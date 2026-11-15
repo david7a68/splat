@@ -1294,6 +1294,47 @@ pub fn plan_act(d: &mut Driver<'_>) {
             format!("The capture shows Add Day's result first, the refusal below: {why}"),
         );
     });
+    // M1's second reader: the session's own plan shows the same stored answer, once, whole, in
+    // its tone; its Undo waits while the note is not as the act left it, so none is drawn.
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    let in_plan = |d: &Driver<'_>| {
+        let nodes = d.nodes();
+        let shown: Vec<_> = nodes.iter().filter(|node| node.name == REFUSED).collect();
+        let whole = shown.len() == 1 && shown[0].fully_in_view();
+        let tone = shown.first().and_then(|node| {
+            d.typed_messages()
+                .into_iter()
+                .find(|(rect, place, _)| {
+                    *place == crate::design::outcome::MessagePlace::Footer
+                        && rect.contains(node.rect.center())
+                })
+                .map(|(_, _, tone)| tone)
+        });
+        let undo = nodes
+            .iter()
+            .any(|node| node.name.starts_with("Undo add plan line"));
+        (
+            whole && tone == Some(crate::design::Tone::Warning) && !undo,
+            format!(
+                "refusals {:?}, tone {tone:?}, an Undo drawn {undo}",
+                shown
+                    .iter()
+                    .map(|node| (node.rect, node.fully_in_view()))
+                    .collect::<Vec<_>>()
+            ),
+        )
+    };
+    d.state_prepared("plan-answer-in-session-plan", Sizes::All, |d| {
+        show_plan(d);
+        let (once, why) = in_plan(d);
+        d.observe(
+            "s30-B1-refusal-in-session-plan",
+            once,
+            format!("The session's plan paints the refusal once, whole, warning, no Undo: {why}"),
+        );
+    });
+    d.click(NAV_TIMELINE);
     d.observe(
         "s30-B1-refusal-stays",
         d.has_containing("was not removed from Session 1"),
