@@ -1067,7 +1067,7 @@ fn before_lose(ui: &mut Ui, width: f32, gap: f32) {
     }
 }
 
-/// Ruling R29, set by the pinned footer around its messages' draw (`draw_messages`): the open
+/// Ruling R29, set by the footer around its messages' draw (`draw_messages`): the open
 /// locks' reason rooms give up their room (`GIVE_UP`), how much room they want now
 /// (`RESERVED`), and how much they took (`DRAWN`).
 pub(in crate::design) const GIVE_UP: &str = "design_reasons_give_up";
@@ -1596,7 +1596,8 @@ pub const SHOW_FILE: &str = "Show file";
 /// A file a footer message is about (M4 gap 1): its path, as data, and the links that open it
 /// (`edit`: `Edit in Obsidian`; `show`: `Show file`). Only a footer message holds one
 /// ([`FaultMessage::file`], [`Notice::file`]), so it stays in the footer's fixed region, which
-/// scrolls when its messages fill a third of the pane; it is never drawn in a pane's content.
+/// scrolls beyond its room (a third of the pane when pinned); it is never drawn in a pane's
+/// content.
 ///
 /// The part draws it on a line under the message's words, from their first letter: the path,
 /// then the links, on one line when they fit; else the path on its own line and the links on
@@ -2932,8 +2933,9 @@ impl Body {
                 None => said.push((reason, *locked)),
             }
         }
-        // Ruling R29: an open lock's room is a reservation, not content. A pinned footer that
-        // has no room for it under its cap tells `reasons` to give it up (`GIVE_UP`). Each pass
+        // Ruling R29: an open lock's room is a reservation, not content. A footer that has no
+        // room for it where it stands (a third of the pane when pinned; the room down to the
+        // pane's end below a short body: ruling Q-c) tells `reasons` to give it up (`GIVE_UP`). Each pass
         // `reasons` tells the footer how much room the reservations want now (`RESERVED`,
         // measured whether or not they take it) and how much they took (`DRAWN`), so nothing
         // older than this pass decides. A locked reason always shows.
@@ -2941,7 +2943,7 @@ impl Body {
             .ctx()
             .data(|data| data.get_temp::<bool>(egui::Id::new(GIVE_UP)))
             .unwrap_or(false);
-        // Only inside a pinned footer's draw, which set the sums; a body message keeps its room
+        // Only inside a footer's draw, which set the sums; a body message keeps its room
         // and counts nothing.
         let add = |ui: &Ui, key: &str, room: f32| {
             ui.ctx().data_mut(|data| {
@@ -4072,17 +4074,22 @@ mod tests {
             );
         }
 
-        // 30 messages with file lines at 960 × 640: the footer takes at most a third of the
-        // pane, and the body stays in view above it.
+        // 30 messages with file lines at 960 × 640: below the short body the footer starts `S`
+        // after it and takes the room down to the pane's end (ruling Q-c; a pinned footer would
+        // take at most a third), and the body stays in view above it.
         let h = harness(960.0, 30, vec![line(SHORT)]);
         let footer = crate::design::pane::footer_rect(&h.ctx, egui::Id::new("file_line_footer"))
             .expect("the footer is drawn");
         let body = h.get_by_label(BODY).rect();
+        let room = crate::design::pane::pane_record(&h.ctx, egui::Id::new("file_line_footer"))
+            .expect("the pane's record")
+            .room();
         assert!(
-            footer.height() <= 640.0 / 3.0 + 1.0
-                && body.bottom() <= footer.top()
+            (footer.top() - (body.bottom() + S)).abs() <= 1.0
+                && (footer.bottom() - room.bottom()).abs() <= 1.0
+                && footer.height() > room.height() / 3.0 + 1.0
                 && body.top() >= 0.0,
-            "30 file lines: footer {footer:?}, body {body:?}"
+            "30 file lines: footer {footer:?}, body {body:?}, pane {room:?}"
         );
         let lowest = h
             .query_all(named(whole(SHORT)))
@@ -5556,10 +5563,6 @@ mod tests {
         let mut app = two();
         app.narrow = Some(320.0);
         let mut h = harness_sized(app, 960.0);
-        // Ruling R29: a lock moves nothing where the footer has room for its reservation; at
-        // 960 × 500 this footer is at its cap, so that case is below, in the pane that shrinks.
-        h.set_size(egui::vec2(960.0, 800.0));
-        h.run_steps(6);
         let tops = |h: &egui_kittest::Harness<'_, App>| {
             ["Folder saved.", "Campaign link saved."].map(|words| {
                 h.get_by_role_and_label(egui::accesskit::Role::Label, words)
@@ -5567,6 +5570,28 @@ mod tests {
                     .top()
             })
         };
+        // Ruling R29: a lock moves nothing where the footer has room for its reservation. With
+        // Q-c, this footer follows a short body, so at 960 × 500 it is taller than a third of the
+        // pane (a pinned footer's cap) and keeps its reservations: a lock moves nothing there
+        // either. The case where it has no room is below, in the pane that shrinks.
+        let (room, footer) = crate::design::pane::pane_records(&h.ctx)
+            .first()
+            .map(|record| (record.room(), record.footer()))
+            .expect("the pane's record");
+        let open = tops(&h);
+        h.state_mut().run_live = true;
+        h.run_steps(4);
+        assert!(
+            footer.is_some_and(|footer| footer.height() > room.height() / 3.0 + 1.0)
+                && tops(&h) == open,
+            "at 960 x 500 the footer {footer:?} below the short body is taller than a third of \
+             the pane {room:?}, and a lock that comes moves no line: {open:?} to {:?}",
+            tops(&h)
+        );
+        h.state_mut().run_live = false;
+        h.run_steps(4);
+        h.set_size(egui::vec2(960.0, 800.0));
+        h.run_steps(6);
         let open = tops(&h);
         h.state_mut().run_live = true;
         h.run_steps(4);
@@ -5593,7 +5618,8 @@ mod tests {
         assert_eq!(tops(&h), open, "a lock that goes moves no line");
 
         // Ruling R29: the open lock's room is a reservation, never a reason to scroll. Shrink
-        // the pane until the footer is at its cap (a third of the pane). At each size a wheel
+        // the pane until the footer has less room than it wants (below the short body, the room
+        // down to the pane's end: ruling Q-c), so its reservations give way. At each size a wheel
         // over the footer moves its words exactly when a line the DM can see is cut: the
         // invisible room alone never makes it scroll, and a cut line can always be reached.
         let view = |h: &egui_kittest::Harness<'_, App>| {
@@ -5654,12 +5680,12 @@ mod tests {
                 capped_whole = Some(height);
             }
         }
-        let height =
-            capped_whole.expect("a size where the footer is at its cap with its lines whole");
+        let height = capped_whole
+            .expect("a size where the footer has less room than it wants, with its lines whole");
         h.set_size(egui::vec2(960.0, height as f32));
         h.run_steps(6);
 
-        // Locked at the cap, each reason is content. The first message's words and actions stay
+        // Locked there, each reason is content. The first message's words and actions stay
         // where they were (its reason comes under them); every reason is there, and a wheel
         // brings each one whole into the footer's view, under its own message's actions.
         let open = tops(&h);
@@ -5673,7 +5699,7 @@ mod tests {
         assert_eq!(
             tops(&h)[0],
             open[0],
-            "at its cap, a lock moves nothing above its reason"
+            "with less room than it wants, a lock moves nothing above its reason"
         );
         assert_eq!(placed(&h)[0], first, "the first message's action stays");
         let line = Type::Small.line();

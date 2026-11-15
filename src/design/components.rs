@@ -3493,9 +3493,10 @@ type FooterMessage<'a> = (
 /// when the body is shorter than the pane (the body's end is the last pass's, kept per footer
 /// id, so the first pass with a new message already knows it), and is pinned at the bottom of
 /// the pane when the body fills the pane. When it cuts the body, a hairline marks its top edge,
-/// so the cut line reads as a list that goes on. The footer is absent when it holds nothing, as
-/// tall as what it holds up to one third
-/// of the pane, and scrolls inside beyond that (see `scroll_part`). Its order is fixed: results
+/// so the cut line reads as a list that goes on. The footer is absent when it holds nothing. It
+/// is as tall as what it holds, up to one third of the pane when pinned (and always when placed
+/// by hand), or up to the pane's end when it follows a short body in `Footer::pane` (ruling Q-c),
+/// and scrolls inside beyond that (see `scroll_part`). Its order is fixed: results
 /// with a live Undo first, newest first by their `ResultOrder`; then reasons, in the order the
 /// caller added them; then other notices in that order, and then results with no live Undo,
 /// newest first. Each result is one item with its own order: never put two results in one. A state word stays on the save row; a fault that belongs to one row
@@ -3658,8 +3659,12 @@ impl<'a> Footer<'a> {
             ui.ctx()
                 .request_discard("the message footer measures its body");
         }
+        // Staged out, this placement keeps the old cap: a third of the pane also for a footer
+        // that follows a short body. Ruling Q-c (a following footer may take the room down to the
+        // pane's end) is `Footer::pane`'s; a legacy pane does not get it (migration-32 design §3).
         let most = (pane.height() / 3.0).floor().max(0.0);
-        // Last pass's height; a change is measured below, and the pass is drawn again.
+        // Last pass's demand (whole), up to the cap; a change is measured below, and the pass is
+        // drawn again.
         let height = stored.min(most);
         // Pinned at the pane's bottom, or `S` below a body that ends above that.
         let pinned = pane.bottom() - height;
@@ -3740,8 +3745,11 @@ impl<'a> Footer<'a> {
     }
 
     /// Draw the messages in `rect`, in the footer's one order, as one focusable group named with
-    /// all their words, with a hairline at its top when it `cut`s the body. Keep the height they
-    /// want, up to `most`; a change from `stored` draws the pass again.
+    /// all their words, with a hairline at its top when it `cut`s the body. `most` is the most
+    /// the footer may take where it stands: a third of the pane when pinned, the room down to the
+    /// pane's end when it follows a short body (ruling Q-c). Keep the height they want, whole
+    /// (the caller caps it where it places the footer); a change from `stored` draws the pass
+    /// again.
     pub(super) fn draw_messages(
         &mut self,
         ui: &mut Ui,
@@ -3770,10 +3778,11 @@ impl<'a> Footer<'a> {
             .join(" ");
         let messages = std::mem::take(&mut self.messages);
         // Ruling R29: the room an open lock keeps for its reason is a reservation. It stays while
-        // the footer has room for it under its cap, so a lock moves nothing; else it is not drawn,
-        // so it never makes the footer scroll. The footer keeps its height (up to the cap) either
-        // way: a message that comes later takes that room, and no pressed choice moves. The room
-        // the reservations want is measured in this pass, at this width, for these messages.
+        // the footer has room for it where it stands (`most`), so a lock moves nothing; else it
+        // is not drawn, so it never makes the footer scroll. The footer keeps its height (up to
+        // `most`) either way: a message that comes later takes that room, and no pressed choice
+        // moves. The room the reservations want is measured in this pass, at this width, for
+        // these messages.
         use super::outcome::{DRAWN, GIVE_UP, RESERVED};
         let give_up_key = self.id.with("give_up");
         let give_up = ui
@@ -3805,7 +3814,9 @@ impl<'a> Footer<'a> {
             ui.ctx()
                 .request_discard("the message footer's reservations changed");
         }
-        let wanted = (bare + room + 2.0 * PART_INSET).ceil().min(most);
+        // The demand, whole: a pinned footer and a following one take it up to their own `most`
+        // (ruling Q-c), so neither is measured at the other's cap.
+        let wanted = (bare + room + 2.0 * PART_INSET).ceil();
         if (wanted - stored).abs() >= HAIRLINE_WIDTH {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(self.id.with("height"), wanted));
@@ -7214,11 +7225,16 @@ mod tests {
                 "{mode} at {size:?} the pinned footer's Undo takes the press"
             );
             // The last body action whole above the pinned footer takes its press, also after the
-            // footer grows by six results.
+            // footer grows by six results. Pinned, the footer is a third of the pane at most
+            // (ruling Q-c).
             for grown in [0, 6] {
                 extra.set(grown);
                 harness.run_steps(3);
                 let at = footer(&harness).expect("the footer shows");
+                assert!(
+                    at.height() <= size.y / 3.0 + 1.0 && at.bottom() >= size.y - L,
+                    "{mode} at {size:?} with {grown} more results, the pinned footer {at:?} is a third of the pane at most"
+                );
                 let (line, centre) = last_line(&harness, at).expect("a body line shows");
                 line_pressed.set(None);
                 click(&mut harness, centre);
@@ -7303,8 +7319,10 @@ mod tests {
                 "{mode} at {size:?} a click on the outside field takes the focus from the footer, and the typed words go there: {:?}",
                 outside.borrow()
             );
-            // Twenty more results overflow the footer: Tab from the field reaches the last Undo,
-            // which scrolls into the footer's view.
+            // Twenty more results: in the pane, below the short body, the footer is not held to a
+            // third of the pane (ruling Q-c). It starts `S` below the save row and takes the room
+            // down to the pane's end, and scrolls inside only beyond that: Tab from the field
+            // reaches the last Undo, which scrolls into the footer's view.
             extra.set(20);
             harness.run_steps(3);
             let last_undo = harness
@@ -7318,13 +7336,25 @@ mod tests {
                 harness.run_steps(2);
             }
             let at = footer(&harness).expect("the footer shows");
+            let save = place(&harness, SAVE_ROW).unwrap();
             let shown = text(&harness, "Undo extra 0");
             assert!(
                 last_undo.is_some()
                     && focused(&harness) == last_undo
-                    && at.height() <= size.y / 3.0 + 1.0
                     && shown.is_some_and(|undo| undo.is_positive() && at.contains_rect(undo)),
-                "{mode} at {size:?} Tab reaches the last Undo of the overflowing footer {at:?}, in view: {shown:?}"
+                "{mode} at {size:?} Tab reaches the last Undo of the footer {at:?}, in view: {shown:?}"
+            );
+            // Placed by hand (staged out), the footer keeps the old cap: a third of the pane.
+            let tall = if by_hand {
+                at.height() <= size.y / 3.0 + 1.0
+            } else {
+                at.height() > size.y / 3.0 + 1.0
+            };
+            assert!(
+                (at.top() - (save.bottom() + S)).abs() <= 1.0
+                    && tall
+                    && at.bottom() <= size.y + 0.5,
+                "{mode} at {size:?} the footer {at:?} of 21 results follows the save row {save:?} by `S`, and ends in the pane; in the pane it is taller than a third of it, by hand a third at most"
             );
             extra.set(0);
             harness.run_steps(3);
@@ -7390,7 +7420,8 @@ mod tests {
         use super::super::{
             layout::ScrollColumn,
             pane::{
-                Body, Fills, FillsReason, footer_rect, pane_record, pane_records, short_body_gap,
+                Body, Fills, FillsReason, Placement, footer_rect, pane_record, pane_records,
+                short_body_gap,
             },
         };
         use std::{cell::Cell, rc::Rc};
@@ -7743,6 +7774,140 @@ mod tests {
             assert!(pressed.get(), "At {size:?} Last action takes its press");
         }
         assert!(under_64, "one small room is under egui's 64 px minimum");
+
+        // Ruling Q-c (migration-32 L1a): the third-of-the-pane cap is for a pinned footer only.
+        // The body is a block `body` px tall and a last line; the footer holds `reasons` one-line
+        // reasons. With none there is no footer and the body's view is the whole room. Below the
+        // short body the footer starts `S` after the last line: with more than a third of the
+        // pane's messages and room left under them, it is as tall as they are, every one whole;
+        // with more than the room holds, it takes the room down to the pane's end and scrolls
+        // inside. At the threshold, a body 2 px shorter than its view (the room less `S` and the
+        // pinned footer) is followed; one as tall as its view pins the footer (equality pins), a
+        // third of the pane tall.
+        for size in [vec2(960.0, 640.0), vec2(1920.0, 1080.0)] {
+            let body = Rc::new(Cell::new(40.0_f32));
+            let reasons = Rc::new(Cell::new(0_usize));
+            let (body_in, reasons_in) = (body.clone(), reasons.clone());
+            let mut harness =
+                egui_kittest::Harness::builder()
+                    .with_size(size)
+                    .build_ui(move |ui| {
+                        ui.label("Title");
+                        let mut footer = Footer::new("qc_footer", ui.available_width());
+                        for at in 0..reasons_in.get() {
+                            let words = format!("Reason {at} of this footer.");
+                            footer.reason(words.clone(), move |ui| {
+                                message(ui, Tone::Error, &words);
+                            });
+                        }
+                        footer.pane(ui, Body::Content, |ui| {
+                            super::super::extras::space(ui, body_in.get());
+                            ui.label("Body end");
+                        });
+                    });
+            super::super::theme::install(&harness.ctx);
+            let id = Id::new("qc_footer");
+            let run = |harness: &mut egui_kittest::Harness<'_>| {
+                harness.run_steps(4);
+                let record = pane_record(&harness.ctx, id).expect("the pane keeps its record");
+                let end = access(harness)
+                    .into_iter()
+                    .find(|(label, _)| label == "Body end")
+                    .map(|(_, rect)| rect.bottom())
+                    .expect("the body's last line");
+                (record, footer_rect(&harness.ctx, id), end)
+            };
+            // A reason painted whole inside the footer's view.
+            let whole = |harness: &egui_kittest::Harness<'_>, at: usize, footer: Rect| {
+                let words = format!("Reason {at} of this footer.");
+                harness
+                    .output()
+                    .shapes
+                    .iter()
+                    .any(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.job.text == words => {
+                            let rect = Rect::from_min_size(text.pos, text.galley.size());
+                            shape
+                                .clip_rect
+                                .intersect(footer)
+                                .expand(0.5)
+                                .contains_rect(rect)
+                        }
+                        _ => false,
+                    })
+            };
+            let (record, footer, _) = run(&mut harness);
+            let room = record.room();
+            let third = (room.height() / 3.0).floor();
+            assert!(
+                footer.is_none()
+                    && record
+                        .viewport()
+                        .is_some_and(|view| (view.bottom() - room.bottom()).abs() <= 0.5),
+                "Q-c at {size:?}: no message, no footer {footer:?}, and the body's view {:?} is the room {room:?}",
+                record.viewport()
+            );
+            // The fewest reasons that make the footer taller than a third of the pane.
+            let mut taller = None;
+            for count in 1..=40 {
+                reasons.set(count);
+                let (record, footer, end) = run(&mut harness);
+                let footer = footer.expect("the footer shows");
+                assert!(
+                    record.placement() == Placement::Follows
+                        && (footer.top() - (end + S)).abs() <= 1.0,
+                    "Q-c at {size:?} with {count} reasons: the footer {footer:?} follows the body's end {end} by `S`"
+                );
+                if footer.height() > third + 1.0 {
+                    taller = Some((count, footer));
+                    break;
+                }
+            }
+            let (count, footer) = taller.unwrap_or_else(|| {
+                panic!("Q-c at {size:?}: a following footer grows taller than a third ({third}) of the pane")
+            });
+            assert!(
+                footer.bottom() < room.bottom() - L
+                    && (0..count).all(|at| whole(&harness, at, footer)),
+                "Q-c at {size:?}: the footer {footer:?} of {count} reasons, taller than a third of the pane, shows every reason whole, with room left under it (pane {room:?})"
+            );
+            // More than the room below the body holds: the footer takes it all, and scrolls.
+            reasons.set(80);
+            let (record, footer, end) = run(&mut harness);
+            let footer = footer.expect("the footer shows");
+            assert!(
+                record.placement() == Placement::Follows
+                    && (footer.top() - (end + S)).abs() <= 1.0
+                    && (footer.bottom() - room.bottom()).abs() <= 1.0
+                    && whole(&harness, 0, footer)
+                    && !whole(&harness, 79, footer),
+                "Q-c at {size:?}: the footer {footer:?} of 80 reasons follows the body's end {end} by `S`, takes the room down to the pane's end {}, and scrolls inside",
+                room.bottom()
+            );
+            // The threshold: the body's view is the room less `S` and the pinned footer, a third.
+            let view = record.viewport().expect("a content pane's view").height();
+            let line = end - (room.top() + body.get());
+            body.set((view - line - 2.0).floor());
+            let (record, footer, end) = run(&mut harness);
+            let footer = footer.expect("the footer shows");
+            assert!(
+                record.placement() == Placement::Follows
+                    && (footer.top() - (end + S)).abs() <= 1.0
+                    && (footer.bottom() - room.bottom()).abs() <= 1.0,
+                "Q-c at {size:?}: a body {:?} px tall in a view of {view} is followed: footer {footer:?}, body end {end}",
+                record.content_height()
+            );
+            body.set((view - line).ceil());
+            let (record, footer, _) = run(&mut harness);
+            let footer = footer.expect("the footer shows");
+            assert!(
+                record.placement() == Placement::Pinned
+                    && (footer.bottom() - room.bottom()).abs() <= 1.0
+                    && (footer.height() - third).abs() <= 1.0,
+                "Q-c at {size:?}: a body {:?} px tall in a view of {view} pins the footer {footer:?} at a third ({third}) of the pane",
+                record.content_height()
+            );
+        }
 
         // One pane function in two `push_id` scopes (Astra re-check 3): A holds a message, B's
         // comes and goes. A's footer keeps its place, its focused Undo and its press. Two panes
