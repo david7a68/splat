@@ -11447,7 +11447,7 @@ mod tests {
             };
             library.open_entry(0);
             library.source = true;
-            library.draft = format!("{text}\n# Ash Wolf\n");
+            library.draft = text.replacen("# Cinder Wolf", "# Ash Wolf", 1);
             let ctx = egui::Context::default();
             crate::design::theme::install(&ctx);
             let mut painted = Vec::new();
