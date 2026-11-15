@@ -10486,9 +10486,10 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     // the header's count, so the DM finds it without opening the note.
     d.observe(
         "iter-29-D-FI2",
-        d.has_containing("File name differs: Mara Vell.md")
+        d.has_containing("File name differs")
+            && !d.has_containing("File: Mara Vell.md")
             && d.has_containing("1 note needs fixing"),
-        "The renamed note's row says ⚠ File name differs: Mara Vell.md and the header counts 1 note needs fixing",
+        "The renamed note's row says ⚠ File name differs and the header counts 1 note needs fixing",
     );
     d.state("renamed-npc-keeps-old-name-in-world", Sizes::All);
     look_up(d, "Rook Ambry");

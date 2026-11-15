@@ -1079,9 +1079,8 @@ pub(crate) enum NoteFault {
     Tables(usize),
     /// Links that need fixing.
     Links(Vec<LinkProblem>),
-    /// The note's name is not its file's name (FI2), with the file's name: it tells the note
-    /// apart from another of the same name, as a same-name row's file name does.
-    Renamed(String),
+    /// The note's name is not its file's name (FI2). The reader's warning names both.
+    Renamed,
 }
 
 impl NoteFault {
@@ -1098,7 +1097,7 @@ impl NoteFault {
         } else if !problems.is_empty() {
             Some(Self::Links(problems))
         } else {
-            renamed_file(item, index).map(|stem| Self::Renamed(format!("{stem}.md")))
+            renamed_file(item, index).map(|_| Self::Renamed)
         }
     }
 
@@ -1109,9 +1108,10 @@ impl NoteFault {
             Self::Unread(count) => design::count(*count, "value not read", "values not read"),
             Self::Tables(count) => design::count(*count, "table fault", "table faults"),
             Self::Links(problems) => link_problem_words(problems),
-            // What is wrong first, then which file: the row names the fault, not a value the
-            // DM must compare with the note's name (SF6).
-            Self::Renamed(file) => format!("File name differs: {file}"),
+            // The row names the fault, not a value the DM must compare with the note's name
+            // (SF6); the reader's warning names both names and offers the two renames. The
+            // file's name stays out of the row, so the words fit a narrow list whole.
+            Self::Renamed => "File name differs".into(),
         }
     }
 }
@@ -5625,11 +5625,8 @@ mod tests {
             fault_of(id),
             Some(NoteFault::Links(vec![LinkProblem::PlaceNotFound]))
         );
-        assert_eq!(fault_of(mara), Some(NoteFault::Renamed("Vell.md".into())));
-        assert_eq!(
-            NoteFault::Renamed("Vell.md".into()).words(),
-            "File name differs: Vell.md"
-        );
+        assert_eq!(fault_of(mara), Some(NoteFault::Renamed));
+        assert_eq!(NoteFault::Renamed.words(), "File name differs");
         assert_eq!(
             faults.of_note(at_path(&gate_path)).cloned(),
             Some(NoteFault::Duplicate)
