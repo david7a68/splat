@@ -98,7 +98,7 @@ pub fn save_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
 }
 fn write_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     let path = resolve(campaign, name)?;
-    fs::create_dir_all(&path).map_err(|e| format!("Could not create session folder: {e}"))?;
+    fs::create_dir_all(&path).map_err(|error| not_created(&error))?;
     let document = CampaignDocument::load(campaign)?;
     let mut map = serde_yaml_ng::Mapping::new();
     map.insert("directory".into(), Value::String(name.trim().to_owned()));
@@ -760,11 +760,7 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
     Ok(note)
 }
 
-fn write_new(path: &Path, text: &str) -> Result<(), String> {
-    write_new_io(path, text).map_err(|e| e.to_string())
-}
-
-/// `write_new` with the system error kept, so a note's save can say what happened in plain
+/// A new file, never replacing one, with the system error kept, so a note's save can say what happened in plain
 /// words (`not_saved`).
 fn write_new_io(path: &Path, text: &str) -> std::io::Result<()> {
     #[cfg(test)]
@@ -956,13 +952,13 @@ pub fn create_template(folder: &Path, name: &str, body: &str) -> Result<Template
     match fs::create_dir(&templates) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(error) => return Err(format!("Could not create the folder: {error}")),
+        Err(error) => return Err(not_created(&error)),
     }
     let path = templates.join(format!("{name}.md"));
     if path.exists() {
         return Err(format!("A template named “{name}” already exists."));
     }
-    write_new(&path, body)?;
+    write_new_io(&path, body).map_err(|error| not_created(&error))?;
     Ok(Template {
         name,
         path: Some(path),
@@ -2703,6 +2699,16 @@ mod tests {
         assert!(create_note(&gone, &new_note(1, "", "Words")).is_err());
         assert!(create_template(&gone, "Notes", "Words").is_err());
         assert!(!gone.exists());
+        // Round 30 B7e: a new template the disk refuses says plain words, never the system's,
+        // and leaves no file.
+        FAILING_WRITES.with(|code| code.set(Some(28)));
+        let refused = create_template(dir.path(), "Notes", "Words").unwrap_err();
+        FAILING_WRITES.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not created. Disk is full. Free some space on the disk, then try again."
+        );
+        assert!(!dir.path().join(TEMPLATES).join("Notes.md").exists());
     }
 
     #[test]
