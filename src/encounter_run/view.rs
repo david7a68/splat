@@ -29,8 +29,8 @@ struct GroupDrag(Uuid);
 pub(super) const AMOUNT: &str = "Amount";
 /// The run's one damage and healing amount: one field, keyed by its run.
 const AMOUNT_FIELD: design::FieldName = crate::field_id!("run_amount");
-/// A group's typed initiative total in Arrivals, keyed by the group (two groups can have one
-/// name).
+/// A group's typed initiative total in Arrivals, keyed by its run and the group (two groups can
+/// have one name; two runs can offer one group).
 const ARRIVAL_TOTAL_FIELD: design::FieldName = crate::field_id!("run_arrival_total");
 const OTHER_EFFECT_FIELD: design::FieldName = crate::field_id!("run_other_effect");
 const OUTCOME_FIELD: design::FieldName = crate::field_id!("run_outcome");
@@ -4361,7 +4361,9 @@ impl Run {
             let response = design::locked(ui, group.problem.as_deref(), |ui| {
                 design::number_field_with_id(
                     ui,
-                    ARRIVAL_TOTAL_FIELD.of(group.id).id(),
+                    // The typed totals are this run's (`group_totals`): keyed by the run and
+                    // the group, so another run's field of the same group shares no text Undo.
+                    ARRIVAL_TOTAL_FIELD.of(self.id).with(group.id).id(),
                     &field,
                     text,
                     "Roll",
@@ -10931,6 +10933,43 @@ mod tests {
         run.borrow_mut().undo();
         harness.run_steps(2);
         assert_eq!(shown(&harness), both, "m-r0-R35-undo");
+        // Astra's review of PR 480 (P2): a typed total is its run's (`group_totals`), so its
+        // field is keyed by the run and the group. Run A types 17, pauses, erases it; run B,
+        // opened with the same group, gets nothing of A's text Undo in its empty field.
+        let total = "Initiative total for Mist Riders";
+        harness.get_by_label(total).click();
+        harness.run_steps(1);
+        harness.get_by_label(total).type_text("17");
+        harness.run_steps(16);
+        for _ in 0..2 {
+            harness.key_press(Key::Backspace);
+            harness.run_steps(1);
+        }
+        harness.run_steps(16);
+        let mut other = super::super::tests::run();
+        other.groups = run.borrow().groups.clone();
+        assert_ne!(other.id, run.borrow().id);
+        let run_a = std::mem::replace(&mut *run.borrow_mut(), other);
+        harness.run_steps(2);
+        harness.get_by_label(total).click();
+        harness.run_steps(1);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, Key::Z);
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow()
+                .group_totals
+                .get(&riders.id)
+                .map(String::as_str)
+                .unwrap_or_default(),
+            "",
+            "m-r0-3-total-owner: Ctrl+Z in run B's field brought back run A's total"
+        );
+        assert!(
+            run_a
+                .group_totals
+                .get(&riders.id)
+                .is_none_or(|text| text.is_empty())
+        );
     }
 
     #[test]
