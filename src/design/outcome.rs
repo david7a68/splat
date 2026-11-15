@@ -5533,6 +5533,8 @@ mod tests {
             pub narrow: Option<f32>,
             /// Two panes side by side, 320 wide, of these heights.
             pub heights: Option<[f32; 2]>,
+            /// Each pane's body is this much taller than its label (a tall body).
+            pub body_tall: [f32; 2],
             /// No Undo or choice has a lock (no reason, open or held, and no room for one).
             pub no_locks: bool,
             /// The next frame asks egui to draw it again (a second pass), once.
@@ -5564,7 +5566,7 @@ mod tests {
             clippy::disallowed_methods,
             reason = "the pilot's by-owner revision, in the frame of its read"
         )]
-        fn show_active(ui: &mut Ui, dndbeyond: &mut DndBeyond, change: InBody) {
+        fn show_active(ui: &mut Ui, dndbeyond: &mut DndBeyond, change: InBody, tall: f32) {
             dndbeyond.edits += 1;
             match change {
                 InBody::Nothing => {}
@@ -5582,6 +5584,9 @@ mod tests {
                 }
             }
             ui.label("Link and folder");
+            if tall > 0.0 {
+                let _ = ui.allocate_exact_size(egui::vec2(10.0, tall), egui::Sense::hover());
+            }
         }
 
         /// One pane: its footer shows the store's kept lines; its body changes the owner.
@@ -5701,8 +5706,9 @@ mod tests {
             };
             // The body changes the store's owner by `&mut` while the footer holds its lines:
             // the gap the pilot found (E0502 with a borrowing entry).
+            let tall = app.body_tall[pane];
             let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
-                show_active(ui, &mut app.dndbeyond, change);
+                show_active(ui, &mut app.dndbeyond, change, tall);
                 7
             });
             assert_eq!(paned.body, 7);
@@ -6171,6 +6177,82 @@ mod tests {
         // Layout PR 2b (ruling L9): each pane's typed footer keeps its plan. Frames with no
         // change compare the lines and sort, join and measure nothing; a new width and a lock
         // that goes make the plan again, and the footer's room is what a fresh pane measures.
+        // Review of PR 452, finding 2 (L1c): already in the first frame of the change, drawn in
+        // one pass.
+        use crate::design::pane::{Placement, pane_records};
+        /// Each pane's footer and where it stands, left to right; where each kept line's words
+        /// are painted, and whether whole inside their clip.
+        type Shown = (Vec<(egui::Rect, Placement)>, Vec<(egui::Rect, bool)>);
+        fn shown(h: &egui_kittest::Harness<'_, App>) -> Shown {
+            fn walk(shape: &egui::Shape, clip: egui::Rect, out: &mut Vec<(egui::Rect, bool)>) {
+                match shape {
+                    egui::Shape::Vec(shapes) => {
+                        shapes.iter().for_each(|shape| walk(shape, clip, out));
+                    }
+                    egui::Shape::Text(text)
+                        if ["Campaign link saved.", "Folder saved."]
+                            .contains(&text.galley.text()) =>
+                    {
+                        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                        out.push((rect, clip.expand(0.5).contains_rect(rect)));
+                    }
+                    _ => {}
+                }
+            }
+            let mut panes: Vec<_> = pane_records(&h.ctx)
+                .iter()
+                .filter_map(|record| record.footer().map(|rect| (rect, record.placement())))
+                .collect();
+            panes.sort_by(|a, b| a.0.left().total_cmp(&b.0.left()));
+            let mut words = Vec::new();
+            for shape in &h.output().shapes {
+                walk(&shape.shape, shape.clip_rect, &mut words);
+            }
+            words.sort_by(|a, b| {
+                (a.0.left(), a.0.top())
+                    .partial_cmp(&(b.0.left(), b.0.top()))
+                    .expect("finite")
+            });
+            (panes, words)
+        }
+        /// The same, within a hundredth of a point.
+        fn same(a: &Shown, b: &Shown) -> bool {
+            let near = |a: egui::Rect, b: egui::Rect| {
+                (a.min - b.min).length() < 0.01 && (a.max - b.max).length() < 0.01
+            };
+            a.0.len() == b.0.len()
+                && a.1.len() == b.1.len()
+                && a.0.iter().zip(&b.0).all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
+                && a.1.iter().zip(&b.1).all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
+        }
+        /// A frame drawn in one pass (egui declines the rerun a changed footer asks for), then
+        /// the next frame, in one pass too: what each shows.
+        fn one_pass(h: &mut egui_kittest::Harness<'_, App>) -> (Shown, Shown) {
+            let passes = h.ctx.options(|options| options.max_passes);
+            h.ctx
+                .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+            let before = h.state().passes;
+            h.step();
+            let first = shown(h);
+            h.step();
+            let next = shown(h);
+            h.ctx.options_mut(|options| options.max_passes = passes);
+            assert_eq!(h.state().passes - before, 2, "two frames of one pass");
+            (first, next)
+        }
+        /// A fresh pane of `app` at `size`, settled: what it shows.
+        fn settles(app: App, size: egui::Vec2) -> Shown {
+            let mut h = harness_sized(app, size.x);
+            h.set_size(size);
+            h.run_steps(6);
+            shown(&h)
+        }
+        fn panes(no_locks: bool) -> App {
+            let mut app = two();
+            app.two_panes = true;
+            app.no_locks = no_locks;
+            app
+        }
         let footers = |h: &egui_kittest::Harness<'_, App>| -> Vec<f32> {
             let mut rects: Vec<egui::Rect> = crate::design::pane::pane_records(&h.ctx)
                 .iter()
@@ -6224,7 +6306,15 @@ mod tests {
         let wide = footers(&h);
         assert_eq!(wide, fresh(1200.0, false));
         h.set_size(egui::vec2(700.0, 500.0));
-        h.run_steps(6);
+        let (first, next) = one_pass(&mut h);
+        let settled = settles(panes(false), egui::vec2(700.0, 500.0));
+        assert!(
+            same(&first, &settled),
+            "the first frame at a new width is where a fresh pane settles: {first:?}, \
+             settled {settled:?}"
+        );
+        assert!(same(&next, &first), "and the next moves nothing: {next:?}");
+        h.run_steps(4);
         let replanned = footer_work();
         assert!(
             replanned.plans > after.plans
@@ -6250,7 +6340,15 @@ mod tests {
         assert_ne!(narrow, wide, "the width changes the footers' room");
         assert_eq!(footers(&h), narrow, "at the new width, a fresh pane's room");
         h.state_mut().no_locks = true;
-        h.run_steps(6);
+        let (first, next) = one_pass(&mut h);
+        let settled = settles(panes(true), egui::vec2(700.0, 500.0));
+        assert!(
+            same(&first, &settled),
+            "the first frame with the locks gone is where a fresh pane settles: {first:?}, \
+             settled {settled:?}"
+        );
+        assert!(same(&next, &first), "and the next moves nothing: {next:?}");
+        h.run_steps(4);
         let unlocked = fresh(700.0, true);
         assert_ne!(unlocked, narrow, "the locks' reasons hold room");
         assert_eq!(
@@ -6258,6 +6356,62 @@ mod tests {
             unlocked,
             "with the locks gone, a fresh pane's room"
         );
+
+        // A footer that comes, then grows: its first frame, drawn in one pass, is where a fresh
+        // pane settles it, its words whole as there; the next frame moves nothing. Beside short
+        // bodies it follows them (two panes). In two panes 300 points tall it is pinned: beside a
+        // tall body (left), and beside a body that fitted its pane until the footer came (right),
+        // not cut short below that body.
+        let lines = [("older", "Campaign link saved"), ("newer", "Folder saved")];
+        for (heights, tall, size) in [
+            (None, [0.0; 2], egui::vec2(1200.0, 500.0)),
+            (Some([300.0; 2]), [1000.0, 230.0], egui::vec2(960.0, 800.0)),
+        ] {
+            let app = |kept: &[(&'static str, &'static str)]| {
+                let mut app = App::default();
+                app.two_panes = heights.is_none();
+                app.heights = heights;
+                app.body_tall = tall;
+                for &(owner, words) in kept {
+                    app.dndbeyond.results.record(Saved(Campaign(owner), words));
+                }
+                app
+            };
+            let mut h = harness_sized(app(&[]), size.x);
+            h.set_size(size);
+            h.run_steps(4);
+            assert!(shown(&h).0.is_empty(), "no footer yet");
+            let fits: Vec<bool> = pane_records(&h.ctx)
+                .iter()
+                .map(crate::design::pane::PaneRecord::fits)
+                .collect();
+            for (at, &(owner, words)) in lines.iter().enumerate() {
+                h.state_mut()
+                    .dndbeyond
+                    .results
+                    .record(Saved(Campaign(owner), words));
+                let (first, next) = one_pass(&mut h);
+                let settled = settles(app(&lines[..=at]), size);
+                let kept = at + 1;
+                assert!(
+                    same(&first, &settled),
+                    "{heights:?}, {kept} kept: the first frame {first:?}, settled {settled:?}"
+                );
+                assert!(
+                    same(&next, &first),
+                    "{heights:?}, {kept} kept: the next frame {next:?}"
+                );
+                h.run_steps(4);
+            }
+            // The fixture: where the footers stand, and which body fitted its pane with none.
+            let stand: Vec<Placement> = shown(&h).0.iter().map(|(_, stand)| *stand).collect();
+            let want = if heights.is_some() {
+                ([false, true], [Placement::Pinned; 2])
+            } else {
+                ([true, true], [Placement::Follows; 2])
+            };
+            assert_eq!((fits.as_slice(), stand.as_slice()), (&want.0[..], &want.1[..]));
+        }
 
         // Review of PR 452, 5: a footer that no frame draws has ended, and its plan with its
         // lines goes; the context keeps the plans of the footers in view, whatever was shown.

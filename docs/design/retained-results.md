@@ -162,8 +162,9 @@ names it, the action's width), the room the lines take (`bare`), the room their 
   widget-like rect takes each reservation's kept room); `FooterWork` counts plans, sorted lines, named bytes,
   reason probes, verb comparisons, Undo labels fitted and reservation layouts. The pane knows an
   **unchanged** footer's demand before it draws (`Footer::planned`). A **changed** footer (its plan does not
-  hold) is measured and placed in its first frame (L1c): it is fitted to what it shows; pinned, it is laid out
-  in a third of the pane and moved down to the pane's bottom in that same pass (`settle_pinned`).
+  hold) is measured and placed in its first frame (L1c): laid out at the pane's bottom in the most room it may
+  take, fitted to what it shows, then placed by that demand as the next pass places it, following or pinned
+  (`settle` in `pane.rs`).
 - **Reasons' room (R29), per footer.** A fresh plan decides `give_up` from its own numbers and the room where
   the footer stands; a pass that makes a plan measures with the footer's own last decision, kept with its
   plan. It keeps each reservation's room also when it gives that room up, so after the pane grows (the plan
