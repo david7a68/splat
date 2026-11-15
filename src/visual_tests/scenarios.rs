@@ -747,7 +747,37 @@ pub(super) fn said_once(
     if lookup {
         d.press_ctrl(Key::K);
     }
+    // Each tab's top: the save row above them keeps one height in every state (Astra, 386).
+    let tab_tops = |d: &Driver<'_>| {
+        ["Add creatures", "Members"].map(|start| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    node.name.starts_with(start)
+                        && !matches!(
+                            node.role,
+                            egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                        )
+                })
+                .map(|node| node.rect.top())
+        })
+    };
+    // The save row's words for the fault are painted inside the row: above the tabs.
+    let inside_row = |d: &Driver<'_>| {
+        let tabs = tab_tops(d).into_iter().flatten().fold(f32::MAX, f32::min);
+        let mut outside = 0;
+        d.each_painted_text(|text, _| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if text.galley.job.text.contains(beside) && rect.bottom() > tabs {
+                outside += 1;
+            }
+        });
+        outside == 0
+    };
+    let tops = tab_tops(d);
     d.click_starting("Add creatures");
+    let mut moves = vec![("Add creatures pressed", tab_tops(d), inside_row(d))];
+    let mut steady = tab_tops(d) == tops && inside_row(d);
     let tab = (said(d), d.visible_text(beside), tones_beside(d, beside));
     if let Some(save) = d.place_of("Save group") {
         d.click_rect(save, "Click: Save group, blocked");
@@ -755,11 +785,22 @@ pub(super) fn said_once(
     let button = (said(d), d.visible_text(beside), tones_beside(d, beside));
     d.press_ctrl(Key::S);
     let key = (said(d), d.visible_text(beside), tones_beside(d, beside));
+    steady &= tab_tops(d) == tops && inside_row(d);
+    moves.push(("Ctrl+S", tab_tops(d), inside_row(d)));
     d.click_starting("Members");
-    // Where the place is cut at the column's end (a member row at the bottom of the plan's
-    // editor at 960), both are painted and the save row is right to say it. Then the place is
-    // looked at where it is whole: at 1920.
-    let cut = said(d) > 1;
+    steady &= tab_tops(d) == tops;
+    moves.push(("Members pressed", tab_tops(d), true));
+    // Where the place's own words are cut at the column's end (a member row at the bottom of
+    // the plan's editor at 960), both are painted and the save row is right to say it. Only
+    // then, the place is looked at where it is whole: at 1920.
+    let mut clipped = false;
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if text.galley.job.text.contains(field) && !clip.expand(0.5).contains_rect(rect) {
+            clipped = true;
+        }
+    });
+    let cut = said(d) > 1 && clipped;
     let look = |d: &Driver<'_>| (said(d), d.visible_text(field), d.visible_text(beside));
     let place = if cut { d.at_size(LARGE, look) } else { look(d) };
     let mut painted = Vec::new();
@@ -779,9 +820,9 @@ pub(super) fn said_once(
     }
     let once = (1, true, vec![tone]);
     (
-        tab == once && button == once && key == once && place == (1, true, false),
+        steady && tab == once && button == once && key == once && place == (1, true, false),
         format!(
-            "Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members (cut at first: {cut}) {place:?}: {painted:?}"
+            "tabs and words steady {steady} (from {tops:?}: {moves:?}); Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members (cut at first: {cut}) {place:?}: {painted:?}"
         ),
     )
 }
@@ -795,7 +836,7 @@ pub(super) fn gone_encounter_said_once(d: &mut Driver<'_>) -> (bool, String) {
             "no longer has the encounter",
             "No fight offers",
         ],
-        "Its encounter was deleted. Choose another under Belongs to.",
+        "Its encounter was deleted. See Belongs to.",
         "Its encounter was deleted, so no fight offers this group.",
         "warning",
     )
@@ -18030,6 +18071,45 @@ pub mod encounter_groups {
                 format!("At {size:?}, the HP fault is under its field: {detail}"),
             );
         }
+        // iter-29 G122 (Astra, 386): with the missing member removed, Save refuses Cinder Wolf's
+        // change. Its open form says the fault under Maximum HP, whole in view at 960 while the
+        // rest of the form runs below: the save row does not say it again. Off screen (the
+        // compact Add creatures tab), the save row says it once. Discard ends the proof.
+        let (form, form_detail) = d.aside(|d| {
+            d.click("More actions for Unknown creature");
+            d.click("Remove");
+            d.expect("Maximum HP: how it changes");
+            let mut whole = false;
+            let mut form_cut = false;
+            let mut says = 0;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = text.galley.job.text.as_str();
+                if words.contains("would become −28") {
+                    whole |= clip.expand(0.5).contains_rect(rect);
+                }
+                // Any painted text that says this fault: the form's, or the save row's.
+                says += usize::from(
+                    words.contains("would become −28")
+                        || words.contains("cannot be saved. See its row"),
+                );
+                form_cut |= words.starts_with("Speed") && !clip.expand(0.5).contains_rect(rect);
+            });
+            let (once, detail) = said_once(
+                d,
+                &["would become −28", "cannot be saved. See its row"],
+                "A creature here cannot be saved. See its row.",
+                "would become −28",
+                "error",
+            );
+            d.click("Discard");
+            d.expect("Replace Unknown creature");
+            (
+                whole && form_cut && says == 1 && once,
+                format!("error whole {whole}, form cut {form_cut}, said {says} times: {detail}"),
+            )
+        });
+        d.observe("iter-29-BC5-G122-open-form", form, form_detail);
         d.click("Back to encounters");
 
         // A new group cannot be saved empty, and it says so.
@@ -19537,6 +19617,9 @@ pub mod encounter_owned_groups {
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
     const SAVE_ENCOUNTER: &str = "Save encounter";
+    /// The gap from the save row's `Invalid` to `Default side` in a group editor, on main
+    /// (318bde49) at 960, 1200 and 1920.
+    const SAVE_ROW_TO_FIELDS: f32 = 28.0;
 
     fn edit_group(name: &str) -> String {
         format!("Edit group {name}")
@@ -19644,6 +19727,24 @@ pub mod encounter_owned_groups {
                 d.visible_text(gone) && said == 1,
                 format!("One message says the gone encounter: {said} painted"),
             );
+            // Lead, round 29 (the band at 960): the cause's place is on the save row, so the
+            // gap from the save row's word to the first field is main's at every size.
+            let band = d
+                .painted_rect_in("Invalid", egui::Rect::EVERYTHING)
+                .zip(
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with("Default side for "))
+                        .map(|node| node.rect),
+                )
+                .map(|(word, side)| side.top() - word.bottom());
+            d.observe(
+                "iter-29-BC5-G122-no-band",
+                band.is_some_and(|band| (band - SAVE_ROW_TO_FIELDS).abs() <= 0.5),
+                format!(
+                    "From the save row's word to Default side: {band:?}, main {SAVE_ROW_TO_FIELDS}"
+                ),
+            );
             let edges = group_field_edges(d, GROUP_ORPHAN);
             // As before this state took all sizes: FD3 holds at 960 and 1200 (at 1920 the
             // fields end at FORM_WIDTH, `iter-19-B-FD3-wide`).
@@ -19704,8 +19805,11 @@ pub mod encounter_owned_groups {
             d.wait_for_text("Unknown creature");
             let (member, member_detail) = said_once(
                 d,
-                &["not in this campaign’s packages"],
-                "Unknown creature: not in this campaign’s packages.",
+                &[
+                    "not in this campaign’s packages",
+                    "cannot be saved. See its row",
+                ],
+                "A creature here cannot be saved. See its row.",
                 "not in this campaign’s packages",
                 "warning",
             );
@@ -19718,9 +19822,6 @@ pub mod encounter_owned_groups {
         });
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
         d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
-        // The proof pressed the compact editor's tabs beside Lookup; Lookup closed after it, so
-        // those tabs gave way to the two columns.
-        d.expect_moves("iter-29 G122 proof: Lookup closed after the press on the editor's tabs");
         let inset = notes_inset(
             d,
             &format!("Group notes for {GROUP_ORPHAN}"),
@@ -21805,8 +21906,11 @@ pub mod session_plan_groups {
             d.wait_for_text("Unknown creature");
             let member = said_once(
                 d,
-                &["not in this campaign’s packages"],
-                "Unknown creature: not in this campaign’s packages.",
+                &[
+                    "not in this campaign’s packages",
+                    "cannot be saved. See its row",
+                ],
+                "A creature here cannot be saved. See its row.",
                 "not in this campaign’s packages",
                 "warning",
             );

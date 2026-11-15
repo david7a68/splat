@@ -37,7 +37,10 @@ const MISSING_ENCOUNTER: &str = "Deleted encounter";
 const GONE_ENCOUNTER: &str = "Its encounter was deleted, so no fight offers this group. Choose another encounter, or Any encounter.";
 /// The same fault beside Save, while the line under Belongs to is not on screen: the cause and
 /// where to repair it.
-const GONE_BESIDE_SAVE: &str = "Its encounter was deleted. Choose another under Belongs to.";
+const GONE_BESIDE_SAVE: &str = "Its encounter was deleted. See Belongs to.";
+/// A member's fault beside Save, while its row is not on screen: fixed words with no name, so
+/// the place's width is known; the row keeps the full cause with the name.
+const MEMBER_BESIDE_SAVE: &str = "A creature here cannot be saved. See its row.";
 /// The Groups list's heading for groups whose encounter is gone; Arrivals says the same words
 /// beside such a group's name (FB10).
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
@@ -1751,30 +1754,32 @@ pub(super) fn change_faults(
     side: &str,
     form_open: bool,
     fault: &dyn Fn(&str) -> String,
-) {
+) -> Option<egui::Rect> {
     if block.is_empty() || form_open {
-        return;
+        return None;
     }
+    // The rect of the fault's own words (G122), not the change rows under it.
     match Overrides::parse(block) {
         Ok(overrides) => {
             let rows = overrides.rows(&Base::of(entry, side));
-            if let Err(error) = overrides.resolve_for(entry, side) {
-                design::message(
-                    ui,
-                    FaultKind::InvalidChange.tone(),
-                    &fault(&override_error(&error)),
-                );
-                // The failed change stays visible beside its fault.
-                change_rows(ui, &rows);
-            }
-        }
-        Err(error) => {
-            design::message(
+            let error = overrides.resolve_for(entry, side).err()?;
+            let said = design::message(
                 ui,
                 FaultKind::InvalidChange.tone(),
                 &fault(&override_error(&error)),
             );
+            // The failed change stays visible beside its fault.
+            change_rows(ui, &rows);
+            Some(said.rect)
         }
+        Err(error) => Some(
+            design::message(
+                ui,
+                FaultKind::InvalidChange.tone(),
+                &fault(&override_error(&error)),
+            )
+            .rect,
+        ),
     }
 }
 
@@ -1798,7 +1803,7 @@ fn change_row(
     set: Option<std::ops::RangeInclusive<i64>>,
     add: std::ops::RangeInclusive<i64>,
     base: &Base,
-) {
+) -> Option<egui::Rect> {
     let mut fault = None;
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
@@ -1875,14 +1880,18 @@ fn change_row(
         }
     });
     // The reason sits under its own field, at the field's left edge, not at the form's top.
-    if let Some(error) = fault {
+    // Its rect is where the form says this fault (G122).
+    fault.map(|error| {
         ui.horizontal(|ui| {
             ui.add_space(LABEL_WIDTH + ui.spacing().item_spacing.x);
             ui.vertical(|ui| {
-                design::small_message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
-            });
-        });
-    }
+                design::small_message(ui, FaultKind::InvalidChange.tone(), &override_error(&error))
+                    .rect
+            })
+            .inner
+        })
+        .inner
+    })
 }
 
 /// One change on its own, for its row's preview and its own fault.
@@ -2010,6 +2019,8 @@ fn other_effect_width(ui: &egui::Ui) -> f32 {
 pub(super) struct FormEnd {
     pub(super) done: bool,
     pub(super) changed: bool,
+    /// Where the form says its change faults, if any (G122: the text the DM reads).
+    pub(super) fault: Option<egui::Rect>,
 }
 
 #[allow(
@@ -2028,12 +2039,15 @@ pub(super) fn overrides_form(
     let mut overrides = match Overrides::parse(block) {
         Ok(overrides) => overrides,
         Err(error) => {
-            design::message(
+            let said = design::message(
                 ui,
                 Tone::Error,
                 &format!("{error} Repair it in Campaign → Campaign entries."),
             );
-            return FormEnd::default();
+            return FormEnd {
+                fault: Some(said.rect),
+                ..FormEnd::default()
+            };
         }
     };
     let base = Base::of(entry, side);
@@ -2076,10 +2090,18 @@ pub(super) fn overrides_form(
     ]
     .into_iter()
     .any(|(label, value)| single_change(label, value).resolve(&base).is_err());
+    let mut fault: Option<egui::Rect> = None;
+    let mut said = |rect: Option<egui::Rect>| {
+        if let Some(rect) = rect {
+            fault = Some(fault.map_or(rect, |fault| fault.union(rect)));
+        }
+    };
     if let Err(error) = overrides.resolve_for(entry, side)
         && !on_a_field
     {
-        design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
+        said(Some(
+            design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error)).rect,
+        ));
     }
     text_row(
         ui,
@@ -2098,50 +2120,50 @@ pub(super) fn overrides_form(
     }
     // A linked character's sheet decides these. One already here can still be cleared.
     if !linked || overrides.max_hp.is_some() {
-        change_row(
+        said(change_row(
             ui,
             "Maximum HP",
             &mut overrides.max_hp,
             Some(1..=1_000_000),
             -1_000_000..=1_000_000,
             &base,
-        );
+        ));
     }
-    change_row(
+    said(change_row(
         ui,
         "AC",
         &mut overrides.armor_class,
         Some(0..=1000),
         -1000..=1000,
         &base,
-    );
-    change_row(
+    ));
+    said(change_row(
         ui,
         "Initiative bonus",
         &mut overrides.initiative_bonus,
         Some(-1000..=1000),
         -1000..=1000,
         &base,
-    );
+    ));
     for (label, bonus) in [
         ("Attack bonus", &mut overrides.attack_bonus),
         ("Damage bonus", &mut overrides.damage_bonus),
     ] {
         let mut value = bonus.map(Change::Add);
-        change_row(ui, label, &mut value, None, -1000..=1000, &base);
+        said(change_row(ui, label, &mut value, None, -1000..=1000, &base));
         *bonus = match value {
             Some(Change::Add(amount)) => Some(amount),
             _ => None,
         };
     }
-    change_row(
+    said(change_row(
         ui,
         "Speed",
         &mut overrides.speed,
         Some(0..=1000),
         -1000..=1000,
         &base,
-    );
+    ));
     match sides {
         Some(_) if overrides.side.is_none() => {}
         Some(sides) => {
@@ -2226,7 +2248,11 @@ pub(super) fn overrides_form(
     if changed {
         *block = overrides.to_mapping();
     }
-    FormEnd { done, changed }
+    FormEnd {
+        done,
+        changed,
+        fault,
+    }
 }
 
 /// The same official names and local Other effect as the run.
@@ -2492,6 +2518,17 @@ impl Encounters {
         let block_right = column_right.map_or(ui.max_rect().right(), |right| {
             right.min(ui.max_rect().right())
         });
+        // The save row's reasons are measured to one edge on both tabs of the compact editor
+        // (Astra, 386): the members column's width as `members_pane` gives it, which the Add
+        // creatures tab does not draw. So a reason keeps its place, and the row its height,
+        // when the DM changes tab.
+        let reasons_right = if compact {
+            ui.max_rect().left()
+                + (ui.available_width() - ui.spacing().scroll.allocated_width())
+                    .clamp(0.0, design::LIST_MEASURE)
+        } else {
+            block_right
+        };
         // FB7: Save group is on the title line at the editor's right edge, above the Add
         // creatures column, where Save encounter is in the encounter editor (round 28: one place
         // in both editors). The name and Belongs to keep the block's edge. The save row below
@@ -2550,103 +2587,110 @@ impl Encounters {
         // Each reason: the words its place is measured by (the longest form), and the words it
         // shows now, if any.
         // Each line below the row: the words it is measured by, the words it shows now, and
-        // whether it is the place kept for a refusal said elsewhere (G122, below).
-        let mut below: Vec<(std::borrow::Cow<'static, str>, Option<&'static str>, bool)> =
-            Vec::new();
-        // G122, lead ruling: while Save refuses a fault that the body says in its place (under
-        // Belongs to, or in a member's row), the save row keeps a place for it, beside Save or
-        // on its own line under the row. The body draws first: the fault shows there only when
-        // its own place is not whole on screen (another tab, scrolled away), so it is said once,
-        // by the mouse and the keyboard alike.
-        let elsewhere: Option<(Tone, String)> = match refusal.as_ref().map(|r| (r.place, r)) {
-            Some((RefusalPlace::BelongsTo, _)) => Some((Tone::Warning, GONE_BESIDE_SAVE.into())),
-            Some((RefusalPlace::Member(_, tone), refusal)) => Some((tone, refusal.text.clone())),
+        // whether it is the campaign-switch reason's line (G122, below).
+        let mut below: Vec<(&'static str, Option<&'static str>, bool)> = Vec::new();
+        // G122, lead ruling (round 29, the band at 960): while Save refuses a fault that the
+        // body says in its own place (under Belongs to, or in a member's row), short words for
+        // it take the place of the campaign-switch reason, the lowest of the row's reasons: from
+        // that reason's start to the row's end, where Save's own reason would be (an empty group
+        // cannot be refused for these). No place is added, so the row and the rule stay where
+        // they are on main. The body draws first; then that place shows these words when the
+        // fault's own place is not whole on screen (another tab, scrolled away), else the switch
+        // reason as before. So the fault is said once, by the mouse and the keyboard alike.
+        let elsewhere: Option<(Tone, &'static str)> = match refusal.as_ref().map(|r| r.place) {
+            Some(RefusalPlace::BelongsTo) => Some((Tone::Warning, GONE_BESIDE_SAVE)),
+            Some(RefusalPlace::Member(_, tone)) => Some((tone, MEMBER_BESIDE_SAVE)),
             _ => None,
         };
         let gone = elsewhere.is_some();
-        let gone_words = elsewhere
-            .as_ref()
-            .map_or_else(String::new, |(tone, words)| {
-                {
-                    // The icon `small_message` draws before the words, for the measure.
-                    let icon = if *tone == Tone::Error {
-                        icons::ERROR
-                    } else {
-                        icons::WARN
-                    };
-                    format!("{icon} {words}")
-                }
-            });
+        // The switch reason's place while `gone`, and its words, drawn after the body.
         let mut gone_place: Option<egui::Rect> = None;
+        let mut deferred_switch: Option<&'static str> = None;
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
             discard =
                 super::editor_save_state(ui, state.word().status(), state.discard_shown(), None);
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
-            let mut room = block_right - ui.cursor().left();
-            if gone {
-                let width = design::number_width(ui, &gone_words, &font).ceil();
-                if width + gap <= room {
-                    room -= width + gap;
-                    let row = ui.max_rect();
-                    gone_place = Some(egui::Rect::from_min_max(
-                        egui::pos2(block_right - width, row.top()),
-                        egui::pos2(block_right, row.top() + Density::Scan.control()),
-                    ));
-                } else {
-                    below.push((gone_words.clone().into(), None, true));
-                }
-            }
+            let mut room = reasons_right - ui.cursor().left();
             // Save's own reason first: it stays at the row's end, under Save, while there is
             // room. A dirty group blocks the campaign switch wherever it is open, so it says so,
             // as the encounter editor does.
-            let mut beside = |measure: &'static str, shown: Option<&'static str>| {
+            let mut beside = |measure: &'static str, shown: Option<&'static str>, switch: bool| {
                 let width = design::number_width(ui, measure, &font) + gap;
                 if width <= room {
                     room -= width;
-                    shown
+                    (shown, true)
                 } else {
-                    below.push((measure.into(), shown, false));
-                    None
+                    below.push((measure, shown, switch));
+                    (None, false)
                 }
             };
-            let empty_reason = beside(EMPTY_REASON, empty.then_some(EMPTY_REASON));
+            let (empty_reason, _) = beside(EMPTY_REASON, empty.then_some(EMPTY_REASON), false);
             // FB6: while Save is blocked, Discard is the one way out, so the lock says only that
             // (`DraftState::lock_reason`). Its place is measured by the longer form.
-            let switch = beside(
+            let (switch, on_row) = beside(
                 design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
                 state.lock_reason(),
+                true,
             );
-            super::blocked_reason(ui, switch);
+            if gone && on_row {
+                let row = ui.max_rect();
+                gone_place = Some(egui::Rect::from_min_max(
+                    egui::pos2(ui.cursor().left(), row.top()),
+                    egui::pos2(reasons_right, row.top() + Density::Scan.control()),
+                ));
+                deferred_switch = switch;
+            } else {
+                super::blocked_reason(ui, switch);
+            }
             ui.allocate_ui_with_layout(
                 egui::vec2(
-                    (block_right - ui.cursor().left()).max(0.0),
+                    (reasons_right - ui.cursor().left()).max(0.0),
                     Density::Scan.control(),
                 ),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| super::blocked_reason(ui, empty_reason),
             );
         });
-        for (reason, shown, kept) in below {
+        for (reason, shown, switch) in below {
             let top = ui.cursor().top();
             let height = ui
                 .painter()
                 .layout(
-                    reason.into_owned(),
+                    reason.to_owned(),
                     Type::Small.font(ui),
                     colors().muted,
                     ui.available_width(),
                 )
                 .size()
                 .y;
-            if kept {
-                // The refusal said elsewhere is drawn here after the body, if at all.
+            // A layout too narrow for the switch reason on the row (narrower than 960, beside
+            // Lookup): its own line, as on main, is the place, as tall as the taller of the two.
+            let height = match elsewhere {
+                Some((_, words)) if switch => height.max(
+                    ui.painter()
+                        .layout(
+                            words.to_owned(),
+                            Type::Small.font(ui),
+                            colors().muted,
+                            (ui.available_width() - design::ICON_SLOT - design::S).max(0.0),
+                        )
+                        .size()
+                        .y,
+                ),
+                _ => height,
+            };
+            let shown = if gone && switch {
                 gone_place = Some(egui::Rect::from_min_size(
                     egui::pos2(ui.cursor().left(), top),
                     egui::vec2(ui.available_width(), height),
                 ));
-            }
+                deferred_switch = shown;
+                None
+            } else {
+                shown
+            };
             super::blocked_reason(ui, shown);
             let used = ui.cursor().top() - top;
             ui.add_space((height + ui.spacing().item_spacing.y - used).max(0.0));
@@ -2749,15 +2793,19 @@ impl Encounters {
                 ));
             },
         );
-        if let (Some(place), Some((tone, words))) =
-            (gone_place.filter(|_| !gone_shown.get()), elsewhere.as_ref())
-        {
+        if let (Some(place), Some((tone, words))) = (gone_place, elsewhere.as_ref()) {
             let mut beside = ui.new_child(
                 egui::UiBuilder::new()
                     .max_rect(place)
                     .layout(egui::Layout::left_to_right(egui::Align::Center)),
             );
-            design::small_message(&mut beside, *tone, words);
+            // Nothing is painted outside the place.
+            beside.set_clip_rect(place.intersect(ui.clip_rect()));
+            if gone_shown.get() {
+                super::blocked_reason(&mut beside, deferred_switch);
+            } else {
+                design::small_message(&mut beside, *tone, words);
+            }
         }
         self.record_separation(separated.into_inner());
         if let Some(press) = paned.pressed {
@@ -3536,13 +3584,10 @@ fn members(
             }
             if let Some(entry) = entry {
                 let fault = |cause: &str| member_fault(&name, Some(&entry.name), line, cause);
-                let before = ui.cursor().top();
-                change_faults(ui, &member.overrides, entry, &side, is_open, &fault);
-                if ui.cursor().top() > before {
-                    fault_said = Some(egui::Rect::from_x_y_ranges(
-                        ui.min_rect().x_range(),
-                        before..=ui.cursor().top(),
-                    ));
+                if let Some(said) =
+                    change_faults(ui, &member.overrides, entry, &side, is_open, &fault)
+                {
+                    fault_said = Some(said);
                 }
                 // The open form edits one member's changes: a change it writes is an edit. The form
                 // says so itself; nothing here copies the changes (review of PR 299).
@@ -3557,6 +3602,10 @@ fn members(
                         &mut draft.typed,
                     );
                     edited |= end.changed;
+                    // The open form says the change's fault on its field or at its top.
+                    if end.fault.is_some() {
+                        fault_said = end.fault;
+                    }
                     if end.done {
                         *expanded = None;
                         ui.scroll_to_rect(member_row, Some(egui::Align::Min));
