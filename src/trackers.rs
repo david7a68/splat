@@ -3790,9 +3790,9 @@ mod tests {
         let mut race = race();
         let t = std::mem::take(&mut race.trackers);
         let mut h = Harness::builder()
-            // Wide enough that every first action fits after the values: the layout in which a
-            // wider value could push the actions.
-            .with_size(eframe::egui::vec2(480.0, 640.0))
+            // Wide enough that every line's first two actions fit after the values (round 30
+            // `tracker-action-wrap`): the layout in which a wider value could push the actions.
+            .with_size(eframe::egui::vec2(640.0, 640.0))
             .build_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
         crate::design::theme::install(&h.ctx);
         // The harness drew a first frame with egui's own fonts, before the theme's: measure the

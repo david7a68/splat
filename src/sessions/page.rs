@@ -314,6 +314,15 @@ impl design::results::Kept for RecordingSaved {
     }
 }
 
+/// What one recording row holds of the tab's single places: the primary action, the
+/// destination's help line, and `Record again` (`record_again_row`).
+#[derive(Clone, Copy)]
+struct RowRoles {
+    primary: bool,
+    destination_here: bool,
+    record_again_here: bool,
+}
+
 /// What the DM chose in the session page's message footer, done after the footer is drawn.
 #[derive(Clone, Debug, PartialEq)]
 enum SessionAct {
@@ -5190,10 +5199,13 @@ impl Sessions {
         recording: &Recording,
         settings: &ProcessingSettings,
         book: &Book,
-        primary: bool,
-        destination_here: bool,
-        record_again_here: bool,
+        roles: RowRoles,
     ) {
+        let RowRoles {
+            primary,
+            destination_here,
+            record_again_here,
+        } = roles;
         let c = colors();
         let live = self
             .live
@@ -6280,9 +6292,13 @@ impl Sessions {
                             recording,
                             settings,
                             book,
-                            primary == Some(index) && !self.confirm_record && !banner_primary,
-                            destination == Some(index),
-                            record_again == Some(index),
+                            RowRoles {
+                                primary: primary == Some(index)
+                                    && !self.confirm_record
+                                    && !banner_primary,
+                                destination_here: destination == Some(index),
+                                record_again_here: record_again == Some(index),
+                            },
                         );
                     },
                 );
@@ -8255,7 +8271,7 @@ mod tests {
         assert_eq!(
             sessions.not_being_played().as_ref().map(Sentence::as_str),
             Some(
-                "Session 1 - The Bridge 2.md is not the session being played. The session being played is Session 1 - The Bridge.md. What you write and add on this page goes into Session 1 - The Bridge 2.md."
+                "What you write and add on this page goes into Session 1 - The Bridge 2.md. The session being played is Session 1 - The Bridge.md."
             ),
             "iter-8-C-ST2-files"
         );
@@ -8263,7 +8279,7 @@ mod tests {
         assert_eq!(
             sessions.not_being_played().as_ref().map(Sentence::as_str),
             Some(
-                "Session 2 is not the session being played. What you write and add on this page goes into Session 1 - The Bridge 2.md."
+                "What you write and add on this page goes into Session 1 - The Bridge 2.md. The session being played is Session 1."
             )
         );
         sessions.selected = Some(played.id);
