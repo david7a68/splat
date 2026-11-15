@@ -253,7 +253,7 @@ mod tests {
                 harness.run();
                 assert_eq!(
                     node_values(&harness, label),
-                    [name.clone()],
+                    std::slice::from_ref(&name),
                     "at {width}: one value, the plain words"
                 );
                 let rows = painted_rows(&harness, label);
