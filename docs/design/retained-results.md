@@ -36,7 +36,8 @@ sentences). It does not grow with the event list or the notes. It is counted (`h
 2b's to remove. Everything else on an unchanged frame is constant and counted (`visits`): `refresh`
 compares three values; `present` finds its entry by the place kept with the line (valid while the
 revision stands), not by a search; `expire` keeps the oldest act for the store's revision and visits no
-entry before the next end (at an end it visits each entry once). `set_locks` visits every entry, so an
+entry before the next end (at an end it visits each entry once, and finds the next end among those
+that stay). `set_locks` visits every entry, so an
 owner calls it when the lock's source changed, not each frame (no first owner has a lock). Other legacy
 footer work of these panes (other results, the removal line) is outside this claim.
 
@@ -100,7 +101,8 @@ another file is another owner key, so its Add shows no more and ends by its life
 that `fights_that_keep_hp` reads: which read of the run list it is (a revision that `take_run_list`
 advances: a reload, a deleted or restored run) and the open run's id and whether it is running. Their
 revision is the second input of both Add keys (`Plan::saved_runs_revision`, `TimelinePage::set_saved_runs`).
-The work is constant per frame (a revision and the open run's timeline fact), never the run list.
+The work is constant per frame (a revision, and the open run's id and running flag through
+`Run::keeps_saved_hp`, with no string copied), never the run list.
 
 Footer construction (`list_messages`, `plan_messages`) keeps only `refresh` (a revision compare on an
 unchanged frame) and `present`. The per-frame `day_numbers`, event searches, `fights_that_keep_hp` and the

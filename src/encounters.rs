@@ -4505,21 +4505,18 @@ impl Encounters {
         self.run_facts.0.revision()
     }
 
-    /// Note the saved-run facts: a revision and the open run's timeline fact (its id, state and
-    /// name, as the app reads each frame), never the run list.
+    /// Note the saved-run facts: a revision and the open run's id and running flag, constant
+    /// work with no string copied (`Run::keeps_saved_hp`), never the run list.
     fn note_run_facts(&mut self) {
         let facts = RunFacts {
             listed: self
                 .snapshot
                 .as_ref()
                 .map(|snapshot| snapshot.runs_read.revision()),
-            open: self.run.as_ref().map(|run| {
-                let fact = run.timeline_fact();
-                (
-                    fact.id,
-                    matches!(fact.state, crate::timeline::RunState::Running),
-                )
-            }),
+            open: self
+                .run
+                .as_ref()
+                .map(crate::encounter_run::Run::keeps_saved_hp),
         };
         self.run_facts.0.set(facts);
     }
@@ -11602,6 +11599,20 @@ mod tests {
             editor.saved_runs_revision(),
             no_run,
             "an open run's facts are over the list"
+        );
+        // Review F2 of PR 444: an unchanged poll copies no timeline fact (no run name).
+        let open = editor.saved_runs_revision();
+        let made = crate::encounter_run::TIMELINE_FACTS.with(std::cell::Cell::get);
+        for _ in 0..3 {
+            editor.note_run_facts();
+        }
+        assert_eq!(
+            (
+                editor.saved_runs_revision(),
+                crate::encounter_run::TIMELINE_FACTS.with(std::cell::Cell::get)
+            ),
+            (open, made),
+            "an unchanged poll keeps the revision and copies no fact of the run"
         );
         let current = editor.run().unwrap().live_info().unwrap().id;
         editor.open_saved_run(&path, &campaign);

@@ -614,11 +614,21 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         };
         let mut oldest = self.oldest_born();
         if oldest.is_some_and(|born| crate::frame_clock::passed(born, life)) {
+            // One visit of each entry: the ended leave, and the next oldest is found among those
+            // that stay.
             let before = self.entries.len();
-            self.entries.retain(|entry| !entry.ended());
+            let mut next: Option<f64> = None;
+            self.entries.retain(|entry| {
+                let stays = !entry.ended();
+                if stays {
+                    next = Some(next.map_or(entry.born, |next| next.min(entry.born)));
+                }
+                stays
+            });
             projection::count(|work| work.visits += before);
             self.changed_if_fewer(before);
-            oldest = self.oldest_born();
+            self.oldest = Some((self.revision, next));
+            oldest = next;
         }
         if let Some(born) = oldest {
             let left = life.as_secs_f64() - (crate::frame_clock::now() - born);
@@ -2553,6 +2563,33 @@ mod tests {
             projection_work().visits - after.visits,
             201,
             "the end visits each entry once"
+        );
+        // Review F3 of PR 444: staggered births. C at 50 s and D at 60 s: at 80 s C ends and D
+        // stays; that frame visits each entry once, finding D's end on the way, and the next
+        // frame before D's end visits none.
+        crate::frame_clock::set(50.0);
+        results.record_timed(Timed(B, "C.".into()), &ctx);
+        crate::frame_clock::set(60.0);
+        results.record_timed(Timed(OTHER, "D.".into()), &ctx);
+        let before = projection_work().visits;
+        crate::frame_clock::set(80.0);
+        results.expire(&ctx);
+        assert!(
+            results.get(&B).is_none() && results.get(&OTHER).is_some(),
+            "C ended, D stays"
+        );
+        assert_eq!(
+            projection_work().visits - before,
+            2,
+            "an end visits each entry once, also the one that stays"
+        );
+        let before = projection_work().visits;
+        crate::frame_clock::set(85.0);
+        results.expire(&ctx);
+        assert_eq!(
+            projection_work().visits - before,
+            0,
+            "the next end was found on the way"
         );
     }
 
