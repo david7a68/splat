@@ -13347,7 +13347,9 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
             |(((message, build), words), undo)| {
                 build.top() >= message.bottom() - 1.0
                     && (build.center().y - undo.center().y).abs() <= 1.0
-                    && (build.left() - (undo.right() + design::L)).abs() <= 1.0
+                    // `L` after the Undo's slot, which ends `S` (its item spacing) past its
+                    // accessible rect.
+                    && (build.left() - (undo.right() + design::L + design::S)).abs() <= 1.0
                     && words > build.left()
             },
         );
