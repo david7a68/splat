@@ -20807,6 +20807,97 @@ pub mod encounter_owned_groups {
             d.has_containing("Encounter deleted") && !d.has_containing("For a deleted encounter"),
             "Arrivals says Encounter deleted for a group whose encounter is gone",
         );
+
+        // B3 final review, F5: the owned groups' check runs after a change, never on an
+        // unchanged frame, and its key reads no group. The count holds both.
+        close_run(d);
+        go_encounters(d);
+        let work = crate::test_support::CachedWork::start("Owned-group check", d, |_| {
+            let (reached, work) = crate::encounters::owned_group_work();
+            crate::test_support::Counts { reached, work }
+        });
+        open_saved_encounter(d, SHRINE);
+        d.expect(&format!("Group name: {GROUP_SHRINE}"));
+        let warm = work.warm(d, true, 1);
+        let idle = work.steady(d, |d| {
+            d.settle();
+            d.at_size(SMALL, |_| ());
+            d.settle();
+            d.has(&format!("Group name: {GROUP_SHRINE}"))
+        });
+        d.observe(
+            "s30-B3-F5-idle",
+            warm.is_ok() && idle.is_ok(),
+            format!("Owned-group check: opened {warm:?}; unchanged frames {idle:?}"),
+        );
+        // F2, R35: a saved owned group whose name is cleared blocks Save before any Save is
+        // pressed, and the footer paints why, in view at every size.
+        let field = format!("Group name: {GROUP_SHRINE}");
+        d.type_into(&field, " ");
+        d.press_ctrl(Key::A);
+        d.press(Key::Delete);
+        let reason = "Enter a group name.";
+        let painted = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.is_disabled(SAVE_ENCOUNTER) && d.visible_text(reason)
+            })
+        });
+        d.observe(
+            "s30-B3-F2-reason",
+            painted.iter().all(|shown| *shown),
+            format!("Blank group name: Save blocked and {reason:?} painted at 960, 1200, 1920: {painted:?}"),
+        );
+        // F1: a different valid name repairs it in the same campaign read: Save waits no more,
+        // and Save writes it.
+        d.type_text("Shrine Vanguard");
+        let repaired = !d.is_disabled(SAVE_ENCOUNTER) && !d.visible_text(reason);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Saved");
+        let saved = d.has("Group name: Shrine Vanguard");
+        // And by the keyboard: blank it, cache the fault, name it again, Ctrl+S.
+        d.type_into("Group name: Shrine Vanguard", " ");
+        d.press_ctrl(Key::A);
+        d.press(Key::Delete);
+        let blocked = d.is_disabled(SAVE_ENCOUNTER);
+        d.type_text("Shrine Reserve");
+        d.press_ctrl(Key::S);
+        d.expect("Saved");
+        let keyed = !d.app_mut().encounters.draft_dirty();
+        d.observe(
+            "s30-B3-F1-renamed",
+            repaired && saved && blocked && keyed,
+            format!(
+                "Repaired name: Save open {repaired}, saved {saved}; blank again blocked {blocked}; Ctrl+S saved {keyed}"
+            ),
+        );
+        // F3, R37: the encounter's own missing name is a missing part, by its kind. A saved
+        // encounter whose name is removed says Invalid in the warning tone; a new one, New.
+        d.type_into("Encounter name: Shrine of Cinders", " ");
+        d.press_ctrl(Key::A);
+        d.press(Key::Delete);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Enter an encounter name.");
+        let saved_word = (
+            d.visible_text(&format!("{} Invalid", crate::design::icons::WARN)),
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
+        );
+        d.click("Discard");
+        d.click("Back to encounters");
+        d.click(NEW_ENCOUNTER);
+        d.press(Key::Delete);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Enter an encounter name.");
+        let new_word = (
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
+            d.visible_text("Invalid"),
+        );
+        d.observe(
+            "s30-B3-F3-encounter-name",
+            saved_word == (true, false) && new_word == (true, false),
+            format!(
+                "No name: saved encounter (warning Invalid, New) {saved_word:?}; new encounter (New, Invalid) {new_word:?}"
+            ),
+        );
     }
 }
 

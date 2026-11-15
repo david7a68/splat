@@ -41,6 +41,29 @@ const PARTY_FROM_CAMPAIGN: &str = "This encounter fills some rows from the campa
 struct Invalid {
     text: String,
     tone: Tone,
+    /// F3, R37: a required part of the encounter is missing (its name), as against a change
+    /// that cannot stand. Set where the fault is found (`Invalid::missing`), never read back from
+    /// the words; with the draft's origin it gives the save row's word.
+    missing: bool,
+}
+
+impl Invalid {
+    /// A required part is missing.
+    fn missing(text: &str) -> Self {
+        Self {
+            missing: true,
+            ..Self::from(text)
+        }
+    }
+
+    /// The save row's typed diagnosis of this fault.
+    fn diagnosis(&self) -> design::save_row::Diagnosis<'static> {
+        if self.missing {
+            design::save_row::Diagnosis::incomplete(self.text.clone())
+        } else {
+            design::save_row::Diagnosis::refused(self.text.clone())
+        }
+    }
 }
 
 impl std::fmt::Debug for Invalid {
@@ -54,6 +77,7 @@ impl From<String> for Invalid {
         Self {
             text,
             tone: Tone::Error,
+            missing: false,
         }
     }
 }
@@ -190,12 +214,15 @@ impl RosterFault {
     }
 }
 
-/// Save's checks of an encounter's changed groups as one ranked diagnosis, with the origin of
-/// the first group that only lacks a part (`owned_groups_found`).
-type OwnedGroupsFound = (
-    design::save_row::Diagnosis<'static>,
-    Option<design::save_row::DraftOrigin>,
-);
+/// Save's checks of an encounter's changed groups (`owned_groups_found`): one ranked
+/// diagnosis, the origin of the first group that only lacks a part, and the reason the footer
+/// paints, if any (F2, R35): the first refusal that no group row or field already says.
+#[derive(Clone)]
+struct OwnedGroupsFound {
+    found: design::save_row::Diagnosis<'static>,
+    origin: Option<design::save_row::DraftOrigin>,
+    footer: Option<String>,
+}
 
 /// N1: Save's checks of an encounter's changed groups, ranked: the first refused change outranks
 /// the first missing part, whose group's origin comes with it (R37).
@@ -203,12 +230,9 @@ fn owned_groups_found(
     groups: &[GroupDraft],
     snapshot: &Snapshot,
     encounter: Uuid,
-) -> (
-    design::save_row::Diagnosis<'static>,
-    Option<design::save_row::DraftOrigin>,
-) {
+) -> OwnedGroupsFound {
     use design::save_row::Diagnosis;
-    let (mut refused, mut incomplete) = (None, None);
+    let (mut refused, mut incomplete, mut refused_footer) = (None, None, None);
     for group in groups.iter().filter(|group| group.dirty()) {
         let Err(refusal) = group.check(snapshot, Some(encounter)) else {
             continue;
@@ -221,14 +245,51 @@ fn owned_groups_found(
             };
             incomplete.get_or_insert((words, group.origin()));
         } else {
-            refused.get_or_insert(named_group_words(&group.name(), refusal.text()));
+            let words = named_group_words(&group.name(), refusal.text());
+            // A member's row or Belongs to already says its own fault.
+            if matches!(
+                refusal.place(),
+                groups::RefusalPlace::Footer | groups::RefusalPlace::SaveRow
+            ) {
+                refused_footer.get_or_insert(words.clone());
+            }
+            refused.get_or_insert(words);
         }
     }
     let origin = incomplete.as_ref().map(|(_, origin)| *origin);
+    let footer = refused_footer.or_else(|| incomplete.as_ref().map(|(words, _)| words.clone()));
     let found = incomplete
         .map_or_else(Diagnosis::valid, |(words, _)| Diagnosis::incomplete(words))
         .and(refused.map_or_else(Diagnosis::valid, Diagnosis::refused));
-    (found, origin)
+    OwnedGroupsFound {
+        found,
+        origin,
+        footer,
+    }
+}
+
+/// F5: the key of the owned-group check: the campaign's read, the encounter draft, its number
+/// of groups and the count of group revisions issued. Constant work per frame: no group is
+/// read. Every edit of a group issues a revision (`GroupDraft::touch`), so a changed group
+/// changes the key; a group added or removed changes the number.
+fn owned_groups_key(snapshot: &Snapshot, draft: &Draft) -> (Uuid, Uuid, usize, u64) {
+    (
+        snapshot.revision,
+        draft.id,
+        draft.groups.len(),
+        groups::revisions_issued(),
+    )
+}
+
+#[cfg(test)]
+thread_local! {
+    /// (frames that asked for the owned-group check, groups that the check or its key read)
+    static OWNED_GROUP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+/// The counts of the owned-group check, for `CachedWork` (F5).
+#[cfg(test)]
+pub(crate) fn owned_group_work() -> (usize, usize) {
+    OWNED_GROUP_WORK.with(std::cell::Cell::get)
 }
 
 /// A group's refusal as the encounter's Save says it: `Group <name>: <words>`.
@@ -900,7 +961,7 @@ impl Draft {
             return Err(reason.into());
         }
         if self.name.trim().is_empty() {
-            return Err("Enter an encounter name.".into());
+            return Err(Invalid::missing("Enter an encounter name."));
         }
         // The Loot list writes that section, so a second one typed in the notes would be lost.
         if self.loot_owned && splat::content::loot::has_section(&self.body) {
@@ -941,6 +1002,7 @@ impl Draft {
                         // The kind of fault sets the tone, here where the message is made.
                         let unreadable = snapshot.catalogue.unreadable_ref(reference);
                         Invalid {
+                            missing: false,
                             tone: missing_creature_tone(unreadable),
                             // G125: each row says its deleted entry (`MISSING_CREATURE`), so the
                             // message says only the next act, for every such row.
@@ -3008,7 +3070,7 @@ pub struct Encounters {
     /// N1: Save's checks of the open encounter's changed groups, as one ranked diagnosis with
     /// the origin of the first group that only lacks a part. Keyed by the snapshot revision and
     /// the changed groups' own revisions, so an unchanged frame does not check them again.
-    owned_group_check: Option<((Uuid, Vec<u64>), OwnedGroupsFound)>,
+    owned_group_check: Option<((Uuid, Uuid, usize, u64), OwnedGroupsFound)>,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
@@ -3287,33 +3349,27 @@ impl Encounters {
     /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
     /// part, whose group's origin comes with it. Checked again only when the campaign's read or a
     /// changed group's own revision changes.
-    fn owned_groups_diagnosis(
-        &mut self,
-    ) -> (
-        design::save_row::Diagnosis<'static>,
-        Option<design::save_row::DraftOrigin>,
-    ) {
-        use design::save_row::Diagnosis;
+    fn owned_groups_diagnosis(&mut self) -> OwnedGroupsFound {
         let (Some(snapshot), Some(draft)) = (self.snapshot.as_ref(), self.draft.as_ref()) else {
-            return (Diagnosis::valid(), None);
+            return OwnedGroupsFound {
+                found: design::save_row::Diagnosis::valid(),
+                origin: None,
+                footer: None,
+            };
         };
-        let key = (
-            snapshot.revision,
-            draft
-                .groups
-                .iter()
-                .filter(|group| group.dirty())
-                .map(GroupDraft::revision)
-                .collect::<Vec<_>>(),
-        );
-        if let Some((cached, (found, origin))) = &self.owned_group_check
+        #[cfg(test)]
+        OWNED_GROUP_WORK.with(|work| work.set((work.get().0 + 1, work.get().1)));
+        let key = owned_groups_key(snapshot, draft);
+        if let Some((cached, found)) = &self.owned_group_check
             && *cached == key
         {
-            return (found.clone(), *origin);
+            return found.clone();
         }
-        let (found, origin) = owned_groups_found(&draft.groups, snapshot, draft.id);
-        self.owned_group_check = Some((key, (found.clone(), origin)));
-        (found, origin)
+        #[cfg(test)]
+        OWNED_GROUP_WORK.with(|work| work.set((work.get().0, work.get().1 + draft.groups.len())));
+        let found = owned_groups_found(&draft.groups, snapshot, draft.id);
+        self.owned_group_check = Some((key, found.clone()));
+        found
     }
     /// Whether the shown message is the last failed check of the draft.
     fn shows_validation_error(&self) -> bool {
@@ -5210,7 +5266,7 @@ impl Encounters {
         frame: &'f design::outcome::PaneFrame,
         width: f32,
         root: &std::path::Path,
-        empty_group: Option<String>,
+        groups_reason: Option<String>,
     ) -> design::outcome::Messages<'f, FooterPress> {
         use design::outcome::FaultMessage;
         self.record_member_results();
@@ -5253,7 +5309,9 @@ impl Encounters {
                 EncounterFault::Failed(error)
             };
             messages.outcome(FaultMessage::new(&fault));
-        } else if let Some(reason) = empty_group {
+        } else if let Some(reason) = groups_reason {
+            // F2, R35: the owned groups' first reason that no row says, painted once (an empty
+            // group, a blank name or side, a refusal with no row of its own).
             messages.outcome(FaultMessage::new(&EncounterFault::Invalid(reason)));
         }
         messages
@@ -6076,16 +6134,41 @@ impl Encounters {
         // ranked as the group editor ranks them, then a roster fault or the last refusal, which
         // is a refused change. A missing part alone takes that group's origin (a new group with
         // only its name is `New` in a saved encounter too); otherwise the encounter's own.
-        let (groups_found, groups_origin) = self.owned_groups_diagnosis();
-        let origin = groups_origin.unwrap_or_else(|| {
-            self.draft
-                .as_ref()
-                .map_or(design::save_row::DraftOrigin::Saved, |draft| draft.origin)
-        });
-        let found = groups_found.and(roster_reason.clone().or(refusal).map_or_else(
-            design::save_row::Diagnosis::valid,
-            design::save_row::Diagnosis::refused,
-        ));
+        // F3: the encounter's own last refusal keeps its kind: a missing name is a missing part.
+        // F2: the footer paints the groups' first reason that no row says (R35).
+        let groups = self.owned_groups_diagnosis();
+        let own = refusal
+            .is_some()
+            .then(|| self.validation_error.as_ref().map(Invalid::diagnosis))
+            .flatten();
+        let draft_origin = self
+            .draft
+            .as_ref()
+            .map_or(design::save_row::DraftOrigin::Saved, |draft| draft.origin);
+        // A missing part says `New` only when every missing part is new: the encounter's own
+        // takes its origin, a group's that group's.
+        let missing_origins = [
+            groups.origin,
+            own.as_ref()
+                .filter(|own| own.only_incomplete())
+                .map(|_| draft_origin),
+        ];
+        let origin = if missing_origins.contains(&Some(design::save_row::DraftOrigin::Saved)) {
+            design::save_row::DraftOrigin::Saved
+        } else if missing_origins.contains(&Some(design::save_row::DraftOrigin::New)) {
+            design::save_row::DraftOrigin::New
+        } else {
+            draft_origin
+        };
+        let found = groups
+            .found
+            .clone()
+            .and(roster_reason.clone().map_or_else(
+                design::save_row::Diagnosis::valid,
+                design::save_row::Diagnosis::refused,
+            ))
+            .and(own.unwrap_or_else(design::save_row::Diagnosis::valid));
+        let groups_footer = groups.footer;
         // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
         // the campaign lock (migrate:O, rows 42 and 51). The encounter draft says `Invalid`
         // only while it has changes; its rows name the faults of a clean one.
@@ -6423,7 +6506,7 @@ impl Encounters {
             &frame,
             ui.available_width(),
             &active.path,
-            empty_group.filter(|_| dirty),
+            groups_footer.filter(|_| dirty),
         );
         let paned = messages.pane(
             ui,

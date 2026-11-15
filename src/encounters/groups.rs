@@ -166,6 +166,13 @@ pub(super) struct GroupDraft {
 
 /// A refusal lives in its own module, so that even this file reads its words and place only
 /// through accessors, and cannot change them after its kind is set.
+///
+/// F4: a group's check never meets unreadable data, so a refusal is only a refused change or a
+/// missing part. `GroupDraft::open` builds a draft only from a note that reads and parses (else
+/// it gives an error and no editor opens), and the check reads the draft's typed fields, not the
+/// file. When the file stops reading later, `Encounters::group_disk_view` takes the pane before
+/// the editor draws (the comparison of `disk::Recovery`). The test
+/// `an_empty_group_or_a_missing_creature_cannot_be_saved` holds the first half.
 mod refusal {
     use super::{RefusalPlace, design};
 
@@ -410,10 +417,6 @@ impl GroupDraft {
     /// The draft changed: Save's cached check runs again.
     pub(super) fn touch(&mut self) {
         self.revision = next_revision();
-    }
-    /// Changes at each edit of the draft, and only then: the key of a cached check.
-    pub(super) fn revision(&self) -> u64 {
-        self.revision
     }
     /// No member that Save would write: Save refuses the group.
     pub(super) fn is_empty(&self) -> bool {
@@ -1538,6 +1541,11 @@ pub(super) fn of_encounter(
                                         &response,
                                         &format!("Group name: {}", group.name),
                                     );
+                                    // F1: a name edit is an edit of the group: its revision
+                                    // keys Save's checks, as in the group's own editor.
+                                    if response.changed() {
+                                        group.touch();
+                                    }
                                     name_right = response.rect.right();
                                     if focus_group.as_deref() == Some(path.as_str()) {
                                         *focus_group = None;
@@ -3240,9 +3248,17 @@ pub(crate) fn member_comparisons() -> (usize, usize) {
 }
 
 /// A new revision for a group draft (`GroupDraft::touch`): larger than every one before it.
+static NEXT_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 fn next_revision() -> u64 {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    NEXT_REVISION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// F5: the count of group revisions issued so far. Every edit of any group draft (`touch`), a
+/// new draft and an opened one issue a revision, so an unchanged count means that no group
+/// changed: a stored edit generation that a cache reads in constant time.
+pub(super) fn revisions_issued() -> u64 {
+    NEXT_REVISION.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// What a group is, in its own editor and in the frame an encounter's editor gives it. There,
@@ -3325,6 +3341,10 @@ fn group_fields(
             &output.response,
             &format!("{NOTES_FIELD} for {}", draft.name),
         );
+        // F1: notes make a group changed, so Save checks it: an edit of them is an edit.
+        if output.response.changed() {
+            draft.touch();
+        }
     });
     gone_shown || member_shown
 }
@@ -5247,7 +5267,7 @@ mod tests {
         // N1: in an encounter, a changed group's refusal is not hidden by another, new and
         // empty group: the encounter says Invalid, not New. The new group alone is New.
         let encounter_word = |groups: &[GroupDraft]| {
-            let (found, origin) =
+            let super::super::OwnedGroupsFound { found, origin, .. } =
                 super::super::owned_groups_found(groups, &snapshot, Uuid::new_v4());
             DraftState::new(
                 origin.unwrap_or(design::save_row::DraftOrigin::Saved),
@@ -5267,6 +5287,15 @@ mod tests {
             encounter_word(&[faulty, fresh]),
             SaveWord::Invalid(design::save_row::InvalidCause::Refused)
         ));
+
+        // F4: no editor opens a group whose note does not read: open gives an error.
+        let unreadable = dir.path().join(FOLDER).join("Broken.md");
+        fs::create_dir_all(unreadable.parent().unwrap()).unwrap();
+        fs::write(&unreadable, "---\nsplat_kind: [encounter_group\n---\n").unwrap();
+        assert!(GroupDraft::open(dir.path(), &format!("{FOLDER}/Broken.md")).is_err());
+        fs::write(&unreadable, [0xff_u8, 0xfe, 0x00]).unwrap();
+        assert!(GroupDraft::open(dir.path(), &format!("{FOLDER}/Broken.md")).is_err());
+        fs::remove_file(&unreadable).unwrap();
 
         // E3: the origin is the group's own fact. A saved group whose file is lost, whose
         // lost file the DM accepted (the comparison text goes, as `disk_choice` does), and
