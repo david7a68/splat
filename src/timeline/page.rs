@@ -222,9 +222,6 @@ pub struct TimelinePage {
     pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
     /// Row 123: the campaign's fights and groups by name, for a check result's plan offer.
     pub plan_names: PlanNames,
-    /// Row 123, point 5: why the last plan line's Undo failed, while its journey's block is not
-    /// in view. The next act on checks or the next Undo ends it.
-    plan_fault: Option<checks::UndoFault>,
     focus_length: bool,
     /// Round 29 G142: a roll was made in this journey (its id) at this check (its offset): the
     /// journey's next draw scrolls least so that the check's result and its offer lines are in
@@ -1066,18 +1063,9 @@ impl TimelinePage {
                     }
                 }
                 ListAct::UndoPlanLine => {
-                    self.plan_fault = None;
-                    // Row 123, point 5: the fault keeps its journey: that journey's open block,
-                    // else this footer.
-                    if let Some((journey, act, words)) = notes.undo_plan_line()
-                        && !(self.selected.as_deref() == Some(journey.as_str())
-                            && self.checks.failed_for(&journey, &act, words.clone()))
-                    {
-                        self.plan_fault = Some(checks::UndoFault {
-                            journey,
-                            act,
-                            words,
-                        });
+                    // Row 123: a refused Undo stays on its entry, which both readers show.
+                    if let Some(ticket) = press.ticket {
+                        notes.undo_plan_line(ticket);
                     }
                 }
                 ListAct::File(act) => file_act(book, act, press.ticket),
@@ -1100,20 +1088,10 @@ impl TimelinePage {
         if let Some(line) = notes.event_link_line(frame, ListAct::UndoLinks) {
             messages.kept(line);
         }
-        notes.plan_line_result(&mut messages, ListAct::UndoPlanLine);
-        // Row 123, point 5: a plan line's Undo that failed while its journey's block is not in
-        // view says why here.
-        match self
-            .plan_fault
-            .as_ref()
-            .map(|fault| fault.standing(&book.events))
-        {
-            Some(Some(words)) => {
-                messages.outcome(design::outcome::Outcome::Refused(as_sentence(words)));
-            }
-            // Its journey is gone: the fault has no owner left.
-            Some(None) => self.plan_fault = None,
-            None => {}
+        // Row 123: the plan line's result, or its refused Undo's answer, from the one store the
+        // Session plan reads too.
+        for line in notes.plan_line_lines(frame, ListAct::UndoPlanLine) {
+            messages.kept(line);
         }
         if let Some(offer) = offer {
             messages.outcome(offer.notice(ListAct::UpdateLinks));
@@ -1697,7 +1675,6 @@ impl TimelinePage {
         checks::note_taken(book, length_taken);
         if let Some(act) = checks_act {
             self.checks.clear_problem();
-            self.plan_fault = None;
             if act == checks::Act::Start {
                 self.focus_length = book.events[index].duration.trim().is_empty();
             }

@@ -9977,6 +9977,15 @@ pub mod run_restart {
             closed,
             "The saved run closes with one click in its footer",
         );
+        // Round 30 G181 (ruling Q-o): one unfinished run has no order, so its heading says
+        // none, and its row carries no order word either.
+        d.observe(
+            "s30-Q-o-one",
+            d.has_label("IN PROGRESS 1")
+                && !d.has_containing("last closed first")
+                && !d.has_containing("Closed last"),
+            "One unfinished run: the heading is IN PROGRESS 1 with no order, and the row says no Closed last",
+        );
         d.state("run-closed-in-one-step", Sizes::All);
         go_library(d);
         d.restart();
@@ -21255,13 +21264,29 @@ pub mod encounter_owned_groups {
         });
         open_saved_encounter(d, SHRINE);
         d.expect(&format!("Group name: {GROUP_SHRINE}"));
+        // B3b: the window starts with the campaign read settled (no load pending), and the
+        // key's inputs are recorded before and after it, so a change names its input. The
+        // inputs are this page's only: another app's group edits (the suite runs scenarios on
+        // parallel threads) never reach them.
+        d.settle();
+        let inputs = |d: &mut Driver<'_>| d.app_mut().encounters.owned_group_inputs();
         let warm = work.warm(d, true, 1);
+        let before = inputs(d);
         let idle = work.steady(d, |d| {
             d.settle();
             d.at_size(SMALL, |_| ());
             d.settle();
             d.has(&format!("Group name: {GROUP_SHRINE}"))
         });
+        let after = inputs(d);
+        let held = before.is_some() && before == after && before.is_some_and(|i| !i.3);
+        let idle = if held {
+            idle
+        } else {
+            Err(format!(
+                "the key's inputs changed in the window: {before:?} then {after:?}"
+            ))
+        };
         d.observe(
             "s30-B3-F5-idle",
             warm.is_ok() && idle.is_ok(),
@@ -21411,6 +21436,43 @@ pub mod encounter_owned_groups {
             said.iter()
                 .all(|(blocked, shown, steps, causes)| *blocked && *shown && *steps == 1 && *causes <= 1),
             format!("Member fault: (Save blocked, {step:?} painted, next-step lines, cause lines) at 960, 1200, 1920: {said:?}"),
+        );
+
+        // N4 (B3b, lead rule): the reason that disables Save now is always painted. A failed
+        // write of the encounter stays as its own line, and the owned group's next step is
+        // painted beside it, once, while the group blocks Save.
+        d.click("Discard");
+        d.expect(&format!("Group name: {GROUP_GOBLINS}"));
+        // The name field is in the head, always in view: a change Save must write.
+        d.type_into(&format!("Encounter name: {SHRINE}"), " ");
+        d.press_ctrl(Key::A);
+        d.type_text(&format!("{SHRINE} at night"));
+        d.expect(&format!("Encounter name: {SHRINE} at night"));
+        // The real save path fails at its write, as a full disk would.
+        const FULL: &str = "Not saved. The disk is full.";
+        crate::encounters::fail_next_encounter_write(FULL);
+        d.click(SAVE_ENCOUNTER);
+        d.settle();
+        let failed = d.visible_text(FULL);
+        d.type_into(&format!("Group notes for {GROUP_GOBLINS}"), "Hungry.");
+        let both = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let mut steps = 0;
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if clip.intersects(rect) {
+                        steps += usize::from(text.galley.job.text.contains(&step));
+                    }
+                });
+                (d.is_disabled(SAVE_ENCOUNTER), steps, d.visible_text(FULL))
+            })
+        });
+        d.observe(
+            "s30-B3b-N4-error-and-step",
+            failed && both.iter().all(|(blocked, steps, error)| *blocked && *steps == 1 && *error),
+            format!(
+                "After a failed write ({failed}) and a group edit: (Save blocked, next-step lines, write error painted) at 960, 1200, 1920: {both:?}"
+            ),
         );
         std::fs::write(&file, &text).unwrap();
     }
@@ -25556,15 +25618,18 @@ pub mod session_plan {
                 && !d.has_containing("Last: Party"),
             "Last: after a long rest says full HP, in lower case",
         );
-        // iter-25-S FK8, iter-28-R FM8 (review of PR 326): the run closed last says what the
-        // value is, `Closed last`, true also for a run still in Setup (no turn was played).
+        // iter-25-S FK8, iter-28-R FM8, round 30 G181 (ruling Q-o): the order of the
+        // unfinished runs is said once, in their heading (`last closed first`); no row carries
+        // an order word (`Closed last` read as "closed at last").
         d.observe(
-            "iter-28-R-FM8",
-            d.nodes()
-                .iter()
-                .any(|node| node.name.contains("Closed last"))
-                && !d.has_containing("Played last"),
-            "The saved run's second line says Closed last (the value is the order of closing)",
+            "s30-Q-o",
+            d.has_label("IN PROGRESS 3 · last closed first")
+                && !d.nodes().iter().any(|node| {
+                    let name = node.name.to_lowercase();
+                    !name.starts_with("in progress")
+                        && (name.contains("closed last") || name.contains("played last"))
+                }),
+            "IN PROGRESS says its order once in the heading; no saved run's line says Closed last",
         );
         d.state("saved-runs-history", Sizes::All);
         d.observe(
@@ -25584,7 +25649,7 @@ pub mod session_plan {
                 node.name.starts_with(|c: char| c.is_ascii_digit())
                     && (node.name.ends_with(" in progress") || node.name.ends_with(" ready"))
                     || node.name.contains(" ready · ")
-            }) && d.has_label("IN PROGRESS 2")
+            }) && d.has_label("IN PROGRESS 2 · last closed first")
                 && d.has_label("READY TO RUN 1"),
             "The Encounters header does not repeat the headings' counts; the headings count 2 in progress and 1 ready",
         );
@@ -25593,7 +25658,7 @@ pub mod session_plan {
         // Review of PR 296, item 3: after Undo the heading counts the run again.
         d.observe(
             "iter-27-S-FM3-undo",
-            d.has_label("IN PROGRESS 3"),
+            d.has_label("IN PROGRESS 3 · last closed first"),
             "After Undo delete run, the IN PROGRESS heading counts 3",
         );
         d.observe(
@@ -25754,6 +25819,43 @@ pub mod session_plan {
             "The Library holds the encounter's latest file",
         );
         d.begin_task();
+        // R41 (round 30 review F2), kept last: the plan's played fight says the run folder's
+        // cause in Encounters' words and tone, not "This fight's run cannot be read" in the
+        // info tone; when the folder comes back, its kept failure ends and the summary shows,
+        // with the event still open.
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+        // The fight opens while the folder is gone, so its failure is the kept summary when
+        // the folder comes back.
+        if d.has("Whole run") {
+            d.click(FIRST);
+        }
+        let folder = d.app_mut().encounters.saved_runs()[0]
+            .path
+            .parent()
+            .unwrap()
+            .to_owned();
+        let aside = folder.with_file_name("Runs set aside");
+        std::fs::rename(&folder, &aside).unwrap();
+        d.click(FIRST);
+        d.settle();
+        d.observe(
+            "s30-R41-plan-missing",
+            d.has_containing("Splat cannot find the run folder ")
+                && !d.has_containing("This fight’s run cannot be read"),
+            "The plan's played fight says Splat cannot find the run folder, as Encounters does",
+        );
+        std::fs::rename(&aside, &folder).unwrap();
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        d.app_mut().encounters.read_runs_again(&campaign);
+        d.settle();
+        d.observe(
+            "s30-R41-plan-restored",
+            !d.has_containing("cannot find the run folder")
+                && !d.has_containing("This fight’s run cannot be read")
+                && d.has("Whole run"),
+            "With the run folder back, the open played fight shows its summary, not the old failure",
+        );
     }
 }
 
