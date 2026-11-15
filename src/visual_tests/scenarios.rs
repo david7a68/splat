@@ -757,23 +757,21 @@ pub(super) fn said_once(
     let key = (said(d), d.visible_text(beside), tones_beside(d, beside));
     d.click_starting("Members");
     // Where the place is cut at the column's end (a member row at the bottom of the plan's
-    // editor), both are painted and the save row is right to say it: the column scrolls, a
-    // little at a time, until the place is whole. Then only the place says it.
+    // editor at 960), both are painted and the save row is right to say it. Then the place is
+    // looked at where it is whole: at 1920.
     let cut = said(d) > 1;
-    for _ in 0..8 {
-        if said(d) <= 1 {
-            break;
-        }
-        if let Some(at) = d.painted_rect_in(field, egui::Rect::EVERYTHING) {
-            d.scroll_points_at(at.center(), 40.0);
-        }
-    }
-    let place = (said(d), d.visible_text(field), d.visible_text(beside));
+    let look = |d: &Driver<'_>| (said(d), d.visible_text(field), d.visible_text(beside));
+    let place = if cut { d.at_size(LARGE, look) } else { look(d) };
     let mut painted = Vec::new();
-    d.each_painted_text(|text, _| {
+    d.each_painted_text(|text, clip| {
         let words = text.galley.job.text.as_str();
         if about.iter().any(|about| words.contains(about)) {
-            painted.push(words.chars().take(90).collect::<String>());
+            painted.push(format!(
+                "{} at {:?} in {:?}",
+                words.chars().take(60).collect::<String>(),
+                text.pos,
+                clip
+            ));
         }
     });
     if lookup {
