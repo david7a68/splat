@@ -680,7 +680,7 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
     front.insert("session_date".into(), new.date.to_owned().into());
     let front = serde_yaml_ng::to_string(&front).map_err(|e| e.to_string())?;
     let text = format!("---\n{front}---\n{}", fill_template(new));
-    write_new(&path, &text)?;
+    write_new_io(&path, &text).map_err(|error| not_created(&error))?;
     let note = parse_note(&path, &text).ok_or("The new note could not be read back.")?;
     remember_notes(folder, std::slice::from_ref(&note))?;
     Ok(note)
@@ -693,6 +693,10 @@ fn write_new(path: &Path, text: &str) -> Result<(), String> {
 /// `write_new` with the system error kept, so a note's save can say what happened in plain
 /// words (`not_saved`).
 fn write_new_io(path: &Path, text: &str) -> std::io::Result<()> {
+    #[cfg(test)]
+    if let Some(code) = FAILING_WRITES.with(std::cell::Cell::get) {
+        return Err(std::io::Error::from_raw_os_error(code));
+    }
     let parent = path
         .parent()
         .ok_or_else(|| std::io::Error::other("Invalid location."))?;
@@ -705,7 +709,7 @@ fn write_new_io(path: &Path, text: &str) -> std::io::Result<()> {
 
 /// Change a note's title or date, and leave any other property the DM added.
 pub fn update_details(note: &Note, title: &str, date: &str, number: u32) -> Result<Note, String> {
-    let text = fs::read_to_string(&note.path).map_err(|e| e.to_string())?;
+    let text = fs::read_to_string(&note.path).map_err(|error| not_read(&error))?;
     let patched = patch_fields(
         &text,
         &[
@@ -750,7 +754,7 @@ pub fn update_details(note: &Note, title: &str, date: &str, number: u32) -> Resu
         }
         _ => patched,
     };
-    replace_file(&note.path, &patched)?;
+    replace_file_io(&note.path, &patched).map_err(|error| not_saved(&error))?;
     parse_note(&note.path, &patched).ok_or_else(|| "The note could not be read back.".to_owned())
 }
 
@@ -766,6 +770,10 @@ pub(crate) fn replace_file(path: &Path, text: &str) -> Result<(), String> {
 /// `replace_file` with the system error kept, so a note's save can say what happened in plain
 /// words (`not_saved`).
 fn replace_file_io(path: &Path, text: &str) -> std::io::Result<()> {
+    #[cfg(test)]
+    if let Some(code) = FAILING_WRITES.with(std::cell::Cell::get) {
+        return Err(std::io::Error::from_raw_os_error(code));
+    }
     let parent = path
         .parent()
         .ok_or_else(|| std::io::Error::other("Invalid location."))?;
@@ -795,6 +803,25 @@ fn sync_folder_io(path: &Path) -> std::io::Result<()> {
 fn not_saved(error: &std::io::Error) -> String {
     let fault = crate::world::file_fault::FileFault::write("", error);
     format!("Not saved. {}. {}", fault.cause(), fault.recovery())
+}
+
+/// A new session note that could not be written (Create session), in the same plain words.
+fn not_created(error: &std::io::Error) -> String {
+    let fault = crate::world::file_fault::FileFault::write("", error);
+    format!("Not created. {}. {}", fault.cause(), fault.recovery())
+}
+
+/// A note that could not be read before a change to it (Save details), in the same plain words.
+fn not_read(error: &std::io::Error) -> String {
+    let fault = crate::world::file_fault::FileFault::read("", error);
+    format!("Not saved. {}. {}", fault.cause(), fault.recovery())
+}
+
+/// A test's failing disk for the write helpers (`replace_file_io`, `write_new_io`): each fails
+/// with this system error code before anything is written.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static FAILING_WRITES: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2345,7 +2372,10 @@ mod tests {
                 "Not saved. Disk is full. Free some space on the disk, then try again.",
             ),
             (ErrorKind::PermissionDenied, permission),
-            (ErrorKind::ReadOnlyFilesystem, permission),
+            (
+                ErrorKind::ReadOnlyFilesystem,
+                "Not saved. Disk is read-only. Make the disk writable, or move the campaign to a disk you can write to.",
+            ),
             (
                 ErrorKind::Interrupted,
                 "Not saved. File cannot be saved. Check that the disk that holds it is connected, then try again.",
@@ -2845,6 +2875,16 @@ mod tests {
             remember_notes(dir.path(), &list_notes(dir.path())).unwrap();
             assert_eq!(file(&index), written, "an idle scan replaced the index");
         }
+        // Round 30 B7d (review F2 of PR 416): a failed Create session says plain words, never
+        // the system's, and leaves no file.
+        FAILING_WRITES.with(|code| code.set(Some(28)));
+        let refused = create_note(dir.path(), &new_note(13, "Full", "Words")).unwrap_err();
+        FAILING_WRITES.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not created. Disk is full. Free some space on the disk, then try again."
+        );
+        assert_eq!(list_notes(dir.path()).len(), 1);
     }
 
     #[test]
@@ -2929,6 +2969,17 @@ mod tests {
             text.contains("tags: [dnd]") && text.ends_with("My words\n"),
             "{text}"
         );
+        // Round 30 B7d (review F2 of PR 416): a failed Save details says plain words, never the
+        // system's, and leaves the file as it was.
+        let before = fs::read_to_string(&path).unwrap();
+        FAILING_WRITES.with(|code| code.set(Some(13)));
+        let refused = update_details(&note, "Other", "2026-02-03", 4).unwrap_err();
+        FAILING_WRITES.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not saved. No permission to save. Give your user account permission to change the file and its folder."
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
     }
 
     #[test]

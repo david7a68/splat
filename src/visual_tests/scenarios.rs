@@ -16555,6 +16555,19 @@ pub mod session_recording {
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.expect("0:00 recorded · Hearing sound");
         d.state_prepared("recording-listed", Sizes::Default, |d| {
+            // Round 30 B7d (review F1 of PR 416): the sound words end by the frame clock, so each
+            // size hears again before its capture, as `recording-hearing` does, and the row says
+            // it at every captured size.
+            d.app_mut()
+                .sessions
+                .simulate_recorder_health(Health::Hearing);
+            d.settle();
+            let size = d.window_size();
+            d.observe(
+                "round-30-recording-listed-hearing",
+                d.has_containing("0:00 recorded · Hearing sound"),
+                format!("At {size:?} the listed recording says it hears sound"),
+            );
             // R5: the rail and the Recordings tab's row.
             check_live_recording_colours(d, &[Surface::Rail, Surface::RecordingsTab]);
             // AT1: with no fight open, the party bar keeps every first name at 960. Portraits give
