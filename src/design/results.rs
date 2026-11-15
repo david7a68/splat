@@ -733,7 +733,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/design/results.rs", "record", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
-        ("src/dndbeyond.rs", "show", &[Ban::Results]),
+        ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         (
             "src/encounter_run/view.rs",
             "groups_tab",
@@ -824,6 +824,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
+        // R24: a value block's save row shows its own messages (the Session folder's).
+        ("src/sessions/page.rs", "folder_block", &[Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         ("src/sessions/page.rs", "banner_notices", &[Ban::Results]),

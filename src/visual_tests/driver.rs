@@ -1101,6 +1101,11 @@ impl<'a> Driver<'a> {
     /// in points): the title's rect, the row's rect and its number of actions. `TitleLine` and
     /// the readers' title lines (`world::title_line_actions`, placed by `title_placement`)
     /// register them; actions that follow the title on its line register none.
+    /// Each value block (`design::ValueBlock`) of the last pass, in drawing order.
+    pub fn value_blocks(&self) -> Vec<crate::design::value_block::BlockRecord> {
+        crate::design::value_block::block_records(&self.harness.ctx)
+    }
+
     pub fn title_action_rows(&self) -> Vec<crate::design::TitleActionRow> {
         crate::design::layout::title_action_rows(&self.harness.ctx)
     }

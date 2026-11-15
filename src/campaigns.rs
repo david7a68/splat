@@ -761,6 +761,17 @@ impl Campaigns {
         }
     }
 
+    /// The Link and folder page's lock, in its own words: a run's lock names what it keeps.
+    pub fn link_lock(blocked: Option<&str>) -> Option<&str> {
+        blocked.map(|reason| {
+            if reason == "Close the run to change campaigns." {
+                "Close the run to change the folder, the session folder or the link."
+            } else {
+                reason
+            }
+        })
+    }
+
     /// The active campaign's folder and D&D Beyond link.
     pub fn show_active(
         &mut self,
@@ -778,39 +789,32 @@ impl Campaigns {
             );
             return;
         };
-        design::gap(ui, design::Gap::S);
-        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-        ui.horizontal(|ui| {
-            design::heading(ui, design::Heading::Label("Folder"));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if Action::quiet("Edit details")
-                    .blocked(blocked)
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    if self.editing.is_none() {
-                        self.add_name = self.name.clone();
-                        self.add_path = self.path.clone();
-                    }
-                    self.remote = None;
-                    self.editing = Some(campaign.id);
-                    self.reveal_details = true;
-                    self.name = campaign.name.clone();
-                    self.path = campaign.path.to_string_lossy().into_owned();
-                }
-            });
+        // Ruling R24, row 93: the folder's block, in the one heading-row form of the Link and
+        // folder page; Edit details is the row's action.
+        let (block, edit) = design::ValueBlock::new(
+            ui,
+            design::HeadingRow::new("Folder")
+                .action(Action::quiet("Edit details").blocked(blocked)),
+        );
+        let link_blocked = Self::link_lock(blocked);
+        // The page's lock is said once, above the first block (lib.rs); each control keeps it on
+        // hover and in its accessible description.
+        let (block, _) = block.field(|ui| {
+            ui.add(egui::Label::new(campaign.path.display().to_string()).wrap());
+            Self::folder_status(ui, &campaign)
         });
-        let link_blocked = blocked.map(|reason| {
-            if reason == "Close the run to change campaigns." {
-                "Close the run to change the folder, the session folder or the link."
-            } else {
-                reason
+        block.end();
+        if edit.is_some_and(|edit| edit.clicked()) {
+            if self.editing.is_none() {
+                self.add_name = self.name.clone();
+                self.add_path = self.path.clone();
             }
-        });
-        design::blocked_reason(ui, link_blocked);
-        ui.add(egui::Label::new(campaign.path.display().to_string()).wrap());
-        Self::folder_status(ui, &campaign);
+            self.remote = None;
+            self.editing = Some(campaign.id);
+            self.reveal_details = true;
+            self.name = campaign.name.clone();
+            self.path = campaign.path.to_string_lossy().into_owned();
+        }
         design::gap(ui, design::Gap::S);
         design::rule(ui);
         // The D&D Beyond heading owns the space above it.
