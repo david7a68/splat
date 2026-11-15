@@ -89,7 +89,15 @@ fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egu
 
 /// `design::two_line_row`, with each warning mark in the detail in its own tone before the
 /// muted words, as Library's rows have.
-fn marked_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> egui::Response {
+/// A list row: its title, and under it its detail, or `narrow` in its place when the detail does
+/// not fit the row whole. The row's accessible name keeps the whole detail.
+fn marked_row(
+    ui: &mut egui::Ui,
+    selected: bool,
+    title: &str,
+    detail: &str,
+    narrow: Option<&str>,
+) -> egui::Response {
     design::row(
         ui,
         ROW,
@@ -104,6 +112,12 @@ fn marked_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> e
             let top = rect.center().y - total / 2.0;
             ui.painter()
                 .galley(egui::pos2(rect.left() + design::S, top), galley, c.text);
+            let detail = match narrow {
+                Some(narrow) if design::number_width(ui, detail, &Type::Small.font(ui)) > width => {
+                    narrow
+                }
+                _ => detail,
+            };
             let detail =
                 crate::library::marked_line(ui, detail, Type::Small.font(ui), c.muted, width);
             ui.painter().galley(
@@ -1709,7 +1723,12 @@ impl WorldPage {
                     entry.name.clone()
                 };
                 // The note's fault record, the one the header's count and its menu read.
-                let detail = if let Some(fault) = index.note_faults().of_note(position) {
+                let fault = index.note_faults().of_note(position);
+                // A fault's words that do not fit the row whole give way to its short form.
+                let narrow = fault
+                    .and_then(super::NoteFault::narrow_words)
+                    .map(|words| format!("{} {words}", icons::WARN));
+                let detail = if let Some(fault) = fault {
                     format!("{} {}", icons::WARN, fault.words())
                 } else if entry.kind == "world" {
                     if index.shares_name(position) {
@@ -1769,7 +1788,8 @@ impl WorldPage {
                             },
                         )
                     } else {
-                        marked_row(ui, selected, &name, &detail).on_hover_text(&entry.path)
+                        marked_row(ui, selected, &name, &detail, narrow.as_deref())
+                            .on_hover_text(&entry.path)
                     };
                     if response.clicked() {
                         self.open_note(entry.id);

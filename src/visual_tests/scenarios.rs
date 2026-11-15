@@ -3387,7 +3387,7 @@ pub mod campaign_content {
         );
         d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
         d.click("Write Campaign.md again");
-        d.wait_for_text("Undo write Campaign.md");
+        d.wait_for_control("Undo write Campaign.md");
         assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
         // Round 23 FA8: the discarded package draft belonged to the file that went missing. Its
         // Undo does not come back with the written file.
@@ -3399,6 +3399,13 @@ pub mod campaign_content {
                 d.visible_text(PACKAGES_DISCARDED)
             ),
         );
+        // Round 30: the write's result is the footer's only Undo of its verb, so it paints
+        // `Undo write` (its name stays whole); at 1920 this frame then differs from
+        // `packages-partial-selection` only by that short footer line. Above: the file was
+        // missing, its bytes are back as saved, and its Undo is drawn (`wait_for_control`);
+        // the state's own check paints the Undo's icon. The result's words are asserted after
+        // this state, with the failed Undo.
+        d.expect_same("the footer's one new line, a lone Undo in its short form");
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
         });
@@ -3449,7 +3456,7 @@ pub mod campaign_content {
         );
         d.state("missing-campaign-manifest-without-copy", Sizes::All);
         d.click("Write a new Campaign.md");
-        d.wait_for_text("Undo write Campaign.md");
+        d.wait_for_control("Undo write Campaign.md");
         assert!(manifest.exists());
     }
 
@@ -6966,6 +6973,30 @@ pub mod run_lookup {
         d.begin_task();
         look_up(d, &OTHER_NOTE.to_lowercase());
         d.state("lookup-with-draft-open", Sizes::All);
+        lookup_open_action_painted(d, "s30-SK8-open-words", &[SMALL, DEFAULT, LARGE]);
+        // Round 30 final review F1 (ruling R35): the locked open action's reason is painted in
+        // Lookup's pane, at every size, whether the action stands on the title line or on its
+        // own line.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let reason = "To open this in Library, save or discard the Library draft first.";
+            let painted = d.at_size(size, |d| {
+                let panel = d.place_of(LOOKUP_SPLITTER)?;
+                d.painted_rect_in(
+                    reason,
+                    egui::Rect::from_min_max(
+                        egui::pos2(panel.right(), f32::NEG_INFINITY),
+                        egui::pos2(f32::INFINITY, f32::INFINITY),
+                    ),
+                )
+            });
+            d.observe(
+                "s30-SK8-open-lock-reason",
+                painted.is_some(),
+                format!(
+                    "At {size:?}, Lookup paints the locked open action's reason at {painted:?}"
+                ),
+            );
+        }
         d.goal("try a lookup with a draft open");
         d.press(Key::Escape);
         let kept = d
@@ -23502,6 +23533,7 @@ pub mod session_plan {
                 );
             }
             if lookup {
+                lookup_open_action_painted(d, "s30-FM4-open-words", &[SMALL]);
                 d.state("rewards-offered-beside-lookup", Sizes::Small);
                 d.click(NAV_LOOKUP);
             }
@@ -24292,6 +24324,30 @@ pub mod session_plan {
             d.visible_text("Hobb the miller says") && d.in_view(NEXT_TURN),
             "Lookup finds last session's note, and the run stays in view",
         );
+        // Round 30 FM13: a found note is prose in the Reader's prose role, as a rule in the
+        // same panel is (`ProseCompact` at Lookup's width), never the stat block's 13 px.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let painted = d.at_size(size, |d| {
+                let panel = d.place_of(LOOKUP_SPLITTER)?;
+                let lookup = egui::Rect::from_min_max(
+                    egui::pos2(panel.right(), f32::NEG_INFINITY),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                d.painted_size(lookup, "Hobb the miller says")
+            });
+            d.observe(
+                "s30-FM13-found-note-prose",
+                painted.is_some_and(|painted| {
+                    [
+                        crate::design::Type::ProseCompact,
+                        crate::design::Type::Prose,
+                    ]
+                    .iter()
+                    .any(|role| role.size() == painted)
+                }),
+                format!("At {size:?}, the found note's words are {painted:?} px"),
+            );
+        }
         // Reading a result closes the list. `N results`, which opens it again, starts a line at
         // the search field's edge.
         let first = lookup_results(d).first().map(|row| row.name.clone());
@@ -27143,6 +27199,30 @@ fn lookup_row_text_left(d: &Driver<'_>) -> Option<f32> {
 }
 
 const LOOKUP_SPLITTER: &str = "Resize Lookup column";
+
+/// Round 30 FM4, SK8: Lookup's open action paints its words, `Open in Library` or `Open in
+/// World`, inside its own target at each size, never its icon alone.
+fn lookup_open_action_painted(d: &mut Driver<'_>, id: &str, sizes: &[(f32, f32)]) {
+    for &size in sizes {
+        let (painted, detail) = d.at_size(size, |d| {
+            let found = ["Open in Library", "Open in World"]
+                .into_iter()
+                .find_map(|words| d.place_of(words).map(|rect| (words, rect)));
+            match found {
+                Some((words, rect)) => (
+                    d.painted_size(rect, words).is_some(),
+                    format!("{words} at {rect:?}"),
+                ),
+                None => (false, "no open action".to_owned()),
+            }
+        });
+        d.observe(
+            id,
+            painted,
+            format!("At {size:?}, Lookup's open action paints its words: {detail}"),
+        );
+    }
+}
 
 /// How a link with an icon paints `<icon> <words>`: whether the icon is underlined, whether the
 /// words are, and the icon's colour. An underline counts whether the text paints it or the link
