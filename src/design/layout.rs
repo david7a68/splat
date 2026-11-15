@@ -1948,7 +1948,7 @@ pub struct BackLink<'a> {
     edge: BackEdge,
     context: Option<&'a str>,
     blocked: Option<&'a str>,
-    /// The accessible name when it is longer than the word (only [`BackLine`] sets it).
+    /// The accessible name when it is longer than the word (only [`EditorHead`] sets it).
     name: Option<&'static str>,
 }
 

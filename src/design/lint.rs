@@ -411,7 +411,7 @@ fn phrase_owner(path: &str, words: &str) -> bool {
 /// - `phrase-owner`: a phrase in a string literal outside its owner file.
 /// - `arrow-label`: a control whose label is only an arrow, as a literal or by the glyph's name
 ///   (`Action::quiet("←")`, the legacy back arrow by name; see `arrow_labels`). An
-///   editor's back is `BackLine`; a back link that starts a line is `TitleLine::back`; both
+///   editor's back is `EditorHead`; a back link that starts a line is `TitleLine::back`; both
 ///   always show their word (K4b, R38).
 fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     let mut found = Vec::new();
@@ -533,7 +533,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
                 }
                 "arrow-label" => {
-                    "Give the control its word: an editor's back is `BackLine::new(word!(…), name, BackLock)` above its name row; a back link that starts a line is `TitleLine::back` with its word"
+                    "Give the control its word: an editor's back is `EditorHead` (its `BackTo` gives the word) above its name row; a back link that starts a line is `TitleLine::back` with its word"
                 }
                 _ => "Use design tokens",
             };
