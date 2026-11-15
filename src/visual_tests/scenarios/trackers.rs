@@ -598,10 +598,10 @@ pub fn run(d: &mut Driver<'_>) {
         "The view lists the pinned trackers, then More trackers, and no Due row yet",
     );
     // FE1: every pinned line stands in the panel's columns, not only the lines of Seals: each
-    // value ends at one edge. Where every line's first two actions fit after the values, each
-    // first action starts at one edge after them; beside Lookup at 960x640, 1200x800 and
-    // 1920x1080 `Enter room` and `Cistern or Sands` do not (round 30 `tracker-action-wrap`), and
-    // every line's actions start under its name, sharing rows.
+    // value ends at one edge. Where a tracker's first two actions fit after the values (every
+    // pinned line at 1920x1080), its first action starts at the panel's one action edge after
+    // them; beside Lookup at 960x640 and 1200x800 they do not (round 30 `tracker-action-wrap`),
+    // and each line's actions start under its name, sharing rows.
     // At 960x640 the last lines are below the panel's fold: the view scrolls to them, and back.
     // A proof step that comes back to the top: not part of the DM's task.
     let small = d.aside(panel_columns_scrolled);
@@ -609,7 +609,7 @@ pub fn run(d: &mut Driver<'_>) {
     let big = d.at_size(LARGE, panel_columns);
     d.observe(
         "T19.2",
-        columns_hold(&small, false) && columns_hold(&wide, false) && columns_hold(&big, false),
+        columns_hold(&small, false) && columns_hold(&wide, false) && columns_hold(&big, true),
         format!(
             "Values, actions and names of the pinned lines: {:?} {:?} {:?} at 960x640, {:?} {:?} at 1200x800, {:?} {:?} at 1920x1080",
             small.values, small.actions, small.names, wide.values, wide.actions, big.values, big.actions
@@ -798,6 +798,31 @@ pub fn run(d: &mut Driver<'_>) {
         small_undo.0 && wide_undo.0,
         format!("Undo's words start at the result's words: {small_undo:?} at 960x640, {wide_undo:?} at 1200x800"),
     );
+    // Round 30 review of PR 400 (F1): at 1920x1080 the actions stand beside their values, so the
+    // whole list fits the panel with no scroll bar and `More trackers` stays in view.
+    let (whole, whole_at) = d.at_size(LARGE, |d| {
+        let panel = d
+            .place_of(SEARCH_LOOKUP)
+            .map_or(f32::MAX, |field| field.left() - 1.0);
+        let more = d.nodes().into_iter().any(|node| {
+            node.fully_in_view() && node.name.to_lowercase().starts_with("more trackers")
+        });
+        let scrolls: Vec<_> = d
+            .pane_records()
+            .iter()
+            .filter_map(|record| record.viewport().map(|view| (view, record.fits())))
+            .filter(|(view, _)| view.left() >= panel)
+            .collect();
+        let race = d
+            .place_of("Enter room")
+            .zip(d.place_of("Cistern or Sands"))
+            .is_some_and(|(enter, cistern)| (enter.top() - cistern.top()).abs() <= 0.5);
+        (
+            more && race && !scrolls.is_empty() && scrolls.iter().all(|(_, fits)| *fits),
+            format!("More trackers in view {more}, race pair on one row {race}, panes {scrolls:?}"),
+        )
+    });
+    d.observe("T19.2-beside-1920", whole, whole_at);
     d.state("trackers-three-notices", Sizes::All);
     // Optimizer scan 26: with the result line at the bottom, a press near its edge goes to the
     // action under the pointer, and a press on the footer to the footer's action.

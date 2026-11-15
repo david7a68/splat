@@ -44,20 +44,27 @@ pub(crate) struct ViewState {
 }
 
 /// The columns that every tracker line of the panel shares, so the values end at one edge
-/// and the first actions start at one edge, whatever the values are (FE1, AE2).
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// and the first actions beside them start at one edge, whatever the values are (FE1, AE2).
+#[derive(Clone, Debug, PartialEq)]
 struct Columns {
     /// The name column, from the line's start, with the indent of a tracker with `per`.
     name: f32,
     /// The value column: as wide as the widest value slot of the panel.
     value: f32,
-    /// Does every line's first two quick actions (its one action, when it has one) fit after the
-    /// value column? Then each line's actions follow its value, all from one edge, and wrap to
-    /// the first action's edge; else every line has its actions on the rows under it, from its
-    /// name's edge, where they share rows across the panel. So no action stands alone on a row
-    /// beside its value while the next one could share it (round 30 `tracker-action-wrap`), and
-    /// no line's first action starts at another edge.
-    beside: bool,
+    /// The trackers whose first two quick actions (its one action, when it has one) do NOT fit
+    /// after the value column, by key. Round 30 `tracker-action-wrap`: a tracker whose pair fits
+    /// has its actions beside its value, from the panel's one action edge, and wrapping to that
+    /// edge; a tracker listed here has them on the rows under it, from its name's edge, as many
+    /// to a row as the panel holds. So no action stands alone on a row beside its value while
+    /// the next one could share a row. Measured for every definition, pinned or not, with the
+    /// columns (`columns`), so opening `More trackers` moves nothing and no frame measures.
+    under: std::rc::Rc<HashSet<String>>,
+}
+
+impl Columns {
+    fn beside(&self, key: &str) -> bool {
+        !self.under.contains(key)
+    }
 }
 
 /// The fewest digits a value slot holds, so a value that gains a digit moves no action.
@@ -89,8 +96,9 @@ fn measure_columns(ui: &egui::Ui, rules: &Rules, state: &State, view: &mut ViewS
     let value_font = Type::Numeral.font(ui);
     let mut name: f32 = 0.0;
     let mut value: f32 = 0.0;
-    // The room a line's actions need beside its value: its first two, with the gap between.
-    let mut first: f32 = 0.0;
+    // The room each tracker's actions need beside its value: its first two, with the gap
+    // between.
+    let mut pairs: Vec<(&str, f32)> = Vec::new();
     for tracker in &rules.trackers {
         let Ok(def) = &tracker.def else { continue };
         let lead = def.quick.iter().take(2).enumerate().map(|(at, quick)| {
@@ -103,7 +111,7 @@ fn measure_columns(ui: &egui::Ui, rules: &Rules, state: &State, view: &mut ViewS
                 .density(Density::Read)
                 .natural_width(ui)
         });
-        first = first.max(lead.sum());
+        pairs.push((tracker.key.as_str(), lead.sum()));
         let indent = if def.per.is_empty() { 0.0 } else { design::L };
         for instance in def.instances() {
             let line = instance.unwrap_or(&def.name);
@@ -118,10 +126,17 @@ fn measure_columns(ui: &egui::Ui, rules: &Rules, state: &State, view: &mut ViewS
     view.widest_value = value;
     // The line's parts and the gaps between them: name, S, value, S, then the actions.
     let used = name + value + 2.0 * design::S + 4.0 * ui.spacing().item_spacing.x;
+    let room = ui.available_width() - used;
     Columns {
         name,
         value,
-        beside: first <= ui.available_width() - used,
+        under: std::rc::Rc::new(
+            pairs
+                .into_iter()
+                .filter(|(_, need)| *need > room)
+                .map(|(key, _)| key.to_owned())
+                .collect(),
+        ),
     }
 }
 
@@ -134,11 +149,11 @@ fn columns(
     revision: u64,
 ) -> Columns {
     let width = ui.available_width().to_bits();
-    match view.columns {
-        Some((seen, at, columns)) if seen == revision && at == width => columns,
+    match &view.columns {
+        Some((seen, at, columns)) if *seen == revision && *at == width => columns.clone(),
         _ => {
             let columns = measure_columns(ui, rules, state, view);
-            view.columns = Some((revision, width, columns));
+            view.columns = Some((revision, width, columns.clone()));
             columns
         }
     }
@@ -396,7 +411,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             },
         );
         for (key, def) in usable(true) {
-            tracker_lines(ui, rules, state, view, columns, key, def, act);
+            tracker_lines(ui, rules, state, view, &columns, key, def, act);
         }
     }
     let more = usable(false).count();
@@ -408,7 +423,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             design::group_heading_text(ui, "More trackers", more),
             |ui| {
                 for (key, def) in usable(false) {
-                    tracker_lines(ui, rules, state, view, columns, key, def, act);
+                    tracker_lines(ui, rules, state, view, &columns, key, def, act);
                 }
             },
         );
@@ -683,7 +698,7 @@ fn tracker_lines(
     rules: &Rules,
     state: &State,
     view: &mut ViewState,
-    columns: Columns,
+    columns: &Columns,
     key: &str,
     def: &super::Definition,
     act: &mut Option<Act>,
@@ -751,7 +766,7 @@ fn tracker_lines(
                 colors().text,
             );
         };
-        if columns.beside {
+        if columns.beside(key) {
             // The actions follow the value, at least two to a row, and the ones that do not fit
             // wrap to the first action's edge, never left of the line's name.
             ui.with_layout(top, |ui| {
@@ -763,8 +778,8 @@ fn tracker_lines(
                 });
             });
         } else {
-            // A line's first two actions do not fit after the values: every line has its actions
-            // on the rows under it, from its name's edge, as many to a row as the panel holds.
+            // This tracker's first two actions do not fit after the values: its actions stand on
+            // the rows under it, from its name's edge, as many to a row as the panel holds.
             ui.vertical(|ui| {
                 one_line(ui);
                 ui.with_layout(top, |ui| head(ui, view));

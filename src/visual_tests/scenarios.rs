@@ -15732,6 +15732,56 @@ pub mod session_recording {
         let size = d.window_size();
         let _ = size;
         check_dismiss_at_message_end(d, "iter-15-C-FD5-dismiss-alone", "stream error 42");
+
+        // Round 30 review of PR 400 (F3): `Recording saved: …` ends by its own events, through
+        // the DM's acts. A: Session 2's recording stops with audio. B: Session 1's stops too, an
+        // unrelated result. A's file goes outside Splat while nothing records: the disk check
+        // ends A, and B stays. A recording that starts in Session 1 ends B. The next result's
+        // Dismiss ends it.
+        const SAVED: &str = "Recording saved: ";
+        d.app_mut().sessions.open(second);
+        d.settle();
+        d.click("Stop recording");
+        d.settle();
+        let a_shown = d.has_containing(SAVED);
+        d.app_mut().sessions.open(first);
+        d.settle();
+        d.click("Record this session");
+        d.click("Start recording");
+        d.expect("Stop recording");
+        d.click("Stop recording");
+        d.settle();
+        let b_shown = d.has_containing(SAVED);
+        d.app_mut().sessions.open(second);
+        d.settle();
+        let a_back = d.has_containing(SAVED);
+        let a_file = crate::sessions::list_recordings(&folder, second)
+            .remove(0)
+            .path;
+        std::fs::remove_file(&a_file).unwrap();
+        d.app_mut().sessions.simulate_disk_check();
+        d.settle();
+        let a_ended = !d.has_containing(SAVED);
+        d.app_mut().sessions.open(first);
+        d.settle();
+        let b_stays = d.has_containing(SAVED);
+        d.click("Record this session");
+        d.click("Start recording");
+        d.expect("Stop recording");
+        let b_ended = !d.has_containing(SAVED);
+        d.click("Stop recording");
+        d.settle();
+        let c_shown = d.has_containing(SAVED);
+        d.click_beside(SAVED, crate::design::outcome::DISMISS_NAME);
+        d.settle();
+        let c_dismissed = !d.has_containing(SAVED);
+        d.observe(
+            "round-30-saved-end-events",
+            a_shown && b_shown && a_back && a_ended && b_stays && b_ended && c_shown && c_dismissed,
+            format!(
+                "A shown {a_shown}, B shown {b_shown}, A back in its session {a_back}, A ended with its file {a_ended}, B stays {b_stays}, B ended by a start {b_ended}, C shown {c_shown}, C dismissed {c_dismissed}"
+            ),
+        );
     }
 
     fn check_marker_columns(d: &mut Driver<'_>) {
@@ -17398,14 +17448,14 @@ pub mod session_recording {
         // choice is explained.
         d.observe(
             "iter-23-S-FL2",
-            d.visible_text("This note was moved or renamed. It is now Renamed in Obsidian.md.")
-                && !d.visible_text("This file is gone from the folder."),
+            d.visible_text("was moved or renamed. It is now Renamed in Obsidian.md.")
+                && !d.visible_text("is gone from the folder."),
             "A renamed note's warning names where it went",
         );
         check_choices_at_text(
             d,
             "iter-15-C-FT1-gone",
-            "This note was moved or renamed.",
+            "was moved or renamed.",
             &[
                 "Save my draft to Renamed in Obsidian.md",
                 "Save my draft as a new file",

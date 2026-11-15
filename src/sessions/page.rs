@@ -290,10 +290,11 @@ fn folder_moved<A>(moved: &kept::FolderMoved) -> design::outcome::Done<A> {
 
 /// Round 30 `recording-result-owner` (FG1, SG3): `Recording saved: <title>.`, kept by the
 /// session whose recording it names. It shows in that session's footer only, and only while its
-/// file stands: every listing of the recordings asks the disk (`refresh_recordings`), and one
-/// that no longer finds the file ends it, whichever session is open. Leaving the tab the DM was
-/// on (`clear_success`), its `Dismiss`, the next recording of the same session and a campaign
-/// switch (another folder) end it too.
+/// file stands: every listing of the recordings and the disk check once a second
+/// (`CHECK_DISK_EVERY`, also while nothing records) ask the disk, and a look that no longer finds
+/// the file ends it, whichever session is open. Leaving the tab the DM was on (`clear_success`),
+/// its `Dismiss`, a recording that starts in the same session (`start_recording`) and a campaign
+/// change (`open_campaign`) end it too.
 struct RecordingSaved {
     owner: kept::OfSession,
     path: PathBuf,
@@ -1462,6 +1463,27 @@ fn missing_note_words(moved_to: Option<String>) -> String {
     )
 }
 
+/// Round 30 `note-conflict-cross-page-banner` (SM2) and review F4 of PR 400: a session note's
+/// warning stands in the bottom banner on every page, so it names its note, not `This file`,
+/// which beside another page's own file is a wrong picture. `name` is the note's (`note_name`);
+/// a template's warning has none and keeps its words. Each cause keeps its words and its tone.
+fn owned_words(name: Option<&str>, words: &str) -> String {
+    let Some(name) = name else {
+        return words.to_owned();
+    };
+    let subject = format!("The note of {name}");
+    if let Some(rest) = words
+        .strip_prefix("This note ")
+        .or_else(|| words.strip_prefix("This file "))
+    {
+        format!("{subject} {rest}")
+    } else if let Some(rest) = words.strip_prefix("Not saved. ") {
+        format!("{subject} was not saved. {rest}")
+    } else {
+        format!("{subject}: {words}")
+    }
+}
+
 fn recording_recovery(missing_input: bool) -> &'static str {
     if missing_input {
         "Choose an input, then record again."
@@ -1694,6 +1716,9 @@ impl Sessions {
             .is_none_or(|at| now.duration_since(at) >= CHECK_DISK_EVERY)
         {
             self.last_check = Some(now);
+            // A saved recording's result ends with its file, also while nothing records: one
+            // look at each kept path at this bounded interval, never on every frame.
+            self.saved.disk_changed(|saved| saved.path.exists());
             // The live file's length and size change, and it can appear after the first look.
             if self.live.as_ref().map(|live| live.session) == self.selected
                 && self.selected.is_some()
@@ -2412,6 +2437,8 @@ impl Sessions {
         // them here, as it happens.
         self.travel = plan::Travel::default();
         self.forget_plan_lines(&[]);
+        // A saved recording's result is its campaign's: the change ends it, not only hides it.
+        self.saved = design::Results::new();
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {
@@ -3392,6 +3419,8 @@ impl Sessions {
                 // A new recording answers an old failure of this session.
                 self.alerts
                     .retain(|alert| !(alert.can_record && alert.session == session));
+                // And it ends the session's last `Recording saved: …` (`RecordingSaved`).
+                self.saved.owner_changed(&self.of_session(Some(session)));
                 self.live = Some(Live {
                     session,
                     label,
@@ -3878,17 +3907,14 @@ impl Sessions {
         if draft.state == DraftState::Missing
             && let Some(error) = &draft.save_again_error
         {
-            design::message(ui, Tone::Error, error);
+            design::message(ui, Tone::Error, &owned_words(name, error));
         }
         // Every choice below starts at its message's text. The red choice keeps an `L` gap.
         match draft.state.clone() {
             DraftState::Conflict => {
-                let words = format!(
-                    "{} changed on disk. Your draft is safe until you choose. Other sessions open after that.",
-                    name.map_or_else(
-                        || "This note".to_owned(),
-                        |name| format!("The note of {name}")
-                    )
+                let words = owned_words(
+                    name,
+                    "This note changed on disk. Your draft is safe until you choose. Other sessions open after that.",
                 );
                 design::message_with_actions(ui, Tone::Warning, &words, |ui| {
                     ui.horizontal_wrapped(|ui| {
@@ -3912,7 +3938,8 @@ impl Sessions {
             // After Discard with no file left, the editor holds the last saved words, not a
             // draft: the one way on is a new file.
             DraftState::Missing if matches!(draft.dropped, Some(Dropped::Discarded(_))) => {
-                let save = design::message_with_actions(ui, Tone::Warning, DISCARDED_GONE, |ui| {
+                let words = owned_words(name, DISCARDED_GONE);
+                let save = design::message_with_actions(ui, Tone::Warning, &words, |ui| {
                     Action::secondary("Save these words as a new file")
                         .show(ui)
                         .clicked()
@@ -3928,6 +3955,7 @@ impl Sessions {
                         .display()
                         .to_string()
                 }));
+                let words = owned_words(name, &words);
                 design::message_with_actions(ui, Tone::Warning, &words, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.y = design::M;
@@ -3956,7 +3984,8 @@ impl Sessions {
                 });
             }
             DraftState::Failed(error) => {
-                let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
+                let words = owned_words(name, &error);
+                let again = design::message_with_actions(ui, Tone::Error, &words, |ui| {
                     Action::secondary("Try to save again").show(ui).clicked()
                 });
                 if again {
@@ -7901,6 +7930,12 @@ impl Sessions {
         self.job.as_ref().is_some_and(|(job, _)| !job.is_held())
     }
 
+    /// The disk check that otherwise runs once a second of wall time (`CHECK_DISK_EVERY`): the
+    /// next `poll` runs it.
+    pub fn simulate_disk_check(&mut self) {
+        self.last_check = None;
+    }
+
     /// The folder scan that otherwise runs every few seconds of wall time.
     pub fn simulate_folder_scan(&mut self) {
         self.scan_folder();
@@ -8246,6 +8281,79 @@ mod tests {
         assert_eq!(
             missing_note_words(None),
             "This file is gone from the folder. Your draft is still here. Choose where to save it, or discard it."
+        );
+    }
+
+    /// Round 30 review F4 of PR 400: every warning of the session note that the banner shows on
+    /// any page names its note, with its cause and its tone: the conflict, the missing note,
+    /// the discarded and missing note, and the failed save. A template's warning (no name)
+    /// keeps `This note`.
+    #[test]
+    fn a_session_note_warning_names_its_note_in_every_state() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("Session 1 - Ash.md");
+        fs::write(&path, "---\nsession_id: 1\n---\n# Ash\n").unwrap();
+        const NAME: &str = "Session 1: Ash on the Road";
+        let words = |state: DraftState, discarded: bool, name: Option<&str>| {
+            let mut draft = Draft::open(&path).unwrap();
+            draft.state = state;
+            if discarded {
+                draft.discard();
+                draft.state = DraftState::Missing;
+            }
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(700.0, 300.0))
+                .build_ui_state(
+                    move |ui, draft: &mut Draft| Sessions::draft_warning(ui, draft, name),
+                    draft,
+                );
+            harness.run_steps(2);
+            let shown: Vec<String> = harness
+                .query_all_by_label_contains("The note of ")
+                .map(|node| node.label().unwrap_or_default())
+                .collect();
+            let unnamed = harness
+                .query_all_by_label_contains("This note ")
+                .next()
+                .is_some()
+                || harness
+                    .query_all_by_label_contains("This file ")
+                    .next()
+                    .is_some();
+            (shown, unnamed)
+        };
+        for (state, discarded, cause) in [
+            (
+                DraftState::Conflict,
+                false,
+                "The note of Session 1: Ash on the Road changed on disk.",
+            ),
+            (
+                DraftState::Missing,
+                false,
+                "The note of Session 1: Ash on the Road is gone from the folder.",
+            ),
+            (
+                DraftState::Missing,
+                true,
+                "The note of Session 1: Ash on the Road is gone from the folder.",
+            ),
+            (
+                DraftState::Failed("Not saved. The disk is full.".to_owned()),
+                false,
+                "The note of Session 1: Ash on the Road was not saved. The disk is full.",
+            ),
+        ] {
+            let (shown, unnamed) = words(state.clone(), discarded, Some(NAME));
+            assert!(
+                shown.iter().any(|words| words.starts_with(cause)) && !unnamed,
+                "{state:?} (discarded {discarded}) names its note: {shown:?}"
+            );
+        }
+        let (shown, unnamed) = words(DraftState::Conflict, false, None);
+        assert!(
+            shown.is_empty() && unnamed,
+            "a template's warning keeps its words"
         );
     }
 
@@ -9292,13 +9400,28 @@ mod tests {
         harness.state_mut().0.finish_recording();
         harness.run_steps(2);
         assert_eq!(saved(&harness), Some("Recording saved"), "A's own rail");
+        // Round 30 review of PR 400 (F3): the footer's `Recording saved: …` is kept by A's
+        // session until the campaign changes; the change ends it, and coming back does not
+        // bring it back (only the rail's word, its own fact, returns).
+        assert!(
+            !harness.state().0.saved.is_empty(),
+            "A keeps its saved result"
+        );
         switch(&mut harness, &b);
+        assert!(
+            harness.state().0.saved.is_empty(),
+            "the campaign change ends A's saved result"
+        );
         assert_eq!(
             saved(&harness),
             None,
             "B's rail says nothing of A's recording"
         );
         switch(&mut harness, &a);
+        assert!(
+            harness.state().0.saved.is_empty(),
+            "back in A, the ended result stays ended"
+        );
         assert_eq!(saved(&harness), Some("Recording saved"), "back in A");
         // Review of PR 346, item 1: the form shows two templates; one is deleted outside Splat
         // before the next scan, and the move's result says what it moved, not what was drawn.
