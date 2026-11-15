@@ -817,10 +817,10 @@ fn not_read(error: &std::io::Error) -> String {
     format!("Not saved. {}. {}", fault.cause(), fault.recovery())
 }
 
-/// A test's failing disk for the write helpers (`replace_file_io`, `write_new_io`): each fails
-/// with this system error code before anything is written.
 #[cfg(test)]
 thread_local! {
+    /// A test's failing disk for the write helpers (`replace_file_io`, `write_new_io`): each
+    /// fails with this system error code before anything is written.
     pub(crate) static FAILING_WRITES: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
 }
 
