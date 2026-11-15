@@ -388,7 +388,8 @@ mod tests {
             page.in_progress_order(),
             Some("open run first, then last closed first")
         );
-        let page = arrange(&templates, &[a], None, &[], &[]);
+        let one = [a];
+        let page = arrange(&templates, &one, None, &[], &[]);
         assert_eq!(page.in_progress_order(), None, "one row has no order");
     }
 

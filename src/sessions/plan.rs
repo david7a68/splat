@@ -5017,6 +5017,10 @@ impl Sessions {
             )),
             _ => None,
         };
+        let path = found
+            .as_ref()
+            .and_then(|found| found.as_ref().ok())
+            .cloned();
         if self
             .fight
             .as_ref()
