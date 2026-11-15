@@ -1,0 +1,236 @@
+//! The Library's kept results (M-L0.4a, ruling M14): one mark store and the data it marks.
+//!
+//! Each kept result (an Undo of a write, a discarded draft, a notice that stays) has its data
+//! here and its mark in one [`design::Results`] store. The store gives the result its footer
+//! order when its act is done, and its ticket in a typed footer (PR 4b). The data and the mark
+//! change together: the fields are private to this module, so a writer can only `set` a result
+//! (data and mark in one call) or `take` it (data out, mark ended). No writer can store data
+//! without its mark, and no mark outlives its data.
+//!
+//! Every kind but a copy holds one result at a time: a new act of that kind replaces the older
+//! result, whose order (and ticket) ends with it. Copies are several per file, each owned by the
+//! file it linked and the path it copied. Scope is `()`: a campaign switch hides none of them;
+//! each kind's own end events decide (see `docs/notes/library-results.md` §4).
+use super::{DependencyUndo, FileId, IdentityUndo, LetGo, OwnerKey, SelectionUndo};
+use crate::content_workspace::{ContentEdits, ManifestWrite};
+use crate::design::{
+    self,
+    results::{DiskChanged, Ends, FooterResult, Kept, Owner, OwnerChanged, Press},
+};
+use crate::persistence::Module;
+use std::path::PathBuf;
+
+/// Which kept result a mark is.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(super) enum KeptKind {
+    ScopeNotice,
+    Unregistered,
+    PackageUse,
+    Manifest,
+    Identities,
+    Identity,
+    Discarded,
+    Removed,
+    Heading,
+    Vital,
+    Copy,
+}
+
+/// Whose a mark is: its kind, and for a copy the file it linked (its package root and path) and
+/// the path it copied, which are absolute and complete.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(super) struct KeptOwner {
+    kind: KeptKind,
+    copy: Option<(PathBuf, String, String)>,
+}
+
+impl KeptOwner {
+    fn of(kind: KeptKind) -> Self {
+        Self { kind, copy: None }
+    }
+
+    fn copy(undo: &DependencyUndo) -> Self {
+        Self {
+            kind: KeptKind::Copy,
+            copy: Some((
+                undo.root.clone(),
+                undo.path.clone(),
+                undo.copied_path.clone(),
+            )),
+        }
+    }
+}
+
+impl Owner for KeptOwner {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+/// A kept result's mark: its owner, for its footer order (and its ticket in a typed footer).
+pub(super) struct KeptMark(KeptOwner);
+
+impl Kept for KeptMark {
+    type Owner = KeptOwner;
+    const ENDS: Ends = Ends {
+        // Its data was taken or replaced (`take_*`, a newer `set_*`): the mark goes with it.
+        owner_changed: OwnerChanged::Ends,
+        // A reload keeps the mark; the kind's own check takes the data (`forget_changed_undos`).
+        disk_changed: DiskChanged::Stays,
+        // Its press is its Undo (a scope notice has none and is never pressed).
+        press: Press::Undo,
+    };
+    fn owner(&self) -> KeptOwner {
+        self.0.clone()
+    }
+}
+
+/// A heading fix: its file, the draft before and the draft the fix wrote.
+pub(super) type HeadingFix = (FileId, String, String);
+/// A stat fix: its file, the draft before, the draft the fix wrote and its result's words.
+pub(super) type StatFix = (FileId, String, String, String);
+/// A discarded draft: its file (owner and path) and the words Discard dropped.
+pub(super) type DiscardedDraft = (OwnerKey, String, String);
+
+/// The Library's kept results, behind the one boundary that changes data and mark together.
+#[derive(Default)]
+pub(super) struct LibraryKept {
+    marks: design::Results<KeptOwner, KeptMark>,
+    scope_notice: Option<String>,
+    unregistered: Option<Module>,
+    package_use: Option<SelectionUndo>,
+    manifest: Option<ManifestWrite>,
+    identities: Option<(ContentEdits, String)>,
+    identity: Option<IdentityUndo>,
+    discarded: Option<DiscardedDraft>,
+    removed: Option<LetGo>,
+    heading: Option<HeadingFix>,
+    vital: Option<StatFix>,
+    copies: Vec<DependencyUndo>,
+}
+
+/// For each one-result kind: its read, its `set` (data and mark in one call: the newest order)
+/// and its `take` (data out, mark ended).
+macro_rules! slot {
+    ($($kind:ident: $field:ident: $ty:ty => $get:ident, $set:ident, $take:ident;)*) => {$(
+        pub(super) fn $get(&self) -> Option<&$ty> {
+            self.$field.as_ref()
+        }
+
+        pub(super) fn $set(&mut self, value: $ty) {
+            self.$field = Some(value);
+            self.marks.record(KeptMark(KeptOwner::of(KeptKind::$kind)));
+        }
+
+        pub(super) fn $take(&mut self) -> Option<$ty> {
+            let value = self.$field.take();
+            if value.is_some() {
+                self.marks.owner_changed(&KeptOwner::of(KeptKind::$kind));
+            }
+            value
+        }
+    )*};
+}
+
+impl LibraryKept {
+    slot! {
+        ScopeNotice: scope_notice: String => scope_notice, set_scope_notice, take_scope_notice;
+        Unregistered: unregistered: Module => unregistered, set_unregistered, take_unregistered;
+        PackageUse: package_use: SelectionUndo => package_use, set_package_use, take_package_use;
+        Manifest: manifest: ManifestWrite => manifest, set_manifest, take_manifest;
+        Identities: identities: (ContentEdits, String) => identities, set_identities, take_identities;
+        Identity: identity: IdentityUndo => identity, set_identity, take_identity;
+        Discarded: discarded: DiscardedDraft => discarded, set_discarded, take_discarded;
+        Removed: removed: LetGo => removed, set_removed, take_removed;
+        Heading: heading: HeadingFix => heading, set_heading, take_heading;
+        Vital: vital: StatFix => vital, set_vital, take_vital;
+    }
+
+    /// The removed entry's record, to note the campaign it belongs to. Its existence (and so its
+    /// mark) does not change here.
+    pub(super) fn removed_mut(&mut self) -> Option<&mut LetGo> {
+        self.removed.as_mut()
+    }
+
+    /// A reload's check of the manifest write: it goes, with its mark, when its file changed.
+    pub(super) fn forget_manifest_if_changed(&mut self) {
+        let had = self.manifest.is_some();
+        ManifestWrite::forget_if_changed(&mut self.manifest);
+        if had && self.manifest.is_none() {
+            self.marks.owner_changed(&KeptOwner::of(KeptKind::Manifest));
+        }
+    }
+
+    /// The copies, oldest first.
+    pub(super) fn copies(&self) -> &[DependencyUndo] {
+        &self.copies
+    }
+
+    /// A new copy, the newest result: its own mark.
+    pub(super) fn push_copy(&mut self, undo: DependencyUndo) {
+        self.marks.record(KeptMark(KeptOwner::copy(&undo)));
+        self.copies.push(undo);
+    }
+
+    /// The copy at `at` leaves (its Undo worked), with its mark.
+    pub(super) fn remove_copy(&mut self, at: usize) -> DependencyUndo {
+        let undo = self.copies.remove(at);
+        self.marks.owner_changed(&KeptOwner::copy(&undo));
+        undo
+    }
+
+    /// Keeps the copies that `keep` holds; the others leave with their marks.
+    pub(super) fn retain_copies(&mut self, mut keep: impl FnMut(&DependencyUndo) -> bool) {
+        let marks = &mut self.marks;
+        self.copies.retain(|undo| {
+            let kept = keep(undo);
+            if !kept {
+                marks.owner_changed(&KeptOwner::copy(undo));
+            }
+            kept
+        });
+    }
+
+    /// The footer line of the one-result kind `kind` (its words, with the order its act
+    /// issued), or `None` when it has no mark. `words` runs only when it has one.
+    pub(super) fn line(
+        &self,
+        kind: KeptKind,
+        words: impl FnOnce() -> String,
+    ) -> Option<FooterResult> {
+        self.marks
+            .get(&KeptOwner::of(kind))
+            .map(|shown| shown.footer(|_| words()))
+    }
+
+    /// The footer line of one copy.
+    pub(super) fn copy_line(&self, undo: &DependencyUndo) -> Option<FooterResult> {
+        self.marks
+            .get(&KeptOwner::copy(undo))
+            .map(|shown| shown.footer(|_| undo.result.clone()))
+    }
+
+    /// The order each mark's act issued, newest first, for the tests of the footer order.
+    #[cfg(test)]
+    pub(super) fn kinds_newest_first(&self) -> Vec<KeptKind> {
+        self.marks
+            .newest_first(&())
+            .map(|shown| shown.value().0.kind)
+            .collect()
+    }
+
+    /// The order the mark of `kind` holds, for the tests of `set` and replacement.
+    #[cfg(test)]
+    pub(super) fn order_of(&self, kind: KeptKind) -> Option<design::ResultOrder> {
+        self.marks
+            .get(&KeptOwner::of(kind))
+            .map(|shown| shown.order())
+    }
+
+    /// How many marks the store holds, for the tests that no mark outlives its data.
+    #[cfg(test)]
+    pub(super) fn marks(&self) -> usize {
+        self.marks.newest_first(&()).count()
+    }
+}
