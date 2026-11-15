@@ -2759,16 +2759,32 @@ impl Sessions {
                 };
                 let reference =
                     timeline::reference(&book.events[at], timeline::day_numbers(&book.events)[at]);
+                // R41 (round 30): a run folder's cause says itself (missing, unreadable);
+                // `REWARDS_BLOCKED` is for the run's own file.
                 let read = match (&plan.run_directory, &self.campaign) {
                     (Some(directory), Some(campaign)) => {
-                        crate::encounter_run::find_run(directory, campaign.id, run)
-                            .and_then(|path| crate::encounter_run::rewards(&path, campaign.id))
+                        crate::encounter_run::find_run_typed(directory, campaign.id, run)
+                            .map_err(|fault| match fault {
+                                crate::encounter_run::FindRunFault::Folder(folder) => {
+                                    folder.message()
+                                }
+                                crate::encounter_run::FindRunFault::File(_) => {
+                                    REWARDS_BLOCKED.to_owned()
+                                }
+                            })
+                            .and_then(|path| {
+                                crate::encounter_run::rewards(&path, campaign.id)
+                                    .map_err(|_| REWARDS_BLOCKED.to_owned())
+                            })
                     }
-                    _ => Err(String::new()),
+                    _ => Err(REWARDS_BLOCKED.to_owned()),
                 };
-                let Ok(found) = read else {
-                    rewards.fault = Some((note, event, fault(REWARDS_BLOCKED), draft.revision()));
-                    return;
+                let found = match read {
+                    Ok(found) => found,
+                    Err(why) => {
+                        rewards.fault = Some((note, event, fault(&why), draft.revision()));
+                        return;
+                    }
                 };
                 let earlier = self.folder.as_deref().map_or_else(
                     || vec![None],
@@ -8101,8 +8117,19 @@ mod tests {
         harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
         harness.run_steps(2);
 
-        // A run that cannot be read: nothing is written, and the row says why.
+        // R41 (round 30): a run folder that is gone says so in its own words, not that the
+        // run cannot be read; nothing is written.
         let before = read();
+        let aside = runs.with_file_name("Runs set aside");
+        fs::rename(&runs, &aside).unwrap();
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        assert_eq!(read(), before);
+        assert!(shown(&harness, "Splat cannot find the run folder "));
+        assert!(!shown(&harness, REWARDS_BLOCKED));
+        fs::rename(&aside, &runs).unwrap();
+
+        // A run that cannot be read: nothing is written, and the row says why.
         fs::remove_file(crate::encounter_run::find_run(&runs, campaign, shrine.id).unwrap())
             .unwrap();
         harness.get_by_label("Add rewards: Shrine").click();
