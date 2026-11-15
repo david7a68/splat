@@ -1668,8 +1668,8 @@ mod suppressions;
 ///   through an alias of the type or a bare function reference: that gap closes when the path
 ///   becomes a Clippy ban after the callers move (the inventory's closing rule).
 /// - `fn sheet_label(`, `fn roll_metric(` and the ability label `"{}{} {}",`: Party's local copies
-///   of the fact contract (ruling M5), which lane Y0 moves to `design::fact`, `design::roll_tile`
-///   and `design::tile_label` (`Str: 8`, round 31 SL12). The lint's own fixture names
+///   of the fact contract (ruling M5), which lane Y0 moves to `design::fact::line`, `fact::roll_tile`
+///   and `fact::tile_label` (`Str: 8`, round 31 SL12). The lint's own fixture names
 ///   `sheet_label` once.
 #[cfg(test)]
 pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, usize)]);
@@ -1781,17 +1781,17 @@ pub(crate) const STAGED: &[Staged] = &[
     ),
     (
         "fn sheet_label(",
-        "Draw a sheet's fact with `design::fact` (M5): it owns the colon, the middle dot and how the line wraps.",
+        "Draw a sheet's fact with `design::fact::line` (M5): it owns the colon, the middle dot and how the line wraps.",
         &[("src/design/lint.rs", 1), ("src/party.rs", 1)],
     ),
     (
         "fn roll_metric(",
-        "Draw a stat tile whose value rolls with `design::roll_tile` (M5).",
+        "Draw a stat tile whose value rolls with `design::fact::roll_tile` (M5).",
         &[("src/party.rs", 1)],
     ),
     (
         "\"{}{} {}\",",
-        "A stat tile's label that holds its own number is `design::tile_label` (`Str: 8`, M5, round 31 SL12).",
+        "A stat tile's label that holds its own number is `design::fact::tile_label` (`Str: 8`, M5, round 31 SL12).",
         &[("src/party.rs", 1)],
     ),
 ];

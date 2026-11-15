@@ -2,12 +2,18 @@
 //! middle dot (`Coins: 12 cp · 40 sp`). The part owns the colon, the separator and how a joined
 //! line wraps; a caller gives a label and its values, never a separator.
 //!
-//! - [`fact`]: a fact on a line of its own. Where the line wraps, each middle dot moves with the
+//! - [`line`]: a fact on a line of its own. Where the line wraps, each middle dot moves with the
 //!   value after it, so no line ends at a dot (round 31 AM15). The accessible name is the plain
 //!   words.
 //! - [`tile_label`]: a stat tile's label that holds its own number (`Str: 8` over `+1`), in the
 //!   same form (round 31 SL12).
 //! - [`roll_tile`]: the rolling stat tile, a [`super::stat_tile`] whose value rolls.
+//!
+//! ```
+//! use splat::fact::{tile_label, words};
+//! assert_eq!(words("Coins", ["12 cp", "40 sp"]), "Coins: 12 cp · 40 sp");
+//! assert_eq!(tile_label("Str", 8), "Str: 8");
+//! ```
 
 use std::fmt::Display;
 
@@ -24,8 +30,8 @@ const SEPARATOR: &str = " · ";
 const PAINTED: &str = " ·\u{a0}";
 
 /// `Resistance: Fire · Cold`: the one form of a fact. It is also the accessible name of
-/// [`fact`].
-pub fn fact_words(label: &str, values: impl IntoIterator<Item = impl Display>) -> String {
+/// [`line`].
+pub fn words(label: &str, values: impl IntoIterator<Item = impl Display>) -> String {
     joined(label, values, SEPARATOR)
 }
 
@@ -35,19 +41,30 @@ fn joined(label: &str, values: impl IntoIterator<Item = impl Display>, separator
 }
 
 /// A fact on a line of its own, wrapped at the room it has. At a break the middle dot moves with
-/// the value after it, so no line ends at a dot; the accessible name is [`fact_words`].
-pub fn fact(ui: &mut Ui, label: &str, values: impl IntoIterator<Item = impl Display>) -> Response {
+/// the value after it, so no line ends at a dot; the accessible name is [`words`].
+pub fn line(ui: &mut Ui, label: &str, values: impl IntoIterator<Item = impl Display>) -> Response {
     let values: Vec<String> = values.into_iter().map(|value| value.to_string()).collect();
-    let response = ui.add(egui::Label::new(joined(label, &values, PAINTED)).wrap());
-    let name = fact_words(label, &values);
-    ui.ctx()
-        .accesskit_node_builder(response.id, |node| node.set_label(name));
+    // Laid out and painted here, as a label is, so the one accessible name is the plain words:
+    // the painted text keeps its no-break spaces out of the name (a label would expose them).
+    let galley = egui::WidgetText::from(joined(label, &values, PAINTED)).into_galley(
+        ui,
+        Some(egui::TextWrapMode::Wrap),
+        ui.available_width(),
+        egui::TextStyle::Body,
+    );
+    let (rect, response) = ui.allocate_exact_size(galley.size(), egui::Sense::hover());
+    let name = words(label, &values);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &name));
+    if ui.is_rect_visible(rect) {
+        ui.painter()
+            .galley(rect.min, galley, ui.style().visuals.text_color());
+    }
     response
 }
 
 /// The label of a stat tile that holds its own number: `Str: 8`, over the tile's value (`+1`).
 pub fn tile_label(label: &str, value: impl Display) -> String {
-    fact_words(label, [value])
+    words(label, [value])
 }
 
 /// The label line of every stat tile: sentence-case muted `Small` words, cut to the tile.
@@ -69,7 +86,7 @@ pub fn roll_tile(ui: &mut Ui, label: &str, value: &str, link: &RollLink) -> Resp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::kittest::{NodeT, Queryable};
+    use egui_kittest::kittest::NodeT;
 
     /// M5: one form for every fact, in words and in the accessible name: the colon, then the
     /// values joined by the middle dot. A tile label that holds its own number takes the same
@@ -79,22 +96,34 @@ mod tests {
     fn a_fact_says_label_colon_values_and_never_ends_a_line_at_a_dot() {
         const WORDS: &str = "Languages: Common · Elvish · Dwarvish · Sylvan · Thieves’ Cant";
         let values = ["Common", "Elvish", "Dwarvish", "Sylvan", "Thieves’ Cant"];
-        assert_eq!(fact_words("Languages", values), WORDS);
-        assert_eq!(fact_words("Darkvision", ["60 ft."]), "Darkvision: 60 ft.");
+        assert_eq!(words("Languages", values), WORDS);
+        assert_eq!(words("Darkvision", ["60 ft."]), "Darkvision: 60 ft.");
         assert_eq!(tile_label("Str", 8), "Str: 8");
         let mut wraps = 0;
         for width in (80..=520).step_by(4) {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(width as f32, 300.0))
                 .build_ui(move |ui| {
-                    let _ = fact(ui, "Languages", values);
+                    let _ = line(ui, "Languages", values);
                 });
             super::super::theme::install(&harness.ctx);
             harness.run();
-            let node = harness.get_by_label(WORDS);
-            assert!(
-                !node.label().unwrap_or_default().contains('\u{a0}'),
-                "the name has plain spaces"
+            let names: Vec<(String, Option<String>)> = harness
+                .root()
+                .children_recursive()
+                .map(|node| {
+                    let node = node.accesskit_node();
+                    (node.label().unwrap_or_default(), node.value())
+                })
+                .filter(|(label, value)| {
+                    label.starts_with("Languages")
+                        || value.as_deref().is_some_and(|v| v.starts_with("Languages"))
+                })
+                .collect();
+            assert_eq!(
+                names,
+                [(String::new(), Some(WORDS.to_owned()))],
+                "at {width}: one name, with plain spaces"
             );
             let rows: Vec<String> = harness
                 .output()

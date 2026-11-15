@@ -51,7 +51,6 @@ pub use layout::{
 #[allow(unused_imports)]
 pub use pane::{Body, EditorRegion, Fills, FillsReason, Placement};
 // Wave 2 callers name the popup parts through `design`, as they name the components.
-pub use fact::{fact, fact_words, roll_tile, tile_label};
 #[allow(unused_imports)]
 pub use popups::{Dropdown, DropdownResponse, Ghost, ImageSize, TipLine, drag_source, rich_tip};
 pub use results::Results;
