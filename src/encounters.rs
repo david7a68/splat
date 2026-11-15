@@ -2552,6 +2552,8 @@ struct Snapshot {
     saved_options: crate::encounter_settings::Options,
     campaign_text: String,
     runs: Vec<crate::encounter_run::SavedRunInfo>,
+    /// Each read of `runs` (`take_run_list`): a new revision, for `RunFacts`.
+    runs_read: crate::design::memo::Revised<()>,
     /// AB1, R41: the run list could not be read, and why. The footer says it in its tone, and
     /// In progress and History say it instead of their empty states. It ends when a read
     /// succeeds.
@@ -2827,6 +2829,7 @@ impl Snapshot {
             saved_options: options,
             campaign_text: document.text,
             runs: Vec::new(),
+            runs_read: crate::design::memo::Revised::new(()),
             runs_unread: None,
             runs_missing: None,
             catalogue,
@@ -2849,6 +2852,7 @@ impl Snapshot {
     ) {
         self.runs_missing = None;
         self.runs_unread = None;
+        self.runs_read.revise(|_| crate::design::memo::Changed::Yes);
         match read {
             Ok(runs) => self.runs = runs,
             Err(error) => {
@@ -3168,10 +3172,34 @@ impl design::results::Kept for MemberMark {
     }
 }
 
+/// What the saved runs say that a kept result reads (`timeline::fights_that_keep_hp`: which
+/// fights keep their saved HP): which read of the run list it is, and the open run's own facts
+/// over it (its id, and whether it is running). Its revision changes when either changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RunFacts {
+    listed: Option<crate::design::memo::Revision>,
+    open: Option<(Uuid, bool)>,
+}
+
+/// [`RunFacts`] with its revision, kept by the page.
+struct RunFactsRevised(crate::design::memo::Revised<RunFacts>);
+
+impl Default for RunFactsRevised {
+    fn default() -> Self {
+        Self(crate::design::memo::Revised::new(RunFacts {
+            listed: None,
+            open: None,
+        }))
+    }
+}
+
 #[derive(Default)]
 pub struct Encounters {
     active: Option<Campaign>,
     snapshot: Option<Snapshot>,
+    /// The saved-run facts that the Session plan's and the Timeline's Add results read, with
+    /// their revision (`saved_runs_revision`). Noted at the end of each `poll`.
+    run_facts: RunFactsRevised,
     /// G118: the Ready rows' difficulty lines, by template id, each under its `Roster::key`,
     /// room, font and scale. The page owns them; a new key replaces an entry, and a template
     /// that leaves the snapshot loses its entry at the next snapshot revision.
@@ -4464,6 +4492,39 @@ impl Encounters {
     }
     /// Keep the snapshot current. The shell calls this every frame.
     pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+        self.poll_reads(ctx, campaigns);
+        self.note_run_facts();
+    }
+
+    /// The revision of the saved-run facts (`RunFacts`): it changes when the run list is read
+    /// again (a deleted or restored run, a reload) or the open run starts, ends or leaves Setup,
+    /// as of this frame's `poll`. A kept result whose words name the fights that keep their
+    /// saved HP keys its words by it (`sessions::page::Plan::saved_runs_revision`, the Timeline's
+    /// `set_saved_runs`).
+    pub fn saved_runs_revision(&self) -> crate::design::memo::Revision {
+        self.run_facts.0.revision()
+    }
+
+    /// Note the saved-run facts: a revision and the open run's timeline fact (its id, state and
+    /// name, as the app reads each frame), never the run list.
+    fn note_run_facts(&mut self) {
+        let facts = RunFacts {
+            listed: self
+                .snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.runs_read.revision()),
+            open: self.run.as_ref().map(|run| {
+                let fact = run.timeline_fact();
+                (
+                    fact.id,
+                    matches!(fact.state, crate::timeline::RunState::Running),
+                )
+            }),
+        };
+        self.run_facts.0.set(facts);
+    }
+
+    fn poll_reads(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
         #[cfg(test)]
         if self.hold_reads {
             return;
@@ -11498,6 +11559,17 @@ mod tests {
         played.record_run(&fact(), None, true);
         played.record_run(&later, None, true);
         editor.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
+        // Ruling L9, early review F1 of PR 444: the revision of the saved-run facts, which the
+        // Add results' words key by, holds on a poll with no change, and moves when the run
+        // list is read again or a run opens.
+        editor.note_run_facts();
+        let facts = editor.saved_runs_revision();
+        editor.note_run_facts();
+        assert_eq!(
+            editor.saved_runs_revision(),
+            facts,
+            "no change, no new revision"
+        );
         editor.follow_continue_rule(&played);
         assert_eq!(
             editor.history_blocked,
@@ -11507,6 +11579,12 @@ mod tests {
         taken["id"] = serde_json::json!(later.id);
         fs::write(&path, serde_json::to_vec_pretty(&taken).unwrap()).unwrap();
         editor.read_runs_again(&campaign);
+        editor.note_run_facts();
+        assert_ne!(
+            editor.saved_runs_revision(),
+            facts,
+            "the run list read again is new facts"
+        );
         editor.open_saved_run(&path, &campaign);
         editor.follow_continue_rule(&played);
         assert_eq!(
@@ -11516,7 +11594,15 @@ mod tests {
         fs::write(&path, &bytes).unwrap();
         editor.snapshot = None;
 
+        editor.note_run_facts();
+        let no_run = editor.saved_runs_revision();
         editor.run = Some(editor.start_run(&campaign, &[]).unwrap());
+        editor.note_run_facts();
+        assert_ne!(
+            editor.saved_runs_revision(),
+            no_run,
+            "an open run's facts are over the list"
+        );
         let current = editor.run().unwrap().live_info().unwrap().id;
         editor.open_saved_run(&path, &campaign);
         assert_eq!(editor.run().unwrap().live_info().unwrap().id, current);

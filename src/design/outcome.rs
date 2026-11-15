@@ -1981,7 +1981,9 @@ impl KeptGroup {
 }
 
 /// A message as drawn: tone, words, Undo and choices, each with its lock. Owned: it holds no
-/// borrow, so a footer of them can sit beside a body that changes the app.
+/// borrow, so a footer of them can sit beside a body that changes the app, and a retained
+/// projection (`design::results::Projection`) can keep it across frames as data.
+#[derive(Clone)]
 struct Body {
     tone: Tone,
     words: Sentence,
@@ -2008,10 +2010,39 @@ fn undo_alone(kept: &[Verb], undo: Option<&UndoStep>) -> bool {
 }
 
 /// A body and the caller's ids of its Undo and of each choice, by index.
-struct Typed<A> {
+pub(in crate::design) struct Typed<A> {
     body: Body,
     undo: Option<A>,
     choices: Vec<A>,
+}
+
+impl<A: Clone> Clone for Typed<A> {
+    fn clone(&self) -> Self {
+        Self {
+            body: self.body.clone(),
+            undo: self.undo.clone(),
+            choices: self.choices.clone(),
+        }
+    }
+}
+
+impl<A> Typed<A> {
+    /// The bytes of its words, for the work counts of a retained projection.
+    pub(in crate::design) fn word_bytes(&self) -> usize {
+        self.body.words.as_str().len()
+    }
+
+    /// Its words, for a test of a retained projection.
+    #[cfg(test)]
+    pub(in crate::design) fn words(&self) -> &str {
+        self.body.words.as_str()
+    }
+
+    /// Whether its Undo's lock holds, for a test of a retained projection.
+    #[cfg(test)]
+    pub(in crate::design) fn undo_locked(&self) -> bool {
+        holding(&self.body.undo_lock).is_some()
+    }
 }
 
 impl<A> Typed<A> {
@@ -2257,20 +2288,29 @@ impl<'f, A> KeptLine<'f, A> {
     /// gives the Undo only then), because only then does the file still hold what it says; then
     /// the Undo, once.
     pub(in crate::design) fn new(
-        _frame: &'f PaneFrame,
+        frame: &'f PaneFrame,
         ticket: Ticket,
         outcome: KeptOutcome<A>,
         refused: Option<(ResultOrder, Sentence, Tone)>,
     ) -> Self {
-        let mut typed = outcome.typed();
-        let refused = refused.map(|(order, words, tone)| {
-            typed.body.tone = tone;
-            let result = std::mem::replace(&mut typed.body.words, words);
-            if typed.body.undo.is_some() {
-                typed.body.words = typed.body.words.clone().then(result);
-            }
-            order
-        });
+        let (typed, refused) = prepare(outcome, refused);
+        Self::prepared(frame, ticket, typed, refused)
+    }
+
+    /// Its ticket, for a test of `Results::present`.
+    #[cfg(test)]
+    pub(in crate::design) fn ticket(&self) -> &Ticket {
+        &self.ticket
+    }
+
+    /// A line from what [`prepare`] made: for `Results::present`, which keeps the prepared
+    /// message in a retained projection and mints the ticket in the frame that shows it.
+    pub(in crate::design) fn prepared(
+        _frame: &'f PaneFrame,
+        ticket: Ticket,
+        typed: Typed<A>,
+        refused: Option<ResultOrder>,
+    ) -> Self {
         Self {
             ticket,
             typed,
@@ -2278,6 +2318,26 @@ impl<'f, A> KeptLine<'f, A> {
             frame: std::marker::PhantomData,
         }
     }
+}
+
+/// A kept result's message as its line draws it, with the order of its refused attempt while
+/// the refusal stands. A refused attempt's line is one answer: the refusal's words first, in the
+/// tone of its diagnosis (`Refusal::tone`, R41); the result's own words follow only while its
+/// Undo is live; then the Undo, once. It needs no frame: a retained projection keeps it as data.
+pub(in crate::design) fn prepare<A>(
+    outcome: KeptOutcome<A>,
+    refused: Option<(ResultOrder, Sentence, Tone)>,
+) -> (Typed<A>, Option<ResultOrder>) {
+    let mut typed = outcome.typed();
+    let refused = refused.map(|(order, words, tone)| {
+        typed.body.tone = tone;
+        let result = std::mem::replace(&mut typed.body.words, words);
+        if typed.body.undo.is_some() {
+            typed.body.words = typed.body.words.clone().then(result);
+        }
+        order
+    });
+    (typed, refused)
 }
 
 /// A footer line as the one footer order sees it ([`footer_order`]).

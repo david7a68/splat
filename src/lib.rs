@@ -40,7 +40,8 @@ pub mod ownership {
     pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
     pub use crate::design::results::{
         Cause, Change, DiskChanged, Ends, FailedAct, Fallback, File, FooterResult, Gone, Kept,
-        Kind, Name, Owner, OwnerChanged, Press, Recovery, Refusal, Results, Shown, Thing,
+        Kind, Mismatch, Name, Owner, OwnerChanged, Press, Projection, Recovery, Refusal, Results,
+        Retained, Shown, Thing,
     };
     pub use crate::design::save_row::{
         Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,
@@ -2010,6 +2011,7 @@ impl Splat {
                 if let Some(campaign) = &active {
                     let fights = self.encounters.plan_fights();
                     let saved_runs = self.encounters.saved_runs();
+                    let saved_runs_revision = self.encounters.saved_runs_revision();
                     let groups = self.encounters.plan_groups();
                     let blocked = self.encounters.plan_blocked();
                     let group_blocked = self.encounters.plan_group_blocked();
@@ -2036,6 +2038,7 @@ impl Splat {
                         tables: sources.as_ref().map_or(&[], |sources| &sources.tables),
                         fights: &fights,
                         saved_runs: &saved_runs,
+                        saved_runs_revision,
                         groups: &groups,
                         group_blocked,
                         group_open,
@@ -2065,7 +2068,10 @@ impl Splat {
                     let current = self.sessions.current();
                     self.timeline_page.open_run = self.run_fact.as_ref().map(|fact| fact.id);
                     self.timeline.run_open = self.encounters.has_run();
-                    self.timeline_page.saved_runs = self.encounters.saved_runs();
+                    self.timeline_page.set_saved_runs(
+                        self.encounters.saved_runs(),
+                        self.encounters.saved_runs_revision(),
+                    );
                     self.timeline_page.dated = self.sessions.current_dated();
                     self.timeline_page.tables =
                         self.lookup.index().map(|index| index.loot_sources());

@@ -1257,6 +1257,7 @@ mod tests {
         let plan = Plan {
             fights,
             saved_runs,
+            saved_runs_revision: crate::design::memo::Revised::new(()).revision(),
             groups: &[],
             group_blocked: None,
             group_open: false,
