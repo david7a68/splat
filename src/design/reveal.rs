@@ -433,8 +433,9 @@ struct Facts {
 }
 
 fn facts(ui: &Ui) -> Facts {
+    let frame = ui.ctx().cumulative_frame_nr();
     ui.input(|input| Facts {
-        frame: ui.ctx().cumulative_frame_nr(),
+        frame,
         events: input.events.clone(),
         moved: input.raw_scroll_delta != Vec2::ZERO
             || input.smooth_scroll_delta != Vec2::ZERO
