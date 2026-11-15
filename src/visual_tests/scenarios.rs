@@ -1457,7 +1457,30 @@ pub mod library_browse {
                         .is_some_and(|rect| (rect.top() - 105.0).abs() < 1.0)
             },
         );
-        d.state("first-launch", Sizes::AllAndHiDpi);
+        d.state_prepared("first-launch", Sizes::AllAndHiDpi, |d| {
+            // Round 30 AI4: with an empty search, All entries stands in its place (the way back
+            // to every entry, selected now) and paints no count: the header already says it.
+            // Its accessible name keeps the count.
+            let row = d.place_of("All entries   2,065");
+            let mut counts = Vec::new();
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == "2,065" && clip.intersects(text.visual_bounding_rect()) {
+                    counts.push(text.visual_bounding_rect());
+                }
+            });
+            // At 960 the categories are the `Section` drop-down, with no rows.
+            let compact = d.window_size().0 < 1000.0 && d.place_of("Section").is_some();
+            d.observe(
+                "s30-B2-all-entries-count",
+                (compact && row.is_none())
+                    || row.is_some_and(|row| {
+                        !counts.iter().any(|count| {
+                            count.center().y >= row.top() && count.center().y <= row.bottom()
+                        })
+                    }),
+                format!("All entries {row:?} paints no count beside it: {counts:?}"),
+            );
+        });
         d.check_tab_order("library, first launch");
         d.begin_task();
 
@@ -1466,6 +1489,57 @@ pub mod library_browse {
         d.state("search-dragon", Sizes::All);
         d.goal("search for dragons");
 
+        // Round 30 AI4, ruled exactly (B2 packet 3): during a search All entries paints the
+        // number of matches, zero included, on its own line; the row keeps its place.
+        let all_row = |d: &mut Driver<'_>, query: &str| {
+            d.at_size(DEFAULT, |d| {
+                let row = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("All entries   "))
+                    .map(|node| node.rect);
+                let heading = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with(SEARCH_RESULTS))
+                    .map(|node| {
+                        node.name
+                            .trim_start_matches(SEARCH_RESULTS)
+                            .trim()
+                            .to_owned()
+                    });
+                let mut painted = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let rect = text.visual_bounding_rect();
+                    if clip.intersects(rect)
+                        && row.is_some_and(|row| {
+                            rect.center().y >= row.top()
+                                && rect.center().y <= row.bottom()
+                                && rect.left() > row.center().x
+                                && rect.right() <= row.right() + 0.5
+                        })
+                    {
+                        painted.push(text.galley.job.text.clone());
+                    }
+                });
+                (query.to_owned(), row, heading, painted)
+            })
+        };
+        let dragons = all_row(d, "dragon");
+        d.aside(|d| search_library(d, "zzqxvw"));
+        let nothing = all_row(d, "zzqxvw");
+        d.observe(
+            "s30-B2-all-entries-count-search",
+            dragons.1.is_some()
+                && dragons.2.is_some()
+                && dragons.3.len() == 1
+                && Some(&dragons.3[0]) == dragons.2.as_ref()
+                && dragons.3[0] != "0"
+                && nothing.1.is_some()
+                && nothing.3 == ["0"],
+            format!("During a search All entries paints the matches (query, row, heading count, painted on the row): {dragons:?}, {nothing:?}"),
+        );
+        d.aside(|d| search_library(d, "dragon"));
         d.click_containing(CREATURE);
         d.expect(CREATURE);
         d.state("creature-stat-block", Sizes::AllAndHiDpi);
@@ -2909,13 +2983,34 @@ pub mod campaign_content {
             clean_top,
             "Starting a draft must keep the editor's top edge"
         );
-        // Round 27 FA3: the draft's reason in the footer has the message form: a tone bar
-        // beside its words, as the footer's other messages have.
-        let reason = d.painted_rect_in("Save or discard to copy", egui::Rect::EVERYTHING);
+        // Round 27 FA3, changed by the structural phase (M2, lead rulings 1 and 2 of packets 1
+        // and 2): the draft's reason has one home, the save row (its own line, or a slot under
+        // it in a reader too narrow for the short form), so it is painted exactly once, between
+        // the toolbar and the editor, and no longer as a footer message.
+        let mut reasons = Vec::new();
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.starts_with("Save or discard")
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                reasons.push(text.visual_bounding_rect());
+            }
+        });
+        let save = d.place_of(SAVE_ENTRY);
+        let toolbar = d.place_of("Read");
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.role == egui::accesskit::Role::MultilineTextInput)
+            .map(|node| node.shown);
         d.observe(
             "iter-27-L-FA3",
-            reason.is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.info)),
-            format!("The Library draft's reason is a footer message with its bar: {reason:?}"),
+            reasons.len() == 1
+                && save.zip(editor).zip(toolbar).is_some_and(|((save, editor), toolbar)| {
+                    reasons[0].top() >= toolbar.bottom() - 0.5
+                        && reasons[0].top() >= save.top() - 0.5
+                        && reasons[0].bottom() <= editor.top() + 0.5
+                }),
+            format!("The Library draft's reason is painted once, on the save row {save:?} or under it, between the toolbar {toolbar:?} and the editor {editor:?}: {reasons:?}"),
         );
         d.state("entry-dirty", Sizes::Default);
         d.click(SAVE_ENTRY);
@@ -23187,7 +23282,7 @@ pub mod session_plan_groups {
             .filter(|(_, member)| !*member)
             .map(|(at, _)| *at)
             .next_back();
-        let example_words = example.map(|line| format!("Line {line}: this link names no entry."));
+        let example_words = example.map(|line| format!("Line {line}: This link names no entry."));
         let each_named = |d: &Driver<'_>| {
             example_words
                 .as_deref()
@@ -23200,7 +23295,7 @@ pub mod session_plan_groups {
             "iter-25-L-FH6",
             each_named(d)
                 && row.is_some_and(|row| {
-                    !d.has_containing(&format!("Line {row}: this link names no entry."))
+                    !d.has_containing(&format!("Line {row}: This link names no entry."))
                 }),
             format!("Both broken links are named, each once: example {example_words:?}, member {named:?}"),
         );
