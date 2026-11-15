@@ -4561,7 +4561,7 @@ pub mod party {
         d.observe(
             "iter-14-B-FD1-opens",
             d.page_title().as_deref() == Some("Settings")
-                && d.focused_name().as_deref() == Some("Paste session cookie"),
+                && d.focused_name().as_deref() == Some("Paste sign-in cookie"),
             "Connect D&D Beyond on the warning opens Settings with the cookie field focused",
         );
         d.click(NAV_PARTY);
@@ -4712,22 +4712,22 @@ pub mod party {
         d.observe(
             "P26",
             d.page_title().as_deref() == Some("Settings")
-                && d.focused_name().as_deref() == Some("Paste session cookie"),
+                && d.focused_name().as_deref() == Some("Paste sign-in cookie"),
             "Connect to refresh opens Settings with the cookie field focused",
         );
-        d.click("Paste session cookie");
-        d.wait_for_text("Paste session cookie");
+        d.click("Paste sign-in cookie");
+        d.wait_for_text("Paste sign-in cookie");
         d.observe(
             "Coverage",
-            d.focused_name().as_deref() == Some("Paste session cookie"),
+            d.focused_name().as_deref() == Some("Paste sign-in cookie"),
             "The cookie field is focused before capture",
         );
         d.state_prepared("connect-to-refresh", Sizes::Default, |d| {
-            d.click("Paste session cookie");
+            d.click("Paste sign-in cookie");
             d.settle();
             d.observe(
                 "iter-5-P13",
-                d.focused_name().as_deref() == Some("Paste session cookie"),
+                d.focused_name().as_deref() == Some("Paste sign-in cookie"),
                 "The cookie field is focused after each capture resize",
             );
         });
@@ -5443,7 +5443,7 @@ pub mod encounter_run {
         d.observe_both(
             "iter-12-F2",
             "The run card shows current and maximum HP after damage",
-            |d| d.visible_text("26 / 33"),
+            |d| d.visible_text("26/33"),
         );
         d.goal_within("T1.2", "damage a named participant who is not current", 3);
 
@@ -5733,9 +5733,9 @@ pub mod settings {
     const REMOVE_CAMPAIGN: &str = "More actions for Quiet Harbor";
     const REMOVE_TITLE: &str = "Remove Quiet Harbor?";
     const NOT_CONNECTED: &str = "Not connected";
-    const COOKIE_HELP: &str = "How to get your session cookie";
+    const COOKIE_HELP: &str = "How to get your sign-in cookie";
     const COOKIE_HELP_TEXT: &str = "Sign in to D&D Beyond in your browser";
-    const COOKIE_FIELD: &str = "Paste session cookie";
+    const COOKIE_FIELD: &str = "Paste sign-in cookie";
     const SYNTHETIC_COOKIE: &str = "synthetic-not-a-real-cookie";
     const CONNECT: &str = "Connect";
     const DISCONNECT: &str = "Disconnect";
@@ -5760,7 +5760,7 @@ pub mod settings {
             "Connect keeps its reason beside the button",
             |d| {
                 let button = d.place_of(CONNECT).unwrap();
-                let reason = d.place_of("Paste your session cookie first.").unwrap();
+                let reason = d.place_of("Paste your sign-in cookie first.").unwrap();
                 (button.left() - reason.right() - crate::design::S).abs() < 1.0
             },
         );
@@ -5897,11 +5897,11 @@ pub mod settings {
         let connect_before = d.place_of(CONNECT);
         let (emptied, back) = d.aside(|d| {
             d.clear_text_in(COOKIE_FIELD);
-            let emptied = d.visible_text("Paste your session cookie first.")
+            let emptied = d.visible_text("Paste your sign-in cookie first.")
                 && !d.visible_text(OFFLINE_ERROR);
             d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
             let back =
-                d.visible_text(OFFLINE_ERROR) && !d.visible_text("Paste your session cookie");
+                d.visible_text(OFFLINE_ERROR) && !d.visible_text("Paste your sign-in cookie");
             (emptied, back)
         });
         d.observe(
@@ -6237,7 +6237,7 @@ pub mod settings {
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
             // G137 (FE6): before any scroll, the form shows whole (R30) and the kept line names
             // the folder Splat proposes, whole.
-            let preview = "Will add …/Salt Road";
+            let preview = "Will create …/Salt Road";
             let nodes = d.nodes();
             let in_view = |name: &str| {
                 nodes
@@ -6247,7 +6247,7 @@ pub mod settings {
             d.observe(
                 "iter-29-C-G137",
                 d.visible_text(preview) && in_view(preview) && in_view("Cancel"),
-                "`Will add …/Salt Road` whole and in view with Cancel, before any scroll",
+                "`Will create …/Salt Road` whole and in view with Cancel, before any scroll",
             );
             for _ in 0..4 {
                 let nodes = d.nodes();
@@ -6718,6 +6718,7 @@ pub mod empty {
         // the account section is below the form.
         let below = |d: &Driver<'_>| {
             let add = d.place_of(ADD_CAMPAIGN).expect("Add campaign is on screen");
+            let preview = format!("Will create …/{NEW_FOLDER}");
             let mut tops: Vec<(String, i32)> = d
                 .nodes()
                 .iter()
@@ -6729,7 +6730,7 @@ pub mod empty {
                     !node.name.is_empty()
                         && node.name != ADD_REASON
                         && node.name != "Cancel"
-                        && !node.name.starts_with("Will add ")
+                        && node.name != preview
                 })
                 .map(|node| (node.name.clone(), node.rect.top().round() as i32))
                 .collect();
@@ -11529,7 +11530,7 @@ pub mod signed_in {
         // G138 (AO2, FO7): the kept line names the folder Splat proposes, whole, at every size.
         d.state_prepared("import-remote-campaign", Sizes::All, |d| {
             // No test scroll: the form shows whole when it opens (R30).
-            let preview = format!("Will add …/{REMOTE_NAME}");
+            let preview = format!("Will create …/{REMOTE_NAME}");
             let shown = d.visible_text(&preview)
                 && d.nodes()
                     .iter()
@@ -11982,7 +11983,7 @@ pub mod signed_in {
         d.click("Connect to sync");
         d.observe(
             "Sign in recovery",
-            d.focused_name().as_deref() == Some("Paste session cookie"),
+            d.focused_name().as_deref() == Some("Paste sign-in cookie"),
             "Sign in again opens Settings with the cookie field focused",
         );
         d.state("sign-in-from-run", Sizes::Default);
@@ -12008,7 +12009,7 @@ pub mod signed_in {
             "iter-12-R4",
             "Sign-in recovery shows the cookie field without unexplained locked actions",
             |d| {
-                d.in_view("Paste session cookie")
+                d.in_view("Paste sign-in cookie")
                     && (!d.in_view("Edit details")
                         || d.in_view("Close the run to change campaigns."))
             },
@@ -15076,6 +15077,7 @@ pub mod session_notes {
         d.state("timeline-disk-conflict", Sizes::All);
         links_beside_lookup(d);
         note_warnings_beside_other_editors(d);
+        header_menu_boundaries(d);
     }
 
     /// Round 30 re-check of PR 400 (follow-up B7b): the session note's warnings stand in the
@@ -15497,6 +15499,72 @@ pub mod session_notes {
                 ),
             );
         }
+    }
+
+    /// R40's extra states follow every main witness, so closing Lookup here cannot change
+    /// the later banner witnesses' layout or remove their existing scrollbar records.
+    fn header_menu_boundaries(d: &mut Driver<'_>) {
+        // R40: the migrated Adds to popup shows full session names. Append the state so
+        // every existing capture keeps its number. No test scroll prepares the popup.
+        d.press(Key::Escape);
+        // The preceding warning witness restores Session 4's file after proving it gone.
+        // Read that restored listing before selecting the session through the real menu.
+        d.app_mut().sessions.refresh();
+        d.click(NAV_TIMELINE);
+        let menu_boundary = |d: &mut Driver<'_>, name: &str| {
+            let menu = d.place_of(&format!("{name} choices"));
+            let control = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::ComboBox && node.name.starts_with(name)
+                })
+                .map(|node| node.rect);
+            let splitter = d.place_of("Resize timeline details column");
+            let (_, height) = d.window_size();
+            let footers = d.footer_bands();
+            d.observe(
+                "s30-B10-header-menu-boundary",
+                menu.zip(control).is_some_and(|(menu, control)| {
+                    menu.top() >= control.bottom()
+                        && menu.bottom() <= height
+                        && splitter.is_none_or(|edge| menu.right() <= edge.left())
+                        && footers.iter().filter(|band| {
+                            band.left() < menu.right() && band.right() > menu.left()
+                        }).all(|band| menu.bottom() <= band.top())
+                }),
+                format!("{name}: menu {menu:?}, control {control:?}, detail splitter {splitter:?}, footer bands {footers:?}, window height {height}"),
+            );
+        };
+        d.state_prepared("adds-to-session-menu", Sizes::All, |d| {
+            if !d.has("No session") {
+                d.click("Session for new events");
+            }
+            d.click("Session 4: Ferry Watch");
+            d.observe(
+                "s30-B10-chosen-value-accessible-value",
+                d.combo_value("Session for new events").as_deref()
+                    == Some("Session 4: Ferry Watch"),
+                "The exact Session for new events name keeps the full chosen value after a menu selection",
+            );
+            if !d.has("No session") {
+                d.click("Session for new events");
+            }
+            d.observe(
+                "s30-B10-chosen-value-menu",
+                d.visible_text("No session") && d.visible_text("Session 4: Ferry Watch"),
+                "The menu shows full session names at every size",
+            );
+            menu_boundary(d, "Session for new events");
+        });
+        d.press(Key::Escape);
+        d.state_prepared("session-filter-menu-boundary", Sizes::All, |d| {
+            if !d.has("Show one session choices") {
+                d.click_starting("Show one session:");
+            }
+            menu_boundary(d, "Show one session");
+        });
+        d.press(Key::Escape);
     }
 }
 
@@ -18565,6 +18633,16 @@ pub mod session_recording {
         assert!(d.in_view(&process));
         d.click(&process);
         d.expect("Summary");
+        d.click("Summary");
+        if !d.in_view(SEARCH_LOOKUP) {
+            d.press_ctrl(Key::K);
+        }
+        d.state_prepared("recording-view-menu-boundary", Sizes::Small, |d| {
+            if !d.has("Recording view choices") {
+                d.click_starting("Recording view:");
+            }
+        });
+        d.press(Key::Escape);
     }
 }
 
@@ -22401,7 +22479,7 @@ pub mod run_add_creature {
         d.expect("Made up in this fight. It has no stat block.");
         d.observe(
             "F1",
-            d.visible_text("22 / 22") && d.visible_text("9") && !d.visible_text("printed +0"),
+            d.visible_text("22/22") && d.visible_text("9") && !d.visible_text("printed +0"),
             "A made-up card shows typed HP and an unsigned initiative total",
         );
         // FK7: the trio keeps the stat block's columns when the DM selects one after the other.
@@ -22431,7 +22509,7 @@ pub mod run_add_creature {
         d.press(Key::Enter);
         d.observe(
             "F1",
-            d.visible_text("17 / 22"),
+            d.visible_text("17/22"),
             "Damage keeps the made-up creature's maximum HP",
         );
         d.state("made-up-creature-after-damage", Sizes::Default);
@@ -22737,6 +22815,13 @@ pub mod run_add_creature {
         }
         d.clear_text_in(FIELD);
         d.begin_task();
+        d.type_into(FIELD, "Boundary visitor");
+        d.state_prepared("new-creature-side-menu-boundary", Sizes::Small, |d| {
+            if !d.has("Side of the new creature choices") {
+                d.click_starting("Side of the new creature:");
+            }
+        });
+        d.press(Key::Escape);
     }
 }
 

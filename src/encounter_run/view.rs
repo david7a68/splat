@@ -444,7 +444,10 @@ fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
             };
             let removed = field(Some(value), "removedHitPoints");
             if removed != field(sheet, "removedHitPoints") {
-                add(format!("{}/{max} HP", (max - removed.unwrap_or(0)).max(0)));
+                add(format!(
+                    "{} HP",
+                    crate::combat_sync::fraction((max - removed.unwrap_or(0)).max(0), max)
+                ));
             }
             let temporary = field(Some(value), "temporaryHitPoints");
             if temporary != field(sheet, "temporaryHitPoints") {
@@ -4616,7 +4619,7 @@ impl Run {
                     ("ARMOR CLASS", unknown(p.armor_class)),
                     (
                         "HIT POINTS",
-                        format!("{} / {}", unknown(p.hp), unknown(p.max_hp)),
+                        crate::combat_sync::fraction(unknown(p.hp), unknown(p.max_hp)),
                     ),
                     ("INITIATIVE", unknown(p.initiative)),
                 ],
@@ -5585,10 +5588,9 @@ impl Run {
             _ => icons::GROUP,
         };
         let mut numbers = format!(
-            "{side_icon} {} · HP {}/{}",
+            "{side_icon} {} · HP {}",
             style::human_label(&p.side),
-            display(p.hp),
-            display(p.max_hp)
+            crate::combat_sync::fraction(display(p.hp), display(p.max_hp))
         );
         let absent = if p.present {
             String::new()
@@ -7700,7 +7702,10 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
     let mut parts = vec![
         p.name.clone(),
         p.side.clone(),
-        format!("HP {}/{}", display(p.hp), display(p.max_hp)),
+        format!(
+            "HP {}",
+            crate::combat_sync::fraction(display(p.hp), display(p.max_hp))
+        ),
         format!("Temp {}", p.temporary_hp),
         format!("AC {}", display(p.armor_class)),
         format!("Initiative {}", display(p.initiative)),
@@ -14317,7 +14322,7 @@ mod tests {
                             amount.request_focus();
                         }
                         if page.settings {
-                            let cookie = Action::secondary("Paste session cookie").show(ui);
+                            let cookie = Action::secondary("Paste sign-in cookie").show(ui);
                             if std::mem::take(&mut page.focus_cookie) {
                                 cookie.request_focus();
                             }
@@ -14365,7 +14370,7 @@ mod tests {
             let expected = if key.is_some() {
                 "Amount"
             } else {
-                "Paste session cookie"
+                "Paste sign-in cookie"
             };
             assert_eq!(
                 focused_name(&harness).as_deref(),

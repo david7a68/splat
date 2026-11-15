@@ -69,7 +69,10 @@ impl Glance {
 
     /// Everything the bar knows after the name, a fact to a line, for hover.
     fn facts(&self) -> Vec<String> {
-        let mut hp = format!("HP {}/{}", known(self.hp), known(self.max_hp));
+        let mut hp = format!(
+            "HP {}",
+            crate::combat_sync::fraction(known(self.hp), known(self.max_hp))
+        );
         if let Some((_, word, _)) = design::hp_word(self.hp, self.max_hp) {
             hp.push_str(&format!(" · {word}"));
         }

@@ -3,8 +3,9 @@
 //! here and after a restart, and the column beside it takes what is left.
 use super::tokens::*;
 use eframe::egui::{
-    self, Context, Id, Ui,
+    self, Context, Id, Rect, Ui,
     containers::panel::{PanelState, Side},
+    emath::GuiRounding as _,
 };
 use std::{collections::BTreeMap, ops::RangeInclusive};
 
@@ -89,7 +90,7 @@ impl Column {
     pub fn show<R>(self, ctx: &Context, add: impl FnOnce(&mut Ui) -> R) -> R {
         let (id, side, margin) = (self.id, self.side, self.frame.inner_margin);
         let shown = self
-            .panel_within(ctx, ctx.available_rect().width())
+            .panel_within(ctx, ctx.available_rect())
             .show(ctx, |ui| fill_and_add(ui, side, margin, add));
         finish_handle(ctx, id, &shown.response);
         shown.inner
@@ -99,31 +100,80 @@ impl Column {
         let (id, side, margin) = (self.id, self.side, self.frame.inner_margin);
         let ctx = ui.ctx().clone();
         let shown = self
-            .panel_within(&ctx, ui.available_width())
+            .panel_within(&ctx, ui.available_rect_before_wrap())
             .show_inside(ui, |ui| fill_and_add(ui, side, margin, add));
         finish_handle(&ctx, id, &shown.response);
         shown.inner
     }
 
-    fn panel_within(self, ctx: &Context, room: f32) -> egui::SidePanel {
-        let id = Id::new(self.id);
-        let mut dragged = ctx.data_mut(|data| {
-            // Egui would hold on to the width of the last frame, and a window that changes
-            // size could not move a natural width any more.
-            data.remove::<PanelState>(id);
-            data.get_temp_mut_or_default::<Widths>(widths_id())
-                .0
-                .get(self.id)
-                .copied()
-        });
-        // A natural width can lie outside the range. A window with no room for the page
-        // limits even that, and the narrow end of the range goes first.
+    fn bounds(&self, room: f32) -> (f32, f32) {
         let min = self.range.start().min(self.natural);
         let max = self
             .range
             .end()
             .max(self.natural)
             .min((room - self.page_keeps).max(*self.range.start()));
+        (min, max)
+    }
+
+    /// The width this column will draw in `room`, without changing its saved width.
+    /// A header may ask before the panel draws. Read the same pending key and pointer
+    /// decisions as the panel, from its current horizontal bounds; consume and save nothing.
+    pub fn width_within(&self, ctx: &Context, room: Rect) -> f32 {
+        let (min, max) = self.bounds(room.width());
+        let dragged = ctx
+            .data(|data| data.get_temp::<Widths>(widths_id()))
+            .and_then(|widths| widths.0.get(self.id).copied());
+        let mut width = dragged.unwrap_or(self.natural);
+        if ctx.memory(|memory| memory.has_focus(Id::new(self.id).with("__resize"))) {
+            let (left, right, home) = ctx.input(|input| {
+                let pressed = |wanted| {
+                    input.events.iter().any(|event| {
+                        matches!(event, egui::Event::Key { key, modifiers, pressed: true, .. }
+                        if *key == wanted && modifiers.matches_logically(egui::Modifiers::NONE))
+                    })
+                };
+                (
+                    pressed(egui::Key::ArrowLeft),
+                    pressed(egui::Key::ArrowRight),
+                    pressed(egui::Key::Home),
+                )
+            });
+            if home {
+                width = self.natural;
+            } else if left || right {
+                let direction = if self.side == Side::Left { 1.0 } else { -1.0 };
+                width = width.clamp(min, max)
+                    + (i32::from(right) - i32::from(left)) as f32 * L * direction;
+            }
+        }
+        // SidePanel applies the current pointer before drawing, using this fixed outer
+        // edge. Do that same calculation here, so a header sees this pass's split too.
+        if let Some(response) = ctx.read_response(Id::new(self.id).with("__resize"))
+            && response.dragged()
+            && let Some(pointer) = response.interact_pointer_pos()
+        {
+            let fixed = match self.side {
+                Side::Left => room.left(),
+                Side::Right => room.right(),
+            };
+            width = (pointer.x - fixed).abs();
+        }
+        let width = width.clamp(min, max).min(room.width());
+        let mut panel = room;
+        match self.side {
+            Side::Left => panel.max.x = room.left() + width,
+            Side::Right => panel.min.x = room.right() - width,
+        }
+        panel.round_ui().width()
+    }
+
+    fn panel_within(self, ctx: &Context, room: Rect) -> egui::SidePanel {
+        let id = Id::new(self.id);
+        // Egui would hold the last frame's natural width as the window changes.
+        ctx.data_mut(|data| data.remove::<PanelState>(id));
+        let (min, max) = self.bounds(room.width());
+        let width = self.width_within(ctx, room);
         if ctx.memory(|memory| memory.has_focus(id.with("__resize"))) {
             // Egui moves focus with the arrow keys at the end of the frame; a focused handle
             // keeps them, so each press resizes and focus stays on the handle.
@@ -144,13 +194,7 @@ impl Column {
                 )
             });
             if home || left || right {
-                dragged = if home {
-                    None
-                } else {
-                    let direction = if self.side == Side::Left { 1.0 } else { -1.0 };
-                    let delta = (i32::from(right) - i32::from(left)) as f32 * L * direction;
-                    Some((dragged.unwrap_or(self.natural).clamp(min, max) + delta).clamp(min, max))
-                };
+                let dragged = (!home).then_some(width);
                 ctx.data_mut(|data| {
                     let widths = &mut data.get_temp_mut_or_default::<Widths>(widths_id()).0;
                     if let Some(width) = dragged {
@@ -164,7 +208,7 @@ impl Column {
         }
         egui::SidePanel::new(self.side, id)
             .resizable(true)
-            .default_width(dragged.unwrap_or(self.natural))
+            .default_width(width)
             .width_range(min..=max)
             .frame(self.frame)
     }
@@ -316,6 +360,63 @@ mod tests {
             );
             assert!(column_dragged(&harness.ctx, "c"));
         }
+        // Timeline computes a menu's room before drawing the detail column. Even a resize
+        // key in that same pass must predict the drawn split, without saving from the read.
+        let predicted = Rc::new(Cell::new(0.0));
+        let drawn = Rc::new(Cell::new(0.0));
+        let before = predicted.clone();
+        let after = drawn.clone();
+        let room = Rc::new(Cell::new(egui::Rect::NOTHING));
+        let bounds = room.clone();
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let column = Column::panel("timeline_detail_panel", PANEL_MIN_WIDTH);
+                    let saved = column_widths(ctx);
+                    bounds.set(ui.available_rect_before_wrap());
+                    before.set(column.width_within(ctx, ui.available_rect_before_wrap()));
+                    assert_eq!(column_widths(ctx), saved, "the width read saves nothing");
+                    column.show_inside(ui, |ui| after.set(ui.max_rect().width()));
+                    assert_eq!(
+                        before.get(),
+                        after.get(),
+                        "the header width agrees before the end of every draw pass"
+                    );
+                });
+            });
+        harness.run_steps(2);
+        harness.ctx.memory_mut(|memory| {
+            memory.request_focus(Id::new("timeline_detail_panel").with("__resize"))
+        });
+        for (key, expected) in [
+            (egui::Key::ArrowLeft, PANEL_MIN_WIDTH + L),
+            (egui::Key::ArrowRight, PANEL_MIN_WIDTH),
+            (egui::Key::Home, PANEL_MIN_WIDTH),
+        ] {
+            harness.key_press(key);
+            harness.step();
+            assert_eq!(
+                drawn.get(),
+                expected,
+                "the resize key takes effect: {key:?}"
+            );
+            assert_eq!(
+                predicted.get(),
+                drawn.get(),
+                "the menu and column agree in the resize pass: {key:?}"
+            );
+            harness.run();
+            assert_eq!(predicted.get(), drawn.get());
+        }
+        let from = pos2(room.get().right() - drawn.get(), 200.0);
+        drag(&mut harness, from, from - egui::vec2(40.0, 0.0));
+        assert_eq!(
+            drawn.get(),
+            PANEL_MIN_WIDTH + 40.0,
+            "the pointer actually resizes"
+        );
+        assert_eq!(predicted.get(), drawn.get());
     }
 
     #[test]

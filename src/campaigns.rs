@@ -1392,7 +1392,7 @@ impl Campaigns {
                     };
                     let cancel = !missing || self.remote.is_some();
                     // G137, G138: the field cuts a long folder's end, the part Splat proposes.
-                    // The kept line names it whole (`Will add …/Salt Road`).
+                    // The kept line names it whole (`Will create …/Salt Road`).
                     let preview = folder_preview(&self.path);
                     let form = design::InlineCreate::new()
                         .field(
@@ -1408,7 +1408,7 @@ impl Campaigns {
                         .kept_line(
                             design::KeptLine::new()
                                 .cancel(CANCEL, cancel)
-                                .preview_path(WILL_ADD, preview.as_deref()),
+                                .preview_path(WILL_CREATE, preview.as_deref()),
                         )
                         .show(ui);
                     if form.side
@@ -1591,7 +1591,7 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
 }
 
 /// The folder `Add campaign` will add, by its last name (`…/Salt Road`), after the leading words
-/// [`WILL_ADD`]: the end of the path is what a narrow field cuts. A folder name alone (a relative
+/// [`WILL_CREATE`]: the end of the path is what a narrow field cuts. A folder name alone (a relative
 /// path) is the name.
 fn folder_preview(path: &str) -> Option<String> {
     let path = std::path::Path::new(path.trim());
@@ -1735,7 +1735,7 @@ impl ImportReveal {
 }
 
 /// The leading words of the folder preview; they stay when the path gives way.
-const WILL_ADD: &str = "Will add ";
+const WILL_CREATE: &str = "Will create ";
 
 /// The result of registering a copied campaign folder, named for the new campaign.
 pub(crate) fn copy_registered(name: &str) -> String {
@@ -2229,7 +2229,7 @@ mod tests {
     }
 
     /// G137, G138: at 960 px Settings gives the add form about 544 px, and the Folder field cuts
-    /// the folder Splat proposes. The kept line names it whole, `Will add …/<name>`.
+    /// the folder Splat proposes. The kept line names it whole, `Will create …/<name>`.
     #[test]
     fn import_form_names_the_proposed_folder_whole() {
         use egui_kittest::kittest::Queryable;
@@ -2241,7 +2241,7 @@ mod tests {
         campaigns.start_import("7", "Salt Road");
         assert!(campaigns.path.ends_with("Salt Road"));
         const WIDTH: f32 = 544.0;
-        let words = "Will add …/Salt Road";
+        let words = "Will create …/Salt Road";
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(WIDTH, 400.0))
             .build_ui_state(

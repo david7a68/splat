@@ -1085,7 +1085,10 @@ impl SheetNow {
     }
     /// One row of the roster. A word goes with the number, so that it is not only a number.
     pub fn line(&self) -> String {
-        let mut parts = vec![format!("HP {}/{}", self.hp, self.max_hp)];
+        let mut parts = vec![format!(
+            "HP {}",
+            crate::combat_sync::fraction(self.hp, self.max_hp)
+        )];
         match design::hp_state(Some(self.hp), Some(self.max_hp)) {
             design::HpState::Zero => parts.push("0 HP".to_owned()),
             design::HpState::Bloodied => parts.push("Bloodied".to_owned()),
@@ -1102,7 +1105,13 @@ impl SheetNow {
             let slots: Vec<_> = self
                 .slots
                 .iter()
-                .map(|slot| format!("L{} {}/{}", slot.level, slot.left, slot.max))
+                .map(|slot| {
+                    format!(
+                        "L{} {}",
+                        slot.level,
+                        crate::combat_sync::fraction(slot.left, slot.max)
+                    )
+                })
                 .collect();
             parts.push(format!("Slots {}", slots.join(", ")));
         }
@@ -1117,16 +1126,18 @@ pub fn party_line(sheets: &[&EntitySnapshot], connected: bool) -> Option<String>
         .min_by_key(|record| record.source.fetched_at)?;
     let now: Vec<SheetNow> = sheets.iter().map(|record| SheetNow::of(record)).collect();
     let mut parts = vec![format!(
-        "Party now: HP {}/{}",
-        now.iter().map(|sheet| sheet.hp).sum::<i64>(),
-        now.iter().map(|sheet| sheet.max_hp).sum::<i64>(),
+        "Party now: HP {}",
+        crate::combat_sync::fraction(
+            now.iter().map(|sheet| sheet.hp).sum::<i64>(),
+            now.iter().map(|sheet| sheet.max_hp).sum::<i64>(),
+        ),
     )];
     let slots = now.iter().flat_map(|sheet| &sheet.slots);
     let (left, max) = slots.fold((0, 0), |(left, max), slot| {
         (left + slot.left, max + slot.max)
     });
     if max > 0 {
-        parts.push(format!("Slots {left}/{max}"));
+        parts.push(format!("Slots {}", crate::combat_sync::fraction(left, max)));
     }
     parts.push(freshness(oldest, connected).word);
     Some(parts.join(" · "))
@@ -1327,11 +1338,13 @@ fn member_row(
         .collect::<Vec<_>>()
         .join(" · ");
     let name = format!(
-        "{}{} · {summary} · {compared} · HP {}/{} · AC {}{}",
+        "{}{} · {summary} · {compared} · HP {} · AC {}{}",
         member.name,
         if local_edits { " · Local edits" } else { "" },
-        hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
-        max_hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+        crate::combat_sync::fraction(
+            hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+            max_hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+        ),
         ac.map_or_else(|| "?".to_owned(), |n| n.to_string()),
         conditions
             .iter()
@@ -1685,10 +1698,10 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
             },
         ));
         if let Some((_, feature)) = &profile.background_feature {
-            ui.label(format!("Feature: {}", feature.name));
+            sheet_label(ui, "Feature", [&feature.name]);
         }
         if !background.feats.is_empty() {
-            ui.add(egui::Label::new(format!("Feats: {}", background.feats.join(", "))).wrap());
+            sheet_label(ui, "Feats", &background.feats);
         }
         if !background.description.is_empty() || profile.background_feature.is_some() {
             design::quiet_section(ui, "Background text", |ui| {
@@ -1705,7 +1718,7 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
         sheet_section(ui, "Details");
         sheet_columns(ui, details.len(), |ui, at| {
             let (label, value) = &details[at];
-            ui.add(egui::Label::new(format!("{label}: {value}")).wrap());
+            sheet_label(ui, label, [value]);
         });
     }
     for (title, rows) in [("Characteristics", characteristics), ("Notes", story)] {
@@ -1829,6 +1842,20 @@ fn text(v: &Value) -> &str {
 fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
+/// One sheet fact: its label, then its values. No caller chooses a separator.
+fn sheet_label(
+    ui: &mut egui::Ui,
+    label: &str,
+    values: impl IntoIterator<Item = impl std::fmt::Display>,
+) {
+    let values = values
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(" · ");
+    ui.add(egui::Label::new(format!("{label}: {values}")).wrap());
+}
+
 fn sheet_section(ui: &mut egui::Ui, title: &str) {
     sheet_heading(ui, title, 0);
 }
@@ -1996,7 +2023,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                 (known(live.hp), known(live.max_hp), live.temporary_hp)
             },
         );
-        metric(ui, "Hit points", format!("{hp} / {max}"));
+        metric(ui, "Hit points", crate::combat_sync::fraction(hp, max));
         metric(ui, "Armor class", val(record, "armor_class"));
         metric(ui, "Temp HP", temp);
         metric(ui, "Proficiency", signed(record, "proficiency_bonus"));
@@ -2110,24 +2137,29 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         ui.weak("No limited-use pools returned.");
     }
     for (key, pool) in &record.definition.splat_resources {
-        ui.label(format!(
-            "{} · {} / {} remaining",
-            pool.name,
-            record
-                .initial
-                .resources
-                .get(key)
-                .map(|v| v.to_string())
-                .unwrap_or("—".into()),
-            pool.max
-        ));
+        sheet_label(
+            ui,
+            &pool.name,
+            [format!(
+                "{} remaining",
+                crate::combat_sync::fraction(
+                    record
+                        .initial
+                        .resources
+                        .get(key)
+                        .map(|v| v.to_string())
+                        .unwrap_or("—".into()),
+                    pool.max
+                )
+            )],
+        );
     }
     let proficiencies = |ui: &mut egui::Ui| {
         sheet_section(ui, "Proficiencies & languages");
         for group in &record.character.proficiencies {
             let values = text(&group["values"]);
             if !values.is_empty() {
-                ui.add(egui::Label::new(format!("{}: {values}", text(&group["group"]))).wrap());
+                sheet_label(ui, text(&group["group"]), values.split(", "));
             }
         }
     };
@@ -2138,16 +2170,12 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             ("Immunity", &record.character.immunities),
             ("Vulnerability", &record.character.vulnerabilities),
         ] {
-            for value in values {
-                ui.label(format!("{label}: {}", text(&value["name"])));
+            if !values.is_empty() {
+                sheet_label(ui, label, values.iter().map(|value| text(&value["name"])));
             }
         }
         for sense in &record.character.senses {
-            ui.label(format!(
-                "{} · {}",
-                text(&sense["name"]),
-                text(&sense["distance"])
-            ));
+            sheet_label(ui, text(&sense["name"]), [text(&sense["distance"])]);
         }
         if let Some(words) = overview_death_saves(record, live) {
             sheet_section(ui, "Death saves");
@@ -2487,38 +2515,41 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                 ("Casting modifier", "modifiers"),
             ] {
                 for value in array(&record.character.casting[key]) {
-                    ui.label(format!(
-                        "{label}: {} · {}",
-                        if key == "spellAttacks" {
-                            value["value"]
-                                .as_i64()
-                                .map_or_else(|| value["value"].to_string(), design::signed)
-                        } else {
-                            value["value"].to_string()
-                        },
-                        array(&value["sources"])
-                            .iter()
-                            .filter_map(Value::as_str)
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ));
+                    let number = if key == "spellAttacks" {
+                        value["value"]
+                            .as_i64()
+                            .map_or_else(|| value["value"].to_string(), design::signed)
+                    } else {
+                        value["value"].to_string()
+                    };
+                    sheet_label(
+                        ui,
+                        label,
+                        std::iter::once(number.as_str())
+                            .chain(array(&value["sources"]).iter().filter_map(Value::as_str)),
+                    );
                 }
             }
             for (key, pool) in &record.definition.splat_resources {
                 if pool.kind.as_deref() != Some("spell_slot") {
                     continue;
                 }
-                ui.label(format!(
-                    "{} · {} / {} remaining",
-                    pool.name,
-                    record
-                        .initial
-                        .resources
-                        .get(key)
-                        .map(|v| v.to_string())
-                        .unwrap_or("—".into()),
-                    pool.max
-                ));
+                sheet_label(
+                    ui,
+                    &pool.name,
+                    [format!(
+                        "{} remaining",
+                        crate::combat_sync::fraction(
+                            record
+                                .initial
+                                .resources
+                                .get(key)
+                                .map(|v| v.to_string())
+                                .unwrap_or("—".into()),
+                            pool.max
+                        )
+                    )],
+                );
             }
         }
         _ => {}
@@ -2551,11 +2582,12 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     }
     if page == 3 {
         use splat::character::profile;
-        ui.label(format!(
-            "Coins · {}",
-            profile::coins(&record.source.raw)
-                .map_or_else(|| "None".into(), |c| profile::coin_line(&c))
-        ));
+        sheet_label(
+            ui,
+            "Coins",
+            [profile::coins(&record.source.raw)
+                .map_or_else(|| "None".into(), |c| profile::coin_line(&c))],
+        );
     }
     let mut level_counts = std::collections::BTreeMap::new();
     for row in &filtered {
@@ -2641,7 +2673,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
 
 #[cfg(test)]
 mod sheet_now_tests {
-    use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line};
+    use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line, sheet_label};
     use serde_json::json;
     #[test]
     fn iter7_b_overflow_tabs_have_no_button_border_and_keep_selected_underline() {
@@ -2998,6 +3030,24 @@ mod sheet_now_tests {
         )
         .unwrap()
     }
+    #[test]
+    fn sheet_labels_use_a_colon_then_dot_separated_values() {
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::new_ui(|ui| {
+            sheet_label(ui, "Resistance", ["Fire", "Cold"]);
+            sheet_label(ui, "Darkvision", ["60 ft."]);
+            sheet_label(ui, "Coins", ["12 cp", "40 sp"]);
+        });
+        harness.run();
+        for words in [
+            "Resistance: Fire · Cold",
+            "Darkvision: 60 ft.",
+            "Coins: 12 cp · 40 sp",
+        ] {
+            harness.get_by_label(words);
+        }
+    }
+
     #[test]
     fn a_sheet_says_what_is_left_and_the_party_line_adds_it_up() {
         let record = wizard(10);

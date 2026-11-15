@@ -459,6 +459,124 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
     found
 }
 
+/// Format strings are Rust literals, so read them through `syn`, including raw and multiline
+/// literals. The formatter owns HP fractions; sheet facts go through the separator-free part.
+fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
+    use syn::visit::Visit;
+    struct Formats<'a> {
+        path: &'a str,
+        function: String,
+        last_line: usize,
+        found: Vec<&'static str>,
+    }
+    impl<'ast> Visit<'ast> for Formats<'_> {
+        fn visit_item_fn(&mut self, item: &'ast syn::ItemFn) {
+            let previous = std::mem::replace(&mut self.function, item.sig.ident.to_string());
+            syn::visit::visit_item_fn(self, item);
+            self.function = previous;
+        }
+        fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+            // Macro tokens are not expressions in syn's default visitor. Parse expression
+            // arguments here, so nested format calls and literal labels are checked too.
+            if let Ok(args) = mac.parse_body_with(
+                syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated,
+            ) {
+                let mut nested = Formats {
+                    path: self.path,
+                    function: self.function.clone(),
+                    last_line: self.last_line,
+                    found: Vec::new(),
+                };
+                for argument in &args {
+                    nested.visit_expr(argument);
+                }
+                self.found.extend(nested.found);
+            }
+        }
+        fn visit_path(&mut self, path: &'ast syn::Path) {
+            if path
+                .segments
+                .last()
+                .is_some_and(|segment| segment.ident == "CHOICES_ROLE")
+                && path
+                    .segments
+                    .last()
+                    .is_some_and(|segment| segment.ident.span().start().line <= self.last_line)
+                && !self.path.ends_with("src/design/popups.rs")
+                && !self.path.ends_with("src/visual_tests/ergonomics.rs")
+            {
+                self.found.push("popup-marker-owner");
+            }
+            syn::visit::visit_path(self, path);
+        }
+        fn visit_lit_str(&mut self, literal: &'ast syn::LitStr) {
+            if literal.span().start().line > self.last_line {
+                return;
+            }
+            let words = literal.value();
+            if words == ["Dropdown", "choices"].join(" ")
+                && !self.path.ends_with("src/design/popups.rs")
+                && !self.path.ends_with("src/visual_tests/ergonomics.rs")
+            {
+                self.found.push("popup-marker-owner");
+            }
+
+            let fraction = words.split_once('/').is_some_and(|(left, right)| {
+                let left = left.trim_end();
+                let right = right.trim_start();
+                if !left.ends_with('}') || !right.starts_with('{') {
+                    return false;
+                }
+                let current = left
+                    .rsplit_once('{')
+                    .map_or("", |(_, tail)| tail.trim_end_matches('}'));
+                let maximum = right[1..].split('}').next().unwrap_or("");
+                ["hp", "current_hp", "current"].contains(&current)
+                    || ["max", "max_hp", "maximum"].contains(&maximum)
+                    || (current.is_empty()
+                        && maximum.is_empty()
+                        && (words.contains("HP") || words == "{} / {}"))
+            });
+            if fraction
+                && !(self.path.ends_with("src/combat_sync.rs") && self.function == "fraction")
+            {
+                self.found.push("hp-fraction-owner");
+            }
+            if self.path.ends_with("src/party.rs")
+                && ["overview", "detail_intro", "background", "details"]
+                    .contains(&self.function.as_str())
+                && (["{label}: ", "{label} · ", "{}: ", "{} · {}"]
+                    .iter()
+                    .any(|prefix| words.starts_with(prefix))
+                    || [
+                        "Coins",
+                        "Resistance",
+                        "Immunity",
+                        "Vulnerability",
+                        "Darkvision",
+                        "Feature",
+                        "Feats",
+                    ]
+                    .iter()
+                    .any(|label| {
+                        words.starts_with(&format!("{label}: "))
+                            || words.starts_with(&format!("{label} · "))
+                    }))
+            {
+                self.found.push("sheet-label-owner");
+            }
+        }
+    }
+    let mut formats = Formats {
+        path,
+        function: String::new(),
+        last_line,
+        found: Vec::new(),
+    };
+    formats.visit_file(&syn::parse_file(text).expect("format lint source parses"));
+    formats.found
+}
+
 fn scan(
     folder: &Path,
     counts: &mut BTreeMap<String, usize>,
@@ -468,9 +586,7 @@ fn scan(
         let path = item.expect("read source entry").path();
         let relative = path.to_string_lossy().replace('\\', "/");
         if path.is_dir() {
-            if !relative.ends_with("src/design") && !relative.ends_with("src/visual_tests") {
-                scan(&path, counts, levels);
-            }
+            scan(&path, counts, levels);
         } else if path.extension().is_some_and(|e| e == "rs")
             // A file of unit tests, such as `formats_tests.rs`, does not ship either.
             && !relative.ends_with("tests.rs")
@@ -481,12 +597,26 @@ fn scan(
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
             let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
             let key = relative.strip_prefix(root).unwrap_or(&relative);
+            // Design and capture code owns raw drawing values. Only the popup classification
+            // marker is restricted there, to its part and the gate that reads it.
+            if key.starts_with("src/design/") || key.starts_with("src/visual_tests/") {
+                for rule in format_rules(key, &text, code.lines().count())
+                    .into_iter()
+                    .filter(|rule| *rule == "popup-marker-owner")
+                {
+                    *counts.entry(format!("{key} {rule}")).or_default() += 1;
+                }
+                continue;
+            }
             for line in code.lines() {
                 for rule in violations(line) {
                     *counts.entry(format!("{key} {rule}")).or_default() += 1;
                 }
             }
             for rule in message_rules(key, &text, code.lines().count()) {
+                *counts.entry(format!("{key} {rule}")).or_default() += 1;
+            }
+            for rule in format_rules(key, &text, code.lines().count()) {
                 *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
             // Package K: a layer built by hand, a `CreateReasons` impl by hand (the syntax tree).
@@ -856,5 +986,88 @@ fn no_lint_level_frees_raw_calls_outside_the_source() {
     assert!(
         check.contains("-D warnings") && !check.contains("-A "),
         "{check}"
+    );
+}
+
+#[test]
+fn format_owners_reject_old_fractions_and_sheet_separators() {
+    let rules = |path: &str, code: &str| format_rules(path, code, usize::MAX);
+    for code in [
+        r#"fn f() { let _ = Dropdown::CHOICES_ROLE; }"#,
+        r#"fn f() { let _ = "Dropdown choices"; }"#,
+    ] {
+        for path in [
+            "src/party.rs",
+            "src/design/components.rs",
+            "src/visual_tests/driver.rs",
+        ] {
+            assert_eq!(rules(path, code), ["popup-marker-owner"]);
+        }
+        assert!(rules("src/design/popups.rs", code).is_empty());
+        assert!(rules("src/visual_tests/ergonomics.rs", code).is_empty());
+    }
+
+    for words in [
+        "HP {}/{}",
+        "{hp} / {max}",
+        "{} / {max_hp} HP",
+        "{} / {}",
+        "{current}/{maximum}",
+    ] {
+        let code = format!("fn row() {{ let _ = format!({words:?}, 1, 2); }}");
+        assert_eq!(
+            rules("src/party.rs", &code),
+            ["hp-fraction-owner"],
+            "{words}"
+        );
+        assert_eq!(
+            rules("src/combat_sync.rs", &code),
+            ["hp-fraction-owner"],
+            "the owning file cannot bypass its formatter"
+        );
+    }
+    assert!(
+        rules(
+            "src/combat_sync.rs",
+            r##"fn fraction() { format!(r#"{current}/{maximum}"#); }"##
+        )
+        .is_empty()
+    );
+    assert!(
+        rules(
+            "src/a.rs",
+            r#"fn path() { format!("{folder}/{stem}.md"); }"#
+        )
+        .is_empty()
+    );
+    for words in [
+        "{label}: {value}",
+        "{} · {}",
+        "Coins · {}",
+        "Darkvision: 60 ft.",
+    ] {
+        for function in ["background", "overview", "detail_intro", "details"] {
+            let code = format!("fn {function}() {{ ui.label(format!({words:?}, 1, 2)); }}");
+            assert_eq!(
+                rules("src/party.rs", &code),
+                ["sheet-label-owner"],
+                "{function}: {words}"
+            );
+        }
+    }
+    assert!(
+        rules(
+            "src/party.rs",
+            r#"fn sheet_label() { ui.label(format!("{label}: {values}")); }"#
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            r##"fn row() { ui.label(format!(
+        r#"{hp} / {max}"#)); }"##
+        ),
+        ["hp-fraction-owner"]
     );
 }

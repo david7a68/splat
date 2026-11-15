@@ -539,14 +539,13 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
             };
             for (label, text) in rows {
                 let run_hp = values.filter(|_| label == "HIT POINTS").map(|values| {
-                    format!(
-                        "{} / {}",
+                    crate::combat_sync::fraction(
                         values
                             .current_hp
                             .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string()),
                         values
                             .hp
-                            .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string())
+                            .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string()),
                     )
                 });
                 let printed = match label {

@@ -2746,7 +2746,7 @@ pub fn hp_readout(
     painter.text(
         pos2(slash, center_y + offset),
         Align2::LEFT_CENTER,
-        format!("/{max_text}"),
+        crate::combat_sync::fraction("", &max_text),
         fonts.max.clone(),
         c.muted,
     );
