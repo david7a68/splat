@@ -741,9 +741,7 @@ pub struct Sessions {
     markers: design::Results<kept::OfSession, kept::MarkerAdd>,
     /// `Recording saved: …`, by the session whose recording it names.
     saved: design::Results<kept::OfSession, RecordingSaved>,
-    /// A test's full disk: every write of the note fails with these words.
-    #[cfg(test)]
-    failing_save: Option<String>,
+
     notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
@@ -2563,11 +2561,6 @@ impl Sessions {
             .flatten()
         {
             draft.save();
-        }
-        // A test's full disk (`simulate_failed_save`): the note's write fails every time.
-        #[cfg(test)]
-        if let (Some(words), Some(draft)) = (&self.failing_save, &mut self.draft) {
-            draft.state = DraftState::Failed(words.clone());
         }
     }
 
@@ -7985,19 +7978,22 @@ impl Sessions {
         draft.save();
     }
 
-    /// The disk refuses the open note's writes, as a full disk would: the DM has typed, the save
-    /// fails, and every later save through `flush` fails again until `simulate_failed_save_ends`.
+    /// The disk refuses the open note's writes, as a full disk would: the DM has typed, and every
+    /// write fails at its result with the error `replace_file` gives for a full disk, before
+    /// anything is written, until `simulate_failed_save_ends`. A direct retry fails too.
     pub fn simulate_failed_save(&mut self) {
-        self.failing_save = Some("Not saved. The disk is full.".to_owned());
         let draft = self.draft.as_mut().expect("an open note");
+        draft.failing_write = Some(std::io::Error::from_raw_os_error(28).to_string());
         draft.body.push_str("\nTyped while the disk was full.\n");
         draft.edited();
-        self.flush();
+        draft.save();
     }
 
     /// The disk takes writes again.
     pub fn simulate_failed_save_ends(&mut self) {
-        self.failing_save = None;
+        if let Some(draft) = &mut self.draft {
+            draft.failing_write = None;
+        }
     }
 
     /// The open note's file leaves the folder outside Splat while the DM has unsaved words,

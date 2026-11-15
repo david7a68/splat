@@ -1436,6 +1436,10 @@ pub struct Draft {
     last_edit: Option<Instant>,
     /// Changes when the words or the file change. No two drafts share one.
     revision: u64,
+    /// A test's full disk: each write fails with this error, as `replace_file` gives it, before
+    /// anything is written or the baseline moves.
+    #[cfg(test)]
+    pub(crate) failing_write: Option<String>,
 }
 
 /// A revision no draft has had.
@@ -1479,7 +1483,15 @@ impl Draft {
             save_again_error: None,
             last_edit: None,
             revision: next_revision(),
+            #[cfg(test)]
+            failing_write: None,
         })
+    }
+
+    /// The file's words as this draft last read or wrote them.
+    #[cfg(test)]
+    pub(crate) fn baseline(&self) -> Option<&str> {
+        self.baseline.as_deref()
     }
 
     /// Changes whenever the words or the file change, so a reader can skip an unchanged draft.
@@ -1569,7 +1581,14 @@ impl Draft {
 
     fn write(&mut self) {
         let text = format!("{}{}", self.prefix, self.body);
-        match replace_file(&self.path, &text) {
+        #[cfg(test)]
+        let written = match &self.failing_write {
+            Some(error) => Err(error.clone()),
+            None => replace_file(&self.path, &text),
+        };
+        #[cfg(not(test))]
+        let written = replace_file(&self.path, &text);
+        match written {
             Ok(()) => {
                 self.baseline = Some(text);
                 self.state = DraftState::Saved;
