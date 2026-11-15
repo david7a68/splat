@@ -125,12 +125,7 @@ impl Campaigns {
         // The form opens with the name field taking the keyboard, and shows whole (the folder
         // Splat proposes and its preview too: G138).
         let mut reveal = design::reveal::Reveal::default();
-        reveal.ask(
-            act,
-            (id, self.data.active_campaign_id),
-            IMPORT_FORM,
-            design::reveal::Want::Open,
-        );
+        reveal.ask(act, (id, self.data.active_campaign_id), IMPORT_FORM);
         self.remote = Some(ImportForm {
             id: id.into(),
             name: name.into(),
@@ -1945,7 +1940,7 @@ mod tests {
         std::fs::create_dir(&folder).unwrap();
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
         campaigns.start_import(
-            design::reveal::Act::test(&egui::Context::default(), 0),
+            design::reveal::Act::outside(&egui::Context::default(), 0),
             "12",
             "Remote name",
         );
@@ -1964,7 +1959,7 @@ mod tests {
         assert_eq!(reopened.active_campaign(), Some(campaign));
         assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
         reopened.start_import(
-            design::reveal::Act::test(&egui::Context::default(), 0),
+            design::reveal::Act::outside(&egui::Context::default(), 0),
             "34",
             "Other campaign",
         );
@@ -2097,7 +2092,7 @@ mod tests {
         std::fs::create_dir(&folder).unwrap();
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
         campaigns.start_import(
-            design::reveal::Act::test(&egui::Context::default(), 0),
+            design::reveal::Act::outside(&egui::Context::default(), 0),
             "12",
             "Campaign",
         );
@@ -2157,7 +2152,7 @@ mod tests {
             .join("a-long-folder-of-settings/with/several/levels/settings");
         let mut campaigns = Campaigns::at(settings.join("settings.json"));
         campaigns.start_import(
-            design::reveal::Act::test(&egui::Context::default(), 0),
+            design::reveal::Act::outside(&egui::Context::default(), 0),
             "7",
             "Salt Road",
         );
@@ -2189,26 +2184,28 @@ mod tests {
         // R30: the form's reveal in a column that scrolls, the form far below the view.
         let scrolled = |height: f32| {
             let campaigns = Campaigns::at(settings.join("settings.json"));
-            let mut h = egui_kittest::Harness::builder()
+            // The form opens in the first frame, by an act in the column.
+            let mut opened = false;
+            egui_kittest::Harness::builder()
                 .with_size(egui::vec2(WIDTH, height))
                 .build_ui_state(
-                    |ui, campaigns: &mut Campaigns| {
+                    move |ui, campaigns: &mut Campaigns| {
                         // 900 px of the page above and below the form (a block that holds room).
                         let room = |ui: &mut egui::Ui| {
                             ui.allocate_exact_size(egui::vec2(1.0, 900.0), egui::Sense::hover());
                         };
                         design::ScrollColumn::new("column").show(ui, |ui| {
                             room(ui);
+                            if !std::mem::replace(&mut opened, true) {
+                                let act = design::reveal::Act::test(ui, 0);
+                                campaigns.start_import(act, "7", "Salt Road");
+                            }
                             campaigns.show_import_form(ui, "7");
                             room(ui);
                         });
                     },
                     campaigns,
-                );
-            // The act of the next frame.
-            let act = design::reveal::Act::test(&h.ctx, 0);
-            h.state_mut().start_import(act, "7", "Salt Road");
-            h
+                )
         };
         let in_view = |h: &egui_kittest::Harness<'_, Campaigns>, height: f32| {
             ["Add campaign", "Cancel", words].iter().all(|name| {

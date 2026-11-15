@@ -183,5 +183,8 @@ pub fn install(ctx: &egui::Context) {
     apply_colors(&mut style, colors());
     apply_type(&mut style);
     apply_spacing(&mut style);
+    // R43: no scroll animation in the app. A programmatic scroll arrives at once; the DM's own
+    // wheel and drag are not animations and stay as they are.
+    style.scroll_animation = egui::style::ScrollAnimation::none();
     ctx.set_style_of(Theme::Dark, style);
 }

@@ -5928,6 +5928,24 @@ pub mod settings {
         d.click("Add from D&D Beyond");
         d.wait_for_text("Salt Road");
         d.click("Add Salt Road from D&D Beyond");
+        // G137 at the original single open, before any Cancel, resize or test scroll: the form
+        // shows whole and the kept line names the folder Splat proposes, whole (R30, R34).
+        d.wait_for_text("Campaign name");
+        let opened = {
+            let preview = "Will add …/Salt Road";
+            let nodes = d.nodes();
+            let whole = |name: &str| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == name && node.fully_in_view())
+            };
+            d.visible_text(preview) && whole(preview) && whole("Cancel") && whole("Add campaign")
+        };
+        d.observe(
+            "iter-30-B6-G137-first-open",
+            opened,
+            "At the first open, `Will add …/Salt Road`, Add campaign and Cancel whole and in view",
+        );
         d.state_prepared("add-from-remote", Sizes::All, |d| {
             // The DM's open act at each size: a reveal never starts again on a resize (R34).
             if d.app().campaigns.importing("9002") {
@@ -11167,6 +11185,22 @@ pub mod signed_in {
             ),
         );
         d.click("Add Salt Road from D&D Beyond");
+        // G138 at the original single open, before any Cancel, resize or test scroll (R34).
+        let opened = {
+            let preview = format!("Will add …/{REMOTE_NAME}");
+            let nodes = d.nodes();
+            let whole = |name: &str| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == name && node.fully_in_view())
+            };
+            d.visible_text(&preview) && whole(&preview) && whole("Cancel")
+        };
+        d.observe(
+            "iter-30-B6-G138-first-open",
+            opened,
+            format!("At the first open, `Will add …/{REMOTE_NAME}` and Cancel whole and in view"),
+        );
         // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
         let (add, labels) = d.at_size(DEFAULT, |d| {
             (

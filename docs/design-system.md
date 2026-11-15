@@ -159,7 +159,9 @@ are one height, so Encounters, Session and the rest keep their places when a run
 
 `theme::install` sets one global `egui::Style` for hover, active and disabled states, focus rings, selection,
 text edits, solid scroll bars, windows, tooltips and separators. Text cursors do not blink. Motion draws the
-eye during long sessions.
+eye during long sessions, so no scroll that the app makes is animated (R43): it arrives at once. The DM's own
+wheel and drag scroll as before. After the DM opens a form, `design::reveal` brings the whole form into view
+once, in the column of the pressed control (R34, R44).
 
 `design::components` holds the shared parts, each a function or a small builder:
 
