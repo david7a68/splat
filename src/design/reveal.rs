@@ -1,298 +1,310 @@
 //! One reveal part (mechanism M6, ruling R34): after an act or an open, the least scroll that
-//! brings its target (an opened form, an act's result and its next action) whole into view.
+//! brings its target (an opened form, an act's result and the next action it makes possible)
+//! whole into view, in the scroll area that owns the target.
 //!
-//! - **Asked at the act.** [`Reveal::ask`] takes an [`Act`], which only a press or a key of this
-//!   pass gives ([`Act::clicked`]); a new act replaces the reveal before it. A draw path cannot renew a reveal: it has no
-//!   act, and asking again with the same act is no new request.
-//! - **Runs in the scroll area that owns the target.** The target says where it is with
-//!   [`Reveal::mark`] after it is drawn. The part finds the innermost scroll area of the target's
-//!   `Ui` (egui's `UiStack`) and resolves against that area's own view, recorded by
-//!   `ScrollColumn` when its content starts ([`region`]); never against a clip that a collapsing
-//!   body shortens for a while. The scroll is the area's offset for its next pass, written by
-//!   that `ScrollColumn` only ([`take_offset`]): no egui scroll request, so a nested area cannot
-//!   take it, and nothing is animated.
-//! - **Ends for good** ([`End`]): the target whole in view; a frame with no progress; a target
-//!   taller than the view after one edge scroll (an opened form shows its top, an act's result
-//!   its end, where its action is: Q2.1); any input of the DM's (a wheel, a press or drag, a key,
-//!   typed or pasted text, IME), observed at every mark even after it ended; the owner's end
-//!   ([`Reveal::end`], a frame that did not draw the target, another visit); and a bound of [`PASSES`] scroll frames inside an absolute deadline.
-//! - **A resize** brings back only a reveal that ended `Whole`, while the DM has given no input
-//!   since its act: a window resize is not the DM's act on the content (the import form at 960,
-//!   1200 and 1920 px). It never brings back one that ended for any other reason.
+//! - **A ticket, asked at the act.** [`Reveal::ask`] consumes an [`Act`], which only a press of
+//!   this frame gives ([`Act::clicked`]); an act of an older frame is refused. An `Act` is neither
+//!   `Copy` nor `Clone`, so two reveals cannot take one act, and a draw path that has no press
+//!   cannot ask. The request is bound at the ask to its owner (the [`Reveal`] value), its visit
+//!   and its target, and at the target's first mark to the column that draws it.
+//! - **Marks report geometry only.** [`Reveal::mark`] gives the rect of the bound target in this
+//!   pass. A mark for another target or in another column does nothing; a mark outside a
+//!   `ScrollColumn` (a raw `egui::ScrollArea`, `ScrollColumn::show_rows`) ends the request
+//!   (`End::Unowned`) and moves nothing.
+//! - **The column resolves once after its content** (`region`): progress is the column's real
+//!   offset and the target's place in its content. The scroll is the offset the column applies at
+//!   the start of its next pass, after it checked that the request is still live and that pass's
+//!   input (`take_offset`). It is never animated: after the part writes an offset, and when it
+//!   ends for the DM's input, it ends egui's stored animation of that column; the pane's focus
+//!   reveal makes no request into a column where a reveal runs ([`holds`]).
+//! - **It ends for good** ([`End`]): the target whole in view; a frame with no progress; a target
+//!   taller than the view after one edge scroll (an opened form shows its top, an act's result its
+//!   end, where its action is: Q2.1); any input of the DM's, read where the column starts (a
+//!   wheel, a press or drag, a key, typed, pasted or composed text; in the act's own frame only
+//!   the press itself is the act's); a focused field that an act's result would move; the owner's
+//!   end (the `Reveal` dropped or [`Reveal::end`]; another visit; a pass of its column that does
+//!   not draw the target; a frame in which its column was not drawn); a new ask (`Replaced`);
+//!   [`PASSES`] scroll frames; and a deadline of `DEADLINE` frames from the act, which also ends
+//!   a request whose target never shows. A resize never restarts it.
 //!
-//! One owner holds a [`Reveal`] (the open form, the plan act's journey); its end event is the
-//! owner's. Nothing repaints for a reveal once it has ended, and an ended reveal costs one
-//! comparison per mark.
-use std::hash::Hash;
+//! Nothing repaints for a reveal once it has ended. A column's work per pass is one look at the
+//! registry of live reveals (one per owner that asked), never at its content.
+use std::{
+    hash::Hash,
+    sync::{Arc, Mutex, Weak},
+};
 
-use eframe::egui::{self, Id, Rect, Response, Ui, Vec2};
+use eframe::egui::{self, Context, Id, Rect, Response, Ui, Vec2};
 
 /// A reveal's bound: frames in which it scrolls.
 pub const PASSES: u8 = 4;
 
-/// The frames, from its first mark, after which a running reveal ends whatever happened.
+/// The frames after its act at which a reveal ends, whatever happened.
 const DEADLINE: u64 = 2 * PASSES as u64;
 
-/// The act that may ask for a reveal: a press or a key of this pass. Its frame and widget are
-/// the reveal's generation, so a pass drawn again in the same frame asks for nothing new.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The act that may ask for a reveal: a press of this frame. Neither `Copy` nor `Clone`:
+/// [`Reveal::ask`] consumes it.
+#[derive(Debug)]
 pub struct Act {
-    /// The frame of the act; `None` only for a test's act made outside a frame.
-    frame: Option<u64>,
+    ctx: Context,
+    frame: u64,
     id: Id,
+    /// The pressed control, in screen points at the act.
+    pressed: Rect,
 }
 
 impl Act {
     /// The act of a control the DM pressed in this pass.
     pub fn clicked(response: &Response) -> Option<Self> {
         response.clicked().then(|| Self {
-            frame: Some(response.ctx.cumulative_frame_nr()),
+            ctx: response.ctx.clone(),
+            frame: response.ctx.cumulative_frame_nr(),
             id: response.id,
+            pressed: response.rect,
         })
     }
 
-    /// An act outside any frame, for a test that opens a form before its first frame.
+    /// An act in this frame of `ctx`, for a test that opens a form without a press.
     #[cfg(test)]
-    pub(crate) fn test(salt: impl Hash) -> Self {
+    pub(crate) fn test(ctx: &Context, salt: impl Hash) -> Self {
         Self {
-            frame: None,
+            ctx: ctx.clone(),
+            frame: ctx.cumulative_frame_nr(),
             id: Id::new(("reveal_test_act", salt)),
+            pressed: Rect::NOTHING,
         }
     }
+}
 
-    /// An act in frame `frame`, for a test.
-    #[cfg(test)]
-    pub(crate) fn test_at(salt: impl Hash, frame: u64) -> Self {
-        Self {
-            frame: Some(frame),
-            id: Id::new(("reveal_test_act", salt)),
-        }
-    }
+/// What happens to the pressed control after an act (R34): an act's result may be brought into
+/// view only when the control is replaced or stays whole in view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pressed {
+    Replaced,
+    Stays,
 }
 
 /// What the target is, which decides the edge that shows when it is taller than the view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Want {
-    /// An opened form: its top shows.
+    /// An opened form: its top shows. The field its opener focuses may move with it.
     Open,
-    /// An act's result and the next action it makes possible: its end shows.
+    /// An act's result and the next action it makes possible: its end shows. It never moves a
+    /// focused field, and a control that stays stays whole in view.
     #[allow(dead_code, reason = "step 2's callers (lane B6) ask for a result")]
-    Result,
+    Result(Pressed),
 }
 
-/// Why a reveal ended. Every end is for good, except `Whole` after a resize (module docs).
+/// Why a reveal ended. Every end is for good.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum End {
     Whole,
     NoProgress,
     TooTall,
     ByTheDm,
+    /// An act's result would move a focused field.
+    Focused,
     OwnerGone,
+    /// Its target is drawn outside a `ScrollColumn`: nothing it may scroll.
+    Unowned,
     Bound,
+    Replaced,
 }
 
 #[derive(Clone, Copy, Debug)]
-enum Phase {
-    Running {
-        /// Scroll frames left.
-        left: u8,
-        /// The absolute frame after which it ends: `DEADLINE` frames after the act (a target
-        /// that never shows ages out), or after the first mark for a test's act or a resize.
-        /// Never reset in draw.
-        deadline: Option<u64>,
-        /// The target's top and the frame of the last scroll asked for.
-        asked: Option<(f32, u64)>,
-        /// The target is taller than the view: one edge scroll, then `TooTall`.
-        edge: bool,
-    },
-    Ended(End),
+struct Asked {
+    frame: u64,
+    /// The column's offset and the target's top in its content, when it asked.
+    offset: f32,
+    content_top: f32,
 }
 
-impl Phase {
-    /// A running reveal whose deadline is `deadline`, or `DEADLINE` frames after its first mark.
-    fn fresh(deadline: Option<u64>) -> Self {
-        Self::Running {
-            left: PASSES,
-            deadline,
-            asked: None,
-            edge: false,
+#[derive(Debug)]
+struct Run {
+    act_frame: u64,
+    act_id: Id,
+    pressed: Rect,
+    visit: Id,
+    target: Id,
+    want: Want,
+    phase: Result<(), End>,
+    deadline: u64,
+    left: u8,
+    /// The column that draws the target, bound at its first mark.
+    column: Option<Id>,
+    /// The target's rect, the column's content `Ui` and the pass, as marked.
+    marked: Option<(Rect, Id, u64)>,
+    /// The last frame its column resolved it.
+    frame: Option<u64>,
+    asked: Option<Asked>,
+    /// The target is taller than the view: one edge scroll, then `TooTall`.
+    edge: bool,
+    /// The pressed control's place in the column's content, when it stays.
+    pressed_content: Option<Rect>,
+    /// The offset for the column's next pass, with the frame that wrote it.
+    pending: Option<(f32, u64)>,
+    /// End egui's stored animation of the column after its content.
+    settle: bool,
+}
+
+impl Run {
+    fn end(&mut self, end: End) {
+        if self.phase.is_ok() {
+            self.phase = Err(end);
+            self.pending = None;
+            self.settle |= end == End::ByTheDm;
         }
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-struct Run {
-    act: Act,
-    visit: Id,
-    want: Want,
-    phase: Phase,
-    /// The DM gave input after the act.
-    touched: bool,
-    /// The last frame that marked the target.
-    frame: Option<u64>,
-    /// The view's size and whether the target was whole in it, at the last mark.
-    seen: Option<(Vec2, bool)>,
+type Shared = Arc<Mutex<Run>>;
+
+fn lock(run: &Mutex<Run>) -> std::sync::MutexGuard<'_, Run> {
+    run.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// One owner's reveal. The owner holds it, asks at its act and marks the target while drawing;
-/// its own end event calls [`Reveal::end`].
+/// The live reveals, for the columns. The owner holds the only strong handle: dropping its
+/// `Reveal` ends the request, and its queued offset with it.
+#[derive(Clone, Default)]
+struct Registry(Vec<Weak<Mutex<Run>>>);
+
+fn registry_id() -> Id {
+    Id::new("design_reveal_registry")
+}
+
+fn live(ctx: &Context) -> Vec<Shared> {
+    ctx.data_mut(|data| {
+        let registry = data.get_temp_mut_or_default::<Registry>(registry_id());
+        registry.0.retain(|run| run.strong_count() > 0);
+        registry.0.iter().filter_map(Weak::upgrade).collect()
+    })
+}
+
+/// One owner's reveal. The owner holds it in the value whose life is the target's (the open
+/// form), asks at its act and marks the target while drawing.
 #[derive(Debug, Default)]
 pub struct Reveal {
-    run: Option<Run>,
+    run: Option<Shared>,
 }
 
 impl Reveal {
-    /// Ask at `act` for the target of `visit` (the owner's object and what it shows now, such as
-    /// the remote campaign and the campaign open) to come into view. The same act again is no
-    /// new request; another act replaces the reveal before it.
-    pub fn ask(&mut self, act: Act, visit: impl Hash, want: Want) {
-        if self.run.is_some_and(|run| run.act == act) {
+    /// Ask at `act` for `target` of `visit` (the owner's object and what it shows now, such as
+    /// the remote campaign and the campaign open) to come into view. An act of an older frame
+    /// asks for nothing; a new ask replaces the request before it.
+    pub fn ask(&mut self, act: Act, visit: impl Hash, target: impl Hash, want: Want) {
+        if act.ctx.cumulative_frame_nr() != act.frame {
             return;
         }
-        self.run = Some(Run {
-            act,
+        if let Some(old) = self.run.take() {
+            lock(&old).end(End::Replaced);
+        }
+        let run = Arc::new(Mutex::new(Run {
+            act_frame: act.frame,
+            act_id: act.id,
+            pressed: act.pressed,
             visit: Id::new(visit),
+            target: Id::new(target),
             want,
-            phase: Phase::fresh(act.frame.map(|frame| frame + DEADLINE)),
-            touched: false,
+            phase: Ok(()),
+            deadline: act.frame + DEADLINE,
+            left: PASSES,
+            column: None,
+            marked: None,
             frame: None,
-            seen: None,
+            asked: None,
+            edge: false,
+            pressed_content: None,
+            pending: None,
+            settle: false,
+        }));
+        act.ctx.data_mut(|data| {
+            data.get_temp_mut_or_default::<Registry>(registry_id())
+                .0
+                .push(Arc::downgrade(&run));
         });
+        act.ctx.request_repaint();
+        self.run = Some(run);
     }
 
-    /// The owner ended (its form closed, its object went away): the reveal ends for good.
+    /// The owner ended (its object went away, its campaign changed): the request ends for good.
     pub fn end(&mut self) {
-        if let Some(run) = &mut self.run {
-            run.phase = Phase::Ended(End::OwnerGone);
+        if let Some(run) = &self.run {
+            lock(run).end(End::OwnerGone);
         }
     }
 
     /// Whether it runs.
     #[cfg(test)]
     pub(crate) fn running(&self) -> bool {
-        self.run
-            .is_some_and(|run| matches!(run.phase, Phase::Running { .. }))
+        self.run.as_ref().is_some_and(|run| lock(run).phase.is_ok())
     }
 
     /// Why it ended; `None` while it runs or before any act.
     #[cfg(test)]
     pub(crate) fn ended(&self) -> Option<End> {
-        match self.run?.phase {
-            Phase::Ended(end) => Some(end),
-            Phase::Running { .. } => None,
-        }
+        self.run.as_ref().and_then(|run| lock(run).phase.err())
     }
 
-    /// The target of `visit` is drawn at `target` (screen rect) in `ui`. One step: it observes
-    /// the DM's input and the owner's visit, then scrolls the owning area the least, or ends.
-    pub fn mark(&mut self, ui: &Ui, visit: impl Hash, target: Rect) {
-        let Some(run) = &mut self.run else {
+    /// The bound target of `visit` is drawn at `target_rect` (screen points) in `ui`, in this
+    /// pass. Geometry only: the column that owns it resolves the request after its content.
+    pub fn mark(&mut self, ui: &Ui, visit: impl Hash, target: impl Hash, target_rect: Rect) {
+        let Some(run) = &self.run else {
             return;
         };
-        // Ended for a reason a resize cannot undo: nothing to observe.
-        if matches!(run.phase, Phase::Ended(end) if end != End::Whole) {
+        let mut run = lock(run);
+        if run.phase.is_err() || Id::new(target) != run.target {
             return;
         }
-        let frame = ui.ctx().cumulative_frame_nr();
-        // A frame that did not draw the target (the page left), or another visit (another
-        // campaign open): the owner's view of the target ended.
-        if run.frame.is_some_and(|last| frame > last + 1) || Id::new(visit) != run.visit {
-            run.phase = Phase::Ended(End::OwnerGone);
+        if Id::new(visit) != run.visit {
+            run.end(End::OwnerGone);
             return;
         }
-        run.frame = Some(frame);
-        // The act's own frame holds the act's own input (its press and release).
-        if run.act.frame != Some(frame) && dm_input(ui) {
-            run.touched = true;
-            run.phase = Phase::Ended(End::ByTheDm);
-            return;
-        }
-        let area = owning_area(ui);
-        let view = area.view;
-        let whole = target.top() >= view.top() - 0.5 && target.bottom() <= view.bottom() + 0.5;
-        if let Some((size, was_whole)) = run.seen
-            && (size - view.size()).length() > 0.5
-            && was_whole
-            && matches!(run.phase, Phase::Ended(End::Whole))
-            && !run.touched
-        {
-            run.phase = Phase::fresh(None);
-        }
-        run.seen = Some((view.size(), whole));
-        let Phase::Running {
-            left,
-            deadline,
-            asked,
-            edge,
-        } = &mut run.phase
-        else {
+        let Some((content, region)) = owning_region(ui) else {
+            run.end(End::Unowned);
             return;
         };
-        let deadline = *deadline.get_or_insert(frame + DEADLINE);
-        let end = if whole {
-            Some(End::Whole)
-        } else if frame > deadline {
-            Some(End::Bound)
-        } else {
-            match *asked {
-                // A pass drawn again in the same frame asks again (a pass drawn again may drop
-                // the offset); a new frame judges the last scroll.
-                Some((_, at)) if at != frame && *edge => Some(End::TooTall),
-                Some((top, at)) if at != frame && (top - target.top()).abs() < 0.5 => {
-                    Some(End::NoProgress)
-                }
-                Some((_, at)) if at == frame => None,
-                _ => {
-                    *left = left.saturating_sub(1);
-                    None
-                }
-            }
-        };
-        if let Some(end) = end {
-            run.phase = Phase::Ended(end);
+        if run.column.is_some_and(|column| column != region.key) {
             return;
         }
-        let tall = target.height() > view.height();
-        *edge |= tall;
-        let delta = if tall {
-            match run.want {
-                Want::Open => target.top() - view.top(),
-                Want::Result => target.bottom() - view.bottom(),
-            }
-        } else if target.bottom() > view.bottom() {
-            target.bottom() - view.bottom()
-        } else {
-            target.top() - view.top()
-        };
-        *asked = Some((target.top(), frame));
-        let last = *left == 0 && !*edge;
-        area.scroll(ui, delta, target, tall.then_some(run.want));
-        if last {
-            run.phase = Phase::Ended(End::Bound);
-        } else {
-            ui.ctx().request_repaint();
-        }
+        run.column = Some(region.key);
+        run.marked = Some((target_rect, content, ui.ctx().cumulative_pass_nr()));
     }
 }
 
-/// Any input of the DM's in this pass: a wheel, a press or drag, a key, typed, pasted or composed
-/// text. Read before a child can consume a key (`mark` runs at the target, but egui keeps typed
-/// text and wheel deltas in the pass's input).
-fn dm_input(ui: &Ui) -> bool {
+/// Whether a reveal runs in the column that `ui` is drawn in: the pane's focus reveal then makes
+/// no request into it.
+pub(super) fn holds(ui: &Ui) -> bool {
+    let Some((_, region)) = owning_region(ui) else {
+        return false;
+    };
+    live(ui.ctx()).iter().any(|run| {
+        let run = lock(run);
+        run.phase.is_ok() && run.column == Some(region.key)
+    })
+}
+
+/// Any input of the DM's in this pass, for a reveal asked in `act_frame`.
+fn dm_input(ui: &Ui, act_frame: u64) -> bool {
+    input_in(ui, ui.ctx().cumulative_frame_nr() == act_frame)
+}
+
+/// Any input of the DM's in this pass. In the act's own frame (`act`) only the press and its
+/// key (`Enter`, `Space`) are the act's.
+fn input_in(ui: &Ui, act: bool) -> bool {
     ui.input(|input| {
         input.raw_scroll_delta != Vec2::ZERO
             || input.smooth_scroll_delta != Vec2::ZERO
-            || input.pointer.any_pressed()
-            || input.pointer.is_decidedly_dragging()
-            || input.events.iter().any(|event| {
-                matches!(
-                    event,
-                    egui::Event::Text(_)
-                        | egui::Event::Paste(_)
-                        | egui::Event::Ime(_)
-                        | egui::Event::MouseWheel { .. }
-                        | egui::Event::Key { pressed: true, .. }
-                )
+            || (!act && (input.pointer.any_pressed() || input.pointer.is_decidedly_dragging()))
+            || input.events.iter().any(|event| match event {
+                egui::Event::Text(_)
+                | egui::Event::Paste(_)
+                | egui::Event::Ime(_)
+                | egui::Event::MouseWheel { .. } => true,
+                egui::Event::Key {
+                    key, pressed: true, ..
+                } => !(act && matches!(key, egui::Key::Enter | egui::Key::Space)),
+                _ => false,
             })
     })
 }
@@ -303,8 +315,10 @@ struct Region {
     pass: u64,
     /// The column's persistent key, which [`take_offset`] reads.
     key: Id,
-    /// The visible view, in screen points: the area's viewport inside its clip.
+    /// The visible view, in screen points: the area's native viewport inside its clip.
     view: Rect,
+    /// The content's top, in screen points.
+    origin: f32,
     /// The vertical offset this pass draws with.
     offset: f32,
 }
@@ -313,12 +327,50 @@ fn region_id(content: Id) -> Id {
     content.with("design_reveal_region")
 }
 
-fn offset_id(key: Id) -> Id {
-    key.with("design_reveal_offset")
+/// The innermost scroll area of `ui`, if a `ScrollColumn` drew it in this pass: its content
+/// `Ui`'s id and its facts.
+fn owning_region(ui: &Ui) -> Option<(Id, Region)> {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let content = ui
+        .stack()
+        .iter()
+        .find(|frame| frame.kind() == Some(egui::UiKind::ScrollArea))?
+        .id;
+    ui.ctx()
+        .data(|data| data.get_temp::<Region>(region_id(content)))
+        .filter(|region| region.pass == pass)
+        .map(|region| (content, region))
+}
+
+/// The offset a live reveal of the column `key` queued for this pass, taken once, after that
+/// reveal and this pass's input are checked. `ScrollColumn` calls it before its area begins.
+pub(super) fn take_offset(ui: &Ui, key: Id) -> Option<f32> {
+    let frame = ui.ctx().cumulative_frame_nr();
+    let mut offset = None;
+    for run in live(ui.ctx()) {
+        let mut run = lock(&run);
+        if run.column != Some(key) {
+            continue;
+        }
+        let Some((to, written)) = run.pending.take() else {
+            continue;
+        };
+        if run.phase.is_err() || !(written == frame || written + 1 == frame) {
+            continue;
+        }
+        if dm_input(ui, run.act_frame) {
+            run.end(End::ByTheDm);
+            continue;
+        }
+        run.settle = true;
+        offset = Some(to);
+    }
+    offset
 }
 
 /// Run `add` as the content of the scroll column `key`, whose content `Ui` is `ui` and whose
-/// viewport (egui's, in content points) is `viewport`. `ScrollColumn` calls it; only it may.
+/// viewport (egui's, in content points) is `viewport`; then resolve each reveal of this column.
+/// `ScrollColumn` calls it; only it may.
 pub(super) fn region<R>(ui: &mut Ui, key: Id, viewport: Rect, add: impl FnOnce(&mut Ui) -> R) -> R {
     let origin = ui.max_rect().min.to_vec2();
     let view = viewport.translate(origin).intersect(ui.clip_rect());
@@ -326,91 +378,154 @@ pub(super) fn region<R>(ui: &mut Ui, key: Id, viewport: Rect, add: impl FnOnce(&
         pass: ui.ctx().cumulative_pass_nr(),
         key,
         view,
+        origin: origin.y,
         offset: viewport.top(),
     };
-    let id = region_id(ui.id());
-    ui.ctx().data_mut(|data| data.insert_temp(id, region));
-    add(ui)
-}
-
-/// The offset a reveal wrote for the column `key` in the last frame, taken once. A column that
-/// was not drawn in the frame after it was written never takes it.
-pub(super) fn take_offset(ui: &Ui, key: Id) -> Option<f32> {
-    let frame = ui.ctx().cumulative_frame_nr();
+    let content = ui.id();
     ui.ctx()
-        .data_mut(|data| data.remove_temp::<(f32, u64)>(offset_id(key)))
-        .filter(|(_, written)| frame <= written + 1)
-        .map(|(offset, _)| offset)
-}
-
-/// The scroll area that owns a target, and how it scrolls.
-struct Area {
-    view: Rect,
-    /// The owning `ScrollColumn`, with its offset this pass; `None`: an area the part does not
-    /// own (a raw `egui::ScrollArea`, `ScrollColumn::show_rows`) or none.
-    column: Option<(Id, f32)>,
-}
-
-impl Area {
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-    )]
-    fn scroll(&self, ui: &Ui, delta: f32, target: Rect, edge: Option<Want>) {
-        match self.column {
-            Some((key, offset)) => {
-                let frame = ui.ctx().cumulative_frame_nr();
-                let to = (offset + delta).max(0.0);
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(offset_id(key), (to, frame)));
-            }
-            // An area the part does not own takes egui's request at its end: the innermost
-            // area, which is this one. Never animated.
-            None => {
-                let (rect, align) = match edge {
-                    Some(Want::Open) => (
-                        Rect::from_min_size(target.min, egui::vec2(target.width(), 1.0)),
-                        Some(egui::Align::TOP),
-                    ),
-                    Some(Want::Result) => (
-                        Rect::from_min_max(
-                            egui::pos2(target.left(), target.bottom() - 1.0),
-                            target.max,
-                        ),
-                        Some(egui::Align::BOTTOM),
-                    ),
-                    None => (target, None),
-                };
-                ui.scroll_to_rect_animation(rect, align, egui::style::ScrollAnimation::none());
-            }
+        .data_mut(|data| data.insert_temp(region_id(content), region));
+    // The DM's input, read before any child can consume a key: outside an act's frame, and in
+    // it (a reveal asked by this content's act).
+    let input = [input_in(ui, false), input_in(ui, true)];
+    let inner = add(ui);
+    let frame = ui.ctx().cumulative_frame_nr();
+    let mut settle = false;
+    for run in live(ui.ctx()) {
+        let mut run = lock(&run);
+        let input = input[usize::from(run.act_frame == frame)];
+        resolve(ui, &mut run, &region, content, input);
+        if run.column == Some(key) {
+            settle |= std::mem::take(&mut run.settle);
         }
     }
+    if settle {
+        settle_animation(ui);
+    }
+    inner
 }
 
-/// The innermost scroll area of `ui`: its view, and the column if a `ScrollColumn` drew it in
-/// this pass. Outside any scroll area, the clip.
-fn owning_area(ui: &Ui) -> Area {
-    let pass = ui.ctx().cumulative_pass_nr();
-    let innermost = ui
-        .stack()
-        .iter()
-        .find(|frame| frame.kind() == Some(egui::UiKind::ScrollArea))
-        .map(|frame| frame.id);
-    let region = innermost.and_then(|id| {
-        ui.ctx()
-            .data(|data| data.get_temp::<Region>(region_id(id)))
-            .filter(|region| region.pass == pass)
-    });
-    match region {
-        Some(region) => Area {
-            view: region.view,
-            column: Some((region.key, region.offset)),
-        },
-        None => Area {
-            view: ui.clip_rect(),
-            column: None,
-        },
+/// One step of `run` after the content of the column `region` (content `Ui` `content`).
+fn resolve(ui: &Ui, run: &mut Run, region: &Region, content: Id, input: bool) {
+    let (frame, pass) = (
+        ui.ctx().cumulative_frame_nr(),
+        ui.ctx().cumulative_pass_nr(),
+    );
+    if run.phase.is_err() {
+        return;
     }
+    if frame > run.deadline {
+        // Also a request whose target never marked ages out here.
+        run.end(End::Bound);
+        return;
+    }
+    if run.column != Some(region.key) {
+        return;
+    }
+    if input {
+        run.end(End::ByTheDm);
+        return;
+    }
+    if run.frame.is_some_and(|last| frame > last + 1) {
+        // A frame drew no pass of its column: the page left.
+        run.end(End::OwnerGone);
+        return;
+    }
+    run.frame = Some(frame);
+    let Some(target) = run
+        .marked
+        .filter(|&(_, at, marked)| at == content && marked == pass)
+        .map(|(rect, ..)| rect)
+    else {
+        // A pass of its column that does not draw the target.
+        run.end(End::OwnerGone);
+        return;
+    };
+    let view = region.view;
+    if run.pressed_content.is_none() && run.want == Want::Result(Pressed::Stays) {
+        // The act's pass or the next: the column has not moved since the press.
+        run.pressed_content = Some(run.pressed.translate(egui::vec2(0.0, -region.origin)));
+    }
+    let span = match run.pressed_content {
+        Some(pressed) => target.union(pressed.translate(egui::vec2(0.0, region.origin))),
+        None => target,
+    };
+    if span.top() >= view.top() - 0.5 && span.bottom() <= view.bottom() + 0.5 {
+        run.end(End::Whole);
+        return;
+    }
+    if matches!(run.want, Want::Result(_))
+        && ui
+            .ctx()
+            .memory(|memory| memory.focused())
+            .is_some_and(|focused| focused != run.act_id)
+    {
+        run.end(End::Focused);
+        return;
+    }
+    let content_top = target.top() - region.origin;
+    if let Some(asked) = run.asked
+        && asked.frame != frame
+    {
+        if run.edge {
+            run.end(End::TooTall);
+            return;
+        }
+        if (asked.offset - region.offset).abs() < 0.5
+            && (asked.content_top - content_top).abs() < 0.5
+        {
+            run.end(End::NoProgress);
+            return;
+        }
+    }
+    if run.asked.is_none_or(|asked| asked.frame != frame) {
+        if run.left == 0 {
+            run.end(End::Bound);
+            return;
+        }
+        run.left -= 1;
+    }
+    let tall = span.height() > view.height();
+    if tall && run.want == Want::Result(Pressed::Stays) {
+        // The result and the control that stays do not fit together: the control stays.
+        run.end(End::TooTall);
+        return;
+    }
+    run.edge |= tall;
+    let delta = if tall {
+        match run.want {
+            Want::Open => span.top() - view.top(),
+            Want::Result(_) => span.bottom() - view.bottom(),
+        }
+    } else if span.bottom() > view.bottom() {
+        span.bottom() - view.bottom()
+    } else {
+        span.top() - view.top()
+    };
+    run.asked = Some(Asked {
+        frame,
+        offset: region.offset,
+        content_top,
+    });
+    run.pending = Some(((region.offset + delta).max(0.0), frame));
+    ui.ctx().request_repaint();
+}
+
+/// End egui's stored scroll animation of the column whose content `ui` is: a request that
+/// arrives at once (no duration) for less than a point, which egui ends at its next pass (an
+/// animation less than a point from its target has arrived). Made after all of the column's
+/// content, so that no nested area takes it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+fn settle_animation(ui: &Ui) {
+    ui.scroll_with_delta_animation(
+        egui::vec2(0.0, -0.01),
+        egui::style::ScrollAnimation {
+            points_per_second: f32::INFINITY,
+            duration: egui::Rangef::new(0.0, 0.0),
+        },
+    );
 }
 
 #[cfg(test)]
@@ -421,32 +536,40 @@ mod tests {
     const WIDTH: f32 = 400.0;
     const HEIGHT: f32 = 300.0;
 
-    /// What a test page draws: a column with `above` px of room, the target (`Target top`, a
-    /// block of `tall` px, `Target end`), then 900 px; whether the target is drawn; and a draw
-    /// path that asks again on every frame with the act it kept.
+    /// A test page: a column with `above` px of room, the target (`Target top`, a block of
+    /// `tall` px, `Target end`), then 900 px. `ask` asks in the next frame; `old` is an act of
+    /// an older frame; `animate` starts egui's own animated scroll to the page's end.
     struct Page {
         reveal: Reveal,
-        act: Act,
+        ask: bool,
+        old: Option<Act>,
         want: Want,
+        target: &'static str,
         above: f32,
         tall: f32,
         drawn: bool,
-        renew: bool,
-        /// The target inside a nested column 120 px high, at the outer column's top.
         nested: bool,
+        raw: bool,
+        animate: bool,
+        /// Text the next frame's ask comes with (the act's frame).
+        with: Option<egui::Event>,
     }
 
     impl Page {
         fn new() -> Self {
             Self {
                 reveal: Reveal::default(),
-                act: Act::test(1),
+                ask: true,
+                old: None,
                 want: Want::Open,
+                target: "t",
                 above: 900.0,
                 tall: 40.0,
                 drawn: true,
-                renew: false,
                 nested: false,
+                raw: false,
+                animate: false,
+                with: None,
             }
         }
     }
@@ -456,8 +579,12 @@ mod tests {
     }
 
     fn target(ui: &mut Ui, page: &mut Page) {
-        if page.renew {
-            page.reveal.ask(page.act, 0, page.want);
+        if page.ask {
+            page.ask = false;
+            page.reveal.ask(Act::test(ui.ctx(), 1), 0, "t", page.want);
+        }
+        if let Some(act) = page.old.take() {
+            page.reveal.ask(act, 0, "t", page.want);
         }
         if page.drawn {
             let tall = page.tall;
@@ -469,16 +596,27 @@ mod tests {
                 })
                 .response
                 .rect;
-            page.reveal.mark(ui, 0, rect);
+            page.reveal.mark(ui, 0, page.target, rect);
         }
     }
 
-    fn harness(mut page: Page) -> egui_kittest::Harness<'static, Page> {
-        page.reveal.ask(page.act, 0, page.want);
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a test's raw scroll area and animation"
+    )]
+    fn harness(page: Page) -> egui_kittest::Harness<'static, Page> {
         egui_kittest::Harness::builder()
             .with_size(egui::vec2(WIDTH, HEIGHT))
             .build_ui_state(
                 |ui, page: &mut Page| {
+                    if page.raw {
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            room(ui, page.above);
+                            target(ui, page);
+                            room(ui, 900.0);
+                        });
+                        return;
+                    }
                     super::super::ScrollColumn::new("outer").show(ui, |ui| {
                         ui.label("Outer top");
                         if page.nested {
@@ -494,6 +632,10 @@ mod tests {
                             room(ui, page.above);
                             target(ui, page);
                         }
+                        let end = ui.label("Page end").rect;
+                        if std::mem::take(&mut page.animate) {
+                            ui.scroll_to_rect(end, None);
+                        }
                         room(ui, 900.0);
                     });
                 },
@@ -505,6 +647,13 @@ mod tests {
         h.get_by_label(name).rect().top()
     }
 
+    fn in_view(h: &egui_kittest::Harness<'_, Page>) -> bool {
+        ["Target top", "Target end"].iter().all(|name| {
+            let rect = h.get_by_label(name).rect();
+            rect.top() >= -0.5 && rect.bottom() <= HEIGHT + 0.5
+        })
+    }
+
     fn wheel(h: &mut egui_kittest::Harness<'_, Page>, by: f32) {
         h.event(egui::Event::PointerMoved(egui::pos2(WIDTH / 2.0, 100.0)));
         h.event(egui::Event::MouseWheel {
@@ -514,64 +663,97 @@ mod tests {
         });
     }
 
-    /// A draw path that asks on every frame with the act it kept asks for nothing new: an
-    /// ended reveal stays ended after the DM scrolls the target away.
+    /// It opens whole, ends, and stays ended: a resize does not bring it back.
     #[test]
-    fn asking_again_with_the_same_act_is_no_new_request() {
-        let mut page = Page::new();
-        page.renew = true;
-        let mut h = harness(page);
+    fn a_reveal_shows_its_target_once() {
+        let mut h = harness(Page::new());
         h.run_steps(8);
+        assert!(in_view(&h), "the target is not whole");
         assert_eq!(h.state().reveal.ended(), Some(End::Whole));
-        wheel(&mut h, 600.0);
-        h.run_steps(8);
-        let away = top(&h, "Target top");
+        let before = top(&h, "Target top");
+        h.set_size(egui::vec2(WIDTH, 120.0));
         h.run_steps(8);
         assert!(
-            away > HEIGHT && (top(&h, "Target top") - away).abs() < 0.5,
-            "a renewed ask brought the target back: {away} then {}",
+            (top(&h, "Target top") - before).abs() < 0.5
+                && h.state().reveal.ended() == Some(End::Whole),
+            "a resize moved an ended reveal's target: {before} then {}",
             top(&h, "Target top")
-        );
-        assert_eq!(h.state().reveal.ended(), Some(End::ByTheDm));
-        // Another act is a new request, and it replaces the old one.
-        h.state_mut().act = Act::test(2);
-        h.run_steps(8);
-        assert!(
-            (0.0..HEIGHT).contains(&top(&h, "Target top")),
-            "a new act did not reveal the target"
         );
     }
 
-    /// A frame that does not draw the target ends the reveal: when the target comes back, it
-    /// is not scrolled to again. A target that never shows ages out from its act.
+    /// An act of an older frame asks for nothing.
+    #[test]
+    fn an_old_act_asks_for_nothing() {
+        let mut page = Page::new();
+        page.ask = false;
+        let mut h = harness(page);
+        let act = Act::test(&h.ctx, 2);
+        h.step();
+        h.state_mut().old = Some(act);
+        h.run_steps(8);
+        assert!(
+            h.state().reveal.ended().is_none() && !h.state().reveal.running(),
+            "an old act made a request"
+        );
+        assert!(top(&h, "Target top") > HEIGHT, "an old act scrolled");
+    }
+
+    /// E1: A queues an offset and ends (its owner drops it, or ends it); the column's next pass
+    /// draws an unrelated page and does not move.
+    #[test]
+    fn an_ended_request_never_moves_its_column() {
+        for drop in [true, false] {
+            let mut page = Page::new();
+            page.ask = false;
+            let mut h = harness(page);
+            h.state_mut().ask = true;
+            h.step();
+            assert!(
+                h.state().reveal.running() && !in_view(&h),
+                "no queued request"
+            );
+            if drop {
+                h.state_mut().reveal = Reveal::default();
+            } else {
+                h.state_mut().reveal.end();
+            }
+            // Another page in the same column: the target is not drawn.
+            h.state_mut().drawn = false;
+            let outer = top(&h, "Outer top");
+            h.run_steps(6);
+            assert!(
+                (top(&h, "Outer top") - outer).abs() < 0.5,
+                "an ended request moved the column (dropped: {drop})"
+            );
+        }
+    }
+
+    /// A pass of its column that does not draw the target ends it; the deadline ends a request
+    /// whose target never shows.
     #[test]
     fn a_missing_target_ends_the_reveal() {
-        let mut h = harness(Page::new());
+        let mut page = Page::new();
+        page.ask = false;
+        let mut h = harness(page);
+        h.state_mut().ask = true;
         h.step();
         h.state_mut().drawn = false;
         h.step();
-        // It comes back further down, out of view.
         h.state_mut().drawn = true;
         h.state_mut().above += 1000.0;
         h.step();
-        assert!(
-            top(&h, "Target top") > HEIGHT,
-            "the target came back in view"
-        );
         let back = top(&h, "Target top");
         h.run_steps(8);
         assert_eq!(h.state().reveal.ended(), Some(End::OwnerGone));
         assert!(
-            (top(&h, "Target top") - back).abs() < 0.5,
-            "a target that left a frame was scrolled to again: {back} then {}",
+            back > HEIGHT && (top(&h, "Target top") - back).abs() < 0.5,
+            "a target that left a pass was scrolled to: {back} then {}",
             top(&h, "Target top")
         );
-        // Asked in frame 0, first drawn 20 frames later: it ended with its deadline.
         let mut page = Page::new();
-        page.act = Act::test_at(3, 0);
         page.drawn = false;
         let mut h = harness(page);
-        h.run_steps(20);
+        h.run_steps(12);
         h.state_mut().drawn = true;
         h.run_steps(8);
         assert_eq!(h.state().reveal.ended(), Some(End::Bound));
@@ -579,6 +761,27 @@ mod tests {
             top(&h, "Target top") > HEIGHT,
             "a late target was scrolled to"
         );
+    }
+
+    /// A mark for another target does nothing; a mark outside a `ScrollColumn` ends it and moves
+    /// nothing.
+    #[test]
+    fn a_mark_reports_only_its_bound_target() {
+        let mut page = Page::new();
+        page.target = "another";
+        let mut h = harness(page);
+        h.run_steps(12);
+        assert!(
+            top(&h, "Target top") > HEIGHT,
+            "another target was revealed"
+        );
+        assert_eq!(h.state().reveal.ended(), Some(End::Bound));
+        let mut page = Page::new();
+        page.raw = true;
+        let mut h = harness(page);
+        h.run_steps(8);
+        assert_eq!(h.state().reveal.ended(), Some(End::Unowned));
+        assert!(top(&h, "Target top") > HEIGHT, "a raw area was scrolled");
     }
 
     /// The target in a nested column scrolls that column only: the outer column stays.
@@ -606,7 +809,10 @@ mod tests {
     /// Taller than the view: an opened form shows its top, an act's result its end, once.
     #[test]
     fn a_tall_target_shows_the_edge_its_want_names() {
-        for (want, name) in [(Want::Open, "Target top"), (Want::Result, "Target end")] {
+        for (want, name) in [
+            (Want::Open, "Target top"),
+            (Want::Result(Pressed::Replaced), "Target end"),
+        ] {
             let mut page = Page::new();
             page.want = want;
             page.tall = 600.0;
@@ -619,5 +825,64 @@ mod tests {
                 "{want:?}: {name} at {at:?}"
             );
         }
+    }
+
+    /// A wheel turn or typed text in the act's own frame ends the reveal: nothing moves.
+    #[test]
+    fn input_in_the_acts_frame_cancels() {
+        for event in [
+            egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, 0.0),
+                modifiers: egui::Modifiers::NONE,
+            },
+            egui::Event::Text("s".into()),
+            egui::Event::Key {
+                key: egui::Key::ArrowDown,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ] {
+            let mut h = harness(Page::new());
+            h.state_mut().ask = false;
+            h.step();
+            let before = top(&h, "Target top");
+            h.state_mut().ask = true;
+            h.event(event.clone());
+            h.run_steps(8);
+            assert!(
+                (top(&h, "Target top") - before).abs() < 0.5
+                    && h.state().reveal.ended() == Some(End::ByTheDm),
+                "{event:?} in the act's frame did not cancel: {before} then {}; {:?}",
+                top(&h, "Target top"),
+                h.state().reveal.ended()
+            );
+        }
+    }
+
+    /// egui's own animation, started before the act, does not outlive the reveal: after the DM
+    /// types, nothing moves on the next frames.
+    #[test]
+    fn no_animation_outlives_the_reveal() {
+        let mut page = Page::new();
+        page.ask = false;
+        page.animate = true;
+        let mut h = harness(page);
+        h.step();
+        h.state_mut().ask = true;
+        h.step();
+        h.event(egui::Event::Text("s".into()));
+        h.step();
+        let mut tops = vec![top(&h, "Target top")];
+        for _ in 0..20 {
+            h.step();
+            tops.push(top(&h, "Target top"));
+        }
+        assert!(
+            tops.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 0.5),
+            "the column moved after the DM typed: {tops:?}"
+        );
     }
 }

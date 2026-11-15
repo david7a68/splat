@@ -743,8 +743,10 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
                 .flatten()
         })
     });
+    // A reveal that runs in this column owns its scroll (`design::reveal`).
     if let Some(rect) = rect
         && !(moved_room && visible.contains_rect(rect))
+        && !super::reveal::holds(ui)
     {
         ui.scroll_to_rect(rect, None);
     }
