@@ -163,6 +163,12 @@ pub fn markdown(ui: &mut Ui, text: &str) {
     crate::markdown_view::show_reader(ui, text);
 }
 
+/// The same, where a link to `markdown_view::ENTRY_LINK` opens an entry. Returns the place
+/// of the entry the DM pressed.
+pub fn entry_markdown(ui: &mut Ui, text: &str) -> Option<usize> {
+    crate::markdown_view::show_reader_entries(ui, text)
+}
+
 /// The same, as compact field rows.
 pub fn compact_markdown(ui: &mut Ui, text: &str) {
     crate::markdown_view::show_compact(ui, text);
