@@ -11,8 +11,8 @@
 //!   clears another campaign's result, whatever the owner's `PartialEq` compares.
 //! - **Its order.** [`Results::record`] issues the [`ResultOrder`] when the action is done. The
 //!   order lives in the entry, and it leaves the store only inside the [`Shown`] view, which
-//!   [`Footer::kept`] takes, or a [`FooterResult`] bound to that result's own words, which
-//!   [`Footer::kept_line`] takes. A caller never holds a bare order, so it
+//!   [`Footer::legacy_kept`] takes, or a [`FooterResult`] bound to that result's own words, which
+//!   [`Footer::legacy_kept_line`] takes. A caller never holds a bare order, so it
 //!   cannot keep orders by kind and show one result with another's order. A draw, which has
 //!   `&Results`, cannot issue or renew an order.
 //! - **Its end events.** [`Kept::ENDS`] says, for every end event, what it does to this kind.
@@ -71,7 +71,7 @@
 //! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
 //! fn add<'a>(footer: &mut Footer<'a>, results: &'a Results<Entry, Done>, a: &Entry) {
 //!     if let Some(shown) = results.get(a) {
-//!         footer.kept(shown, true, |done| done.words.as_str().into(), |done, ui| {
+//!         footer.legacy_kept(shown, true, |done| done.words.as_str().into(), |done, ui| {
 //!             ui.label(done.words.as_str());
 //!         });
 //!     }
@@ -407,7 +407,7 @@ pub enum ByTicket<E> {
 pub struct Gone;
 
 /// One kept result's words and its order, bound together. It is not `Clone`, and its order is
-/// private: [`Footer::kept_line`] is the only way to give it to the footer.
+/// private: [`Footer::legacy_kept_line`] is the only way to give it to the footer.
 pub struct FooterResult {
     order: ResultOrder,
     words: String,
@@ -422,9 +422,9 @@ impl FooterResult {
 /// The footer's entries for kept results. Each takes a view that only a [`Results`] store makes
 /// and maps the stored value to what is drawn; none hands the order to the caller.
 ///
-/// - [`Footer::kept`] takes the [`Shown`] view while the store is borrowed: `words` and `draw`
+/// - [`Footer::legacy_kept`] takes the [`Shown`] view while the store is borrowed: `words` and `draw`
 ///   get the value.
-/// - [`Footer::kept_line`] takes an owned [`FooterResult`] (made by [`Shown::footer`]), for a
+/// - [`Footer::legacy_kept_line`] takes an owned [`FooterResult`] (made by [`Shown::footer`]), for a
 ///   caller that draws after the store's borrow ends.
 ///
 /// A typed outcome (package M) adds its entry beside these in `design`, as
@@ -436,7 +436,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "A footer holds only owned, typed data: make a `KeptLine` with `Shown::outcome` and give it to `Messages::kept` (src/design/outcome.rs)."
     )]
-    pub fn kept<T>(
+    pub fn legacy_kept<T>(
         &mut self,
         shown: Shown<'a, T>,
         has_undo: bool,
@@ -454,7 +454,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "A footer holds only owned, typed data: make a `KeptLine` with `Shown::outcome` and give it to `Messages::kept` (src/design/outcome.rs)."
     )]
-    pub fn kept_line(
+    pub fn legacy_kept_line(
         &mut self,
         line: &'a FooterResult,
         has_undo: bool,
@@ -1040,17 +1040,17 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/components.rs",
             "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
         ),
         (
             "src/design/components.rs",
             "iter27_a_footer_results_go_newest_first_by_their_action",
-            &[Ban::Results],
+            &[Ban::Results, Ban::Footer],
         ),
         (
             "src/design/components.rs",
             "iter27_a_the_footer_follows_a_short_body",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
         ),
         (
             "src/design/gallery.rs",
@@ -1066,7 +1066,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "groups_tab",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
         ),
         (
             "src/encounters/groups.rs",
@@ -1086,11 +1086,29 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
+            &[
+                Ban::Results,
+                Ban::Layout(2),
+                Ban::Pane(1),
+                Ban::RowKey(1),
+                Ban::Footer,
+            ],
         ),
         ("src/encounters.rs", "run_settings", &[Ban::Results]),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
-        ("src/library.rs", "add_reader_result", &[Ban::Results]),
+        (
+            "src/library.rs",
+            "add_reader_result",
+            &[Ban::Results, Ban::Footer],
+        ),
+        // Layout PR 2b: the Library page's error, a legacy footer line (a closure).
+        ("src/library.rs", "page_error", &[Ban::Footer]),
+        // Layout PR 2b: the test of the legacy `Footer::legacy_kept`.
+        (
+            "src/design/results.rs",
+            "the_footer_takes_each_kept_result_with_its_own_order",
+            &[Ban::Footer],
+        ),
         // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
         // Round 29 L: the source change's Undo, and the registration's (`undo_package_registration`),
         // moved into stores; by owner until the reader footer moves to `Messages`.
@@ -1134,7 +1152,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "editor_pane",
-            &[Ban::Results, Ban::Extras(1)],
+            &[Ban::Results, Ban::Extras(1), Ban::Footer],
         ),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         ("src/library.rs", "give_new_identity", &[Ban::Results]),
@@ -1144,7 +1162,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/library.rs", "open_entry", &[Ban::Results]),
-        ("src/library.rs", "reader_messages", &[Ban::Results]),
+        (
+            "src/library.rs",
+            "reader_messages",
+            &[Ban::Results, Ban::Footer],
+        ),
         ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
@@ -1250,7 +1272,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         // The editor's columns (`Fills::because`) and the unread rows' warning in main's footer
         // (`show_by_hand`): the typed footer holds no file line with its links.
-        ("src/encounters.rs", "editor_view", &[Ban::Pane(2)]),
+        (
+            "src/encounters.rs",
+            "editor_view",
+            &[Ban::Pane(2), Ban::Footer],
+        ),
         (
             "src/encounters.rs",
             "roster",
@@ -1498,7 +1524,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/components.rs",
             "iter28_p_the_pane_places_its_footer_for_every_body",
-            &[Ban::Layout(1)],
+            &[Ban::Layout(1), Ban::Footer],
         ),
         (
             "src/design/components.rs",
@@ -1694,6 +1720,34 @@ pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, u
 /// See [`Staged`]: the pattern, what to use instead, and the count of each file.
 #[cfg(test)]
 pub(crate) const STAGED: &[Staged] = &[
+    // Layout PR 2b: a footer line lowered to a closure is the legacy footer's (`clippy.toml`
+    // bans the four entries; a function that already holds an allow for another ban is caught
+    // here). Give the footer typed data: `outcome::Messages`.
+    (
+        ".legacy_reason(",
+        "Give the footer a typed line: `outcome::Messages::outcome` (layout PR 2b).",
+        &[
+            ("src/design/components.rs", 10),
+            ("src/encounter_run/view.rs", 1),
+            ("src/encounters.rs", 2),
+            ("src/library.rs", 4),
+        ],
+    ),
+    (
+        ".legacy_notice(",
+        "Give the footer a typed line: `outcome::Messages::outcome` (layout PR 2b).",
+        &[("src/design/components.rs", 1), ("src/library.rs", 7)],
+    ),
+    (
+        ".legacy_kept(",
+        "Give the footer a kept result as a `KeptLine`: `Shown::outcome`, `Messages::kept`.",
+        &[],
+    ),
+    (
+        ".legacy_kept_line(",
+        "Give the footer a kept result as a `KeptLine`: `Shown::outcome`, `Messages::kept`.",
+        &[("src/encounter_run/view.rs", 1), ("src/library.rs", 1)],
+    ),
     (
         "Outcome::Refused(",
         "Answer a refused act with a typed `Refusal` on its entry (`Results::undo_or_refuse`): it names the thing, the cause and a next step, and ranks as an act (M1).",
@@ -2279,7 +2333,8 @@ mod tests {
     /// `draw` get the stored value.
     #[allow(
         deprecated,
-        reason = "the test of `Footer::kept`, deprecated until Wave 3 removes it"
+        clippy::disallowed_methods,
+        reason = "the test of `Footer::legacy_kept`, deprecated until Wave 3 removes it, and banned (`Ban::Footer`)"
     )]
     #[test]
     fn the_footer_takes_each_kept_result_with_its_own_order() {
@@ -2294,7 +2349,7 @@ mod tests {
                     let mut footer = Footer::new("kept_test", 500.0);
                     for owner in [&A, &B] {
                         let shown = results.get(owner).unwrap();
-                        footer.kept(
+                        footer.legacy_kept(
                             shown,
                             true,
                             |done| done.words.into(),
@@ -2648,8 +2703,8 @@ mod tests {
         let mut faults = Vec::new();
         for (pattern, instead, allowed) in STAGED {
             for (path, text) in &files {
-                // The store itself, and this table, name the patterns.
-                if path == "src/design/results.rs" {
+                // The store itself, this table and the suppressions' checker name the patterns.
+                if path == "src/design/results.rs" || path == "src/design/results/suppressions.rs" {
                     continue;
                 }
                 let count = text.matches(pattern).count();
@@ -2685,8 +2740,12 @@ mod tests {
                         suppressions::Ban::Layout(_)
                             | suppressions::Ban::RowKey(_)
                             | suppressions::Ban::Extras(_)
+                            // Layout PR 2b: the design system owns the legacy footer's closure
+                            // lines, and its own tests of them.
+                            | suppressions::Ban::Footer
                     )),
-                "{file} `{item}`: only the design system and its harness own raw egui calls"
+                "{file} `{item}`: only the design system and its harness own raw egui calls and \
+                 the legacy footer's closure lines"
             );
         }
         let rows: Vec<_> = STAGED_ALLOWS.iter().chain(OWNED_ALLOWS).copied().collect();

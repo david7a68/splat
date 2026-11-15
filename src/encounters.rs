@@ -4886,7 +4886,7 @@ impl Encounters {
             ui.available_width(),
         );
         if let Some(error) = editor.error.clone() {
-            footer.reason(error.clone(), move |ui| {
+            footer.legacy_reason(error.clone(), move |ui| {
                 design::message(ui, Tone::Error, &error);
             });
         }
@@ -6842,7 +6842,7 @@ impl Encounters {
                 .map(|(note, _)| note.as_str())
                 .collect::<Vec<_>>()
                 .join(" ");
-            unread.reason(words, move |ui| {
+            unread.legacy_reason(words, move |ui| {
                 unread_roster_rows(ui, &root, &path, &notes, faults);
             });
         }
