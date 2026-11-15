@@ -2690,7 +2690,16 @@ impl Encounters {
                 super::editor_save_state(ui, state.word().status(), state.discard_shown(), None);
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
-            let mut room = reasons_right - ui.cursor().left();
+            // R37: `New` is shorter than the words it turns into (`Unsaved`, or `Invalid`), so
+            // the reasons' places are measured as if the word were the wider of those: the first
+            // member then moves no reason and no field.
+            let word_width =
+                |word: design::save_row::SaveWord| design::number_width(ui, word.words(), &font);
+            let widest = word_width(design::save_row::SaveWord::Unsaved).max(word_width(
+                design::save_row::SaveWord::Invalid(design::save_row::InvalidCause::Refused),
+            ));
+            let mut room =
+                reasons_right - ui.cursor().left() - (widest - word_width(state.word())).max(0.0);
             // Save's own reason first: it stays at the row's end, under Save, while there is
             // room. A dirty group blocks the campaign switch wherever it is open, so it says so,
             // as the encounter editor does.

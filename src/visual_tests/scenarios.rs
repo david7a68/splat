@@ -19388,13 +19388,16 @@ pub mod encounter_groups {
         // R37 (B3): a saved group that an edit empties is a refused change, not a new draft:
         // it says Invalid in the warning tone of its cause, never New, and Save waits with the
         // reason. At the scenario's end: the editor keeps one member result, so this removes
-        // both members and does not come back.
+        // all three of Lost Patrol's members and does not come back.
         d.click("More actions for Cinder Wolf");
         d.click("Remove");
         d.expect("Removed Cinder Wolf.");
         d.click("More actions for Unknown creature");
         d.click("Remove");
         d.expect("Removed Unknown creature.");
+        d.click("More actions for Goblin Warrior");
+        d.click("Remove");
+        d.expect("Removed Goblin Warrior.");
         let emptied = (
             d.visible_text(&format!("{} Invalid", crate::design::icons::WARN)),
             d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
