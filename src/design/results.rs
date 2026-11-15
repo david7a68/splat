@@ -183,9 +183,16 @@
 //! };
 //! ```
 use super::components::{Footer, ResultOrder};
-use eframe::egui::Ui;
+use super::memo::Revision;
+use super::outcome::Sentence;
+use eframe::egui::{self, Ui};
+use std::time::Duration;
 
+mod projection;
 mod refusal;
+#[cfg(test)]
+pub(crate) use projection::work as projection_work;
+pub use projection::{Mismatch, Projection, Retained};
 pub use refusal::{Cause, Change, FailedAct, Fallback, File, Kind, Name, Recovery, Refusal, Thing};
 
 /// A new order for an act done now: a result recorded, an Undo attempt refused.
@@ -222,6 +229,12 @@ pub trait Kept {
     const ENDS: Ends;
     /// The object this result belongs to. The store reads it once, when the result is recorded.
     fn owner(&self) -> Self::Owner;
+    /// How long the result lives on the frame clock (`crate::frame_clock`) after its act, for a
+    /// result that ends by itself (an Add's Undo). Such a kind is recorded with
+    /// [`Results::record_timed`], which arms its end, and its owner ends it with
+    /// [`Results::expire`] in its update, before any projection of it is made or shown. `None`:
+    /// it has no timer, and it is recorded with [`Results::record`].
+    const LIFE: Option<Duration> = None;
 }
 
 /// A kind of kept result that checks, at [`Results::reconcile`], the state its words and its
@@ -275,6 +288,7 @@ pub struct Shown<'a, T> {
     order: ResultOrder,
     value: &'a T,
     refused: Option<&'a Refused>,
+    lock: Option<&'a Sentence>,
 }
 
 impl<'a, T> Shown<'a, T> {
@@ -292,6 +306,11 @@ impl<'a, T> Shown<'a, T> {
     /// ([`Results::undo_or_refuse`]).
     pub fn refusal(&self) -> Option<&'a Refusal> {
         self.refused.map(|refused| &refused.refusal)
+    }
+
+    /// Why its Undo waits now, while it waits ([`Results::set_locks`]).
+    pub fn lock(&self) -> Option<&'a Sentence> {
+        self.lock
     }
 
     /// This result as a typed footer line for this frame's pane (package M), made from its own
@@ -471,40 +490,102 @@ struct Entry<O, T> {
     /// The refusal of its last attempt ([`Results::undo_or_refuse`]): it ends with the entry, at
     /// the entry's next attempt, and at [`Results::end_refusals`].
     refused: Option<Refused>,
+    /// When its act was done, on the frame clock, for a kind with a [`Kept::LIFE`].
+    born: f64,
+    /// Why its Undo waits now ([`Results::set_locks`]); `None` while it is open.
+    lock: Option<Sentence>,
 }
 
-impl<O: Owner, T> Entry<O, T> {
+impl<O: Owner, T: Kept> Entry<O, T> {
     /// The same owner in the same scope. The scope is compared by the store, not left to the
     /// owner's `PartialEq`.
     fn is(&self, owner: &O) -> bool {
         self.owner.scope() == owner.scope() && self.owner == *owner
     }
+
+    /// Its life ([`Kept::LIFE`]) has passed on the frame clock.
+    fn ended(&self) -> bool {
+        T::LIFE.is_some_and(|life| crate::frame_clock::passed(self.born, life))
+    }
 }
 
 /// Every kept result of one kind, each with its owner and its order. See the module comment.
+///
+/// **Its revision** ([`Results::revision`]) names one version of the whole collection, for a
+/// retained [`Projection`]: it advances at every change that a projection reads (an entry came
+/// or left, a refusal was set or ended, a lock changed, a value was changed in place, a life
+/// ended at [`Results::expire`]) and never at a read. A ticket's order is not this revision: a
+/// refusal or a lock changes the words of an entry that keeps its ticket.
 pub struct Results<O, T> {
     entries: Vec<Entry<O, T>>,
+    revision: Revision,
+    /// For a kind with a life: when its oldest entry's act was done (`None`: no entry), as
+    /// worked out at a revision. Valid while that revision stands, so `expire` visits no entry
+    /// on a frame before the next end.
+    oldest: Option<(Revision, Option<f64>)>,
 }
 
 impl<O, T> Default for Results<O, T> {
     fn default() -> Self {
         Self {
             entries: Vec::new(),
+            revision: Revision::next(),
+            oldest: None,
         }
     }
 }
 
 impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
-    pub const fn new() -> Self {
-        Self {
-            entries: Vec::new(),
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The version of the whole collection. See the type's comment.
+    pub fn revision(&self) -> Revision {
+        self.revision
+    }
+
+    /// Something a projection reads changed.
+    fn changed(&mut self) {
+        self.revision = Revision::next();
+    }
+
+    /// `changed`, when the entries are fewer than `before`.
+    fn changed_if_fewer(&mut self, before: usize) {
+        if self.entries.len() != before {
+            self.changed();
         }
     }
 
     /// Keep the result of an action done now. It gets a new order, newer than every result
     /// before it, and it ends its owner's earlier result of this kind. Call it where the action
-    /// is done; Undo and then the same action again is a new action with a new order.
+    /// is done; Undo and then the same action again is a new action with a new order. A kind
+    /// with a [`Kept::LIFE`] does not compile here: [`Results::record_timed`] arms its end.
     pub fn record(&mut self, value: T) {
+        const {
+            assert!(
+                T::LIFE.is_none(),
+                "this kind has a life: record it with `record_timed`, which arms its end"
+            )
+        };
+        self.keep(value);
+    }
+
+    /// `record` for a kind with a [`Kept::LIFE`]: it also asks `ctx` for a repaint at its end
+    /// ([`Results::expire`]), so a result recorded after its owner's update this frame still
+    /// ends with no input.
+    pub fn record_timed(&mut self, value: T, ctx: &egui::Context) {
+        const {
+            assert!(
+                T::LIFE.is_some(),
+                "this kind has no life: record it with `record`"
+            )
+        };
+        self.keep(value);
+        self.expire(ctx);
+    }
+
+    fn keep(&mut self, value: T) {
         let owner = value.owner();
         self.entries.retain(|entry| !entry.is(&owner));
         let order = act_order();
@@ -513,7 +594,72 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             order,
             value,
             refused: None,
+            born: crate::frame_clock::now(),
+            lock: None,
         });
+        self.changed();
+    }
+
+    /// The owner's update for a kind with a [`Kept::LIFE`]: each result whose life passed on the
+    /// frame clock ends, and the revision advances only when one ended. The soonest end left is
+    /// asked of `ctx` as a repaint, so the result ends with no input. Call it before any
+    /// projection of the store is made or shown ([`Retained::refresh`], [`Results::present`]).
+    ///
+    /// Its cost on a frame before the next end is constant: the oldest act is kept for the
+    /// store's revision, and no entry is visited. A frame at or after an end visits each entry
+    /// once.
+    pub fn expire(&mut self, ctx: &egui::Context) {
+        let Some(life) = T::LIFE else {
+            return;
+        };
+        let mut oldest = self.oldest_born();
+        if oldest.is_some_and(|born| crate::frame_clock::passed(born, life)) {
+            let before = self.entries.len();
+            self.entries.retain(|entry| !entry.ended());
+            projection::count(|work| work.visits += before);
+            self.changed_if_fewer(before);
+            oldest = self.oldest_born();
+        }
+        if let Some(born) = oldest {
+            let left = life.as_secs_f64() - (crate::frame_clock::now() - born);
+            ctx.request_repaint_after(Duration::from_secs_f64(left.max(0.0)));
+        }
+    }
+
+    /// When the oldest entry's act was done: kept for the store's revision, worked out again
+    /// (one visit of each entry) only after a change.
+    fn oldest_born(&mut self) -> Option<f64> {
+        match self.oldest {
+            Some((at, born)) if at == self.revision => born,
+            _ => {
+                projection::count(|work| work.visits += self.entries.len());
+                let born = self
+                    .entries
+                    .iter()
+                    .map(|entry| entry.born)
+                    .min_by(f64::total_cmp);
+                self.oldest = Some((self.revision, born));
+                born
+            }
+        }
+    }
+
+    /// The owner's locks: `lock` says, for each result, why its Undo waits now (`None`: it is
+    /// open). The revision advances only when one differs from what the store holds. A
+    /// projection reads it through [`Shown::lock`]. It visits every entry: call it in the
+    /// owner's update when the lock's source changed (its own revision), not on every frame.
+    pub fn set_locks(&mut self, mut lock: impl FnMut(&T) -> Option<Sentence>) {
+        let mut changed = false;
+        for entry in &mut self.entries {
+            let now = lock(&entry.value);
+            if entry.lock != now {
+                entry.lock = now;
+                changed = true;
+            }
+        }
+        if changed {
+            self.changed();
+        }
     }
 
     /// The owner's result, if it has one.
@@ -547,6 +693,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             order: entry.order,
             value: &entry.value,
             refused: entry.refused.as_ref(),
+            lock: entry.lock.as_ref(),
         }
     }
 
@@ -569,7 +716,10 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             )
         };
         let at = self.position(owner)?;
-        Some(run(&self.entries[at].value).map(|done| (self.entries.remove(at).value, done)))
+        Some(run(&self.entries[at].value).map(|done| {
+            self.changed();
+            (self.entries.remove(at).value, done)
+        }))
     }
 
     /// The Undo of the entry `ticket` names, as `undo` does by owner: it leaves only when `run`
@@ -592,7 +742,10 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             .position(|entry| entry.order == ticket.order)
             .ok_or(ByTicket::Gone)?;
         match run(&self.entries[at].value) {
-            Ok(done) => Ok((self.entries.remove(at).value, done)),
+            Ok(done) => {
+                self.changed();
+                Ok((self.entries.remove(at).value, done))
+            }
             Err(error) => Err(ByTicket::Failed(error)),
         }
     }
@@ -621,6 +774,8 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             .ok_or(ByTicket::Gone)?;
         let result = run(&self.entries[at].value);
         let order = act_order();
+        // Either way its line changes: it goes, or it opens with the refusal's words.
+        self.changed();
         match result {
             Ok(done) => Ok((self.entries.remove(at).value, done)),
             Err(refusal) => {
@@ -636,8 +791,13 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     /// by the change that caused it; its own events end it. Call it at the change, never each
     /// frame.
     pub fn source_changed(&mut self, mut holds: impl FnMut(&mut T) -> bool) {
+        if self.entries.is_empty() {
+            return;
+        }
         self.entries
             .retain_mut(|entry| holds(&mut entry.value) || entry.refused.is_some());
+        // `holds` may revise a value in place, which the store cannot see.
+        self.changed();
     }
 
     /// The refused attempt of each entry for which `ends` is true ends (its object went away;
@@ -657,6 +817,9 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             }
             true
         });
+        if ended > 0 {
+            self.changed();
+        }
         ended
     }
 
@@ -672,6 +835,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             .entries
             .iter()
             .position(|entry| entry.order == ticket.order)?;
+        self.changed();
         Some(self.entries.remove(at).value)
     }
 
@@ -684,6 +848,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             )
         };
         let at = self.position(owner)?;
+        self.changed();
         Some(self.entries.remove(at).value)
     }
 
@@ -703,7 +868,10 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             .iter_mut()
             .find(|entry| entry.order == ticket.order)
             .ok_or(Gone)?;
-        Ok(change(&mut entry.value))
+        let done = change(&mut entry.value);
+        // A change in place, which the store cannot see: its words may differ.
+        self.changed();
+        Ok(done)
     }
 
     /// `revise_by` for the owner's entry, whichever it is now. [`Gone`] when the owner has none.
@@ -717,7 +885,9 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             .iter_mut()
             .find(|entry| entry.is(owner))
             .ok_or(Gone)?;
-        Ok(change(&mut entry.value))
+        let done = change(&mut entry.value);
+        self.changed();
+        Ok(done)
     }
 
     /// `revise_by` for every entry whose value `holds` (a note file moved, and each Undo that
@@ -734,6 +904,9 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
                 change(&mut entry.value);
                 revised += 1;
             }
+        }
+        if revised > 0 {
+            self.changed();
         }
         revised
     }
@@ -760,26 +933,32 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
 
     /// The owner changed by its own later action (a saved edit, a rename, a removal).
     pub fn owner_changed(&mut self, owner: &O) {
+        let before = self.entries.len();
         match T::ENDS.owner_changed {
             OwnerChanged::Ends => self.entries.retain(|entry| !entry.is(owner)),
             OwnerChanged::Stays => {}
         }
+        self.changed_if_fewer(before);
     }
 
     /// Each result whose owner can never come back (a dropped draft that no Undo can restore)
     /// ends, in every scope. `reachable` is asked once per result, with its value.
     pub fn end_unreachable(&mut self, mut reachable: impl FnMut(&T) -> bool) {
+        let before = self.entries.len();
         self.entries.retain(|entry| reachable(&entry.value));
+        self.changed_if_fewer(before);
     }
 
     /// The files changed on disk (a reload, a file event). `holds` says whether a result still
     /// holds; it is asked only for a kind whose `disk_changed` is `Checked`.
     pub fn disk_changed(&mut self, mut holds: impl FnMut(&T) -> bool) {
+        let before = self.entries.len();
         match T::ENDS.disk_changed {
             DiskChanged::Ends => self.entries.clear(),
             DiskChanged::Checked => self.entries.retain(|entry| holds(&entry.value)),
             DiskChanged::Stays => {}
         }
+        self.changed_if_fewer(before);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -990,11 +1169,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/sessions/plan.rs", "scene_act", &[Ban::Results]),
-        (
-            "src/sessions/plan.rs",
-            "scenes_are_note_acts_with_their_own_undo statement",
-            &[Ban::Results],
-        ),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),
@@ -1529,7 +1703,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/library.rs", 14),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 1),
-            ("src/sessions/plan.rs", 6),
+            ("src/sessions/plan.rs", 4),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],
@@ -1687,6 +1861,28 @@ mod tests {
             .collect()
     }
 
+    /// A retained footer line of a `Done` (ruling L9): its words, and `Undo add` locked while
+    /// the store's lock for it holds.
+    fn line_of(shown: Shown<'_, Done>) -> super::super::outcome::KeptOutcome<u8> {
+        use super::super::outcome::{Said, UndoStep, Verb};
+        let undo = UndoStep::verb(Verb::Add).pressed_as(1_u8);
+        let undo = match shown.lock() {
+            Some(reason) => undo.blocked(reason.clone()),
+            None => undo,
+        };
+        Said::new(crate::sentence!(
+            "{}.",
+            shown.value().words.trim_end_matches('.')
+        ))
+        .undo(undo)
+        .into()
+    }
+
+    /// The revision of inputs that a test's lines read besides the store: never changed.
+    fn no_inputs() -> Revision {
+        super::super::memo::Revised::new(()).revision()
+    }
+
     /// Review of PR 298, item 2: A's and B's link results each keep their own order. A slot
     /// keyed by kind gave B's order to A.
     #[test]
@@ -1730,8 +1926,11 @@ mod tests {
             results.get(&A).unwrap().order(),
             results.get(&B).unwrap().order(),
         );
+        // Ruling L9: a failed plain Undo changes nothing a projection reads.
+        let revision = results.revision();
         let failed = results.undo(&A, |_| Err::<(), _>("A's file changed."));
         assert_eq!(failed, Some(Err("A's file changed.")));
+        assert_eq!(results.revision(), revision, "a failed Undo is no change");
         assert_eq!(
             results.get(&A).unwrap().order(),
             a,
@@ -1764,8 +1963,44 @@ mod tests {
             )
         };
         let changed = || refusal(Cause::Changed(File::SessionNote));
+        // Ruling L9: A's line, kept as data, before the refused attempt.
+        let (frame, inputs) = (super::super::outcome::PaneFrame::for_test(), no_inputs());
+        let mut view = Retained::new();
+        view.refresh(&results, &A, inputs, line_of);
+        let before = view.get().unwrap();
+        assert!(matches!(
+            results.present(&frame, before, &A, inputs),
+            Ok(Some(_))
+        ));
         let refused = results.undo_or_refuse(Ticket { order: a }, |_| Err::<(), _>(changed()));
         assert_eq!(refused, Err(ByTicket::Failed(())));
+        // The refusal changes A's words with the same ticket: its kept line is refused, not
+        // drawn; made again, it opens with the refusal's words.
+        assert_eq!(
+            results
+                .present(&frame, view.get().unwrap(), &A, inputs)
+                .err(),
+            Some(Mismatch::Revision),
+            "a line kept from before the refusal is not drawn"
+        );
+        let after = view.refresh(&results, &A, inputs, line_of);
+        assert!(
+            after
+                .words()
+                .is_some_and(|words| words.starts_with(changed().words_told_apart(None).as_str())),
+            "made again, it says the refusal: {:?}",
+            after.words()
+        );
+        // A lock is a change too, and only a change of it: the Undo's lock comes with it.
+        let revision = results.revision();
+        results.set_locks(|_| Some(crate::sentence!("Save the note first.")));
+        assert_ne!(results.revision(), revision, "a new lock");
+        let locked = results.revision();
+        results.set_locks(|_| Some(crate::sentence!("Save the note first.")));
+        assert_eq!(results.revision(), locked, "the same lock is no change");
+        assert!(view.refresh(&results, &A, inputs, line_of).undo_locked());
+        results.set_locks(|_| None);
+        assert!(!view.refresh(&results, &A, inputs, line_of).undo_locked());
         let shown = results.get_by(&Ticket { order: a }).unwrap();
         assert_eq!(shown.order(), a, "the ticket stays");
         assert_eq!(shown.refusal(), Some(&changed()));
@@ -1930,6 +2165,53 @@ mod tests {
                 campaign: "Ashfall",
             },
         );
+        // Ruling L9, early review F3: a kept line's binding compares the owner's scope, as the
+        // store does. Both entries are in before A's line is made, so the revision matches;
+        // B's key, equal to A's by `PartialEq`, is still refused: no line, no ticket.
+        {
+            use super::super::outcome::{Said, UndoStep, Verb};
+            let line = |shown: Shown<'_, Linked>| -> super::super::outcome::KeptOutcome<u8> {
+                Said::new(crate::sentence!(
+                    "{}.",
+                    shown.value().1.trim_end_matches('.')
+                ))
+                .undo(UndoStep::verb(Verb::Add).pressed_as(1_u8))
+                .into()
+            };
+            let (frame, inputs) = (super::super::outcome::PaneFrame::for_test(), no_inputs());
+            let mut both = Results::new();
+            both.record(Linked(a.clone(), "A."));
+            both.record(Linked(b.clone(), "B."));
+            let mut view = Retained::new();
+            let a_line = view.refresh(&both, &a, inputs, line);
+            assert_eq!(a_line.words(), Some("A."));
+            assert!(matches!(
+                both.present(&frame, a_line, &a, inputs),
+                Ok(Some(_))
+            ));
+            assert_eq!(
+                both.present(&frame, a_line, &b, inputs).err(),
+                Some(Mismatch::Key),
+                "A's line is not B's, in B's campaign"
+            );
+            // A store made by `Default`, with the same entries, is another store.
+            let mut other: Results<ById, Linked> = Results::default();
+            other.record(Linked(a.clone(), "A."));
+            let mut fresh = Retained::new();
+            let fresh_line = fresh.refresh(&other, &a, inputs, line);
+            assert_ne!(other.revision(), both.revision());
+            assert_eq!(
+                both.present(&frame, fresh_line, &a, inputs).err(),
+                Some(Mismatch::Revision),
+                "a line of another store is not this store's"
+            );
+            assert_eq!(
+                both.present(&frame, view.get().unwrap(), &a, no_inputs())
+                    .err(),
+                Some(Mismatch::Inputs),
+                "a line made from other inputs is not drawn"
+            );
+        }
         let mut links = Results::new();
         links.record(Linked(a.clone(), "A."));
         let a_order = links.get(&a).unwrap().order();
@@ -2049,6 +2331,64 @@ mod tests {
             Ok("B")
         );
 
+        // Ruling L9, early review F5: kept lines of A and B share one store revision. Undo A:
+        // both kept lines are refused until their owner makes them again; then A has none, and
+        // B shows its unchanged words with a ticket that still reaches B. A recorded again: A's
+        // first line and ticket stay unusable.
+        let mut results = Results::<Note, Done>::new();
+        results.record(done(A, "A"));
+        results.record(done(B, "B"));
+        let inputs = no_inputs();
+        let (mut view_a, mut view_b, mut first_a) =
+            (Retained::new(), Retained::new(), Retained::new());
+        first_a.refresh(&results, &a, inputs, line_of);
+        view_a.refresh(&results, &a, inputs, line_of);
+        view_b.refresh(&results, &b, inputs, line_of);
+        let b_before = ticket(&results, &b);
+        let a_first = ticket(&results, &a);
+        assert!(matches!(
+            results.present(&frame, view_b.get().unwrap(), &b, inputs),
+            Ok(Some(line)) if *line.ticket() == b_before
+        ));
+        assert!(
+            results
+                .undo_by(ticket(&results, &a), |_| Ok::<_, ()>(()))
+                .is_ok()
+        );
+        for (view, owner) in [(&view_a, &a), (&view_b, &b)] {
+            assert_eq!(
+                results
+                    .present(&frame, view.get().unwrap(), owner, inputs)
+                    .err(),
+                Some(Mismatch::Revision),
+                "before its owner makes it again, a kept line is not drawn"
+            );
+        }
+        let a_now = view_a.refresh(&results, &a, inputs, line_of);
+        assert!(matches!(
+            results.present(&frame, a_now, &a, inputs),
+            Ok(None)
+        ));
+        let b_now = view_b.refresh(&results, &b, inputs, line_of);
+        assert_eq!(b_now.words(), Some("B."), "B's words are unchanged");
+        assert!(matches!(
+            results.present(&frame, b_now, &b, inputs),
+            Ok(Some(line)) if *line.ticket() == b_before
+        ));
+        assert_eq!(results.get(&b).map(|shown| shown.value().words), Some("B"));
+        results.record(done(A, "A again"));
+        assert_eq!(
+            results
+                .present(&frame, first_a.get().unwrap(), &a, inputs)
+                .err(),
+            Some(Mismatch::Revision),
+            "A's first line does not come back with a new A"
+        );
+        assert_eq!(
+            results.undo_by(a_first, |_| Ok::<_, ()>(())).err(),
+            Some(ByTicket::Gone)
+        );
+
         // M3 gap 3: a kept entry changes in place. Revise A (by its ticket, then by its owner):
         // the unrelated B stays, A keeps its order and its place, its old ticket still acts and
         // the action gets the revised value; a revised entry keeps its kind's end events; an
@@ -2134,6 +2474,88 @@ mod tests {
 
     /// R11: `reconcile` revises each entry in place by itself: A's value changes, B's does not;
     /// both keep their order, and A's ticket from before still reaches A (its Undo stays).
+    /// Ruling L9, early review F4: a timed store's owner update visits no entry on a frame
+    /// before the next end, and `present` finds its entry by the place kept with its line, so
+    /// an unchanged frame costs the same with one entry or two hundred. What a frame hands the
+    /// legacy footer is the shown line's words, all of them, also the clauses the footer may
+    /// not show: the counted exception that PR 2b removes. At the end, one frame visits each
+    /// entry once, ends them, and advances the revision.
+    #[test]
+    fn a_timed_store_does_no_entry_work_before_its_end() {
+        use super::super::outcome::{Said, UndoStep, Verb};
+        struct Timed(Note, String);
+        impl Kept for Timed {
+            type Owner = Note;
+            const ENDS: Ends = Ends {
+                owner_changed: OwnerChanged::Ends,
+                disk_changed: DiskChanged::Stays,
+                press: Press::Undo,
+            };
+            const LIFE: Option<Duration> = Some(Duration::from_secs(30));
+            fn owner(&self) -> Note {
+                self.0.clone()
+            }
+        }
+        fn line(shown: Shown<'_, Timed>) -> super::super::outcome::KeptOutcome<u8> {
+            Said::new(crate::sentence!(
+                "{}.",
+                shown.value().1.trim_end_matches('.')
+            ))
+            .undo(UndoStep::verb(Verb::Add).pressed_as(1_u8))
+            .into()
+        }
+        let ctx = egui::Context::default();
+        let (frame, inputs) = (super::super::outcome::PaneFrame::for_test(), no_inputs());
+        crate::frame_clock::set(10.0);
+        let mut results = Results::<Note, Timed>::new();
+        for id in 0..200 {
+            let hidden = Note {
+                id: 100 + id,
+                campaign: "Ashfall",
+            };
+            results.record_timed(Timed(hidden, "Hidden.".into()), &ctx);
+        }
+        let long = "Bridge keeps its saved HP. ".repeat(40);
+        let long = long.trim_end();
+        results.record_timed(Timed(A, long.to_owned()), &ctx);
+        let mut view = Retained::new();
+        let mut frame_of = |results: &mut Results<Note, Timed>| {
+            results.expire(&ctx);
+            let projection = view.refresh(results, &A, inputs, line);
+            results
+                .present(&frame, projection, &A, inputs)
+                .unwrap()
+                .is_some()
+        };
+        assert!(frame_of(&mut results), "the first frame makes the line");
+        let before = projection_work();
+        for at in [12.0, 20.0, 39.5] {
+            crate::frame_clock::set(at);
+            assert!(frame_of(&mut results), "{at}: it stands");
+        }
+        let after = projection_work();
+        assert_eq!(
+            (after.built - before.built, after.visits - before.visits),
+            (0, 0),
+            "frames before the end make no line and visit no entry"
+        );
+        assert_eq!(
+            after.handed - before.handed,
+            3 * long.len(),
+            "each frame hands the shown line's words to the legacy footer, no more"
+        );
+        let revision = results.revision();
+        crate::frame_clock::set(40.0);
+        assert!(!frame_of(&mut results), "at the end the line is gone");
+        assert!(results.is_empty());
+        assert_ne!(results.revision(), revision, "the end is a change");
+        assert_eq!(
+            projection_work().visits - after.visits,
+            201,
+            "the end visits each entry once"
+        );
+    }
+
     #[test]
     fn reconcile_revises_each_entry_in_place() {
         let mut results = Results::<Note, Done>::new();
