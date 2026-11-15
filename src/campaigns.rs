@@ -1616,6 +1616,8 @@ struct ImportReveal {
     campaign: Option<Uuid>,
     /// The form's top and the frame of the last scroll it asked for.
     asked: Option<(f32, u64)>,
+    /// The form is taller than its view: only its top is asked for.
+    top_only: bool,
     /// The view's size and whether the form was whole in it, in the last frame that drew it.
     view: Option<(egui::Vec2, bool)>,
     /// The last frame that drew the form.
@@ -1630,11 +1632,13 @@ impl ImportReveal {
         self.left = Self::PASSES;
         self.campaign = campaign;
         self.asked = None;
+        self.top_only = false;
     }
 
     fn end(&mut self) {
         self.left = 0;
         self.asked = None;
+        self.top_only = false;
     }
 
     /// One pass of the open form at `form`, in the campaign open now.
@@ -1680,28 +1684,34 @@ impl ImportReveal {
             self.end();
             return;
         }
-        match self.asked {
-            // A pass drawn again in the same frame asks again; it is not a new frame.
-            Some((_, at)) if at == frame => {}
-            // A frame after the last ask that shows no progress: stop.
-            Some((top, _)) if (top - form.top()).abs() < 0.5 => {
-                self.end();
-                return;
+        if let Some((top, at)) = self.asked {
+            // A pass drawn again in the same frame asks again (a pass drawn again may drop a
+            // scroll); a new frame judges the last one.
+            if at != frame {
+                if self.top_only || (top - form.top()).abs() < 0.5 {
+                    // Its top shows (a form taller than its view), or no progress: stop.
+                    self.end();
+                    return;
+                }
+                self.left -= 1;
             }
-            _ => self.left -= 1,
+        } else {
+            self.left -= 1;
         }
-        if form.height() > view.height() {
-            // Taller than the view: its top shows, and the reveal ends.
+        // Taller than the view: only its top shows, and the next frame ends the reveal.
+        self.top_only |= form.height() > view.height();
+        self.asked = Some((form.top(), frame));
+        if self.top_only {
             ui.scroll_to_rect(
                 egui::Rect::from_min_size(form.min, egui::vec2(form.width(), 1.0)),
                 Some(egui::Align::TOP),
             );
-            self.end();
-            return;
+        } else {
+            ui.scroll_to_rect(form, None);
         }
-        self.asked = Some((form.top(), frame));
-        ui.scroll_to_rect(form, None);
-        if self.left > 0 {
+        if self.left == 0 && !self.top_only {
+            self.end();
+        } else {
             ui.ctx().request_repaint();
         }
     }
@@ -2251,13 +2261,15 @@ mod tests {
                 .with_size(egui::vec2(WIDTH, height))
                 .build_ui_state(
                     |ui, campaigns: &mut Campaigns| {
-                        egui::ScrollArea::vertical()
-                            .id_salt("column")
-                            .show(ui, |ui| {
-                                ui.add_space(900.0);
-                                campaigns.show_import_form(ui, "7");
-                                ui.add_space(900.0);
-                            });
+                        // 900 px of the page above and below the form (a block that holds room).
+                        let room = |ui: &mut egui::Ui| {
+                            ui.allocate_exact_size(egui::vec2(1.0, 900.0), egui::Sense::hover());
+                        };
+                        design::ScrollColumn::new("column").show(ui, |ui| {
+                            room(ui);
+                            campaigns.show_import_form(ui, "7");
+                            room(ui);
+                        });
                     },
                     campaigns,
                 )
@@ -2278,11 +2290,6 @@ mod tests {
                 modifiers: egui::Modifiers::NONE,
             });
         };
-        // It opens: the whole form comes into view, and the reveal ends.
-        let mut h = scrolled(400.0);
-        h.run_steps(8);
-        assert!(in_view(&h, 400.0), "the opened form shows whole");
-        assert!(!h.state().reveal.running());
         // A wheel turn while the reveal could still act is not pulled back. The fight comes
         // where a reveal cannot finish: a form taller than its view, which never shows whole.
         // Its top shows once; 200 px of the DM's wheel up from there stays.
@@ -2322,7 +2329,22 @@ mod tests {
             frames <= usize::from(ImportReveal::PASSES) + 1 && !h.state().reveal.running(),
             "a form taller than its view kept its reveal for {frames} frames"
         );
+        let top = h
+            .query_all_by_label("Campaign name")
+            .next()
+            .expect("the name field")
+            .rect()
+            .top();
+        assert!(
+            (-0.5..=120.0).contains(&top),
+            "a form taller than its view shows its top: Campaign name at {top}"
+        );
         h.run_steps(4);
         assert!(!h.state().reveal.running(), "an ended reveal started again");
+        // It opens: the whole form comes into view, and the reveal ends.
+        let mut h = scrolled(400.0);
+        h.run_steps(8);
+        assert!(in_view(&h, 400.0), "the opened form shows whole");
+        assert!(!h.state().reveal.running());
     }
 }
