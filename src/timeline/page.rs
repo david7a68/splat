@@ -27,6 +27,8 @@ const EVENT_TITLE: design::FieldName = crate::field_id!("event_title");
 const EVENT_PLACE: design::FieldName = crate::field_id!("event_place");
 const EVENT_KIND: design::FieldName = crate::field_id!("timeline_event_kind");
 const EVENT_SESSION: design::FieldName = crate::field_id!("timeline_event_session");
+const NEW_EVENTS_SESSION: design::FieldId =
+    crate::field_id!("timeline_new_events_session").once(design::Once::PageSearch);
 const PLACE_AFTER: design::FieldName = crate::field_id!("timeline_place_after");
 /// The page's own view choice: which session it shows. It is the page's state, not saved
 /// object data.
@@ -222,9 +224,6 @@ pub struct TimelinePage {
     pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
     /// Row 123: the campaign's fights and groups by name, for a check result's plan offer.
     pub plan_names: PlanNames,
-    /// Row 123, point 5: why the last plan line's Undo failed, while its journey's block is not
-    /// in view. The next act on checks or the next Undo ends it.
-    plan_fault: Option<checks::UndoFault>,
     focus_length: bool,
     /// Round 29 G142: a roll was made in this journey (its id) at this check (its offset): the
     /// journey's next draw scrolls least so that the check's result and its offer lines are in
@@ -320,7 +319,16 @@ impl RestRulingAction {
 pub struct JustAdded {
     file: super::TimelineFile,
     id: String,
-    at: Instant,
+    /// When it was added, on the frame clock (`crate::frame_clock`).
+    at: f64,
+}
+
+impl JustAdded {
+    /// Does the result end now: `UNDO_ADD_FOR` passed on the frame clock, or another event is
+    /// selected (`selected`)?
+    fn ends(&self, selected: Option<&String>) -> bool {
+        crate::frame_clock::passed(self.at, UNDO_ADD_FOR) || selected != Some(&self.id)
+    }
 }
 
 impl design::results::Kept for JustAdded {
@@ -673,43 +681,46 @@ impl TimelinePage {
 
     /// Where a new event goes, said before it happens. An encounter run goes there too.
     ///
-    /// Kept on `egui::ComboBox`: its narrow control shows the chosen session's short form
-    /// (`Session 1`) while its list shows the whole names, and `design::Dropdown` shows only the
-    /// chosen row's own words (a gap sent to the part's owner).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
+    /// The closed control keeps the short session name; its menu and accessible value keep
+    /// the whole name. The Dropdown part owns the regular weight.
     fn new_events_line(
         &mut self,
         ui: &mut egui::Ui,
         sessions: &[SessionLink],
         current: Option<Uuid>,
+        room: egui::Rect,
     ) {
         ui.label(Type::Small.rich(ui, "Adds to").color(colors().muted));
-        let label = current
-            .and_then(|id| sessions.iter().find(|session| session.id == id))
-            .map_or("No session", |session| short_session(&session.label));
         let mut chosen = current;
-        let inner = egui::ComboBox::from_id_salt("timeline_new_events_session")
-            .truncate()
-            .selected_text(label)
+        let mut dropdown = design::Dropdown::new(NEW_EVENTS_SESSION, "Session for new events")
+            .choice(None, "No session");
+        for session in sessions {
+            dropdown = dropdown.choice_with_short_label(
+                Some(session.id),
+                session.label.as_str(),
+                short_session(&session.label),
+            );
+        }
+        // This header's room starts on its row: its menu opens below, never above it.
+        let mut room = room;
+        room.min.y = room.top().max(ui.cursor().top());
+        let shown = dropdown
+            .within(room)
             .width(design::READER_MEASURE / 4.0)
-            .icon(design::combo_icon)
-            .show_ui(ui, |ui| {
-                design::choice_value(ui, &mut chosen, None, "No session");
-                for session in sessions {
-                    design::choice_wrapped_value(ui, &mut chosen, Some(session.id), &session.label);
-                }
-            });
-        design::named(ui, &inner.response, "Session for new events");
-        inner.response.on_hover_text(label);
+            .show(ui, &mut chosen);
+        design::named(ui, &shown.response, "Session for new events");
         if chosen != current {
             self.new_events_to = Some(chosen);
         }
     }
 
-    fn filters(&mut self, ui: &mut egui::Ui, sessions: &[SessionLink], current: Option<Uuid>) {
+    fn filters(
+        &mut self,
+        ui: &mut egui::Ui,
+        sessions: &[SessionLink],
+        current: Option<Uuid>,
+        room: egui::Rect,
+    ) {
         let before = (self.filter, self.search.clone(), self.session);
         let tabs = |ui: &mut egui::Ui, filter: &mut Filter| {
             design::segmented(
@@ -741,7 +752,10 @@ impl TimelinePage {
                 "Search",
                 160.0,
             );
+            let mut menu_room = room;
+            menu_room.min.y = menu_room.top().max(ui.cursor().top());
             design::Dropdown::new(SESSION_FILTER, "Show one session")
+                .within(menu_room)
                 .choice(None, "All sessions")
                 .choices(
                     sessions
@@ -750,7 +764,7 @@ impl TimelinePage {
                 )
                 .width(150.0)
                 .show(ui, &mut self.session);
-            self.new_events_line(ui, sessions, current);
+            self.new_events_line(ui, sessions, current, room);
         });
         if before != (self.filter, self.search.clone(), self.session) {
             self.reset_detail = true;
@@ -1066,18 +1080,9 @@ impl TimelinePage {
                     }
                 }
                 ListAct::UndoPlanLine => {
-                    self.plan_fault = None;
-                    // Row 123, point 5: the fault keeps its journey: that journey's open block,
-                    // else this footer.
-                    if let Some((journey, act, words)) = notes.undo_plan_line()
-                        && !(self.selected.as_deref() == Some(journey.as_str())
-                            && self.checks.failed_for(&journey, &act, words.clone()))
-                    {
-                        self.plan_fault = Some(checks::UndoFault {
-                            journey,
-                            act,
-                            words,
-                        });
+                    // Row 123: a refused Undo stays on its entry, which both readers show.
+                    if let Some(ticket) = press.ticket {
+                        notes.undo_plan_line(ticket);
                     }
                 }
                 ListAct::File(act) => file_act(book, act, press.ticket),
@@ -1100,20 +1105,10 @@ impl TimelinePage {
         if let Some(line) = notes.event_link_line(frame, ListAct::UndoLinks) {
             messages.kept(line);
         }
-        notes.plan_line_result(&mut messages, ListAct::UndoPlanLine);
-        // Row 123, point 5: a plan line's Undo that failed while its journey's block is not in
-        // view says why here.
-        match self
-            .plan_fault
-            .as_ref()
-            .map(|fault| fault.standing(&book.events))
-        {
-            Some(Some(words)) => {
-                messages.outcome(design::outcome::Outcome::Refused(as_sentence(words)));
-            }
-            // Its journey is gone: the fault has no owner left.
-            Some(None) => self.plan_fault = None,
-            None => {}
+        // Row 123: the plan line's result, or its refused Undo's answer, from the one store the
+        // Session plan reads too.
+        for line in notes.plan_line_lines(frame, ListAct::UndoPlanLine) {
+            messages.kept(line);
         }
         if let Some(offer) = offer {
             messages.outcome(offer.notice(ListAct::UpdateLinks));
@@ -1145,10 +1140,11 @@ impl TimelinePage {
         }
         // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
         let file = book.file();
-        if self.added.get(&file).is_some_and(|shown| {
-            let added = shown.value();
-            added.at.elapsed() >= UNDO_ADD_FOR || self.selected.as_ref() != Some(&added.id)
-        }) {
+        if self
+            .added
+            .get(&file)
+            .is_some_and(|shown| shown.value().ends(self.selected.as_ref()))
+        {
             self.added.owner_changed(&file);
         }
         if let Some(shown) = self.added.get(&file) {
@@ -1697,7 +1693,6 @@ impl TimelinePage {
         checks::note_taken(book, length_taken);
         if let Some(act) = checks_act {
             self.checks.clear_problem();
-            self.plan_fault = None;
             if act == checks::Act::Start {
                 self.focus_length = book.events[index].duration.trim().is_empty();
             }
@@ -1834,7 +1829,7 @@ impl TimelinePage {
             self.added.record(JustAdded {
                 file: book.file(),
                 id,
-                at: Instant::now(),
+                at: crate::frame_clock::now(),
             });
         }
         if let Some(words) = self.dated.clone()
@@ -1871,7 +1866,7 @@ impl TimelinePage {
                 self.added.record(JustAdded {
                     file: book.file(),
                     id,
-                    at: Instant::now(),
+                    at: crate::frame_clock::now(),
                 });
             }
             return;
@@ -1887,7 +1882,29 @@ impl TimelinePage {
             .as_ref()
             .is_some_and(|id| book.events.iter().any(|event| event.id == *id));
         if !(narrow && event_open) {
-            self.filters(ui, sessions, current);
+            // The header is drawn before the body splits. Use the app's current width
+            // decision, including pending keyboard and pointer resize, rather than the
+            // previous pass's panel.
+            let mut room = ui.clip_rect();
+            // The header knows its current clip, not the list footer drawn later. Long
+            // menus keep the part's height cap and inner scroll, as the old ComboBox did.
+            if !narrow && event_open {
+                let natural = design::side_panel_width(page_width);
+                let content_width = page_width.min(design::LIST_MEASURE + natural);
+                let detail = design::Column::panel("timeline_detail_panel", natural).width_within(
+                    ui.ctx(),
+                    egui::Rect::from_min_size(
+                        ui.max_rect().min,
+                        egui::vec2(content_width, ui.available_height()),
+                    ),
+                );
+                room.max.x = room.right().min(
+                    ui.max_rect().left() + content_width
+                        - detail
+                        - ui.style().interaction.resize_grab_radius_side,
+                );
+            }
+            self.filters(ui, sessions, current, room);
         }
         design::gap(ui, design::Gap::XS);
         // Beside Lookup or Notes at a small window, two columns would crush the list.
@@ -2026,6 +2043,33 @@ fn header_kind(event: &Event) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Round 30 B7d: the Add result ends by the frame clock, so a test's frames decide when:
+    /// 29 s after the add it stands, 31 s after it has ended. Another selection ends it at once.
+    #[test]
+    fn the_add_result_ends_by_the_frame_clock() {
+        crate::frame_clock::set(100.0);
+        let added = JustAdded {
+            file: super::super::TimelineFile(std::path::PathBuf::from("Timeline.md")),
+            id: "e1".to_owned(),
+            at: crate::frame_clock::now(),
+        };
+        let selected = Some("e1".to_owned());
+        crate::frame_clock::set(129.0);
+        assert!(
+            !added.ends(selected.as_ref()),
+            "29 s of frames later it stands"
+        );
+        assert!(
+            added.ends(Some(&"e2".to_owned())),
+            "another selection ends it"
+        );
+        crate::frame_clock::set(131.0);
+        assert!(
+            added.ends(selected.as_ref()),
+            "31 s of frames later it has ended"
+        );
+    }
 
     #[test]
     fn iter3_c_closed_long_rest_rows_show_both_rulings() {

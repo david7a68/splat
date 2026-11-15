@@ -4,7 +4,7 @@ use std::fs;
 
 /// FB2: the flagged member in the groups list, the plan and Arrivals, with its line and cause.
 const SCOUT_FAULT: &str =
-    "Scout (as Goblin Warrior) · line\u{a0}15: the change “HP lots” was not read.";
+    "Scout (as Goblin Warrior) · line\u{a0}15: The change “HP lots” was not read.";
 
 /// FB2: each summary of the flagged member is the cause alone; the example `Use a number, such
 /// as HP +5.` belongs to the editor. The found texts also hold each painted row of a wrapped
@@ -345,7 +345,7 @@ pub fn run(d: &mut Driver<'_>) {
         "A lowercase rule heading keeps its warning on the page its repair link opens",
         |d| {
             d.visible_text("Roll NPC initiative")
-                && d.has_containing("combat initiative choice “Lost initiative” is not a rule.")
+                && d.has_containing("Combat initiative choice “Lost initiative” is not a rule.")
         },
     );
     fs::write(&manifest, &saved).unwrap();
@@ -470,7 +470,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Use a number, such as HP +5.");
     d.observe(
         "iter-25-B-FA1-editor",
-        !d.has_containing("Line 15: the change"),
+        !d.has_containing("Line 15: The change"),
         "The group editor's member fault is the one form, not the flag's own sentence",
     );
     d.expect("Goblin Warrior");
@@ -592,7 +592,8 @@ pub fn run(d: &mut Driver<'_>) {
             ),
         );
     }
-    // FD2: the unread value is a warning message, and its example starts at its words.
+    // FD2: the unread value is a message, and its example starts at its words. s30 B11 F2 (R41,
+    // lead ruling): an unread member row is unreadable data, so the message is an error.
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let (tones, words, example) = d.at_size(size, |d| {
             let words = super::glyph_spans(d, "Changes “HP lots” not read.", "Changes");
@@ -608,7 +609,7 @@ pub fn run(d: &mut Driver<'_>) {
         );
         d.observe(
             "iter-22-B-FD2",
-            tones == ["warning"]
+            tones == ["error"]
                 && colour == Some(crate::design::colors().text)
                 && words
                     .first()
@@ -704,7 +705,7 @@ pub fn run(d: &mut Driver<'_>) {
     fs::write(&roster_path, &flagged_roster).unwrap();
     d.click("Reload from disk");
     open_saved_encounter(d, "Shrine of Cinders");
-    d.expect("the change “HP lots” was not read");
+    d.expect("The change “HP lots” was not read");
     assert!(d.is_disabled("Start fight"));
     assert!(!d.app_mut().encounters.has_run());
     d.expect("Edit in Obsidian");
@@ -759,7 +760,9 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     // FC3: the row that blocks Start fight shows in its place, after the last row that reads,
-    // and marks itself once, in the warning tone; no other row does.
+    // and marks itself once; no other row does. s30 B11 (R41, lead ruling): an unread roster row
+    // is a row of a file that cannot be read, so its mark and the message above the roster are
+    // errors, as Save's reason for it is.
     // One label can give two nodes with one rect; a row is one place.
     let mut marked: Vec<(String, egui::Rect)> = d
         .nodes()
@@ -791,17 +794,19 @@ pub fn run(d: &mut Driver<'_>) {
         .find(|node| node.name.ends_with("Line 20 not read"))
         .map(|node| node.rect);
     let last_read = d.place_of("6. Ember Cultist");
+    let message = super::tones_beside(d, "Ember Cultist · line 20: The change");
     d.observe(
         "iter-25-B-FC3",
         marked.len() == 1
-            && marked[0].0 == format!("{} Line 20 not read", crate::design::icons::WARN)
+            && marked[0].0 == format!("{} Line 20 not read", crate::design::icons::ERROR)
             // iter-26-B FA5, AA2: the icon and the words, every painted part of the mark.
             && !tones.is_empty()
-            && tones.iter().all(|tone| *tone == crate::design::colors().result.warning)
+            && tones.iter().all(|tone| *tone == crate::design::colors().result.error)
+            && message == ["error"]
             && mark
                 .zip(last_read)
                 .is_some_and(|(mark, row)| mark.top() > row.bottom()),
-        format!("Marked roster rows {marked:?}, mark colours {tones:?}, mark {mark:?} after row 6 {last_read:?}"),
+        format!("Marked roster rows {marked:?}, mark colours {tones:?}, message {message:?}, mark {mark:?} after row 6 {last_read:?}"),
     );
     d.state("flagged-roster-at-start-fight", Sizes::All);
     // B4 review F2: at 1920 the roster's last control, its whole target, stays in view under the
@@ -830,13 +835,13 @@ pub fn run(d: &mut Driver<'_>) {
         .guard_campaign(&campaign.path);
     d.settle();
     assert!(d.is_disabled("Begin combat"));
-    d.expect("the change “HP lots” was not read");
+    d.expect("The change “HP lots” was not read");
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let (fits, placed) = d.at_size(size, |d| {
             let warning = d
                 .nodes()
                 .into_iter()
-                .find(|node| node.name.contains("the change “HP lots” was not read"));
+                .find(|node| node.name.contains("The change “HP lots” was not read"));
             let header = d.place_of("Begin combat").unwrap();
             let fits = warning
                 .as_ref()
@@ -855,7 +860,7 @@ pub fn run(d: &mut Driver<'_>) {
                 (Some(warning), Some(file)) if file.top() >= warning.rect.bottom() - 1.0 => {
                     super::file_links_at_message_words_by_hand(
                         d,
-                        "Ember Cultist · line 20: the change “HP lots”",
+                        "Ember Cultist · line 20: The change “HP lots”",
                         &roster_path,
                         "Encounters/Shrine of Cinders.md",
                     )
@@ -883,7 +888,7 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     d.expect(
-        "Ember Cultist · line 20: the change “HP lots” was not read. Use a number, such as HP +5.",
+        "Ember Cultist · line 20: The change “HP lots” was not read. Use a number, such as HP +5.",
     );
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let fits = d.at_size(size, |d| {
@@ -928,6 +933,34 @@ pub fn run(d: &mut Driver<'_>) {
             && d.visible_text("Line\u{a0}20\u{a0}not\u{a0}read"),
         format!("Rows from line 20 say so, others do not: {marked:?} of {rows:?}"),
     );
+    // s30 B11 F2 (R41, lead ruling): run setup says the unread roster row as an error, in its
+    // cause and in the row's own mark, as the encounter editor and Save's reason do.
+    let cause = super::tones_beside(
+        d,
+        "Ember Cultist · line 20: The change “HP lots” was not read",
+    );
+    let mut mark = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if clip.intersects(rect) {
+            for section in &text.galley.job.sections {
+                if text.galley.job.text[section.byte_range.clone()]
+                    .contains("Line\u{a0}20\u{a0}not")
+                {
+                    mark.push(section.format.color);
+                }
+            }
+        }
+    });
+    d.observe(
+        "s30-B11-F2-run-setup",
+        cause == ["error"]
+            && !mark.is_empty()
+            && mark
+                .iter()
+                .all(|color| *color == crate::design::colors().result.error),
+        format!("Run setup: the cause {cause:?}, the row marks' colours {mark:?}"),
+    );
     // iter-26-R FA11: the setup file line names the file by its path in the campaign, as the
     // encounter editor does.
     d.observe_both(
@@ -941,7 +974,7 @@ pub fn run(d: &mut Driver<'_>) {
     let one_row = d
         .nodes()
         .iter()
-        .filter(|node| node.name.contains("the change “HP lots” was not read"))
+        .filter(|node| node.name.contains("The change “HP lots” was not read"))
         .count();
     let mut two_flagged = flagged_roster.clone();
     let first = &splat::content::layout::Document::new(&flagged_roster)
@@ -959,7 +992,7 @@ pub fn run(d: &mut Driver<'_>) {
     let warnings = d
         .nodes()
         .iter()
-        .filter(|node| node.name.contains("the change “HP lots” was not read"))
+        .filter(|node| node.name.contains("The change “HP lots” was not read"))
         .count();
     let show_file = d
         .nodes()
@@ -980,7 +1013,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .into_iter()
                 .filter(|node| {
                     node.role == egui::accesskit::Role::Label
-                        && node.name.contains("the change “HP lots” was not read")
+                        && node.name.contains("The change “HP lots” was not read")
                         && node.in_view()
                 })
                 .collect();

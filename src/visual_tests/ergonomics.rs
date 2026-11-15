@@ -264,8 +264,11 @@ fn column_handle(node: &AccessKitNode<'_>, rect: egui::Rect) -> bool {
 /// all the popup's contents inside it. A control is a leaf, so it cannot match.
 fn popup_body(node: &Node<'_>, rect: egui::Rect, parent_is_window: bool) -> bool {
     let access = node.accesskit_node();
-    access.role() == Role::Unknown
-        && access.label().is_none()
+    let unnamed = access.role() == Role::Unknown && access.label().is_none();
+    let dropdown = access.role() == Role::GenericContainer
+        && access.label().is_some_and(|label| !label.trim().is_empty())
+        && access.data().role_description() == Some(crate::design::Dropdown::CHOICES_ROLE);
+    (unnamed || dropdown)
         && parent_is_window
         && !thin(rect)
         && node.children().next().is_some()
@@ -1841,34 +1844,52 @@ mod tests {
     )]
     fn a_menu_over_a_column_splitter_is_an_app_fault() {
         // In a modal dialog over the column, the menu crosses a splitter the dialog blocks.
-        let checks = |choice: &'static str, note: &'static str, modal: bool| {
-            let mut harness =
-                Harness::builder()
-                    .with_size(egui::vec2(600.0, 400.0))
-                    .build_state(
-                        move |ctx, _: &mut crate::Splat| {
-                            let menu = |ui: &mut egui::Ui| {
+        let checks = |choice: &'static str, note: &'static str, modal: bool, tagged: bool| {
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(600.0, 400.0))
+                .build_state(
+                    move |ctx, _: &mut crate::Splat| {
+                        let menu = |ui: &mut egui::Ui| {
+                            if tagged {
+                                let button = ui.button("Open");
+                                let popup = egui::Popup::menu(&button).show(|ui| {
+                                    let _ = ui.button(choice);
+                                    ui.label(note);
+                                });
+                                if let Some(popup) = popup {
+                                    ui.ctx().accesskit_node_builder(popup.response.id, |node| {
+                                        node.set_role(Role::GenericContainer);
+                                        node.set_label("Open choices");
+                                        node.set_role_description(
+                                            crate::design::Dropdown::CHOICES_ROLE,
+                                        );
+                                    });
+                                }
+                            } else {
                                 ui.menu_button("Open", |ui| {
                                     let _ = ui.button(choice);
                                     ui.label(note);
                                 });
-                            };
-                            crate::design::Column::left("encounter_add", 200.0, 150.0..=300.0)
-                                .show(ctx, |ui| {
-                                    if !modal {
-                                        menu(ui);
-                                    }
-                                });
-                            egui::CentralPanel::default().show(ctx, |_| {});
-                            if modal {
-                                egui::Modal::new(egui::Id::new("dialog")).show(ctx, |ui| {
-                                    ui.set_min_width(300.0);
-                                    menu(ui);
-                                });
                             }
-                        },
-                        crate::Splat::default(),
-                    );
+                        };
+                        crate::design::Column::left("encounter_add", 200.0, 150.0..=300.0).show(
+                            ctx,
+                            |ui| {
+                                if !modal {
+                                    menu(ui);
+                                }
+                            },
+                        );
+                        egui::CentralPanel::default().show(ctx, |_| {});
+                        if modal {
+                            egui::Modal::new(egui::Id::new("dialog")).show(ctx, |ui| {
+                                ui.set_min_width(300.0);
+                                menu(ui);
+                            });
+                        }
+                    },
+                    crate::Splat::default(),
+                );
             harness.run();
             harness.get_by_label("Open").click();
             harness.run();
@@ -1909,7 +1930,7 @@ mod tests {
         };
         let wide = "Move this group to Arena Final";
         let note = "Danger: its creatures move with it";
-        let (overlaps, found, blocked) = checks(wide, note, false);
+        let (overlaps, found, blocked) = checks(wide, note, false, false);
         assert_eq!(overlaps, [true; 2], "the wide menu crosses the splitter");
         assert!(!blocked);
         let against_splitter: Vec<_> = found
@@ -1951,7 +1972,23 @@ mod tests {
                 .all(|(check, ..)| check == "no-overlap/egui-chrome"),
             "the menu's own background: {found:?}"
         );
-        let (overlaps, found, blocked) = checks(wide, note, true);
+        // A correctly named Dropdown group must keep the same cross-scope checks.
+        // Removing only popup_body's tagged path must make this assertion fail.
+        let (overlaps, tagged, blocked) = checks(wide, note, false, true);
+        assert_eq!(overlaps, [true; 2]);
+        assert!(!blocked);
+        for name in [wide, "(unnamed Label)"] {
+            assert!(
+                tagged.iter().any(|(check, node, detail)| {
+                    check == APP_VS_CHROME
+                        && (node.contains(name) || detail.contains(name))
+                        && (node.contains("Resize creature search column")
+                            || detail.contains("Resize creature search column"))
+                }),
+                "the named popup still fails for {name}: {tagged:?}"
+            );
+        }
+        let (overlaps, found, blocked) = checks(wide, note, true, false);
         assert_eq!(
             overlaps, [true; 2],
             "the menu in the dialog crosses the splitter"
@@ -1961,7 +1998,7 @@ mod tests {
             found.iter().all(|(check, ..)| check != APP_VS_CHROME),
             "{found:?}"
         );
-        let (overlaps, found, _) = checks("Move", "Danger", false);
+        let (overlaps, found, _) = checks("Move", "Danger", false, false);
         assert_eq!(
             overlaps, [false; 2],
             "the narrow menu is clear of the splitter"

@@ -13,6 +13,8 @@ pub(crate) enum Kind {
     NotText,
     ReadDenied,
     WriteDenied,
+    /// The disk or file system takes no writes at all (mounted read-only).
+    ReadOnly,
     Gone,
     Exists,
     DiskFull,
@@ -44,9 +46,8 @@ impl FileFault {
     /// A failed write of `path`, or of the folder that holds it.
     pub fn write(path: &str, error: &io::Error) -> Self {
         let kind = match error.kind() {
-            io::ErrorKind::PermissionDenied | io::ErrorKind::ReadOnlyFilesystem => {
-                Kind::WriteDenied
-            }
+            io::ErrorKind::ReadOnlyFilesystem => Kind::ReadOnly,
+            io::ErrorKind::PermissionDenied => Kind::WriteDenied,
             io::ErrorKind::StorageFull | io::ErrorKind::QuotaExceeded => Kind::DiskFull,
             io::ErrorKind::NotFound => Kind::Gone,
             io::ErrorKind::AlreadyExists => Kind::Exists,
@@ -82,6 +83,7 @@ impl FileFault {
             Kind::NotText => format!("Splat cannot read {path} as text."),
             Kind::ReadDenied => format!("Splat has no permission to read {path}."),
             Kind::WriteDenied => format!("Splat has no permission to save {path}."),
+            Kind::ReadOnly => format!("The disk is read-only, so Splat cannot save {path}."),
             Kind::Gone => format!("Splat cannot find {path}."),
             Kind::Exists => format!("{path} already exists."),
             Kind::DiskFull => format!("The disk is full, so Splat cannot save {path}."),
@@ -103,6 +105,10 @@ impl FileFault {
             Kind::ReadDenied => ("Give your user account permission to read the file.", false),
             Kind::WriteDenied => (
                 "Give your user account permission to change the file and its folder.",
+                false,
+            ),
+            Kind::ReadOnly => (
+                "Make the disk writable, or move the campaign to a disk you can write to.",
                 false,
             ),
             Kind::Gone => ("It was moved or deleted outside Splat.", false),
@@ -136,6 +142,7 @@ impl FileFault {
             Kind::NotText => "Not a text file",
             Kind::ReadDenied => "No permission to read",
             Kind::WriteDenied => "No permission to save",
+            Kind::ReadOnly => "Disk is read-only",
             Kind::Gone => "File not found",
             Kind::Exists => "File already exists",
             Kind::DiskFull => "Disk is full",
@@ -297,13 +304,24 @@ mod tests {
 
     #[test]
     fn iter18_d_every_kind_names_its_file_and_a_recovery() {
+        // Round 30 B7d (review F3 of PR 416): read-only storage has its own words; it is not a
+        // permission the DM's account lacks.
+        let read_only = FileFault::write(
+            "NPCs/Rook.md",
+            &io::Error::new(io::ErrorKind::ReadOnlyFilesystem, "raw"),
+        );
+        assert_eq!(
+            read_only.message(),
+            "The disk is read-only, so Splat cannot save NPCs/Rook.md. Make the disk writable, \
+             or move the campaign to a disk you can write to."
+        );
         let cases = [
             (io::ErrorKind::InvalidData, true, Kind::NotText),
             (io::ErrorKind::PermissionDenied, true, Kind::ReadDenied),
             (io::ErrorKind::NotFound, true, Kind::Gone),
             (io::ErrorKind::Interrupted, true, Kind::CannotRead),
             (io::ErrorKind::PermissionDenied, false, Kind::WriteDenied),
-            (io::ErrorKind::ReadOnlyFilesystem, false, Kind::WriteDenied),
+            (io::ErrorKind::ReadOnlyFilesystem, false, Kind::ReadOnly),
             (io::ErrorKind::StorageFull, false, Kind::DiskFull),
             (io::ErrorKind::AlreadyExists, false, Kind::Exists),
             (io::ErrorKind::NotFound, false, Kind::Gone),

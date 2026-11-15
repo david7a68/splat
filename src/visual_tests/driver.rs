@@ -992,6 +992,18 @@ impl<'a> Driver<'a> {
         nodes
     }
 
+    /// The full accessible value of the combo box with this exact name.
+    pub fn combo_value(&self, name: &str) -> Option<String> {
+        self.harness
+            .root()
+            .children_recursive()
+            .find(|node| {
+                let access = node.accesskit_node();
+                access.role() == Role::ComboBox && access.label().as_deref() == Some(name)
+            })
+            .and_then(|node| node.accesskit_node().value())
+    }
+
     /// The accessible description of every node on screen that has one.
     pub fn descriptions(&self) -> Vec<String> {
         let mut found = Vec::new();

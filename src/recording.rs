@@ -210,6 +210,9 @@ pub struct Recorder {
     size: u64,
     grew: Instant,
     heard: Instant,
+    /// When sound was last heard, on the frame clock (`crate::frame_clock`): `Hearing sound`
+    /// ends `HEARD_FOR` later by the frame clock. `heard` stays the wall clock for silence.
+    heard_at: f64,
     checked: Instant,
 }
 
@@ -267,6 +270,7 @@ impl Recorder {
             size: 0,
             grew: now,
             heard: now,
+            heard_at: crate::frame_clock::now(),
             checked: now,
         }
     }
@@ -283,7 +287,7 @@ impl Recorder {
 
     /// Sound in the last few seconds.
     pub fn heard_just_now(&self) -> bool {
-        self.heard.elapsed() < HEARD_FOR
+        !crate::frame_clock::passed(self.heard_at, HEARD_FOR)
     }
 
     pub fn health(&self) -> &Health {
@@ -293,6 +297,7 @@ impl Recorder {
     #[cfg(test)]
     pub fn simulate_health(&mut self, health: Health) {
         self.heard = Instant::now();
+        self.heard_at = crate::frame_clock::now();
         self.health = health;
     }
 
@@ -332,6 +337,7 @@ impl Recorder {
             let peak = last_second_peak(&self.path, size);
             if peak.is_some_and(|peak| peak >= SILENCE_PEAK) {
                 self.heard = now;
+                self.heard_at = crate::frame_clock::now();
                 self.health = Health::Hearing;
             } else if now.duration_since(self.heard) >= SILENT_AFTER {
                 self.health = Health::Silent;
@@ -850,6 +856,27 @@ mod tests {
         assert_eq!(
             recorder.health(),
             &Health::Stopped("no such device".to_owned())
+        );
+    }
+
+    /// Round 30 B7d: `Hearing sound` ends `HEARD_FOR` after the last sound by the frame clock,
+    /// so a test's frames decide when the word turns to `Quiet`.
+    #[test]
+    fn hearing_ends_by_the_frame_clock() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut recorder =
+            Recorder::start(Tool::Simulated, None, dir.path().join("out.wav")).unwrap();
+        crate::frame_clock::set(10.0);
+        recorder.simulate_health(Health::Hearing);
+        crate::frame_clock::set(14.5);
+        assert!(
+            recorder.heard_just_now(),
+            "4.5 s of frames later it still hears"
+        );
+        crate::frame_clock::set(15.5);
+        assert!(
+            !recorder.heard_just_now(),
+            "5.5 s of frames later it is quiet"
         );
     }
 

@@ -72,6 +72,14 @@ impl Repair {
     fn dirty(&self) -> bool {
         self.draft != self.baseline
     }
+    /// Save's check of the draft as the save row's typed diagnosis: the one value that gives
+    /// the save row's `Invalid` and the footer's message of the same fault their tone (R41).
+    /// A note that does not parse cannot be read, so it is an error in every place.
+    fn diagnosis(&self) -> Option<design::save_row::Diagnosis<'_>> {
+        self.refusal
+            .as_deref()
+            .map(design::save_row::Diagnosis::refused)
+    }
     /// Save asks its own question again, then writes. A refusal is Invalid with its cause, never
     /// a failed Save: `Not saved.` belongs only to a write that failed on the disk. True when the
     /// draft was written.
@@ -313,7 +321,8 @@ enum ContentPress {
 enum ContentFault<'a> {
     /// Save's or a load's error, or the change check's (the system's or the workspace's words).
     Error(&'a str),
-    /// Campaign.md is missing: what Splat can write (the campaigns' preview words).
+    /// Campaign.md is missing: what Splat can write (the campaigns' preview words). A missing
+    /// file is a warning (R41), as the missing manifests and folders are.
     MissingCampaign(&'a str),
     /// The campaign folder is not on disk.
     NoFolder,
@@ -325,8 +334,12 @@ enum ContentFault<'a> {
     },
     /// A repair's Save failed on the disk.
     RepairNotSaved { path: &'a str, cause: &'a str },
-    /// Save's own check refuses an open repair's draft.
-    RepairRefused { path: &'a str, cause: &'a str },
+    /// Save's own check refuses an open repair's draft: `found`, the diagnosis that also gives
+    /// the repair's save row its word, so both say the fault in one tone (R41).
+    RepairRefused {
+        path: &'a str,
+        found: &'a design::save_row::Diagnosis<'a>,
+    },
     /// A package manifest that cannot be used; `on_disk`: it is there but broken (the error
     /// tone), else it is gone (a warning).
     Manifest {
@@ -355,13 +368,15 @@ impl design::outcome::Fault for ContentFault<'_> {
     fn severity(&self) -> design::outcome::Severity {
         use design::outcome::Severity;
         match self {
-            Self::Error(_) | Self::MissingCampaign(_) | Self::Unreadable { .. } => {
-                Severity::CannotRead
-            }
+            Self::Error(_) | Self::Unreadable { .. } => Severity::CannotRead,
             Self::RepairNotSaved { .. } => Severity::NotSaved,
+            Self::RepairRefused { found, .. } => match found.tone() {
+                Some(design::Tone::Error) => Severity::CannotRead,
+                _ => Severity::NeedsFixing,
+            },
             Self::Manifest { on_disk: true, .. } => Severity::CannotRead,
-            Self::NoFolder
-            | Self::RepairRefused { .. }
+            Self::MissingCampaign(_)
+            | Self::NoFolder
             | Self::Manifest { on_disk: false, .. }
             | Self::Unavailable { .. }
             | Self::Flag(_)
@@ -418,9 +433,11 @@ impl design::outcome::Fault for ContentFault<'_> {
                     None => first,
                 }
             }
-            Self::RepairRefused { cause, .. } | Self::Flag(cause) => {
-                outside(cause).unwrap_or(crate::sentence!("This needs fixing."))
-            }
+            Self::RepairRefused { found, .. } => found
+                .blocking()
+                .and_then(&outside)
+                .unwrap_or(crate::sentence!("This needs fixing.")),
+            Self::Flag(cause) => outside(cause).unwrap_or(crate::sentence!("This needs fixing.")),
             Self::Manifest {
                 package,
                 problem,
@@ -1568,10 +1585,10 @@ impl CampaignContent {
                     path: &repair.path,
                     cause: failure,
                 }));
-            } else if let Some(refusal) = repair.refusal.as_ref().filter(|_| open) {
+            } else if let Some(found) = repair.diagnosis().filter(|_| open) {
                 messages.outcome(FaultMessage::new(&ContentFault::RepairRefused {
                     path: &repair.path,
-                    cause: refusal,
+                    found: &found,
                 }));
             }
         }
@@ -1965,6 +1982,7 @@ impl CampaignContent {
                     // is the active one. After Save failed on the disk it stays open to try
                     // again, but `owner` skips it until the next edit.
                     let mut state = design::DraftState::new(
+                        design::save_row::DraftOrigin::Saved, // a repair edits a file on disk
                         if repair.dirty() {
                             design::save_row::Changed::Yes
                         } else {
@@ -1977,8 +1995,8 @@ impl CampaignContent {
                         },
                     )
                     .locks_campaign();
-                    if let Some(refusal) = &repair.refusal {
-                        state = state.refused(refusal.as_str());
+                    if let Some(found) = repair.diagnosis() {
+                        state = state.check(found.into_owned());
                     }
                     if repair.failure.is_some() {
                         state = state.not_saved();

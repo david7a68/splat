@@ -386,7 +386,38 @@ fn row_galleys(
     let c = colors();
     let room = (width - 2.0 * S - ICON_SLOT).max(1.0);
     let wrap = |words: &str, font: egui::FontId, color| {
-        ui.fonts_mut(|fonts| fonts.layout(words.to_owned(), font, color, room))
+        // Egui's fallback splits an overwide word. Shorten only such words first, so the
+        // ordinary wrapping path can break at word boundaries and fitting text stays exact.
+        let mut fitted = None;
+        let mut start = 0;
+        let mut copied = 0;
+        for token in words.split_inclusive(char::is_whitespace) {
+            let word = token.trim_end_matches(char::is_whitespace);
+            if number_width(ui, word, &font) > room {
+                let short = one_line(ui, word, font.clone(), color, room);
+                let short: String = short
+                    .rows
+                    .iter()
+                    .flat_map(|row| row.glyphs.iter().map(|glyph| glyph.chr))
+                    .collect();
+                let value = fitted.get_or_insert_with(String::new);
+                value.push_str(&words[copied..start]);
+                value.push_str(&short);
+                copied = start + word.len();
+            }
+            start += token.len();
+        }
+        if let Some(value) = &mut fitted {
+            value.push_str(&words[copied..]);
+        }
+        ui.fonts_mut(|fonts| {
+            fonts.layout(
+                fitted.unwrap_or_else(|| words.to_owned()),
+                font,
+                color,
+                room,
+            )
+        })
     };
     (
         wrap(label, Type::Body.font(ui), color),
@@ -402,7 +433,7 @@ pub(super) fn choice_wrapped_height(ui: &Ui, label: &str, reason: Option<&str>, 
 }
 
 /// [`choice`] in a list whose rows wrap (the drop-down's, `Dropdown`): the same check column and
-/// look, its words wrapped inside the row (never cut), so two names that differ at their end
+/// look, its words wrapped at word boundaries inside the row (an overwide word ends in an ellipsis), so two names that differ at their end
 /// stay apart; a blocked choice shows its reason below its words and takes no press and no
 /// keyboard focus. This is the form for words from the user's data (X2): it takes `&str` of any
 /// length. Its width follows [`choice`]'s rule; only its words wrap instead of being cut.
