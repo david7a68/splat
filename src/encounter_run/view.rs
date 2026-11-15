@@ -10918,7 +10918,10 @@ mod tests {
         harness.key_press(Key::Enter);
         harness.run_steps(2);
         // Nothing pressed: no refusal either (the run's own check refuses a roll with no bonus).
-        let pressed = (run.borrow().state.participants.len(), run.borrow().error.clone());
+        let pressed = (
+            run.borrow().state.participants.len(),
+            run.borrow().error.clone(),
+        );
         assert_eq!(
             pressed,
             (rows, None),
