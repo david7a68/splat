@@ -2473,8 +2473,33 @@ fn replace_missing_creature(
         ui.checkbox(&mut all, format!("Replace all {count} {name} rows"));
     }
     let query = search.to_lowercase();
+    // The five, kept for this picker and worked out again only when the words or the
+    // campaign's encounters (a new read: `Snapshot::revision`) change: a repaint ranks nothing
+    // (review of PR 450, P2).
+    let ranked_key = key.with("ranked");
+    let found = match ui
+        .ctx()
+        .data(|data| data.get_temp::<ReplacementKept>(ranked_key))
+        .filter(|kept| kept.snapshot == snapshot.revision && kept.query == query)
+    {
+        Some(kept) => kept.found,
+        None => {
+            let found = std::sync::Arc::new(replacement_indices(&snapshot.creatures, &query));
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(
+                    ranked_key,
+                    ReplacementKept {
+                        snapshot: snapshot.revision,
+                        query: query.clone(),
+                        found: found.clone(),
+                    },
+                );
+            });
+            found
+        }
+    };
     let mut replaced = None;
-    for creature in replacement_matches(&snapshot.creatures, &query) {
+    for creature in found.iter().filter_map(|&at| snapshot.creatures.get(at)) {
         ui.push_id(creature.id, |ui| {
             let (chosen, read) = creature_result_row(ui, creature, "Use", false);
             if chosen {
@@ -2502,26 +2527,54 @@ fn replace_missing_creature(
 /// `matching::Typed::creature`) and then by origin, as the encounter search ranks them. They are
 /// ranked before the five are taken, so the exact name is never left out. With no words, the
 /// list's first five.
+#[cfg(test)]
 fn replacement_matches<'a>(creatures: &'a [Creature], query: &str) -> Vec<&'a Creature> {
-    let typed = crate::matching::Typed::new(query);
-    let mut found: Vec<(crate::matching::Rank, &Creature)> = creatures
+    replacement_indices(creatures, query)
+        .into_iter()
+        .map(|at| &creatures[at])
+        .collect()
+}
+
+/// `replacement_matches` as the places of the five in `creatures`. With no words it stops at
+/// the fifth creature it can offer; with words it ranks as typed only, so no typo is worked
+/// out (review of PR 450).
+fn replacement_indices(creatures: &[Creature], query: &str) -> Vec<usize> {
+    let offered = creatures
         .iter()
-        .filter(|c| !c.linked)
-        .filter_map(|c| {
-            if query.is_empty() {
-                return Some((crate::matching::Rank::typed(0), c));
-            }
-            let rank = typed
-                .creature(&c.lower, crate::matching::words(&c.lower))
-                .filter(|rank| !rank.typo)?;
-            Some((rank, c))
+        .enumerate()
+        .filter(|(_, c)| !c.linked)
+        .inspect(|_| {
+            #[cfg(test)]
+            REPLACEMENT_NAMES.with(|names| names.set(names.get() + 1));
+        });
+    if query.is_empty() {
+        return offered.map(|(at, _)| at).take(5).collect();
+    }
+    let typed = crate::matching::Typed::new(query);
+    let mut found: Vec<(crate::matching::Rank, crate::lookup::Origin, usize)> = offered
+        .filter_map(|(at, c)| {
+            let rank = typed.creature_as_typed(&c.lower, crate::matching::words(&c.lower))?;
+            Some((rank, c.origin, at))
         })
         .collect();
-    if !query.is_empty() {
-        // Stable: the list's order stays inside one rank and origin.
-        found.sort_by_key(|&(rank, c)| (rank, c.origin));
-    }
-    found.into_iter().map(|(_, c)| c).take(5).collect()
+    // Stable: the list's order stays inside one rank and origin.
+    found.sort_by_key(|&(rank, origin, _)| (rank, origin));
+    found.into_iter().map(|(.., at)| at).take(5).collect()
+}
+
+/// One replacement picker's five, with the read of the encounters and the words they are for.
+#[derive(Clone)]
+struct ReplacementKept {
+    snapshot: Uuid,
+    query: String,
+    found: std::sync::Arc<Vec<usize>>,
+}
+
+// Creatures the replacement picker visited on this thread, for a test that a repaint visits
+// none.
+#[cfg(test)]
+thread_local! {
+    static REPLACEMENT_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // Group members use the same picker without the roster's bulk action.
@@ -7269,7 +7322,10 @@ impl Encounters {
                 ))
             });
             if let Some(index) = index {
-                for (package, entry, name, owner) in index.unused_creatures(&parsed.words) {
+                // Kept for this search and worked out again only when its words or the index
+                // change: a repaint with no match as typed ranks nothing (review of PR 450).
+                let unused = index.unused_creatures_kept(ui.ctx(), response.id, &parsed.words);
+                for &(package, entry, ref name, ref owner) in unused.iter() {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(
                             Type::Small
@@ -8507,6 +8563,56 @@ mod tests {
             .collect();
         assert_eq!(listed.len(), 5, "fixture: five creatures listed");
         assert_eq!(names(""), listed);
+        // P2 of the review of PR 450: the picker keeps its five. A repaint with the same words
+        // visits no creature; new words rank again, as typed only (no typo compared); with no
+        // words it stops at the fifth it can offer.
+        use egui_kittest::kittest::Queryable;
+        let visited = || REPLACEMENT_NAMES.with(std::cell::Cell::get);
+        let typos = || crate::matching::TYPO_CHECKS.with(std::cell::Cell::get);
+        let offered = snapshot.creatures.iter().filter(|c| !c.linked).count();
+        assert!(offered > 5, "fixture: more creatures than the five");
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 600.0))
+            .build_ui_state(
+                |ui, snapshot: &mut Snapshot| {
+                    let _ = replace_missing_creature(ui, snapshot, 1, "Missing");
+                },
+                snapshot,
+            );
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let empty = visited();
+        harness.get_by_label("Replacement creature").click();
+        harness.run_steps(1);
+        harness
+            .get_by_label("Replacement creature")
+            .type_text("fenstalker");
+        harness.run_steps(3);
+        let (seen, compared) = (visited(), typos());
+        harness.run_steps(5);
+        assert_eq!(visited(), seen, "an unchanged repaint visits no creature");
+        assert!(seen > empty, "the words ranked");
+        harness.get_by_label("Replacement creature").type_text(" ");
+        harness.run_steps(3);
+        assert!(visited() > seen, "new words rank again");
+        assert_eq!(typos(), compared, "as typed only: no typo is compared");
+        // Another read of the encounters (a new revision) ranks again.
+        let seen = visited();
+        *harness.state_mut() = Snapshot::load(&active, &[]).unwrap();
+        harness.run_steps(2);
+        assert!(
+            visited() > seen,
+            "another read of the encounters ranks again"
+        );
+        // No words: the first five it can offer, and no more visited.
+        let before = visited();
+        let fresh = Snapshot::load(&active, &[]).unwrap();
+        assert_eq!(
+            replacement_indices(&fresh.creatures, "").len(),
+            5,
+            "the list's first five"
+        );
+        assert_eq!(visited() - before, 5, "it stops at the fifth");
     }
 
     #[test]
