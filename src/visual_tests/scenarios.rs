@@ -17925,7 +17925,9 @@ pub mod session_recording {
         d.click(&process);
         d.expect("Summary");
         d.click("Summary");
-        d.press_ctrl(Key::K);
+        if !d.in_view(SEARCH_LOOKUP) {
+            d.press_ctrl(Key::K);
+        }
         d.state_prepared("recording-view-menu-boundary", Sizes::Small, |d| {
             d.click_starting("Recording view:");
         });
