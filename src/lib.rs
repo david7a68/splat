@@ -542,6 +542,8 @@ impl Splat {
             Some("Stop the recording to change campaigns.")
         } else if self.sessions.processing() {
             Some("Wait for processing to finish, or cancel it, to change campaigns.")
+        } else if self.campaign_content.applying() {
+            Some("Wait until Apply has finished.")
         } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
             Some("Resolve the unsaved session file to change campaigns.")
         } else if self.world_page.dirty()
