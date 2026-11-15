@@ -303,10 +303,21 @@ impl<'a, T> Shown<'a, T> {
         frame: &'f super::outcome::PaneFrame,
         make: impl FnOnce(&T) -> super::outcome::KeptOutcome<A>,
     ) -> super::outcome::KeptLine<'f, A> {
+        self.outcome_told_apart(frame, None, make)
+    }
+
+    /// `outcome`, with the place of a refused attempt's answer told apart by `apart`
+    /// (`Refusal::words_told_apart`), for a reader that shows two answers that would read alike.
+    pub fn outcome_told_apart<'f, A>(
+        self,
+        frame: &'f super::outcome::PaneFrame,
+        apart: Option<&Name>,
+        make: impl FnOnce(&T) -> super::outcome::KeptOutcome<A>,
+    ) -> super::outcome::KeptLine<'f, A> {
         let refused = self.refused.map(|refused| {
             (
                 refused.order,
-                refused.refusal.words(),
+                refused.refusal.words_told_apart(apart),
                 refused.refusal.tone(),
             )
         });
@@ -647,6 +658,37 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             true
         });
         ended
+    }
+
+    /// A refused attempt whose offered recovery succeeded (the DM saved the draft the answer
+    /// asked to save): `recovered` says so, from the value and its refusal. Its entry ends, with
+    /// its answer: the act it answered is done. How many ended. Other entries stay.
+    pub fn end_recovered(&mut self, mut recovered: impl FnMut(&T, &Refusal) -> bool) -> usize {
+        let before = self.entries.len();
+        self.entries.retain(|entry| {
+            !entry
+                .refused
+                .as_ref()
+                .is_some_and(|refused| recovered(&entry.value, &refused.refusal))
+        });
+        before - self.entries.len()
+    }
+
+    /// Say again why a refused attempt's Undo waits, when the reason changed with no act (two
+    /// files now hold its note): `restate` gives the new refusal, or `None` to keep it. The
+    /// attempt's order stays: a restatement is not an act. How many were restated.
+    pub fn restate_refusals(&mut self, mut restate: impl FnMut(&T) -> Option<Refusal>) -> usize {
+        let mut restated = 0;
+        for entry in &mut self.entries {
+            if let Some(refused) = &mut entry.refused
+                && let Some(refusal) = restate(&entry.value)
+                && refusal != refused.refusal
+            {
+                refused.refusal = refusal;
+                restated += 1;
+            }
+        }
+        restated
     }
 
     /// The offer `ticket` names, used up by its press; `None` when it was replaced or ended.

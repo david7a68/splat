@@ -773,7 +773,8 @@ pub struct Sessions {
     last_check: Option<Instant>,
     last_scan: Option<Instant>,
     /// Row 123: a count that changes when a listing of the folder (`refresh`) finds other notes
-    /// (an id, a file or a label), so a plan line's owner is checked against the notes only then.
+    /// (an id, a file, a second file or a label), so a plan line's owner is checked against the notes
+    /// only then.
     pub(super) notes_revision: u64,
     /// The campaign's manifest changed, so what holds a copy of it must reload.
     pub manifest_changed: Option<PathBuf>,
@@ -2520,7 +2521,15 @@ impl Sessions {
         };
         let changed = place(&notes) != place(&self.notes);
         self.wants_index_refresh |= changed;
-        if changed {
+        // A second file for a session (a backup, a sync copy) changes which file a plan line's
+        // Undo may write, so it counts too.
+        let copies = |notes: &[Note]| -> Vec<(Uuid, Vec<PathBuf>)> {
+            notes
+                .iter()
+                .map(|note| (note.id, note.also.clone()))
+                .collect()
+        };
+        if changed || copies(&notes) != copies(&self.notes) {
             // Row 123: a plan line's owners are checked again only now.
             self.notes_revision += 1;
         }

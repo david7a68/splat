@@ -247,6 +247,8 @@ pub enum Cause {
     Unreadable(File),
     /// `The session note could not be saved.` An error.
     NotSaved(File),
+    /// `Two files hold the session note.` A warning: Splat cannot tell which one to change.
+    TwoFiles(File),
 }
 
 /// The DM's next step: a bounded operation on a real target, whose words this part writes.
@@ -265,6 +267,8 @@ pub enum Recovery {
     PutBack(File),
     /// `Check that session’s note file in its folder, then press Undo again.`
     CheckFile(File),
+    /// `Keep one copy of that session’s note file in its folder, then press Undo again.`
+    KeepOneFile(File),
 }
 
 /// A refused act's answer: what was not done, why, and the next step. Its fields are private, it
@@ -289,33 +293,51 @@ impl Refusal {
     /// is an error; a file that changed, went or holds another note is a warning.
     pub fn tone(&self) -> Tone {
         match self.cause {
-            Cause::Changed(_) | Cause::Conflict(_) | Cause::Gone(_) | Cause::Replaced(_) => {
-                Tone::Warning
-            }
+            Cause::Changed(_)
+            | Cause::Conflict(_)
+            | Cause::Gone(_)
+            | Cause::Replaced(_)
+            | Cause::TwoFiles(_) => Tone::Warning,
             Cause::Unreadable(_) | Cause::NotSaved(_) => Tone::Error,
         }
     }
 
+    /// Its next step, for the owner's end events: a recovery that succeeded ends it
+    /// (`Results::end_recovered`).
+    pub fn recovery(&self) -> Recovery {
+        self.recovery
+    }
+
     /// The whole answer: the act not done, the cause, the next step.
     pub fn words(&self) -> Sentence {
+        self.words_told_apart(None)
+    }
+
+    /// The whole answer, its place told apart from another answer's by `apart` (a file and a
+    /// journey: `Session 1 (Road.md, Ford crossing)`), when two answers would read alike.
+    pub fn words_told_apart(&self, apart: Option<&Name>) -> Sentence {
+        let place = |name: &Name| match apart {
+            Some(apart) => format!("{} ({})", name.as_str(), apart.as_str()),
+            None => name.as_str().to_owned(),
+        };
         let act = match &self.act {
             FailedAct::NotRemoved { what, from } => crate::sentence!(
                 "The {} for {} was not removed from {}.",
                 what.kind.noun(),
                 what.name.as_str(),
-                from.as_str()
+                place(from)
             ),
-            FailedAct::LeftDraft { what, place } => crate::sentence!(
+            FailedAct::LeftDraft { what, place: at } => crate::sentence!(
                 "The {} for {} was taken out of the draft of {}, and the draft was not saved.",
                 what.kind.noun(),
                 what.name.as_str(),
-                place.as_str()
+                place(at)
             ),
             FailedAct::NotDeleted { what, from } => crate::sentence!(
                 "The {} for {} was not deleted from {}.",
                 what.kind.noun(),
                 what.name.as_str(),
-                from.as_str()
+                place(from)
             ),
         };
         let cause = match &self.cause {
@@ -332,6 +354,7 @@ impl Refusal {
             Cause::NotSaved(file) => {
                 crate::sentence!("The {} could not be saved.", file.noun())
             }
+            Cause::TwoFiles(file) => crate::sentence!("Two files hold the {}.", file.noun()),
         };
         let next = match self.recovery {
             Recovery::ByHand { file, change } => {
@@ -352,6 +375,10 @@ impl Refusal {
             ),
             Recovery::CheckFile(file) => crate::sentence!(
                 "Check {} in its folder, then press Undo again.",
+                file.file()
+            ),
+            Recovery::KeepOneFile(file) => crate::sentence!(
+                "Keep one copy of {} in its folder, then press Undo again.",
                 file.file()
             ),
         };

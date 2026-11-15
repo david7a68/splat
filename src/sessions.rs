@@ -1913,6 +1913,19 @@ impl NoteUndo {
         &self.after
     }
 
+    /// Whether this draft is the note the act changed, saved, with the words (and properties)
+    /// from before the act: the Undo is done, also when its own save failed and a later Save of
+    /// the draft wrote it.
+    pub fn undone(&self, draft: &Draft) -> bool {
+        self.owns(draft)
+            && !draft.unsaved()
+            && draft.body == self.before
+            && self
+                .properties
+                .as_ref()
+                .is_none_or(|properties| properties.0 == draft.prefix)
+    }
+
     /// Whether the act's fragment is in the file. One whose save failed waits in the draft.
     pub fn written(&self) -> bool {
         self.written
