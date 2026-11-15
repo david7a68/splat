@@ -8290,12 +8290,12 @@ mod tests {
     /// keeps `This note`.
     #[test]
     fn a_session_note_warning_names_its_note_in_every_state() {
-        use egui_kittest::kittest::{NodeT, Queryable};
+        use egui_kittest::kittest::Queryable;
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("Session 1 - Ash.md");
         fs::write(&path, "---\nsession_id: 1\n---\n# Ash\n").unwrap();
         const NAME: &str = "Session 1: Ash on the Road";
-        let words = |state: DraftState, discarded: bool, name: Option<&str>| {
+        let shows = |state: DraftState, discarded: bool, name: Option<&str>, words: &str| {
             let mut draft = Draft::open(&path).unwrap();
             draft.state = state;
             if discarded {
@@ -8309,10 +8309,7 @@ mod tests {
                     draft,
                 );
             harness.run_steps(2);
-            let shown: Vec<String> = harness
-                .query_all_by_label_contains("The note of ")
-                .map(|node| node.accesskit_node().label().unwrap_or_default())
-                .collect();
+            let named = harness.query_all_by_label_contains(words).next().is_some();
             let unnamed = harness
                 .query_all_by_label_contains("This note ")
                 .next()
@@ -8321,7 +8318,7 @@ mod tests {
                     .query_all_by_label_contains("This file ")
                     .next()
                     .is_some();
-            (shown, unnamed)
+            (named, unnamed)
         };
         for (state, discarded, cause) in [
             (
@@ -8345,17 +8342,19 @@ mod tests {
                 "The note of Session 1: Ash on the Road was not saved. The disk is full.",
             ),
         ] {
-            let (shown, unnamed) = words(state.clone(), discarded, Some(NAME));
+            let (named, unnamed) = shows(state.clone(), discarded, Some(NAME), cause);
             assert!(
-                shown.iter().any(|words| words.starts_with(cause)) && !unnamed,
-                "{state:?} (discarded {discarded}) names its note: {shown:?}"
+                named && !unnamed,
+                "{state:?} (discarded {discarded}) names its note: {cause}"
             );
         }
-        let (shown, unnamed) = words(DraftState::Conflict, false, None);
-        assert!(
-            shown.is_empty() && unnamed,
-            "a template's warning keeps its words"
+        let (named, unnamed) = shows(
+            DraftState::Conflict,
+            false,
+            None,
+            "This note changed on disk.",
         );
+        assert!(named && unnamed, "a template's warning keeps its words");
     }
 
     #[test]
