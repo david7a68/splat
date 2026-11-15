@@ -1721,14 +1721,7 @@ impl Splat {
                         // Round 28 FO2: the rail says `Sync stopped` on every page, as a link
                         // to Party; the strip does not say it again.
                         if strip.sync_stopped && !self.party.sync_stopped {
-                            design::status(
-                                ui,
-                                Status {
-                                    icon: icons::SYNC_OFF,
-                                    word: "Sync stopped",
-                                    color: c.sync.pending,
-                                },
-                            );
+                            design::status(ui, party::SyncStopped::rail());
                         }
                         if let Some(name) = strip
                             .sync_error

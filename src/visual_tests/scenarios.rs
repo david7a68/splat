@@ -6219,7 +6219,22 @@ pub mod settings {
             format!("Gaps after temporary HP: {gaps:?}"),
         );
         party_body_takes_presses(d, "iter-27-C-press-stopped", STOPPED);
-        d.state("sync-stopped-recovery", Sizes::All);
+        d.state_prepared("sync-stopped-recovery", Sizes::All, |d| {
+            // s30 B11 (R41): the rail's `Sync stopped` and the Party footer's notice of it take
+            // one tone, a warning.
+            let (rail, footer) = (
+                status_tones(d, "Sync stopped"),
+                tones_beside(d, "Combat sync stopped when the connection"),
+            );
+            d.observe(
+                "s30-B11-tone-sync-stopped",
+                rail == ["warning"] && footer == ["warning"],
+                format!(
+                    "At {:?}, the rail {rail:?} and the Party footer {footer:?}",
+                    d.window_size()
+                ),
+            );
+        });
         assert!(d.in_view("Dismiss this message"));
         d.click("Dismiss this message");
         party_body_takes_presses(d, "iter-27-C-press-stopped-dismissed", "");
