@@ -1019,6 +1019,25 @@ impl CampaignContent {
         }
     }
 
+    /// The one place that changes the check's campaign. Its stored data (proposals, declined
+    /// choices, error, the time of the last check) belongs to that campaign and ends when the
+    /// owner changes, whether or not a check is running.
+    fn set_check_owner(&mut self, owner: Option<Uuid>) {
+        if self.reconcile.campaign != owner {
+            self.reconcile.proposals.clear();
+            self.reconcile.declined.clear();
+            self.reconcile.error = None;
+            self.reconcile.checked_at = None;
+        }
+        self.reconcile.campaign = owner;
+    }
+
+    /// An Apply runs: its writes are under way, so the campaign switch waits for it
+    /// (`Splat::blocked_switch`) and it is never cancelled.
+    pub fn applying(&self) -> bool {
+        self.reconcile.pending.is_some() && self.reconcile.applying
+    }
+
     /// Whether `tick` starts a check for the app's campaign `active`: none is running, and the
     /// last one was for another campaign or is old.
     fn check_due(&self, active: Uuid) -> bool {
@@ -1055,8 +1074,7 @@ impl CampaignContent {
         let owner = self.reconcile.campaign;
         if owner != active {
             // Not this campaign's: the check is due again for the one open now.
-            self.reconcile.campaign = None;
-            self.reconcile.checked_at = None;
+            self.set_check_owner(None);
             return;
         }
         self.reconcile.checked_at = Some(Instant::now());
@@ -1091,7 +1109,7 @@ impl CampaignContent {
         keys: Option<BTreeSet<String>>,
     ) {
         let (tx, rx) = mpsc::channel();
-        self.reconcile.campaign = Some(campaign.id);
+        self.set_check_owner(Some(campaign.id));
         self.reconcile.pending = Some(rx);
         self.reconcile.applying = keys.is_some();
         let modules = campaigns.modules().to_vec();
@@ -1139,12 +1157,16 @@ impl CampaignContent {
         // `start_check`). A check (or an Apply) still running is cancelled only when the app's
         // campaign is not ITS campaign: once per change, also when the DM comes back before it
         // completes (A -> B -> A); a check started for the app's campaign is never cancelled.
-        if self.reconcile.pending.is_some()
+        // The check's stored data (its proposals, declined choices, error and time) is its
+        // campaign's too: it ends with it, also when no check runs any more. A running Apply is
+        // never cancelled: the campaign switch waits for it (`applying`, the switch lock).
+        if !self.applying()
+            && self.reconcile.campaign.is_some()
             && campaign.map(|campaign| campaign.id) != self.reconcile.campaign
         {
             self.reconcile.pending = None;
             self.reconcile.applying = false;
-            self.reconcile.campaign = None;
+            self.set_check_owner(None);
         }
         if let Some(old) = &self.active
             && campaign.is_none_or(|campaign| campaign.id != old.id)
@@ -3684,6 +3706,74 @@ mod tests {
         assert_eq!(
             starts, 1,
             "ticks on a hidden page started {starts} checks for B"
+        );
+        // B's check completes while the page holds A; the DM returns to A, whose own check then
+        // fails: A never shows B's proposals (the check's stored data ends with its campaign).
+        let witch = || Proposal {
+            key: "witch-bolt".into(),
+            name: "Witch Bolt".into(),
+            kind: "spell".into(),
+            change: Move::ToPackage("Player's Handbook".into()),
+            blocked: None,
+        };
+        finished_in(
+            &mut content,
+            Checked {
+                applied: None,
+                proposals: Ok(vec![witch()]),
+            },
+            Some(second.id),
+        );
+        assert!(content.review_detail().is_some(), "B's proposals are B's");
+        content.forget_discards_of_other_campaigns(Some(&first));
+        assert!(
+            content.reconcile.proposals.is_empty() && content.review_detail().is_none(),
+            "back in A, B's proposals show while A's own check runs"
+        );
+        assert!(content.check_due(first.id));
+        content.set_check_owner(Some(first.id));
+        finished_in(
+            &mut content,
+            Checked {
+                applied: None,
+                proposals: Err("The campaign package check stopped.".into()),
+            },
+            Some(first.id),
+        );
+        assert!(
+            content.reconcile.proposals.is_empty() && content.review_detail().is_none(),
+            "A shows B's proposals after its own check failed"
+        );
+        // An Apply runs in A: the campaign switch is refused with its reason, a campaign change
+        // does not cancel it, and its failure answers in A when it completes.
+        let (tx, rx) = mpsc::channel();
+        content.set_check_owner(Some(first.id));
+        content.reconcile.pending = Some(rx);
+        content.reconcile.applying = true;
+        let app = crate::Splat {
+            campaign_content: content,
+            ..Default::default()
+        };
+        assert_eq!(app.blocked_switch(), Some("Wait until Apply has finished."));
+        let mut content = app.campaign_content;
+        content.forget_discards_of_other_campaigns(Some(&second));
+        assert!(
+            content.applying(),
+            "a campaign change cancelled a running Apply"
+        );
+        tx.send(Checked {
+            applied: Some(Err("A sheet has local edits.".into())),
+            proposals: Ok(Vec::new()),
+        })
+        .unwrap();
+        content.finish_check(Some(first.id));
+        assert_eq!(
+            content
+                .answer
+                .as_ref()
+                .map(|answer| (answer.campaign, answer.words.as_str())),
+            Some((first.id, "A sheet has local edits.")),
+            "the Apply's failure answers in its own campaign"
         );
     }
 
