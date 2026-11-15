@@ -1230,7 +1230,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "conditions_tab",
-            &[Ban::Layout(1), Ban::RowKey(1)],
+            &[Ban::RowKey(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -1238,8 +1238,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(2), Ban::Extras(1), Ban::Pane(1)],
         ),
         ("src/encounter_run/view.rs", "group_row", &[Ban::Extras(2)]),
-        ("src/encounter_run/view.rs", "log_tab", &[Ban::Layout(1)]),
-        ("src/encounter_run/view.rs", "notes_tab", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "optional_number",
@@ -1248,7 +1246,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "record_tab",
-            &[Ban::Layout(1), Ban::Extras(1), Ban::RowKey(1)],
+            &[Ban::Extras(1), Ban::RowKey(1)],
         ),
         ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
         (
