@@ -209,6 +209,18 @@ fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
     design::group_heading(ui, word, count);
 }
 
+/// Q-o: the In progress heading says the list's order after its count, in the count's muted
+/// form, from `unfinished_order_words` (only with two or more runs).
+fn in_progress_heading(ui: &mut egui::Ui, count: usize) {
+    let mut job = design::group_heading_text(ui, "IN PROGRESS", count);
+    if let Some(order) = crate::encounter_run::unfinished_order_words(count)
+        && let Some(format) = job.sections.last().map(|section| section.format.clone())
+    {
+        job.append(&format!(" · {order}"), 0.0, format);
+    }
+    ui.label(job);
+}
+
 fn section(
     ui: &mut egui::Ui,
     id: &str,
@@ -574,7 +586,7 @@ pub(super) fn in_progress_list(
     action: &mut Option<ListAction>,
 ) {
     let (blocked, loading) = availability;
-    heading(ui, "IN PROGRESS", page.in_progress.len());
+    in_progress_heading(ui, page.in_progress.len());
     if page.runs_unread {
         blocked_reason(ui, Some(UNFINISHED_UNREAD));
     } else if page.in_progress.is_empty() {
@@ -1532,17 +1544,18 @@ mod iter_2_c_tests {
             let font = Type::Small.font(ui);
             let width = |text: &str| design::number_width(ui, text, &font);
             assert!(width("Last: 1") > 0.0, "the test measures text");
-            let detail = "Copy 2 · Closed last · Round 2 · Paused · Last: 1 damage to Kestrel Dunmoor (6 HP left) · 2026-01-01 03:00";
+            let detail = "Copy 2 · Round 2 · Paused · Last: 1 damage to Kestrel Dunmoor (6 HP left) · 2026-01-01 03:00";
             // It fits: nothing changes.
             assert_eq!(fit_detail(ui, detail, &font, width(detail)), detail);
             // Room for some of the last change: it loses whole words, and the time stays whole.
-            let shortened = "Copy 2 · Closed last · Round 2 · Paused · Last: 1 damage to Kestrel… · 2026-01-01 03:00";
+            let shortened =
+                "Copy 2 · Round 2 · Paused · Last: 1 damage to Kestrel… · 2026-01-01 03:00";
             let fitted = fit_detail(ui, detail, &font, width(shortened));
             assert!(fitted.ends_with(" · 2026-01-01 03:00"), "{fitted}");
             assert!(fitted.contains(" · Last: 1 damage to Kestrel…"), "{fitted}");
             assert!(width(&fitted) <= width(shortened));
             // Room for no word of it: the last change goes, and the time stays whole.
-            let without = "Copy 2 · Closed last · Round 2 · Paused · 2026-01-01 03:00";
+            let without = "Copy 2 · Round 2 · Paused · 2026-01-01 03:00";
             let fitted = fit_detail(
                 ui,
                 detail,

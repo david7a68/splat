@@ -358,10 +358,11 @@ pub fn run(d: &mut Driver<'_>) {
     );
 
     // Close run by mistake. It goes back to the page the fight began on, where the run that
-    // closed last has Resume: one press brings the fight back, with its Undo.
+    // closed last has Resume (the first row; its heading says the order): one press brings
+    // the fight back, with its Undo.
     close_run(d);
     d.begin_task();
-    d.click_beside(&format!("{RUN_VAULT} · Closed last"), RESUME);
+    d.click_beside(&format!("{RUN_VAULT} · Round"), RESUME);
     d.expect(&format!("{RUN_HEADING}{RUN_VAULT}"));
     d.goal_within("T17.1", "come back from Close run", 1);
     d.observe(
@@ -795,7 +796,7 @@ pub fn run(d: &mut Driver<'_>) {
     go_encounters(d);
     d.observe(
         "T17.4",
-        d.has_label("IN PROGRESS 2") && d.visible_text("No ended fights yet."),
+        d.has_label("IN PROGRESS 2 · last closed first") && d.visible_text("No ended fights yet."),
         format!(
             "Encounters lists the continued fight in In progress, and History has none: {:?}",
             d.name_starting("IN PROGRESS")

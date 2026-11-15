@@ -4901,7 +4901,8 @@ impl Run {
                 );
             }
         }
-        // The run closed last owns Resume, including recovery copies.
+        // The run closed last owns Resume, including recovery copies. Q-o: the list's heading
+        // says this order (`unfinished_order_words`); no row carries an order word.
         runs.sort_by(|a, b| {
             close_order
                 .get(&b.path)
@@ -4911,18 +4912,6 @@ impl Run {
                 .then_with(|| a.label.cmp(&b.label))
                 .then_with(|| a.path.cmp(&b.path))
         });
-        if let Some(run) = runs
-            .iter_mut()
-            .find(|run| run.standing == Standing::Unfinished)
-            && close_order.get(&run.path).is_some_and(|order| *order > 0)
-        {
-            let duplicate = run
-                .id
-                .and_then(|id| identities.get(&id))
-                .is_some_and(|paths| paths.len() > 1);
-            let at = if duplicate { 0 } else { after_copy(run) };
-            run.label.insert_str(at, "Closed last · ");
-        }
         let all_recent = runs
             .iter()
             .filter(|run| run.standing == Standing::Unfinished)
@@ -5031,6 +5020,14 @@ pub enum Standing {
     /// The file is not a run this campaign can open. It can belong to another campaign that
     /// shares the folder, so the page offers nothing that would change it.
     Unreadable,
+}
+
+/// Q-o: the order of a list of unfinished runs, in the words its heading says
+/// (`IN PROGRESS 2 · last closed first`). `Run::list` puts the run closed last first. One row
+/// has no order, so it gets no words. This is the only place that words the order: no row's
+/// label carries an order word.
+pub(crate) fn unfinished_order_words(count: usize) -> Option<&'static str> {
+    (count >= 2).then_some("last closed first")
 }
 
 /// One saved run, as the Encounters page lists it.
@@ -7079,7 +7076,7 @@ mod tests {
         let copies = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(copies[0].id, Some(latest));
         assert_eq!(copies[0].encounter, "Ambush");
-        assert!(copies[0].label.starts_with("Copy 1 · Closed last · "));
+        assert!(copies[0].label.starts_with("Copy 1 · Round "));
         assert!(copies[0].label.contains(" · Last: "));
         let old = copies
             .iter()
@@ -7090,23 +7087,24 @@ mod tests {
             fs::read(&original).unwrap(),
             [bytes.as_slice(), b"\n"].concat()
         );
-        // FM8 (review of PR 326): the label says what the value is, the run closed last. A
-        // run opened and not closed (B) does not take it from A, which was closed last.
+        // FM8 (review of PR 326), Q-o (round 30 G181): a run opened and not closed (B) does not
+        // take first place from A, which was closed last. The heading says that order
+        // (`unfinished_order_words`); no row's label carries an order word.
         {
             let _opened = Run::open(&original, campaign).unwrap();
             let rows = Run::list(dir.path(), campaign).unwrap();
-            let a = rows.iter().find(|row| row.id == Some(latest)).unwrap();
-            let b = rows.iter().find(|row| row.id == Some(original_id)).unwrap();
+            assert_eq!(rows[0].id, Some(latest), "iter-28-R-FM8: A first");
             assert!(
-                a.label.contains("Closed last · "),
-                "iter-28-R-FM8: {}",
-                a.label
+                rows.iter()
+                    .all(|row| !row.label.to_lowercase().contains("closed")),
+                "Q-o: no row carries an order word: {:?}",
+                rows.iter().map(|row| &row.label).collect::<Vec<_>>()
             );
-            assert!(
-                !b.label.contains("Closed last"),
-                "iter-28-R-FM8: {}",
-                b.label
+            assert_eq!(
+                unfinished_order_words(rows.len()),
+                Some("last closed first")
             );
+            assert_eq!(unfinished_order_words(1), None, "one row has no order");
         }
         let mut old = Run::open(&original, campaign).unwrap();
         assert!(old.close_run());
