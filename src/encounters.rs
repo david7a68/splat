@@ -2474,12 +2474,7 @@ fn replace_missing_creature(
     }
     let query = search.to_lowercase();
     let mut replaced = None;
-    for creature in snapshot
-        .creatures
-        .iter()
-        .filter(|c| !c.linked && c.lower.contains(&query))
-        .take(5)
-    {
+    for creature in replacement_matches(&snapshot.creatures, &query) {
         ui.push_id(creature.id, |ui| {
             let (chosen, read) = creature_result_row(ui, creature, "Use", false);
             if chosen {
@@ -2500,6 +2495,33 @@ fn replace_missing_creature(
         data.insert_temp(all_key, all);
     });
     replaced
+}
+
+/// The replacement picker's five results for the lower-case `query`: the creatures that the
+/// search finds as typed (no typo), best first in the one creature order (M3,
+/// `matching::Typed::creature`) and then by origin, as the encounter search ranks them. They are
+/// ranked before the five are taken, so the exact name is never left out. With no words, the
+/// list's first five.
+fn replacement_matches<'a>(creatures: &'a [Creature], query: &str) -> Vec<&'a Creature> {
+    let typed = crate::matching::Typed::new(query);
+    let mut found: Vec<(crate::matching::Rank, &Creature)> = creatures
+        .iter()
+        .filter(|c| !c.linked)
+        .filter_map(|c| {
+            if query.is_empty() {
+                return Some((crate::matching::Rank::typed(0), c));
+            }
+            let rank = typed
+                .creature(&c.lower, crate::matching::words(&c.lower))
+                .filter(|rank| !rank.typo)?;
+            Some((rank, c))
+        })
+        .collect();
+    if !query.is_empty() {
+        // Stable: the list's order stays inside one rank and origin.
+        found.sort_by_key(|&(rank, c)| (rank, c.origin));
+    }
+    found.into_iter().map(|(_, c)| c).take(5).collect()
 }
 
 // Group members use the same picker without the roster's bulk action.
@@ -7206,15 +7228,16 @@ impl Encounters {
                     .facets
                     .as_ref()
                     .is_some_and(|f| parsed.words_in(&c.name, f));
-                Some((crate::matching::with_other(typed.name(&c.lower), facts)?, c))
+                // FI5, M3: the one creature order, as Lookup and Arrivals rank its names.
+                let name = typed.creature(&c.lower, crate::matching::words(&c.lower));
+                Some((crate::matching::with_other(name, facts)?, c))
             })
             .collect();
         // The plain name first, so "wolf" finds Wolf before Dire Wolf. A fact match comes
         // after every name match as typed, and a typo in the name comes last. The sort is
         // stable, so the list's order stays inside each rank.
         if !parsed.words.is_empty() {
-            // FI5: the one creature order, as Arrivals sorts its names.
-            ranked.sort_by_key(|&(rank, c)| (rank.creature(), c.origin));
+            ranked.sort_by_key(|&(rank, c)| (rank, c.origin));
         }
         let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
         let matches: Vec<&Creature> = ranked.into_iter().map(|(_, c)| c).collect();
@@ -8439,6 +8462,51 @@ mod tests {
         );
         assert_eq!(super::run_copy_word("Round 2 · Paused"), None);
         assert_eq!(super::run_copy_word("Copying · Round 1"), None);
+    }
+
+    /// M3, F1 of the review of PR 450: the replacement picker ranks in the one creature order
+    /// before it takes its five, so the exact name comes first, also after five names that hold
+    /// it; with no words it keeps the list's first five.
+    #[test]
+    fn the_replacement_picker_ranks_before_it_takes_five() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        for name in [
+            "Ancient Fenstalker",
+            "Bog Fenstalker",
+            "Cave Fenstalker",
+            "Dread Fenstalker",
+            "Elder Fenstalker",
+            "Fenstalker",
+        ] {
+            creature(dir.path(), name, false);
+        }
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let names = |query: &str| -> Vec<String> {
+            replacement_matches(&snapshot.creatures, query)
+                .into_iter()
+                .map(|c| c.name.clone())
+                .collect()
+        };
+        assert_eq!(
+            names("fenstalker"),
+            [
+                "Fenstalker",
+                "Ancient Fenstalker",
+                "Bog Fenstalker",
+                "Cave Fenstalker",
+                "Dread Fenstalker",
+            ]
+        );
+        let listed: Vec<String> = snapshot
+            .creatures
+            .iter()
+            .filter(|c| !c.linked)
+            .take(5)
+            .map(|c| c.name.clone())
+            .collect();
+        assert_eq!(listed.len(), 5, "fixture: five creatures listed");
+        assert_eq!(names(""), listed);
     }
 
     #[test]

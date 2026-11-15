@@ -4769,7 +4769,7 @@ pub mod party {
 pub mod encounter_build {
     use super::*;
     const NEW_NAME: &str = "Ashfall Crossing";
-    const MONSTER: &str = "wolf";
+    pub(super) const MONSTER: &str = "wolf";
     const BOSS: &str = "cultist";
     const SAVED_NOTE: &str = "Saved";
     const SAVED_ENCOUNTER: &str = "Bridge Ambush";
@@ -4802,6 +4802,51 @@ pub mod encounter_build {
         "7. Wolf",
         "8. Cultist",
     ];
+    /// M3 (round 31 `creature-search-order`, AB5, SB5): the creatures that `wolf` finds, in the
+    /// one creature order. The encounter search here and Lookup (`run_lookup`) both list them
+    /// so: the exact name, then every name that holds the word, by origin and then by name, so
+    /// Werewolf comes before Winter Wolf.
+    pub(super) const WOLF_ORDER: [&str; 6] = [
+        "Wolf",
+        "Cinder Wolf",
+        "Dire Wolf",
+        "Giant Wolf Spider",
+        "Werewolf",
+        "Winter Wolf",
+    ];
+
+    /// The [`WOLF_ORDER`] creatures a list shows in view inside `within`, top to bottom, each
+    /// found by its row's accessible name (`row(name, wolf)`).
+    pub(super) fn wolves_listed(
+        d: &Driver<'_>,
+        within: egui::Rect,
+        row: impl Fn(&str, &str) -> bool,
+    ) -> Vec<&'static str> {
+        let mut found: Vec<(f32, &'static str)> = d
+            .nodes()
+            .iter()
+            .filter(|node| node.in_view() && within.contains_rect(node.rect))
+            .filter_map(|node| {
+                WOLF_ORDER
+                    .iter()
+                    .find(|wolf| row(&node.name, wolf))
+                    .map(|wolf| (node.rect.top(), *wolf))
+            })
+            .collect();
+        found.sort_by(|a, b| a.0.total_cmp(&b.0));
+        found.into_iter().map(|(_, wolf)| wolf).collect()
+    }
+
+    /// M3: the encounter search for [`MONSTER`] lists [`WOLF_ORDER`], each row by its name.
+    fn search_lists_wolf_order(d: &mut Driver<'_>) {
+        let size = d.window_size();
+        let wolves = wolves_listed(d, egui::Rect::EVERYTHING, |name, wolf| name == wolf);
+        d.observe(
+            "M3-creature-search-order",
+            wolves == WOLF_ORDER,
+            format!("At {size:?} the encounter search lists {wolves:?} for {MONSTER}"),
+        );
+    }
 
     /// A page's title: the painted text with exactly these words in the largest type.
     fn page_title_left(d: &Driver<'_>, title: &str) -> Option<f32> {
@@ -4867,7 +4912,10 @@ pub mod encounter_build {
         // The party is already there, and Enter goes on to the search.
         d.press(Key::Enter);
         d.type_text(MONSTER);
-        d.state("find-creature", Sizes::Default);
+        // M3 (round 31 `creature-search-order`): the one creature order, which `run_lookup`
+        // checks in Lookup for the same words, at each captured size and at 1920.
+        d.state_prepared("find-creature", Sizes::Default, search_lists_wolf_order);
+        d.act_at_size(LARGE, search_lists_wolf_order);
         // The result row for the plain Wolf, not a word anywhere on the page.
         let nodes = d.nodes();
         // The line under its name, read as the DM sees it: in columns.
@@ -7280,6 +7328,35 @@ pub mod run_lookup {
             kept && d.has_containing(UNSAVED_NOTE) && d.in_view(NEXT_TURN),
             "Lookup works while a Library draft is unsaved. The draft's own words are still in the editor, and the run strip stays",
         );
+
+        // M3 (round 31 `creature-search-order`, AB5, SB5): Lookup lists the creatures that
+        // `wolf` finds in the one creature order, which `encounter_build` checks for the
+        // encounter search: Werewolf before Winter Wolf, at each size.
+        look_up(d, encounter_build::MONSTER);
+        d.state_prepared("lookup-creature-order", Sizes::All, |d| {
+            let size = d.window_size();
+            // Lookup's panel: right of its splitter, where the run beside it has no rows.
+            let panel = d
+                .place_of(LOOKUP_SPLITTER)
+                .map_or(egui::Rect::NOTHING, |splitter| {
+                    egui::Rect::from_min_max(
+                        egui::pos2(splitter.right(), f32::NEG_INFINITY),
+                        egui::pos2(f32::INFINITY, f32::INFINITY),
+                    )
+                });
+            let wolves = encounter_build::wolves_listed(d, panel, |name, wolf| {
+                name.strip_prefix(wolf)
+                    .is_some_and(|detail| detail.starts_with(" · "))
+            });
+            d.observe(
+                "M3-creature-search-order",
+                wolves == encounter_build::WOLF_ORDER,
+                format!(
+                    "At {size:?} Lookup lists {wolves:?} for {}",
+                    encounter_build::MONSTER
+                ),
+            );
+        });
     }
 }
 
