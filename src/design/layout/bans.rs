@@ -64,13 +64,19 @@ pub(crate) enum Shape {
     Chain(String, String),
     /// `.name(…)` with at least this many arguments (a turbofish's comma can count as one more).
     Arity(String, usize),
+    /// Every mention of the identifier outside a `use` declaration, except its definition
+    /// (`fn name`): a method or an associated call, a reference, a macro's argument.
+    Name(String),
 }
 
 impl Shape {
     /// A shape from its spelling in a list (`lint::legacy`): `.name` is a method, `.name/n` a
-    /// method called with at least `n` arguments, `Owner::name` a function by its path, and a
-    /// bare `name` a free function.
+    /// method called with at least `n` arguments, `Owner::name` a function by its path, `name()`
+    /// a free function's call, and a bare `name` every mention of the name.
     pub(crate) fn of(spelling: &str) -> Self {
+        if let Some(name) = spelling.strip_suffix("()") {
+            return Self::Free(None, name.to_owned());
+        }
         if let Some(method) = spelling.strip_prefix('.') {
             return match method.split_once('/') {
                 Some((name, args)) => Self::Arity(
@@ -82,21 +88,7 @@ impl Shape {
         }
         match spelling.rsplit_once("::") {
             Some((owner, name)) => Self::Assoc(owner.to_owned(), name.to_owned()),
-            None => Self::Free(None, spelling.to_owned()),
-        }
-    }
-
-    /// The owner and the name an alias could rename (`banned-alias`); a method has no owner.
-    pub(crate) fn path(&self) -> Option<(String, String)> {
-        match self {
-            Self::Assoc(owner, name) | Self::Chain(owner, name) => {
-                Some((owner.clone(), name.clone()))
-            }
-            Self::Free(module, name) => Some((
-                module.clone().unwrap_or_else(|| "fn".to_owned()),
-                name.clone(),
-            )),
-            Self::Method(_) | Self::Arity(..) => None,
+            None => Self::Name(spelling.to_owned()),
         }
     }
 }
@@ -343,55 +335,123 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
     Ok(calls(source, &patterns)?.len())
 }
 
-/// Each call of one of `patterns` in `source`: the line it starts on and the index of its
-/// pattern. `Err` when `source` does not lex.
-pub(crate) fn calls(source: &str, patterns: &[Shape]) -> Result<Vec<(usize, usize)>, String> {
+/// The tokens of `source` and the line of each. `Err` when it does not lex.
+fn lexed(source: &str) -> Result<(Vec<Token>, Vec<usize>), String> {
     let stream = TokenStream::from_str(source).map_err(|error| error.to_string())?;
     let (mut tokens, mut lines) = (Vec::new(), Vec::new());
     flatten(stream, &mut tokens, &mut lines);
+    Ok((tokens, lines))
+}
+
+/// Whether each token is inside a `use` declaration, which names paths and calls nothing.
+fn in_use(tokens: &[Token]) -> Vec<bool> {
+    let (mut mask, mut depth, mut open) = (vec![false; tokens.len()], 0usize, None);
+    for (at, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Open(_) => depth += 1,
+            Token::Close => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if open.is_none() && ident(Some(token)) == Some("use") {
+            open = Some(depth);
+        }
+        if let Some(level) = open {
+            mask[at] = true;
+            if *token == Token::Punct(';') && depth == level {
+                open = None;
+            }
+        }
+    }
+    mask
+}
+
+/// Each call of one of `patterns` in `source`: the line it starts on, the index of its
+/// pattern, and whether the name is called there (`(` after it, past a turbofish) rather than
+/// only named. `Err` when `source` does not lex.
+pub(crate) fn calls(source: &str, patterns: &[Shape]) -> Result<Vec<(usize, usize, bool)>, String> {
+    let (tokens, lines) = lexed(source)?;
+    let in_use = in_use(&tokens);
+    let before = |at: usize| at.checked_sub(1).and_then(|before| tokens.get(before));
     let mut found = Vec::new();
     // `flatten` gives each token its line.
     for (at, &line) in lines.iter().enumerate() {
         for (index, shape) in patterns.iter().enumerate() {
-            let hit = match shape {
+            // Where the matched name is.
+            let name_at = match shape {
                 Shape::Assoc(owner, name) => {
                     // `Owner::name`, also `Owner::<T>::name`.
                     let after = after_turbofish(&tokens, at + 1);
-                    ident(tokens.get(at)) == Some(owner)
+                    (ident(tokens.get(at)) == Some(owner)
                         && path_sep(&tokens, after)
-                        && ident(tokens.get(after + 2)) == Some(name)
+                        && ident(tokens.get(after + 2)) == Some(name))
+                    .then_some(after + 2)
                 }
-                Shape::Method(name) => {
-                    tokens.get(at) == Some(&Token::Punct('.'))
-                        && ident(tokens.get(at + 1)) == Some(name)
-                        && (tokens.get(at + 2) == Some(&Token::Open(Delimiter::Parenthesis))
-                            || path_sep(&tokens, at + 2))
-                }
-                Shape::Free(Some(module), name) => {
-                    ident(tokens.get(at)) == Some(module)
-                        && path_sep(&tokens, at + 1)
-                        && ident(tokens.get(at + 3)) == Some(name)
-                }
-                Shape::Chain(owner, name) => chain_hits(&tokens, at, owner, name),
-                Shape::Arity(name, args) => {
-                    tokens.get(at) == Some(&Token::Punct('.'))
-                        && ident(tokens.get(at + 1)) == Some(name)
-                        && arguments(&tokens, after_turbofish(&tokens, at + 2))
-                            .is_some_and(|found| found >= *args)
-                }
+                Shape::Method(name) => (tokens.get(at) == Some(&Token::Punct('.'))
+                    && ident(tokens.get(at + 1)) == Some(name)
+                    && (tokens.get(at + 2) == Some(&Token::Open(Delimiter::Parenthesis))
+                        || path_sep(&tokens, at + 2)))
+                .then_some(at + 1),
+                Shape::Free(Some(module), name) => (ident(tokens.get(at)) == Some(module)
+                    && path_sep(&tokens, at + 1)
+                    && ident(tokens.get(at + 3)) == Some(name))
+                .then_some(at + 3),
+                Shape::Chain(owner, name) => chain_hits(&tokens, at, owner, name).then_some(at),
+                Shape::Arity(name, args) => (tokens.get(at) == Some(&Token::Punct('.'))
+                    && ident(tokens.get(at + 1)) == Some(name)
+                    && arguments(&tokens, after_turbofish(&tokens, at + 2))
+                        .is_some_and(|found| found >= *args))
+                .then_some(at + 1),
                 Shape::Free(None, name) => {
                     // `name(…)`, also `name::<T>(…)`.
-                    ident(tokens.get(at)) == Some(name)
+                    (ident(tokens.get(at)) == Some(name)
                         && tokens.get(after_turbofish(&tokens, at + 1))
                             == Some(&Token::Open(Delimiter::Parenthesis))
-                        && at.checked_sub(1).and_then(|before| tokens.get(before))
-                            != Some(&Token::Punct('.'))
-                        && ident(at.checked_sub(1).and_then(|before| tokens.get(before)))
-                            != Some("fn")
+                        && before(at) != Some(&Token::Punct('.'))
+                        && ident(before(at)) != Some("fn"))
+                    .then_some(at)
                 }
+                Shape::Name(name) => (ident(tokens.get(at)) == Some(name)
+                    && !in_use[at]
+                    && ident(before(at)) != Some("fn"))
+                .then_some(at),
             };
-            if hit {
-                found.push((line, index));
+            if let Some(name_at) = name_at {
+                let called = matches!(shape, Shape::Chain(..))
+                    || tokens.get(after_turbofish(&tokens, name_at + 1))
+                        == Some(&Token::Open(Delimiter::Parenthesis));
+                found.push((line, index, called));
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// The line of each alias of one of `names`: a rename `name as other` (in a `use` or not) or a
+/// type alias `type T = …;` that names one. Read from the tokens, so an alias inside a
+/// macro's body is found too. `Err` when `source` does not lex.
+pub(crate) fn aliases(source: &str, names: &[&str]) -> Result<Vec<usize>, String> {
+    let (tokens, lines) = lexed(source)?;
+    let named = |at: &usize| ident(tokens.get(*at)).is_some_and(|word| names.contains(&word));
+    let mut found = Vec::new();
+    for at in 0..tokens.len() {
+        if named(&at) && ident(tokens.get(at + 1)) == Some("as") {
+            found.push(lines[at]);
+        }
+        if ident(tokens.get(at)) == Some("type") {
+            // To the `;` that ends the alias, at its own depth.
+            let mut depth = 0usize;
+            let end = (at + 1..tokens.len())
+                .find(|&next| {
+                    match tokens[next] {
+                        Token::Open(_) => depth += 1,
+                        Token::Close => depth = depth.saturating_sub(1),
+                        _ => {}
+                    }
+                    depth == 0 && tokens[next] == Token::Punct(';')
+                })
+                .unwrap_or(tokens.len());
+            if (at + 1..end).any(|next| named(&next)) {
+                found.push(lines[at]);
             }
         }
     }
@@ -402,8 +462,7 @@ pub(crate) fn calls(source: &str, patterns: &[Shape]) -> Result<Vec<(usize, usiz
 const ORDERS: [&str; 5] = ["Foreground", "Tooltip", "Middle", "Debug", "Background"];
 
 /// Every banned path of `clippy.toml`, all packages' lists, by its last two segments: the
-/// owner or module and the name; and every path the legacy host freeze counts
-/// (`lint::legacy::CAPABILITIES`). A renaming import or a type alias of one would hide it from
+/// owner or module and the name. A renaming import or a type alias of one would hide it from
 /// the counters, which match names in an item's tokens.
 fn banned_paths() -> Vec<(String, String)> {
     CLIPPY
@@ -416,7 +475,6 @@ fn banned_paths() -> Vec<(String, String)> {
             };
             Some(((*owner).to_owned(), (*name).to_owned()))
         })
-        .chain(crate::design::lint::legacy::alias_paths())
         .collect()
 }
 
@@ -686,14 +744,20 @@ mod tests {
             2
         );
         // Each call's line, and the pattern it matched (the legacy host freeze's spellings).
-        let freeze = [Shape::of(".scroll_to_me"), Shape::of("Fills::because")];
+        // Each call's line, its pattern, and whether it is called (the legacy host freeze's
+        // spellings): a bare name is every mention outside a `use`, but not its definition.
+        let freeze = [
+            Shape::of(".scroll_to_me"),
+            Shape::of("Fills::because"),
+            Shape::of("register_row"),
+        ];
         assert_eq!(
             calls(
-                "fn f() {\n    let w = \"ui.scroll_to_me()\";\n    ui.scroll_to_me(None);\n    Fills::because(r);\n}",
+                "use crate::design::register_row;\nfn f() {\n    let w = \"ui.scroll_to_me()\";\n    ui.scroll_to_me(None);\n    let fill = Fills::because;\n    egui::Ui::register_row::<()>(ui, r);\n    let mark = crate::design::register_row;\n    rows!(register_row);\n}\nfn register_row() {}",
                 &freeze
             )
             .unwrap(),
-            [(3, 0), (4, 1)]
+            [(4, 0, true), (5, 1, false), (6, 2, true), (7, 2, false), (8, 2, false)]
         );
     }
 
@@ -732,10 +796,6 @@ mod tests {
             // Round 29 P-1: a free function through a module that re-exports it.
             "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::add_field_keys as keys; }",
             "use crate::design::{add_field_keys as keys, AddField};",
-            // Migration 32 (ruling L12): the paths the legacy host freeze counts.
-            "use crate::design::ScrollColumn as Rows;",
-            "use crate::design::register_row as mark;",
-            "type Main = egui::CentralPanel;",
         ] {
             assert_eq!(rules(text), ["banned-alias"], "{text}");
         }
@@ -744,7 +804,6 @@ mod tests {
             "use egui::accesskit::Action as Access;",
             "type Groups = BTreeMap<String, Value>;",
             "use splat::content::formats::patch_model as patch_fields;",
-            "use crate::design::{Column, ScrollColumn};",
         ] {
             assert!(rules(text).is_empty(), "{text}");
         }

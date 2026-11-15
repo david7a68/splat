@@ -593,17 +593,19 @@ fn scan(
         let relative = path.to_string_lossy().replace('\\', "/");
         if path.is_dir() {
             scan(&path, counts, levels, files);
-        } else if path.extension().is_some_and(|e| e == "rs")
-            // A file of unit tests, such as `formats_tests.rs`, does not ship either.
-            && !relative.ends_with("tests.rs")
-        {
+        } else if path.extension().is_some_and(|e| e == "rs") {
             let text = fs::read_to_string(&path).expect("read source file");
+            let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
+            let key = relative.strip_prefix(root).unwrap_or(&relative);
+            // The legacy host freeze reads every file: a name does not make a file test-only.
+            files.push((key.to_owned(), text.clone()));
+            // A file of unit tests, such as `formats_tests.rs`, does not ship either.
+            if relative.ends_with("tests.rs") {
+                continue;
+            }
             // Unit tests may name colours and sizes. They do not ship.
             // `mod tests;` near the top names a file of its own, so only an inline module ends it.
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
-            let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
-            let key = relative.strip_prefix(root).unwrap_or(&relative);
-            files.push((key.to_owned(), text.clone()));
             // Design and capture code owns raw drawing values. Only the popup classification
             // marker is restricted there, to its part and the gate that reads it.
             if key.starts_with("src/design/") || key.starts_with("src/visual_tests/") {
@@ -693,7 +695,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 "foreground-layer" => "Foreground layers and menus belong to src/design/",
                 "hand-create-reasons" => "Declare a form's reasons with `create_reasons!`",
                 "banned-alias" => {
-                    "Name a banned owner or function as clippy.toml or `lint::legacy` names it: an alias (`use … as …`, `type … =`) hides it from the counts"
+                    "Name a banned owner or function as clippy.toml names it: an alias (`use … as …`, `type … =`) hides it from the counts"
                 }
                 "phrase-owner" => {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"

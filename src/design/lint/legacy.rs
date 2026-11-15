@@ -1,22 +1,29 @@
 //! The legacy host freeze (migration 32, layout PR 0, ruling L12). Tests only.
 //!
-//! `src/design/legacy_hosts.tsv` lists every call of a layout or host path that the pane
+//! `src/design/legacy_hosts.tsv` lists every use of a layout or host path that the pane
 //! mechanism replaces ([`CAPABILITIES`]), by the function that holds it (`Type::name` in an
-//! `impl` or a trait), with the pane's owner. Calls are read from the tokens
-//! (`layout::bans::calls`), so words in strings and comments never count; `#[test]` and
-//! `#[cfg(test)]` items and test-only module files do not count.
+//! `impl` or a trait), with the pane's owner: in the app and in `src/design/`, whose rows are
+//! the implementation boundary. Uses are read from the tokens (`layout::bans::calls`): a method
+//! or associated call, a reference and a macro's argument all name the path; words in strings
+//! and comments never do. `#[test]` and `#[cfg(test)]` items, and files that only `cfg(test)`
+//! module declarations load, do not count; a file's name proves nothing.
 //!
-//! - The list is exact: a new call fails, and fewer calls ask to lower the row.
-//! - No row grows against its base. The calls are counted again in the source of the merge base
-//!   of `HEAD` and `origin/main` (read with `git`; `SPLAT_LEGACY_BASE` names another ref), so a
-//!   call added together with its row fails, and so does a new function around a counted call
-//!   (a wrapper is a new site). Only the lead raises a site, in the gate's raise file
-//!   (`SPLAT_STILLNESS_RAISE`), one line per site: `legacy-host / <capability> / <file> /
-//!   <function> => <reason>`. A base that cannot be read fails.
+//! - The list is exact: a new use fails, and fewer uses ask to lower the row.
+//! - No row grows against its base. The uses are counted again in the source of the merge base
+//!   of `HEAD` and `origin/main` (read with `git`; `SPLAT_LEGACY_BASE` names another ref, never
+//!   in the landing gate), so a use added together with its row fails, and so does a new
+//!   function around a counted use, in the app or in the design system (a wrapper is a new
+//!   site). A raise is a line in the gate's raise file (`SPLAT_STILLNESS_RAISE`), one per site:
+//!   `legacy-host / <capability> / <file> / <function> => <reason>`; the lead passes that file
+//!   at landing (a workflow rule: the test reads the line, not who wrote it). A base that cannot
+//!   be read fails.
+//! - Escapes fail with no row and no raise: a frozen function named but not called (a
+//!   reference, a macro's argument), a frozen path inside `macro_rules!`, and an alias of a
+//!   frozen owner or function (`… as …`, `type … =`), anywhere, `src/design/` too.
 //! - `src/design/c3_ledger.tsv` lists the 85 round-31 C3 deductions: report:ID, root, the steps
 //!   of ruling L1 that own it, whether the layout design names it there or only its root, and
 //!   its status. It claims no geometry. A row is never removed; its owning step closes it.
-use crate::design::layout::bans::{Shape, calls};
+use crate::design::layout::bans::{Shape, aliases, calls};
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::Command;
 use syn::spanned::Spanned;
@@ -26,109 +33,92 @@ const MANIFEST: &str = include_str!("../legacy_hosts.tsv");
 const LEDGER: &str = include_str!("../c3_ledger.tsv");
 const LEDGER_PATH: &str = "src/design/c3_ledger.tsv";
 
-/// Where a capability is counted.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Scope {
-    /// Everywhere, `src/design/` too: a legacy design path, which a new part could wrap again.
-    Everywhere,
-    /// Outside `src/design/`: a raw egui call, which the design system owns.
-    App,
-}
-
-/// The capabilities the pane mechanism replaces (layout design §4.3), each with how its calls
-/// are written, split at spaces (`bans::Shape::of`: `.name` a method, `.name/n` one with at
-/// least `n` arguments, `Owner::name` a path, a bare name a free function).
-const CAPABILITIES: [(&str, Scope, &str); 11] = [
-    // A body drawn by a closure into a pane (`Footer::pane`, `Messages::pane` and kin).
+/// The capabilities the pane mechanism replaces (layout design §4.3), each with how its uses
+/// are spelled, split at spaces (`bans::Shape::of`): a bare name is every mention of that
+/// function, or of that type when it starts with a capital; `Owner::name` a path; `name()` a
+/// free function's call; `.name/n` a method called with at least `n` arguments.
+const CAPABILITIES: [(&str, &str); 11] = [
+    // A body drawn by a closure into a pane. `Self::pane` counts in `Footer` and `Messages` only.
     (
         "pane-host",
-        Scope::Everywhere,
-        ".pane/3 .pane_content/3 .pane_editor/2 Footer::pane Footer::pane_content \
-         Footer::pane_editor Messages::pane Messages::pane_content Messages::pane_editor",
+        ".pane/3 Footer::pane Messages::pane Self::pane pane_content pane_editor",
     ),
     // A footer placed by hand.
-    (
-        "hand-footer",
-        Scope::Everywhere,
-        ".show_by_hand Footer::show_by_hand",
-    ),
+    ("hand-footer", "show_by_hand"),
     // A body that manages its own room, also through the Sessions wrapper `fills(reason)`:
-    // each Sessions pane that invokes it counts.
-    ("fills", Scope::Everywhere, "Fills::because fills"),
+    // each Sessions pane that calls it counts (only its calls: `fills` is also a variable name).
+    ("fills", "Fills::because fills()"),
     // Rows drawn by a closure for the part of a list in view.
-    (
-        "virtual-rows",
-        Scope::App,
-        ".show_rows .show_viewport ScrollColumn::show_rows ScrollColumn::show_viewport",
-    ),
+    ("virtual-rows", "show_rows show_viewport"),
     // A row registered after it painted, for the old whole-row mask.
-    ("row-register", Scope::App, "register_row"),
+    ("row-register", "register_row"),
     // A clip that a caller sets.
-    (
-        "row-clip",
-        Scope::App,
-        ".set_clip_rect .with_clip_rect .shrink_clip_rect",
-    ),
+    ("row-clip", "set_clip_rect with_clip_rect shrink_clip_rect"),
     // A scroll request outside the reveal part (B6's list, PR 403).
     (
         "scroll-request",
-        Scope::App,
-        ".scroll_to_rect .scroll_to_rect_animation .scroll_to_cursor .scroll_to_cursor_animation \
-         .scroll_to_me .scroll_to_me_animation .scroll_with_delta .scroll_with_delta_animation",
+        "scroll_to_rect scroll_to_rect_animation scroll_to_cursor scroll_to_cursor_animation \
+         scroll_to_me scroll_to_me_animation scroll_with_delta scroll_with_delta_animation",
     ),
     // An offset that a caller writes into a scroll area.
     (
         "scroll-offset",
-        Scope::App,
-        ".vertical_scroll_offset .horizontal_scroll_offset .scroll_offset",
+        "vertical_scroll_offset horizontal_scroll_offset scroll_offset",
     ),
     // A raw scroll area: Clippy refuses it outside a counted row, and here it cannot grow.
     (
         "scroll-area",
-        Scope::App,
         "ScrollArea::vertical ScrollArea::both ScrollArea::horizontal ScrollArea::neither \
          ScrollArea::new",
     ),
     // The allowed host composition: the page regions that hold panes.
     (
         "host-region",
-        Scope::App,
-        "CentralPanel::default SidePanel::left SidePanel::right TopBottomPanel::top \
-         TopBottomPanel::bottom Column::panel",
+        "CentralPanel SidePanel TopBottomPanel Column::panel",
     ),
     // The messages of more than one owner fed into one footer: a mixed task footer. A function
     // that feeds one counts nothing.
-    (
-        "mixed-footer",
-        Scope::App,
-        ".footer_messages footer_messages",
-    ),
+    ("mixed-footer", "footer_messages"),
 ];
 
 /// A counted site: capability, file, function.
 type Site = (String, String, String);
 type Counts = BTreeMap<Site, usize>;
 
-/// The owner and the name of each path the freeze counts, for the source lint's `banned-alias`
-/// rule (`layout::bans::syntax_rules`): an alias would hide a call from the count.
-pub(crate) fn alias_paths() -> Vec<(String, String)> {
+/// Every name an alias could hide: each frozen function or type, and each owner of a frozen path.
+fn alias_names() -> Vec<&'static str> {
     CAPABILITIES
         .iter()
-        .flat_map(|(_, _, spellings)| spellings.split_whitespace())
-        .filter_map(|spelling| Shape::of(spelling).path())
+        .flat_map(|(_, spellings)| spellings.split_whitespace())
+        .filter(|spelling| !spelling.starts_with('.'))
+        .map(|spelling| spelling.trim_end_matches("()"))
+        .map(|spelling| spelling.split("::").next().unwrap_or(spelling))
+        .filter(|name| *name != "Self")
         .collect()
 }
 
-/// The functions and test items of one file, by line (`syn`).
+/// A module declared with a file of its own (`mod x;`): the inline modules around it, its name,
+/// its `#[path]`, and whether only a test build compiles it.
+struct Declaration {
+    inline: Vec<String>,
+    name: String,
+    path: Option<String>,
+    test: bool,
+}
+
+/// The functions, test items, `macro_rules!` and module declarations of one file, by line.
 #[derive(Default)]
 struct Items {
     /// Each function: its name (`Type::name` in an `impl` or a trait), first and last line.
     functions: Vec<(String, usize, usize)>,
     /// The first and last line of each test item.
     tests: Vec<(usize, usize)>,
-    /// Test-only modules declared here with a file of their own (`#[cfg(test)] mod x;`).
-    test_modules: Vec<String>,
+    /// The first and last line of each `macro_rules!`.
+    macros: Vec<(usize, usize)>,
+    declarations: Vec<Declaration>,
     owner: Option<String>,
+    inline: Vec<String>,
+    in_test: bool,
 }
 
 fn lines(node: &impl Spanned) -> (usize, usize) {
@@ -144,6 +134,12 @@ fn is_test(attributes: &[syn::Attribute]) -> bool {
                     .parse_args::<syn::Ident>()
                     .is_ok_and(|word| word == "test"))
     })
+}
+
+fn within(spans: &[(usize, usize)], line: usize) -> bool {
+    spans
+        .iter()
+        .any(|(first, last)| (*first..=*last).contains(&line))
 }
 
 impl Items {
@@ -186,11 +182,50 @@ impl Items {
 
 impl<'ast> Visit<'ast> for Items {
     fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
-        match (is_test(&node.attrs), &node.content) {
-            (true, Some(_)) => self.tests.push(lines(node)),
-            (true, None) => self.test_modules.push(node.ident.to_string()),
-            (false, _) => visit::visit_item_mod(self, node),
+        let test = self.in_test || is_test(&node.attrs);
+        let name = node.ident.to_string();
+        if node.content.is_none() {
+            let path = node.attrs.iter().find_map(|attribute| {
+                let value = &attribute.meta.require_name_value().ok()?.value;
+                match value {
+                    syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(file),
+                        ..
+                    }) if attribute.path().is_ident("path") => Some(file.value()),
+                    _ => None,
+                }
+            });
+            let inline = self.inline.clone();
+            self.declarations.push(Declaration {
+                inline,
+                name,
+                path,
+                test,
+            });
+            return;
         }
+        if test && !self.in_test {
+            self.tests.push(lines(node));
+        }
+        let outer = std::mem::replace(&mut self.in_test, test);
+        self.inline.push(name);
+        visit::visit_item_mod(self, node);
+        self.inline.pop();
+        self.in_test = outer;
+    }
+
+    fn visit_item_macro(&mut self, node: &'ast syn::ItemMacro) {
+        if node.mac.path.is_ident("macro_rules") {
+            self.macros.push(lines(node));
+        }
+        visit::visit_item_macro(self, node);
+    }
+
+    fn visit_stmt_macro(&mut self, node: &'ast syn::StmtMacro) {
+        if node.mac.path.is_ident("macro_rules") {
+            self.macros.push(lines(node));
+        }
+        visit::visit_stmt_macro(self, node);
     }
 
     fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
@@ -234,64 +269,155 @@ impl<'ast> Visit<'ast> for Items {
     }
 }
 
-/// The path, less `.rs`, of the child module `name` that `path` declares (`src/a.rs` and
-/// `src/a/mod.rs` → `src/a/name`; `src/lib.rs` → `src/name`).
-fn child(path: &str, name: &str) -> String {
-    let dir = match path.rsplit_once('/') {
-        Some((dir, "mod.rs" | "lib.rs" | "main.rs")) => dir,
-        _ => path.trim_end_matches(".rs"),
-    };
-    format!("{dir}/{name}")
+/// `path` with `.` and `..` segments resolved.
+fn normal(path: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "." | "" => {}
+            ".." => {
+                parts.pop();
+            }
+            part => parts.push(part),
+        }
+    }
+    parts.join("/")
 }
 
-/// Each counted call in `files` (path, text), by capability and the function that holds it.
-fn counts(files: &[(String, String)]) -> Result<Counts, String> {
+/// The file that a declaration in `path` loads, among `known`: `src/a.rs` and `src/a/mod.rs`
+/// load `src/a/x.rs` or `src/a/x/mod.rs`; a `#[path]` outside an inline module is relative to
+/// the declaring file's folder.
+fn module_file(path: &str, declaration: &Declaration, known: &BTreeSet<&str>) -> Option<String> {
+    let (folder, file) = path.rsplit_once('/').unwrap_or(("", path));
+    let own = match file {
+        "mod.rs" | "lib.rs" | "main.rs" => folder.to_owned(),
+        _ => path.trim_end_matches(".rs").to_owned(),
+    };
+    let inline = declaration.inline.join("/");
+    let candidates = match &declaration.path {
+        Some(file) if inline.is_empty() => vec![format!("{folder}/{file}")],
+        Some(file) => vec![format!("{own}/{inline}/{file}")],
+        None => {
+            let base = format!("{own}/{inline}/{}", declaration.name);
+            vec![format!("{base}.rs"), format!("{base}/mod.rs")]
+        }
+    };
+    candidates
+        .iter()
+        .map(|candidate| normal(candidate))
+        .find(|candidate| known.contains(candidate.as_str()))
+}
+
+/// The files that a production build never compiles: every declaration that loads them is
+/// `cfg(test)`, or sits in a file that is itself never compiled. A crate root (`src/lib.rs`,
+/// `src/main.rs`) is compiled; a file that nothing declares is not proven test-only and counts.
+fn test_only(files: &[(&String, Items)]) -> BTreeSet<String> {
+    let known: BTreeSet<&str> = files.iter().map(|(path, _)| path.as_str()).collect();
+    let loads: Vec<(&str, String, bool)> = files
+        .iter()
+        .flat_map(|(path, items)| {
+            items.declarations.iter().filter_map(|declaration| {
+                module_file(path, declaration, &known)
+                    .map(|child| (path.as_str(), child, declaration.test))
+            })
+        })
+        .collect();
+    let root = |path: &str| {
+        let (folder, file) = path.rsplit_once('/').unwrap_or(("", path));
+        (folder == "src" || folder.ends_with("/src")) && matches!(file, "lib.rs" | "main.rs")
+    };
+    let mut live: BTreeSet<&str> = known.iter().copied().filter(|path| root(path)).collect();
+    loop {
+        let more: Vec<&str> = loads
+            .iter()
+            .filter(|(parent, child, test)| {
+                !test && live.contains(parent) && !live.contains(child.as_str())
+            })
+            .map(|(_, child, _)| child.as_str())
+            .collect();
+        if more.is_empty() {
+            break;
+        }
+        live.extend(more);
+    }
+    loads
+        .iter()
+        .filter(|(_, child, _)| !live.contains(child.as_str()))
+        .map(|(_, child, _)| child.clone())
+        .collect()
+}
+
+/// What [`scan`] finds: each counted use by site, and the escapes that no row or raise allows.
+struct Found {
+    counts: Counts,
+    escapes: Vec<String>,
+}
+
+/// Each counted use in `files` (path, text), by capability and the function that holds it.
+fn scan(files: &[(String, String)]) -> Result<Found, String> {
     let patterns: Vec<(usize, Shape)> = CAPABILITIES
         .iter()
         .enumerate()
-        .flat_map(|(at, (_, _, spellings))| {
+        .flat_map(|(at, (_, spellings))| {
             spellings
                 .split_whitespace()
                 .map(move |s| (at, Shape::of(s)))
         })
         .collect();
     let shapes: Vec<Shape> = patterns.iter().map(|(_, shape)| shape.clone()).collect();
+    let names = alias_names();
     let mut read = Vec::new();
-    let mut test_only = Vec::new();
     for (path, text) in files {
         let file = syn::parse_file(text).map_err(|error| format!("{path}: {error}"))?;
         let mut items = Items::default();
         items.visit_file(&file);
-        test_only.extend(items.test_modules.iter().map(|name| child(path, name)));
-        read.push((path, text, items));
+        read.push((path, items));
     }
-    let mut counts = Counts::new();
-    for (path, text, items) in read {
-        let module = path.trim_end_matches(".rs").trim_end_matches("/mod");
-        if path.ends_with("tests.rs")
-            || test_only
-                .iter()
-                .any(|dir| module == dir || module.starts_with(&format!("{dir}/")))
-        {
+    let test_only = test_only(&read);
+    let (mut counts, mut escapes) = (Counts::new(), Vec::new());
+    for ((path, items), (_, text)) in read.iter().zip(files) {
+        if test_only.contains(*path) {
             continue;
         }
-        let own = path.starts_with("src/design/");
-        for (line, at) in calls(text, &shapes).map_err(|error| format!("{path}: {error}"))? {
-            let (capability, scope, _) = CAPABILITIES[patterns[at].0];
-            if (own && scope == Scope::App)
-                || items
-                    .tests
-                    .iter()
-                    .any(|(first, last)| (*first..=*last).contains(&line))
+        let uses = calls(text, &shapes).map_err(|error| format!("{path}: {error}"))?;
+        for (line, at, called) in uses {
+            if within(&items.tests, line) {
+                continue;
+            }
+            let (capability, _) = CAPABILITIES[patterns[at].0];
+            let holder = items.holder(line);
+            let type_name =
+                matches!(&shapes[at], Shape::Name(name) if name.starts_with(char::is_uppercase));
+            if let Shape::Assoc(owner, _) = &shapes[at]
+                && owner == "Self"
+                && !(holder.starts_with("Footer::") || holder.starts_with("Messages::"))
             {
                 continue;
             }
-            let site = (capability.to_owned(), path.clone(), items.holder(line));
+            let place = format!("{path}:{line} `{holder}`");
+            if !called && !type_name {
+                escapes.push(format!(
+                    "{place}: a {capability} path named but not called (a reference, a macro's argument). Call it directly where it is used, so that each use is a counted site (ruling L12)."
+                ));
+            }
+            if within(&items.macros, line) {
+                escapes.push(format!(
+                    "{place}: a {capability} path inside `macro_rules!`, whose every expansion would be an uncounted use. Use it in a function (ruling L12)."
+                ));
+            }
+            let site = (capability.to_owned(), (*path).clone(), holder);
             *counts.entry(site).or_default() += 1;
+        }
+        for line in aliases(text, &names).map_err(|error| format!("{path}: {error}"))? {
+            if !within(&items.tests, line) {
+                escapes.push(format!(
+                    "{path}:{line}: an alias (`… as …`, `type … =`) of a frozen owner or function hides its uses from the legacy host freeze (ruling L12). Name it as it is."
+                ));
+            }
         }
     }
     counts.retain(|(capability, ..), count| capability != "mixed-footer" || *count > 1);
-    Ok(counts)
+    Ok(Found { counts, escapes })
 }
 
 /// The manifest's rows (capability, file, function, count, owner, note; split at tabs) by site.
@@ -398,9 +524,19 @@ fn git(args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
-/// The base commit: the merge base of `HEAD` and `origin/main`, or of `SPLAT_LEGACY_BASE`.
+/// The base commit: the merge base of `HEAD` and `origin/main`, or of `SPLAT_LEGACY_BASE`,
+/// which the landing gate (`SPLAT_LAND_LOCKED=1`) refuses.
 fn base_commit() -> Result<String, String> {
-    let named = std::env::var("SPLAT_LEGACY_BASE").unwrap_or_else(|_| "origin/main".to_owned());
+    let named = match std::env::var("SPLAT_LEGACY_BASE") {
+        Ok(_) if std::env::var("SPLAT_LAND_LOCKED").is_ok_and(|locked| locked == "1") => {
+            return Err(
+                "the landing gate compares with origin/main only; unset SPLAT_LEGACY_BASE"
+                    .to_owned(),
+            );
+        }
+        Ok(named) => named,
+        Err(_) => "origin/main".to_owned(),
+    };
     git(&["merge-base", "HEAD", &named])
 }
 
@@ -417,7 +553,7 @@ fn files_at(commit: &str) -> Result<Vec<(String, String)>, String> {
     ])?;
     listed
         .lines()
-        .filter(|path| path.ends_with(".rs") && !path.ends_with("tests.rs"))
+        .filter(|path| path.ends_with(".rs"))
         .map(|path| {
             Ok((
                 path.to_owned(),
@@ -427,24 +563,28 @@ fn files_at(commit: &str) -> Result<Vec<(String, String)>, String> {
         .collect()
 }
 
-/// What the lint test reports for the freeze: the manifest against the calls of `files` (the
-/// working tree), and the calls against the base.
+/// What the lint test reports for the freeze, for `files` (the working tree): its escapes, the
+/// manifest against its uses, and its uses against the base.
 pub(super) fn problems(files: &[(String, String)]) -> Vec<String> {
-    let found = match counts(files) {
+    let Found {
+        counts: found,
+        escapes,
+    } = match scan(files) {
         Ok(found) => found,
         Err(error) => return vec![format!("legacy host freeze: {error}")],
     };
-    let mut problems = match manifest(MANIFEST) {
-        Ok(listed) => against_manifest(&found, &listed),
-        Err(faults) => faults,
-    };
+    let mut problems = escapes;
+    match manifest(MANIFEST) {
+        Ok(listed) => problems.extend(against_manifest(&found, &listed)),
+        Err(faults) => problems.extend(faults),
+    }
     let unavailable = |why: String| {
         format!(
             "legacy host freeze: the base cannot be read, so no site was compared with it (ruling L12): {why}. Fetch main (`git fetch origin main`) so that `origin/main` exists, or name the base in SPLAT_LEGACY_BASE."
         )
     };
     match base_commit().and_then(|commit| Ok((files_at(&commit)?, commit))) {
-        Ok((base_files, commit)) => match counts(&base_files) {
+        Ok((base_files, commit)) => match scan(&base_files).map(|found| found.counts) {
             // An empty base is no base: nothing would be compared.
             Ok(base) if !base.is_empty() => {
                 let raises = std::env::var("SPLAT_STILLNESS_RAISE").unwrap_or_default();
@@ -547,72 +687,142 @@ fn the_c3_ledger_keeps_every_deduction() {
     assert!(faults.is_empty(), "{}", faults.join("\n"));
 }
 
-/// The freeze's own cases: a call raised with its row, a wrapper, a test item, a base.
+/// The freeze's own cases: a use raised with its row, wrappers in the app and in the design
+/// system, associated calls, references, macros, aliases, and which files a build compiles.
 #[test]
 fn the_legacy_freeze_finds_what_it_should() {
-    let file = |text: &str| vec![("src/a.rs".to_owned(), text.to_owned())];
-    let site = |capability: &str, function: &str| {
-        (
-            capability.to_owned(),
-            "src/a.rs".to_owned(),
-            function.to_owned(),
-        )
+    let at = |files: &[(&str, &str)]| {
+        let files: Vec<(String, String)> = files
+            .iter()
+            .map(|(path, text)| ((*path).to_owned(), (*text).to_owned()))
+            .collect();
+        scan(&files).unwrap()
     };
-    let base = counts(&file(
-        "fn draw(footer: Footer, ui: &mut Ui) {\n    footer.show_by_hand(ui);\n}",
-    ))
-    .unwrap();
-    assert_eq!(base, Counts::from([(site("hand-footer", "draw"), 1)]));
-    // A second call, with its row raised: the manifest agrees, the base does not.
-    let two = counts(&file(
+    let counts = |text: &str| at(&[("src/a.rs", text)]).counts;
+    let site = |capability: &str, file: &str, function: &str| {
+        (capability.to_owned(), file.to_owned(), function.to_owned())
+    };
+    let base = counts("fn draw(footer: Footer, ui: &mut Ui) {\n    footer.show_by_hand(ui);\n}");
+    assert_eq!(
+        base,
+        Counts::from([(site("hand-footer", "src/a.rs", "draw"), 1)])
+    );
+    // A second use, with its row raised: the manifest agrees, the base does not.
+    let two = counts(
         "fn draw(f: Footer, g: Footer, ui: &mut Ui) {\n    f.show_by_hand(ui);\n    g.show_by_hand(ui);\n}",
-    ))
-    .unwrap();
+    );
     assert!(against_manifest(&two, &two).is_empty());
     let raised = growth(&two, &base, "", "B0");
     assert!(
         raised.len() == 1 && raised[0].contains("draw: 2 here, 1 in the base B0"),
         "{raised:?}"
     );
-    // The lead's raise line lets exactly that site pass.
+    // A raise line lets exactly that site pass.
     let line = "legacy-host / hand-footer / src/a.rs / draw => ruled";
     assert!(growth(&two, &base, line, "B0").is_empty());
-    // A wrapper moves the call into a new site: it fails against the base.
-    let wrapped = counts(&file(
+    // A wrapper moves the use into a new site: it fails against the base, in the app ...
+    let wrapped = counts(
         "impl Host {\n    fn by_hand(f: Footer, ui: &mut Ui) -> f32 {\n        f.show_by_hand(ui)\n    }\n}\nfn draw(f: Footer, ui: &mut Ui) {\n    Host::by_hand(f, ui);\n}",
-    ))
-    .unwrap();
+    );
     assert_eq!(
         wrapped,
-        Counts::from([(site("hand-footer", "Host::by_hand"), 1)])
+        Counts::from([(site("hand-footer", "src/a.rs", "Host::by_hand"), 1)])
     );
     assert_eq!(growth(&wrapped, &base, "", "B0").len(), 1);
+    // ... and in the design system (review F2): the app's row goes, the design helper's comes.
+    let moved = at(&[
+        (
+            "src/design/layout.rs",
+            "pub fn by_hand(f: Footer, ui: &mut Ui) -> f32 {\n    f.show_by_hand(ui)\n}",
+        ),
+        (
+            "src/a.rs",
+            "fn draw(f: Footer, ui: &mut Ui) {\n    design::by_hand(f, ui);\n}",
+        ),
+    ]);
+    assert_eq!(
+        moved.counts,
+        Counts::from([(site("hand-footer", "src/design/layout.rs", "by_hand"), 1)])
+    );
+    assert_eq!(growth(&moved.counts, &base, "", "B0").len(), 1);
+    // An associated call and a reference are uses (F1); a reference, a macro's argument, a use
+    // inside `macro_rules!` and an alias are escapes that no row allows (F1, F2, F4).
+    let named = at(&[(
+        "src/a.rs",
+        "fn draw(ui: &mut Ui, r: Rect) {\n    egui::Ui::scroll_to_rect(ui, r, None);\n    let mark = crate::design::register_row;\n    mark(ui, r);\n    rows!(set_clip_rect);\n}\nmacro_rules! reveal {\n    ($ui:expr) => { $ui.scroll_to_me(None) };\n}\nuse crate::design::register_row as note;",
+    )]);
+    assert_eq!(
+        named.counts,
+        Counts::from([
+            (site("scroll-request", "src/a.rs", "draw"), 1),
+            (site("row-register", "src/a.rs", "draw"), 1),
+            (site("row-clip", "src/a.rs", "draw"), 1),
+            (site("scroll-request", "src/a.rs", "(file)"), 1),
+        ])
+    );
+    let escapes = named.escapes.join("\n");
+    for expected in [
+        "src/a.rs:3 `draw`: a row-register path named but not called",
+        "src/a.rs:5 `draw`: a row-clip path named but not called",
+        "src/a.rs:8 `(file)`: a scroll-request path inside `macro_rules!`",
+        "src/a.rs:10: an alias",
+    ] {
+        assert!(escapes.contains(expected), "{expected}\n{escapes}");
+    }
+    assert_eq!(named.escapes.len(), 4, "{escapes}");
+    // `Footer::pane` through a type alias in the design system (F2): the alias fails.
+    let host = at(&[(
+        "src/design/pane.rs",
+        "type Host<'a> = Footer<'a>;\nfn show(h: Host, ui: &mut Ui) {\n    Host::pane(h, ui, Body::Content, |_| ());\n}",
+    )]);
+    assert!(
+        host.escapes.len() == 1 && host.escapes[0].starts_with("src/design/pane.rs:1: an alias"),
+        "{:?}",
+        host.escapes
+    );
     // Words, a call with too few arguments, one feeder, a nested function, test items.
-    let quiet = counts(&file(
+    let quiet = counts(
         "fn draw(p: Processing, ui: &mut Ui) {\n    let w = \"ui.scroll_to_rect(r)\";\n    p.pane(ui);\n    s.footer_messages(&mut f);\n    fn inner(ui: &mut Ui) {\n        ui.scroll_to_me(None);\n    }\n}\n#[cfg(test)]\nmod tests {\n    fn t(ui: &mut Ui) { ui.scroll_to_rect(r, None); }\n}\n#[test]\nfn u() { Fills::because(r); }",
-    ))
-    .unwrap();
-    assert_eq!(quiet, Counts::from([(site("scroll-request", "inner"), 1)]));
+    );
+    assert_eq!(
+        quiet,
+        Counts::from([(site("scroll-request", "src/a.rs", "inner"), 1)])
+    );
     // Two owners' messages in one footer.
-    let mixed = counts(&file(
-        "fn settings(f: &mut Footer) { a.footer_messages(f); B::footer_messages(b, f); }",
-    ))
-    .unwrap();
-    assert_eq!(mixed, Counts::from([(site("mixed-footer", "settings"), 2)]));
-    // A test-only module's file, and raw egui calls inside the design system, do not count.
-    let files = vec![
+    let mixed =
+        counts("fn settings(f: &mut Footer) { a.footer_messages(f); B::footer_messages(b, f); }");
+    assert_eq!(
+        mixed,
+        Counts::from([(site("mixed-footer", "src/a.rs", "settings"), 2)])
+    );
+    // Only `cfg(test)` declarations make a file test-only, never its name (F3): `live_tests.rs`
+    // loads without `cfg(test)` and counts, as does `#[path]`'s file; `gallery.rs` does not.
+    let modules = at(&[
         (
-            "src/design/mod.rs".to_owned(),
-            "#[cfg(test)]\nmod gallery;".to_owned(),
+            "src/lib.rs",
+            "mod live_tests;\nmod sessions;\n#[cfg(test)]\nmod gallery;",
         ),
         (
-            "src/design/gallery.rs".to_owned(),
-            "fn g(f: Footer, ui: &mut Ui) { f.show_by_hand(ui); }".to_owned(),
+            "src/live_tests.rs",
+            "fn live(ui: &mut Ui) {\n    ui.scroll_to_me(None);\n}",
         ),
         (
-            "src/design/layout.rs".to_owned(),
-            "fn area(ui: &mut Ui) { ui.scroll_to_rect(r, None); }".to_owned(),
+            "src/gallery.rs",
+            "fn g(f: Footer, ui: &mut Ui) {\n    f.show_by_hand(ui);\n}",
         ),
-    ];
-    assert!(counts(&files).unwrap().is_empty());
+        ("src/sessions.rs", "pub mod page;"),
+        ("src/sessions/page.rs", "#[path = \"carry.rs\"]\nmod carry;"),
+        (
+            "src/sessions/carry.rs",
+            "fn c(ui: &mut Ui) {\n    ui.scroll_to_me(None);\n}",
+        ),
+    ]);
+    assert_eq!(
+        modules.counts,
+        Counts::from([
+            (site("scroll-request", "src/live_tests.rs", "live"), 1),
+            (site("scroll-request", "src/sessions/carry.rs", "c"), 1),
+        ])
+    );
+    assert_eq!(growth(&modules.counts, &Counts::new(), "", "B0").len(), 2);
 }
