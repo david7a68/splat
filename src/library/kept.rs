@@ -11,6 +11,7 @@
 //! result, whose order (and ticket) ends with it. Copies are several per file, each owned by the
 //! file it linked and the path it copied. Scope is `()`: a campaign switch hides none of them;
 //! each kind's own end events decide (see `docs/notes/library-results.md` §4).
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{DependencyUndo, FileId, IdentityUndo, LetGo, OwnerKey, SelectionUndo};
 use crate::content_workspace::{ContentEdits, ManifestWrite};
 use crate::design::{

@@ -263,6 +263,14 @@ enum OwnerKey {
     Campaign(Uuid),
 }
 
+/// What a stat fix changes: the kept results, the draft, its revision and the page's error.
+type StatFixParts<'a> = (
+    &'a mut LibraryKept,
+    &'a mut String,
+    &'a mut u64,
+    &'a mut Option<String>,
+);
+
 /// One file in the Library: its owner (kind and id) and its path in the owner's folder. Two
 /// packages can each have `Rules/Watch.md`, and so can a campaign and a package with one UUID:
 /// they are different files.
@@ -418,7 +426,7 @@ impl HeadingChoice {
                 )
             }),
             undo: undo
-                .is_some_and(|(at, _, after)| at == file && after == draft)
+                .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && after == draft)
                 .then(|| format!("The first heading now says {}.", entry.name)),
             undo_line: None,
         }
@@ -4268,10 +4276,17 @@ struct Place {
 }
 impl Place {
     fn find(&self, notes: &[Note]) -> Option<usize> {
-        notes
-            .iter()
-            .position(|n| n.owner.key() == self.owner && n.path == self.path)
+        file_at(notes, (self.owner, &self.path))
     }
+}
+
+/// The note that is this file: its owner's kind and id, and its path. The one key that Back and
+/// Forward (`Place::find`), the reselection after a reload and the new entry's selection use,
+/// so a campaign file never stands for a package file with the same UUID and path (M-L0.4a).
+fn file_at(notes: &[Note], (owner, path): (OwnerKey, &str)) -> Option<usize> {
+    notes
+        .iter()
+        .position(|note| note.owner.key() == owner && note.path == path)
 }
 impl Library {
     /// The footer line of each kept result in `results` that the Library's store marks: its
@@ -4301,6 +4316,57 @@ impl Library {
                 Some((kind, self.kept.line(mark, || words)?))
             })
             .collect()
+    }
+
+    /// The stat fix (`Use <value>`) of `file`: the draft gets the value, and the fix's Undo is
+    /// the newest kept result (its file whole: owner kind, owner id and path). It takes the
+    /// parts it changes, so the editor can call it while it reads the open note.
+    fn fix_stat(
+        (kept, draft, revision, error): StatFixParts<'_>,
+        file: FileId,
+        entry: &Entry,
+        (key, label, value): (&'static str, &str, i64),
+    ) {
+        match creature::use_vital(draft, entry, key, value) {
+            Ok(after) => {
+                kept.set_vital((
+                    file,
+                    draft.clone(),
+                    after.clone(),
+                    format!("The stat block now says {label} {value}."),
+                ));
+                *draft = after;
+                // The draft changed: a failed Save of the old words no longer owns it.
+                *revision += 1;
+            }
+            Err(failure) => *error = Some(failure),
+        }
+    }
+
+    /// The stat fix's result words while its Undo shows: the open file is the fix's own file
+    /// (owner kind, owner id, path) and the draft is the text the fix wrote.
+    fn stat_result_for(&self, file: &FileId) -> Option<String> {
+        self.kept
+            .vital()
+            .filter(|(at, _, after, _)| at.0 == file.0 && at.1 == file.1 && *after == self.draft)
+            .map(|(_, _, _, result)| result.clone())
+    }
+
+    /// Whether a press of `Undo stat change` acts now, in the frame of the press: the open file
+    /// is the fix's own file and the draft is still the text the fix wrote (typed text is never
+    /// replaced).
+    fn stat_undo_applies(&self, file: &FileId) -> bool {
+        self.kept.vital().is_some_and(|(at, _, after, _)| {
+            at.0 == file.0 && at.1 == file.1 && *after == self.draft
+        })
+    }
+
+    /// Whether a press of `Undo heading change` acts now: as `stat_undo_applies`, for the
+    /// heading fix.
+    fn heading_undo_applies(&self, file: &FileId) -> bool {
+        self.kept
+            .heading()
+            .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && *after == self.draft)
     }
 
     /// The footer order of the open entry's link result: the order its own update issued
@@ -5110,11 +5176,10 @@ impl Library {
                                     let _ = campaigns.rename_module(module.id, name);
                                 }
                             }
-                            self.selected = self.reselect.as_ref().and_then(|(owner, path)| {
-                                l.notes
-                                    .iter()
-                                    .position(|n| n.owner.key() == *owner && &n.path == path)
-                            });
+                            self.selected = self
+                                .reselect
+                                .as_ref()
+                                .and_then(|(owner, path)| file_at(&l.notes, (*owner, path)));
                             if let Some(i) = self.selected {
                                 self.draft = l.notes[i].text.clone();
                                 // The draft changed: a failed Save of the old words no longer owns it.
@@ -7197,9 +7262,7 @@ impl Library {
                                 l.invalidate();
                                 self.matches = None;
                                 self.scope_counts = None;
-                                self.selected = l.notes.iter().position(|n| {
-                                    n.path == created_path && n.owner.key() == created_owner
-                                });
+                                self.selected = file_at(&l.notes, (created_owner, &created_path));
                                 if self.selected.is_some() {
                                     self.trail.leave(left);
                                 }
@@ -8365,13 +8428,7 @@ impl Library {
             // actions wait is painted by `design::ReaderToolbar`, never by the footer.
             let discard_shown =
                 discard_is_for(self.kept.discarded(), note) && self.draft == note.text;
-            let vital_result = self
-                .kept
-                .vital()
-                .filter(|(file, _, after, _)| {
-                    file.0 == note.owner.key() && file.1 == note.path && after == &self.draft
-                })
-                .map(|(_, _, _, result)| result.clone());
+            let vital_result = self.stat_result_for(&(note.owner.key(), note.path.clone()));
             let vitals = match (editable, &parsed) {
                 (true, Ok(entry)) => creature::vital_checks(entry),
                 _ => Vec::new(),
@@ -9011,11 +9068,7 @@ impl Library {
                 HeadingChoice::new(current.as_ref(), &self.draft, self.kept.heading(), &file);
             let pressed_heading = (
                 heading_fix && heading_now.fix.is_some(),
-                heading_undo.get()
-                    && self
-                        .kept
-                        .heading()
-                        .is_some_and(|(at, _, after)| *at == file && *after == self.draft),
+                heading_undo.get() && self.heading_undo_applies(&file),
             );
             if pressed_heading.0 || pressed_heading.1 {
                 self.draft_revision += 1;
@@ -9032,26 +9085,20 @@ impl Library {
                     .then_some((key, label, value, entry))
             });
             if let Some((key, label, value, entry)) = current {
-                match creature::use_vital(&self.draft, &entry, key, value) {
-                    Ok(after) => {
-                        self.kept.set_vital((
-                            (note.owner.key(), note.path.clone()),
-                            self.draft.clone(),
-                            after.clone(),
-                            format!("The stat block now says {label} {value}."),
-                        ));
-                        self.draft = after;
-                        // The draft changed: a failed Save of the old words no longer owns it.
-                        self.draft_revision += 1;
-                    }
-                    Err(error) => self.error = Some(error),
-                }
+                Self::fix_stat(
+                    (
+                        &mut self.kept,
+                        &mut self.draft,
+                        &mut self.draft_revision,
+                        &mut self.error,
+                    ),
+                    file.clone(),
+                    &entry,
+                    (key, label, value),
+                );
             }
             if vital_undo.get()
-                && self
-                    .kept
-                    .vital()
-                    .is_some_and(|(at, _, after, _)| *at == file && *after == self.draft)
+                && self.stat_undo_applies(&file)
                 && let Some((_, before, _, _)) = self.kept.take_vital()
             {
                 self.draft = before;
@@ -13377,6 +13424,234 @@ mod tests {
             ..note(&first, "a.md")
         };
         assert!(!discard_is_for(Some(&discarded), &campaign));
+    }
+
+    /// M-L0.4a, proof 4: three files that differ only by their owner. A is a package's
+    /// `Rules/X.md`; B1 a campaign's with A's UUID (settings check package and campaign UUIDs
+    /// apart); B2 another package's. Each holds `text`.
+    fn same_path_notes(text: &str, shared: Uuid, root: &Path) -> Vec<Note> {
+        let module = |id: Uuid, name: &str| Module {
+            id,
+            name: name.into(),
+            path: root.join(name),
+        };
+        let note = |owner: Owner| Note {
+            path: "Rules/X.md".into(),
+            entry: Entry::parse("Rules/X.md", text).ok(),
+            text: text.to_owned(),
+            error: None,
+            fault: None,
+            manifest_gone: false,
+            owner,
+        };
+        vec![
+            note(Owner::Package(module(shared, "a"))),
+            note(Owner::Campaign(Campaign {
+                id: shared,
+                name: "B1".into(),
+                path: root.join("b1"),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            })),
+            note(Owner::Package(module(Uuid::new_v4(), "b2"))),
+        ]
+    }
+
+    #[test]
+    fn heading_and_stat_undos_belong_to_their_whole_file() {
+        // M-L0.4a, proof 4: a fix's Undo shows and acts only on its own file (owner kind, owner
+        // id and path). B gets A's exact fixed text, so only one owner check stands between B and
+        // A's Undo: B1 the kind (same UUID), B2 the owner id (same path). Main's lifecycle stays:
+        // the Undo is not ended by a selection, and comes back on A.
+        let temp = tempfile::tempdir().unwrap();
+        // A creature whose first heading is not its name, and whose Hit Points line is not its
+        // stat block's: the two fixes, through their real writers.
+        let text = format!(
+            "{}\n**Hit Points** 45\n",
+            note_text("Guard", "creature", None)
+                .replace("| Hit Points |  |", "| Hit Points | 1 |")
+                .replacen("# Guard", "# Old Guard", 1)
+        );
+        let entry = Entry::parse("Rules/X.md", &text).unwrap();
+        let shared = Uuid::new_v4();
+        let open = |library: &mut Library, at: usize| {
+            library.open_entry(at);
+            assert_eq!(library.selected, Some(at), "fixture: entry {at} opens");
+            let note = &library.loaded.as_ref().unwrap().notes[at];
+            (note.owner.key(), note.path.clone())
+        };
+        let library_with = |notes_text: &str| Library {
+            loaded: Some(Loaded {
+                notes: same_path_notes(notes_text, shared, temp.path()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        // The heading fix: A's Undo, and B1 and B2 holding A's exact `after` text.
+        let a: FileId = (OwnerKey::Package(shared), "Rules/X.md".into());
+        let choice = HeadingChoice::new(Some(&entry), &text, None, &a);
+        let mut after = text.clone();
+        let mut kept = LibraryKept::default();
+        assert!(choice.apply((true, false), &a, &mut after, &mut kept));
+        let mut library = library_with(&after);
+        library.kept = kept;
+        let after_entry = Entry::parse("Rules/X.md", &after).unwrap();
+        let heading_shows = |library: &Library, file: &FileId| {
+            HeadingChoice::new(
+                Some(&after_entry),
+                &library.draft,
+                library.kept.heading(),
+                file,
+            )
+            .undo
+            .is_some()
+        };
+        let file = open(&mut library, 0);
+        assert!(
+            heading_shows(&library, &file) && library.heading_undo_applies(&file),
+            "A's heading Undo shows and acts on A"
+        );
+        for (at, case) in [(1, "same UUID, other kind"), (2, "same path, other owner")] {
+            let file = open(&mut library, at);
+            assert!(!heading_shows(&library, &file), "heading show: {case}");
+            assert!(
+                !library.heading_undo_applies(&file),
+                "heading press: {case}"
+            );
+        }
+        let file = open(&mut library, 0);
+        assert!(
+            heading_shows(&library, &file) && library.heading_undo_applies(&file),
+            "heading A → B → A: the Undo is back on A"
+        );
+
+        // The stat fix, on its own.
+        let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
+        let mut fixed = Library {
+            draft: text.clone(),
+            ..Default::default()
+        };
+        Library::fix_stat(
+            (
+                &mut fixed.kept,
+                &mut fixed.draft,
+                &mut fixed.draft_revision,
+                &mut fixed.error,
+            ),
+            a.clone(),
+            &entry,
+            (key, label, value),
+        );
+        let mut library = library_with(&fixed.draft);
+        library.kept = std::mem::take(&mut fixed.kept);
+        let file = open(&mut library, 0);
+        assert!(
+            library.stat_result_for(&file).is_some() && library.stat_undo_applies(&file),
+            "A's stat Undo shows and acts on A"
+        );
+        for (at, case) in [(1, "same UUID, other kind"), (2, "same path, other owner")] {
+            let file = open(&mut library, at);
+            assert!(
+                library.stat_result_for(&file).is_none(),
+                "stat show: {case}"
+            );
+            assert!(!library.stat_undo_applies(&file), "stat press: {case}");
+        }
+        let file = open(&mut library, 0);
+        assert!(
+            library.stat_result_for(&file).is_some(),
+            "stat A → B → A: the Undo is back on A"
+        );
+
+        // Two slots: a stat fix, then a heading fix. With the draft back at each fix's text,
+        // that fix's Undo shows: one kind's fix never ends the other's.
+        let mut library = Library {
+            draft: text.clone(),
+            ..Default::default()
+        };
+        Library::fix_stat(
+            (
+                &mut library.kept,
+                &mut library.draft,
+                &mut library.draft_revision,
+                &mut library.error,
+            ),
+            a.clone(),
+            &entry,
+            (key, label, value),
+        );
+        let stat_after = library.draft.clone();
+        let stat_entry = Entry::parse("Rules/X.md", &stat_after).unwrap();
+        let mut heading_after = stat_after.clone();
+        HeadingChoice::new(Some(&stat_entry), &stat_after, None, &a).apply(
+            (true, false),
+            &a,
+            &mut heading_after,
+            &mut library.kept,
+        );
+        assert_ne!(
+            stat_after, heading_after,
+            "fixture: the heading fix changed it"
+        );
+        library.draft = stat_after;
+        assert!(
+            library.stat_undo_applies(&a),
+            "a heading fix keeps the stat Undo"
+        );
+        library.draft = heading_after;
+        assert!(
+            library.heading_undo_applies(&a),
+            "the stat fix before it kept nothing from the heading Undo"
+        );
+    }
+
+    #[test]
+    fn back_and_a_reload_keep_a_campaign_file_apart_from_a_package_file() {
+        // M-L0.4a, proof 4: a package file and a campaign file with one UUID and one path (the
+        // package's loads first), and another file. Back, and the reselection after a reload,
+        // find the campaign's file, never the package's.
+        let temp = tempfile::tempdir().unwrap();
+        let shared = Uuid::new_v4();
+        let text = note_text("Watch", "rule", None);
+        let notes = || {
+            let mut notes = same_path_notes(&text, shared, temp.path());
+            notes[2].path = "Other.md".into();
+            notes
+        };
+        let mut library = Library {
+            loaded: Some(Loaded {
+                notes: notes(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        library.open_entry(1);
+        library.open_entry(2);
+        library.go(Step::Back);
+        assert_eq!(library.selected, Some(1), "Back opens the campaign's file");
+
+        // The reload: `start_load` keeps the open file's identity, and the new notes come in.
+        library.reselect = Some((OwnerKey::Campaign(shared), "Rules/X.md".into()));
+        library.loaded = None;
+        library.selected = None;
+        let (send, receive) = mpsc::channel();
+        send.send(Ok(Loaded {
+            notes: notes(),
+            ..Default::default()
+        }))
+        .unwrap();
+        library.pending = Some(receive);
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
+        });
+        assert_eq!(
+            library.selected,
+            Some(1),
+            "the reload reselects the campaign's file"
+        );
     }
 
     #[test]
