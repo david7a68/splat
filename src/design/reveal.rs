@@ -733,7 +733,9 @@ mod tests {
     }
 
     #[allow(clippy::disallowed_methods, reason = "a test's raw scroll area")]
-    fn harness(page: Page) -> egui_kittest::Harness<'static, Page> {
+    fn harness(mut page: Page) -> egui_kittest::Harness<'static, Page> {
+        // The page asks after the theme (its fonts) is installed.
+        let ask = std::mem::take(&mut page.ask);
         let mut h = egui_kittest::Harness::builder()
             .with_size(egui::vec2(WIDTH, HEIGHT))
             .build_ui_state(
@@ -748,6 +750,7 @@ mod tests {
             );
         super::super::theme::install(&h.ctx);
         h.step();
+        h.state_mut().ask = ask;
         h
     }
 
