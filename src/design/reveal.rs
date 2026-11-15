@@ -749,7 +749,6 @@ mod tests {
         }
     }
 
-    #[allow(clippy::disallowed_methods, reason = "a test's scroll request")]
     fn content(ui: &mut Ui, page: &mut Page) {
         ui.label("Outer top");
         room(ui, page.open_down);
@@ -802,7 +801,6 @@ mod tests {
         room(ui, 900.0);
     }
 
-    #[allow(clippy::disallowed_methods, reason = "a test's raw scroll area")]
     fn harness(mut page: Page) -> egui_kittest::Harness<'static, Page> {
         // The page asks after the theme (its fonts) is installed.
         let ask = std::mem::take(&mut page.ask);
@@ -811,7 +809,8 @@ mod tests {
             .build_ui_state(
                 |ui, page: &mut Page| {
                     if page.raw {
-                        egui::ScrollArea::vertical().show(ui, |ui| content(ui, page));
+                        // A scroll area that is not a `ScrollColumn`.
+                        super::super::sideways_scroll(ui, "raw", |ui| content(ui, page));
                     } else {
                         super::super::ScrollColumn::new("outer").show(ui, |ui| content(ui, page));
                     }
