@@ -1216,12 +1216,16 @@ impl Campaigns {
                 let undo =
                     design::outcome::UndoStep::of(design::outcome::Verb::Register, "campaign")
                         .pressed_as(());
-                // The page's lock comes from outside this footer (a run, a recording, a draft):
-                // its words are a sentence from elsewhere.
-                let undo = match locked.and_then(design::outcome::Sentence::outside) {
-                    Some(reason) => undo.blocked(reason),
-                    None => undo,
-                };
+                // The page's lock comes and goes (a run, a recording, a draft): `locked_when`, so
+                // its line keeps its room while it is open and nothing below moves. Its words
+                // come from `blocked_switch` in `src/lib.rs` as app-owned `&str` (the counted
+                // `Ban::Words` allowance of this function); while open, the room is the draft's.
+                let reason = locked
+                    .and_then(design::outcome::Sentence::outside)
+                    .unwrap_or(splat::sentence!(
+                        "Save or discard your changes to change campaigns."
+                    ));
+                let undo = undo.locked_when(locked.is_some(), reason);
                 if design::outcome::kept_result(ui, &added, undo, Vec::new()).is_some() {
                     let mut this = me.borrow_mut();
                     if let Err(error) = this.undo_campaign_copy() {

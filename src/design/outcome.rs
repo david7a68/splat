@@ -610,12 +610,28 @@ impl UndoStep {
     }
 
     /// The app's own fixed words for a step that is not a verb and an object
-    /// (`Undo package registration`): a `'static` literal that starts with `Undo `, never words
-    /// from data. Its label is these words, whole at every width.
-    pub fn words(label: &'static str) -> Self {
-        debug_assert!(
-            label.starts_with("Undo "),
-            "an Undo's words start with `Undo `"
+    /// (`Undo package registration`), made once as a `const` step that each place showing it
+    /// uses: its visible form, its short form and its accessible name are these words, whole at
+    /// every width. A literal that does not start with `Undo ` and a word does not compile in a
+    /// `const`.
+    ///
+    /// ```
+    /// const STEP: splat::outcome::UndoStep = splat::outcome::UndoStep::words("Undo source change");
+    /// ```
+    /// ```compile_fail
+    /// const STEP: splat::outcome::UndoStep = splat::outcome::UndoStep::words("Source change");
+    /// ```
+    pub const fn words(label: &'static str) -> Self {
+        let b = label.as_bytes();
+        assert!(
+            b.len() > 5
+                && b[0] == b'U'
+                && b[1] == b'n'
+                && b[2] == b'd'
+                && b[3] == b'o'
+                && b[4] == b' '
+                && b[5].is_ascii_lowercase(),
+            "an Undo's words start with `Undo ` and a word"
         );
         Self {
             step: Step::Words(label),
@@ -1209,6 +1225,8 @@ pub struct Undo<A> {
     step: UndoStep,
     id: A,
     lock: Lock,
+    /// The [`SharedCause`] its lock belongs to, if any.
+    cause: Option<egui::Id>,
 }
 
 impl UndoStep {
@@ -1218,6 +1236,7 @@ impl UndoStep {
             step: self,
             id,
             lock: None,
+            cause: None,
         }
     }
 }
@@ -1233,6 +1252,14 @@ impl<A> Undo<A> {
     /// Locked while `locked`, for `reason`; the reason's line is kept while it is open.
     pub fn locked_when(mut self, locked: bool, reason: Sentence) -> Self {
         self.lock = Some((reason, locked));
+        self.cause = None;
+        self
+    }
+
+    /// Locked while `cause` holds, as one of the set of Undos it locks ([`SharedCause`]).
+    pub fn locked_by(mut self, cause: &SharedCause) -> Self {
+        self.lock = Some((cause.reason.clone(), cause.locked));
+        self.cause = Some(cause.key);
         self
     }
 }
@@ -1883,53 +1910,55 @@ impl<A> From<Said<A>> for KeptOutcome<A> {
 
 /// M2's typed adapter for a kept result that a legacy `Footer::result` closure still draws
 /// (Library's reader results, Campaign's copy result): the result's words in the success tone
-/// and its typed [`Undo`] (with its lock, `blocked` or `locked_when`) and choices, drawn by the
-/// same code as a `Messages` footer's kept line. Its lock's reason is painted under it, at the
-/// message words, whenever the lock holds; no flag can hide it (ruling R35, Q-u). A reason that
-/// an earlier result of the same footer already painted in this pass is not painted again (one
-/// cause once, `docs/design-system.md` "When one cause blocks several controls"); its control
-/// keeps the reason as its hover and accessible description. The id of what the DM pressed.
+/// and its typed [`Undo`] (with its lock: `blocked`, `locked_when`, or `locked_by` a
+/// [`SharedCause`]) and choices, drawn by the same code as a `Messages` footer's kept line. Its
+/// lock's reason is painted under it, at the message words, whenever the lock holds, and its
+/// room is kept while it is open (ruling R29); no flag can hide it (rulings R35, Q-u). The id of
+/// what the DM pressed.
 ///
 /// The words are the caller's: this is the staged path for callers whose results are not yet
-/// in a `Results` store: named debt, its calls counted by `kept_result_calls_only_shrink`.
+/// in a `Results` store. It is named debt: Library's and Campaign's calls are counted exactly
+/// (`library::tests::m2_legacy_reason_paths_are_counted`).
 pub fn kept_result<A>(
     ui: &mut Ui,
     words: &str,
     undo: Undo<A>,
     choices: Vec<Choice<A>>,
 ) -> Option<A> {
-    let mut typed = Typed::new(
+    let typed = Typed::new(
         Tone::Success,
         Sentence(Cow::Owned(words.to_owned())),
         Some(undo),
         choices,
     );
-    // The reasons this footer painted in this pass, keyed by the footer being drawn.
-    let footer = ui
-        .ctx()
-        .data(|data| data.get_temp::<egui::Id>(egui::Id::new("design_footer_drawing")));
-    let key = egui::Id::new(("design_kept_result_reasons", footer));
-    let pass = ui.ctx().cumulative_pass_nr();
-    let said = ui.ctx().data(|data| {
-        data.get_temp::<(u64, Vec<String>)>(key)
-            .filter(|(at, _)| *at == pass)
-            .map(|(_, said)| said)
-            .unwrap_or_default()
-    });
-    typed.body.said = said.clone();
     let pressed = typed.body.draw(ui, MessagePlace::Footer);
-    let mut said = said;
-    said.extend(
-        typed
-            .body
-            .lock_reasons()
-            .filter(|reason| !said.iter().any(|s| s == reason))
-            .map(str::to_owned)
-            .collect::<Vec<_>>(),
-    );
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(key, (pass, said)));
     typed.id(pressed?)
+}
+
+/// One cause that locks a named set of Undos together (Library's open draft over the Undos of
+/// its file changes), in one paint scope (the pane that shows the set). In each pass the first
+/// Undo of the set that is drawn in that scope says the reason, or keeps its room while the
+/// cause is open (R29); every other Undo of the set cites it: disabled, with the reason as its
+/// hover and accessible description, and no second line. The same Undo says it in the open and
+/// the locked state, so nothing moves when the cause comes or goes. A lock of its own (a file
+/// that changed after one result) is `blocked` or `locked_when`, never shared: equal words do
+/// not make one cause.
+#[derive(Clone, Debug)]
+pub struct SharedCause {
+    key: egui::Id,
+    reason: Sentence,
+    locked: bool,
+}
+
+impl SharedCause {
+    /// The cause `what` in the paint scope `scope` (a pane's own id), holding while `locked`.
+    pub fn new(scope: egui::Id, what: &'static str, locked: bool, reason: Sentence) -> Self {
+        Self {
+            key: scope.with(("design_shared_cause", what)),
+            reason,
+            locked,
+        }
+    }
 }
 
 /// A message as drawn: tone, words, Undo and choices, each with its lock. Owned: it holds no
@@ -1945,9 +1974,8 @@ struct Body {
     hovers: Vec<Option<String>>,
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
-    /// Lock reasons an earlier message of the same footer painted in this pass
-    /// (`kept_result`): said once, so not painted again here.
-    said: Vec<String>,
+    /// The shared cause of its Undo's lock, if the lock is one ([`SharedCause`]).
+    undo_cause: Option<egui::Id>,
 }
 
 /// A body and the caller's ids of its Undo and of each choice, by index.
@@ -1959,9 +1987,9 @@ struct Typed<A> {
 
 impl<A> Typed<A> {
     fn new(tone: Tone, words: Sentence, undo: Option<Undo<A>>, choices: Vec<Choice<A>>) -> Self {
-        let (undo, undo_lock, undo_id) = match undo {
-            Some(undo) => (Some(undo.step), undo.lock, Some(undo.id)),
-            None => (None, None, None),
+        let (undo, undo_lock, undo_id, undo_cause) = match undo {
+            Some(undo) => (Some(undo.step), undo.lock, Some(undo.id), undo.cause),
+            None => (None, None, None, None),
         };
         let mut ids = Vec::with_capacity(choices.len());
         let (mut whats, mut locks, mut hovers) = (Vec::new(), Vec::new(), Vec::new());
@@ -1987,7 +2015,7 @@ impl<A> Typed<A> {
                 locks,
                 hovers,
                 file: None,
-                said: Vec::new(),
+                undo_cause,
             },
             undo: undo_id,
             choices: ids,
@@ -2721,15 +2749,22 @@ impl Body {
     fn reasons(&self, ui: &mut Ui) {
         // Identical reasons are one line, shown when any of their locks holds.
         let mut said: Vec<(&str, bool)> = Vec::new();
+        // A shared cause is said by the first Undo of its set drawn in this pass, in the open
+        // and the locked state alike; the others cite it.
+        let cited = self.undo.is_some()
+            && self.undo_cause.is_some_and(|key| {
+                let pass = ui.ctx().cumulative_pass_nr();
+                ui.ctx().data_mut(|data| {
+                    let claimed = data.get_temp::<u64>(key) == Some(pass);
+                    data.insert_temp(key, pass);
+                    claimed
+                })
+            });
         let locks = std::iter::once(&self.undo_lock)
-            .filter(|_| self.undo.is_some())
+            .filter(|_| self.undo.is_some() && !cited)
             .chain(&self.locks);
         for (reason, locked) in locks.flatten() {
             let reason = reason.as_str();
-            // Said above, by an earlier result of the same footer in this pass.
-            if self.said.iter().any(|said| said == reason) {
-                continue;
-            }
             match said.iter_mut().find(|(said, _)| *said == reason) {
                 Some((_, any)) => *any |= *locked,
                 None => said.push((reason, *locked)),
@@ -2775,14 +2810,7 @@ impl Body {
                 RESERVED,
                 probe.min_rect().height() + ui.spacing().item_spacing.y,
             );
-            // In a footer's draw (it set the sums), the room stays in the footer's height, at
-            // its end: no blank line under this message, and a lock that closes takes that room,
-            // so the footer neither grows nor shows a band between its messages. A body message
-            // has no such height: it keeps the room in place.
-            let in_footer = ui
-                .ctx()
-                .data(|data| data.get_temp::<f32>(egui::Id::new(RESERVED)).is_some());
-            if !give_up && !in_footer {
+            if !give_up {
                 let before = ui.cursor().top();
                 message_choice_row(ui, self.tone, |ui| {
                     ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
@@ -2792,14 +2820,6 @@ impl Body {
                 add(ui, DRAWN, ui.cursor().top() - before);
             }
         }
-    }
-
-    /// The reasons of its locks that hold now.
-    fn lock_reasons(&self) -> impl Iterator<Item = &str> {
-        std::iter::once(&self.undo_lock)
-            .filter(|_| self.undo.is_some())
-            .chain(&self.locks)
-            .filter_map(holding)
     }
 
     /// A choice's whole width, with the `L` before a red one.
@@ -3324,11 +3344,10 @@ mod tests {
     use eframe::egui;
     use egui_kittest::{Harness, kittest::Queryable};
 
-    /// M2's staged adapter is named debt: its calls outside `src/design/` can only shrink, as
-    /// their results move into `Results` stores and `Messages` footers.
+    /// M2's staged adapter is named debt: no file outside `src/design/` uses it but the two
+    /// that `library::tests::m2_legacy_reason_paths_are_counted` counts exactly.
     #[test]
-    fn kept_result_calls_only_shrink() {
-        const ALLOWED: &[(&str, usize)] = &[("src/campaigns.rs", 1), ("src/library.rs", 5)];
+    fn kept_result_is_used_only_where_counted() {
         let mut found = Vec::new();
         let mut stack = vec![std::path::PathBuf::from("src")];
         while let Some(dir) = stack.pop() {
@@ -3338,27 +3357,17 @@ mod tests {
                     if !path.ends_with("design") {
                         stack.push(path);
                     }
-                } else if path.extension().is_some_and(|ext| ext == "rs") {
-                    let text = std::fs::read_to_string(&path).unwrap();
-                    let calls = text.matches("kept_result(").count();
-                    if calls > 0 {
-                        found.push((path.to_string_lossy().replace('\\', "/"), calls));
-                    }
+                } else if path.extension().is_some_and(|ext| ext == "rs")
+                    && std::fs::read_to_string(&path)
+                        .unwrap()
+                        .contains("kept_result")
+                {
+                    found.push(path.to_string_lossy().replace('\\', "/"));
                 }
             }
         }
-        for (path, calls) in &found {
-            let allowed = ALLOWED
-                .iter()
-                .find(|(file, _)| file == path)
-                .map_or(0, |(_, count)| *count);
-            assert!(
-                *calls <= allowed,
-                "{path} calls `kept_result` {calls} times; it may call it {allowed} times. Draw a \
-                 new result through a `Results` store and `Messages` in place of the adapter."
-            );
-        }
-        assert!(!found.is_empty(), "the walk found no call: check its root");
+        found.sort();
+        assert_eq!(found, ["src/campaigns.rs", "src/library.rs"]);
     }
 
     #[allow(
@@ -5114,6 +5123,79 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().acted, [Ok("Folder saved")]);
         assert_eq!(h.state().presses.first().map(|press| press.0), Some(1));
+    }
+
+    /// M2 (packet E3): through the staged adapter, one shared cause over two Undos is said once
+    /// per pane, by the same Undo whether it is open or locked, so the control after them never
+    /// moves when the cause comes or goes; a second pane says it again for itself; two
+    /// independent locks with equal words each keep their own explanation.
+    #[test]
+    fn a_shared_cause_is_said_once_per_pane_and_moves_nothing() {
+        use egui_kittest::kittest::Queryable;
+        const DRAFT: Sentence = crate::sentence!("Save or discard this draft to undo.");
+        const ENDED: Sentence = crate::sentence!("A file changed on disk after this change.");
+        let mut h = Harness::new_ui_state(
+            |ui, locked: &mut bool| {
+                for pane in ["left", "right"] {
+                    ui.push_id(pane, |ui| {
+                        let cause = SharedCause::new(
+                            egui::Id::new(("pane", pane)),
+                            "draft",
+                            *locked,
+                            DRAFT,
+                        );
+                        for (words, step) in [
+                            ("First change.", "Undo first"),
+                            ("Second change.", "Undo second"),
+                        ] {
+                            let undo = UndoStep::act(step).pressed_as(()).locked_by(&cause);
+                            let _ = kept_result(ui, words, undo, Vec::new());
+                        }
+                        ui.button(format!("After {pane}"));
+                    });
+                }
+                for words in ["Third change.", "Fourth change."] {
+                    let undo = UndoStep::act(words).pressed_as(()).blocked(ENDED);
+                    let _ = kept_result(ui, words, undo, Vec::new());
+                }
+            },
+            false,
+        );
+        h.set_size(egui::vec2(600.0, 900.0));
+        h.run_steps(3);
+        let after = |h: &Harness<'_, bool>| {
+            ["After left", "After right"].map(|name| h.get_by_label(name).rect().top())
+        };
+        let open = after(&h);
+        assert_eq!(
+            h.query_all_by_label(DRAFT.as_str()).count(),
+            0,
+            "an open cause paints no words"
+        );
+        *h.state_mut() = true;
+        h.run_steps(3);
+        assert_eq!(
+            after(&h),
+            open,
+            "a cause that comes moves no control after its set"
+        );
+        assert_eq!(
+            h.query_all_by_label(DRAFT.as_str()).count(),
+            2,
+            "one line per pane, not one per Undo and not one for the app"
+        );
+        assert_eq!(
+            h.query_all_by_label(ENDED.as_str()).count(),
+            2,
+            "equal words of independent causes are two explanations"
+        );
+        *h.state_mut() = false;
+        h.run_steps(3);
+        assert_eq!(
+            after(&h),
+            open,
+            "a cause that goes moves no control after its set"
+        );
     }
 
     /// At 960 in a narrow pane the lock's reason wraps at whole words under the message words;

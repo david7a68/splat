@@ -96,56 +96,106 @@ pub fn temp_hp_text(temp: i64) -> String {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Action group (M2): one availability value per action gives its lock, its hover, its accessible
-// description and its painted reason.
+// Reader toolbar (M2): one availability value per action gives its lock, its hover, its
+// accessible description and its painted reason.
 
-/// Whether one action of an [`ActionGroup`] runs now, and why not. This ONE value gives the
-/// control's disabled state, its hover and accessible description, and the reason the group
-/// paints: the group takes no `blocked` from its caller and no flag that hides a reason.
+/// Whether one action of a [`ReaderToolbar`] runs now, and why not. This ONE value gives the
+/// control's disabled state, its hover and accessible description, and the reason that is
+/// painted: the toolbar takes no `blocked` from its caller and no flag that hides a reason.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Availability {
     /// It runs now.
     Open,
-    /// It waits for a cause that the group states: painted once under the group's controls, in
+    /// It waits for a steady cause that the toolbar states: painted once under its row, in
     /// `Small` muted words at the row's start (ruling R35), whatever other action waits for it.
-    /// For a steady cause (no destination yet): a cause that comes and goes while the DM types
-    /// in the same pane is a [`DraftCause`], so the row never grows under the DM's hands.
     Waits(super::outcome::Sentence),
-    /// It waits for an open draft, whose save row states the cause (one cause at its source,
-    /// `docs/design-system.md`, "When one cause blocks several controls"). The control keeps
-    /// the reason as its hover and accessible description.
-    Draft(DraftCause),
+    /// It waits while the pane's open draft has changes ([`DraftLock`]). The draft's save row
+    /// paints the reason in its slot; with no save row, the toolbar paints it under its row.
+    Draft,
+    /// It waits for a fault that the pane's body states in painted words with its recovery
+    /// (an unreadable file's placeholder): the control has the reason as its hover and
+    /// accessible description only, so one cause is said once. Only the mode switch takes it;
+    /// a reviewer checks that the body states the cause (outside the type's proof).
+    Body(super::outcome::Sentence),
 }
 
-impl Availability {
-    /// The reason it waits, if it does.
-    pub fn reason(&self) -> Option<&str> {
-        match self {
-            Self::Open => None,
-            Self::Waits(reason) => Some(reason.as_str()),
-            Self::Draft(cause) => Some(cause.reason),
+/// The pane's open draft, for the toolbar's [`Availability::Draft`] actions: its state (the
+/// lock holds while the save row shows a draft with changes, `Discard` beside its word, or a
+/// file changed on disk) and the reason those actions wait. It is consumed by the one toolbar
+/// it is given to, so it cannot outlive that pane's draw or serve another pane.
+pub struct DraftLock<'s> {
+    state: &'s super::DraftState<'s>,
+    reason: super::outcome::Sentence,
+}
+
+impl<'s> DraftLock<'s> {
+    pub fn new(state: &'s super::DraftState<'s>, reason: super::outcome::Sentence) -> Self {
+        Self { state, reason }
+    }
+
+    fn locked(&self) -> bool {
+        self.state.discard_shown()
+            || self.state.save_blocked() == Some(super::save_row::CHANGED_ON_DISK)
+    }
+}
+
+/// Where the draft's reason is still owed after [`ReaderToolbar::show`]: the pane's save row
+/// (`save_row`), or, when the pane draws none, the line right under the toolbar
+/// (`no_save_row`). Dropping it unpaid fails in debug builds and tests: no caller can disable
+/// a toolbar action for the draft and leave its reason unpainted.
+#[must_use = "pay the draft's reason: `save_row` or `no_save_row`"]
+pub struct DraftSlot<'s> {
+    draft: DraftLock<'s>,
+    /// A toolbar control waits for the draft: its reason is owed.
+    cites: bool,
+    paid: bool,
+}
+
+impl<'s> DraftSlot<'s> {
+    /// The pane's save row for the draft, then, when a toolbar control waits for the draft, its
+    /// reason in the measured slot under the row: painted while the draft has changes, its room
+    /// kept while it has none (R29: the same slot in both states), so nothing moves while the DM
+    /// types.
+    pub fn save_row(mut self, ui: &mut Ui, save: &str) -> super::save_row::SaveRow {
+        self.paid = true;
+        let row = super::save_row(ui, self.draft.state, save);
+        if self.cites {
+            reason_slot(ui, self.draft.reason.as_str(), self.draft.locked());
+        }
+        row
+    }
+
+    /// The pane draws no save row for the draft (a comparison owns the pane, or the entry is not
+    /// editable): the reason, while it holds, on its own line here, right under the toolbar.
+    pub fn no_save_row(mut self, ui: &mut Ui) {
+        self.paid = true;
+        if self.cites && self.draft.locked() {
+            blocked_reason(ui, Some(self.draft.reason.as_str()));
         }
     }
 }
 
-/// Proof that a draft's save row states why other actions wait: made only from a
-/// [`DraftState`](super::DraftState) whose save row shows a draft with changes (`Discard`
-/// beside its word) or a file changed on disk.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DraftCause {
-    reason: &'static str,
-}
-
-impl DraftCause {
-    /// `reason` (each other control's hover) while `state`'s row states the draft's cause;
-    /// `None` when it does not, and then the caller has no cause to cite.
-    pub fn of(state: &super::DraftState<'_>, reason: &'static str) -> Option<Self> {
-        (state.discard_shown() || state.word() == super::save_row::SaveWord::ChangedOnDisk)
-            .then_some(Self { reason })
+impl Drop for DraftSlot<'_> {
+    fn drop(&mut self) {
+        debug_assert!(
+            self.paid || !self.cites || std::thread::panicking(),
+            "a toolbar's draft reason was never painted: call `save_row` or `no_save_row`"
+        );
     }
 }
 
-/// One action of a group: its words, its icon, the caller's id, and its availability.
+/// A reason's line: painted while `locked`, else drawn invisibly so its measured room stays.
+fn reason_slot(ui: &mut Ui, reason: &str, locked: bool) {
+    if locked {
+        blocked_reason(ui, Some(reason));
+    } else {
+        ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
+            blocked_reason(ui, Some(reason));
+        });
+    }
+}
+
+/// One action of the toolbar: its words, its icon, the caller's id, and its availability.
 struct GroupAction<'a, A> {
     label: &'a str,
     icon: Option<&'a str>,
@@ -154,10 +204,15 @@ struct GroupAction<'a, A> {
 }
 
 impl<A> GroupAction<'_, A> {
-    fn action(&self) -> Action<'_> {
+    fn action<'r>(&'r self, draft: Option<&'r str>) -> Action<'r> {
+        let reason = match &self.availability {
+            Availability::Open => None,
+            Availability::Waits(reason) | Availability::Body(reason) => Some(reason.as_str()),
+            Availability::Draft => draft,
+        };
         let action = Action::quiet(self.label)
             .density(Density::Read)
-            .blocked(self.availability.reason());
+            .blocked(reason);
         match self.icon {
             Some(icon) => action.icon(icon),
             None => action,
@@ -165,32 +220,61 @@ impl<A> GroupAction<'_, A> {
     }
 }
 
-/// A group of quiet toolbar actions that may wait (Library's `Copy to…`, `Make NPC note`,
-/// `Choose for this campaign`). It owns each action's availability AND the reason under its
-/// controls, from one [`Availability`] value per action; the caller never sets `blocked` and
-/// never decides whether a reason is painted. [`row`](Self::row) draws the toolbar row: the
-/// caller's fixed prefix first (a mode switch, `Back`: ruling R38, its place never depends on
-/// the extras), then the group's actions on the row when they fit, else behind `More` at the
-/// row's right end; then each `Waits` cause once, under the row.
-#[must_use = "draw it with `row`"]
-pub struct ActionGroup<'a, A> {
+/// What the DM pressed in a [`ReaderToolbar`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolbarPress<A> {
+    Back,
+    Action(A),
+}
+
+/// The words of `More`, the toolbar's overflow menu.
+const MORE: &str = "More";
+
+/// The reader's toolbar, a closed part (ruling R38): the mode switch (`Read` and the source
+/// mode), then `Back`, then the extras. The mode switch keeps the room of its wider source
+/// label and `Back` decides its key hint from the prefix and a reserved `More` alone, so
+/// `Back` has one place whatever the entry's kind or its extras. The extras follow on the row
+/// when they fit, else behind `More` (Read density, as tall as the other controls) at the row's
+/// right end. Each action's availability gives its lock and its reason: a steady cause is
+/// painted once under the row; the draft's reason is owed by the returned [`DraftSlot`].
+#[must_use = "draw it with `show`"]
+pub struct ReaderToolbar<'a, A> {
+    source: &'a mut bool,
+    source_label: &'a str,
+    wider_label: &'a str,
+    mode: Availability,
+    /// `Back`'s hint and icon, while there is history.
+    back: Option<(&'a str, &'a str)>,
     actions: Vec<GroupAction<'a, A>>,
 }
 
-impl<A> Default for ActionGroup<'_, A> {
-    fn default() -> Self {
+impl<'a, A: Copy> ReaderToolbar<'a, A> {
+    /// `Read` and `source_label` over `source`; the switch keeps the room of `wider_label` (the
+    /// other entries' source label); `mode` is the switch's own availability.
+    pub fn new(
+        source: &'a mut bool,
+        source_label: &'a str,
+        wider_label: &'a str,
+        mode: Availability,
+    ) -> Self {
         Self {
+            source,
+            source_label,
+            wider_label,
+            mode,
+            back: None,
             actions: Vec::new(),
         }
     }
-}
 
-impl<'a, A: Copy> ActionGroup<'a, A> {
-    pub fn new() -> Self {
-        Self::default()
+    /// `Back`, with `icon` and `hint` on hover, while there is history to go back to.
+    pub fn back(mut self, history: bool, icon: &'a str, hint: &'a str) -> Self {
+        self.back = history.then_some((icon, hint));
+        self
     }
 
-    /// An action, quiet at `Density::Read`, that gives `id` back when pressed.
+    /// An extra, quiet at `Density::Read`, that gives `id` back when pressed. An extra never
+    /// waits for the body's fault ([`Availability::Body`] is the mode switch's).
     pub fn action(
         mut self,
         label: &'a str,
@@ -198,6 +282,10 @@ impl<'a, A: Copy> ActionGroup<'a, A> {
         id: A,
         availability: Availability,
     ) -> Self {
+        debug_assert!(
+            !matches!(availability, Availability::Body(_)),
+            "an extra's reason is painted: `Waits` or `Draft`"
+        );
         self.actions.push(GroupAction {
             label,
             icon,
@@ -207,66 +295,120 @@ impl<'a, A: Copy> ActionGroup<'a, A> {
         self
     }
 
-    /// The width its actions take on a row, each with `S` before it.
-    pub fn width(&self, ui: &Ui) -> f32 {
-        self.actions
-            .iter()
-            .map(|action| action.action().natural_width(ui) + S)
-            .sum()
+    /// The `Back` control, with or without its key.
+    fn back_action(icon: &'a str, hint: &'a str, key: bool) -> Action<'a> {
+        let back = Action::quiet("Back")
+            .icon(icon)
+            .density(Density::Read)
+            .hint(hint);
+        if key { back.key("Alt+Left") } else { back }
     }
 
-    /// The causes it paints: each `Waits` reason once, in the order of its actions.
-    pub fn reasons(&self) -> Vec<&str> {
+    /// The row, then each steady cause once under it. `draft` is the pane's open draft; its
+    /// reason is owed by the returned slot. Also the DM's press.
+    pub fn show<'s>(
+        self,
+        ui: &mut Ui,
+        draft: DraftLock<'s>,
+    ) -> (Option<ToolbarPress<A>>, DraftSlot<'s>) {
+        let draft_reason = draft.locked().then(|| draft.reason.as_str().to_owned());
+        let mut pressed = None;
+        let gap = ui.spacing().item_spacing.x;
+        let more_width = Action::quiet(&format!("{MORE}    "))
+            .density(Density::Read)
+            .natural_width(ui);
+        let mode_reason = match &self.mode {
+            Availability::Waits(reason) | Availability::Body(reason) => Some(reason.as_str()),
+            Availability::Draft => draft_reason.as_deref(),
+            Availability::Open => None,
+        };
+        ui.horizontal(|ui| {
+            let left = ui.cursor().left();
+            let room = ui.available_width();
+            let before = segment_width(ui, self.source_label);
+            locked(ui, mode_reason, |ui| {
+                segmented(
+                    ui,
+                    self.source,
+                    &[(false, "Read"), (true, self.source_label)],
+                )
+            });
+            // The wider source label's room: `Back` starts at one x for every entry.
+            let reserve = segment_width(ui, self.wider_label) - before;
+            if reserve > 0.0 {
+                space(ui, reserve);
+            }
+            if let Some((icon, hint)) = self.back {
+                let prefix = ui.cursor().left() - left;
+                let with_key = Self::back_action(icon, hint, true).natural_width(ui);
+                let key = prefix + gap + with_key + gap + more_width <= room;
+                if Self::back_action(icon, hint, key).show(ui).clicked() {
+                    pressed = Some(ToolbarPress::Back);
+                }
+            }
+            if self.actions.is_empty() {
+                return;
+            }
+            let draft = draft_reason.as_deref();
+            let width: f32 = self
+                .actions
+                .iter()
+                .map(|action| action.action(draft).natural_width(ui) + gap)
+                .sum();
+            if width <= ui.available_width() {
+                for action in &self.actions {
+                    if action.action(draft).show(ui).clicked() {
+                        pressed = Some(ToolbarPress::Action(action.id));
+                    }
+                }
+            } else {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let response = Action::quiet(&format!("{MORE}    "))
+                        .name(MORE)
+                        .density(Density::Read)
+                        .show(ui);
+                    let caret = Rect::from_min_max(
+                        pos2(response.rect.right() - L - XS, response.rect.top()),
+                        response.rect.right_bottom(),
+                    );
+                    super::combo_icon(ui, caret, ui.style().interact(&response), false);
+                    super::menu_popup(&*ui, &response).show(|ui| {
+                        for action in &self.actions {
+                            if action.action(draft).show(ui).clicked() {
+                                pressed = Some(ToolbarPress::Action(action.id));
+                                ui.close();
+                            }
+                        }
+                    });
+                });
+            }
+        });
+        // Each steady cause once, in the order of the controls that wait for it.
         let mut said: Vec<&str> = Vec::new();
-        for action in &self.actions {
-            if let Availability::Waits(reason) = &action.availability
+        let causes =
+            std::iter::once(&self.mode).chain(self.actions.iter().map(|a| &a.availability));
+        for availability in causes {
+            if let Availability::Waits(reason) = availability
                 && !said.contains(&reason.as_str())
             {
                 said.push(reason.as_str());
             }
         }
-        said
-    }
-
-    /// The toolbar row: `prefix` first (it gets the room the actions need, to decide its own
-    /// optional parts), then the actions when they fit in the room left, else `More` with them
-    /// in its menu at the row's right end; then, under the row, each cause the group states.
-    /// The prefix's value, and the id of the action the DM pressed.
-    pub fn row<P>(self, ui: &mut Ui, prefix: impl FnOnce(&mut Ui, f32) -> P) -> (P, Option<A>) {
-        let width = self.width(ui);
-        let mut pressed = None;
-        let value = ui
-            .horizontal(|ui| {
-                let value = prefix(ui, width);
-                if self.actions.is_empty() {
-                    return value;
-                }
-                if width <= ui.available_width() {
-                    for action in &self.actions {
-                        if action.action().show(ui).clicked() {
-                            pressed = Some(action.id);
-                        }
-                    }
-                } else {
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        let response = menu_button(ui, "More", false);
-                        super::menu_popup(&*ui, &response).show(|ui| {
-                            for action in &self.actions {
-                                if action.action().show(ui).clicked() {
-                                    pressed = Some(action.id);
-                                    ui.close();
-                                }
-                            }
-                        });
-                    });
-                }
-                value
-            })
-            .inner;
-        for reason in self.reasons() {
+        for reason in said {
             blocked_reason(ui, Some(reason));
         }
-        (value, pressed)
+        // The draft's reason is owed only when a control waits for the draft.
+        let cites = matches!(self.mode, Availability::Draft)
+            || self
+                .actions
+                .iter()
+                .any(|action| action.availability == Availability::Draft);
+        let slot = DraftSlot {
+            draft,
+            cites,
+            paid: false,
+        };
+        (pressed, slot)
     }
 }
 

@@ -40,8 +40,8 @@ pub(crate) const USE_COPY: &str = "Use the copy in encounters";
 pub(crate) const USE_COPY_RESULT: &str = "Encounters now use the copy.";
 
 /// Why source editing is blocked for a file that the system will not read.
-const UNREAD_EDIT: &str =
-    "Splat cannot read this file. Fix it outside Splat, then choose Try again.";
+const UNREAD_EDIT: design::outcome::Sentence =
+    splat::sentence!("Splat cannot read this file. Fix it outside Splat, then choose Try again.");
 
 /// A file that cannot be read: what happened, how to recover, and Try again, which starts at the
 /// message words. The system's words go to Technical details. Nothing here changes the file.
@@ -736,6 +736,11 @@ pub(crate) fn duplicate_repair_consequence(
         );
     }
 }
+
+/// A copied package's registration: its result's Undo.
+const PACKAGE_REGISTRATION_UNDO: UndoStep = UndoStep::words("Undo package registration");
+/// `Use the copy in encounters`: its result's Undo.
+const SOURCE_CHANGE_UNDO: UndoStep = UndoStep::words("Undo source change");
 
 /// Why the page's other actions wait while a campaign entry's draft has changes.
 static DRAFT_IN_CAMPAIGN: design::outcome::Sentence =
@@ -2613,13 +2618,17 @@ struct ResultPress {
 }
 
 impl ReaderResults {
-    /// `step`'s Undo, locked while the open entry's draft (or its changed file) holds it, with
-    /// a stable reason so the lock coming or going moves nothing below it.
+    /// `step`'s Undo, one of the set that the open entry's draft (or its changed file) locks:
+    /// one cause in the reader's pane, said once under the first of them, with its room kept
+    /// while it is open, so the lock coming or going moves nothing below it.
     fn draft_lock(&self, step: UndoStep) -> design::outcome::Undo<()> {
-        step.pressed_as(()).locked_when(
+        let cause = design::outcome::SharedCause::new(
+            egui::Id::new("library_reader_results"),
+            "draft",
             self.locked.is_some(),
             self.locked.unwrap_or(&UNDO_WAITS_FOR_DRAFT).clone(),
-        )
+        );
+        step.pressed_as(()).locked_by(&cause)
     }
 
     fn any(&self) -> bool {
@@ -2753,7 +2762,7 @@ fn show_result(
                 // The Undo sits on the message line, as every Undo after a message does. After
                 // an outside change it stays there, blocked, and the reason follows at the
                 // message words. The result still happened, so its words keep the text colour.
-                let undo = UndoStep::words("Undo package registration").pressed_as(());
+                let undo = PACKAGE_REGISTRATION_UNDO.pressed_as(());
                 let undo = match blocked {
                     // A lock that holds for as long as the result shows: an outside change, or
                     // another campaign that chose the copy.
@@ -2781,7 +2790,7 @@ fn show_result(
             if let Some((line, blocked)) = &page.rosters
                 && let Some((.., owner)) = &page.registration
             {
-                let undo = UndoStep::words("Undo source change").pressed_as(());
+                let undo = SOURCE_CHANGE_UNDO.pressed_as(());
                 let undo = if *blocked {
                     undo.blocked(crate::content_workspace::UNDO_ENDED_REASON)
                 } else {
@@ -2825,7 +2834,7 @@ fn show_result(
         }
         ResultKind::Identity => {
             if let Some(words) = &results.identity {
-                let undo = results.draft_lock(UndoStep::words(crate::world::SEPARATE_ENTRY_UNDO));
+                let undo = results.draft_lock(crate::world::SEPARATE_ENTRY_UNDO);
                 pressed.identity =
                     design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
             }
@@ -7790,33 +7799,43 @@ impl Library {
             }
             _ => None,
         };
-        // The extras wait for one of two causes, each from ONE value: the open draft (its save
-        // row states it; each control keeps it as hover and accessible description) or, for
-        // `Copy to…`, the places policy it shares with `New entry` (painted under the row).
-        let draft = match draft_reason {
-            Some(reason) => match design::DraftCause::of(&draft_state, reason) {
-                Some(cause) => design::Availability::Draft(cause),
-                None => design::Availability::Waits(
-                    self.draft_lock()
-                        .cloned()
-                        .unwrap_or_else(|| DRAFT_IN_PACKAGE.clone()),
-                ),
-            },
-            None => design::Availability::Open,
+        // Each control waits for one cause, from ONE value: the open draft (its save row, or the
+        // line under the toolbar when there is none, paints the reason), `Copy to…`'s places
+        // policy that it shares with `New entry` (painted under the toolbar), or, for the mode
+        // switch, the unreadable file that the body states.
+        let copy_availability = match Places::of(campaigns).copy() {
+            Some(reason) => design::Availability::Waits(reason),
+            None => design::Availability::Draft,
         };
-        let copy_availability = match (&draft, Places::of(campaigns).copy()) {
-            (design::Availability::Open, Some(reason)) => design::Availability::Waits(reason),
-            _ => draft.clone(),
-        };
-        #[derive(Clone, Copy)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         enum Extra {
             Copy,
             Make,
             Choose,
         }
-        let mut extras = design::ActionGroup::new();
+        let edit_label = if editable {
+            "Edit Markdown"
+        } else {
+            "Markdown source"
+        };
+        let was_source = self.source;
+        let draft_words = self.draft_lock().unwrap_or(self.draft_words()).clone();
+        let mut toolbar = design::ReaderToolbar::new(
+            &mut self.source,
+            edit_label,
+            "Markdown source",
+            match &fault {
+                Some(_) => design::Availability::Body(UNREAD_EDIT),
+                None => design::Availability::Open,
+            },
+        )
+        .back(
+            self.trail.peek(Step::Back).is_some(),
+            icons::LEGACY_BACK,
+            "Return to the entry before this link. During a draft, read it in Lookup.",
+        );
         if can_copy {
-            extras = extras.action(
+            toolbar = toolbar.action(
                 "Copy to…",
                 Some(icons::COPY),
                 Extra::Copy,
@@ -7824,48 +7843,29 @@ impl Library {
             );
         }
         if can_make {
-            extras = extras.action("Make NPC note", None, Extra::Make, draft.clone());
+            toolbar = toolbar.action(
+                "Make NPC note",
+                None,
+                Extra::Make,
+                design::Availability::Draft,
+            );
         }
         if let Some(label) = choose {
-            extras = extras.action(label, None, Extra::Choose, draft.clone());
+            toolbar = toolbar.action(label, None, Extra::Choose, design::Availability::Draft);
         }
-        let back = Action::quiet("Back")
-            .icon(icons::LEGACY_BACK)
-            .density(Density::Read);
-        let edit_label = if editable {
-            "Edit Markdown"
-        } else {
-            "Markdown source"
-        };
-        // Ruling R38: the mode switch and `Back` are a fixed prefix, drawn before the extras, so
-        // `Back` keeps its place whatever kind of entry is open. Its key shows when the prefix,
-        // the key and the extras fit; the extras go behind `More` when they do not fit after it.
-        let history = self.trail.peek(Step::Back).is_some();
-        let (back_pressed, extra) = extras.row(ui, |ui, extras_width| {
-            let was_source = self.source;
-            design::locked(ui, fault.as_ref().map(|_| UNREAD_EDIT), |ui| {
-                design::segmented(ui, &mut self.source, &[(false, "Read"), (true, edit_label)])
-            });
-            if self.source != was_source {
-                self.scope_notice = None;
-                self.focus_repair = self.source && note.error.is_some();
-            }
-            if !history {
-                return false;
-            }
-            let with_key = back.natural_width(ui)
-                + design::number_width(ui, "Alt+Left", &Type::Small.font(ui))
-                + design::L
-                + extras_width;
-            let show_key = with_key <= ui.available_width();
-            (if show_key { back.key("Alt+Left") } else { back })
-                .hint("Return to the entry before this link. During a draft, read it in Lookup.")
-                .show(ui)
-                .clicked()
-        });
-        if back_pressed {
+        let draft_lock = design::DraftLock::new(&draft_state, draft_words);
+        let (toolbar_press, draft_slot) = toolbar.show(ui, draft_lock);
+        if self.source != was_source {
+            self.scope_notice = None;
+            self.focus_repair = self.source && note.error.is_some();
+        }
+        if toolbar_press == Some(design::ToolbarPress::Back) {
             step = Some(Step::Back);
         }
+        let extra = match toolbar_press {
+            Some(design::ToolbarPress::Action(extra)) => Some(extra),
+            _ => None,
+        };
         let copy_clicked = matches!(extra, Some(Extra::Copy));
         let make_clicked = matches!(extra, Some(Extra::Make));
         let choose_clicked = matches!(extra, Some(Extra::Choose));
@@ -7876,6 +7876,12 @@ impl Library {
         let save_row = editable && (self.source || dirty);
         // Edit Markdown's save row, with the pane's message footer below the editor.
         let slot_row = save_row && !conflict;
+        // The draft's reason: in the save row's slot, or with no save row right here, under
+        // the toolbar.
+        let mut draft_slot = Some(draft_slot);
+        if !slot_row && let Some(slot) = draft_slot.take() {
+            slot.no_save_row(ui);
+        }
         if choose_clicked && let Owner::Package(module) = &note.owner {
             if about {
                 use_every = Some(module.clone());
@@ -8191,7 +8197,10 @@ impl Library {
             let row = ui
                 .scope(|ui| {
                     ui.set_max_width(editor_width);
-                    design::save_row(ui, &draft_state, "Save")
+                    draft_slot
+                        .take()
+                        .expect("the save row pays the draft's reason")
+                        .save_row(ui, "Save")
                 })
                 .inner;
             save |= row.save;
@@ -10045,6 +10054,50 @@ mod tests {
         repair.undo().unwrap();
         fs::write(&path, valid).unwrap();
         assert_eq!(local_module(&module.path).unwrap().id, module.id);
+    }
+
+    /// M2's named debt (ruling R35, packet E4): the legacy reason paths, whose reason is a hover
+    /// unless the caller paints it, and the staged result adapter, counted exactly in the two
+    /// files of this lane outside their tests. A new raw `.blocked(…)` (also `Copy to…` taken
+    /// out of the toolbar part), a new `design::locked(…)`, a new old Undo message or a new
+    /// adapter use (also through an aliased import, which spells its name) fails here; a removed
+    /// one lowers its line in the same change. The app-wide Clippy bans come in the late bans PR.
+    #[test]
+    fn m2_legacy_reason_paths_are_counted() {
+        const COUNTS: &[(&str, &[(&str, usize)])] = &[
+            (
+                "src/library.rs",
+                &[
+                    ("kept_result", 5),
+                    (".blocked(", 11),
+                    ("blocked_if(", 0),
+                    ("design::locked(", 6),
+                    ("undo_message(", 8),
+                ],
+            ),
+            (
+                "src/campaigns.rs",
+                &[
+                    ("kept_result", 1),
+                    (".blocked(", 5),
+                    ("blocked_if(", 0),
+                    ("design::locked(", 1),
+                    ("undo_message(", 0),
+                ],
+            ),
+        ];
+        for (path, counts) in COUNTS {
+            let text = fs::read_to_string(path).unwrap();
+            let body = &text[..text.find("#[cfg(test)]\nmod tests").unwrap_or(text.len())];
+            for (pattern, count) in *counts {
+                assert_eq!(
+                    body.matches(pattern).count(),
+                    *count,
+                    "{path}: `{pattern}` is counted debt (M2). Draw a waiting control through \
+                     `design::ReaderToolbar` or a typed message, or change this line on purpose."
+                );
+            }
+        }
     }
 
     /// Round 30 SH1: a folder field reads its folders only while its suggestions menu is open,
