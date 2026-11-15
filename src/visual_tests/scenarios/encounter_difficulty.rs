@@ -223,7 +223,31 @@ pub fn run(d: &mut Driver<'_>) {
 
     // T5.7: the Ready to run rows. Lookup closed, then open.
     ready_rows_say_their_word(d, "T5.7-ready");
-    d.state("ready-to-run", Sizes::All);
+    // iter-29 G118 (AB4, FB5; ruling R31), a cell witness on the PAINTED line at each size:
+    // Nameless Visitor's only creature lacks its XP, so its row ends with `XP not known` and
+    // names Nameless Thing once. Where the summary gave way, the name follows the reason.
+    d.state_prepared("ready-to-run", Sizes::All, |d| {
+        let mut lines = Vec::new();
+        d.each_painted_text(|text, clip| {
+            let words = text.galley.job.text.replace('\u{a0}', " ");
+            if clip.intersects(text.visual_bounding_rect()) && words.contains(UNKNOWN_FORM) {
+                lines.push(words);
+            }
+        });
+        d.observe(
+            "iter-29-G118-named-once",
+            lines.len() == 1
+                && lines.iter().all(|line| {
+                    line.matches("Nameless Thing").count() == 1
+                        && if line.contains("1 × Nameless Thing") {
+                            line.ends_with(&format!(" · {UNKNOWN_FORM}"))
+                        } else {
+                            line.contains(&format!("{UNKNOWN_FORM}: Na"))
+                        }
+                }),
+            format!("The Ready to run row of {UNKNOWN} paints {lines:?}"),
+        );
+    });
     let stand_in = d.painted_tooltip_shows("Above High", STAND_IN);
     d.observe(
         "T5.7-hover",
