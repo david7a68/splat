@@ -4467,11 +4467,23 @@ impl Run {
         }
     }
 
-    /// While a group is held, the initiative list says it can take it.
+    /// While a group is held, the initiative list says it can take it. A group whose Add came
+    /// to wait while it was held (a step or its Undo took away its side's initiative, a new
+    /// read of the groups) is let go: no outline promises a drop that would not join.
     fn group_drop_zone(&mut self, ui: &mut egui::Ui, rect: Rect) {
         let Some(held) = egui::DragAndDrop::payload::<GroupDrag>(ui.ctx()) else {
             return;
         };
+        let takes = self
+            .groups
+            .iter()
+            .flat_map(|groups| groups.iter())
+            .find(|group| group.id == held.0)
+            .is_some_and(|group| self.add_waits(group).is_none());
+        if !takes {
+            egui::DragAndDrop::clear_payload(ui.ctx());
+            return;
+        }
         ui.painter().rect_stroke(
             rect,
             design::RADIUS_CONTROL,

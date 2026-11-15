@@ -23385,7 +23385,7 @@ pub mod run_add_creature {
             (
                 format!("Encounter Groups/{RIDERS}.md"),
                 format!(
-                    "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {RIDERS}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {rider}}}\n    count: 2\n",
+                    "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {RIDERS}\nsplat_encounter_group:\n  side: rivals\n  members:\n  - creature: {{id: {rider}}}\n    count: 2\n",
                     splat::character::stable_id("visual:group:mist-riders")
                 ),
             ),
@@ -23416,6 +23416,65 @@ pub mod run_add_creature {
             "m-r0-R35-typed",
             !d.visible_text(NO_BONUS) && !d.is_disabled(&add_group(RIDERS)),
             "A typed total ends the reason, and Add runs",
+        );
+
+        // Astra's review of PR 472 (P2): a drop takes the lock too, also when the Add came to
+        // wait while the group was held. By side, in combat, Mist Riders joins the rivals'
+        // initiative with no roll once Rival Team has one; held over the roster, Ctrl+Z takes
+        // Rival Team back, so Mist Riders would roll with no bonus: the release adds nothing and
+        // refuses nothing.
+        d.clear_text_in(&format!("Initiative total for {RIDERS}"));
+        close_run(d);
+        go_campaign(d);
+        d.click(TAB_RUN_SETTINGS);
+        d.click_starting("Roll NPC initiative: ");
+        d.click("In one group per side");
+        d.click("Save run settings");
+        d.expect("No changes");
+        go_encounters(d);
+        run_saved_encounter(d, "Shrine of Cinders");
+        d.click("Roll NPC initiative");
+        let unset: Vec<String> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Initiative for "))
+            .map(|node| node.name)
+            .filter(|name| d.field_text(name).is_none_or(|text| text.trim().is_empty()))
+            .collect();
+        for (at, name) in unset.iter().enumerate() {
+            d.type_into(name, &(18 - at).to_string());
+        }
+        d.click("Begin combat");
+        d.expect(NEXT_TURN);
+        open_arrivals(d);
+        d.type_into(&format!("Initiative total for {GROUP_RIVALS}"), "14");
+        d.click(&add_group(GROUP_RIVALS));
+        d.expect("Undo: add Rival Team");
+        let joins = !d.is_disabled(&add_group(RIDERS)) && !d.visible_text(NO_BONUS);
+        let rows = roster_places(d);
+        let list = rows.first().map(|(_, rect)| *rect).expect("run rows");
+        d.drag_hold(&format!("Drag {RIDERS} to the initiative list"), list);
+        d.press_ctrl(Key::Z);
+        let undone = !d.has_containing("Undo: add Rival Team");
+        let before = roster_places(d).len();
+        d.drag_release(list);
+        let after = roster_places(d).len();
+        let refused = d.has_containing("has no initiative bonus. Type a total instead.")
+            || d.visible_text("has no initiative bonus. Type a total instead.");
+        d.observe(
+            "m-r0-P2-held-drop",
+            joins
+                && undone
+                && after == before
+                && after + 3 == rows.len()
+                && !refused
+                && d.visible_text(NO_BONUS),
+            format!(
+                "Mist Riders joined by side ({joins}); Ctrl+Z while held took Rival Team back \
+                 ({undone}); rows {} with Rival Team, {before} held, {after} after the drop; \
+                 a refusal shows: {refused}",
+                rows.len()
+            ),
         );
     }
 }
