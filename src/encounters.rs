@@ -246,13 +246,20 @@ fn owned_groups_found(
             incomplete.get_or_insert((words, group.origin()));
         } else {
             let words = named_group_words(&group.name(), refusal.text());
-            // A member's row or Belongs to already says its own fault.
-            if matches!(
-                refusal.place(),
-                groups::RefusalPlace::Footer | groups::RefusalPlace::SaveRow
-            ) {
-                refused_footer.get_or_insert(words.clone());
-            }
+            // N2 (lead ruling, R35): a fault with a place of its own (a member's row, Belongs
+            // to) keeps its cause there, and the footer always names the next step, so a blocked
+            // Save has painted words whether that place is in view or not; never the cause twice.
+            let footer = match refusal.place() {
+                groups::RefusalPlace::Footer | groups::RefusalPlace::SaveRow => words.clone(),
+                groups::RefusalPlace::Member(..) => {
+                    fix_group_row(refusal.row().unwrap_or("marked"), &group.name())
+                }
+                groups::RefusalPlace::BelongsTo => format!(
+                    "Choose who {} belongs to before you save.",
+                    group_words(&group.name())
+                ),
+            };
+            refused_footer.get_or_insert(footer);
             refused.get_or_insert(words);
         }
     }
@@ -290,6 +297,23 @@ thread_local! {
 #[cfg(test)]
 pub(crate) fn owned_group_work() -> (usize, usize) {
     OWNED_GROUP_WORK.with(std::cell::Cell::get)
+}
+
+/// The next step for a group's member row that blocks Save (N2): `Fix the Cinder Wolf row of
+/// Ash Hounds before you save.`
+fn fix_group_row(row: &str, group: &str) -> String {
+    format!(
+        "Fix the {row} row of {} before you save.",
+        group_words(group)
+    )
+}
+
+/// A group as a sentence names it: its name, or `the new group` while it has none.
+fn group_words(name: &str) -> String {
+    match name.trim() {
+        "" => "the new group".to_owned(),
+        name => name.to_owned(),
+    }
 }
 
 /// A group's refusal as the encounter's Save says it: `Group <name>: <words>`.

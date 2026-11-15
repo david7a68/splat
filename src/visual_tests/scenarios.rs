@@ -21005,6 +21005,84 @@ pub mod encounter_owned_groups {
                 "No name: saved encounter (warning Invalid, New) {saved_word:?}; new encounter (New, Invalid) {new_word:?}"
             ),
         );
+        d.click("Discard");
+        if d.has("Back to encounters") {
+            d.click("Back to encounters");
+        }
+
+        // N1 (B3 re-check): who owns a group is part of Save's check. A clean saved encounter
+        // whose own group has the name of a group for any encounter: making it available to any
+        // encounter blocks Save and paints why, before any Save, in the same campaign read.
+        open_saved_encounter(d, SHRINE);
+        let field = format!("Group name: {GROUP_SHRINE}");
+        d.type_into(&field, " ");
+        d.press_ctrl(Key::A);
+        d.type_text(GROUP_GOBLINS);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Saved");
+        d.settle();
+        d.click_first(&format!("More actions for {GROUP_GOBLINS}"));
+        d.click("Make available to any encounter");
+        d.expect("Undo move");
+        let taken = format!("Another group is named {GROUP_GOBLINS}");
+        let moved = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.is_disabled(SAVE_ENCOUNTER) && d.visible_text(&taken)
+            })
+        });
+        d.observe(
+            "s30-B3-N1-made-available",
+            moved.iter().all(|shown| *shown),
+            format!("A taken name made available: Save blocked and {taken:?} painted at 960, 1200, 1920: {moved:?}"),
+        );
+        d.click("Undo move");
+        d.expect(&format!("Group name: {GROUP_GOBLINS}"));
+        d.click("Back to encounters");
+
+        // N2 (lead ruling, R35): a member fault keeps its cause on its row, and the footer
+        // always names the next step, once, whether the row is in view or not.
+        let file = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join(format!("Encounter Groups/{GROUP_SHRINE}.md"));
+        let text = std::fs::read_to_string(&file).unwrap();
+        let broken = text.replacen("creatures/goblin_warrior", "creatures/no_such_creature", 1);
+        assert_ne!(broken, text);
+        std::fs::write(&file, &broken).unwrap();
+        d.click("Reload from disk");
+        d.settle();
+        open_saved_encounter(d, SHRINE);
+        d.type_into(&format!("Group notes for {GROUP_GOBLINS}"), "Hungry.");
+        let step = format!("Fix the Unknown creature row of {GROUP_GOBLINS} before you save.");
+        let said = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let (mut steps, mut causes) = (0, 0);
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    let words = text.galley.job.text.as_str();
+                    if clip.intersects(rect) {
+                        steps += usize::from(words.contains("before you save."));
+                        causes += usize::from(words.contains("Not in this campaign’s packages"));
+                    }
+                });
+                (
+                    d.is_disabled(SAVE_ENCOUNTER),
+                    d.visible_text(&step),
+                    steps,
+                    causes,
+                )
+            })
+        });
+        d.observe(
+            "s30-B3-N2-member-step",
+            said.iter()
+                .all(|(blocked, shown, steps, causes)| *blocked && *shown && *steps == 1 && *causes <= 1),
+            format!("Member fault: (Save blocked, {step:?} painted, next-step lines, cause lines) at 960, 1200, 1920: {said:?}"),
+        );
+        std::fs::write(&file, &text).unwrap();
     }
 }
 
