@@ -922,27 +922,20 @@ fn planned_summary_on_road(
                 rows(&with_form(facts, &words.replace(' ', "\u{a0}"))) <= lines
             };
             let short = missing.short();
-            // G118 (round 28 FB6, as `difficulty::Line`): the reason names only the members
-            // that the line does not show, matched by the name each is called by. Where the
-            // whole summary shows them all, it stays whole with the short reason; cutting a
-            // member to name it again says less.
+            // R31 (round 28 FB6; review of PR 324), the rule of `difficulty::Line` by the same
+            // function: where every creature the line shows lacks its XP, the summary already
+            // says whose, so it stays whole with the short reason; cutting a member to name it
+            // again says less. Beside a creature with a known XP, the reason keeps the names.
+            // Members are matched by the name each is called by; facts are not creatures.
             let unsaid = |count: usize| {
                 let gone = &giving_way[..units.len() - count];
-                let shown: Vec<&str> = units
-                    .iter()
-                    .enumerate()
-                    .filter(|(at, _)| !gone.contains(at))
-                    .filter_map(|(_, unit)| unit.3)
-                    .collect();
-                crate::difficulty::Missing {
-                    names: missing
-                        .names
+                missing.unsaid(
+                    units
                         .iter()
-                        .filter(|name| !shown.contains(&name.as_str()))
-                        .cloned()
-                        .collect(),
-                    ..missing.clone()
-                }
+                        .enumerate()
+                        .filter(|(at, _)| !gone.contains(at))
+                        .filter_map(|(_, unit)| unit.3),
+                )
             };
             let all = unsaid(units.len());
             let named = !missing.names.is_empty() && all.names.is_empty();
@@ -6563,10 +6556,10 @@ mod tests {
             Some("1 × Nameless Thing · XP not known"),
             "FB6: the member stays whole and is not named twice, at {width} px"
         );
-        // G118 (AB4, FB5; replaces the review of PR 324, which named it again): a member the
-        // row shows is not named again, also beside a creature whose XP is known, and also
-        // renamed (called `Shade`, shown `Shade (as Nameless Thing)`). A missing creature the
-        // row does not show is still named.
+        // R31 (review of PR 324, kept): with a creature whose XP is known beside it, the
+        // summary does not say whose XP is missing, so the reason keeps the name. Where every
+        // creature shown lacks its XP, the reason is short. Members are matched by the name
+        // each is called by, never by parsed words; `Changed` is not a creature (G118).
         let wide = |typed: &crate::difficulty::Summary, difficulty: &Difficulty| {
             let mut painted = None;
             for _ in 0..2 {
@@ -6586,32 +6579,49 @@ mod tests {
             }
             painted
         };
-        let mixed = roster(0, &[(1, "Wolf"), (1, "Nameless Thing")]);
-        assert_eq!(
-            wide(&mixed, &unknown(Unknown::Xp)).as_deref(),
-            Some("1 × Wolf, 1 × Nameless Thing · XP not known"),
-            "a mixed roster names its shown creature once"
-        );
-        let renamed = crate::difficulty::Summary {
-            members: vec![
-                crate::difficulty::Member::new(1, "Wolf"),
-                crate::difficulty::Member::renamed(1, "Shade", "Nameless Thing"),
-            ],
-            facts: vec![crate::difficulty::Fact::Changed],
-            ..Default::default()
-        };
-        let shade = Difficulty {
+        let missing = |names: &[&str]| Difficulty {
+            unknown: names.len() as u64,
             missing: Some(Missing {
                 what: Unknown::Xp,
-                at: vec![1],
-                names: vec!["Shade".into()],
+                at: (0..names.len()).collect(),
+                names: names.iter().map(|name| (*name).to_owned()).collect(),
             }),
             ..unknown(Unknown::Xp)
         };
+        let mixed = roster(0, &[(1, "Wolf"), (1, "Nameless Thing")]);
         assert_eq!(
-            wide(&renamed, &shade).as_deref(),
-            Some("1 × Wolf, 1 × Shade (as Nameless Thing) · Changed · XP not known"),
-            "a renamed creature is matched by the name it is called by"
+            wide(&mixed, &unknown(Unknown::Xp)).as_deref(),
+            Some("1 × Wolf, 1 × Nameless Thing · XP not known: Nameless Thing"),
+            "a mixed roster names whose XP is missing"
+        );
+        let two = roster(0, &[(1, "Nameless Thing"), (1, "Wisp")]);
+        assert_eq!(
+            wide(&two, &missing(&["Nameless Thing", "Wisp"])).as_deref(),
+            Some("1 × Nameless Thing, 1 × Wisp · XP not known"),
+            "two creatures that both lack their XP: the summary says whose"
+        );
+        let shade = |beside: bool| crate::difficulty::Summary {
+            members: beside
+                .then(|| crate::difficulty::Member::new(1, "Wolf"))
+                .into_iter()
+                .chain([crate::difficulty::Member::renamed(
+                    1,
+                    "Shade",
+                    "Nameless Thing",
+                )])
+                .collect(),
+            facts: vec![crate::difficulty::Fact::Changed],
+            ..Default::default()
+        };
+        assert_eq!(
+            wide(&shade(false), &missing(&["Shade"])).as_deref(),
+            Some("1 × Shade (as Nameless Thing) · Changed · XP not known"),
+            "a renamed creature alone is matched by the name it is called by"
+        );
+        assert_eq!(
+            wide(&shade(true), &missing(&["Shade"])).as_deref(),
+            Some("1 × Wolf, 1 × Shade (as Nameless Thing) · Changed · XP not known: Shade"),
+            "beside a known creature, the reason keeps the called name"
         );
         assert_eq!(
             wide(&roster(0, &[(1, "Wolf")]), &unknown(Unknown::Xp)).as_deref(),

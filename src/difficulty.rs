@@ -151,6 +151,30 @@ impl Missing {
             .or_else(|| Some(self.short().to_owned()))
     }
 
+    /// Ruling R31, for every line that shows a roster with this reason: the names the reason
+    /// still says, given the CALLED names of the creatures the line still shows
+    /// (`Member::called`; facts are not creatures). Where every creature shown lacks its XP,
+    /// the line already says whose: only the missing ones it does not show are named. Where a
+    /// creature with a known XP is shown beside them, or none is shown, every name stays:
+    /// saying whose input is missing is worth the repeated name.
+    pub fn unsaid<'a>(&self, shown: impl IntoIterator<Item = &'a str>) -> Self {
+        let shown: Vec<&str> = shown.into_iter().collect();
+        let says_whose = self.what == Unknown::Xp
+            && !shown.is_empty()
+            && shown
+                .iter()
+                .all(|called| self.names.iter().any(|name| name == called));
+        Self {
+            names: self
+                .names
+                .iter()
+                .filter(|name| !(says_whose && shown.contains(&name.as_str())))
+                .cloned()
+                .collect(),
+            ..self.clone()
+        }
+    }
+
     /// The reason with no names, where a line has no room for them.
     pub fn short(&self) -> &'static str {
         match self.what {
@@ -803,11 +827,13 @@ impl<'a> Line<'a> {
         text
     }
 
-    /// Whether a member that is still on the line is this creature: equal names, nothing else.
-    fn shows(&self, stage: &Stage, name: &str) -> bool {
-        self.units.iter().enumerate().any(|(at, unit)| {
-            unit.member.as_deref() == Some(name) && !stage.gone.contains(&Give::Unit(at))
-        })
+    /// The called names of the members still on the line at `stage` (R31: by identity).
+    fn shown<'s>(&'s self, stage: &'s Stage) -> impl Iterator<Item = &'s str> + 's {
+        self.units
+            .iter()
+            .enumerate()
+            .filter(|(at, _)| !stage.gone.contains(&Give::Unit(*at)))
+            .filter_map(|(_, unit)| unit.member.as_deref())
     }
 
     fn with_label(&self, parts: Vec<Part>) -> Vec<Part> {
@@ -901,16 +927,9 @@ impl<'a> Line<'a> {
                 Some(fallback(line(&last, form(&last), true)))
             }
             (None, Some(missing)) => {
-                // A member that the summary still shows is not named again (AB4, FB5, SB5).
-                let unsaid = |stage: &Stage| Missing {
-                    names: missing
-                        .names
-                        .iter()
-                        .filter(|name| !self.shows(stage, name))
-                        .cloned()
-                        .collect(),
-                    ..missing.clone()
-                };
+                // R31 (AB4, FB5, SB5): where every creature still shown lacks its XP, they are
+                // not named again; beside a known one, the reason keeps the names.
+                let unsaid = |stage: &Stage| missing.unsaid(self.shown(stage));
                 let reason = |words: String| self.with_label(vec![(words, false)]);
                 let whole = |stage: &Stage| {
                     unsaid(stage)
@@ -1280,10 +1299,19 @@ mod tests {
         assert_eq!(at(36), "1 × Nameless Thing · XP not known");
         assert_eq!(at(32), "… · XP not known: Nameless Thing");
         assert!(!visitor.fit(fits(200)).unwrap().cut);
+        // R31: beside a creature with a known XP (Ox), the reason keeps every name: it says
+        // whose input is missing.
         let two = Line::roster(&unknown, typed(5, &[(1, "Nameless Thing"), (1, "Ox")]));
         assert_eq!(
             two.fit(fits(200)).unwrap().text(),
-            "5 party · 1 × Nameless Thing, 1 × Ox · XP not known: Wisp"
+            "5 party · 1 × Nameless Thing, 1 × Ox · XP not known: Nameless Thing and 1 more"
+        );
+        // Every creature shown lacks its XP: the line says whose; the one it does not show is
+        // named.
+        let both = Line::roster(&unknown, typed(5, &[(1, "Nameless Thing")]));
+        assert_eq!(
+            both.fit(fits(200)).unwrap().text(),
+            "5 party · 1 × Nameless Thing · XP not known: Wisp"
         );
         // FK3, SK3, FJ3 (R1): a joining group whose fight has no word still says `Fight after`,
         // with `XP not known` in the word's place and whose XP it is.
@@ -1324,16 +1352,17 @@ mod tests {
         };
         let typed = Line::roster(&ghost, &comma);
         let at = |room| typed.fit(fits(room)).unwrap().text();
+        // R31: Cinder Wolf's XP is known, so the reason names the ghost.
         assert_eq!(
             at(200),
-            "5 party · 2 × Cinder Wolf, 1 × Ghost, of the Mill · XP not known"
+            "5 party · 2 × Cinder Wolf, 1 × Ghost, of the Mill · XP not known: Ghost, of the Mill"
         );
         for room in (1..=80).rev() {
             let text = at(room);
             assert!(text.chars().count() <= room, "{room}: {text}");
             assert!(
-                text.matches("Ghost").count() <= 1,
-                "the name once at {room}: {text}"
+                text.matches("Ghost").count() <= 1 + usize::from(text.contains("1 × Ghost")),
+                "the name once in the reason at {room}: {text}"
             );
             assert!(
                 !text.contains("1 × Ghost,…") && !text.contains("Ghost, …"),

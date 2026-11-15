@@ -1224,9 +1224,9 @@ mod iter_2_c_tests {
             rated.contains(&whole) && rated.iter().any(|line| *line != whole),
             "{rated:?}"
         );
-        // G118 (AB4, FB5): a creature with no XP that the summary shows is named once: the
-        // line ends with `XP not known`. Only where the summary gave way so that it no longer
-        // shows the creature do the names follow `XP not known`.
+        // G118 (AB4, FB5), ruling R31: a creature with no XP that the summary shows alone is
+        // named once: the line ends with `XP not known`. Only where the summary gave way so
+        // that it no longer shows the creature do the names follow `XP not known`.
         let nameless = crate::difficulty::Difficulty {
             unknown: 1,
             missing: Some(crate::difficulty::Missing {
@@ -1252,6 +1252,37 @@ mod iter_2_c_tests {
         assert!(
             unknown.contains(&"5 party · 1 × Nameless Thing · XP not known".to_owned()),
             "{unknown:?}"
+        );
+        // R31: two creatures that both lack their XP: the summary says whose. Beside a creature
+        // with a known XP, the reason keeps the name: it says whose input is missing.
+        let missing = |names: &[&str]| crate::difficulty::Difficulty {
+            unknown: names.len() as u64,
+            missing: Some(crate::difficulty::Missing {
+                what: crate::difficulty::Unknown::Xp,
+                at: (0..names.len()).collect(),
+                names: names.iter().map(|name| (*name).to_owned()).collect(),
+            }),
+            ..Default::default()
+        };
+        let two = lines(
+            &missing(&["Nameless Thing", "Wisp"]),
+            &roster(&[(1, "Nameless Thing"), (1, "Wisp")]),
+            "XP not known",
+        );
+        assert!(
+            two.contains(&"5 party · 1 × Nameless Thing, 1 × Wisp · XP not known".to_owned()),
+            "{two:?}"
+        );
+        let mixed = lines(
+            &nameless,
+            &roster(&[(1, "Wolf"), (1, "Nameless Thing")]),
+            "XP not known",
+        );
+        assert!(
+            mixed.contains(
+                &"5 party · 1 × Wolf, 1 × Nameless Thing · XP not known: Nameless Thing".to_owned()
+            ),
+            "{mixed:?}"
         );
     }
 
