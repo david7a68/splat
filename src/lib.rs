@@ -40,7 +40,8 @@ pub mod ownership {
     pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
     pub use crate::design::results::{
         Cause, Change, DiskChanged, Ends, FailedAct, Fallback, File, FooterResult, Gone, Kept,
-        Kind, Name, Owner, OwnerChanged, Press, Recovery, Refusal, Results, Shown, Thing,
+        Kind, Name, Owner, OwnerChanged, Part, Press, Recovery, Refusal, Results, Rows, Shown,
+        Step, Thing, Way,
     };
     pub use crate::design::save_row::{
         Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,

@@ -186,7 +186,10 @@ use super::components::{Footer, ResultOrder};
 use eframe::egui::Ui;
 
 mod refusal;
-pub use refusal::{Cause, Change, FailedAct, Fallback, File, Kind, Name, Recovery, Refusal, Thing};
+pub use refusal::{
+    Cause, Change, FailedAct, Fallback, File, Kind, Name, Part, Recovery, Refusal, Rows, Step,
+    Thing, Way,
+};
 
 /// A new order for an act done now: a result recorded, an Undo attempt refused.
 #[allow(
