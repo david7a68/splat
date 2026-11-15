@@ -1014,14 +1014,20 @@ impl CampaignContent {
         let Some(active) = active else {
             return;
         };
-        let due = self.reconcile.campaign != Some(active.id)
+        if self.check_due(active.id) {
+            self.start_check(ctx, campaigns, active.clone(), None);
+        }
+    }
+
+    /// Whether `tick` starts a check for the app's campaign `active`: none is running, and the
+    /// last one was for another campaign or is old.
+    fn check_due(&self, active: Uuid) -> bool {
+        let due = self.reconcile.campaign != Some(active)
             || self
                 .reconcile
                 .checked_at
                 .is_none_or(|at| at.elapsed() >= CHECK_EVERY);
-        if due && self.reconcile.pending.is_none() {
-            self.start_check(ctx, campaigns, active.clone(), None);
-        }
+        due && self.reconcile.pending.is_none()
     }
     /// Words for the sidebar, when the campaign package has something to review.
     pub fn review_detail(&self) -> Option<String> {
@@ -1128,14 +1134,21 @@ impl CampaignContent {
         {
             self.answer = None;
         }
-        if let Some(old) = &self.active
-            && campaign.is_none_or(|campaign| campaign.id != old.id)
+        // Two owners: the loaded page's campaign (`self.active`, set by `reload`, which stays while
+        // the page is hidden) and the running check's campaign (`reconcile.campaign`, set by
+        // `start_check`). A check (or an Apply) still running is cancelled only when the app's
+        // campaign is not ITS campaign: once per change, also when the DM comes back before it
+        // completes (A -> B -> A); a check started for the app's campaign is never cancelled.
+        if self.reconcile.pending.is_some()
+            && campaign.map(|campaign| campaign.id) != self.reconcile.campaign
         {
-            // A check (or an Apply) still running belongs to the visit that started it: a change
-            // of campaign drops it, also when the DM comes back before it completes (A -> B -> A).
             self.reconcile.pending = None;
             self.reconcile.applying = false;
             self.reconcile.campaign = None;
+        }
+        if let Some(old) = &self.active
+            && campaign.is_none_or(|campaign| campaign.id != old.id)
+        {
             end_results(&mut self.results, old.id, |payload| {
                 matches!(
                     payload,
@@ -3651,6 +3664,26 @@ mod tests {
         assert!(
             content.answer.is_none() && content.reconcile.pending.is_none(),
             "an Apply from A's earlier visit entered A's new state"
+        );
+        // The page loaded A and is hidden; the DM opens B. Each tick runs the campaign change and
+        // then starts a check when one is due (`check_due`, as `tick` does): N ticks start one
+        // check for B, and it is never cancelled by the page's own, older campaign.
+        content.active = Some(first.clone());
+        let mut senders = Vec::new();
+        let mut starts = 0;
+        for _ in 0..10 {
+            content.forget_discards_of_other_campaigns(Some(&second));
+            if content.check_due(second.id) {
+                let (tx, rx) = mpsc::channel::<Checked>();
+                content.reconcile.campaign = Some(second.id);
+                content.reconcile.pending = Some(rx);
+                senders.push(tx);
+                starts += 1;
+            }
+        }
+        assert_eq!(
+            starts, 1,
+            "ticks on a hidden page started {starts} checks for B"
         );
     }
 

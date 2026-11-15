@@ -1702,12 +1702,15 @@ impl ImportReveal {
         self.top_only |= form.height() > view.height();
         self.asked = Some((form.top(), frame));
         if self.top_only {
-            ui.scroll_to_rect(
+            // Not animated: nothing moves once the reveal has ended (a typed key does not stop
+            // egui's animation; a wheel turn does).
+            ui.scroll_to_rect_animation(
                 egui::Rect::from_min_size(form.min, egui::vec2(form.width(), 1.0)),
                 Some(egui::Align::TOP),
+                egui::style::ScrollAnimation::none(),
             );
         } else {
-            ui.scroll_to_rect(form, None);
+            ui.scroll_to_rect_animation(form, None, egui::style::ScrollAnimation::none());
         }
         if self.left == 0 && !self.top_only {
             self.end();
@@ -2341,6 +2344,19 @@ mod tests {
         );
         h.run_steps(4);
         assert!(!h.state().reveal.running(), "an ended reveal started again");
+        // The DM types during the reveal: it ends, and nothing moves on later frames (its scroll
+        // is not animated, so no motion outlives it).
+        let mut h = scrolled(400.0);
+        h.step();
+        h.event(egui::Event::Text("s".into()));
+        h.step();
+        let typed = h.get_by_label("Add campaign").rect().top();
+        h.run_steps(10);
+        let later = h.get_by_label("Add campaign").rect().top();
+        assert!(
+            (later - typed).abs() < 0.5 && !h.state().reveal.running(),
+            "the form moved after the DM typed: {typed} then {later}"
+        );
         // It opens: the whole form comes into view, and the reveal ends.
         let mut h = scrolled(400.0);
         h.run_steps(8);

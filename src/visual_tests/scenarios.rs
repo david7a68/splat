@@ -5744,7 +5744,8 @@ pub mod settings {
             if !d.has("Campaign name") {
                 d.click("Add from D&D Beyond");
             }
-            d.row_of("Campaign name");
+            // No `row_of` here: it scrolls a hidden row into view, and the G137 witness must not
+            // depend on a test scroll. The scroll loop below runs after the check.
             d.wait_for_text("Campaign name");
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
             // G137 (FE6): before any scroll, the form shows whole (R30) and the kept line names
