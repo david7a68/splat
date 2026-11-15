@@ -3641,15 +3641,7 @@ impl Sessions {
         match written {
             Written::Already => Ok(()),
             Written::Done(Ok(undo)) => {
-                self.keep_plan_line(
-                    journey_label(book, journey),
-                    road_plan_line(book, journey, chosen),
-                    journey,
-                    chosen,
-                    note,
-                    path,
-                    undo,
-                );
+                self.keep_plan_line(book, journey, chosen, note, path, undo);
                 Ok(())
             }
             // A draft of its own that could not save holds nothing for an Undo.
@@ -3716,14 +3708,15 @@ impl Sessions {
     /// made here, once, from the other entries, never from a line's place in a list.
     fn keep_plan_line(
         &mut self,
-        journey_label: String,
-        line: String,
+        book: &Book,
         journey: &str,
         chosen: &checks::Planned,
         note: Uuid,
         path: std::path::PathBuf,
         undo: NoteUndo,
     ) {
+        let journey_label = journey_label(book, journey);
+        let line = road_plan_line(book, journey, chosen);
         let seen = self.note_source(note, &path);
         let session = self
             .notes
@@ -3794,29 +3787,13 @@ impl Sessions {
         match written {
             Written::Already => Ok(()),
             Written::Done(Ok(undo)) => {
-                self.keep_plan_line(
-                    journey_label(book, journey),
-                    road_plan_line(book, journey, chosen),
-                    journey,
-                    chosen,
-                    note,
-                    path,
-                    undo,
-                );
+                self.keep_plan_line(book, journey, chosen, note, path, undo);
                 Ok(())
             }
             Written::Done(Err(fault)) => {
                 let words = fault.words().to_owned();
                 if let ActFault::NotSaved(_, undo) = fault {
-                    self.keep_plan_line(
-                        journey_label(book, journey),
-                        road_plan_line(book, journey, chosen),
-                        journey,
-                        chosen,
-                        note,
-                        path,
-                        undo,
-                    );
+                    self.keep_plan_line(book, journey, chosen, note, path, undo);
                 }
                 Err(words)
             }
