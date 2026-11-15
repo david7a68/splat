@@ -7318,18 +7318,72 @@ impl Library {
                 _ => {}
             }
         }
+        // A package whose manifest is known to be gone (its warning says so). Its path is known
+        // ABSENT, which is not the same as an empty file. Save writes the draft as a new
+        // manifest only when the path is still free and no other file holds the package's
+        // registered identity; it never writes over a file (the no-clobber write).
+        enum Gone {
+            Create,
+            Elsewhere(String),
+            Back(Option<String>),
+            Unread(FileFault),
+            Failed(String),
+        }
+        let gone = {
+            let note = &self.loaded.as_ref().unwrap().notes[i];
+            match (&note.owner, note.manifest_gone) {
+                (Owner::Package(module), true) => {
+                    let root = module.path.as_path();
+                    Some(match moved_note(root, module.id, &note.path) {
+                        // The manifest came back under another name: no second one.
+                        Ok(Some((path, _))) => Gone::Elsewhere(path),
+                        Err(error) => Gone::Failed(error),
+                        Ok(None) => match read_disk(root, &note.path) {
+                            Ok(None) => Gone::Create,
+                            // Any file there now, an empty one too: the comparison decides.
+                            Ok(Some(text)) => Gone::Back(Some(text)),
+                            Err(fault) => Gone::Unread(fault),
+                        },
+                    })
+                }
+                _ => None,
+            }
+        };
+        match gone {
+            Some(Gone::Create) => file_gone = true,
+            Some(Gone::Elsewhere(path)) => {
+                self.error = Some(format!(
+                    "Not saved. This package’s manifest is now in {path}. Reload from disk to open it there."
+                ));
+                return;
+            }
+            Some(Gone::Failed(error)) => {
+                self.error = Some(error);
+                return;
+            }
+            Some(Gone::Back(text)) => {
+                self.disk_change = Some(DiskChange {
+                    text,
+                    moved_to: None,
+                    fault: None,
+                });
+                return;
+            }
+            Some(Gone::Unread(fault)) => {
+                self.disk_change = Some(DiskChange {
+                    text: None,
+                    moved_to: None,
+                    fault: Some(fault),
+                });
+                return;
+            }
+            None => {}
+        }
         // The write check reads the identity index from the notes as they are now.
         self.loaded.as_mut().unwrap().duplicates.take();
         let loaded = self.loaded.as_ref().unwrap();
         let note = &loaded.notes[i];
         let root = note.owner.root().expect("an editable note").to_path_buf();
-        // A package whose manifest is known to be gone (its warning says so): Save writes the
-        // draft as a new manifest, with no baseline, and never over a file (the no-clobber
-        // write). A file that came back at that path since keeps the outside-change guard: the
-        // baseline check sends it to the comparison, and the draft stays.
-        if note.manifest_gone && note_path(&root, &note.path).is_ok_and(|path| !path.exists()) {
-            file_gone = true;
-        }
         let refused = loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft));
         let result = match &refused {
             Some(error) => Err(error.clone()),
@@ -10222,6 +10276,62 @@ mod tests {
         let at = reads();
         assert!(pass("a", open, other.path(), None).is_empty());
         assert!(reads() > at, "another root reads again");
+    }
+
+    /// Round 30 B11 F4, Astra F8, and the B2b review's F1 and F2: Save on the draft of a
+    /// package manifest that is known to be gone. An empty file that came back at its path is
+    /// a file, never overwritten: the comparison opens. The manifest back under another name
+    /// (same identity) is refused with a painted reason, with no second manifest. A free path is
+    /// created from the draft.
+    #[test]
+    fn a_gone_manifest_draft_is_created_only_on_a_free_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let manifest = module.path.join("Package.md");
+        let valid = fs::read_to_string(&manifest).unwrap();
+        fs::remove_file(&manifest).unwrap();
+        let loaded = load(Some(&module)).unwrap();
+        let at = loaded
+            .notes
+            .iter()
+            .position(|note| note.manifest_gone)
+            .expect("the gone manifest is kept as a note");
+        let mut library = Library {
+            loaded: Some(loaded),
+            ..Default::default()
+        };
+        library.open_entry(at);
+        library.draft = valid.clone();
+        // F2: an empty file is there at Save.
+        fs::write(&manifest, "").unwrap();
+        library.save_selected(false);
+        assert_eq!(
+            fs::read_to_string(&manifest).unwrap(),
+            "",
+            "never written over"
+        );
+        assert!(library.disk_change.is_some(), "the comparison opens");
+        assert_eq!(library.draft, valid, "the draft stays");
+        // F1: the manifest came back as Module.md, with this package's identity.
+        fs::remove_file(&manifest).unwrap();
+        library.disk_change = None;
+        fs::write(module.path.join("Module.md"), &valid).unwrap();
+        library.save_selected(false);
+        assert!(!manifest.exists(), "no second manifest");
+        assert!(
+            library
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("Module.md")),
+            "the refusal names where the manifest is: {:?}",
+            library.error
+        );
+        // A free path, with no other manifest: Save creates it from the draft.
+        fs::remove_file(module.path.join("Module.md")).unwrap();
+        library.error = None;
+        library.save_selected(false);
+        assert_eq!(fs::read_to_string(&manifest).unwrap(), valid);
+        assert!(library.just_saved);
     }
 
     #[test]
