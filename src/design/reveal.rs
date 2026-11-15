@@ -2,7 +2,7 @@
 //! brings its target (an opened form, an act's result and its next action) whole into view.
 //!
 //! - **Asked at the act.** [`Reveal::ask`] takes an [`Act`], which only a press or a key of this
-//!   pass gives ([`Act::clicked`], [`Act::key`]). A draw path cannot renew a reveal: it has no
+//!   pass gives ([`Act::clicked`]); a new act replaces the reveal before it. A draw path cannot renew a reveal: it has no
 //!   act, and asking again with the same act is no new request.
 //! - **Runs in the scroll area that owns the target.** The target says where it is with
 //!   [`Reveal::mark`] after it is drawn. The part finds the innermost scroll area of the target's
@@ -15,8 +15,7 @@
 //!   taller than the view after one edge scroll (an opened form shows its top, an act's result
 //!   its end, where its action is: Q2.1); any input of the DM's (a wheel, a press or drag, a key,
 //!   typed or pasted text, IME), observed at every mark even after it ended; the owner's end
-//!   ([`Reveal::end`], a frame that did not draw the target, another visit); a new act
-//!   (`Replaced`); and a bound of [`PASSES`] scroll frames inside an absolute deadline.
+//!   ([`Reveal::end`], a frame that did not draw the target, another visit); and a bound of [`PASSES`] scroll frames inside an absolute deadline.
 //! - **A resize** brings back only a reveal that ended `Whole`, while the DM has given no input
 //!   since its act: a window resize is not the DM's act on the content (the import form at 960,
 //!   1200 and 1920 px). It never brings back one that ended for any other reason.
@@ -26,7 +25,7 @@
 //! comparison per mark.
 use std::hash::Hash;
 
-use eframe::egui::{self, Id, Key, Rect, Response, Ui, Vec2};
+use eframe::egui::{self, Id, Rect, Response, Ui, Vec2};
 
 /// A reveal's bound: frames in which it scrolls.
 pub const PASSES: u8 = 4;
@@ -49,14 +48,6 @@ impl Act {
         response.clicked().then(|| Self {
             frame: Some(response.ctx.cumulative_frame_nr()),
             id: response.id,
-        })
-    }
-
-    /// The act of a key the DM pressed in this pass (`Enter` in a form).
-    pub fn key(ui: &Ui, key: Key, salt: impl Hash) -> Option<Self> {
-        ui.input(|input| input.key_pressed(key)).then(|| Self {
-            frame: Some(ui.ctx().cumulative_frame_nr()),
-            id: ui.id().with(("reveal_key", salt)),
         })
     }
 
@@ -85,6 +76,7 @@ pub enum Want {
     /// An opened form: its top shows.
     Open,
     /// An act's result and the next action it makes possible: its end shows.
+    #[allow(dead_code, reason = "step 2's callers (lane B6) ask for a result")]
     Result,
 }
 
@@ -97,7 +89,6 @@ pub enum End {
     ByTheDm,
     OwnerGone,
     Bound,
-    Replaced,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -177,13 +168,15 @@ impl Reveal {
     }
 
     /// Whether it runs.
-    pub fn running(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn running(&self) -> bool {
         self.run
             .is_some_and(|run| matches!(run.phase, Phase::Running { .. }))
     }
 
     /// Why it ended; `None` while it runs or before any act.
-    pub fn ended(&self) -> Option<End> {
+    #[cfg(test)]
+    pub(crate) fn ended(&self) -> Option<End> {
         match self.run?.phase {
             Phase::Ended(end) => Some(end),
             Phase::Running { .. } => None,
