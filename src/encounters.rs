@@ -52,16 +52,34 @@ impl Invalid {
     fn missing(text: &str) -> Self {
         Self {
             missing: true,
+            // R37: a missing part's tone, the one its diagnosis gives the save row's word.
+            tone: Tone::Warning,
             ..Self::from(text)
         }
     }
 
-    /// The save row's typed diagnosis of this fault.
+    /// The save row's typed diagnosis of this fault. Its tone is the fault's (R41): a deleted
+    /// creature is a thing that is gone, a warning; an unreadable one or a change that cannot
+    /// stand is an error.
     fn diagnosis(&self) -> design::save_row::Diagnosis<'static> {
         if self.missing {
             design::save_row::Diagnosis::incomplete(self.text.clone())
+        } else if self.tone == Tone::Warning {
+            design::save_row::Diagnosis::missing(self.text.clone())
         } else {
             design::save_row::Diagnosis::refused(self.text.clone())
+        }
+    }
+}
+
+/// A group's refusal, with its kind: the encounter page keeps it as its last refusal, and the
+/// save row and the footer give it the refusal's tone (R41).
+impl From<&groups::Refusal> for Invalid {
+    fn from(refusal: &groups::Refusal) -> Self {
+        Self {
+            text: refusal.text().to_owned(),
+            tone: refusal.tone(),
+            missing: refusal.diagnosis().only_incomplete(),
         }
     }
 }
@@ -221,7 +239,7 @@ impl RosterFault {
 struct OwnedGroupsFound {
     found: design::save_row::Diagnosis<'static>,
     origin: Option<design::save_row::DraftOrigin>,
-    footer: Option<String>,
+    footer: Option<EncounterFault>,
     /// N4: the cause that the footer's next step answers, in the words Save says it (`Group
     /// <name>: <cause>`), so the footer can leave out a stored failed-action message that only
     /// repeats it, and keep any other.
@@ -236,8 +254,12 @@ fn owned_groups_found(
     encounter: Uuid,
 ) -> OwnedGroupsFound {
     use design::save_row::Diagnosis;
-    let (mut refused, mut incomplete, mut refused_footer) = (None, None, None);
+    let mut incomplete = None;
     let mut incomplete_cause = None;
+    // Lead ruling 1 (s30 B11 F1): the most severe refusal across the groups by the diagnosis
+    // rank, then group order (`Diagnosis::outranks`; equals keep the first). Its diagnosis, its
+    // typed footer and its cause are chosen together, so none comes from another group.
+    let mut chosen: Option<(Diagnosis<'static>, EncounterFault, String)> = None;
     for group in groups.iter().filter(|group| group.dirty()) {
         let Err(refusal) = group.check(snapshot, Some(encounter)) else {
             continue;
@@ -252,6 +274,8 @@ fn owned_groups_found(
             incomplete.get_or_insert((words, group.origin()));
         } else {
             let words = named_group_words(&group.name(), refusal.text());
+            // Save's words for it, with the refusal's kind and so its tone.
+            let found = refusal.named(words.clone());
             // N2 (lead ruling, R35): a fault with a place of its own (a member's row, Belongs
             // to) keeps its cause there, and the footer always names the next step, so a blocked
             // Save has painted words whether that place is in view or not; never the cause twice.
@@ -265,21 +289,30 @@ fn owned_groups_found(
                     group_words(&group.name())
                 ),
             };
-            refused_footer.get_or_insert((footer, words.clone()));
-            refused.get_or_insert(words);
+            if chosen
+                .as_ref()
+                .is_none_or(|(kept, ..)| found.outranks(kept))
+            {
+                // R41: the footer says the fault in the refusal's tone.
+                let fault = EncounterFault::refusal(footer, &found);
+                chosen = Some((found, fault, words));
+            }
         }
     }
     let origin = incomplete.as_ref().map(|(_, origin)| *origin);
-    let (footer, cause) = match refused_footer {
-        Some((footer, cause)) => (Some(footer), Some(cause)),
+    let (refused, footer, cause) = match chosen {
+        Some((found, footer, cause)) => (Some(found), Some(footer), Some(cause)),
         None => (
-            incomplete.as_ref().map(|(words, _)| words.clone()),
+            None,
+            incomplete.as_ref().map(|(words, _)| {
+                EncounterFault::refusal(words.clone(), &Diagnosis::incomplete(words.as_str()))
+            }),
             incomplete_cause,
         ),
     };
     let found = incomplete
         .map_or_else(Diagnosis::valid, |(words, _)| Diagnosis::incomplete(words))
-        .and(refused.map_or_else(Diagnosis::valid, Diagnosis::refused));
+        .and(refused.unwrap_or_else(Diagnosis::valid));
     OwnedGroupsFound {
         found,
         origin,
@@ -362,6 +395,31 @@ fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
     egui::Id::new(("roster_fault_rows", draft))
 }
 
+/// Save's reason for the encounter's unread roster rows (`reason`), as its typed diagnosis.
+/// Lead ruling (s30 B11, R41): an unread roster row is a row of a file that is there and cannot
+/// be read, so it is an error wherever the editor says it: Save's reason (`Invalid`), the
+/// message above the roster and the row's own mark. This is the one value they read; a roster
+/// row whose creature file is missing stays a warning (`missing_creature_tone`).
+fn unread_rows_found(reason: String) -> design::save_row::Diagnosis<'static> {
+    design::save_row::Diagnosis::refused(reason)
+}
+
+/// The tone of every place that says an unread roster row: its diagnosis's. Run setup reads it
+/// too.
+pub(crate) fn unread_row_tone() -> Tone {
+    unread_rows_found(String::new())
+        .tone()
+        .unwrap_or(Tone::Error)
+}
+
+/// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
+pub(crate) fn unread_row_mark() -> (&'static str, egui::Color32) {
+    match unread_row_tone() {
+        Tone::Error => (icons::ERROR, colors().result.error),
+        _ => (icons::WARN, colors().result.warning),
+    }
+}
+
 /// A roster row's own mark for its unread row fault (FC3): short, as a row's other faults are.
 fn roster_row_fault_words(line: usize) -> String {
     format!("Line {line} not read")
@@ -379,16 +437,14 @@ fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
                     egui::Label::new(Type::Strong.rich(ui, &fault.name).color(colors().text))
                         .truncate(),
                 );
-                // FA5, AA2: the whole mark, icon and words, in the warning tone, as run setup
-                // marks the same row; the name keeps the text colour.
+                // FA5, AA2: the whole mark, icon and words, in the fault's tone (R41: an unread
+                // row is an error, `unread_row_mark`); the name keeps the text colour.
+                let (icon, color) = unread_row_mark();
                 ui.add(
                     egui::Label::new(
                         Type::Small
-                            .rich(
-                                ui,
-                                format!("{} {}", icons::WARN, roster_row_fault_words(fault.line)),
-                            )
-                            .color(colors().result.warning),
+                            .rich(ui, format!("{icon} {}", roster_row_fault_words(fault.line)))
+                            .color(color),
                     )
                     .wrap(),
                 );
@@ -474,27 +530,43 @@ fn unread_notes(
     path: &str,
     flags: &[splat::content::layout::Flag],
     faults: &[RosterFault],
-) -> Vec<String> {
+) -> Vec<(String, Tone)> {
     flags
         .iter()
         .map(|flag| {
             let row = faults.iter().find(|fault| fault.line == flag.line);
-            // A flag read back from a saved copy has only its sentence, which names its line:
-            // it follows the file or the row, and no line is added.
-            let Some(words) = flag.words() else {
-                return match row {
-                    _ if faults.is_empty() => format!("{path}: {}", flag.message),
-                    Some(fault) => format!("{}: {}", fault.name, flag.message),
-                    None => flag.message.clone(),
-                };
+            // R41: a flag of an unread roster row in that fault's tone; any other a warning.
+            let tone = if row.is_some() {
+                unread_row_tone()
+            } else {
+                Tone::Warning
             };
-            match row {
-                _ if faults.is_empty() => format!("{path}, line {}: {words}", flag.line),
-                Some(fault) => row_fault_words(&fault.name, flag.line, &words),
-                None => flag.message.clone(),
-            }
+            (unread_note(path, flag, row, faults), tone)
         })
         .collect()
+}
+
+/// One flag's words (`unread_notes`).
+fn unread_note(
+    path: &str,
+    flag: &splat::content::layout::Flag,
+    row: Option<&RosterFault>,
+    faults: &[RosterFault],
+) -> String {
+    // A flag read back from a saved copy has only its sentence, which names its line: it
+    // follows the file or the row, and no line is added.
+    let Some(words) = flag.words() else {
+        return match row {
+            _ if faults.is_empty() => format!("{path}: {}", flag.message),
+            Some(fault) => format!("{}: {}", fault.name, flag.message),
+            None => flag.message.clone(),
+        };
+    };
+    match row {
+        _ if faults.is_empty() => format!("{path}, line {}: {words}", flag.line),
+        Some(fault) => row_fault_words(&fault.name, flag.line, &words),
+        None => flag.message.clone(),
+    }
 }
 
 /// `N content issues to repair`: the words of a page's collapsing content issue count.
@@ -534,28 +606,29 @@ pub(crate) fn file_line(ui: &mut egui::Ui, root: &std::path::Path, relative: &st
     ui.horizontal_wrapped(|ui| crate::world::entry_file_links(ui, &path, true));
 }
 
-/// The encounter file's unread rows, one warning each. The last warning says what to do, and the
-/// file's path and links start at its words, as every message's actions do.
+/// The encounter file's unread rows, one message each: an unread roster row in its error tone
+/// (`unread_row_tone`, R41), any other flag of the file as a warning. The last message says what
+/// to do, and the file's path and links start at its words, as every message's actions do.
 fn unread_roster_rows(
     ui: &mut egui::Ui,
     root: &std::path::Path,
     path: &str,
-    notes: &[String],
+    notes: &[(String, Tone)],
     faults: usize,
 ) {
-    let Some((last, before)) = notes.split_last() else {
+    let Some(((last, last_tone), before)) = notes.split_last() else {
         return;
     };
-    for note in before {
-        design::message(ui, Tone::Warning, note);
+    for (note, tone) in before {
+        design::message(ui, *tone, note);
     }
     if faults == 0 {
-        design::message(ui, Tone::Warning, last);
+        design::message(ui, *last_tone, last);
         return;
     }
     design::message_with_actions(
         ui,
-        Tone::Warning,
+        unread_row_tone(),
         &format!("{last} {}", fix_roster_rows(faults)),
         |ui| file_line(ui, root, path),
     );
@@ -1013,7 +1086,11 @@ impl Draft {
             &self.path,
             &roster_faults(&entry, &snapshot.known_creature_names),
         ) {
-            return Err(reason.into());
+            // R41: in the tone of its diagnosis, as the message above the roster says it.
+            return Err(Invalid {
+                tone: unread_row_tone(),
+                ..reason.into()
+            });
         }
         if self.name.trim().is_empty() {
             return Err(Invalid::missing("Enter an encounter name."));
@@ -2012,6 +2089,17 @@ fn missing_creature_tone(unreadable: Option<&crate::content_workspace::Unreadabl
     }
 }
 
+/// R41 (lead ruling, s30 B11): whether a creature reference that does not resolve names a file
+/// that is there and cannot be read (unreadable, an error), as against a creature that is gone (a
+/// warning). The roster's one classification (`missing_creature_tone`), which a group's members
+/// share.
+pub(super) fn creature_unreadable(
+    catalogue: &crate::content_workspace::Catalogue,
+    reference: &crate::content_workspace::EntryRef,
+) -> bool {
+    missing_creature_tone(catalogue.unreadable_ref(reference)) == Tone::Error
+}
+
 /// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
 fn missing_creature_mark(
     unreadable: Option<&crate::content_workspace::UnreadableNote>,
@@ -2962,6 +3050,17 @@ enum EncounterFault {
     /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
+}
+
+impl EncounterFault {
+    /// Save's refusal `words` in the tone of its diagnosis `found` (R41): the one place that
+    /// turns a refusal into a footer fault, so the footer and the save row's word agree.
+    fn refusal(words: String, found: &design::save_row::Diagnosis<'_>) -> Self {
+        match found.tone() {
+            Some(Tone::Error) => Self::Failed(words),
+            _ => Self::Invalid(words),
+        }
+    }
 }
 
 impl design::outcome::Fault for EncounterFault {
@@ -5374,7 +5473,7 @@ impl Encounters {
         frame: &'f design::outcome::PaneFrame,
         width: f32,
         root: &std::path::Path,
-        groups_reason: Option<(String, String)>,
+        groups_reason: Option<(EncounterFault, String)>,
     ) -> design::outcome::Messages<'f, FooterPress> {
         use design::outcome::FaultMessage;
         self.record_member_results();
@@ -5425,9 +5524,10 @@ impl Encounters {
             messages.outcome(FaultMessage::new(&fault));
         }
         if let Some(reason) = groups_reason {
-            // F2, R35: the owned groups' first reason, as its next step where a row or field
-            // says the cause (an empty group, a blank name or side, a member's row).
-            messages.outcome(FaultMessage::new(&EncounterFault::Invalid(reason)));
+            // F2, R35: the owned groups' chosen reason, as its next step where a row or field
+            // says the cause (an empty group, a blank name or side, a member's row), in its own
+            // typed tone (R41).
+            messages.outcome(FaultMessage::new(&reason));
         }
         messages
     }
@@ -6270,10 +6370,11 @@ impl Encounters {
         let found = groups
             .found
             .clone()
-            .and(roster_reason.clone().map_or_else(
-                design::save_row::Diagnosis::valid,
-                design::save_row::Diagnosis::refused,
-            ))
+            .and(
+                roster_reason
+                    .clone()
+                    .map_or_else(design::save_row::Diagnosis::valid, unread_rows_found),
+            )
             .and(own.unwrap_or_else(design::save_row::Diagnosis::valid));
         let groups_footer = groups.footer.zip(groups.cause);
         // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
@@ -6597,7 +6698,11 @@ impl Encounters {
         );
         if let Some((notes, faults, path)) = unread_rows.filter(|(notes, ..)| !notes.is_empty()) {
             let root = active.path.clone();
-            let words = notes.join(" ");
+            let words = notes
+                .iter()
+                .map(|(note, _)| note.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
             unread.reason(words, move |ui| {
                 unread_roster_rows(ui, &root, &path, &notes, faults);
             });
@@ -8287,13 +8392,18 @@ mod tests {
         let saved = |line: usize, message: &str| -> splat::content::layout::Flag {
             serde_json::from_value(serde_json::json!({"line": line, "message": message})).unwrap()
         };
+        // R41 (lead ruling, s30 B11): an unread roster row's note is an error; another flag of
+        // the file is a warning.
         assert_eq!(
             unread_notes(
                 "Encounters/Shrine.md",
                 &[saved(3, "Line 3: the date was not read.")],
                 &[]
             ),
-            ["Encounters/Shrine.md: Line 3: the date was not read."]
+            [(
+                "Encounters/Shrine.md: Line 3: the date was not read.".to_owned(),
+                Tone::Warning
+            )]
         );
         assert_eq!(
             unread_notes(
@@ -8301,7 +8411,10 @@ mod tests {
                 &[saved(20, "Line 20: the change was not read.")],
                 &[row("Ember Cultist", 20)]
             ),
-            ["Ember Cultist: Line 20: the change was not read."]
+            [(
+                "Ember Cultist: Line 20: the change was not read.".to_owned(),
+                Tone::Error
+            )]
         );
         for (flags, rows, path, expected, sentence) in [
             (
@@ -8336,7 +8449,23 @@ mod tests {
             ),
         ] {
             let notes = unread_notes(path, &flags, &rows);
-            assert_eq!(notes, expected);
+            let (words, tones): (Vec<String>, Vec<Tone>) = notes.iter().cloned().unzip();
+            assert_eq!(words, expected);
+            // R41: each roster row's note in the error tone of Save's reason for it.
+            for (flag, tone) in flags.iter().zip(&tones) {
+                let roster_row = rows.iter().any(|row| row.line == flag.line);
+                assert_eq!(
+                    *tone,
+                    if roster_row {
+                        unread_rows_found(String::new()).tone().unwrap()
+                    } else {
+                        Tone::Warning
+                    },
+                    "line {}",
+                    flag.line
+                );
+            }
+            assert_eq!(unread_row_tone(), Tone::Error);
             // The run setup and Save's reason give each row the editor's words (iter-23 FA4).
             for row in &rows {
                 let flag = flags.iter().find(|flag| flag.line == row.line).unwrap();
@@ -8344,7 +8473,7 @@ mod tests {
                     problem: flag.words().unwrap(),
                     ..row.clone()
                 };
-                assert!(notes.contains(&fault.words()), "{}", fault.words());
+                assert!(words.contains(&fault.words()), "{}", fault.words());
                 let reason = roster_fault_reason(path, std::slice::from_ref(&fault)).unwrap();
                 assert!(
                     reason.contains(fault.words().trim_end_matches('.')),
@@ -8396,7 +8525,7 @@ mod tests {
                     links, 0,
                     "a fault that is not a roster row has no file line"
                 );
-                assert_eq!(find(&notes[0]).len(), 1);
+                assert_eq!(find(&words[0]).len(), 1);
                 continue;
             };
             assert_eq!(
@@ -8409,8 +8538,8 @@ mod tests {
                 .collect();
             assert_eq!(ended.len(), 1, "only the last warning says what to do");
             let last = ended[0].1;
-            assert!(ended[0].0.starts_with(notes.last().unwrap().as_str()));
-            for note in &notes[..notes.len() - 1] {
+            assert!(ended[0].0.starts_with(words.last().unwrap().as_str()));
+            for note in &words[..words.len() - 1] {
                 let found = find(note);
                 assert_eq!(
                     found.len(),
@@ -10851,8 +10980,9 @@ mod tests {
             "Choose a replacement for the Cinder Wolf row before you save or start a fight."
         );
         assert!(invalid.tone == Tone::Warning);
-        // The row says the same fault in the same tone.
+        // The row says the same fault in the same tone, and so does the save row's word (R41).
         assert!(invalid.tone == missing_creature_tone(None));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         let mut encounters = Encounters {
             snapshot: Some(deleted),
             validation_path: Some(draft.path.clone()),
@@ -10895,6 +11025,7 @@ mod tests {
             .catalogue
             .unreadable_ref(draft.setup.roster[0].creature.as_ref().unwrap());
         assert!(invalid.tone == missing_creature_tone(unread));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         assert_eq!(missing_creature_mark(unread).0, icons::ERROR);
         encounters.snapshot = Some(snapshot);
         encounters.draft = Some(draft);
@@ -10920,6 +11051,7 @@ mod tests {
         );
         assert!(invalid.tone == Tone::Warning, "{invalid:?}");
         assert!(invalid.tone == missing_creature_tone(duplicate));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         assert_eq!(missing_creature_mark(duplicate).0, icons::WARN);
         encounters.snapshot = Some(snapshot);
         encounters.error = Some(invalid.text.clone());
