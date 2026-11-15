@@ -1732,6 +1732,15 @@ impl Sessions {
                 draft.follow_disk();
             }
         }
+        // Round 30 re-check N1 of PR 400: a kept `Recording saved: …` must end when its file goes
+        // also with no input, so while one is kept the app wakes for the next disk check. Only
+        // then: with nothing kept, this asks for no frame.
+        if !self.saved.is_empty() {
+            let since = self
+                .last_check
+                .map_or(CHECK_DISK_EVERY, |at| now.duration_since(at));
+            ctx.request_repaint_after(CHECK_DISK_EVERY.saturating_sub(since));
+        }
         if let Some(id) = self.draft.as_mut().and_then(|draft| draft.restored.take()) {
             self.refresh();
             self.selected = Some(id);
@@ -7963,6 +7972,29 @@ impl Sessions {
         draft.save();
     }
 
+    /// The open note's save fails, as a full disk would make it.
+    pub fn simulate_failed_save(&mut self) {
+        let draft = self.draft.as_mut().expect("an open note");
+        draft.state = DraftState::Failed("Not saved. The disk is full.".to_owned());
+    }
+
+    /// The open note's file leaves the folder outside Splat while the DM has unsaved words,
+    /// and the next save finds it gone. Returns where the file went, to put it back.
+    pub fn simulate_note_gone(&mut self) -> (PathBuf, PathBuf) {
+        let draft = self.draft.as_mut().expect("an open note");
+        let path = draft.path.clone();
+        let folder = path.parent().expect("the session folder");
+        let away = folder
+            .parent()
+            .expect("the parent of the folder")
+            .join("note-gone-for-a-while.md");
+        fs::rename(&path, &away).expect("the note moves away");
+        draft.body.push_str("\nTyped after the file went.\n");
+        draft.edited();
+        draft.save();
+        (path, away)
+    }
+
     /// Processing of the open session finishes now, as the background job would.
     pub fn simulate_job_finished(&mut self) {
         let session = self.selected.expect("an open session");
@@ -9423,6 +9455,52 @@ mod tests {
             "back in A, the ended result stays ended"
         );
         assert_eq!(saved(&harness), Some("Recording saved"), "back in A");
+        // Round 30 re-check N1 of PR 400: with no input, a kept `Recording saved: …` still ends
+        // with its file. X and Y record in two sessions; the idle frame asks to wake by the next
+        // disk check; X's file goes; that wake ends X, and Y stays.
+        let (x, y) = (Uuid::new_v4(), Uuid::new_v4());
+        for (session, file) in [(x, "x.wav"), (y, "y.wav")] {
+            harness.state_mut().0.live = Some(Live {
+                session,
+                label: "Session".to_owned(),
+                recorder: crate::recording::Recorder::start(
+                    crate::recording::Tool::Simulated,
+                    None,
+                    audio.path().join(file),
+                )
+                .unwrap(),
+            });
+            harness.state_mut().0.finish_recording();
+        }
+        let wakes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let heard = wakes.clone();
+        harness.ctx.set_request_repaint_callback(move |info| {
+            heard.lock().unwrap().push(info.delay);
+        });
+        // The disk check ran in this frame: the next one is due `CHECK_DISK_EVERY` later.
+        harness.state_mut().0.last_check = None;
+        harness.step();
+        let soonest = wakes.lock().unwrap().iter().min().copied();
+        assert!(
+            soonest.is_some_and(|delay| delay <= CHECK_DISK_EVERY),
+            "an idle frame with a kept result asks to wake by the next disk check: {soonest:?}"
+        );
+        std::fs::remove_file(audio.path().join("x.wav")).unwrap();
+        // The wake: the next frame, once the check is due.
+        harness.state_mut().0.last_check = Some(Instant::now() - CHECK_DISK_EVERY);
+        harness.step();
+        let kept = |harness: &egui_kittest::Harness<'_, State>, session: Uuid| {
+            let sessions = &harness.state().0;
+            sessions
+                .saved
+                .get(&sessions.of_session(Some(session)))
+                .is_some()
+        };
+        assert!(
+            !kept(&harness, x) && kept(&harness, y),
+            "the wake ends X with its file, and Y stays"
+        );
+        harness.ctx.set_request_repaint_callback(|_| {});
         // Review of PR 346, item 1: the form shows two templates; one is deleted outside Splat
         // before the next scan, and the move's result says what it moved, not what was drawn.
         harness.state_mut().0.folder_text = "Moved A".to_owned();
