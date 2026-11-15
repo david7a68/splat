@@ -522,7 +522,8 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                 self.found.push("hp-fraction-owner");
             }
             if self.path.ends_with("src/party.rs")
-                && ["overview", "detail_intro", "background"].contains(&self.function.as_str())
+                && ["overview", "detail_intro", "background", "details"]
+                    .contains(&self.function.as_str())
                 && (["{label}: ", "{label} · ", "{}: ", "{} · {}"]
                     .iter()
                     .any(|prefix| words.starts_with(prefix))
