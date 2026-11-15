@@ -739,7 +739,9 @@ pub fn run(d: &mut Driver<'_>) {
                 .find(|node| node.name.starts_with("Ember Cultist · ") && node.in_view())
                 .map(|node| node.name)
                 .unwrap_or_default();
-            let placed = super::file_links_at_message_words_by_hand(
+            // Migration-32 L2c: the editor's unread rows are typed faults in its one footer,
+            // with the fault's own file line (its links named with the file).
+            let placed = super::file_links_at_message_words(
                 d,
                 "Ember Cultist · line 20: ",
                 &roster_path,
