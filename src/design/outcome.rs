@@ -3185,7 +3185,12 @@ struct MeasureContext {
 
 /// One pass of the measuring context: `add` gets a `Ui` there with `ui`'s style and this
 /// context's fonts and scale, and the file lines' state `gone`. Nothing it draws reaches this
-/// context: no widget, no accessible node, no focus and no paint.
+/// context: no widget, no accessible node, no focus and no paint. Its root `Ui` is the one
+/// `egui::Ui::new` in the design system: that context has no page, so no host region.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn measuring<R>(ui: &Ui, gone: &[(egui::Id, bool)], mut add: impl FnMut(&mut Ui) -> R) -> R {
     let main = ui.ctx();
     let key = egui::Id::new("design_footer_measure");
@@ -3236,12 +3241,12 @@ fn measuring<R>(ui: &Ui, gone: &[(egui::Id, bool)], mut add: impl FnMut(&mut Ui)
     let style = ui.style().clone();
     let mut out = None;
     let _ = measure.run(input, |ctx| {
-        egui::CentralPanel::default()
-            .frame(egui::Frame::NONE)
-            .show(ctx, |ui| {
-                ui.set_style(style.clone());
-                out = Some(add(ui));
-            });
+        let mut ui = Ui::new(
+            ctx.clone(),
+            egui::Id::new("design_footer_measure"),
+            egui::UiBuilder::new().max_rect(screen).style(style.clone()),
+        );
+        out = Some(add(&mut ui));
     });
     out.expect("the measuring context draws one pass")
 }
