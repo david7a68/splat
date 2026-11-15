@@ -5612,44 +5612,126 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     close_run(d);
     // Round 30 AP1, kept last: when the run's encounter is gone, Edit encounter does not
     // leave the run; Prep says why under the action. The reason belongs to that run: it ends
-    // when the run closes, so the run opened again shows the action without it.
-    show(d, "Rook Ambry");
-    d.wait_for_text("Watch House");
-    d.click(start);
-    d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
-    d.click("Close Lookup");
-    fight_tab(d, "Prep");
-    d.expect("Edit encounter");
-    let note = encounters.join("Fight with Rook Ambry.md");
-    let text = fs::read_to_string(&note).unwrap();
-    fs::remove_file(&note).unwrap();
+    // when the run closes, so the next run of the encounter shows the action without it.
+    let open_rook_prep = |d: &mut Driver<'_>| {
+        show(d, "Rook Ambry");
+        d.wait_for_text("Watch House");
+        d.click(start);
+        d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+        d.click("Close Lookup");
+        fight_tab(d, "Prep");
+        d.expect("Edit encounter");
+    };
+    open_rook_prep(d);
+    // The run's encounter is one of the saved fights with Rook: set them all aside.
+    let rook_notes: Vec<(std::path::PathBuf, String)> = fs::read_dir(&encounters)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with("Fight with Rook Ambry"))
+        })
+        .map(|path| {
+            let text = fs::read_to_string(&path).unwrap();
+            (path, text)
+        })
+        .collect();
+    assert!(!rook_notes.is_empty());
+    for (path, _) in &rook_notes {
+        fs::remove_file(path).unwrap();
+    }
     d.click("Edit encounter");
     d.settle();
     const GONE: &str = "This encounter is no longer in the campaign.";
     d.observe(
         "s30-AP1-refused",
-        d.has(&format!("{RUN_HEADING}Fight with Rook Ambry"))
+        d.has_containing(&format!("{RUN_HEADING}Fight with Rook Ambry"))
             && d.has("Edit encounter")
             && d.has_containing(GONE),
         "Edit encounter for a deleted encounter stays on the run, and Prep says why under it",
     );
     d.state("prep-edit-encounter-gone", Sizes::All);
-    fs::write(&note, text).unwrap();
+    for (path, text) in &rook_notes {
+        fs::write(path, text).unwrap();
+    }
     // A setup nobody touched leaves no save, so the next run of this encounter is a new run.
     close_run(d);
-    show(d, "Rook Ambry");
-    d.wait_for_text("Watch House");
-    d.click(start);
-    d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
-    d.click("Close Lookup");
-    fight_tab(d, "Prep");
-    d.expect("Edit encounter");
+    open_rook_prep(d);
     d.observe(
         "s30-AP1-refusal-ends",
         !d.has_containing(GONE),
         "The reason ended with its run: the next run of the encounter shows Edit encounter without it",
     );
-    close_run(d);
+    // Review of lane B4: Prep's Edit encounter never replaces an unsaved draft. (c) With
+    // nothing unsaved it opens the editor; (a) with unsaved words in the encounter, and (b)
+    // with the encounter saved and a creature beside it unsaved, it stays on the run, the
+    // draft stays, and Prep paints the guard's own sentence under the action.
+    d.click("Edit encounter");
+    d.expect("Back to run");
+    d.observe(
+        "s30-AP1-clean-opens",
+        d.has("Back to run") && d.has(SAVE_ENCOUNTER),
+        "With nothing unsaved, Prep's Edit encounter opens the encounter's editor",
+    );
+    const DRAFT_WORDS: &str = "Rook waits by the well.";
+    d.type_into("Read-aloud and notes", DRAFT_WORDS);
+    d.click("Back to run");
+    fight_tab(d, "Prep");
+    d.click("Edit encounter");
+    d.settle();
+    let guard = d
+        .app_mut()
+        .encounters
+        .plan_group_blocked()
+        .map(str::to_owned);
+    let kept = d.app_mut().encounters.encounter_dirty();
+    d.observe(
+        "s30-AP1-dirty-encounter",
+        kept && d.has_containing(&format!("{RUN_HEADING}Fight with Rook Ambry"))
+            && guard.as_deref().is_some_and(|reason| d.has_containing(reason)),
+        format!("An unsaved encounter: Edit encounter stays on the run, the draft stays ({kept}), and Prep paints the guard's reason {guard:?}"),
+    );
+    d.state("prep-edit-encounter-unsaved", Sizes::All);
+    d.click(NAV_ENCOUNTERS);
+    d.observe(
+        "s30-AP1-dirty-encounter-words",
+        d.visible_text(DRAFT_WORDS),
+        "The unsaved words are still in the encounter's editor",
+    );
+    d.click("Discard");
+    d.settle();
+    d.click("More actions for Rook Ambry");
+    d.click("Make it yours");
+    d.settle();
+    d.click(SAVE_ENCOUNTER);
+    d.settle();
+    d.type_into("Name", " of the Watch");
+    d.settle();
+    let (encounter, creature) = {
+        let page = &d.app_mut().encounters;
+        (page.encounter_dirty(), page.creature_dirty())
+    };
+    d.click("Back to run");
+    fight_tab(d, "Prep");
+    d.click("Edit encounter");
+    d.settle();
+    let guard = d
+        .app_mut()
+        .encounters
+        .plan_group_blocked()
+        .map(str::to_owned);
+    let still = d.app_mut().encounters.creature_dirty();
+    d.observe(
+        "s30-AP1-dirty-creature",
+        !encounter
+            && creature
+            && still
+            && d.has_containing(&format!("{RUN_HEADING}Fight with Rook Ambry"))
+            && guard.as_deref().is_some_and(|reason| d.has_containing(reason)),
+        format!("A saved encounter with an unsaved creature (encounter dirty {encounter}, creature dirty {creature}, after {still}): Edit encounter stays on the run and Prep paints the guard's reason {guard:?}"),
+    );
+    d.state("prep-edit-encounter-unsaved-creature", Sizes::All);
 }
 
 /// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the
