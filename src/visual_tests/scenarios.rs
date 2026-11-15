@@ -983,8 +983,8 @@ pub(super) fn painted_paragraph(d: &Driver<'_>, words: &str) -> Option<egui::Rec
 }
 
 /// The tones of the bars beside each visible painted paragraph whose text passes `wanted`.
-/// The tone of each painted status `<icon> <word>` in view (a save row's `Invalid`), by its icon
-/// and its word's colour: `warning`, `error` or `none` (R41: one fault has one tone).
+/// The tone of each painted status `<icon> <word>` in view (a save row's `Invalid`, a rail mark),
+/// by its word's colour: `warning`, `error` or `none` (R41: one fault has one tone).
 pub(super) fn status_tones(d: &Driver<'_>, word: &str) -> Vec<&'static str> {
     let colors = crate::design::colors();
     let mut tones = Vec::new();
@@ -994,19 +994,14 @@ pub(super) fn status_tones(d: &Driver<'_>, word: &str) -> Vec<&'static str> {
         if !clip.intersects(rect) || job.sections.len() != 3 || !job.text.ends_with(word) {
             return;
         }
-        let icon = &job.text[job.sections[0].byte_range.clone()];
         let color = job.sections[2].format.color;
-        tones.push(
-            if icon == crate::design::icons::WARN && color == colors.result.warning {
-                "warning"
-            } else if icon == crate::design::icons::ERROR
-                && (color == colors.result.error || color == colors.document.invalid)
-            {
-                "error"
-            } else {
-                "none"
-            },
-        );
+        tones.push(if color == colors.result.warning {
+            "warning"
+        } else if color == colors.result.error || color == colors.document.invalid {
+            "error"
+        } else {
+            "none"
+        });
     });
     tones
 }

@@ -188,8 +188,9 @@ mod refusal {
         /// there: no other place repeats it.
         place: RefusalPlace,
         /// The save row's typed diagnosis (`design::save_row::Diagnosis`), owned, so the cached
-        /// check carries it whole to `DraftState`.
-        diagnosis: design::save_row::Diagnosis<'static>,
+        /// check carries it whole to `DraftState`. Boxed, so a `Result` that holds a refusal
+        /// stays small.
+        diagnosis: Box<design::save_row::Diagnosis<'static>>,
         /// The member's row that says this fault, by the name it shows (N2): the next step
         /// that a pane with the row out of view names.
         row: Option<Box<str>>,
@@ -205,7 +206,7 @@ mod refusal {
         pub(in crate::encounters) fn refused(text: impl Into<String>, place: RefusalPlace) -> Self {
             let text = text.into();
             Self {
-                diagnosis: design::save_row::Diagnosis::refused(text.clone()),
+                diagnosis: Box::new(design::save_row::Diagnosis::refused(text.clone())),
                 text,
                 place,
                 row: None,
@@ -216,7 +217,7 @@ mod refusal {
         pub(in crate::encounters) fn missing(text: impl Into<String>, place: RefusalPlace) -> Self {
             let text = text.into();
             Self {
-                diagnosis: design::save_row::Diagnosis::missing(text.clone()),
+                diagnosis: Box::new(design::save_row::Diagnosis::missing(text.clone())),
                 text,
                 place,
                 row: None,
@@ -256,7 +257,7 @@ mod refusal {
         ) -> Self {
             let text = text.into();
             Self {
-                diagnosis: design::save_row::Diagnosis::incomplete(text.clone()),
+                diagnosis: Box::new(design::save_row::Diagnosis::incomplete(text.clone())),
                 text,
                 place,
                 row: None,
@@ -5385,9 +5386,11 @@ mod tests {
         let mut fresh = GroupDraft::new();
         fresh.name = "Ash Hounds".into();
         assert_eq!(encounter_word(std::slice::from_ref(&fresh)), SaveWord::New);
+        // R41 (s30 B11): its member's creature is not in the packages, a thing that is gone, so
+        // `Invalid` takes the warning tone that the member's row says it in.
         assert!(matches!(
             encounter_word(&[faulty, fresh]),
-            SaveWord::Invalid(design::save_row::InvalidCause::Refused)
+            SaveWord::Invalid(design::save_row::InvalidCause::Missing)
         ));
 
         // F4: no editor opens a group whose note does not read: open gives an error.
