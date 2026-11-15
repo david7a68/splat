@@ -1618,6 +1618,52 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
 /// when their parent uses bold. Short paint keeps the full menu and accessible label.
 #[test]
 fn chosen_values_use_regular_weight_and_keep_full_choice_words() {
+    for size in [
+        vec2(960.0, 640.0),
+        vec2(1200.0, 900.0),
+        vec2(1920.0, 1080.0),
+    ] {
+        let ctx = context();
+        let chosen = Cell::new(0);
+        let control = Cell::new(Rect::NOTHING);
+        let draw = |events| {
+            frame(&ctx, size, events, |ui| {
+                let mut current = chosen.get();
+                let shown = Dropdown::new(SIDE, "Session for new events")
+                    .choice(0, "No session")
+                    .choice_with_short_label(4, "Session 4: Ferry Watch", "Session 4")
+                    .show(ui, &mut current);
+                crate::design::named(ui, &shown.response, "Session for new events");
+                control.set(shown.response.rect);
+                chosen.set(current);
+            })
+        };
+        draw(Vec::new());
+        draw(click(control.get().center()));
+        draw(Vec::new());
+        draw(Vec::new());
+        let rows = ctx
+            .data(|data| data.get_temp::<Vec<Id>>(list().with("rows")))
+            .unwrap();
+        let row = ctx.read_response(rows[1]).unwrap();
+        draw(click(row.rect.center()));
+        assert_eq!(chosen.get(), 4, "the real menu selects Session 4");
+        let closed = draw(Vec::new());
+        assert!(
+            closed
+                .platform_output
+                .accesskit_update
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| {
+                    node.role() == egui::accesskit::Role::ComboBox
+                        && node.label() == Some("Session for new events")
+                        && node.value() == Some("Session 4: Ferry Watch")
+                }),
+            "{size:?}: the exact old name and full selected value stay together"
+        );
+    }
     const FULL: &str = "Session 1: Tonight at the old bridge";
     const TYPED: FieldId =
         crate::field_id!("test_dropdown_typed").once(crate::design::Once::Example);

@@ -14113,7 +14113,7 @@ pub mod session_notes {
 
         // Reading last week's note does not send tonight's run there.
         d.click(NAV_TIMELINE);
-        d.click_starting("Session for new events");
+        d.click("Session for new events");
         d.click("No session");
         d.click(NAV_SESSIONS);
         d.click("New session");
@@ -15203,19 +15203,17 @@ pub mod session_notes {
                 format!("{name}: menu {menu:?}, control {control:?}, detail splitter {splitter:?}, footer bands {footers:?}, window height {height}"),
             );
         };
-        d.click_starting("Session for new events");
-        d.click("Session 4: Ferry Watch");
         d.state_prepared("adds-to-session-menu", Sizes::All, |d| {
+            d.click("Session for new events");
+            d.click("Session 4: Ferry Watch");
             d.observe(
-                "s30-B10-chosen-value-accessible-name",
-                d.nodes().iter().any(|node| {
-                    node.role == egui::accesskit::Role::ComboBox
-                        && node.name == "Session for new events: Session 4: Ferry Watch"
-                }),
-                "The live Adds to control keeps the full chosen label in its accessible name",
+                "s30-B10-chosen-value-accessible-value",
+                d.combo_value("Session for new events").as_deref()
+                    == Some("Session 4: Ferry Watch"),
+                "The exact Session for new events name keeps the full chosen value after a menu selection",
             );
             if !d.has("No session") {
-                d.click_starting("Session for new events");
+                d.click("Session for new events");
             }
             d.observe(
                 "s30-B10-chosen-value-menu",
@@ -23304,7 +23302,7 @@ pub mod session_plan {
     /// New events go to this session, by the Timeline page's own control.
     fn go_timeline_choose_session(d: &mut Driver<'_>, session: &str) {
         d.click(NAV_TIMELINE);
-        d.click_starting("Session for new events");
+        d.click("Session for new events");
         d.click_starting(session);
     }
 

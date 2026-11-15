@@ -695,10 +695,11 @@ impl TimelinePage {
                 short_session(&session.label),
             );
         }
-        dropdown
+        let shown = dropdown
             .within(room)
             .width(design::READER_MEASURE / 4.0)
             .show(ui, &mut chosen);
+        design::named(ui, &shown.response, "Session for new events");
         if chosen != current {
             self.new_events_to = Some(chosen);
         }
