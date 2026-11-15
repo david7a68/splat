@@ -3142,7 +3142,10 @@ fn file_states<A>(ctx: &egui::Context, lines: &[FooterLine<A>]) -> Vec<(egui::Id
         .filter_map(|line| line.typed.body.file.as_ref().and_then(FileLine::path))
         .map(|path| {
             let key = egui::Id::new(("design_file_gone", path));
-            (key, ctx.data(|data| data.get_temp::<bool>(key)) == Some(true))
+            (
+                key,
+                ctx.data(|data| data.get_temp::<bool>(key)) == Some(true),
+            )
         })
         .collect()
 }
@@ -3151,7 +3154,12 @@ fn file_states<A>(ctx: &egui::Context, lines: &[FooterLine<A>]) -> Vec<(egui::Id
 fn file_states_of(ctx: &egui::Context, files: &[(egui::Id, bool)]) -> Vec<(egui::Id, bool)> {
     files
         .iter()
-        .map(|&(key, _)| (key, ctx.data(|data| data.get_temp::<bool>(key)) == Some(true)))
+        .map(|&(key, _)| {
+            (
+                key,
+                ctx.data(|data| data.get_temp::<bool>(key)) == Some(true),
+            )
+        })
         .collect()
 }
 
@@ -3228,12 +3236,12 @@ fn measuring<R>(ui: &Ui, gone: &[(egui::Id, bool)], mut add: impl FnMut(&mut Ui)
     let style = ui.style().clone();
     let mut out = None;
     let _ = measure.run(input, |ctx| {
-        let mut ui = Ui::new(
-            ctx.clone(),
-            egui::Id::new("design_footer_measure"),
-            egui::UiBuilder::new().max_rect(screen).style(style.clone()),
-        );
-        out = Some(add(&mut ui));
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ctx, |ui| {
+                ui.set_style(style.clone());
+                out = Some(add(ui));
+            });
     });
     out.expect("the measuring context draws one pass")
 }
@@ -6404,9 +6412,18 @@ mod tests {
             a.0.len() == b.0.len()
                 && a.1.len() == b.1.len()
                 && a.2.len() == b.2.len()
-                && a.0.iter().zip(&b.0).all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
-                && a.1.iter().zip(&b.1).all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
-                && a.2.iter().zip(&b.2).all(|(a, b)| a.0 == b.0 && near(a.1, b.1))
+                && a.0
+                    .iter()
+                    .zip(&b.0)
+                    .all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
+                && a.1
+                    .iter()
+                    .zip(&b.1)
+                    .all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
+                && a.2
+                    .iter()
+                    .zip(&b.2)
+                    .all(|(a, b)| a.0 == b.0 && near(a.1, b.1))
         }
         /// A frame drawn in one pass (egui declines the rerun a changed footer asks for), then
         /// the next frame, in one pass too: what each shows.
@@ -6567,10 +6584,12 @@ mod tests {
             (Some([300.0; 2]), [1000.0, 230.0], egui::vec2(960.0, 800.0)),
         ] {
             let app = |kept: &[(&'static str, &'static str)]| {
-                let mut app = App::default();
-                app.two_panes = heights.is_none();
-                app.heights = heights;
-                app.body_tall = tall;
+                let mut app = App {
+                    two_panes: heights.is_none(),
+                    heights,
+                    body_tall: tall,
+                    ..App::default()
+                };
                 for &(owner, words) in kept {
                     app.dndbeyond.results.record(Saved(Campaign(owner), words));
                 }
@@ -6609,7 +6628,10 @@ mod tests {
             } else {
                 ([true, true], [Placement::Follows; 2])
             };
-            assert_eq!((fits.as_slice(), stand.as_slice()), (&want.0[..], &want.1[..]));
+            assert_eq!(
+                (fits.as_slice(), stand.as_slice()),
+                (&want.0[..], &want.1[..])
+            );
             // Its controls take presses where they are painted in the frame that brings them: a
             // third result comes, and a press on its Undo where a fresh pane settles it, decided
             // on that first frame's targets, reaches it.
@@ -6619,10 +6641,7 @@ mod tests {
                 .results
                 .record(Saved(Campaign("third"), "Folder chosen"));
             let third = order(h.state(), "third");
-            let settled = settles(
-                app(&[lines[0], lines[1], ("third", "Folder chosen")]),
-                size,
-            );
+            let settled = settles(app(&[lines[0], lines[1], ("third", "Folder chosen")]), size);
             let (_, undo) = settled
                 .2
                 .iter()

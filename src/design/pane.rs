@@ -2013,7 +2013,7 @@ impl Footer<'_> {
             },
         );
         #[cfg(not(test))]
-        let _ = (footer, placement, local);
+        let _ = (footer, placement, cut, local);
         out
     }
 }
