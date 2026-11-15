@@ -5599,8 +5599,10 @@ impl Library {
                                     let count = count_of(section, &counts);
                                     // Without a search, All entries would repeat the header's
                                     // count above the useful kinds (round 30 AI4): it shows only
-                                    // with a search, to leave the results for the whole scope.
-                                    if count == 0 || (section == Section::All && !searching) {
+                                    // as a way back, from a search's results or an open About.
+                                    if count == 0
+                                        || (section == Section::All && !searching && !about_open)
+                                    {
                                         continue;
                                     }
                                     if section == Section::Unreadable {
@@ -11381,7 +11383,8 @@ mod tests {
         }
         for word in ["Read", "Back", "More"] {
             assert!(
-                rendered.iter().any(|text| text == word),
+                // `More` is a menu button: its words, then room for its caret.
+                rendered.iter().any(|text| text.trim_end() == word),
                 "Missing {word}: {rendered:?}"
             );
         }

@@ -509,7 +509,7 @@ whole at minimum width. Its menu is as wide as the control, so it stays in the c
 a long package name wraps. An empty search or filter names its scope (`No entries match in Can use. Try fewer
 words, or search Everything.`), and quiet `Search Everything` starts the next line at the text edge: it keeps
 the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
-Hide All entries without a search; pressing the selected category again shows every entry of the scope, so no
+Hide All entries without a search, except as the way back from an open About row; pressing the selected category again shows every entry of the scope, so no
 row comes or goes under the pointer. Empty categories and their headings stay hidden. Fixed scope names
 wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
 or without its mark, so a fault moves no row below it. The row always keeps `About`, the word that says what it opens; a
