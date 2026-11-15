@@ -710,6 +710,194 @@ pub(super) fn tones_beside(d: &Driver<'_>, words: &str) -> Vec<&'static str> {
     tones_where(d, |text| text.contains(words))
 }
 
+/// iter-29 G122, lead ruling (source verdict on 77b5da22): a changed group draft that Save
+/// refuses for a fault the editor says in its place (`field`: the line under Belongs to, or a
+/// member's row). On the compact `Add creatures` tab that place is not on screen: the fault is
+/// said once, beside Save, in its `tone`, also after a press of the blocked Save group and after
+/// Ctrl+S. Back on `Members`, it is said once, in its place only. `about` are the words of any
+/// painted text that speaks of the fault.
+pub(super) fn said_once(
+    d: &mut Driver<'_>,
+    about: &[&str],
+    beside: &str,
+    field: &str,
+    tone: &str,
+) -> (bool, String) {
+    let said = |d: &Driver<'_>| {
+        let mut count = 0;
+        d.each_painted_text(|text, _| {
+            let words = text.galley.job.text.as_str();
+            count += usize::from(about.iter().any(|about| words.contains(about)));
+        });
+        count
+    };
+    // The driver's window is 960 between states. Where the editor still has two columns there
+    // (the Encounters page), Lookup beside it makes it compact, with its tabs.
+    let tabs = |d: &Driver<'_>| {
+        d.nodes().into_iter().any(|node| {
+            node.name.starts_with("Add creatures")
+                && !node.disabled
+                && !matches!(
+                    node.role,
+                    egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                )
+        })
+    };
+    let lookup = !tabs(d);
+    if lookup {
+        d.press_ctrl(Key::K);
+    }
+    // Each tab's top: the save row above them keeps one height in every state (Astra, 386).
+    let tab_tops = |d: &Driver<'_>| {
+        ["Add creatures", "Members"].map(|start| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    node.name.starts_with(start)
+                        && !matches!(
+                            node.role,
+                            egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                        )
+                })
+                .map(|node| node.rect.top())
+        })
+    };
+    // The save row's words for the fault are painted inside the row: above the tabs.
+    let inside_row = |d: &Driver<'_>| {
+        let tabs = tab_tops(d).into_iter().flatten().fold(f32::MAX, f32::min);
+        let mut outside = 0;
+        d.each_painted_text(|text, _| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if text.galley.job.text.contains(beside) && rect.bottom() > tabs {
+                outside += 1;
+            }
+        });
+        outside == 0
+    };
+    let tops = tab_tops(d);
+    d.click_starting("Add creatures");
+    let mut moves = vec![("Add creatures pressed", tab_tops(d), inside_row(d))];
+    let mut steady = tab_tops(d) == tops && inside_row(d);
+    let tab = (said(d), d.visible_text(beside), tones_beside(d, beside));
+    if let Some(save) = d.place_of("Save group") {
+        d.click_rect(save, "Click: Save group, blocked");
+    }
+    let button = (said(d), d.visible_text(beside), tones_beside(d, beside));
+    d.press_ctrl(Key::S);
+    let key = (said(d), d.visible_text(beside), tones_beside(d, beside));
+    steady &= tab_tops(d) == tops && inside_row(d);
+    moves.push(("Ctrl+S", tab_tops(d), inside_row(d)));
+    d.click_starting("Members");
+    steady &= tab_tops(d) == tops;
+    moves.push(("Members pressed", tab_tops(d), true));
+    // Where the place's own words are cut at the column's end (a member row at the bottom of
+    // the plan's editor at 960), both are painted and the save row is right to say it. Only
+    // then, the place is looked at where it is whole: at 1920.
+    let mut clipped = false;
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if text.galley.job.text.contains(field) && !clip.expand(0.5).contains_rect(rect) {
+            clipped = true;
+        }
+    });
+    let cut = said(d) > 1 && clipped;
+    let look = |d: &Driver<'_>| (said(d), d.visible_text(field), d.visible_text(beside));
+    let place = if cut { d.at_size(LARGE, look) } else { look(d) };
+    let mut painted = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let words = text.galley.job.text.as_str();
+        if about.iter().any(|about| words.contains(about)) {
+            painted.push(format!(
+                "{} at {:?} in {:?}",
+                words.chars().take(60).collect::<String>(),
+                text.pos,
+                clip
+            ));
+        }
+    });
+    if lookup {
+        d.press_ctrl(Key::K);
+    }
+    let once = (1, true, vec![tone]);
+    (
+        steady && tab == once && button == once && key == once && place == (1, true, false),
+        format!(
+            "tabs and words steady {steady} (from {tops:?}: {moves:?}); Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members (cut at first: {cut}) {place:?}: {painted:?}"
+        ),
+    )
+}
+
+/// `said_once` for a group whose encounter is gone.
+pub(super) fn gone_encounter_said_once(d: &mut Driver<'_>) -> (bool, String) {
+    said_once(
+        d,
+        &[
+            "encounter was deleted",
+            "no longer has the encounter",
+            "No fight offers",
+        ],
+        "Its encounter was deleted. See Belongs to.",
+        "Its encounter was deleted, so no fight offers this group.",
+        "warning",
+    )
+}
+
+/// iter-29 G135 (AN1): Rival Captain's whole change link and all its stats are on screen. The
+/// pencil is painted whole, inside its clip. On a row of its own, the link's words start at the
+/// stats' text edge (N4, the pencil hangs), and its target is at least 24 px and clear of the
+/// Count row below.
+pub(super) fn change_link_whole(d: &Driver<'_>) -> (bool, String) {
+    const LINK: &str = "Changed · 1 to add by hand";
+    const STATS: &str = "as\u{a0}Ember\u{a0}Cultist";
+    let mut pencil = None;
+    let mut stats = None;
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        let words = text.galley.job.text.as_str();
+        if words.starts_with(crate::design::icons::CHANGED) && clip.intersects(rect) {
+            pencil = Some(clip.expand(0.5).contains_rect(rect));
+        }
+        if words.contains(STATS) && clip.intersects(rect) {
+            stats = Some(rect);
+        }
+    });
+    let link = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == LINK && node.in_view())
+        .map(|node| node.rect);
+    let count = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == "How many of Rival Captain")
+        .map(|node| node.rect);
+    let own_row = link
+        .zip(stats)
+        .is_some_and(|(link, stats)| link.top() >= stats.bottom() - 0.5);
+    let placed = link
+        .zip(stats)
+        .zip(count)
+        .is_some_and(|((link, stats), count)| {
+            let edge = !own_row || (link.left() - stats.left()).abs() <= 0.5;
+            edge && link.width() >= crate::design::XL
+                && link.height() >= crate::design::XL
+                && link.bottom() <= count.top()
+        });
+    // On its own row the link has no pencil (N4: a quiet action that starts a line outside a
+    // message has no icon); after the stats, its pencil is painted whole.
+    let pencil_right = if own_row {
+        pencil.is_none()
+    } else {
+        pencil == Some(true)
+    };
+    (
+        d.visible_text(LINK) && d.visible_text(STATS) && pencil_right && placed,
+        format!(
+            "link {link:?}, stats {stats:?}, own row {own_row}, Count {count:?}, pencil whole {pencil:?}"
+        ),
+    )
+}
+
 /// The painted rect of the visible paragraph that starts with `words`.
 pub(super) fn painted_paragraph(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     let mut found = None;
@@ -18038,6 +18226,45 @@ pub mod encounter_groups {
                 format!("At {size:?}, the HP fault is under its field: {detail}"),
             );
         }
+        // iter-29 G122 (Astra, 386): with the missing member removed, Save refuses Cinder Wolf's
+        // change. Its open form says the fault under Maximum HP, whole in view at 960 while the
+        // rest of the form runs below: the save row does not say it again. Off screen (the
+        // compact Add creatures tab), the save row says it once. Discard ends the proof.
+        let (form, form_detail) = d.aside(|d| {
+            d.click("More actions for Unknown creature");
+            d.click("Remove");
+            d.expect("Maximum HP: how it changes");
+            let mut whole = false;
+            let mut form_cut = false;
+            let mut says = 0;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = text.galley.job.text.as_str();
+                if words.contains("would become −28") {
+                    whole |= clip.expand(0.5).contains_rect(rect);
+                }
+                // Any painted text that says this fault: the form's, or the save row's.
+                says += usize::from(
+                    words.contains("would become −28")
+                        || words.contains("cannot be saved. See its row"),
+                );
+                form_cut |= words.starts_with("Speed") && !clip.expand(0.5).contains_rect(rect);
+            });
+            let (once, detail) = said_once(
+                d,
+                &["would become −28", "cannot be saved. See its row"],
+                "A creature here cannot be saved. See its row.",
+                "would become −28",
+                "error",
+            );
+            d.click("Discard");
+            d.expect("Replace Unknown creature");
+            (
+                whole && form_cut && says == 1 && once,
+                format!("error whole {whole}, form cut {form_cut}, said {says} times: {detail}"),
+            )
+        });
+        d.observe("iter-29-BC5-G122-open-form", form, form_detail);
         d.click("Back to encounters");
 
         // A new group cannot be saved empty, and it says so.
@@ -19545,6 +19772,9 @@ pub mod encounter_owned_groups {
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
     const SAVE_ENCOUNTER: &str = "Save encounter";
+    /// The gap from the save row's `Invalid` to `Default side` in a group editor, on main
+    /// (318bde49) at 960, 1200 and 1920.
+    const SAVE_ROW_TO_FIELDS: f32 = 28.0;
 
     fn edit_group(name: &str) -> String {
         format!("Edit group {name}")
@@ -19634,11 +19864,48 @@ pub mod encounter_owned_groups {
         // A group whose encounter is gone says so in its editor.
         d.click(&edit_group(GROUP_ORPHAN));
         d.expect("Deleted encounter");
-        d.state_prepared("group-whose-encounter-is-gone", Sizes::Default, |d| {
+        d.state_prepared("group-whose-encounter-is-gone", Sizes::All, |d| {
+            // iter-29 G122 (AB1): one message under Belongs to says the cause and the repair,
+            // whole and in view; the footer does not say the fault again.
+            let gone = "Its encounter was deleted, so no fight offers this group. Choose another encounter, or Any encounter.";
+            let mut said = 0;
+            d.each_painted_text(|text, _| {
+                let words = text.galley.job.text.as_str();
+                said += usize::from(
+                    words.contains("encounter was deleted")
+                        || words.contains("no longer has the encounter")
+                        || words.contains("No fight offers"),
+                );
+            });
+            d.observe(
+                "iter-29-BC5-G122",
+                d.visible_text(gone) && said == 1,
+                format!("One message says the gone encounter: {said} painted"),
+            );
+            // Lead, round 29 (the band at 960): the cause's place is on the save row, so the
+            // gap from the save row's word to the first field is main's at every size.
+            let band = d
+                .painted_rect_in("Invalid", egui::Rect::EVERYTHING)
+                .zip(
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with("Default side for "))
+                        .map(|node| node.rect),
+                )
+                .map(|(word, side)| side.top() - word.bottom());
+            d.observe(
+                "iter-29-BC5-G122-no-band",
+                band.is_some_and(|band| (band - SAVE_ROW_TO_FIELDS).abs() <= 0.5),
+                format!(
+                    "From the save row's word to Default side: {band:?}, main {SAVE_ROW_TO_FIELDS}"
+                ),
+            );
             let edges = group_field_edges(d, GROUP_ORPHAN);
+            // As before this state took all sizes: FD3 holds at 960 and 1200 (at 1920 the
+            // fields end at FORM_WIDTH, `iter-19-B-FD3-wide`).
             d.observe(
                 "iter-19-B-FD3",
-                group_fields_end_at_column(edges),
+                d.window_size().0 > 1900.0 || group_fields_end_at_column(edges),
                 format!(
                     "The group name field and Belongs to end at the notes field's right edge: {edges:?}"
                 ),
@@ -19667,13 +19934,49 @@ pub mod encounter_owned_groups {
                 format!("Default side starts at {side:?}, Belongs to at {belongs:?}"),
             );
             // A group no fight can offer says so as a warning, not as field help.
-            let tones = tones_beside(d, "No fight offers this group now.");
+            let tones = tones_beside(d, "Its encounter was deleted, so no fight offers");
             d.observe(
                 "iter-23-B-FB2",
                 tones == ["warning"],
                 format!("The line under Belongs to is a warning: {tones:?}"),
             );
         });
+        // iter-29 G122: with Belongs to off screen, the save row says the cause once, by the
+        // mouse and the keyboard (Encounters page).
+        // The same for a member whose creature is gone: the group goes to Any encounter, and
+        // its Cinder Wolf's package entry is deleted, then put back; Discard ends the edit.
+        let (once, detail, member, member_detail) = d.aside(|d| {
+            d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
+            let (once, detail) = gone_encounter_said_once(d);
+            d.click("Belongs to: Deleted encounter");
+            d.click("Any encounter");
+            let wolf = d
+                .root
+                .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
+            let text = std::fs::read_to_string(&wolf).unwrap();
+            std::fs::remove_file(&wolf).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.wait_for_text("Unknown creature");
+            let (member, member_detail) = said_once(
+                d,
+                &[
+                    "not in this campaign’s packages",
+                    "cannot be saved. See its row",
+                ],
+                "A creature here cannot be saved. See its row.",
+                "not in this campaign’s packages",
+                "warning",
+            );
+            std::fs::write(&wolf, text).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.click("Discard");
+            d.expect("Deleted encounter");
+            (once, detail, member, member_detail)
+        });
+        d.observe("iter-29-BC5-G122-off-screen", once, detail);
+        d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
         let inset = notes_inset(
             d,
             &format!("Group notes for {GROUP_ORPHAN}"),
@@ -21680,7 +21983,21 @@ pub mod session_plan_groups {
 
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("Back to the plan");
-        d.state("plan-group-edit", Sizes::Default);
+        // iter-29 G135 (AN1): the whole change link is readable at every size: after the stats
+        // where it fits, else on its own row. No stat is left out for it.
+        d.state_prepared("plan-group-edit", Sizes::All, |d| {
+            let (whole, detail) = change_link_whole(d);
+            d.observe("iter-29-BC5-G135", whole, detail);
+        });
+        // The same at 960 beside Lookup, where the editor is narrowest.
+        let (whole, detail) = d.aside(|d| {
+            // The driver's window is 960 between states.
+            d.press_ctrl(Key::K);
+            let whole = change_link_whole(d);
+            d.press_ctrl(Key::K);
+            whole
+        });
+        d.observe("iter-29-BC5-G135-lookup", whole, detail);
         // FK1: the first edit adds the campaign-switch reason in its reserved place, so no field
         // moves. A proof aside: Discard puts the clean group back.
         d.aside(|d| {
@@ -21705,6 +22022,65 @@ pub mod session_plan_groups {
             d.click("Discard");
             d.expect(&format!("Group name: {GROUP_RIVALS}"));
         });
+        // iter-29 G122 on the Sessions page: the plan's group comes to belong to an encounter
+        // that is then deleted. With Belongs to off screen, the save row says the cause once,
+        // by the mouse and the keyboard. The file and the group are put back after.
+        let (once, detail) = d.aside(|d| {
+            let arena = d.root.join(format!(
+                "campaigns/emberfall/Encounters/{}.md",
+                crate::visual_tests::fixture::RUN_ARENA
+            ));
+            let text = std::fs::read_to_string(&arena).unwrap();
+            d.click("Belongs to: Any encounter");
+            d.click(crate::visual_tests::fixture::RUN_ARENA);
+            std::fs::remove_file(&arena).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.wait_for_text("Deleted encounter");
+            let once = gone_encounter_said_once(d);
+            std::fs::write(&arena, text).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.click("Discard");
+            d.expect("Belongs to: Any encounter");
+            once
+        });
+        d.observe("iter-29-BC5-G122-off-screen-plan", once, detail);
+        let (member, member_detail) = d.aside(|d| {
+            // A member whose creature is gone, with a changed name: its Cinder Wolf's package
+            // entry is deleted, then put back.
+            d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
+            let wolf = d
+                .root
+                .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
+            let text = std::fs::read_to_string(&wolf).unwrap();
+            std::fs::remove_file(&wolf).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            // The row's heading names the gone creature, whichever place says the fault.
+            d.wait_for_text("Unknown creature");
+            let member = said_once(
+                d,
+                &[
+                    "not in this campaign’s packages",
+                    "cannot be saved. See its row",
+                ],
+                "A creature here cannot be saved. See its row.",
+                "not in this campaign’s packages",
+                "warning",
+            );
+            std::fs::write(&wolf, text).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.click("Discard");
+            d.expect(&format!("Group name: {GROUP_RIVALS}"));
+            member
+        });
+        d.observe(
+            "iter-29-BC5-G122-member-off-screen-plan",
+            member,
+            member_detail,
+        );
         d.click("Back to the plan");
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
 

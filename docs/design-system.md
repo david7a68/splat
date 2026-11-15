@@ -1283,8 +1283,14 @@ too. The word never gives way. Where a line has no room (Q-s), `5 party` goes fi
 then the limit (`XP 1,050 · Moderate`), then the XP number, then the creature summary from its end, by whole facts
 and members (`1 × Cinder Tyrant, … · High`): the row answers "what can I run?", so the creatures stay longest. The
 row's hover and its accessible name keep the whole line. A fight with no word because an input is not known says
-`XP not known` in the word's place (`Difficulty::form`), with whose input it is only where the line does not show
-that name already (`1 × Nameless Thing · XP not known`, never `… Nameless Thing · XP not known: Nameless Thing`).
+`XP not known` in the word's place (`Difficulty::form`). R31: the reason drops its names only when every creature
+that the line still shows lacks its XP; then the line already says whose (`1 × Nameless Thing · XP not known`).
+When a creature with a known XP is shown beside them, the reason keeps the names of the missing ones (`1 × Wolf,
+1 × Nameless Thing · XP not known: Nameless Thing`): saying whose input is missing is worth the repeated name. When
+the summary has given way and no longer shows a missing creature, the reason names it. "Shows" is decided by the
+member's identity (the name it is called by: a renamed `1 × Shade (as Nameless Thing)` is `Shade`), never by parsed
+words; facts such as `Changed` are not creatures. The Ready row and the plan row use the one rule
+(`Missing::unsaid`).
 With no table or no party, or nothing against the party, the line is as before. A row with an unfinished run shows
 no word. Arrivals names what the XP is for: a group's heading says its side, its member count, then `Fight after:
 XP 450 · Low`, the fight once the group joins (`Enemies · 3 members · Fight after: XP 450 · Low`, the order of the
@@ -2067,7 +2073,7 @@ the members from their end (Encounter difficulty, above). Every `·` on the row,
 same blank on each side: the font's own spacing around `·` is uneven, so the row moves each `·` by whole pixels. The
 opened row's `Read encounter` line does not say the difficulty again. A fight with no word because an input is not
 known ends its row with that, and whose, in the word's place: `XP not known: Nameless Thing`, or `Level not known:
-<name>`; with more names, the first and `and 2 more`. One exception: a plan row whose every creature lacks its XP already says whose in its summary, so it ends with `XP not known` alone (`5 party · 1 × Nameless Thing · XP not known`); a creature with a known XP beside them keeps the names. Where the row has no room, the first name shortens from its end
+<name>`; with more names, the first and `and 2 more`. One exception (R31): a plan row whose every creature shown lacks its XP already says whose in its summary, so it ends with `XP not known` alone (`5 party · 1 × Nameless Thing · XP not known`); a creature with a known XP beside them keeps the names. Where the row has no room, the first name shortens from its end
 (`XP not known: Namel…`) and goes only when no letter of it fits (X1); hover and the accessible name keep the whole. The names come from `Scale::weigh`'s typed answer
 (`Difficulty::missing`). The encounter editor, where the DM can repair the cause, ends its line with the names: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
 would be. Without room the names shorten from their end (`XP not known: Nameless Th…`) and go only when no letter
