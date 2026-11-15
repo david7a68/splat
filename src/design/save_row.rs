@@ -68,7 +68,7 @@
 //!
 //! ```compile_fail
 //! # use splat::ownership::Diagnosis;
-//! let found = Diagnosis { refused: None, missing: None, incomplete: None, unreadable: true }; // <- by hand
+//! let found = Diagnosis { refused: None, missing: None, incomplete: None, unreadable: true, gone: false }; // <- by hand
 //! ```
 use super::{Action, Density, Status, Tone, colors, components::status, icons};
 use eframe::egui::{self, Ui};
@@ -110,6 +110,9 @@ pub struct Diagnosis<'a> {
     missing: Option<Cow<'a, str>>,
     incomplete: Option<Cow<'a, str>>,
     unreadable: bool,
+    /// The draft's file is gone, and Save can write it again: a missing thing that does not
+    /// block Save (`Diagnosis::gone`).
+    gone: bool,
 }
 
 impl<'a> Diagnosis<'a> {
@@ -120,6 +123,7 @@ impl<'a> Diagnosis<'a> {
             missing: None,
             incomplete: None,
             unreadable: false,
+            gone: false,
         }
     }
 
@@ -152,6 +156,15 @@ impl<'a> Diagnosis<'a> {
         }
     }
 
+    /// The draft's own file is gone (a deleted manifest), and Save writes it again: `Invalid` in
+    /// the warning tone of a missing thing (R41), but, as unreadable data, it does not block Save.
+    pub fn gone() -> Self {
+        Self {
+            gone: true,
+            ..Self::valid()
+        }
+    }
+
     /// The kind that ranks first, by the one rule: unreadable data, a refused change, a thing
     /// that is gone, then a missing part. `None` when nothing is wrong.
     pub fn cause(&self) -> Option<InvalidCause> {
@@ -159,7 +172,7 @@ impl<'a> Diagnosis<'a> {
             Some(InvalidCause::Unreadable)
         } else if self.refused.is_some() {
             Some(InvalidCause::Refused)
-        } else if self.missing.is_some() {
+        } else if self.missing.is_some() || self.gone {
             Some(InvalidCause::Missing)
         } else if self.incomplete.is_some() {
             Some(InvalidCause::Incomplete)
@@ -198,6 +211,7 @@ impl<'a> Diagnosis<'a> {
             missing: other.missing.or(self.missing),
             incomplete: other.incomplete.or(self.incomplete),
             unreadable: self.unreadable || other.unreadable,
+            gone: self.gone || other.gone,
         }
     }
 
@@ -217,6 +231,7 @@ impl<'a> Diagnosis<'a> {
             && self.refused.is_none()
             && self.missing.is_none()
             && !self.unreadable
+            && !self.gone
     }
 
     pub fn into_owned(self) -> Diagnosis<'static> {
@@ -225,6 +240,7 @@ impl<'a> Diagnosis<'a> {
             missing: self.missing.map(|why| Cow::Owned(why.into_owned())),
             incomplete: self.incomplete.map(|why| Cow::Owned(why.into_owned())),
             unreadable: self.unreadable,
+            gone: self.gone,
         }
     }
 }
@@ -425,6 +441,10 @@ impl<'a> DraftState<'a> {
         self.found.unreadable || (self.changed() && self.found_when_changed.unreadable)
     }
 
+    fn gone(&self) -> bool {
+        self.found.gone || (self.changed() && self.found_when_changed.gone)
+    }
+
     fn refused(&self) -> Option<&str> {
         self.kind(|found| found.refused.as_deref())
     }
@@ -450,7 +470,7 @@ impl<'a> DraftState<'a> {
             SaveWord::Invalid(InvalidCause::Unreadable)
         } else if self.refused().is_some() {
             SaveWord::Invalid(InvalidCause::Refused)
-        } else if self.missing().is_some() {
+        } else if self.missing().is_some() || self.gone() {
             SaveWord::Invalid(InvalidCause::Missing)
         } else if self.incomplete().is_some() {
             match self.origin {
@@ -826,6 +846,15 @@ mod tests {
                 SaveWord::Invalid(InvalidCause::Missing),
                 SaveWeight::Secondary,
                 Some("Its encounter was deleted."),
+                true,
+            ),
+            // F4: a gone file is Invalid in the warning tone, and Save still writes it again.
+            (
+                "gone",
+                yes().check(Diagnosis::gone()),
+                SaveWord::Invalid(InvalidCause::Missing),
+                SaveWeight::Primary,
+                None,
                 true,
             ),
             (

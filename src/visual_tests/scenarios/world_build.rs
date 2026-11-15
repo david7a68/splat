@@ -7835,6 +7835,28 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Manifest repair has a secondary border",
         );
     });
+    // s30 B11 F4 (R41): in Edit Markdown, the reader's save row says the deleted manifest's
+    // `Invalid` in its warning tone, as its footer message and the owner's mark do; Save can
+    // still write it again.
+    let gone = d.aside(|d| {
+        d.click("Edit Markdown");
+        d.settle();
+        let tones = (
+            super::status_tones(d, "Invalid"),
+            manifest_fault_tone(d, "The package manifest was deleted."),
+        );
+        d.click("Read");
+        d.settle();
+        tones
+    });
+    d.observe(
+        "s30-B11-F4-manifest-gone",
+        gone.0 == ["warning"] && gone.1 == Some("warning"),
+        format!(
+            "Edit Markdown of a deleted manifest: Invalid {:?}, footer {:?}",
+            gone.0, gone.1
+        ),
+    );
     d.click("Write the manifest again");
     d.settle();
     assert!(!d.has_containing("The package manifest was deleted"));
