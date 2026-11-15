@@ -2262,6 +2262,66 @@ impl Lookup {
             .filter(|item| !item.is_note() || item.is_world_note())
     }
 
+    /// The open action's words for the entry on show: where a press takes it.
+    fn open_action_words(&self) -> Option<&'static str> {
+        let index = self.index.as_ref()?;
+        let current = self.open_target(index)?;
+        Some(
+            if current.entry.kind == "world" || current.is_world_note() {
+                "Open in World"
+            } else {
+                "Open in Library"
+            },
+        )
+    }
+
+    /// The open action with its icon and words: a press changes the page beside Lookup, so its
+    /// words always say where (FP4, FM4).
+    fn open_action_of(words: &str) -> Action<'_> {
+        Action::quiet(words)
+            .icon(icons::OPEN_OUT)
+            .density(Density::Read)
+    }
+
+    /// Why the open action is locked, from the one fact that locks it: an unsaved Library draft.
+    /// The lock, its hover and accessible text, and the painted line take these words.
+    fn open_lock(&self) -> Option<String> {
+        let words = self.open_action_words()?;
+        self.library_draft.then(|| {
+            format!(
+                "To open this in {}, save or discard the Library draft first.",
+                words.trim_start_matches("Open in ")
+            )
+        })
+    }
+
+    /// The open action's locked reason, painted once in Lookup above the entry, from the text
+    /// edge, wherever the action stands (ruling R35). Nothing while the action is open.
+    fn open_lock_line(&self, ui: &mut egui::Ui) {
+        design::blocked_reason(ui, self.open_lock().as_deref());
+    }
+
+    /// The open action, locked while a Library draft is unsaved. Returns whether it was pressed.
+    fn open_action(&self, ui: &mut egui::Ui, own_line: bool) -> bool {
+        let Some(words) = self.open_action_words() else {
+            return false;
+        };
+        design::locked(ui, self.open_lock().as_deref(), |ui| {
+            // On a line of its own the action has no icon, as `Show N results` has: the
+            // panel's margin is narrower than an icon's hang, so its words start at the
+            // text edge (N4).
+            if own_line {
+                Action::quiet(words)
+                    .density(Density::Read)
+                    .line_start()
+                    .show(ui)
+                    .clicked()
+            } else {
+                Self::open_action_of(words).show(ui).clicked()
+            }
+        })
+    }
+
     /// An entry or a found note, which Trackers keeps while it is in view.
     fn holds_something(&self) -> bool {
         self.current.is_some() || self.reading_written.is_some()
@@ -2304,6 +2364,10 @@ impl Lookup {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
         let mut close = false;
+        // Where the open action stands: on the title line when its words fit there, else on a
+        // line of its own above the entry (FM4, SK8). Never an icon alone.
+        let mut open_on_title = true;
+        let mut open_pressed = false;
         if self.trackers_shown {
             let mut back = false;
             ui.horizontal(|ui| {
@@ -2340,36 +2404,15 @@ impl Lookup {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
-                    if let Some(current) = self
-                        .index
-                        .as_ref()
-                        .and_then(|index| self.open_target(index))
-                        && design::locked(
-                            ui,
-                            self.library_draft
-                                .then_some("Save or discard the Library draft first."),
-                            |ui| {
-                                let words =
-                                    if current.entry.kind == "world" || current.is_world_note() {
-                                        "Open in World"
-                                    } else {
-                                        "Open in Library"
-                                    };
-                                // The press changes the page beside Lookup, so its words say
-                                // where whenever the title line has room for them (FP4); only
-                                // a line too narrow keeps the icon alone, named by its words.
-                                let action = Action::quiet(words)
-                                    .icon(icons::OPEN_OUT)
-                                    .density(Density::Read);
-                                if action.natural_width(ui) + design::L <= ui.available_width() {
-                                    action.show(ui).clicked()
-                                } else {
-                                    design::icon_button(ui, icons::OPEN_OUT, words).clicked()
-                                }
-                            },
-                        )
-                    {
-                        self.open_in_library = Some(current.entry.clone());
+                    // The room left after the title, Back while it shows, and Close: the action
+                    // stands here with its icon and words when they fit whole, else on its own
+                    // line above the entry.
+                    open_on_title = self.open_action_words().is_none_or(|words| {
+                        Self::open_action_of(words).natural_width(ui) + design::L
+                            <= ui.available_width()
+                    });
+                    if open_on_title {
+                        open_pressed = self.open_action(ui, false);
                     }
                 });
             });
@@ -2399,6 +2442,15 @@ impl Lookup {
         };
         if std::mem::take(&mut self.focus_search) {
             design::focus_and_select(ui, response.id, &self.query);
+        }
+        if open_pressed
+            && let Some(entry) = self
+                .index
+                .as_ref()
+                .and_then(|index| self.open_target(index))
+                .map(|current| current.entry.clone())
+        {
+            self.open_in_library = Some(entry);
         }
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
@@ -2783,6 +2835,12 @@ impl Lookup {
             }
             return;
         };
+        // The open action's own line, when the title line cannot hold its words: directly above
+        // the entry it opens, below the rule, so it never reads as an act on the results.
+        if !open_on_title && self.open_action(ui, true) {
+            self.open_in_library = Some(current.entry.clone());
+        }
+        self.open_lock_line(ui);
         let mut nav = self.reader.choices(ui, &index);
         if ui.rect_contains_pointer(ui.available_rect_before_wrap())
             && ui.input(|input| input.smooth_scroll_delta.y != 0.0)
@@ -2910,7 +2968,9 @@ impl Lookup {
                 }
                 design::rule(ui);
             }
-            crate::markdown_view::show_compact(ui, &written.text);
+            // A found note is prose: the Reader's prose role, as a rule in this panel has
+            // (`ProseCompact` at this width), not the stat block's field rows (FM13).
+            style::markdown(ui, &written.text);
         });
         if open {
             self.open_written = Some(written.place.clone());

@@ -949,6 +949,31 @@ impl<'a> Driver<'a> {
         }
     }
 
+    /// Wait until a control with exactly this accessible name is drawn in the window: a sync
+    /// point before a step on that control, whatever words it paints (a lone Undo paints
+    /// `Undo <verb>`, named by its whole label). Fails by timeout as `wait_for_text` does.
+    pub fn wait_for_control(&mut self, name: &str) {
+        let started = Instant::now();
+        let timeout = if self.diagnose {
+            DIAGNOSTIC_TEXT_TIMEOUT
+        } else {
+            ASYNC_TIMEOUT
+        };
+        while !self
+            .nodes()
+            .iter()
+            .any(|node| node.name == name && Self::is_control(node) && node.in_view())
+        {
+            assert!(
+                started.elapsed() < timeout,
+                "{}: waiting for the control {name:?} after {timeout:?}.\n{}",
+                self.scenario,
+                self.describe()
+            );
+            self.harness.step();
+        }
+    }
+
     /// The top-level page the app is showing now.
     pub fn current_page(&self) -> String {
         self.harness
