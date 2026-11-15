@@ -24724,7 +24724,6 @@ pub mod session_plan {
                 && !d.has_containing("This fight’s run cannot be read"),
             "The plan's played fight says Splat cannot find the run folder, as Encounters does",
         );
-        d.state("played-fight-run-folder-gone", Sizes::All);
         std::fs::rename(&aside, &folder).unwrap();
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         d.app_mut().encounters.read_runs_again(&campaign);

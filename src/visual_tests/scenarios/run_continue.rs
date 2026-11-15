@@ -796,7 +796,9 @@ pub fn run(d: &mut Driver<'_>) {
     go_encounters(d);
     d.observe(
         "T17.4",
-        d.has_label("IN PROGRESS 2 · last closed first") && d.visible_text("No ended fights yet."),
+        // Q-o (review F1): the continued fight is open and leads the list; one closed run
+        // follows it, so the heading says no order.
+        d.has_label("IN PROGRESS 2") && d.visible_text("No ended fights yet."),
         format!(
             "Encounters lists the continued fight in In progress, and History has none: {:?}",
             d.nodes()
