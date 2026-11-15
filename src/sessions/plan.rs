@@ -677,6 +677,13 @@ pub(crate) enum FightFault {
     Other(String),
 }
 
+/// The open played fight's summary, with the run's file as last found (or why not), by its run.
+pub(crate) type KeptFight = (
+    Uuid,
+    Option<Result<std::path::PathBuf, crate::encounter_run::FindRunFault>>,
+    Result<crate::encounter_run::FightSummary, FightFault>,
+);
+
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
 fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
     crate::encounters::run_state_word(saved, true)
