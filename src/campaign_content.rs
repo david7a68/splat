@@ -1965,6 +1965,7 @@ impl CampaignContent {
                     // is the active one. After Save failed on the disk it stays open to try
                     // again, but `owner` skips it until the next edit.
                     let mut state = design::DraftState::new(
+                        design::save_row::DraftOrigin::Saved, // a repair edits a file on disk
                         if repair.dirty() {
                             design::save_row::Changed::Yes
                         } else {
@@ -1978,7 +1979,7 @@ impl CampaignContent {
                     )
                     .locks_campaign();
                     if let Some(refusal) = &repair.refusal {
-                        state = state.refused(refusal.as_str());
+                        state = state.check(design::save_row::Diagnosis::refused(refusal.as_str()));
                     }
                     if repair.failure.is_some() {
                         state = state.not_saved();
