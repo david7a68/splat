@@ -1481,6 +1481,20 @@ pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, u
 #[cfg(test)]
 pub(crate) const STAGED: &[Staged] = &[
     (
+        "Outcome::Refused(",
+        "Answer a refused act with a typed `Refusal` on its entry (`Results::undo_or_refuse`): it names the thing, the cause and a next step, and ranks as an act (M1).",
+        &[
+            ("src/design/outcome.rs", 1),
+            ("src/design/pane.rs", 5),
+            ("src/sessions/carry.rs", 1),
+            ("src/sessions/plan.rs", 2),
+            ("src/timeline/page.rs", 1),
+            ("src/trackers/history.rs", 1),
+            ("src/trackers/view.rs", 1),
+            ("src/world.rs", 1),
+        ],
+    ),
+    (
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[

@@ -1183,6 +1183,47 @@ pub fn plan_act(d: &mut Driver<'_>) {
             format!("The capture opens its footer with the whole refusal: {why}"),
         );
     });
+    // Ruling R42: a later act on another object leads with its own line; A's answer goes down
+    // and stays.
+    d.click_add_event("Add Day");
+    let pushed = |d: &Driver<'_>| {
+        let nodes = d.nodes();
+        let refusal = nodes
+            .iter()
+            .find(|node| node.name == REFUSED)
+            .map(|node| node.rect);
+        let mut footer: Vec<_> = d
+            .typed_messages()
+            .into_iter()
+            .filter(|(rect, place, _)| {
+                *place == crate::design::outcome::MessagePlace::Footer
+                    && refusal.is_some_and(|words| rect.x_range().intersects(words.x_range()))
+            })
+            .collect();
+        footer.sort_by(|a, b| a.0.top().total_cmp(&b.0.top()));
+        let first = footer.first().copied();
+        (
+            first.is_some_and(|(rect, _, tone)| {
+                tone == crate::design::Tone::Success
+                    && refusal.is_some_and(|words| !rect.contains(words.center()))
+            }),
+            format!("first {first:?}, refusal {refusal:?}, footer {footer:?}"),
+        )
+    };
+    let (down, why) = pushed(d);
+    d.observe(
+        "s30-B1-refusal-pushed-down",
+        down,
+        format!("Add Day's result leads; A's refusal stays below it: {why}"),
+    );
+    d.state_prepared("plan-answer-pushed-down", Sizes::Default, |d| {
+        let (down, why) = pushed(d);
+        d.observe(
+            "s30-B1-refusal-pushed-down",
+            down,
+            format!("The capture shows Add Day's result first, the refusal below: {why}"),
+        );
+    });
     // Final review 3, point 1: a block taller than the view. A check near the view's bottom is
     // rolled: its result's plan line comes whole into view (the reveal is the check's row, not
     // the block).
@@ -1253,6 +1294,11 @@ pub fn plan_act(d: &mut Driver<'_>) {
         format!("Journey B keeps its opening place: {opening:?}, {after:?}"),
     );
     d.click("Close Lookup");
+    d.observe(
+        "s30-B1-refusal-stays",
+        d.has_containing("was not removed from Session 1"),
+        "Other acts on other objects never ended A's answer",
+    );
     d.app_mut().timeline.remove(&ford);
     d.settle();
     d.observe(

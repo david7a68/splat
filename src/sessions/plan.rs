@@ -3336,12 +3336,6 @@ impl Sessions {
         session.is_some_and(|note| self.plan_entry(Some(note), |_| ()).is_some())
     }
 
-    /// Tests: the next poll reads the session notes on disk.
-    #[cfg(test)]
-    pub fn check_disk_soon(&mut self) {
-        self.last_check = None;
-    }
-
     /// Tests: the next disk check waits its full interval from now, so a scenario's outside
     /// change meets the DM's next press before `poll` reads it.
     #[cfg(test)]
