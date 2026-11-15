@@ -1767,6 +1767,15 @@ mod tests {
         let shown = results.get_by(&Ticket { order: a }).unwrap();
         assert_eq!(shown.order(), a, "the ticket stays");
         assert_eq!(shown.refusal(), Some(&changed()));
+        // Review N7: an answer told apart from one that reads alike joins its place with the
+        // middle dot, as its result and its Undo do (R45: no brackets).
+        assert_eq!(
+            changed()
+                .words_told_apart(Name::new("Travel · 2").as_ref())
+                .as_str(),
+            "The plan line for Bell was not removed from Session 1 · Travel · 2. The session \
+             note changed on disk. Open that session’s notes and remove the plan line there."
+        );
         let attempt = shown.refused.unwrap().order;
         assert!(
             attempt > a && attempt > b,
