@@ -2377,7 +2377,7 @@ impl Lookup {
         });
         let mut close = false;
         // Where the open action stands: on the title line when its words fit there, else on a
-        // line of its own under the search field (FM4, SK8). Never an icon alone.
+        // line of its own above the entry (FM4, SK8). Never an icon alone.
         let mut open_on_title = true;
         let mut open_pressed = false;
         if self.trackers_shown {
@@ -2448,9 +2448,6 @@ impl Lookup {
         };
         if std::mem::take(&mut self.focus_search) {
             design::focus_and_select(ui, response.id, &self.query);
-        }
-        if !self.trackers_shown && !open_on_title {
-            open_pressed = self.open_action(ui, true);
         }
         if open_pressed
             && let Some(entry) = self
@@ -2844,6 +2841,11 @@ impl Lookup {
             }
             return;
         };
+        // The open action's own line, when the title line cannot hold its words: directly above
+        // the entry it opens, below the rule, so it never reads as an act on the results.
+        if !open_on_title && self.open_action(ui, true) {
+            self.open_in_library = Some(current.entry.clone());
+        }
         let mut nav = self.reader.choices(ui, &index);
         if ui.rect_contains_pointer(ui.available_rect_before_wrap())
             && ui.input(|input| input.smooth_scroll_delta.y != 0.0)
