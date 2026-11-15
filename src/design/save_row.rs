@@ -635,7 +635,8 @@ mod tests {
         }
         assert!(
             forms.len() >= 2,
-            "the sweep reached the slot under the row: {forms:?}"
+            "the sweep reached the slot under the row: {forms:?}; first {:?}",
+            &seen[..seen.len().min(8)]
         );
     }
 
