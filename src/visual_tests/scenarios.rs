@@ -18797,6 +18797,19 @@ pub mod encounter_groups {
             }),
             format!("Invalid, the refused row and the words beside Save at 960, 1200 and 1920: {tones:?}"),
         );
+        // s30 B11 F6 (Astra re-check): with both faults kept and Cinder Wolf's error row out of
+        // view (the compact Add creatures tab), the save row says the chosen fault once, whole,
+        // in the error tone, by the mouse and the keyboard alike.
+        let (mixed, mixed_detail) = d.aside(|d| {
+            said_once(
+                d,
+                &["would become −28", "cannot be saved. See its row"],
+                "A creature here cannot be saved. See its row.",
+                "would become −28",
+                "error",
+            )
+        });
+        d.observe("s30-B11-F6-mixed-fallback", mixed, mixed_detail);
         // The fault sits under the Maximum HP field at its left edge, once, and the preview
         // beside the field takes the error colour.
         for size in [SMALL, DEFAULT] {
