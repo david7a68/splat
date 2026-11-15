@@ -1055,7 +1055,10 @@ impl SheetNow {
     }
     /// One row of the roster. A word goes with the number, so that it is not only a number.
     pub fn line(&self) -> String {
-        let mut parts = vec![format!("HP {}/{}", self.hp, self.max_hp)];
+        let mut parts = vec![format!(
+            "HP {}",
+            crate::combat_sync::fraction(self.hp, self.max_hp)
+        )];
         match design::hp_state(Some(self.hp), Some(self.max_hp)) {
             design::HpState::Zero => parts.push("0 HP".to_owned()),
             design::HpState::Bloodied => parts.push("Bloodied".to_owned()),
@@ -1087,9 +1090,11 @@ pub fn party_line(sheets: &[&EntitySnapshot], connected: bool) -> Option<String>
         .min_by_key(|record| record.source.fetched_at)?;
     let now: Vec<SheetNow> = sheets.iter().map(|record| SheetNow::of(record)).collect();
     let mut parts = vec![format!(
-        "Party now: HP {}/{}",
-        now.iter().map(|sheet| sheet.hp).sum::<i64>(),
-        now.iter().map(|sheet| sheet.max_hp).sum::<i64>(),
+        "Party now: HP {}",
+        crate::combat_sync::fraction(
+            now.iter().map(|sheet| sheet.hp).sum::<i64>(),
+            now.iter().map(|sheet| sheet.max_hp).sum::<i64>(),
+        ),
     )];
     let slots = now.iter().flat_map(|sheet| &sheet.slots);
     let (left, max) = slots.fold((0, 0), |(left, max), slot| {
@@ -1297,11 +1302,13 @@ fn member_row(
         .collect::<Vec<_>>()
         .join(" · ");
     let name = format!(
-        "{}{} · {summary} · {compared} · HP {}/{} · AC {}{}",
+        "{}{} · {summary} · {compared} · HP {} · AC {}{}",
         member.name,
         if local_edits { " · Local edits" } else { "" },
-        hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
-        max_hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+        crate::combat_sync::fraction(
+            hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+            max_hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+        ),
         ac.map_or_else(|| "?".to_owned(), |n| n.to_string()),
         conditions
             .iter()
@@ -1966,7 +1973,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                 (known(live.hp), known(live.max_hp), live.temporary_hp)
             },
         );
-        metric(ui, "Hit points", format!("{hp} / {max}"));
+        metric(ui, "Hit points", crate::combat_sync::fraction(hp, max));
         metric(ui, "Armor class", val(record, "armor_class"));
         metric(ui, "Temp HP", temp);
         metric(ui, "Proficiency", signed(record, "proficiency_bonus"));
