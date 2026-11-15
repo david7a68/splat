@@ -280,11 +280,12 @@ impl Refusal {
         self.words_told_apart(None)
     }
 
-    /// The whole answer, its place told apart from another answer's by `apart` (a file and a
-    /// journey: `Session 1 (Road.md, Ford crossing)`), when two answers would read alike.
+    /// The whole answer, its place told apart from another answer's by `apart`, joined by the
+    /// middle dot as every told-apart place is (`Session 1: Road · Travel · 2`; R45: no brackets),
+    /// when two answers would read alike.
     pub fn words_told_apart(&self, apart: Option<&Name>) -> Sentence {
         let place = |name: &Name| match apart {
-            Some(apart) => format!("{} ({})", name.as_str(), apart.as_str()),
+            Some(apart) => format!("{} · {}", name.as_str(), apart.as_str()),
             None => name.as_str().to_owned(),
         };
         let act = match &self.act {

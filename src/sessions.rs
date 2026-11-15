@@ -61,15 +61,6 @@ fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     })
 }
 
-/// The wording of a run folder that is gone. The session folder says it as a typed fault
-/// (`page::FolderFault::Missing`); the run's callers still read these words (routing row 136).
-pub(crate) fn missing_folder(what: &str, folder: &Path) -> String {
-    format!(
-        "{what} folder not found: {}. It may have been moved or renamed.",
-        folder.display()
-    )
-}
-
 pub fn folder(campaign: &Campaign) -> Result<PathBuf, String> {
     folder_typed(campaign).map_err(String::from)
 }
