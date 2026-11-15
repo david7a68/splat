@@ -196,14 +196,21 @@ pub struct TimelinePage {
     scroll_to: Option<usize>,
     /// An event just added with the buttons, with one step of undo.
     added: design::Results<super::TimelineFile, JustAdded>,
+    /// Its footer line, kept as data across frames (ruling L9): made again only when the store,
+    /// the book or the saved-run facts changed.
+    added_view: design::results::Retained<super::TimelineFile, ListAct, AddedInputs>,
+    /// The book's revision at the last check that the Add result's event is still there.
+    added_seen: Option<design::memo::Revision>,
     /// The list opens where the story is now, at its end.
     opened: bool,
     /// One column: the detail hides the list, so the open event's results end its form.
     narrow: bool,
     /// The run open now, whose event must stay while it runs.
     pub open_run: Option<Uuid>,
-    /// Saved runs from the same campaign snapshot used by the Session plan.
-    pub saved_runs: Vec<crate::encounter_run::SavedRunInfo>,
+    /// Saved runs from the same campaign snapshot used by the Session plan, and the revision of
+    /// their facts (`Encounters::saved_runs_revision`): `set_saved_runs`.
+    saved_runs: Vec<crate::encounter_run::SavedRunInfo>,
+    saved_runs_revision: Option<design::memo::Revision>,
     /// The DM followed an open fight's status back to the run.
     pub wants_back_to_run: bool,
     /// Filters and the selection belong to one campaign.
@@ -314,35 +321,33 @@ impl RestRulingAction {
     }
 }
 
-/// The Timeline page's add result: the event the buttons added, until the DM moves on, opens
-/// another event, or `UNDO_ADD_FOR` passes, so it cannot undo the wrong event.
+/// The Timeline page's add result: the event the buttons added, until the DM opens another
+/// event, the event is gone from the book, or `UNDO_ADD_FOR` passes on the frame clock, so it
+/// cannot undo the wrong event. The page's owner update (`settle_added`) ends it, before any
+/// footer reads it.
 pub struct JustAdded {
     file: super::TimelineFile,
     id: String,
-    /// When it was added, on the frame clock (`crate::frame_clock`).
-    at: f64,
-}
-
-impl JustAdded {
-    /// Does the result end now: `UNDO_ADD_FOR` passed on the frame clock, or another event is
-    /// selected (`selected`)?
-    fn ends(&self, selected: Option<&String>) -> bool {
-        crate::frame_clock::passed(self.at, UNDO_ADD_FOR) || selected != Some(&self.id)
-    }
 }
 
 impl design::results::Kept for JustAdded {
     type Owner = super::TimelineFile;
     const ENDS: design::results::Ends = design::results::Ends {
-        // Another selection, or the time running out, ends it (`list_messages`).
+        // The event's removal here ends it; another selection does too (`select`).
         owner_changed: design::results::OwnerChanged::Ends,
-        disk_changed: design::results::DiskChanged::Stays,
+        // A change of the book (a reload, a file event, an edit) that lost its event ends it.
+        disk_changed: design::results::DiskChanged::Checked,
         press: design::results::Press::Undo,
     };
+    const LIFE: Option<Duration> = Some(UNDO_ADD_FOR);
     fn owner(&self) -> super::TimelineFile {
         self.file.clone()
     }
 }
+
+/// The inputs of the Add result's words besides its store: the book's revision (the event's
+/// label, its day, its rest ruling) and the saved-run facts' (which fights keep their HP).
+type AddedInputs = (design::memo::Revision, design::memo::Revision);
 
 /// A footer fault of the Timeline: a save that failed, a removal that notes still link to, a
 /// flag of the file, or a second timeline file. The kind gives the tone.
@@ -657,8 +662,50 @@ impl TimelinePage {
         self.search.clear();
         self.session = None;
         self.reset_detail = true;
-        self.selected = Some(id.to_owned());
+        self.select(Some(id.to_owned()));
         self.scroll_to = book.events.iter().position(|event| event.id == id);
+    }
+
+    /// The saved runs and the revision of their facts, from the campaign's encounters.
+    pub fn set_saved_runs(
+        &mut self,
+        runs: Vec<crate::encounter_run::SavedRunInfo>,
+        revision: design::memo::Revision,
+    ) {
+        self.saved_runs = runs;
+        self.saved_runs_revision = Some(revision);
+    }
+
+    /// Open `selected`: another event than the Add result's ends that result at once, so it
+    /// cannot undo the wrong event.
+    fn select(&mut self, selected: Option<String>) {
+        self.selected = selected;
+        self.end_add_of_other_selection();
+    }
+
+    /// An Add result whose event is not the open one can never be undone again: it ends.
+    fn end_add_of_other_selection(&mut self) {
+        let selected = &self.selected;
+        self.added
+            .end_unreachable(|added| selected.as_ref() == Some(&added.id));
+    }
+
+    /// The Add result's owner update, before any footer reads it (ruling L9): its life on the
+    /// frame clock ends it (`Results::expire`, which asks for a repaint at the end); a change of
+    /// the book that lost its event ends it, checked only when the book's revision changed (an
+    /// unreadable book keeps the events it had, so its Add stands until its life ends; a book
+    /// of another file is another owner, so its Add shows no more); another selection ends it.
+    fn settle_added(&mut self, ctx: &egui::Context, book: &Book) {
+        self.added.expire(ctx);
+        let revision = book.revision();
+        if self.added_seen != Some(revision) {
+            self.added_seen = Some(revision);
+            if !self.added.is_empty() {
+                self.added
+                    .disk_changed(|added| book.events.iter().any(|event| event.id == added.id));
+            }
+        }
+        self.end_add_of_other_selection();
     }
 
     /// The list view for this frame: worked out again only when the book or the filters
@@ -976,7 +1023,7 @@ impl TimelinePage {
         };
         if response.clicked() {
             self.reset_detail = self.selected.as_ref() != Some(&event.id);
-            self.selected = Some(event.id.clone());
+            self.select(Some(event.id.clone()));
             self.focus_title = false;
         }
     }
@@ -1076,7 +1123,7 @@ impl TimelinePage {
                         && let Ok((added, ())) = self.added.undo_by(ticket, |_| Ok::<(), ()>(()))
                     {
                         book.undo_add(&added.id);
-                        self.selected = None;
+                        self.select(None);
                     }
                 }
                 ListAct::UndoPlanLine => {
@@ -1138,37 +1185,37 @@ impl TimelinePage {
                 }
             }));
         }
-        // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
+        // The Add result: its owner update (`settle_added`) ended it if it is over, so this
+        // frame finds its kept line, made again only when the store, the book or the saved-run
+        // facts changed, and presents it.
         let file = book.file();
-        if self
-            .added
-            .get(&file)
-            .is_some_and(|shown| shown.value().ends(self.selected.as_ref()))
-        {
-            self.added.owner_changed(&file);
-        }
-        if let Some(shown) = self.added.get(&file) {
-            ui.ctx().request_repaint_after(UNDO_ADD_FOR);
-            let days = day_numbers(&book.events);
-            let id = shown.value().id.clone();
-            let label = book
-                .events
-                .iter()
-                .position(|event| event.id == id)
-                .map_or_else(String::new, |at| book.events[at].label(days[at]));
-            let event = book.events.iter().find(|event| event.id == id);
-            let restores = event
-                .filter(|event| event.kind == Kind::LongRest && event.restores)
-                .map(|event| {
-                    super::fights_that_keep_hp(&book.events, event.session, &self.saved_runs)
+        let inputs = (
+            book.revision(),
+            self.saved_runs_revision.unwrap_or_else(|| book.revision()),
+        );
+        let saved_runs = &self.saved_runs;
+        let projection = self
+            .added_view
+            .refresh(&self.added, &file, inputs, |shown| {
+                let id = &shown.value().id;
+                let at = book.events.iter().position(|event| event.id == *id);
+                let label = at.map_or_else(String::new, |at| {
+                    book.events[at].label(day_numbers(&book.events)[at])
                 });
-            // Timeline lists every session, so its result names only the event.
-            let words = as_sentence(&added_message(&label, None, restores));
-            messages.kept(shown.outcome(frame, |_| {
+                let restores = at
+                    .map(|at| &book.events[at])
+                    .filter(|event| event.kind == Kind::LongRest && event.restores)
+                    .map(|event| {
+                        super::fights_that_keep_hp(&book.events, event.session, saved_runs)
+                    });
+                // Timeline lists every session, so its result names only the event.
+                let words = as_sentence(&added_message(&label, None, restores));
                 Said::new(words)
                     .undo(UndoStep::verb(Verb::Add).pressed_as(ListAct::UndoAdd))
                     .into()
-            }));
+            });
+        if let Ok(Some(line)) = self.added.present(frame, projection, &file, inputs) {
+            messages.kept(line);
         }
         if book.merged_outside {
             messages.outcome(Notice::new(crate::sentence!(
@@ -1736,7 +1783,7 @@ impl TimelinePage {
                 .filter(|session| session.mentions.contains(&id))
                 .count();
             book.remove_linked(&id, mentions);
-            self.selected = None;
+            self.select(None);
         }
     }
 
@@ -1758,10 +1805,12 @@ impl TimelinePage {
             *self = Self {
                 open_run: self.open_run,
                 saved_runs: std::mem::take(&mut self.saved_runs),
+                saved_runs_revision: self.saved_runs_revision,
                 ..Default::default()
             };
         }
         self.campaign = Some(campaign_id);
+        self.settle_added(ui.ctx(), book);
         // A pending reveal is its journey's: a changed selection drops it before any draw.
         if self
             .reveal_checks
@@ -1826,11 +1875,13 @@ impl TimelinePage {
         ) {
             self.reveal(&id, book);
             self.focus_title = true;
-            self.added.record(JustAdded {
-                file: book.file(),
-                id,
-                at: crate::frame_clock::now(),
-            });
+            self.added.record_timed(
+                JustAdded {
+                    file: book.file(),
+                    id,
+                },
+                ui.ctx(),
+            );
         }
         if let Some(words) = self.dated.clone()
             && design::message_with_action(ui, Tone::Warning, &words, "Play this one")
@@ -1863,11 +1914,13 @@ impl TimelinePage {
                 let id = book.add(Kind::Day, current);
                 self.reveal(&id, book);
                 self.focus_title = true;
-                self.added.record(JustAdded {
-                    file: book.file(),
-                    id,
-                    at: crate::frame_clock::now(),
-                });
+                self.added.record_timed(
+                    JustAdded {
+                        file: book.file(),
+                        id,
+                    },
+                    ui.ctx(),
+                );
             }
             return;
         }
@@ -1914,7 +1967,7 @@ impl TimelinePage {
                     .show(ui)
                     .clicked()
                 {
-                    self.selected = None;
+                    self.select(None);
                 }
                 // With the list hidden, the open event's results are in the form's own footer,
                 // so they move no field.
@@ -2044,31 +2097,143 @@ fn header_kind(event: &Event) -> String {
 mod tests {
     use super::*;
 
-    /// Round 30 B7d: the Add result ends by the frame clock, so a test's frames decide when:
-    /// 29 s after the add it stands, 31 s after it has ended. Another selection ends it at once.
+    /// Round 30 B7d, ruling L9: the Add result ends in the page's owner update
+    /// (`settle_added`), before the footer presents its kept line: by the frame clock (the
+    /// pane drawn unchanged across the end, with no input: until it, a repaint is asked for
+    /// at the time left; at it, one frame drops the words, `Undo add` and the footer's room);
+    /// when a reload of the book lost its event (A gone, B unchanged; an edit that keeps it is
+    /// the control); and at once when another event is opened.
     #[test]
     fn the_add_result_ends_by_the_frame_clock() {
-        crate::frame_clock::set(100.0);
-        let added = JustAdded {
-            file: super::super::TimelineFile(std::path::PathBuf::from("Timeline.md")),
-            id: "e1".to_owned(),
-            at: crate::frame_clock::now(),
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        let b = book.add(Kind::Event, None);
+        book.events[0].title = "Toll gate".into();
+        book.save();
+        type State = (TimelinePage, Book, crate::sessions::page::Sessions);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_state(
+                |ctx, (page, book, notes): &mut State| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
+                    });
+                },
+                (
+                    TimelinePage::default(),
+                    book,
+                    crate::sessions::page::Sessions::default(),
+                ),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let footer = |harness: &egui_kittest::Harness<'_, State>| {
+            design::pane::footer_rect(&harness.ctx, egui::Id::new("timeline_list_footer"))
         };
-        let selected = Some("e1".to_owned());
-        crate::frame_clock::set(129.0);
-        assert!(
-            !added.ends(selected.as_ref()),
-            "29 s of frames later it stands"
+        let repaint = |harness: &egui_kittest::Harness<'_, State>| {
+            harness.output().viewport_output[&egui::ViewportId::ROOT].repaint_delay
+        };
+        let shows = |harness: &egui_kittest::Harness<'_, State>| {
+            (
+                harness.query_by_label("Undo add").is_some(),
+                harness
+                    .query_all_by_label_contains(" added.")
+                    .next()
+                    .is_some(),
+            )
+        };
+        let add = |harness: &mut egui_kittest::Harness<'_, State>, at: f64| {
+            crate::frame_clock::set(at);
+            harness.get_by_label("Add Major event").click();
+            harness.run_steps(3);
+            assert_eq!(
+                shows(harness),
+                (true, true),
+                "the add says so, with its Undo"
+            );
+            harness
+                .state()
+                .0
+                .selected
+                .clone()
+                .expect("the new event is open")
+        };
+        let a = add(&mut harness, 100.0);
+        let start = crate::design::results::projection_work();
+        for (at, left) in [(129.0, 1.0), (129.75, 0.25)] {
+            crate::frame_clock::set(at);
+            harness.step();
+            assert_eq!(shows(&harness), (true, true), "{at}: it stands");
+            assert!(
+                (repaint(&harness).as_secs_f64() - left).abs() < 1e-3,
+                "{at}: a repaint is asked for at the end, {left} s on, not {:?}",
+                repaint(&harness)
+            );
+        }
+        let held = footer(&harness).expect("the result's footer is drawn");
+        let quiet = crate::design::results::projection_work();
+        assert_eq!(
+            (quiet.built - start.built, quiet.bytes - start.bytes),
+            (0, 0),
+            "frames with no change build the kept line no more"
+        );
+        crate::frame_clock::set(130.0);
+        harness.step();
+        assert_eq!(
+            shows(&harness),
+            (false, false),
+            "30 s of frames later the words and the Undo are gone in one frame"
         );
         assert!(
-            added.ends(Some(&"e2".to_owned())),
-            "another selection ends it"
+            footer(&harness).is_none_or(|now| (now.height() - held.height()).abs() > 1.0),
+            "in that frame the footer gives its room back: {held:?} -> {:?}",
+            footer(&harness)
         );
-        crate::frame_clock::set(131.0);
+        // F2 of the early review: a reload of the book that lost the added event ends its
+        // result on the first frame that shows the reload; an edit that keeps it does not.
+        let edit_on_disk = |keep: &dyn Fn(&Event) -> bool, title: Option<&str>| {
+            let mut other = Book::default();
+            other.open(Some(dir.path()));
+            other.events.retain(|event| keep(event));
+            if let Some(title) = title {
+                other.events[0].title = title.into();
+            }
+            other.touch();
+            other.save();
+        };
+        let a2 = add(&mut harness, 200.0);
+        harness.state_mut().1.save();
+        edit_on_disk(&|_| true, Some("Toll bridge"));
+        assert!(harness.state_mut().1.read_if_changed());
+        harness.step();
+        assert_eq!(
+            shows(&harness),
+            (true, true),
+            "an edit on disk that keeps the added event keeps its result"
+        );
+        let a2_id = a2.clone();
+        edit_on_disk(&move |event| event.id != a2_id, None);
+        assert!(harness.state_mut().1.read_if_changed());
+        harness.step();
+        assert_eq!(
+            shows(&harness),
+            (false, false),
+            "a reload that lost the added event ends its result on the first frame"
+        );
         assert!(
-            added.ends(selected.as_ref()),
-            "31 s of frames later it has ended"
+            harness.state().1.events.iter().any(|event| event.id == b)
+                && harness.query_by_label_contains("Toll bridge").is_some(),
+            "the unrelated event B stays"
         );
+        assert_ne!(a, a2);
+        // Another event opened ends it at once, in the frame of the press.
+        let a3 = add(&mut harness, 300.0);
+        harness.state_mut().0.select(Some(b.clone()));
+        harness.step();
+        assert_eq!(shows(&harness), (false, false), "another selection ends it");
+        assert!(!harness.state().1.events.iter().all(|event| event.id != a3));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! The Session page's plan: its rows (planned, open and played fights, groups and events), the
 //! Add strip, a row's menu and its opened detail.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
-use super::{Added, Plan, Sessions, plan_summary, wrapped_words};
+use super::{Plan, Sessions, kept, plan_summary, wrapped_words};
 use crate::{
     design::{
         self, Action, Density, Status, Tone, Type, colors, icons,
@@ -35,7 +35,12 @@ use std::{
 };
 use uuid::Uuid;
 
-const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
+/// How long the plan's Add result and its Undo live (`kept::PlanAdded`).
+pub(super) const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
+
+/// The inputs of the plan's Add words besides its store: the book's revision (the event's rest
+/// ruling and the fights in its session) and the saved-run facts' (which of them keep their HP).
+pub(super) type AddedInputs = (design::memo::Revision, design::memo::Revision);
 
 /// One draw of the plan's one-time reveal: after the DM adds a row or acts on one, the row after
 /// it scrolls into view above the message footer, so its action needs no extra gesture.
@@ -139,7 +144,8 @@ pub(super) enum FooterAct {
     UndoGroupDiscard,
     UndoGroupRemove,
     UndoDeletedRun,
-    UndoAdd(String),
+    /// `Undo add`: the press's ticket names the result (`Sessions::added`).
+    UndoAdd,
     UndoRemove,
     UndoRuling,
     Scene(SceneAct),
@@ -4284,15 +4290,7 @@ impl Sessions {
         file_messages(&frame, &mut messages, book, |act| {
             pressed(FooterAct::File(act))
         });
-        self.plan_messages(
-            &frame,
-            ui,
-            &mut messages,
-            book,
-            session,
-            plan,
-            &planned_results,
-        );
+        self.plan_messages(&frame, &mut messages, book, session, plan, &planned_results);
         self.scene_messages(&mut messages, shown);
         self.removed_group_message(&mut messages, session);
         // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
@@ -4316,13 +4314,14 @@ impl Sessions {
             let days = timeline::day_numbers(&book.events);
             let index = book.events.iter().position(|event| event.id == *id);
             self.row_reveal = Some((id.clone(), 0, ui.ctx().cumulative_pass_nr()));
-            self.added = Some(Added {
-                order: design::ResultOrder::issue(),
+            let added = kept::PlanAdded {
+                owner: self.of_session(session),
                 id: id.clone(),
                 label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
-                at: crate::frame_clock::now(),
+                to: self.session_name(session),
                 count: book.events.len(),
-            });
+            };
+            self.added.record_timed(added, ui.ctx());
             self.open_event = None;
         }
         let days = timeline::day_numbers(&book.events);
@@ -4737,9 +4736,13 @@ impl Sessions {
                     FooterAct::UndoGroupDiscard => self.wants_group_undo = true,
                     FooterAct::UndoGroupRemove => self.undo_group_remove(session),
                     FooterAct::UndoDeletedRun => self.undo_deleted_run(),
-                    FooterAct::UndoAdd(id) => {
-                        book.undo_add(&id);
-                        self.added = None;
+                    FooterAct::UndoAdd => {
+                        if let Some(ticket) = press.ticket
+                            && let Ok((added, ())) =
+                                self.added.undo_by(ticket, |_| Ok::<(), ()>(()))
+                        {
+                            book.undo_add(&added.id);
+                        }
                     }
                     FooterAct::UndoRemove => {
                         if let Some(ticket) = press.ticket {
@@ -4751,7 +4754,7 @@ impl Sessions {
                     FooterAct::UndoRuling => {
                         if let Some(ticket) = press.ticket {
                             book.undo_restores(ticket);
-                            self.added = None;
+                            self.end_plan_add();
                         }
                     }
                     FooterAct::Scene(act) => scene_act = Some(act),
@@ -4845,7 +4848,7 @@ impl Sessions {
         }
         if let Some((id, action)) = ruling {
             action.apply(book, &id);
-            self.added = None;
+            self.end_plan_add();
         }
         if let Some(saved) = delete_run {
             match crate::encounter_run::DeletedRun::delete(&saved) {
@@ -4881,9 +4884,9 @@ impl Sessions {
         if let (Some(link), Some(draft), Some(session)) = (insert, &mut self.draft, session) {
             insert_in_note(&mut draft.body, &link);
             draft.edited();
-            self.added = None;
             self.mentions
                 .insert(session, timeline::referenced_ids(&draft.body));
+            self.end_plan_add();
         }
     }
 
@@ -5364,14 +5367,9 @@ impl Sessions {
     /// What can be undone in the plan: the event just added or just removed, a deleted run, and
     /// a rest's ruling. Round 28 (rows 29, 77, 78a, 131): each is in the footer, never in a
     /// row, and a ruling's result stays while its Undo is live, open or closed.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the plan’s parts that its results name"
-    )]
     fn plan_messages<'f>(
         &mut self,
         frame: &'f PaneFrame,
-        ui: &egui::Ui,
         messages: &mut Messages<'f, super::SessionAct>,
         book: &Book,
         session: Option<Uuid>,
@@ -5379,42 +5377,29 @@ impl Sessions {
         planned: &[(String, bool)],
     ) {
         self.deleted_run_message(messages);
-        let days = timeline::day_numbers(&book.events);
-        // It goes at the DM's next edit, or soon, so that it cannot undo the wrong thing.
-        if let Some(just) = &self.added {
-            let current = book
-                .events
-                .iter()
-                .position(|event| event.id == just.id)
-                .map(|at| book.events[at].label(days[at]));
-            if crate::frame_clock::passed(just.at, UNDO_ADD_FOR)
-                || just.count != book.events.len()
-                || current.as_ref() != Some(&just.label)
-            {
-                self.added = None;
-            } else {
-                ui.ctx().request_repaint_after(UNDO_ADD_FOR);
-            }
-        }
-        if let Some(just) = &self.added {
-            let to = self.session_name(session);
+        // The Add result: its owner update (`settle_timed`) ended it if it is over (its life, the
+        // DM's next edit, another session), so this frame finds its kept line, made again only
+        // when the store, the book or the saved-run facts changed, and presents it.
+        let key = self.of_session(session);
+        let inputs = (book.revision(), plan.saved_runs_revision);
+        let projection = self.added_view.refresh(&self.added, &key, inputs, |shown| {
+            let just = shown.value();
             let restores = book
                 .events
                 .iter()
                 .any(|event| event.id == just.id && event.restores)
                 .then(|| timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs));
-            let words = as_sentence(&added_message(&just.label, to.as_deref(), restores));
-            kept_at(
-                messages,
-                just.order,
-                Said::new(words).undo(
-                    UndoStep::verb(Verb::Add)
-                        .pressed_as(pressed(FooterAct::UndoAdd(just.id.clone()))),
-                ),
-            );
+            let words = as_sentence(&added_message(&just.label, just.to.as_deref(), restores));
+            Said::new(words)
+                .undo(UndoStep::verb(Verb::Add).pressed_as(pressed(FooterAct::UndoAdd)))
+                .into()
+        });
+        if let Ok(Some(line)) = self.added.present(frame, projection, &key, inputs) {
+            messages.kept(line);
         } else if !self.removal_superseded(book)
             && let Some(shown) = book.results.removal.get(&book.file())
         {
+            let days = timeline::day_numbers(&book.events);
             let words = as_sentence(&removed_event_words(
                 book,
                 session,
@@ -7186,6 +7171,8 @@ mod tests {
             selected: Some(session),
             ..Default::default()
         };
+        // The saved runs' facts, which these frames never change.
+        let no_runs = crate::design::memo::Revised::new(()).revision();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH, 640.0))
             .build_state(
@@ -7200,6 +7187,7 @@ mod tests {
                     let plan = Plan {
                         fights: &[],
                         saved_runs: runs,
+                        saved_runs_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -7926,6 +7914,8 @@ mod tests {
         // Review round 1 (REVIEW-291-scene-state-height): a scene that links a rule note has no
         // second line; when the note goes, `Not found` ends its line and the row keeps its
         // height.
+        // The saved runs' facts, which these frames never change.
+        let no_runs = crate::design::memo::Revised::new(()).revision();
         let mut row = egui_kittest::Harness::builder()
             .with_size(egui::vec2(400.0, 800.0))
             .build_state(
@@ -7934,6 +7924,7 @@ mod tests {
                     let plan = Plan {
                         fights: &[],
                         saved_runs: &[],
+                        saved_runs_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8006,6 +7997,8 @@ mod tests {
             ..Sessions::default()
         };
         let fights = [planned_fight("Bridge", "Encounters/Bridge.md")];
+        // The saved runs' facts, which these frames never change.
+        let no_runs = crate::design::memo::Revised::new(()).revision();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH, 800.0))
             .build_state(
@@ -8014,6 +8007,7 @@ mod tests {
                     let plan = Plan {
                         fights: &fights,
                         saved_runs: &[],
+                        saved_runs_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8030,6 +8024,9 @@ mod tests {
                         party: &[],
                         tables: &[],
                     };
+                    // The app's frame: the owner update (`Sessions::poll` ends with
+                    // `settle_timed`), then the page.
+                    page.settle_timed(ctx, book);
                     egui::CentralPanel::default()
                         .show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
                 },
@@ -8256,18 +8253,20 @@ mod tests {
             let day = *timeline::day_numbers(&book.events).last().unwrap();
             (event.id.clone(), event.label(day), book.events.len())
         };
-        #[allow(
-            clippy::disallowed_methods,
-            reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-        )]
-        let added = Added {
-            order: design::ResultOrder::issue(),
-            id,
-            label,
-            at: crate::frame_clock::now(),
-            count,
-        };
-        harness.state_mut().0.added = Some(added);
+        let added_at = 1000.0;
+        crate::frame_clock::set(added_at);
+        {
+            let ctx = harness.ctx.clone();
+            let page = &mut harness.state_mut().0;
+            let added = kept::PlanAdded {
+                owner: page.of_session(page.selected),
+                id,
+                label: label.clone(),
+                to: None,
+                count,
+            };
+            page.added.record_timed(added, &ctx);
+        }
         harness.run_steps(4);
         assert!(
             harness.query_by_label("Undo add").is_some(),
@@ -8277,28 +8276,58 @@ mod tests {
             harness.query_by_label("Open: Pay the toll").is_some(),
             "a result in the footer does not fold the scenes"
         );
-        // Round 30 B7d: the Add result and its Undo end by the frame clock: 29 s of frames
-        // after the add they stand, 31 s after they are gone.
-        let added_at = harness
-            .state()
-            .0
-            .added
-            .as_ref()
-            .map(|added| added.at)
-            .unwrap();
-        crate::frame_clock::set(added_at + 29.0);
-        harness.run_steps(2);
-        assert!(
-            harness.query_by_label("Undo add").is_some(),
-            "29 s of frames later the Undo stands"
+        // Round 30 B7d, ruling L9: the Add result and its Undo end by the frame clock, in the
+        // owner update (`settle_timed`), not in the footer, which only presents the kept line.
+        // The pane is drawn unchanged across the end, with no input: until it, each frame asks
+        // for a repaint at the time left; at it, one frame drops the words, `Undo add` and the
+        // footer's room together, and builds the line no more.
+        let words = format!("{label} added.");
+        let footer = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            let session = harness.state().0.selected;
+            design::pane::footer_rect(
+                &harness.ctx,
+                egui::Id::new(("session_plan_footer", session)),
+            )
+        };
+        let repaint = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness.output().viewport_output[&egui::ViewportId::ROOT].repaint_delay
+        };
+        let start = crate::design::results::projection_work();
+        for (at, left) in [(29.0, 1.0), (29.75, 0.25)] {
+            crate::frame_clock::set(added_at + at);
+            harness.step();
+            assert!(
+                harness.query_by_label("Undo add").is_some()
+                    && harness.query_by_label(&words).is_some(),
+                "{at} s of frames later the words and the Undo stand"
+            );
+            assert!(
+                (repaint(&harness).as_secs_f64() - left).abs() < 1e-3,
+                "{at} s: the owner asks for a repaint at the end, {left} s on, not {:?}",
+                repaint(&harness)
+            );
+        }
+        let held = footer(&harness).expect("the result's footer is drawn");
+        let quiet = crate::design::results::projection_work();
+        assert_eq!(
+            (quiet.built - start.built, quiet.bytes - start.bytes),
+            (0, 0),
+            "frames with no change build the kept line no more"
         );
-        crate::frame_clock::set(added_at + 31.0);
-        harness.run_steps(2);
+        // The exact end: `frame_clock::passed` holds at 30 s.
+        crate::frame_clock::set(added_at + 30.0);
+        harness.step();
         assert!(
-            harness.query_by_label("Undo add").is_none(),
-            "31 s of frames later the result has ended"
+            harness.query_by_label("Undo add").is_none()
+                && harness.query_by_label(&words).is_none(),
+            "30 s of frames later the words and the Undo are gone in one frame"
         );
-        harness.state_mut().0.added = None;
+        assert!(
+            footer(&harness).is_none_or(|now| (now.height() - held.height()).abs() > 1.0),
+            "in that frame the footer gives its room back: {held:?} -> {:?}",
+            footer(&harness)
+        );
+        assert!(harness.state().0.added.is_empty(), "the owner ended it");
         harness.set_size(egui::vec2(design::FORM_WIDTH, 800.0));
         harness.run_steps(4);
         // An act that changes the note's words ends that Undo.
@@ -8742,6 +8771,8 @@ mod tests {
             }),
             ..Sessions::default()
         };
+        // The saved runs' facts, which these frames never change.
+        let no_runs = crate::design::memo::Revised::new(()).revision();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH, 800.0))
             .build_state(
@@ -8750,6 +8781,7 @@ mod tests {
                     let plan = Plan {
                         fights: &[],
                         saved_runs: &[],
+                        saved_runs_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
