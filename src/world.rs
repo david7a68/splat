@@ -1120,6 +1120,12 @@ impl NoteFault {
             Self::Renamed(Some(file)) => format!("File name differs · {file}"),
         }
     }
+
+    /// The row's words where `words` does not fit whole: the fault without the file's name.
+    /// The other same-name row still shows its own file name, so the two stay apart.
+    pub(crate) fn narrow_words(&self) -> Option<&'static str> {
+        matches!(self, Self::Renamed(Some(_))).then_some("File name differs")
+    }
 }
 
 /// The faults of one index's World notes, worked out once per index
@@ -5636,6 +5642,10 @@ mod tests {
         assert_eq!(
             NoteFault::Renamed(Some("Vell.md".into())).words(),
             "File name differs · Vell.md"
+        );
+        assert_eq!(
+            NoteFault::Renamed(Some("Vell.md".into())).narrow_words(),
+            Some("File name differs")
         );
         assert_eq!(
             faults.of_note(at_path(&gate_path)).cloned(),
