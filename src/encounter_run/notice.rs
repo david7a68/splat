@@ -67,7 +67,7 @@ impl Run {
         let presses = design::TurnHeading::new(
             &self.name,
             self.state.round,
-            design::TurnName::whole(current, &roster),
+            design::TurnName::whole(current, &roster, (self.revision, participants.len())),
             scale,
             self.panel == Panel::Groups && !self.hide_panel,
             nobody_present.then_some(NOBODY_PRESENT),
@@ -803,6 +803,22 @@ mod tests {
                     "the run's kept heading chose {scans} then {} times",
                     run.borrow().turn_heading.scans()
                 );
+                // F2: a rename in play moves the run's revision; the heading fits again on the
+                // next frame, once.
+                let other = format!("Cinder Wolf {}", number % 5 + 1);
+                run.borrow_mut()
+                    .simulate_rename(&other, "Cinder Wolf of the Ashen Marches");
+                harness.run_steps(3);
+                assert_eq!(run.borrow().turn_heading.scans(), scans + 1, "a rename");
+                // A real step (marking a row absent) and its Undo each move the revision.
+                run.borrow_mut()
+                    .apply(Command::Presence(4, false))
+                    .expect("a step");
+                harness.run_steps(3);
+                assert_eq!(run.borrow().turn_heading.scans(), scans + 2, "a step");
+                run.borrow_mut().undo();
+                harness.run_steps(3);
+                assert_eq!(run.borrow().turn_heading.scans(), scans + 3, "its Undo");
                 let texts: Vec<_> = harness
                     .output()
                     .shapes

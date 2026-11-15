@@ -79,21 +79,37 @@ pub struct TurnPresses {
 pub struct TurnName<'a> {
     name: &'a str,
     roster: RosterNames<'a>,
+    revision: RosterRevision,
 }
 
 /// Every name that can have the turn: a visitor over the participants' own name fields, in the
 /// run's order. The key letter's choice reads all of them (see `TurnName::whole`).
 pub type RosterNames<'a> = &'a dyn Fn(&mut dyn FnMut(&str));
 
+/// The run's state revision (`Run::revision`: every step, Undo and sheet sync) and the roster's
+/// length: fixed size, so an unchanged frame compares it without walking the roster.
+pub type RosterRevision = (u64, usize);
+
 impl<'a> TurnName<'a> {
-    /// The current participant's name field itself (no current turn is `None`), and the roster
-    /// it is one of. `N` shows only while EVERY roster name fits whole beside it, so pressing
+    /// The current participant's name field itself (no current turn is `None`), the roster it
+    /// is one of (absent participants too), and the run's state `revision`, which changes at
+    /// every step, Undo and sheet sync (`Run::keep_step`, `Run::take_back`). `N` shows only
+    /// while EVERY roster name fits whole beside it (a companion rule of R22), so pressing
     /// `Next turn` never brings the letter or takes it away: neither `Next turn` nor `Add`
-    /// moves under the DM's pointer (G1b), and a cut name still never stands beside `N` (R22).
-    pub fn whole(name: Option<&'a String>, roster: RosterNames<'a>) -> Self {
+    /// moves under the DM's pointer (G1b), and a cut name still never stands beside `N`. Its
+    /// cost: one long name hides `N` for the whole roster at that width. A roster edit (a
+    /// join, a rename, a copy, their Undo) may change the letter on the next draw (lead's
+    /// ruling 2). The part walks the roster only when it fits again, never on a frame whose
+    /// key is unchanged.
+    pub fn whole(
+        name: Option<&'a String>,
+        roster: RosterNames<'a>,
+        revision: RosterRevision,
+    ) -> Self {
         Self {
             name: name.map_or("", String::as_str),
             roster,
+            revision,
         }
     }
 }
@@ -106,6 +122,7 @@ pub struct TurnHeading<'a> {
     round: u64,
     name: &'a str,
     roster: RosterNames<'a>,
+    revision: RosterRevision,
     scale: RunScale,
     add_selected: bool,
     next_blocked: Option<&'a str>,
@@ -130,6 +147,7 @@ impl<'a> TurnHeading<'a> {
             round,
             name: name.name,
             roster: name.roster,
+            revision: name.revision,
             scale,
             add_selected,
             next_blocked,
@@ -282,7 +300,8 @@ struct Key {
     run: String,
     round: u64,
     name: String,
-    roster: Vec<String>,
+    /// The run's state revision: a roster that changes also changes it (F2).
+    revision: RosterRevision,
     keys: TurnKeys,
     scale: RunScale,
     metrics: Metrics,
@@ -294,26 +313,11 @@ impl Key {
             run: heading.run.to_owned(),
             round: heading.round,
             name: heading.name.to_owned(),
-            roster: {
-                let mut roster = Vec::new();
-                (heading.roster)(&mut |name| roster.push(name.to_owned()));
-                roster
-            },
+            revision: heading.revision,
             keys: heading.keys,
             scale: heading.scale,
             metrics,
         }
-    }
-
-    /// The roster's names, compared in place in order.
-    fn same_roster(&self, heading: &TurnHeading<'_>) -> bool {
-        let mut at = 0;
-        let mut same = true;
-        (heading.roster)(&mut |name| {
-            same &= self.roster.get(at).is_some_and(|kept| kept == name);
-            at += 1;
-        });
-        same && at == self.roster.len()
     }
 
     /// Compares in place: no string is made.
@@ -321,7 +325,7 @@ impl Key {
         self.run == heading.run
             && self.round == heading.round
             && self.name == heading.name
-            && self.same_roster(heading)
+            && self.revision == heading.revision
             && self.keys == heading.keys
             && self.scale == heading.scale
             && self.metrics == *metrics
@@ -458,9 +462,16 @@ fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
         (width(metrics.least) <= room).then(|| (text.to_owned(), metrics.least))
     };
     let least = sized(metrics.least);
-    // The letter may show only while every roster name fits whole beside it (G1b, R22).
+    // The letter may show only while every roster name fits whole beside it (G1b, R22). This
+    // decision measures the round as at least three of the font's widest digits, so the round
+    // 9 → 10 and 99 → 100 does not change it (lead's ruling 1); from round 1000 the real label
+    // is wider, and the letter may change once there (the named overflow).
     let roster_fits = {
-        let room = room(Letter::Shown);
+        let widest = ('0'..='9')
+            .map(|digit| number_width(ui, &digit.to_string(), &metrics.round))
+            .fold(0.0, f32::max);
+        let allowance = number_width(ui, "Round ", &metrics.round) + 3.0 * widest;
+        let room = room(Letter::Shown) + round.size().x - round.size().x.max(allowance);
         let mut fits = true;
         (heading.roster)(&mut |name| fits &= number_width(ui, name, &least) <= room);
         fits

@@ -1209,10 +1209,13 @@ pub fn run(d: &mut Driver<'_>) {
     // iter-28-R FK8, amended by ruling R22 (M5). The old check held `Add to fight` still when
     // Lookup hid Next turn's `N` (the letter's room stayed). Under R22 the heading, a line with
     // a name, releases that room: beside Lookup Next turn paints no `N` and keeps its right
-    // edge, `Add to fight` moves right by EXACTLY the released width (by zero when `N` was not
-    // shown), and the name keeps a room that is not empty. Any other shift of Add fails here.
-    let places = |d: &mut Driver<'_>| {
-        d.at_size(DEFAULT, |d| {
+    // edge, `Add to fight` moves right by EXACTLY the released width, and the name keeps a room
+    // that is not empty. Both cases run (their before-states are `undo-steps-unread` above): at
+    // 1200 `N` shows before Lookup (a positive release); at 960 a roster name does not fit
+    // beside `N`, so it is already keyless (a zero release: nothing moves). Any other shift of
+    // Add fails here.
+    let places = |d: &mut Driver<'_>, size| {
+        d.at_size(size, |d| {
             let next = d.place_of(NEXT_TURN);
             let name = d
                 .nodes()
@@ -1227,27 +1230,35 @@ pub fn run(d: &mut Driver<'_>) {
             )
         })
     };
-    let (next_before, key_before, add_before, _) = places(d);
+    let cases = [(DEFAULT, true), (SMALL, false)];
+    let before: Vec<_> = cases.iter().map(|(size, _)| places(d, *size)).collect();
     open_lookup(d);
-    let (next_after, key_after, add_after, name_after) = places(d);
+    let after: Vec<_> = cases.iter().map(|(size, _)| places(d, *size)).collect();
     let keyed = |words: &str| words.split(' ').any(|word| word == "N");
-    let held = match (next_before, next_after, add_before, add_after) {
-        (Some(next_a), Some(next_b), Some(add_a), Some(add_b)) => {
-            let released = next_a.width() - next_b.width();
-            (next_a.right() - next_b.right()).abs() < 0.5
-                && (keyed(&key_before) == (released > 1.0))
-                && ((add_b.left() - add_a.left()) - released).abs() < 0.5
-        }
-        _ => false,
-    };
-    d.observe(
-        "iter-28-R-FK8",
-        held && !keyed(&key_after) && name_after.is_some_and(|rect| rect.width() > 1.0),
-        format!(
-            "Next turn and Add before and beside Lookup: {next_before:?} {key_before:?} \
-             {add_before:?}, {next_after:?} {key_after:?} {add_after:?}; name {name_after:?}"
-        ),
-    );
+    for (((size, positive), before), after) in cases.iter().zip(&before).zip(&after) {
+        let (next_before, key_before, add_before, _) = before;
+        let (next_after, key_after, add_after, name_after) = after;
+        let held = match (next_before, next_after, add_before, add_after) {
+            (Some(next_a), Some(next_b), Some(add_a), Some(add_b)) => {
+                let released = next_a.width() - next_b.width();
+                (next_a.right() - next_b.right()).abs() < 0.5
+                    && keyed(key_before) == *positive
+                    && (released > 1.0) == *positive
+                    && ((add_b.left() - add_a.left()) - released).abs() < 0.5
+            }
+            _ => false,
+        };
+        d.observe(
+            "iter-28-R-FK8",
+            held && !keyed(key_after) && name_after.is_some_and(|rect| rect.width() > 1.0),
+            format!(
+                "At {size:?}, {} release: Next turn and Add before and beside Lookup: \
+                 {next_before:?} {key_before:?} {add_before:?}, {next_after:?} {key_after:?} \
+                 {add_after:?}; name {name_after:?}",
+                if *positive { "a positive" } else { "a zero" }
+            ),
+        );
+    }
     whole_at_every_size(
         d,
         "T17.6",

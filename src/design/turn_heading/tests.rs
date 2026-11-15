@@ -133,7 +133,7 @@ fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
                     TurnHeading::new(
                         "Ember Road",
                         123,
-                        TurnName::whole(Some(&name), &alone),
+                        TurnName::whole(Some(&name), &alone, (0, 1)),
                         scale,
                         false,
                         None,
@@ -153,7 +153,7 @@ fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
                             TurnHeading::new(
                                 "Ember Road",
                                 123,
-                                TurnName::whole(Some(current), &beside),
+                                TurnName::whole(Some(current), &beside, (0, 2)),
                                 scale,
                                 false,
                                 None,
@@ -168,6 +168,32 @@ fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
                         letter_with(&LONG_NUMBERED.to_owned()),
                         "{width} px: the letter changes with the current name"
                     );
+                    // Lead's ruling 1 (F1): pressing Next from round 9 to 10, or 99 to 100,
+                    // moves neither Next turn nor Add (same roster, width and scale).
+                    let controls = |round: u64| {
+                        let mut kept = KeptTurnHeading::new();
+                        let (nodes, _) = frame(&ctx, width, |ui| {
+                            TurnHeading::new(
+                                "Ember Road",
+                                round,
+                                TurnName::whole(Some(&name), &beside, (0, 2)),
+                                scale,
+                                false,
+                                None,
+                                keys,
+                            )
+                            .show(ui, &mut kept)
+                        });
+                        (bounds(&nodes, "Next turn"), bounds(&nodes, "Add to fight"))
+                    };
+                    for (before, after) in [(9, 10), (99, 100)] {
+                        assert_eq!(
+                            controls(before),
+                            controls(after),
+                            "{width} px, hp {}: round {before} → {after} moves a control",
+                            scale.hp
+                        );
+                    }
                     let at = format!("{width} px, {name:?}, {keys:?}, hp {}", scale.hp);
                     assert!(
                         kept.fits(),
@@ -262,7 +288,7 @@ fn too_narrow_a_heading_fails_with_its_least_form() {
         TurnHeading::new(
             "Ember Road",
             123,
-            TurnName::whole(Some(&name), &names),
+            TurnName::whole(Some(&name), &names, (0, 1)),
             RUN_LARGE,
             false,
             None,
@@ -300,7 +326,7 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
             let _ = TurnHeading::new(
                 "Ember Road",
                 round,
-                TurnName::whole(Some(&name), &names),
+                TurnName::whole(Some(&name), &names, (0, 1)),
                 RUN_REGULAR,
                 false,
                 None,
@@ -310,7 +336,7 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
             TurnHeading::new(
                 "Road",
                 1,
-                TurnName::whole(Some(&long), &longs),
+                TurnName::whole(Some(&long), &longs, (0, 1)),
                 RUN_REGULAR,
                 false,
                 None,
@@ -405,6 +431,41 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
         3,
     );
     assert_eq!((a.scans(), b.scans()), (6, 3), "and only once");
+    // Ruling 3 (F2): thirty participants; an unchanged frame walks none of them. A new state
+    // revision (a step, an Undo, a sheet sync) or a new roster length walks it once.
+    let thirty: Vec<String> = (1..=30).map(|n| format!("Ember Cultist {n}")).collect();
+    let visits = std::cell::Cell::new(0);
+    let walk = |visit: &mut dyn FnMut(&str)| {
+        for name in &thirty {
+            visits.set(visits.get() + 1);
+            visit(name);
+        }
+    };
+    let mut c = KeptTurnHeading::new();
+    let draw = |c: &mut KeptTurnHeading, revision: (u64, usize)| {
+        let _ = frame(&ctx, 900.0, |ui| {
+            TurnHeading::new(
+                "Ember Road",
+                2,
+                TurnName::whole(Some(&thirty[0]), &walk, revision),
+                RUN_REGULAR,
+                false,
+                None,
+                TurnKeys::Work,
+            )
+            .show(ui, c)
+        });
+    };
+    draw(&mut c, (7, 30));
+    assert_eq!(visits.get(), 30, "the first fit walks the roster once");
+    for _ in 0..3 {
+        draw(&mut c, (7, 30));
+    }
+    assert_eq!(visits.get(), 30, "unchanged frames walk no participant");
+    draw(&mut c, (8, 30));
+    assert_eq!(visits.get(), 60, "a new state revision walks it once");
+    draw(&mut c, (8, 31));
+    assert_eq!(visits.get(), 90, "a new roster length walks it once");
 }
 
 /// The selector alone (not evidence for the plan row, whose recipe is a later pull request):

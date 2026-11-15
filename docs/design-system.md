@@ -1572,9 +1572,14 @@ after the DM stops sync for that character; an untouched linked row has no sync 
 The header has two lines. Round and current turn use bold sans larger than row names, beside Next turn.
 When the turn heading does not fit, drop `’s turn` before shortening the name. When the name at its least size
 does not fit beside Next turn, Next turn gives up its `N` key letter and the letter's room before the name is cut
-(R22; the Keys list keeps N). The letter shows only while every name of the roster fits whole beside it, so
-pressing Next turn never brings or takes the letter, and no control moves under the pointer. With Lookup open the
-letter and its room are gone. `design::TurnHeading` owns this line.
+(R22; the Keys list keeps N). A companion rule of R22: the letter shows only while every name of the roster (absent
+participants too) fits whole beside it, so pressing Next turn never brings or takes the letter, and no control moves
+under the pointer. Its cost: one long name hides `N` for the whole roster at that width. This decision counts the
+round as at least three of the widest digits, so round 9 → 10 and 99 → 100 move nothing; from round 1000 the letter
+may change once (the named overflow). A roster edit (a join, a rename, a copy, their Undo) may change the letter on
+the next draw. With Lookup open the letter and its room are gone. Below the run list's kept width (454 px), where
+not even the name's first letter and its copy mark fit, the heading paints that least form clipped.
+`design::TurnHeading` owns this line.
 Keep the final copy number, such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
 remainder less `L`. Undo always keeps the word `Undo`: shorten the target first, then drop the `Next:` notice
