@@ -4288,10 +4288,6 @@ impl Library {
     pub fn refocus_draft(&mut self) {
         self.focus_markdown = true;
     }
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn register_copy(&mut self, campaigns: &mut Campaigns) -> Result<(), String> {
         let source = self
             .copied_package
@@ -8019,13 +8015,10 @@ impl Library {
             icons::LEGACY_BACK,
             "Return to the entry before this link. During a draft, read it in Lookup.",
         );
+        // M0355 (round 31 reader-toolbar-icon-form): every toolbar action has one form, its
+        // words; Back is navigation and keeps its arrow.
         if can_copy {
-            toolbar = toolbar.action(
-                "Copy to…",
-                Some(icons::COPY),
-                Extra::Copy,
-                copy_availability,
-            );
+            toolbar = toolbar.action("Copy to…", None, Extra::Copy, copy_availability);
         }
         if can_make {
             toolbar = toolbar.action(

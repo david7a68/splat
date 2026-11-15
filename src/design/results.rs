@@ -194,8 +194,8 @@ mod refusal;
 pub(crate) use projection::work as projection_work;
 pub use projection::{Mismatch, Projection, Retained};
 pub use refusal::{
-    AtLimit, Cause, Change, FailedAct, Fallback, File, Kind, Limit, Name, Part, Recovery, Refusal,
-    Rows, Step, Thing, Way,
+    AtLimit, Cause, Change, FailedAct, Fallback, File, Folder, Kind, Limit, Name, Part, Recovery,
+    Refusal, Rows, Step, Thing, Way,
 };
 
 /// A new order for an act done now: a result recorded, an Undo attempt refused.
@@ -1133,7 +1133,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/library.rs", "open_entry", &[Ban::Results]),
         ("src/library.rs", "reader_messages", &[Ban::Results]),
-        ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),

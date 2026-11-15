@@ -2555,7 +2555,31 @@ pub mod library_navigation {
         }
         d.click("Read Captain Varra");
         d.wait_for_text("The last commander of the Emberfall watch.");
-        d.state("reference-outside-package", Sizes::All);
+        // M0355 (round 31 reader-toolbar-icon-form): the toolbar's actions have one form, their
+        // words: none paints an icon. Back is navigation and keeps its arrow.
+        d.state_prepared("reference-outside-package", Sizes::All, |d| {
+            let size = d.window_size();
+            let forms: Vec<(&str, bool)> = ["Copy to…", "Make NPC note"]
+                .into_iter()
+                .filter_map(|name| {
+                    let rect = d.place_of(name)?;
+                    let icon = d
+                        .painted_in(rect)
+                        .chars()
+                        .any(|c| ('\u{e000}'..='\u{f8ff}').contains(&c));
+                    Some((name, icon))
+                })
+                .collect();
+            // At 960 both fold into More; elsewhere both show.
+            let folded = forms.is_empty() && d.place_of("More").is_some();
+            d.observe(
+                "M0355-toolbar-one-form",
+                folded || (forms.len() == 2 && forms.iter().all(|(_, icon)| !icon)),
+                format!(
+                    "At {size:?} the toolbar's actions (name, paints an icon): {forms:?}; folded into More: {folded}"
+                ),
+            );
+        });
         let toolbar = d
             .nodes()
             .into_iter()
