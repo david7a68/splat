@@ -80,14 +80,29 @@ pub(super) struct PastSession<'a> {
 pub(super) struct Arranged<'a> {
     /// Unfinished runs, with the open one first. Ended runs always stay in History.
     pub in_progress: Vec<&'a SavedRunInfo>,
+    /// The open run leads `in_progress`; the rows after it are in `Run::list`'s order, the
+    /// run closed last first.
+    pub open_first: bool,
     pub ready: Vec<ReadyRow<'a>>,
     pub history: Vec<PastSession<'a>>,
     pub unreadable: Vec<&'a SavedRunInfo>,
-    /// The run list could not be read: the lists say so, never that they are empty (AB1).
-    pub runs_unread: bool,
+    /// The run list could not be read, and why: the lists say so, never that they are empty
+    /// (AB1, R41).
+    pub runs_unread: Option<&'a crate::encounter_run::RunFolderFault>,
 }
 
 impl Arranged<'_> {
+    /// Q-o, round 30 G181: the order of the In progress rows, in the words its heading says.
+    /// This is the only place that words it, from the rows as arranged. The words are about
+    /// closed rows: none below two; with the open run first, they say so.
+    pub fn in_progress_order(&self) -> Option<&'static str> {
+        let closed = self.in_progress.len() - usize::from(self.open_first);
+        match (closed >= 2, self.open_first) {
+            (false, _) => None,
+            (true, false) => Some("last closed first"),
+            (true, true) => Some("open run first, then last closed first"),
+        }
+    }
     pub fn ended_count(&self) -> usize {
         self.history.iter().map(|session| session.runs.len()).sum()
     }
@@ -128,6 +143,7 @@ pub(super) fn arrange<'a>(
     let mut page = Arranged::default();
     page.in_progress
         .extend(open.filter(|run| run.standing == Standing::Unfinished));
+    page.open_first = !page.in_progress.is_empty();
     let mut unfinished = BTreeSet::new();
     if let Some(open) = open
         && open.standing == Standing::Unfinished
@@ -239,6 +255,7 @@ mod tests {
             encounter: name.into(),
             label: String::new(),
             standing,
+            setup: false,
             saved_at: None,
             unsent: Vec::new(),
         }
@@ -349,6 +366,31 @@ mod tests {
         assert!(page.ready.is_empty(), "another run is still unfinished");
         assert_eq!(page.in_progress[0].id, other[0].id);
         assert_eq!(page.ended_count(), 1);
+
+        // Q-o (round 30 G181, review F1): the heading's order words follow the rows as
+        // arranged. Close B, then A, and open B again: B leads as the open run, so
+        // "last closed first" would be false.
+        let [a, b, c] = std::array::from_fn(|_| run(&templates[0], Standing::Unfinished));
+        let on_disk = [a.clone(), b.clone()];
+        let page = arrange(&templates, &on_disk, None, &[], &[]);
+        assert_eq!(page.in_progress_order(), Some("last closed first"));
+        let page = arrange(&templates, &on_disk, Some(&b), &[], &[]);
+        assert_eq!(page.in_progress[0].id, b.id, "the open run leads");
+        assert_eq!(
+            page.in_progress_order(),
+            None,
+            "one closed row after the open run has no order"
+        );
+        let on_disk = [a.clone(), b.clone(), c];
+        let page = arrange(&templates, &on_disk, Some(&b), &[], &[]);
+        assert_eq!(page.in_progress.len(), 3);
+        assert_eq!(
+            page.in_progress_order(),
+            Some("open run first, then last closed first")
+        );
+        let one = [a];
+        let page = arrange(&templates, &one, None, &[], &[]);
+        assert_eq!(page.in_progress_order(), None, "one row has no order");
     }
 
     #[test]
