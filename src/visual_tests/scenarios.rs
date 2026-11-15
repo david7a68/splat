@@ -11431,6 +11431,36 @@ pub mod library_scope {
                 && !d.has_containing("No entries match"),
             "Search Everything keeps the words, sets the scope to Everything and lists the matches",
         );
+
+        // M3 (round 31 `creature-search-order`): Library's entry search lists the creatures that
+        // `wolf` finds in the one creature order, as Lookup and the encounter search list them
+        // (`encounter_build::WOLF_ORDER`): Werewolf before Winter Wolf, at each size.
+        search_library(d, encounter_build::MONSTER);
+        d.state_prepared("search-creature-order", Sizes::All, |d| {
+            let size = d.window_size();
+            // The entry list: left of its splitter, so the open entry's own lines do not count.
+            let list = d.place_of("Resize Library entries column").map_or(
+                egui::Rect::NOTHING,
+                |splitter| {
+                    egui::Rect::from_min_max(
+                        egui::pos2(f32::NEG_INFINITY, f32::NEG_INFINITY),
+                        egui::pos2(splitter.left(), f32::INFINITY),
+                    )
+                },
+            );
+            let wolves = encounter_build::wolves_listed(d, list, |name, wolf| {
+                name.strip_prefix(wolf)
+                    .is_some_and(|detail| detail.starts_with(" · "))
+            });
+            d.observe(
+                "M3-creature-search-order",
+                wolves == encounter_build::WOLF_ORDER,
+                format!(
+                    "At {size:?} Library lists {wolves:?} for {}",
+                    encounter_build::MONSTER
+                ),
+            );
+        });
     }
 
     const BUILT_IN: &str = "Built-in · Read only";

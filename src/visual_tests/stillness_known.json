@@ -262,7 +262,10 @@
     ["N4/quiet-action-line-start","03-campaign-fireball","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","03-campaign-fireball","960x640","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","04-package-about-title","1200x800","Button \"Filter creatures\"",1],
-    ["N4/quiet-action-line-start","04-package-about-title","1920x1080","Button \"Filter creatures\"",1]
+    ["N4/quiet-action-line-start","04-package-about-title","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-search-creature-order","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-search-creature-order","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","05-search-creature-order","960x640","Button \"Filter creatures\"",1]
   ],
   "library-to-encounter": [
     ["G1b/pressed-control-moved","05-copy-in-encounter","960x640","Button \"Save encounter\"",1],
