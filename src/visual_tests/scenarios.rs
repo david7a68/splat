@@ -28395,12 +28395,18 @@ pub(crate) fn plan_lines_out_of_order(d: &Driver<'_>) -> (usize, Vec<String>) {
             return;
         }
         read += 1;
-        let xp_before_member = words.contains('…') && words.contains("XP ");
-        let party_before_limit =
-            words.contains(" party") && !words.contains("(up to") && !words.contains("Above High");
-        if xp_before_member || party_before_limit {
+        if !q_s_order(&words) {
             wrong.push(words);
         }
     });
     (read, wrong)
+}
+
+/// Whether a summary line that ends with a known word is in Q-s order: a cut member (`…`) has
+/// no XP number beside it, and a kept party's size keeps the limit (`Above High` has none).
+pub(crate) fn q_s_order(words: &str) -> bool {
+    let xp_before_member = words.contains('…') && words.contains("XP ");
+    let party_before_limit =
+        words.contains(" party") && !words.contains("(up to") && !words.contains("Above High");
+    !(xp_before_member || party_before_limit)
 }
