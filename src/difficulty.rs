@@ -63,7 +63,7 @@ pub struct Scale {
 }
 
 /// The four words, in rising order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Word {
     Low,
     Moderate,
@@ -83,7 +83,7 @@ impl Word {
 }
 
 /// A fight's XP and, when every input is known, its word.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Difficulty {
     /// The sum of the XP that is known.
     pub xp: u64,
@@ -100,7 +100,7 @@ pub struct Difficulty {
 }
 
 /// The inputs that are not known, so that an opened row can say why it has no word (W1-D2).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Missing {
     pub what: Unknown,
     /// Each one by its place in what `Scale::weigh` was given: among the foes, or in the party
@@ -110,7 +110,7 @@ pub struct Missing {
     pub names: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Unknown {
     Xp,
     Level,
@@ -193,7 +193,7 @@ impl Difficulty {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Rating {
     pub word: Word,
     /// The party's budget for Low, Moderate and High.
@@ -401,13 +401,30 @@ pub struct Summary {
 }
 
 impl Summary {
-    /// TRANSITIONAL, at the edge only (`From<&str>`): the Encounters list still hands its Ready
-    /// row's summary as built words (`encounters::roster_summary`; the typed handoff is routed
-    /// to the Encounters package). Only a leading party count (`5 party`) is read; everything
+    /// The whole summary as words, in the line's order, with nothing given way:
+    /// `5 party · 2 × Cinder Wolf, 1 × Ember Cultist · Changed`. For a place that shows the
+    /// summary as plain words (a row's hover, the plan); a difficulty line takes the parts.
+    pub fn text(&self) -> String {
+        let mut parts = Vec::new();
+        if self.party > 0 {
+            parts.push(party_words(self.party));
+        }
+        if !self.members.is_empty() {
+            let members: Vec<String> = self.members.iter().map(member_words).collect();
+            parts.push(members.join(", "));
+        }
+        parts.extend(self.facts.iter().cloned());
+        parts.join(" · ")
+    }
+
+    /// Built words, kept for this module's tests of opaque text. No caller hands built words
+    /// to a line: `Line::roster` takes a `Summary`, and `&str` is not one (the Ready row hands
+    /// typed parts since G118). Only a leading party count (`5 party`) is read; everything
     /// after it is ONE opaque fact: never parsed into members, never narrowed member by member.
     /// It is shown as it came; after the XP number (Q-s) it shortens from its end where a
     /// separator stands (`, `, ` · `) with `…`, as the line did before typed parts, and goes last. A name such as
     /// `Ghost, 02 × Echo` keeps its words: never reformatted, only cut from the end.
+    #[cfg(test)]
     pub fn from_built(text: &str) -> Self {
         let (party, rest) = match text.split_once(" · ") {
             Some((first, rest)) => (first, rest),
@@ -429,12 +446,6 @@ impl Summary {
                 .into_iter()
                 .collect(),
         }
-    }
-}
-
-impl From<&str> for Summary {
-    fn from(text: &str) -> Self {
-        Self::from_built(text)
     }
 }
 

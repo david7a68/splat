@@ -228,13 +228,24 @@ fn section(
     }
 }
 
+/// G118: a Ready row's difficulty line. It takes the roster's TYPED parts (`Roster::parts`),
+/// never built words, so a member the summary shows is not named again after `XP not known`.
+/// The line is kept in the page's `kept` under the roster's key, so an unchanged frame builds
+/// and measures nothing.
+pub(super) struct ReadyLine<'a> {
+    pub id: Uuid,
+    pub difficulty: &'a crate::difficulty::Difficulty,
+    pub roster: &'a super::history::Roster,
+    pub kept: &'a mut crate::difficulty::Kept<Uuid>,
+}
+
 pub(super) fn list_row(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
     name: &str,
     detail: &str,
     status: bool,
-    difficulty: Option<&crate::difficulty::Difficulty>,
+    line: Option<ReadyLine<'_>>,
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
@@ -270,9 +281,17 @@ pub(super) fn list_row(
                         // then the detail from its end by whole facts and members, then the XP
                         // number. Hover and the accessible name keep the whole line (V7).
                         let font = Type::Small.font(ui);
-                        let fitted = difficulty.and_then(|difficulty| {
-                            crate::difficulty::Line::roster(difficulty, detail)
-                                .fit(|text| design::number_width(ui, text, &font) <= room)
+                        let difficulty = line.as_ref().map(|line| line.difficulty);
+                        let fitted = line.and_then(|line| {
+                            let ReadyLine {
+                                id,
+                                difficulty,
+                                roster,
+                                kept,
+                            } = line;
+                            kept.fit(ui, &id, roster.key, room, &font, || {
+                                crate::difficulty::Line::roster(difficulty, &roster.parts)
+                            })
                         });
                         let form = difficulty.and_then(crate::difficulty::Difficulty::form);
                         let (visible_detail, parts) = match fitted {
@@ -614,6 +633,7 @@ pub(super) fn ready_list(
     page: &history::Arranged<'_>,
     live: Option<&SavedRunInfo>,
     blocked: Option<&'static str>,
+    kept: &mut crate::difficulty::Kept<Uuid>,
     action: &mut Option<ListAction>,
 ) {
     heading(ui, "READY TO RUN", page.ready.len());
@@ -634,7 +654,11 @@ pub(super) fn ready_list(
             Some(FIGHT_OPEN.to_owned())
         } else if row.unfinished_run {
             Some("This fight is unfinished.".to_owned())
-        } else if template.summary.as_deref().is_none_or(str::is_empty) {
+        } else if template
+            .summary
+            .as_ref()
+            .is_none_or(|roster| roster.words.is_empty())
+        {
             Some("Add participants first.".to_owned())
         } else {
             None
@@ -645,7 +669,11 @@ pub(super) fn ready_list(
             } else {
                 "This encounter has an unfinished run. Resume it in In progress."
             })
-        } else if template.summary.as_deref().is_none_or(str::is_empty) {
+        } else if template
+            .summary
+            .as_ref()
+            .is_none_or(|roster| roster.words.is_empty())
+        {
             Some("Add participants first.")
         } else {
             blocked
@@ -656,12 +684,22 @@ pub(super) fn ready_list(
             &template.name,
             template
                 .summary
-                .as_deref()
+                .as_ref()
+                .map(|roster| roster.words.as_str())
                 .filter(|s| !s.is_empty())
                 .unwrap_or("No participants yet"),
             false,
             // A fight with an unfinished run is not ready, so it has no word (F1).
-            Some(&template.difficulty).filter(|_| !row.unfinished_run),
+            template
+                .summary
+                .as_ref()
+                .filter(|_| !row.unfinished_run)
+                .map(|roster| ReadyLine {
+                    id: template.id,
+                    difficulty: &template.difficulty,
+                    roster,
+                    kept: &mut *kept,
+                }),
             |ui| {
                 row_menu(ui, &template.name, |ui| {
                     let remove = !has_saved_run(page, row);
@@ -816,8 +854,8 @@ pub(super) fn history_list(
                             if let Some(template) = past.template {
                                 let start_blocked = blocked.or(template
                                     .summary
-                                    .as_deref()
-                                    .is_none_or(str::is_empty)
+                                    .as_ref()
+                                    .is_none_or(|roster| roster.words.is_empty())
                                     .then_some("Add participants first."));
                                 if menu_action(ui, START_FIGHT, start_blocked) {
                                     *action = Some(ListAction::Run(template.path.clone()));
@@ -1082,21 +1120,46 @@ mod iter_2_c_tests {
             unknown: 0,
             missing: None,
         };
-        let detail = "5 party · Cinder Tyrant · 2 × Ember Cultist";
+        // The Ready row's roster as `roster_summary` gives it: typed parts (G118).
+        let roster = |members: &[(usize, &str)]| crate::difficulty::Summary {
+            party: 5,
+            members: members
+                .iter()
+                .map(|&(count, name)| crate::difficulty::Member {
+                    count,
+                    name: name.into(),
+                })
+                .collect(),
+            facts: Vec::new(),
+        };
+        let summary = roster(&[(1, "Cinder Tyrant"), (2, "Ember Cultist")]);
+        let detail = &summary.text();
+        assert_eq!(detail, "5 party · 1 × Cinder Tyrant, 2 × Ember Cultist");
         let widths: Vec<f32> = (200..=520).step_by(4).map(|width| width as f32).collect();
-        let lines = |rating: Option<&crate::difficulty::Difficulty>| {
+        let lines = |rating: &crate::difficulty::Difficulty,
+                     summary: &crate::difficulty::Summary,
+                     ends: &str| {
+            let roster = super::super::history::Roster::new(summary.clone(), rating);
+            let detail = roster.words.clone();
+            let mut kept = crate::difficulty::Kept::default();
             let mut lines = Vec::new();
             for width in &widths {
                 let output = ctx.run(Default::default(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.scope(|ui| {
                             ui.set_max_width(*width);
-                            list_row(ui, "row", "Mill Road", detail, false, rating, |_| {});
+                            let line = ReadyLine {
+                                id: Uuid::nil(),
+                                difficulty: rating,
+                                roster: &roster,
+                                kept: &mut kept,
+                            };
+                            list_row(ui, "row", "Mill Road", &detail, false, Some(line), |_| {});
                         });
                     });
                 });
                 let line = output.shapes.iter().find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.ends_with("Above High") => {
+                    egui::Shape::Text(text) if text.galley.job.text.contains(ends) => {
                         Some(text.galley.job.text.clone())
                     }
                     _ => None,
@@ -1105,7 +1168,7 @@ mod iter_2_c_tests {
             }
             lines
         };
-        let rated = lines(Some(&rating));
+        let rated = lines(&rating, &summary, "Above High");
         const FORM: &str = " · XP 6,300 · Above High";
         // Q-s (iter-29 G120): the word never gives way; `5 party` goes first, then the XP number,
         // then the creatures from the end. So a line that lost a creature lost those two too.
@@ -1139,6 +1202,31 @@ mod iter_2_c_tests {
         assert!(
             rated.contains(&whole) && rated.iter().any(|line| *line != whole),
             "{rated:?}"
+        );
+        // G118 (AB4, FB5): a creature with no XP that the summary shows is named once: the
+        // line ends with `XP not known`. Only where the summary gave way so that it no longer
+        // shows the creature do the names follow `XP not known`.
+        let nameless = crate::difficulty::Difficulty {
+            unknown: 1,
+            missing: Some(crate::difficulty::Missing {
+                what: crate::difficulty::Unknown::Xp,
+                at: vec![0],
+                names: vec!["Nameless Thing".into()],
+            }),
+            ..Default::default()
+        };
+        let unknown = lines(&nameless, &roster(&[(1, "Nameless Thing")]), "XP not known");
+        for line in &unknown {
+            assert!(line.matches("Nameless Thing").count() <= 1, "{line:?}");
+            if line.contains("1 × Nameless Thing") {
+                assert!(line.ends_with(" · XP not known"), "{line:?}");
+            } else {
+                assert!(line.contains("XP not known: Na"), "{line:?}");
+            }
+        }
+        assert!(
+            unknown.contains(&"5 party · 1 × Nameless Thing · XP not known".to_owned()),
+            "{unknown:?}"
         );
     }
 
@@ -1220,7 +1308,16 @@ mod iter_2_c_tests {
             path: format!("Encounters/{name}.md"),
             id: Uuid::new_v4(),
             name: name.into(),
-            summary: Some("1 × Wolf".into()),
+            summary: Some(super::super::history::Roster::new(
+                crate::difficulty::Summary {
+                    members: vec![crate::difficulty::Member {
+                        count: 1,
+                        name: "Wolf".into(),
+                    }],
+                    ..Default::default()
+                },
+                &Default::default(),
+            )),
             difficulty: Default::default(),
             repeatable: true,
         };
