@@ -47,6 +47,11 @@ pub(crate) enum Ban {
     /// its ticket; the number of calls in the item, counted in its tokens as `Layout` is, also in
     /// an item allowed for another ban.
     ByOwner(u16),
+    /// Layout PR 2b: a footer line lowered to a closure (`Footer::legacy_reason`,
+    /// `legacy_notice`, `legacy_kept`, `legacy_kept_line`): the legacy footer's. A typed footer
+    /// (`outcome::Messages`) holds data. Staged out; the calls are also counted per file
+    /// (`STAGED`).
+    Footer,
 }
 
 impl Ban {
@@ -54,7 +59,7 @@ impl Ban {
     /// not list it is refused even when the row lists another ban. (`Results`, `Words` and
     /// `Body` match ordinary calls too: `::issue_count_title`, `outside_after`, `.show(`; they
     /// need a token-exact match first.)
-    pub(crate) const EXACT: [Ban; 3] = [Ban::Sentence, Ban::Order, Ban::Answer];
+    pub(crate) const EXACT: [Ban; 4] = [Ban::Sentence, Ban::Order, Ban::Answer, Ban::Footer];
 
     /// The bans an allowed item may call exactly once (`Messages::answer`: ruling Q-x's one
     /// answer to the DM's last act, one call site).
@@ -76,6 +81,9 @@ impl Ban {
                 "__checked",
             ],
             Self::Order => &["outcome_at"],
+            // Every call form (`exact_calls` reads them as tokens: a method, an associated call,
+            // a reference).
+            Self::Footer => &FOOTER_LINES,
             Self::Answer => &[".answer(", "Messages::answer"],
             Self::Body => &["banner", "row_fault", ".show(", "RowMessages::new"],
             // Counted in the item's tokens instead (`check`).
@@ -336,7 +344,40 @@ fn row_messages_calls(body: &str) -> usize {
 /// `Messages::answer` is counted called or referenced (`let f = Messages::answer;`), and not
 /// when an identifier character follows (`Messages::answer_all`). A text scan, as
 /// `row_messages_calls`: not syntax-aware (a token-aware checker is a known limit).
+/// The legacy footer's closure lines (`Ban::Footer`, layout PR 2b, ruling L13).
+pub(crate) const FOOTER_LINES: [&str; 4] = [
+    "legacy_reason",
+    "legacy_notice",
+    "legacy_kept",
+    "legacy_kept_line",
+];
+
+/// Each use of a legacy footer line in `source`, in any call form: a method (`f.legacy_notice(…)`),
+/// an associated call (`Footer::legacy_notice(f, …)`), a reference (`let n = Footer::legacy_notice;`).
+/// Read as tokens by the L0 freeze's machinery (`layout::bans::calls`, `Shape::Name`), so words in
+/// strings and comments, `use` declarations and the definitions do not count.
+pub(crate) fn footer_line_uses(source: &str) -> usize {
+    let shapes: Vec<crate::design::layout::bans::Shape> = FOOTER_LINES
+        .iter()
+        .map(|name| crate::design::layout::bans::Shape::Name((*name).to_owned()))
+        .collect();
+    crate::design::layout::bans::calls(source, &shapes).map_or_else(
+        // A source that does not lex: count every word, so nothing hides.
+        |_| {
+            let code = code_only(source);
+            FOOTER_LINES
+                .iter()
+                .map(|name| code.matches(name).count())
+                .sum()
+        },
+        |found| found.len(),
+    )
+}
+
 fn exact_calls(ban: Ban, body: &str) -> usize {
+    if ban == Ban::Footer {
+        return footer_line_uses(body);
+    }
     let code = code_only(body);
     ban.calls()
         .iter()
@@ -450,7 +491,7 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                     }
                 }
                 None => faults.push(format!(
-                    "{path}:{}: a suppression of `clippy::disallowed_methods` on `{}` that `design::results::STAGED_ALLOWS` does not list. Use `design::Results`, `Footer::kept` and `design::save_row` instead.",
+                    "{path}:{}: a suppression of `clippy::disallowed_methods` on `{}` that `design::results::STAGED_ALLOWS` does not list. Use `design::Results`, `Footer::legacy_kept` and `design::save_row` instead.",
                     suppression.line, suppression.item
                 )),
             }
@@ -591,6 +632,36 @@ mod tests {
             1,
             "{other}"
         );
+        // Layout PR 2b, review of PR 452 (ruling L13): a legacy footer line is found in every
+        // call form, also in an item allowed for another ban: a method, an associated call and a
+        // reference. A row that lists `Ban::Footer` allows them.
+        for footer in [
+            "    footer.legacy_notice(words, |_| {});\n",
+            "    Footer::legacy_notice(footer, words, |_| {});\n",
+            "    let notice = Footer::legacy_reason;\n",
+            "    crate::design::Footer::legacy_kept_line(footer, line, true, |_, _| {});\n",
+        ] {
+            let item = format!(
+                "#[allow(clippy::disallowed_methods)]\nfn page_error() {{\n    footer.result(order, words, true, |_| {{}});\n{footer}}}\n"
+            );
+            assert_eq!(
+                check(
+                    &file(&item),
+                    &[("src/new.rs", "page_error", &[Ban::Results])]
+                )
+                .len(),
+                1,
+                "{item}"
+            );
+            assert!(
+                check(
+                    &file(&item),
+                    &[("src/new.rs", "page_error", &[Ban::Results, Ban::Footer])]
+                )
+                .is_empty(),
+                "{item}"
+            );
+        }
         let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
         assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());
         // Review of PR 308: a by-owner Undo added to an item already allowed for another ban

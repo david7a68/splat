@@ -36,7 +36,8 @@ sentences). It does not grow with the event list or the notes. It is counted (`h
 2b's to remove. Everything else on an unchanged frame is constant and counted (`visits`): `refresh`
 compares three values; `present` finds its entry by the place kept with the line (valid while the
 revision stands), not by a search; `expire` keeps the oldest act for the store's revision and visits no
-entry before the next end (at an end it visits each entry once). `set_locks` visits every entry, so an
+entry before the next end (at an end it visits each entry once, and finds the next end among those
+that stay). `set_locks` visits every entry, so an
 owner calls it when the lock's source changed, not each frame (no first owner has a lock). Other legacy
 footer work of these panes (other results, the removal line) is outside this claim.
 
@@ -100,7 +101,8 @@ another file is another owner key, so its Add shows no more and ends by its life
 that `fights_that_keep_hp` reads: which read of the run list it is (a revision that `take_run_list`
 advances: a reload, a deleted or restored run) and the open run's id and whether it is running. Their
 revision is the second input of both Add keys (`Plan::saved_runs_revision`, `TimelinePage::set_saved_runs`).
-The work is constant per frame (a revision and the open run's timeline fact), never the run list.
+The work is constant per frame (a revision, and the open run's id and running flag through
+`Run::keeps_saved_hp`, with no string copied), never the run list.
 
 Footer construction (`list_messages`, `plan_messages`) keeps only `refresh` (a revision compare on an
 unchanged frame) and `present`. The per-frame `day_numbers`, event searches, `fights_that_keep_hp` and the
@@ -142,3 +144,41 @@ Add loses one staged `ResultOrder::issue` and one `outcome_at` (their `STAGED_AL
 - A frame-bound line ends the store's borrow; the types do not stop the pane's body from changing the
   store between `present` and the footer's paint (as today). The truth claim is for the frame's start.
 - Every other result owner keeps the frame-bound path; the footer renderer is PR 2b.
+
+## 7. The retained footer (layout PR 2b)
+
+`Messages` keeps its lines as typed data (`FooterLine`: rank, act order, the typed message, a kept line's
+ticket); nothing is lowered to a closure. The pane draws them through `TypedFooter`, which keeps a plan per
+footer: the lines' one order (`footer_order`'s rule), the accessible name, each Undo's short form
+(`undo_alone`), each kept Undo's words as fitted to its room (`forms`: the visible form, the whole form that
+names it, the action's width), the room the lines take (`bare`), the room their open locks' reasons want
+(`reserved`) and the room each of those reasons keeps (`rooms`).
+
+- **When the plan is made.** By the pass that draws the lines, so its measure is the paint's own (the
+  typography, wraps, actions and reasons that are drawn), and only when the lines changed (compared as data
+  with the last ones, with the state their file lines draw from: a link pressed for a file that is gone adds a
+  reason line), or the width, the scale or the style. An unchanged frame sorts, names, counts Undo verbs,
+  builds and fits no Undo label (`Body::undo_form` takes the plan's) and lays out no reservation (an empty
+  widget-like rect takes each reservation's kept room); `FooterWork` counts plans, sorted lines, named bytes,
+  reason probes, verb comparisons, Undo labels fitted and reservation layouts. The pane knows an
+  **unchanged** footer's demand before it draws (`Footer::planned`). A **changed** footer's first frame still
+  paints at its last height and measures, as before; its placement in that same frame comes with PR 456 (L1c).
+- **Reasons' room (R29), per footer.** A fresh plan decides `give_up` from its own numbers and the room where
+  the footer stands; a pass that makes a plan measures with the footer's own last decision, kept with its
+  plan. It keeps each reservation's room also when it gives that room up, so after the pane grows (the plan
+  holds: height is not in its key) a quiet frame takes the room and lays out no reason. No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay
+  for the legacy footer only (`Reasons::Legacy`).
+- **Lifetime.** The plans of one context live in one store (`FooterPlans`). A footer that no frame drew since
+  the last one has ended (its pane closed, its owner changed), and its plan, with its lines, is dropped by the
+  store's sweep, once per frame when the first footer draws: the store holds the footers of about two frames.
+  The sweep visits each kept footer once (`FooterWork::swept`), and the store's spare room shrinks with it.
+- **Presses.** One press slot per `Messages` per pass, taken by `pane`; nothing keeps a press across passes, so
+  a press is acted on once, also when egui draws the frame again or declines to.
+- **The old path.** `Footer::legacy_reason`, `legacy_notice`, `legacy_kept`, `legacy_kept_line` (and the
+  staged `result`) are banned by Clippy, listed per function (`Ban::Footer`, exact) and counted per file
+  (`LEGACY_FOOTER_LINES`) in every call form, read as tokens with the L0 freeze's machinery (a method, an
+  associated call, a reference: ruling L13). First callers moved: Rules and runs (its discard joins the page's
+  `kept` store), Settings and Link and folder (Campaigns, the account, D&D Beyond).
+- **Limits.** Building `Messages` each frame (the caller's words) and comparing them stays O(the footer's
+  words); a caller that keeps owner revisions could skip both, which is later work. Fonts changed with
+  `set_fonts` are not part of the plan's key (only width, scale and style).
