@@ -8984,7 +8984,16 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     );
     assert!(!d.has_containing("Ash Exposure · "));
     d.expect(UNDO_REMOVE);
-    d.state("deleted-draft-let-go", Sizes::All);
+    // M9: Remove's Undo names the entry, whole where it fits (here at every size).
+    d.state_prepared("deleted-draft-let-go", Sizes::All, |d| {
+        let size = d.window_size();
+        let named = d.place_of(UNDO_REMOVE);
+        d.observe(
+            "M9-undo-remove-object",
+            named.is_some() && d.in_view(UNDO_REMOVE),
+            format!("At {size:?} Remove's Undo is {UNDO_REMOVE:?}: {named:?}"),
+        );
+    });
     let let_go_count = files_to_fix(d);
     d.click(UNDO_REMOVE);
     d.expect("Remove entry and lose draft");
