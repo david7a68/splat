@@ -5775,9 +5775,11 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     );
     d.state("prep-edit-encounter-unsaved", Sizes::All);
     d.click(NAV_ENCOUNTERS);
+    // At 1920 the whole editor is in view (B4's back line takes a line at 1200).
+    let kept_words = d.at_size(LARGE, |d| d.visible_text(DRAFT_WORDS));
     d.observe(
         "s30-AP1-dirty-encounter-words",
-        d.visible_text(DRAFT_WORDS),
+        kept_words,
         "The unsaved words are still in the encounter's editor",
     );
     d.click("Discard");
