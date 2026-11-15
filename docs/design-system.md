@@ -218,7 +218,10 @@ caret menu without a button border; it names and underlines the selected page wh
 menus put the caret after the word. Keep remains the default focus when closing could lose work.
 
 A drop-down menu stays inside its owning pane and clip. A header above a split passes the
-list pane’s current room through `Dropdown::within`; it cannot widen the part’s room. A short
+list pane’s current room through `Dropdown::within`; it cannot widen the part’s room. Timeline's
+header rooms end before the list footer band and start on the control's row, so their menus open
+below and scroll above the footer. An explicit room prefers the full label's one-line width,
+clamped to that room; default-room menus retain their width policy. A short
 room shows the whole rows it can hold and scrolls inside. Below one row, the menu closes and
 returns the keyboard to its control. Open row metrics follow the words, fonts, width and scale;
 a closed control does no row measurement.

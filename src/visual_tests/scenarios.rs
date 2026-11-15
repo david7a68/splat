@@ -15214,6 +15214,9 @@ pub mod session_notes {
                     menu.top() >= control.bottom()
                         && menu.bottom() <= height
                         && splitter.is_none_or(|edge| menu.right() <= edge.left())
+                        && footers.iter().filter(|band| {
+                            band.left() < menu.right() && band.right() > menu.left()
+                        }).all(|band| menu.bottom() <= band.top())
                 }),
                 format!("{name}: menu {menu:?}, control {control:?}, detail splitter {splitter:?}, footer bands {footers:?}, window height {height}"),
             );

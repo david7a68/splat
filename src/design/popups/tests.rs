@@ -390,9 +390,16 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
     // The real header owner must also end its room at the list's footer band. A short
     // event list puts that band much higher than the window bottom, even with 12 sessions.
     {
+        use crate::timeline::{
+            Book, Kind,
+            page::{SessionLink, TimelinePage},
+        };
         use egui_kittest::kittest::Queryable;
-        use crate::timeline::{Book, Kind, page::{SessionLink, TimelinePage}};
-        for size in [vec2(960.0, 640.0), vec2(1200.0, 800.0), vec2(1920.0, 1080.0)] {
+        for size in [
+            vec2(960.0, 640.0),
+            vec2(1200.0, 800.0),
+            vec2(1920.0, 1080.0),
+        ] {
             for count in [4, 12] {
                 for (name, menu) in [
                     ("Session for new events", "Session for new events choices"),
@@ -403,16 +410,23 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
                     book.merged_outside = true;
                     let mut page = TimelinePage::default();
                     page.reveal(&id, &book);
-                    let links: Vec<_> = (1..=count).map(|number| SessionLink {
-                        id: uuid::Uuid::new_v4(),
-                        label: format!("Session {number}: Ferry Watch"),
-                        mentions: Vec::new(),
-                    }).collect();
+                    let links: Vec<_> = (1..=count)
+                        .map(|number| SessionLink {
+                            id: uuid::Uuid::new_v4(),
+                            label: format!("Session {number}: Ferry Watch"),
+                            mentions: Vec::new(),
+                        })
+                        .collect();
                     let campaign = uuid::Uuid::new_v4();
                     let mut harness = egui_kittest::Harness::builder()
                         .with_size(size)
                         .build_state(
-                            move |ctx, (page, book, notes): &mut (TimelinePage, Book, crate::sessions::page::Sessions)| {
+                            move |ctx,
+                                  (page, book, notes): &mut (
+                                TimelinePage,
+                                Book,
+                                crate::sessions::page::Sessions,
+                            )| {
                                 egui::CentralPanel::default().show(ctx, |ui| {
                                     page.show(ui, book, campaign, &links, None, notes);
                                 });
@@ -430,7 +444,9 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
                         .collect();
                     assert!(!footers.is_empty(), "the fixture must have the list footer");
                     assert!(
-                        footers.iter().all(|band| popup.bottom() <= band.top() + 0.5),
+                        footers
+                            .iter()
+                            .all(|band| popup.bottom() <= band.top() + 0.5),
                         "{size:?}, {count} sessions, {name}: menu {popup:?} crosses footer bands {footers:?}"
                     );
                 }

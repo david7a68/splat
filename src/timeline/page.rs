@@ -179,6 +179,9 @@ pub struct SessionLink {
 
 #[derive(Default)]
 pub struct TimelinePage {
+    /// The list's last measured content/viewport edge, before its footer band. The header
+    /// draws first; a changed edge discards the pass, so its menus use the current layout.
+    header_menu_bottom: Option<f32>,
     /// The filters, with a revision.
     filters: FilterKey,
     /// The list view, by the book's revision and the filters' (`ListView`).
@@ -695,6 +698,9 @@ impl TimelinePage {
                 short_session(&session.label),
             );
         }
+        // This header's room starts on its row: its menu opens below, never above it.
+        let mut room = room;
+        room.min.y = room.top().max(ui.cursor().top());
         let shown = dropdown
             .within(room)
             .width(design::READER_MEASURE / 4.0)
@@ -743,8 +749,10 @@ impl TimelinePage {
                 "Search",
                 160.0,
             );
+            let mut menu_room = room;
+            menu_room.min.y = menu_room.top().max(ui.cursor().top());
             design::Dropdown::new(SESSION_FILTER, "Show one session")
-                .within(room)
+                .within(menu_room)
                 .choice(None, "All sessions")
                 .choices(
                     sessions
@@ -1036,7 +1044,24 @@ impl TimelinePage {
         let offer = open.and_then(|id| notes.event_link_offer(book, id));
         let frame = PaneFrame::new(ui);
         let messages = self.list_messages(&frame, ui, book, notes, open, offer.as_ref());
-        let paned = messages.pane(ui, design::Body::Content, |ui| body(self, ui, book, notes));
+        let paned = messages.pane(ui, design::Body::Content, |ui| {
+            let value = body(self, ui, book, notes);
+            // A following footer's band starts at the content's end; a pinned one's starts
+            // at the viewport's end. The smaller edge keeps both clear (also a whole-row cut).
+            // Without a footer, reserving the same edge is conservative. No panel state is read.
+            let bottom = ui.min_rect().bottom().min(
+                design::pane::body_room(ui).map_or(ui.clip_rect().bottom(), |room| room.bottom()),
+            );
+            if self
+                .header_menu_bottom
+                .is_none_or(|kept| (kept - bottom).abs() > 0.5)
+            {
+                self.header_menu_bottom = Some(bottom);
+                ui.ctx()
+                    .request_discard("the Timeline header measures its list menu room");
+            }
+            value
+        });
         if let Some(press) = paned.pressed {
             match press.id {
                 ListAct::UndoLinks => {
@@ -1894,6 +1919,11 @@ impl TimelinePage {
             // decision, including pending keyboard and pointer resize, rather than the
             // previous pass's panel.
             let mut room = ui.clip_rect();
+            // The list measures its content/viewport edge below. A changed edge redraws
+            // this pass before it can be shown, including when the window or list changes.
+            room.max.y = room
+                .bottom()
+                .min(self.header_menu_bottom.unwrap_or(room.top()));
             if !narrow && event_open {
                 let natural = design::side_panel_width(page_width);
                 let content_width = page_width.min(design::LIST_MEASURE + natural);
