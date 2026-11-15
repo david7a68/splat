@@ -11648,7 +11648,39 @@ pub mod library_scope {
                 ),
             );
         });
+
+        // M-L0.4a (proof 3, the scope notice: a kept result of the Library's store with no
+        // state before): in the package's scope, a link in a package note opens an entry outside
+        // it. The scope widens to Everything and the pane's footer says so.
+        let note = d.root.join("modules/ashen-marches/Rules/Fire Note.md");
+        std::fs::write(
+            &note,
+            format!(
+                "{}\nSee [[Fireball|the fire spell]].\n",
+                crate::library::note_text("Fire Note", "rule", None)
+            ),
+        )
+        .unwrap();
+        d.click("Packages");
+        d.click("Reload from disk");
+        d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+        d.click(MODULE);
+        search_library(d, "fire note");
+        d.click_starting("Fire Note · ");
+        d.click("the fire spell (opens Fireball)");
+        d.state_prepared("scope-notice", Sizes::All, |d| {
+            let size = d.window_size();
+            d.observe(
+                "M-L0.4a-scope-notice",
+                d.visible_text(SCOPE_NOTICE)
+                    && d.has(&format!("What the Library shows: {EVERYTHING}")),
+                format!("At {size:?} the footer says {SCOPE_NOTICE:?} and the scope is Everything"),
+            );
+        });
     }
+
+    /// The scope notice of `open_entry` when the open entry is outside the scope.
+    const SCOPE_NOTICE: &str = "Scope is now Everything, to show Fireball.";
 
     const BUILT_IN: &str = "Built-in · Read only";
     const CAMPAIGN_OWNER: &str = "Campaign · Editable";

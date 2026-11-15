@@ -13607,6 +13607,121 @@ mod tests {
     }
 
     #[test]
+    fn every_kept_result_comes_with_its_mark_from_its_real_writer() {
+        // M-L0.4a, proof 2: each writer stores its result's data and its mark in one call
+        // (`LibraryKept::set_*`): empty → present, the newest first; a second act of the kind
+        // replaces the first (a newer order, still one mark of the kind).
+        let temp = tempfile::tempdir().unwrap();
+        let m = create_module(&temp.path().join("module"), "Module", "test").unwrap();
+        for name in ["Ash", "Brand"] {
+            fs::write(
+                m.path.join(format!("{name}.md")),
+                note_text(name, "rule", None),
+            )
+            .unwrap();
+        }
+        let mut library = Library {
+            loaded: Some(load(Some(&m)).unwrap()),
+            ..Default::default()
+        };
+        let at = |library: &Library, name: &str| {
+            let path = format!("{name}.md");
+            let notes = &library.loaded.as_ref().unwrap().notes;
+            notes.iter().position(|note| note.path == path).unwrap()
+        };
+        let newest = |library: &Library| library.kept.kinds_newest_first().first().copied();
+        // Both acts of one kind: the second replaces the first, with a newer order.
+        let replaced = |library: &Library, kind: KeptKind, before: Option<design::ResultOrder>| {
+            let marks = library.kept.kinds_newest_first();
+            assert_eq!(marks.first(), Some(&kind), "{kind:?}: the newest");
+            assert_eq!(
+                marks.iter().filter(|at| **at == kind).count(),
+                1,
+                "{kind:?}: one"
+            );
+            assert!(
+                library.kept.order_of(kind) > before,
+                "{kind:?}: a newer order"
+            );
+        };
+
+        // ScopeNotice, by `open_entry` of an entry outside the scope.
+        for name in ["Ash", "Brand"] {
+            let before = library.kept.order_of(KeptKind::ScopeNotice);
+            library.scope = Scope::Package(Uuid::new_v4());
+            library.open_entry(at(&library, name));
+            replaced(&library, KeptKind::ScopeNotice, before);
+        }
+        // Identity, by `give_new_identity` of the open entry.
+        for name in ["Ash", "Brand"] {
+            let before = library.kept.order_of(KeptKind::Identity);
+            library.selected = Some(at(&library, name));
+            library.give_new_identity().unwrap();
+            replaced(&library, KeptKind::Identity, before);
+        }
+        // Discarded, by `reload_note_from_disk` of a changed file under a draft; Removed with it
+        // when the file has gone.
+        for (text, kind) in [
+            (Some("A changed file.".to_owned()), KeptKind::Discarded),
+            (None, KeptKind::Removed),
+        ] {
+            let before = library.kept.order_of(kind);
+            let index = at(&library, "Ash");
+            library.selected = Some(index);
+            library.draft = "An unsaved draft.".into();
+            library.disk_change = Some(DiskChange {
+                text,
+                moved_to: None,
+                fault: None,
+            });
+            library.reload_note_from_disk(index);
+            replaced(&library, kind, before);
+            if kind == KeptKind::Removed {
+                // The draft it let go is a discard too: both, Remove's the newest.
+                assert!(library.kept.discarded().is_some() && library.kept.removed().is_some());
+            }
+        }
+        // Heading and Vital, by their real fixes.
+        let text = format!(
+            "{}\n**Hit Points** 45\n",
+            note_text("Guard", "creature", None)
+                .replace("| Hit Points |  |", "| Hit Points | 1 |")
+                .replacen("# Guard", "# Old Guard", 1)
+        );
+        let entry = Entry::parse("Rules/X.md", &text).unwrap();
+        let file: FileId = (OwnerKey::Package(m.id), "Rules/X.md".into());
+        for _ in 0..2 {
+            let before = library.kept.order_of(KeptKind::Heading);
+            let mut draft = text.clone();
+            HeadingChoice::new(Some(&entry), &text, None, &file).apply(
+                (true, false),
+                &file,
+                &mut draft,
+                &mut library.kept,
+            );
+            replaced(&library, KeptKind::Heading, before);
+        }
+        let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
+        for _ in 0..2 {
+            let before = library.kept.order_of(KeptKind::Vital);
+            library.draft = text.clone();
+            Library::fix_stat(
+                (
+                    &mut library.kept,
+                    &mut library.draft,
+                    &mut library.draft_revision,
+                    &mut library.error,
+                ),
+                file.clone(),
+                &entry,
+                (key, label, value),
+            );
+            replaced(&library, KeptKind::Vital, before);
+        }
+        assert_eq!(newest(&library), Some(KeptKind::Vital));
+    }
+
+    #[test]
     fn back_and_a_reload_keep_a_campaign_file_apart_from_a_package_file() {
         // M-L0.4a, proof 4: a package file and a campaign file with one UUID and one path (the
         // package's loads first), and another file. Back, and the reselection after a reload,
