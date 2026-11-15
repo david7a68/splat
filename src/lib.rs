@@ -42,7 +42,9 @@ pub mod ownership {
         Cause, Change, DiskChanged, Ends, FailedAct, Fallback, File, FooterResult, Gone, Kept,
         Kind, Name, Owner, OwnerChanged, Press, Recovery, Refusal, Results, Shown, Thing,
     };
-    pub use crate::design::save_row::{DraftState, Primary, SaveWeight, SaveWord};
+    pub use crate::design::save_row::{
+        Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,
+    };
 }
 mod difficulty;
 mod dndbeyond;
