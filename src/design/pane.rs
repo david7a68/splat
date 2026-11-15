@@ -1444,18 +1444,25 @@ struct Stop {
     room: Rect,
     width: f32,
     next: Next,
-    /// The body's paint.
+    /// The body's paint, and its widgets on the pane's layer (their places in egui's list).
     body: (usize, usize),
+    widgets: (usize, usize),
     /// The row cut's hairline that the pass drew for the body's room, if any.
     cut_line: Option<usize>,
     rows_before: usize,
 }
 
-/// The body's paint stops where the next pass's body room ends (`Stop`): at that room's end, or
-/// at its last whole registered row there (N12) with that row cut's hairline, which the next pass
-/// keeps, so it is drawn the same; a line cut's hairline at the footer's top. Nothing moves: the
-/// footer was drawn once, in its place. Returns whether content goes on below the body's room.
-fn stop_body(ui: &Ui, stop: Stop) -> bool {
+/// The body stops where the next pass's body room ends (`Stop`): at that room's end, or at its
+/// last whole registered row there (N12) with that row cut's hairline, which the next pass keeps,
+/// so it is drawn the same; a line cut's hairline at the footer's top. Nothing moves: the footer
+/// was drawn once, in its place. The edge holds for presses and for a screen reader as for the
+/// paint (review of PR 456, P2): each body widget that reaches below it takes presses only above
+/// it from now on (egui keeps a widget's last press area; re-registered for hover only, so its
+/// focus order, its accessible node and its id stay), and one wholly below it is hidden from a
+/// screen reader. The focused control keeps both: the next pass, in the new room, brings it whole
+/// into view (`reveal_focus`: the room changed under it). Returns whether content goes on below
+/// the body's room.
+fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
     use egui::layers::ShapeIdx;
     let Stop {
         id,
@@ -1464,6 +1471,7 @@ fn stop_body(ui: &Ui, stop: Stop) -> bool {
         width,
         next,
         body,
+        widgets,
         cut_line,
         rows_before,
     } = stop;
@@ -1473,6 +1481,30 @@ fn stop_body(ui: &Ui, stop: Stop) -> bool {
         whole_row_cut(rows.get(rows_before..).unwrap_or_default(), view.viewport)
     });
     let limit = row_cut.unwrap_or(next.body_room.bottom());
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    let below: Vec<egui::WidgetRect> = ui.ctx().viewport(|viewport| {
+        viewport
+            .this_pass
+            .widgets
+            .get_layer(layer)
+            .skip(widgets.0)
+            .take(widgets.1.saturating_sub(widgets.0))
+            .filter(|widget| widget.interact_rect.bottom() > limit && Some(widget.id) != focused)
+            .copied()
+            .collect()
+    });
+    if !below.is_empty() {
+        let mut edge = ui.new_child(egui::UiBuilder::new().id_salt(id.with("stop_body")));
+        edge.disable();
+        edge.set_clip_rect(ui.clip_rect().intersect(Rect::everything_above(limit)));
+        for widget in &below {
+            let _ = edge.interact(widget.rect, widget.id, Sense::hover());
+            if widget.rect.top() >= limit {
+                ui.ctx()
+                    .accesskit_node_builder(widget.id, |node| node.set_hidden());
+            }
+        }
+    }
     ui.ctx().graphics_mut(|graphics| {
         let list = graphics.entry(layer);
         for at in body.0..body.1 {
@@ -1681,6 +1713,7 @@ impl Footer<'_> {
                 .graphics(|graphics| graphics.get(layer).map_or(0, |list| list.next_idx().0))
         };
         let body_from = paint_at(ui);
+        let widgets_from = widget_count(ui);
         // An edge (the footer, the session banner) ends the body: no registered row is cut.
         let edge = held || banner_below(ui.ctx());
         // What a layer opened from the body may use: the body's room, inside the clip.
@@ -1826,6 +1859,7 @@ impl Footer<'_> {
         };
         drop(body_ui);
         let body_to = paint_at(ui);
+        let widgets_to = widget_count(ui);
         // `pane_then`: the messages from the state the body's acts left, before the footer
         // paints.
         let out = then(inner, &mut self);
@@ -1971,6 +2005,7 @@ impl Footer<'_> {
                         width,
                         next,
                         body: (body_from, body_to),
+                        widgets: (widgets_from, widgets_to),
                         cut_line: new_cut.map(|_| cut_line),
                         rows_before,
                     },

@@ -2740,6 +2740,8 @@ struct PlanEnv {
     width: u32,
     scale: u32,
     style: std::sync::Arc<egui::Style>,
+    /// The fonts in effect (`font_key`): new fonts, or a family's font replaced, plan again.
+    fonts: u64,
 }
 
 /// One line as the plan sees it: what decides its place and its size. A press's id is not in
@@ -2974,6 +2976,7 @@ impl<A: 'static> TypedFooter<A> {
             width: width.to_bits(),
             scale: ui.ctx().pixels_per_point().to_bits(),
             style: ui.style().clone(),
+            fonts: font_key(ui.ctx()),
         }
     }
 
@@ -3175,8 +3178,34 @@ fn line_ui<R>(ui: &mut Ui, scope: Option<egui::Id>, add: impl FnOnce(&mut Ui) ->
 /// The height a footer's lines are measured in: more than any footer takes.
 const MEASURE_ROOM: f32 = 100_000.0;
 
+/// The fonts in effect in `ctx`, as one key: each family's fonts, and each font's name and data
+/// (by its shared data, so new fonts under an old name count). Any `set_fonts` that changes what
+/// a family draws with changes it, not only the theme's. Worked out once a pass.
+fn font_key(ctx: &egui::Context) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let pass = ctx.cumulative_pass_nr();
+    let id = egui::Id::new("design_footer_font_key");
+    if let Some((kept, key)) = ctx.data(|data| data.get_temp::<(u64, u64)>(id))
+        && kept == pass
+    {
+        return key;
+    }
+    let key = ctx.fonts(|view| {
+        let fonts = view.definitions();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        fonts.families.hash(&mut hasher);
+        for (name, data) in &fonts.font_data {
+            name.hash(&mut hasher);
+            std::sync::Arc::as_ptr(data).hash(&mut hasher);
+        }
+        hasher.finish()
+    });
+    ctx.data_mut(|data| data.insert_temp(id, (pass, key)));
+    key
+}
+
 /// The context a footer's lines are measured in (`TypedFooter::measure`), kept in this one's
-/// memory, and the font generation it has (`theme::font_generation`).
+/// memory, and the fonts it has (`font_key`).
 #[derive(Clone)]
 struct MeasureContext {
     ctx: egui::Context,
@@ -3194,7 +3223,8 @@ struct MeasureContext {
 fn measuring<R>(ui: &Ui, gone: &[(egui::Id, bool)], mut add: impl FnMut(&mut Ui) -> R) -> R {
     let main = ui.ctx();
     let key = egui::Id::new("design_footer_measure");
-    let fonts = super::theme::font_generation(main);
+    // The measuring context has the fonts in effect here, whoever set them (`font_key`).
+    let fonts = font_key(main);
     let kept = main.data(|data| data.get_temp::<MeasureContext>(key));
     let measure = match kept {
         Some(kept) if kept.fonts == fonts => kept.ctx,
@@ -5711,6 +5741,8 @@ mod tests {
             pub heights: Option<[f32; 2]>,
             /// Each pane's body is this much taller than its label (a tall body).
             pub body_tall: [f32; 2],
+            /// The panes' style draws body text in this font family.
+            pub family: Option<&'static str>,
             /// No Undo or choice has a lock (no reason, open or held, and no room for one).
             pub no_locks: bool,
             /// The next frame asks egui to draw it again (a second pass), once.
@@ -5912,6 +5944,13 @@ mod tests {
 
         pub(super) fn frame(ui: &mut Ui, app: &mut App) {
             app.passes += 1;
+            if let Some(family) = app.family {
+                use crate::design::tokens::Type;
+                ui.style_mut().text_styles.insert(
+                    Type::Body.style(),
+                    egui::FontId::new(Type::Body.size(), egui::FontFamily::Name(family.into())),
+                );
+            }
             if let Some(heights) = app.heights {
                 ui.horizontal_top(|ui| {
                     for (pane, height) in heights.into_iter().enumerate() {
@@ -6662,6 +6701,54 @@ mod tests {
                 &h.state().presses[before..],
                 [(0, Act::Undo, third)],
                 "{heights:?}: a press on the new Undo, decided on its first frame's targets"
+            );
+        }
+
+        // Review of PR 456 (re-review, P2): fonts set after the footers were planned reach their
+        // plan and its measure, whoever sets them. Every family's first font replaced by a larger
+        // one, then a new family that the panes' style picks for body text: the first frame,
+        // drawn in one pass, is where a fresh pane with those fonts settles, and the next frame
+        // moves nothing.
+        for family in [None, Some("pilot")] {
+            let mut h = harness_sized(panes(false), 1200.0);
+            h.run_steps(4);
+            let mut fonts = h.ctx.fonts(|view| view.definitions().clone());
+            let mono = fonts.families[&egui::FontFamily::Monospace][0].clone();
+            let mut larger = (*fonts.font_data[&mono]).clone();
+            larger.tweak.scale = 1.5;
+            fonts
+                .font_data
+                .insert("pilot larger".into(), std::sync::Arc::new(larger));
+            match family {
+                None => {
+                    for faces in fonts.families.values_mut() {
+                        faces.insert(0, "pilot larger".into());
+                    }
+                }
+                Some(family) => {
+                    fonts.families.insert(
+                        egui::FontFamily::Name(family.into()),
+                        vec!["pilot larger".into()],
+                    );
+                }
+            }
+            h.ctx.set_fonts(fonts.clone());
+            h.state_mut().family = family;
+            let (first, next) = one_pass(&mut h);
+            let mut fresh = harness_sized(panes(false), 1200.0);
+            fresh.ctx.set_fonts(fonts);
+            fresh.run_steps(2);
+            fresh.state_mut().family = family;
+            fresh.run_steps(6);
+            let settled = shown(&fresh);
+            assert!(
+                same(&first, &settled) && settled != shown(&harness_sized(panes(false), 1200.0)),
+                "{family:?}: the first frame with the new fonts is where a fresh pane settles, \
+                 and the fonts change it: {first:?}, settled {settled:?}"
+            );
+            assert!(
+                same(&next, &first),
+                "{family:?}: and the next moves nothing: {next:?}"
             );
         }
 

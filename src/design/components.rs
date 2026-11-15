@@ -8009,7 +8009,9 @@ mod tests {
         let shown = Rc::new(Cell::new(0_usize));
         let pressed = Rc::new(Cell::new(None::<usize>));
         let tall = Rc::new(Cell::new(false));
+        let row_pressed = Rc::new(Cell::new(None::<usize>));
         let (shown_in, pressed_in, tall_in) = (shown.clone(), pressed.clone(), tall.clone());
+        let row_in = row_pressed.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(960.0, 640.0))
             .build_ui(move |ui| {
@@ -8029,7 +8031,18 @@ mod tests {
                                 }
                             }
                             if tall_in.get() {
-                                rows(ui, 60);
+                                // Registered rows, each a button over two lines (review of PR
+                                // 456, P2: the footer's new edge cuts a row below its button).
+                                for line in 0..60 {
+                                    let row = ui.vertical(|ui| {
+                                        if ui.button(format!("Row {line}")).clicked() {
+                                            row_in.set(Some(line));
+                                        }
+                                        ui.label(format!("Line {line}"));
+                                        ui.label("Detail");
+                                    });
+                                    super::register_row(ui, row.response.rect);
+                                }
                             }
                             shown_in.get()
                         },
@@ -8130,8 +8143,10 @@ mod tests {
             }
         };
         let mut press_checked = false;
-        for is_tall in [false, true] {
+        let mut gap_checked = false;
+        for (is_tall, probe_gap) in [(false, false), (true, false), (true, true)] {
             tall.set(is_tall);
+            row_pressed.set(None);
             shown.set(0);
             harness.event(egui::Event::PointerGone);
             harness.run_steps(6);
@@ -8190,7 +8205,40 @@ mod tests {
                 // frame the first choice's accessible bounds are where it is painted, and a press
                 // there, decided on that frame's targets, reaches it.
                 let mut press_first = false;
-                if is_tall && count == 3 {
+                // Review of PR 456 (re-review, P2): the body's new edge holds for presses and for
+                // a screen reader as for the paint. In the act's frame every row button below the
+                // body's lowest painted line is hidden from a screen reader, and a press on one
+                // that lies above the footer (between the cut row's top and the body's new edge)
+                // reaches nothing in the next frame.
+                if is_tall && count == 3 && probe_gap {
+                    use egui_kittest::kittest::NodeT;
+                    let footer = first.0.expect("the footer");
+                    let hidden: Vec<(Rect, bool)> =
+                        egui_kittest::kittest::Queryable::query_all_by_role(
+                            &harness,
+                            egui::accesskit::Role::Button,
+                        )
+                        .filter(|node| {
+                            node.accesskit_node()
+                                .label()
+                                .is_some_and(|label| label.starts_with("Row "))
+                        })
+                        .filter(|node| node.rect().top() >= first.2 - 0.5)
+                        .map(|node| (node.rect(), node.accesskit_node().is_hidden()))
+                        .collect();
+                    let gap = hidden
+                        .iter()
+                        .map(|(rect, _)| *rect)
+                        .find(|rect| rect.bottom() <= footer.top() - 0.5);
+                    assert!(
+                        hidden.iter().all(|(_, is_hidden)| *is_hidden) && gap.is_some(),
+                        "pane_then: in the act's frame each row button below the lowest painted line {} is hidden, one of them above the footer {footer:?}: {hidden:?}",
+                        first.2
+                    );
+                    click(&mut harness, gap.expect("a button in the gap").center());
+                    gap_checked = true;
+                }
+                if is_tall && count == 3 && !probe_gap {
                     let bounds =
                         egui_kittest::kittest::Queryable::query_by_label(&harness, PRESS_WORDS[0])
                             .expect("the first choice")
@@ -8208,9 +8256,12 @@ mod tests {
                 harness.step();
                 let next = view(&harness, count);
                 assert!(
-                    same(&first, &next) && pressed.get() == press_first.then_some(0),
-                    "pane_then (tall {is_tall}): the frame after {press} moves nothing ({first:?} then {next:?}), and a press on the first choice where it is painted reaches it: {:?}",
-                    pressed.get()
+                    same(&first, &next)
+                        && pressed.get() == press_first.then_some(0)
+                        && row_pressed.get().is_none(),
+                    "pane_then (tall {is_tall}): the frame after {press} moves nothing ({first:?} then {next:?}), a press on the first choice where it is painted reaches it, and one in the body's hidden gap reaches no row: {:?}, row {:?}",
+                    pressed.get(),
+                    row_pressed.get()
                 );
                 if press_first {
                     pressed.set(None);
@@ -8221,6 +8272,7 @@ mod tests {
             }
         }
         assert!(press_checked, "pane_then: the press check ran");
+        assert!(gap_checked, "pane_then: the gap check ran");
         // With reruns allowed again, an unchanged frame draws the footer in one pass: a footer
         // whose messages come after the body keeps its measured room and words.
         harness
