@@ -7980,6 +7980,66 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             d.has("Write the manifest again"),
         ),
     );
+    // Round 30 B11 F4 / Astra F8 (lane B2b): Save on the draft of a manifest known to be gone
+    // writes it as a new file (never over one): the manifest holds the DM's line, `Saved`
+    // shows and the missing-manifest warning ends. On main before B2b, Save compared the draft
+    // with an empty text that no file held and left the pane silently in a deleted-file view.
+    let saved = d.visible_text("Saved");
+    d.observe(
+        "s30-B2b-gone-manifest-save-writes",
+        fs::read_to_string(&path).is_ok_and(|text| text.contains("Kept by the DM."))
+            && saved
+            && !after.1,
+        format!(
+            "Ctrl+S writes Package.md from the draft (files with the line {holding:?}), Saved shows ({saved}), the warning ends ({})",
+            !after.1
+        ),
+    );
+    // A file that comes back at the manifest's path before Save keeps the outside-change
+    // guard: Save does not write over it, and the draft stays.
+    let _ = fs::remove_file(&path);
+    d.focus_window(false);
+    d.focus_window(true);
+    // On the old code the first Save left the pane in a deleted-file view, so the warning may
+    // not come back: that is reported here, not as a timeout that hides the checks above.
+    let mut back = false;
+    for _ in 0..20 {
+        back = d.has_containing("The package manifest was deleted");
+        if back {
+            break;
+        }
+        d.settle();
+    }
+    if back {
+        d.click("Edit Markdown");
+        d.settle();
+        d.replace_text_in(
+            "Markdown editor",
+            &format!("{}\nKept by the DM again.\n", valid.trim_end()),
+        );
+        d.settle();
+        let outside = "Someone else's notes.\n";
+        fs::write(&path, outside).unwrap();
+        d.press_ctrl(egui::Key::S);
+        d.settle();
+        let kept = d.app_mut().library.dirty();
+        d.observe(
+            "s30-B2b-gone-manifest-reappears",
+            fs::read_to_string(&path).is_ok_and(|text| text == outside)
+                && kept
+                && !d.visible_text("Saved"),
+            format!(
+                "A file that came back keeps its bytes and the draft stays (draft kept {kept})"
+            ),
+        );
+    } else {
+        d.observe(
+            "s30-B2b-gone-manifest-reappears",
+            false,
+            "The missing-manifest warning did not come back after the manifest was deleted again",
+        );
+    }
+    fs::write(&path, &valid).unwrap();
 }
 
 pub fn package_file_changed(d: &mut Driver<'_>) {
