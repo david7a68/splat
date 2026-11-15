@@ -235,15 +235,19 @@ pub fn run(d: &mut Driver<'_>) {
     // FB2 (replaces V7's word that gave way): beside Lookup at 960x640 Mill Road's detail
     // gives way on its row and its difficulty stays; the row's hover keeps the whole detail.
     // The row is found by the start of its detail, which stays painted where the rest is cut.
-    const HIGH_START: &str = "5 party";
+    // Q-s (iter-29 G120): `5 party` and then the XP number give way before the creatures, so
+    // the row starts with its leading creature where it gave way; the word stays.
+    const HIGH_START: &str = "1 × Cinder Tyrant";
     let (line, hover) = d.act_at_size(SMALL, |d| {
-        let line = plan_summary_line(d, HIGH_START).filter(|line| line.contains("XP 6,300"));
-        let hover = d.painted_tooltip_shows("XP 6,300", HIGH_SUMMARY);
+        let line = plan_summary_line(d, HIGH_START)
+            .or_else(|| plan_summary_line(d, "5 party · 1 × Cinder Tyrant"))
+            .filter(|line| line.contains(" · High"));
+        let hover = d.painted_tooltip_shows(HIGH_START, HIGH_SUMMARY);
         (line, hover)
     });
-    let kept = line
-        .as_deref()
-        .is_some_and(|line| line.ends_with(HIGH_FORM) || line.ends_with(HIGH_SHORT));
+    let kept = line.as_deref().is_some_and(|line| {
+        line.ends_with(HIGH_FORM) || line.ends_with(HIGH_SHORT) || line.ends_with(" · High")
+    });
     d.observe(
         "iter-27-B-FB2-ready",
         kept && hover,
