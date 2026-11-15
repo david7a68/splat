@@ -29,8 +29,16 @@ New `compile_fail` proofs: a `Projection` made by hand; a ticket read from a pro
 `present` kept in app state (the existing proof, repeated for this path). Each has its compiling twin.
 
 In this PR the `KeptLine` still goes to the unchanged `Messages` footer, which needs owned data: `present`
-copies the retained words into the line each frame. That copy is as large as the shown lines, not the
-content (the event list, the notes); it is counted (`handed` bytes) and named as PR 2b's to remove.
+copies the retained message into the line each frame, and `Messages::kept_at` copies its words again.
+**The cost of an unchanged frame is therefore O(all handed message bytes)**: every word of each presented
+line, also clauses the footer does not show (a long rest that names N fights keeping their HP hands all N
+sentences). It does not grow with the event list or the notes. It is counted (`handed` bytes) and is PR
+2b's to remove. Everything else on an unchanged frame is constant and counted (`visits`): `refresh`
+compares three values; `present` finds its entry by the place kept with the line (valid while the
+revision stands), not by a search; `expire` keeps the oldest act for the store's revision and visits no
+entry before the next end (at an end it visits each entry once). `set_locks` visits every entry, so an
+owner calls it when the lock's source changed, not each frame (no first owner has a lock). Other legacy
+footer work of these panes (other results, the removal line) is outside this claim.
 
 ## 2. Owner revisions
 
@@ -40,8 +48,8 @@ revision also names its store. It advances only when what a projection reads cha
 
 | Event | Calls | Advances when |
 |---|---|---|
-| Store mutation | `record`; `undo`, `undo_by`, `use_press`, `use_press_by` | always (an entry came or left) |
-| Refusal change | `undo_or_refuse` (`Err` sets a refusal, `Ok` removes), `end_refusals` | a refusal was set or ended |
+| Store mutation | `record`, `record_timed`; `undo`, `undo_by`, `use_press`, `use_press_by` | an entry came or left (a failed plain Undo is no change) |
+| Refusal change | `undo_or_refuse` (`Err` sets a refusal; `Ok` removes the entry, refused or not), `end_refusals` | a refusal was set or ended, or the entry left |
 | Lock change | new `set_locks(|value| -> Option<Sentence>)`, per entry | an entry's lock differs |
 | End events | `owner_changed`, `disk_changed`, `end_unreachable` | an entry left |
 | In-place change | `source_changed`, `revise_by`, `revise`, `revise_where`, `reconcile` | they hand out `&mut T` and cannot see a change, so: they reached an entry. Their docs already say "at the change, never each frame". |
@@ -50,8 +58,10 @@ revision also names its store. It advances only when what a projection reads cha
 Reads (`get`, `newest_first`, `present`) never advance it. A ticket's order is not the content revision:
 a refusal or a lock changes the words with the same ticket.
 
-**Expiry.** `Kept` gets `const LIFE: Option<Duration> = None`; a timed kind sets it. `record` stores the
-entry's end on the frame clock (`frame_clock::now() + life`: the act's time, not a key). The owner calls
+**Expiry.** `Kept` gets `const LIFE: Option<Duration> = None`; a timed kind sets it, and must be recorded
+with `record_timed(value, ctx)` (`record` of a timed kind, and `record_timed` of an untimed one, do not
+compile). It stores the act's time on the frame clock (not a key) and arms the end at once, so a result
+recorded after the owner's update in the same frame still ends with no input. The owner calls
 `expire(ctx)` in its update, before any projection lookup. It ends each entry whose end passed, advances
 the revision only when one ended, and asks egui for a repaint at the soonest remaining end
 (`request_repaint_after(remaining)`), so the line ends with no input. No key holds `now()` or a frame
@@ -63,8 +73,12 @@ drawn. Result life is frame-clock seconds only; reveal's frame-number bounds are
 
 A projection carries `Bound { revision, key: O, inputs: I }`: the store revision it was made from, the
 owner key it shows, and `I: memo::Key`, the owner's other revisions that its words read (for both Add
-results, `Book::revision()`). `present` compares all three with the store's revision and the key and
-inputs the caller gives now. Any mismatch is `Err(Mismatch::{Revision, Key, Inputs})`: no line, no ticket.
+results, `Book::revision()` and `Encounters::saved_runs_revision()`). `present` compares all three with
+the store's revision and the key and inputs the caller gives now. The key is compared as the store
+compares owners: scope and `O::eq` (an owner whose `PartialEq` compares an id only cannot pass B's key for
+A's line). A store made by `new` or `Default` gets a revision of its own. The types cannot prove that
+the caller gives the live key and the live input revisions: the caller passes the values it read this
+frame (the owner's own `book.revision()`, `plan.saved_runs_revision`). Any mismatch is `Err(Mismatch::{Revision, Key, Inputs})`: no line, no ticket.
 It is not drawn and not silently rebuilt in the paint; the owner's next `refresh` rebuilds it. An entry
 that the projection names but the store lacks while the revision matches is an internal fault (debug
 assertion, rejected). For fields (PR 3 and PR 10), the same `Bound` binds a field buffer to its owner,
@@ -74,9 +88,19 @@ field key and revision; this PR uses it for result lines only.
 
 | Owner | State after this PR | Life | Expiry and end events run in | Projection key |
 |---|---|---|---|---|
-| Timeline Add | `Results<TimelineFile, JustAdded>` (its `at` goes) | `LIFE` 30 s | top of `Timeline::show`, before any footer: `expire`; another selection ends it (`owner_changed`) | (store revision, `book.revision()`) |
-| Session plan Add | `Option<Added>` with its own `ResultOrder::issue` and staged `outcome_at` becomes `Results<OfSession, PlanAdded>` | `LIFE` 30 s | `Sessions::expire_timed(ctx, book)`, from `poll`: `expire`, then the events check (count, label) only when `book.revision()` changed | (store revision, `book.revision()`) |
-| Recording words | `saved_at` and `Recorder::heard_at` | 8 s, 5 s | `Sessions::expire_timed` and `Recorder::expire`: the stored facts change; repaint at the remaining time | `Sessions::recording_revision()` (a `Revised` of the two timed facts) |
+| Timeline Add | `Results<TimelineFile, JustAdded>` (its `at` goes) | `LIFE` 30 s | `settle_added`, at the top of `Timeline::show`, before any footer: `expire`; when `book.revision()` changed, an Add whose event is gone ends (`disk_changed`, now `Checked`: a reload, a file event, an edit); another selection ends it at the press (`select`, used by every writer) and again in the update | (store revision, (`book.revision()`, saved-run facts)) |
+| Session plan Add | `Option<Added>` with its own `ResultOrder::issue` and staged `outcome_at` becomes `Results<OfSession, PlanAdded>` | `LIFE` 30 s | `Sessions::settle_timed(ctx, book)`, at the end of `poll`, after `book.poll`: `expire`, then the events check (count, label) only when `book.revision()` changed; select, a ruling, a note insert end it (`end_plan_add`) | (store revision, (`book.revision()`, saved-run facts)) |
+| Recording words | `saved_at` and the recorder's `hearing` | 8 s, 5 s | `Sessions::settle_words` (from `settle_timed`, and from the stop, which arms the end) and `Recorder::expire`, each frame, outside `poll`'s wall-clock pause | `recording_revision()` (a `Revised` of the two words); read only by tests until a retained reader exists |
+
+**Unreadable or moved book (Timeline Add).** An unreadable book keeps the events it had, so its Add
+stands until its life ends; the page then shows the problem in place of the list and its footer. A book of
+another file is another owner key, so its Add shows no more and ends by its life.
+
+**Saved-run facts (F1 of the early review).** `Encounters` notes, at the end of each `poll`, the facts
+that `fights_that_keep_hp` reads: which read of the run list it is (a revision that `take_run_list`
+advances: a reload, a deleted or restored run) and the open run's id and whether it is running. Their
+revision is the second input of both Add keys (`Plan::saved_runs_revision`, `TimelinePage::set_saved_runs`).
+The work is constant per frame (a revision and the open run's timeline fact), never the run list.
 
 Footer construction (`list_messages`, `plan_messages`) keeps only `refresh` (a revision compare on an
 unchanged frame) and `present`. The per-frame `day_numbers`, event searches, `fights_that_keep_hp` and the
@@ -86,23 +110,35 @@ Add loses one staged `ResultOrder::issue` and one `outcome_at` (their `STAGED_AL
 
 ## 5. Proof
 
-- Extend the store's ticket tests: A, unrelated B, Undo A: B's projection still presents with B's words;
-  A's is rejected. Record A again: A's old projection is rejected before it can act. Refusal and lock
-  each change the revision and the rebuilt words. B's projection with A's key: `Mismatch::Key`.
+- Extend the store's ticket tests (one store revision, two stages): projections of A and B; Undo A; both
+  old projections are refused (`Mismatch::Revision`); after the owner refreshes, A has no line and B
+  presents its unchanged words with a ticket equal to B's. Record A again: A's first projection and its
+  ticket stay unusable. Refusal and lock each change the revision and the rebuilt words; a failed plain
+  Undo and an unchanged lock do not. With the `ById` owner and both entries recorded first, A's
+  projection with B's equal-id key: `Mismatch::Key`; a projection of a `Default` store: `Revision`.
 - Extend `the_add_result_ends_by_the_frame_clock` (Timeline) and the plan's 29 s / 31 s test: an
   unchanged pane across the end with no input; in one frame the words, `Undo add` and the footer's
   height change together; the repaint delay asked before it equals the remaining time.
 - Extend the recording word test (7.5 s / 8.5 s) and `hearing_ends_by_the_frame_clock` the same way.
 - Work counter (`test_support::CachedWork`): projection builds counted inside `refresh` in entries and
   word bytes. Unchanged frames and a resize: zero; an edit of the book: a rebuild.
-- Mutants, each red at its own assertion: no revision at expiry; no revision at a refusal; B's binding
-  with A's key accepted; `refresh` rebuilding every frame.
+- Extend the plan long-rest test: a deleted saved run (book revision fixed) removes the HP clause in the
+  next frame while the rest's result and Undo stay; Undo of the deletion brings it back.
+- Extend the Timeline test: a saved A, an unrelated B, and a reload without A: no A result or Undo on the
+  first frame, B unchanged; an edit on disk that keeps A is the control.
+- A timed store with 200 hidden entries and a long message: unchanged frames build nothing and visit no
+  entry; the handed bytes are the shown line's words per frame; the end visits each entry once.
+- Mutants, each red: no revision at expiry; no revision at a refusal; B's key accepted; the scope not
+  compared; `refresh` rebuilding every frame; `expire` scanning every frame; the plan's key without the
+  saved-run facts; Timeline without the lost-event check; the recording words not settled.
+- A source scan counts the frame clock's reads (`frame_clock`): only where a timer starts or ends.
 
-## 6. Limits and questions
+## 6. Limits
 
-- Saved runs have no revision. The plan and Timeline Add words name the fights that keep their HP
-  (`fights_that_keep_hp`); they are re-derived when the store or the book changes, not when only a saved
-  run changes in the 30 s. Today they are re-derived each frame. The fix is a revision of the
-  encounters' saved runs (outside this lane's files). Question for the review: is this limit accepted?
+- The saved-run facts are noted at the end of `Encounters::poll`. A run list read at the end of a frame
+  (`route`) is seen at the next frame's poll, before that frame's pages draw; the same frame drew before
+  the read.
 - The plan's Add words fix the session's name at the act, as the event's label already is.
+- A frame-bound line ends the store's borrow; the types do not stop the pane's body from changing the
+  store between `present` and the footer's paint (as today). The truth claim is for the frame's start.
 - Every other result owner keeps the frame-bound path; the footer renderer is PR 2b.
