@@ -8149,16 +8149,14 @@ pub mod run_sync_conflict {
         };
         for size in [SMALL, DEFAULT] {
             let (conflict, review, undo, reminders) = d.at_size(size, line);
-            // The reminders, when they show at all, are in the room between Review and Undo.
-            let clear = conflict
-                .zip(review)
-                .zip(undo)
-                .is_some_and(|((conflict, review), undo)| {
-                    // X69: the conflict's name ends `S` before `Review`.
-                    conflict.right() + crate::design::S <= review.left() + 1.0
-                        && review.right() < undo.left()
+            // The reminders, when they show at all, are in the room between the conflict and
+            // Undo. Q-j (iter-29 G134, FP2): the conflict's words are its one review link, so
+            // no `Review` link follows them.
+            let clear = review.is_none()
+                && conflict.zip(undo).is_some_and(|(conflict, undo)| {
+                    conflict.right() < undo.left()
                         && reminders.is_none_or(|place| {
-                            place.left() > review.right() && place.right() < undo.left()
+                            place.left() > conflict.right() && place.right() < undo.left()
                         })
                 });
             d.observe(
@@ -8411,6 +8409,25 @@ pub mod party_from_run {
         d.click(SHEET_PAGE);
         d.wait_for_text("This row moves. The current turn stays.");
         d.state("correct-tab", Sizes::Default);
+        // iter-29 G127 (FJ8): the note already added has its own label between the reason and
+        // the note, so it does not read as the reason's second sentence.
+        let place = |d: &Driver<'_>, wanted: &str| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == wanted)
+                .map(|node| node.rect)
+        };
+        let order = (
+            place(d, "Type a note first."),
+            place(d, "Notes so far"),
+            place(d, "Holding the bridge."),
+        );
+        d.observe(
+            "iter-29-R1-G127",
+            matches!(order, (Some(reason), Some(label), Some(note))
+                if reason.bottom() <= label.top() && label.bottom() <= note.top()),
+            format!("Reason, label and saved note in that order: {order:?}"),
+        );
         // FI3, FJ2: every reason sits on its own line below its field, at the field's left, and
         // the note field takes the form's width up to Add note.
         let correct = |d: &Driver<'_>| {
@@ -9614,14 +9631,15 @@ pub mod run_edge_states {
         d.type_into(OTHER_EFFECT, LONG_EFFECT);
         d.click(ADD_EFFECT);
         // iter-27-R FK4: the Undo names its verb, so the DM can tell an add from a removal.
-        d.expect(&format!("Undo: add {LONG_EFFECT} on {TARGET}"));
+        // iter-29 G22 (FK11): an effect's Undo has one form, `add effect <words>`.
+        d.expect(&format!("Undo: add effect {LONG_EFFECT} on {TARGET}"));
         d.observe(
             "iter-27-R-FK4",
             !d.has(&format!("Undo: {LONG_EFFECT} on {TARGET}")),
             "The added words' Undo starts with its verb",
         );
         d.state_prepared("long-effect-text", Sizes::All, |d| {
-            undo_keeps_its_word(d, &format!("Undo: add {LONG_EFFECT} on {TARGET}"));
+            undo_keeps_its_word(d, &format!("Undo: add effect {LONG_EFFECT} on {TARGET}"));
         });
         d.observe(
             "Long effects",
@@ -9763,6 +9781,40 @@ pub mod run_edge_states {
         d.state_prepared("changed-on-disk", Sizes::Default, |d| {
             conflict_choices_read_height(d, "iter-15-B2-density-run", SAVE_AS_NEW, KEEP_RUN);
         });
+        // iter-29 G131 (R25, FK2): the notice cannot be dismissed. It keeps its lines and its
+        // choices, the roster's scroll body ends above it at a whole row (FI2 above: no row
+        // moved), and every roster row is reached by scrolling: at 1200, Ember Cultist, the row
+        // behind the notice, is not wholly in view before and comes wholly into view with the
+        // wheel (Astra, PR 371: a partly visible row or a missing scroll must not pass).
+        let shown = |d: &Driver<'_>| {
+            d.nodes().into_iter().any(|node| {
+                node.name.starts_with("Ember Cultist, ")
+                    && node.name.contains(", HP ")
+                    && node.fully_in_view()
+            })
+        };
+        // A proof that ends where it started (scrolled back): no step of the DM's task.
+        let (hidden, reached) = d.aside(|d| {
+            d.act_at_size(DEFAULT, |d| {
+                let hidden = !shown(d);
+                let top = roster_places(d).first().map(|(_, rect)| rect.center());
+                if let Some(at) = top {
+                    d.scroll_at(at, 3);
+                }
+                let reached = shown(d);
+                if let Some(at) = top {
+                    d.scroll_up_at(at, 3);
+                }
+                (hidden, reached)
+            })
+        });
+        d.observe(
+            "iter-29-R1-G131",
+            hidden && reached,
+            format!(
+                "Not wholly in view before scrolling {hidden}; wholly in view after scrolling {reached}"
+            ),
+        );
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
         d.observe(
@@ -10082,9 +10134,11 @@ pub mod run_sync_states {
         );
         // iter-28-R FL4: the pending block says what waits, that Splat tries again, and how to
         // close now; the conflict block beside it keeps `Choose which values to keep`.
+        // iter-29 G178 (AL2, FL2, SL3): it names the change that waits, in the HP form of the
+        // conflict's buttons: `Its change to 49/62 HP has not reached D&D Beyond yet.`
         let pending = d.nodes().into_iter().find(|node| {
-            node.name
-                .contains("changes have not reached D&D Beyond yet")
+            node.name.starts_with("Its change to ")
+                && node.name.contains(" HP has not reached D&D Beyond yet")
         });
         d.observe(
             "iter-28-R-FL4",
@@ -11451,7 +11505,8 @@ pub mod signed_in {
         // iter11-B2: only a step the sheet made gives up `D&D Beyond`. A DM's own effect with
         // those words keeps them, or Undo shows its word alone.
         const DM_EFFECT: &str = "D&D Beyond boon";
-        let dm_undo = format!("Undo: add {DM_EFFECT} on {MEMBER}");
+        // iter-29 G22 (FK11): an effect's Undo has one form, `add effect <words>`.
+        let dm_undo = format!("Undo: add effect {DM_EFFECT} on {MEMBER}");
         d.click(CONDITIONS);
         d.type_into("Other effect", DM_EFFECT);
         d.click("Add");
@@ -11547,6 +11602,17 @@ pub mod signed_in {
         d.click(CLOSE_RUN);
         d.app_mut().encounters.simulate_sync_conflict(OTHER);
         d.settle();
+        // iter-29 G44 (FO2): this is the close dialog's second opening in this view. It gives
+        // Keep running the default focus again, as the first did.
+        d.observe(
+            "iter-29-R1-G44",
+            d.focused_name().as_deref() == Some("Keep running"),
+            format!(
+                "The second opening focuses Keep running: {:?} (focus id {:?})",
+                d.focused_name(),
+                d.focus_id()
+            ),
+        );
         for size in [SMALL, DEFAULT, LARGE] {
             let pair = d.at_size(size, |d| {
                 let connect = line_and_action_below(d, CHOOSE, "Connect to sync");
@@ -11604,7 +11670,22 @@ pub mod signed_in {
             blocked_words(d),
             "Signed out, a blocked Close now is not offered in the words, and its reason shows",
         );
-        d.state("close-with-conflict-signed-out", Sizes::Default);
+        // iter-29 G44 (FO2), the reviewer's witness. The dialog above is this view's second
+        // opening (the first was `close-with-unsent-changes`); with the conflict, Close run is
+        // locked, so the DM cannot open it a third time here. At EACH size, after the resize and
+        // before the image is saved, Keep running holds the focus, so the still shows its ring.
+        d.state_prepared("close-with-conflict-signed-out", Sizes::All, |d| {
+            d.settle();
+            let focused = d.focused_name();
+            d.observe(
+                "iter-29-R1-G44-witness",
+                focused.as_deref() == Some("Keep running"),
+                format!(
+                    "The second opening, after the resize: focus on {focused:?} (id {:?})",
+                    d.focus_id()
+                ),
+            );
+        });
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
         d.observe(
@@ -14255,7 +14336,12 @@ pub mod session_notes {
             .encounters
             .simulate_sync_conflict("Iselle Marrowind");
         d.settle();
-        d.click("Review");
+        // Q-j (iter-29 G134): the conflict's words are its review link.
+        if d.has("Sync conflict: Iselle Marrowind") {
+            d.click("Sync conflict: Iselle Marrowind");
+        } else {
+            d.click("Conflict: Iselle Marrowind");
+        }
         d.observe(
             "T11.8",
             !d.has("Close notes"),

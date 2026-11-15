@@ -215,7 +215,7 @@ const HOVERS: &[(&str, &str, Target, &str)] = &[
     (
         "run-ended: played before",
         "reason",
-        Words("A later fight or rest was played"),
+        Words("a later fight or rest was played"),
         "F8: the reason a fight cannot go on; a narrow place may shorten it to a hover",
     ),
     (
