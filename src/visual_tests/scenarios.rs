@@ -15072,7 +15072,7 @@ pub mod session_recording {
     const TITLE: &str = "The Bridge";
     const RECORDING: &str = "19:00";
     const WARNING: &str = "The check returned nothing, so the clean transcript was not checked.";
-    const "Discard": &str = "Discard";
+    const DISCARD: &str = "Discard";
 
     /// FT2: one `L` gap between the recording's result links and its marked events heading.
     fn check_events_gap(d: &mut Driver<'_>, id: &str) {
@@ -17528,12 +17528,12 @@ pub mod session_recording {
                     .place_of("Save my draft as a new file")
                     .expect("New-file recovery is present");
                 let drop = d
-                    .place_of("Discard")
+                    .place_of(DISCARD)
                     .expect("Destructive recovery is present");
                 assert!(
                     d.in_view("Save my draft to Renamed in Obsidian.md")
                         && d.in_view("Save my draft as a new file")
-                        && d.in_view("Discard")
+                        && d.in_view(DISCARD)
                 );
                 if size == SMALL {
                     (drop.top() - new.top()).abs() <= 1.0
@@ -17563,9 +17563,9 @@ pub mod session_recording {
             &[
                 "Save my draft to Renamed in Obsidian.md",
                 "Save my draft as a new file",
-                "Discard",
+                DISCARD,
             ],
-            Some("Discard"),
+            Some(DISCARD),
             &[SMALL, DEFAULT, LARGE],
         );
         // Round 26 FM5: one fault, one tone. The moved note's banner is a warning, so the header
@@ -17603,7 +17603,7 @@ pub mod session_recording {
         let old_path = snapshot.path.clone();
         let moved_path = snapshot.moved_to.clone().expect("the note was found renamed");
         let moved_before = std::fs::read_to_string(&moved_path).unwrap();
-        d.click("Discard");
+        d.click(DISCARD);
         // The folder scan, which follows the renamed file every few seconds, keeps the Undo.
         d.app_mut().sessions.simulate_folder_scan();
         d.settle();
@@ -21961,22 +21961,22 @@ pub mod session_plan_groups {
         // Ash Pack, add a scene, Undo the discard, discard Ash Pack again: the newer discard is
         // now above the scene. Then both are undone, so the group is as it was.
         d.aside(|d| {
-            const UNDO_"Discard": &str = "Undo discard of Ash Pack";
+            const UNDO_DISCARD: &str = "Undo discard of Ash Pack";
             let top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
             d.click("Discard");
-            d.expect(UNDO_"Discard");
+            d.expect(UNDO_DISCARD);
             d.click("More Add actions");
             d.click("Add Scene");
             d.type_text("Watch the ford");
             d.press(Key::Enter);
             d.expect("Scene added to tonight.");
             d.press(Key::Escape);
-            let first = (top(d, "Undo add scene"), top(d, UNDO_"Discard"));
-            d.click(UNDO_"Discard");
+            let first = (top(d, "Undo add scene"), top(d, UNDO_DISCARD));
+            d.click(UNDO_DISCARD);
             d.expect("Back to the plan");
             d.click("Discard");
-            d.expect(UNDO_"Discard");
-            let second = (top(d, "Undo add scene"), top(d, UNDO_"Discard"));
+            d.expect(UNDO_DISCARD);
+            let second = (top(d, "Undo add scene"), top(d, UNDO_DISCARD));
             d.observe(
                 "review-274-order-repeat",
                 first.0.zip(first.1).is_some_and(|(scene, discard)| scene < discard)
@@ -21986,7 +21986,7 @@ pub mod session_plan_groups {
                 ),
             );
             d.click("Undo add scene");
-            d.click(UNDO_"Discard");
+            d.click(UNDO_DISCARD);
             d.expect("Back to the plan");
         });
         // AK1: the empty group's reason has a reserved place, so adding the first creature moves
