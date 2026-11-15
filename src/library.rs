@@ -2632,7 +2632,7 @@ struct ResultPress {
 }
 
 impl ReaderResults {
-    /// The Undo step of the kept result `kind`, when it has one drawn by `kept_result`: the one
+    /// The Undo step of the kept result `kind`, when the staged adapter draws it: the one
     /// place that makes it, for its drawing and for its footer's count.
     fn undo_step(&self, kind: ResultKind) -> Option<UndoStep> {
         match kind {
