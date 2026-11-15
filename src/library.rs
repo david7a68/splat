@@ -5050,16 +5050,19 @@ impl Library {
         }
         self.stale = true;
     }
+    /// The open entry's file, whole (owner kind, owner id, path): what a reload selects again.
+    fn open_file_id(&self) -> Option<FileId> {
+        self.loaded
+            .as_ref()
+            .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
+            .map(|n| (n.owner.key(), n.path.clone()))
+    }
     fn invalidate(&mut self) {
         self.matches = None;
         self.scope_counts = None;
     }
     fn start_load(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
-        self.reselect = self
-            .loaded
-            .as_ref()
-            .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .map(|n| (n.owner.key(), n.path.clone()));
+        self.reselect = self.open_file_id();
         self.load_key = Some(load_key(campaigns));
         let modules = campaigns.modules().to_vec();
         let campaign = campaigns.active_campaign();
@@ -13457,15 +13460,9 @@ mod tests {
         ]
     }
 
-    #[test]
-    fn heading_and_stat_undos_belong_to_their_whole_file() {
-        // M-L0.4a, proof 4: a fix's Undo shows and acts only on its own file (owner kind, owner
-        // id and path). B gets A's exact fixed text, so only one owner check stands between B and
-        // A's Undo: B1 the kind (same UUID), B2 the owner id (same path). Main's lifecycle stays:
-        // the Undo is not ended by a selection, and comes back on A.
-        let temp = tempfile::tempdir().unwrap();
-        // A creature whose first heading is not its name, and whose Hit Points line is not its
-        // stat block's: the two fixes, through their real writers.
+    /// M-L0.4a, proof 4: a creature whose first heading is not its name, and whose Hit Points
+    /// line is not its stat block's, for the two real fixes; and its file A.
+    fn fix_fixture() -> (String, Entry, FileId, Uuid) {
         let text = format!(
             "{}\n**Hit Points** 45\n",
             note_text("Guard", "creature", None)
@@ -13474,30 +13471,57 @@ mod tests {
         );
         let entry = Entry::parse("Rules/X.md", &text).unwrap();
         let shared = Uuid::new_v4();
-        let open = |library: &mut Library, at: usize| {
-            library.open_entry(at);
-            assert_eq!(library.selected, Some(at), "fixture: entry {at} opens");
-            let note = &library.loaded.as_ref().unwrap().notes[at];
-            (note.owner.key(), note.path.clone())
-        };
-        let library_with = |notes_text: &str| Library {
+        (
+            text,
+            entry,
+            (OwnerKey::Package(shared), "Rules/X.md".into()),
+            shared,
+        )
+    }
+
+    /// The entry at `at` opens; its file, whole.
+    fn open_file(library: &mut Library, at: usize) -> FileId {
+        library.open_entry(at);
+        assert_eq!(library.selected, Some(at), "fixture: entry {at} opens");
+        let note = &library.loaded.as_ref().unwrap().notes[at];
+        (note.owner.key(), note.path.clone())
+    }
+
+    /// The three same-path files of `same_path_notes`, each holding `text`, with `kept`.
+    fn same_path_library(text: &str, shared: Uuid, root: &Path, kept: LibraryKept) -> Library {
+        Library {
             loaded: Some(Loaded {
-                notes: same_path_notes(notes_text, shared, temp.path()),
+                notes: same_path_notes(text, shared, root),
                 ..Default::default()
             }),
+            kept,
             ..Default::default()
-        };
+        }
+    }
 
-        // The heading fix: A's Undo, and B1 and B2 holding A's exact `after` text.
-        let a: FileId = (OwnerKey::Package(shared), "Rules/X.md".into());
-        let choice = HeadingChoice::new(Some(&entry), &text, None, &a);
-        let mut after = text.clone();
+    /// The B files of proof 4: B1 differs from A by its owner's kind only, B2 by its owner's id.
+    const OTHER_FILES: [(usize, &str); 2] =
+        [(1, "same UUID, other kind"), (2, "same path, other owner")];
+
+    #[test]
+    fn a_heading_fix_undo_belongs_to_its_whole_file() {
+        // M-L0.4a, proof 4: the heading fix's Undo shows and acts only on its own file (owner
+        // kind, owner id, path). B gets A's exact fixed text, so one owner check stands between B
+        // and A's Undo: B1 the kind, B2 the owner id. Main's lifecycle stays: a selection does not
+        // end it, and it comes back on A.
+        let temp = tempfile::tempdir().unwrap();
+        let (text, entry, a, shared) = fix_fixture();
         let mut kept = LibraryKept::default();
-        assert!(choice.apply((true, false), &a, &mut after, &mut kept));
-        let mut library = library_with(&after);
-        library.kept = kept;
+        let mut after = text.clone();
+        assert!(HeadingChoice::new(Some(&entry), &text, None, &a).apply(
+            (true, false),
+            &a,
+            &mut after,
+            &mut kept
+        ));
+        let mut library = same_path_library(&after, shared, temp.path(), kept);
         let after_entry = Entry::parse("Rules/X.md", &after).unwrap();
-        let heading_shows = |library: &Library, file: &FileId| {
+        let shows = |library: &Library, file: &FileId| {
             HeadingChoice::new(
                 Some(&after_entry),
                 &library.draft,
@@ -13507,29 +13531,37 @@ mod tests {
             .undo
             .is_some()
         };
-        let file = open(&mut library, 0);
+        let file = open_file(&mut library, 0);
         assert!(
-            heading_shows(&library, &file) && library.heading_undo_applies(&file),
+            shows(&library, &file) && library.heading_undo_applies(&file),
             "A's heading Undo shows and acts on A"
         );
-        for (at, case) in [(1, "same UUID, other kind"), (2, "same path, other owner")] {
-            let file = open(&mut library, at);
-            assert!(!heading_shows(&library, &file), "heading show: {case}");
+        for (at, case) in OTHER_FILES {
+            let file = open_file(&mut library, at);
+            assert!(!shows(&library, &file), "heading show: {case}");
+        }
+        for (at, case) in OTHER_FILES {
+            let file = open_file(&mut library, at);
             assert!(
                 !library.heading_undo_applies(&file),
                 "heading press: {case}"
             );
         }
-        let file = open(&mut library, 0);
+        let file = open_file(&mut library, 0);
         assert!(
-            heading_shows(&library, &file) && library.heading_undo_applies(&file),
+            shows(&library, &file) && library.heading_undo_applies(&file),
             "heading A → B → A: the Undo is back on A"
         );
+    }
 
-        // The stat fix, on its own.
+    #[test]
+    fn a_stat_fix_undo_belongs_to_its_whole_file() {
+        // M-L0.4a, proof 4: as for the heading fix, for the stat fix (its own slot).
+        let temp = tempfile::tempdir().unwrap();
+        let (text, entry, a, shared) = fix_fixture();
         let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
         let mut fixed = Library {
-            draft: text.clone(),
+            draft: text,
             ..Default::default()
         };
         Library::fix_stat(
@@ -13539,35 +13571,43 @@ mod tests {
                 &mut fixed.draft_revision,
                 &mut fixed.error,
             ),
-            a.clone(),
+            a,
             &entry,
             (key, label, value),
         );
-        let mut library = library_with(&fixed.draft);
-        library.kept = std::mem::take(&mut fixed.kept);
-        let file = open(&mut library, 0);
+        let kept = std::mem::take(&mut fixed.kept);
+        let mut library = same_path_library(&fixed.draft, shared, temp.path(), kept);
+        let file = open_file(&mut library, 0);
         assert!(
             library.stat_result_for(&file).is_some() && library.stat_undo_applies(&file),
             "A's stat Undo shows and acts on A"
         );
-        for (at, case) in [(1, "same UUID, other kind"), (2, "same path, other owner")] {
-            let file = open(&mut library, at);
+        for (at, case) in OTHER_FILES {
+            let file = open_file(&mut library, at);
             assert!(
                 library.stat_result_for(&file).is_none(),
                 "stat show: {case}"
             );
+        }
+        for (at, case) in OTHER_FILES {
+            let file = open_file(&mut library, at);
             assert!(!library.stat_undo_applies(&file), "stat press: {case}");
         }
-        let file = open(&mut library, 0);
+        let file = open_file(&mut library, 0);
         assert!(
-            library.stat_result_for(&file).is_some(),
+            library.stat_result_for(&file).is_some() && library.stat_undo_applies(&file),
             "stat A → B → A: the Undo is back on A"
         );
+    }
 
-        // Two slots: a stat fix, then a heading fix. With the draft back at each fix's text,
-        // that fix's Undo shows: one kind's fix never ends the other's.
+    #[test]
+    fn a_heading_fix_and_a_stat_fix_keep_their_own_slots() {
+        // M-L0.4a, proof 4: a stat fix, then a heading fix. With the draft back at each fix's
+        // text, that fix's Undo applies: one kind's fix never ends the other's.
+        let (text, entry, a, _) = fix_fixture();
+        let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
         let mut library = Library {
-            draft: text.clone(),
+            draft: text,
             ..Default::default()
         };
         Library::fix_stat(
@@ -13602,7 +13642,7 @@ mod tests {
         library.draft = heading_after;
         assert!(
             library.heading_undo_applies(&a),
-            "the stat fix before it kept nothing from the heading Undo"
+            "the heading Undo stands beside the stat Undo"
         );
     }
 
@@ -13722,10 +13762,10 @@ mod tests {
     }
 
     #[test]
-    fn back_and_a_reload_keep_a_campaign_file_apart_from_a_package_file() {
+    fn back_keeps_a_campaign_file_apart_from_a_package_file() {
         // M-L0.4a, proof 4: a package file and a campaign file with one UUID and one path (the
-        // package's loads first), and another file. Back, and the reselection after a reload,
-        // find the campaign's file, never the package's.
+        // package's loads first), and another file. Back finds the campaign's file, never the
+        // package's.
         let temp = tempfile::tempdir().unwrap();
         let shared = Uuid::new_v4();
         let text = note_text("Watch", "rule", None);
@@ -13745,9 +13785,29 @@ mod tests {
         library.open_entry(2);
         library.go(Step::Back);
         assert_eq!(library.selected, Some(1), "Back opens the campaign's file");
+    }
 
-        // The reload: `start_load` keeps the open file's identity, and the new notes come in.
-        library.reselect = Some((OwnerKey::Campaign(shared), "Rules/X.md".into()));
+    #[test]
+    fn a_reload_reselects_the_campaign_file_not_the_package_file() {
+        // M-L0.4a, proof 4: as above, through the real reload: `start_load` keeps the open
+        // file's identity, and `show` takes the new notes in.
+        let temp = tempfile::tempdir().unwrap();
+        let shared = Uuid::new_v4();
+        let text = note_text("Watch", "rule", None);
+        let notes = || {
+            let mut notes = same_path_notes(&text, shared, temp.path());
+            notes[2].path = "Other.md".into();
+            notes
+        };
+        let mut library = Library {
+            loaded: Some(Loaded {
+                notes: notes(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        library.open_entry(1);
+        library.reselect = library.open_file_id();
         library.loaded = None;
         library.selected = None;
         let (send, receive) = mpsc::channel();
