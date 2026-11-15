@@ -5204,6 +5204,14 @@ mod tests {
             pub two_panes: bool,
             /// The pane in a column this wide.
             pub narrow: Option<f32>,
+            /// Two panes side by side, 320 wide, of these heights.
+            pub heights: Option<[f32; 2]>,
+            /// No Undo or choice has a lock (no reason, open or held, and no room for one).
+            pub no_locks: bool,
+            /// The next frame asks egui to draw it again (a second pass), once.
+            pub discard: bool,
+            /// Passes drawn.
+            pub passes: usize,
             /// What the older line says.
             pub older_line: OlderLine,
             /// The newer line has the older line's verb too (about Shrine of Cinders), so two
@@ -5250,6 +5258,10 @@ mod tests {
         /// One pane: its footer shows the store's kept lines; its body changes the owner.
         fn one_pane(ui: &mut Ui, app: &mut App, pane: usize) {
             let live = app.run_live;
+            let no_locks = app.no_locks;
+            if std::mem::take(&mut app.discard) {
+                ui.ctx().request_discard("the pilot draws this frame again");
+            }
             let older_undo_open = app.older_undo_open;
             let older_line = app.older_line;
             let same_verb = app.same_verb;
@@ -5300,21 +5312,26 @@ mod tests {
                             }
                             _ => {}
                         }
-                        let mut said = Said::new(crate::sentence!("{}.", saved.1)).undo(
-                            UndoStep::verb(Verb::Change)
-                                .tell_apart(owner)
-                                .pressed_as(Act::Undo)
-                                .locked_when(live && !(owner == "older" && older_undo_open), LOCK),
-                        );
+                        let undo = UndoStep::verb(Verb::Change)
+                            .tell_apart(owner)
+                            .pressed_as(Act::Undo);
+                        let undo = if no_locks {
+                            undo
+                        } else {
+                            undo.locked_when(live && !(owner == "older" && older_undo_open), LOCK)
+                        };
+                        let mut said = Said::new(crate::sentence!("{}.", saved.1)).undo(undo);
                         if owner == "older" {
                             // A choice attached to a kept result.
-                            said = said.choice(
-                                Choice::new(
-                                    MessageChoice::Choice("Register as a new campaign"),
-                                    Act::Register,
-                                )
-                                .locked_when(live, LOCK),
+                            let register = Choice::new(
+                                MessageChoice::Choice("Register as a new campaign"),
+                                Act::Register,
                             );
+                            said = said.choice(if no_locks {
+                                register
+                            } else {
+                                register.locked_when(live, LOCK)
+                            });
                             if let Some([a, b]) = moves {
                                 if deletes {
                                     said = said.choice(Choice::named_as(
@@ -5382,7 +5399,21 @@ mod tests {
         }
 
         pub(super) fn frame(ui: &mut Ui, app: &mut App) {
-            if app.two_panes {
+            app.passes += 1;
+            if let Some(heights) = app.heights {
+                ui.horizontal_top(|ui| {
+                    for (pane, height) in heights.into_iter().enumerate() {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(320.0, height),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.set_max_height(height);
+                                one_pane(ui, app, pane);
+                            },
+                        );
+                    }
+                });
+            } else if app.two_panes {
                 ui.columns(2, |columns| {
                     for (pane, column) in columns.iter_mut().enumerate() {
                         one_pane(column, app, pane);
@@ -5806,6 +5837,146 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().acted, [Ok("Folder saved")]);
         assert_eq!(h.state().presses.first().map(|press| press.0), Some(1));
+
+        // Layout PR 2b (ruling L9): each pane's typed footer keeps its plan. Frames with no
+        // change compare the lines and sort, join and measure nothing; a new width and a lock
+        // that goes make the plan again, and the footer's room is what a fresh pane measures.
+        let footers = |h: &egui_kittest::Harness<'_, App>| -> Vec<f32> {
+            let mut rects: Vec<egui::Rect> = crate::design::pane::pane_records(&h.ctx)
+                .iter()
+                .filter_map(|record| record.footer())
+                .collect();
+            rects.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            rects.iter().map(egui::Rect::height).collect()
+        };
+        let fresh = |width: f32, no_locks: bool| {
+            let mut app = two();
+            app.two_panes = true;
+            app.no_locks = no_locks;
+            let mut h = harness_sized(app, width);
+            h.run_steps(6);
+            footers(&h)
+        };
+        let mut app = two();
+        app.two_panes = true;
+        let mut h = harness_sized(app, 1200.0);
+        h.run_steps(4);
+        let quiet = footer_work();
+        h.run_steps(6);
+        let after = footer_work();
+        assert!(
+            after.compared > quiet.compared,
+            "the frames reached the footers"
+        );
+        assert_eq!(
+            (
+                after.plans - quiet.plans,
+                after.sorted - quiet.sorted,
+                after.named - quiet.named,
+                after.probes - quiet.probes,
+            ),
+            (0, 0, 0, 0),
+            "an unchanged frame sorts, names and measures nothing"
+        );
+        let wide = footers(&h);
+        assert_eq!(wide, fresh(1200.0, false));
+        h.set_size(egui::vec2(700.0, 500.0));
+        h.run_steps(6);
+        assert!(
+            footer_work().plans > after.plans,
+            "a new width makes the plans again"
+        );
+        let narrow = fresh(700.0, false);
+        assert_ne!(narrow, wide, "the width changes the footers' room");
+        assert_eq!(footers(&h), narrow, "at the new width, a fresh pane's room");
+        h.state_mut().no_locks = true;
+        h.run_steps(6);
+        let unlocked = fresh(700.0, true);
+        assert_ne!(unlocked, narrow, "the locks' reasons hold room");
+        assert_eq!(
+            footers(&h),
+            unlocked,
+            "with the locks gone, a fresh pane's room"
+        );
+
+        // Two panes side by side: a short one whose footer has no room for its reasons'
+        // reservations, and a tall one that has. Each decides for itself (no shared state): the
+        // tall one keeps the room under `Folder saved.` for its open lock's reason, as two tall
+        // panes do; the short one gives it up.
+        let gaps = |h: &egui_kittest::Harness<'_, App>| -> Vec<f32> {
+            let tops = |words: &str| {
+                let mut tops: Vec<(f32, f32)> = h
+                    .query_all_by_role_and_label(egui::accesskit::Role::Label, words)
+                    .map(|node| (node.rect().left(), node.rect().top()))
+                    .collect();
+                tops.sort_by(|a, b| a.0.total_cmp(&b.0));
+                tops
+            };
+            tops("Folder saved.")
+                .iter()
+                .zip(tops("Campaign link saved."))
+                .map(|(newer, older)| older.1 - newer.1)
+                .collect()
+        };
+        let panes = |heights: [f32; 2]| {
+            let mut app = two();
+            app.heights = Some(heights);
+            let mut h = harness_sized(app, 960.0);
+            h.set_size(egui::vec2(960.0, 800.0));
+            h.run_steps(8);
+            gaps(&h)
+        };
+        let tall = panes([760.0, 760.0]);
+        let mixed = panes([230.0, 760.0]);
+        assert_eq!(
+            (tall.len(), mixed.len()),
+            (2, 2),
+            "two panes: {tall:?} {mixed:?}"
+        );
+        assert!(
+            mixed[0] < mixed[1] - 1.0,
+            "the short pane gives its reservation up: {mixed:?}"
+        );
+        assert!(
+            (mixed[1] - tall[1]).abs() < 0.5,
+            "the tall pane keeps its own, as beside another tall pane: {mixed:?} {tall:?}"
+        );
+
+        // Ruling L9 (attack finding 2): a press is acted on once, by its ticket, also when its
+        // frame is drawn again (a second pass) and when that rerun is declined (one pass at
+        // most). The click's frames (one per input event) draw one more pass when egui may.
+        let mut drawn = Vec::new();
+        for passes in [2_usize, 1] {
+            let mut app = two();
+            app.two_panes = true;
+            let mut h = harness_sized(app, 1200.0);
+            h.ctx.options_mut(|options| {
+                options.max_passes = std::num::NonZeroUsize::new(passes).expect("one at least");
+            });
+            let older = order(h.state(), "older");
+            // The press's frame asks egui to draw it again.
+            h.state_mut().discard = true;
+            h.get_all_by_label("Undo change older")
+                .nth(1)
+                .unwrap()
+                .click();
+            let before = h.state().passes;
+            h.step();
+            drawn.push(h.state().passes - before);
+            assert!(!h.state().discard, "the frame asked for its rerun");
+            h.run_steps(3);
+            assert_eq!(
+                h.state().presses,
+                [(1, Act::Undo, older)],
+                "{passes} passes: one press, by its ticket"
+            );
+            assert_eq!(h.state().acted, [Ok("Campaign link saved")]);
+        }
+        assert_eq!(
+            drawn[0],
+            drawn[1] + 1,
+            "the rerun was drawn where egui may, and declined where it may not: {drawn:?}"
+        );
     }
 
     /// M2 (packet 2, the cut of ruling 3): through the staged adapter, each locked Undo says its
