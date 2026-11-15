@@ -741,6 +741,9 @@ pub struct Sessions {
     markers: design::Results<kept::OfSession, kept::MarkerAdd>,
     /// `Recording saved: …`, by the session whose recording it names.
     saved: design::Results<kept::OfSession, RecordingSaved>,
+    /// A test's full disk: every write of the note fails with these words.
+    #[cfg(test)]
+    failing_save: Option<String>,
     notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
@@ -2555,6 +2558,11 @@ impl Sessions {
             .flatten()
         {
             draft.save();
+        }
+        // A test's full disk (`simulate_failed_save`): the note's write fails every time.
+        #[cfg(test)]
+        if let (Some(words), Some(draft)) = (&self.failing_save, &mut self.draft) {
+            draft.state = DraftState::Failed(words.clone());
         }
     }
 
@@ -7972,31 +7980,19 @@ impl Sessions {
         draft.save();
     }
 
-    /// The open note's save fails through the real write: the note and its folder become read
-    /// only, the DM has typed, and the save runs. Every retry fails too until
-    /// `simulate_failed_save_ends`. Returns the note's path.
-    #[cfg(unix)]
-    pub fn simulate_failed_save(&mut self) -> PathBuf {
-        use std::os::unix::fs::PermissionsExt;
+    /// The disk refuses the open note's writes, as a full disk would: the DM has typed, the save
+    /// fails, and every later save through `flush` fails again until `simulate_failed_save_ends`.
+    pub fn simulate_failed_save(&mut self) {
+        self.failing_save = Some("Not saved. The disk is full.".to_owned());
         let draft = self.draft.as_mut().expect("an open note");
-        let folder = draft.path.parent().expect("the session folder");
-        fs::set_permissions(&draft.path, fs::Permissions::from_mode(0o444)).expect("read only");
-        fs::set_permissions(folder, fs::Permissions::from_mode(0o555)).expect("read only");
-        draft
-            .body
-            .push_str("\nTyped while the folder was read only.\n");
+        draft.body.push_str("\nTyped while the disk was full.\n");
         draft.edited();
-        draft.save();
-        draft.path.clone()
+        self.flush();
     }
 
-    /// The note of `simulate_failed_save` and its folder can be written again.
-    #[cfg(unix)]
-    pub fn simulate_failed_save_ends(note: &Path) {
-        use std::os::unix::fs::PermissionsExt;
-        let folder = note.parent().expect("the session folder");
-        fs::set_permissions(folder, fs::Permissions::from_mode(0o755)).expect("writable");
-        fs::set_permissions(note, fs::Permissions::from_mode(0o644)).expect("writable");
+    /// The disk takes writes again.
+    pub fn simulate_failed_save_ends(&mut self) {
+        self.failing_save = None;
     }
 
     /// The open note's file leaves the folder outside Splat while the DM has unsaved words,

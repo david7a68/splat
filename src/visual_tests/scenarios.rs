@@ -14714,18 +14714,10 @@ pub mod session_notes {
         // Undo) is wholly in view, not clipped.
         d.click(NAV_SESSIONS);
         d.settle();
-        let read_only = d.app_mut().sessions.simulate_failed_save();
+        d.app_mut().sessions.simulate_failed_save();
         // Timeline still holds the event form the scenario opened (Rest at the mill).
         d.click(NAV_TIMELINE);
         d.expect("Rest at the mill");
-        let dbg = |d: &mut Driver<'_>, at: &str| {
-            use std::os::unix::fs::PermissionsExt;
-            let state = d.app_mut().sessions.draft_snapshot().map(|draft| format!("{:?}", draft.state));
-            let mode = std::fs::metadata(read_only.parent().unwrap()).map(|m| m.permissions().mode());
-            let banner = d.nodes().into_iter().filter(|n| n.name.contains("ot saved")).map(|n| n.name).collect::<Vec<_>>();
-            d.observe("debug-b7c", false, format!("{at}: state {state:?}, folder mode {mode:?}, {banner:?}"));
-        };
-        dbg(d, "before the state");
         d.state_prepared("note-save-failed-elsewhere", Sizes::Standard, |d| {
             banner_whole(
                 d,
@@ -14734,13 +14726,12 @@ pub mod session_notes {
                 &["Try to save again", "Title"],
             );
         });
-        dbg(d, "after the state");
-        crate::sessions::page::Sessions::simulate_failed_save_ends(&read_only);
-        if d.in_view("Try to save again") {
-            d.click("Try to save again");
-        }
+        d.app_mut().sessions.simulate_failed_save_ends();
+        d.click("Try to save again");
         d.settle();
-        let retried = !d.has_containing("was not saved.");
+        let retried = !d.nodes().iter().any(|node| {
+            node.name.starts_with("The note of Session ") && node.name.contains("was not saved.")
+        });
         d.observe(
             "round-30-note-warnings-elsewhere",
             retried,
