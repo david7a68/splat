@@ -285,7 +285,13 @@ pub fn run(d: &mut Driver<'_>) {
         let mut rows = Vec::new();
         d.each_painted_text(|text, clip| {
             let words = text.galley.job.text.replace('\u{a0}', " ");
-            if clip.intersects(text.visual_bounding_rect()) && words.contains(" · XP ") {
+            // iter-29 G118: a row is found by its form's end, also where its XP number gave
+            // way (`1 × Cinder Tyrant, … · High`). Before G118 only the Nameless Visitor row,
+            // cut by its repeated name, was found here.
+            let ends = [" · XP ", " · Low", " · Moderate", " · High", UNKNOWN_FORM];
+            if clip.intersects(text.visual_bounding_rect())
+                && ends.iter().any(|end| words.contains(end))
+            {
                 rows.push(words);
             }
         });
@@ -297,9 +303,12 @@ pub fn run(d: &mut Driver<'_>) {
         !cut.is_empty()
             && cut.iter().all(|row| {
                 !row.contains("(up to")
-                    && row.split(" · ").chain(row.split(", ")).all(|part| {
-                        !part.ends_with('…') || part.trim_end_matches('…').trim().is_empty()
-                    })
+                    && row
+                        .split(" · ")
+                        .flat_map(|fact| fact.split(", "))
+                        .all(|part| {
+                            !part.ends_with('…') || part.trim_end_matches('…').trim().is_empty()
+                        })
             }),
         format!(
             "Beside Lookup at 960x640, the Ready rows that gave way: {cut:?} (all rows {rows:?})"
