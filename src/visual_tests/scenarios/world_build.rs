@@ -7921,8 +7921,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         ),
     );
     // A file that comes back at the manifest's path before Save keeps the outside-change
-    // guard: Save does not write over it, and the draft stays.
-    fs::remove_file(&manifest).unwrap();
+    // guard: Save does not write over it, and the draft stays. (On the old code Save wrote no
+    // file, so there may be none to remove.)
+    let _ = fs::remove_file(&manifest);
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text("The package manifest was deleted");
