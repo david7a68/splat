@@ -4,7 +4,7 @@ use std::fs;
 
 /// FB2: the flagged member in the groups list, the plan and Arrivals, with its line and cause.
 const SCOUT_FAULT: &str =
-    "Scout (as Goblin Warrior) · line\u{a0}15: the change “HP lots” was not read.";
+    "Scout (as Goblin Warrior) · line\u{a0}15: The change “HP lots” was not read.";
 
 /// FB2: each summary of the flagged member is the cause alone; the example `Use a number, such
 /// as HP +5.` belongs to the editor. The found texts also hold each painted row of a wrapped

@@ -415,6 +415,9 @@ struct Draft {
     recovery: disk::Recovery,
     id: Uuid,
     path: String,
+    /// Whether this encounter was ever saved (R37): `New` from `Draft::new`, `Saved` from
+    /// `Draft::open` and the first successful save. Its own fact, not `baseline`.
+    origin: design::save_row::DraftOrigin,
     baseline: Option<String>,
     source: String,
     name: String,
@@ -471,6 +474,7 @@ impl Draft {
             recovery: Default::default(),
             id,
             path: format!("Encounters/{id}.md"),
+            origin: design::save_row::DraftOrigin::New,
             baseline: None,
             source,
             name: name.clone(),
@@ -524,6 +528,7 @@ impl Draft {
             recovery: Default::default(),
             id: entry.id,
             path: path.into(),
+            origin: design::save_row::DraftOrigin::Saved,
             baseline: Some(text.clone()),
             source: text,
             saved_name: entry.name.clone(),
@@ -594,14 +599,19 @@ impl Draft {
         self.groups.insert(at, back);
     }
     /// AB1: Save's reason while one of this encounter's changed groups has no members: Save
-    /// checks every changed group, and refuses an empty one.
-    fn empty_group_reason(&self) -> Option<String> {
+    /// checks every changed group, and refuses an empty one. R37: the reason comes with that
+    /// group's origin, so a new group with only its name makes the draft `New`, and a saved
+    /// group an edit emptied makes it `Invalid`.
+    fn empty_group_reason(&self) -> Option<(String, design::save_row::DraftOrigin)> {
         self.groups
             .iter()
             .find(|group| group.is_empty() && group.dirty())
-            .map(|group| match group.name().trim() {
-                "" => "Add a creature to the new group first.".to_owned(),
-                name => format!("Add a creature to {name} first."),
+            .map(|group| {
+                let reason = match group.name().trim() {
+                    "" => "Add a creature to the new group first.".to_owned(),
+                    name => format!("Add a creature to {name} first."),
+                };
+                (reason, group.origin())
             })
     }
     /// Read this encounter's own groups, once the campaign has been read.
@@ -805,6 +815,7 @@ impl Draft {
         crate::file_batch::apply(&changes)?;
         self.source = text.clone();
         self.baseline = Some(text);
+        self.origin = design::save_row::DraftOrigin::Saved;
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
         self.saved_body = self.body.clone();
@@ -5939,8 +5950,30 @@ impl Encounters {
         });
         // AB1: Save checks every changed group too, so an empty one makes the draft Invalid now,
         // not after a refused Save. It is the frame's own state, read without parsing.
-        let empty_group = self.draft.as_ref().and_then(Draft::empty_group_reason);
-        let refusal = roster_reason.clone().or(empty_group.clone()).or(refusal);
+        let (empty_group, empty_origin) = self
+            .draft
+            .as_ref()
+            .and_then(Draft::empty_group_reason)
+            .unzip();
+        // The typed check of the save row (R37, E2): an empty group is a missing part, and the
+        // draft's origin for it is that group's (a new group with only its name is `New` in a
+        // saved encounter too); a roster fault or the last refusal is a refused change and
+        // outranks it. With no empty group the origin is the encounter's own.
+        let origin = empty_origin.unwrap_or_else(|| {
+            self.draft
+                .as_ref()
+                .map_or(design::save_row::DraftOrigin::Saved, |draft| draft.origin)
+        });
+        let found = empty_group
+            .clone()
+            .map_or_else(
+                design::save_row::Diagnosis::valid,
+                design::save_row::Diagnosis::incomplete,
+            )
+            .and(roster_reason.clone().or(refusal).map_or_else(
+                design::save_row::Diagnosis::valid,
+                design::save_row::Diagnosis::refused,
+            ));
         // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
         // the campaign lock (migrate:O, rows 42 and 51). The encounter draft says `Invalid`
         // only while it has changes; its rows name the faults of a clean one.
@@ -5956,10 +5989,9 @@ impl Encounters {
             } else {
                 design::save_row::Primary::Draft
             };
-            let mut state = design::DraftState::new(changed, primary).locks_campaign();
-            if let Some(refusal) = &refusal {
-                state = state.refused_when_changed(refusal.clone());
-            }
+            let mut state = design::DraftState::new(origin, changed, primary)
+                .locks_campaign()
+                .check_when_changed(found);
             if saved_note.is_some() {
                 state = state.just_saved();
             }

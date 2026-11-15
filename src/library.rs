@@ -7656,6 +7656,7 @@ impl Library {
         // (`design::save_row`). A parse fault ends with the draft that parses: the saved file
         // stays unreadable on the owner line until Save, but the draft is not Invalid.
         let mut draft_state = design::DraftState::new(
+            design::save_row::DraftOrigin::Saved, // New entry writes the file before it opens
             if dirty {
                 design::save_row::Changed::Yes
             } else {
@@ -7668,10 +7669,10 @@ impl Library {
             },
         );
         if let Some(refusal) = &save_refusal {
-            draft_state = draft_state.refused(refusal.as_str());
+            draft_state = draft_state.check(design::save_row::Diagnosis::refused(refusal.as_str()));
         }
         if fault.is_some() || repair_problem.is_some() {
-            draft_state = draft_state.invalid();
+            draft_state = draft_state.check(design::save_row::Diagnosis::unreadable());
         }
         if conflict {
             draft_state = draft_state.changed_on_disk();

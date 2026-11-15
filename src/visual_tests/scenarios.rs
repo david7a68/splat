@@ -17904,7 +17904,7 @@ pub mod encounter_groups {
         // in the editor and Arrivals; the member that is not in the packages stays a warning.
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "not in this campaign’s packages"),
+            tones_beside(d, "Not in this campaign’s packages"),
         );
         d.observe(
             "iter-22-B-FT1-list",
@@ -18096,7 +18096,7 @@ pub mod encounter_groups {
         let (found, invalid) = d.at_size(SMALL, |d| {
             (
                 d.in_view_containing(
-                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                    "Unknown creature · line\u{a0}13: Not in this campaign’s packages.",
                 ),
                 d.in_view_containing("would become −28"),
             )
@@ -18110,7 +18110,7 @@ pub mod encounter_groups {
             tones_beside(d, "would become −28"),
             tones_beside(
                 d,
-                "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                "Unknown creature · line\u{a0}13: Not in this campaign’s packages.",
             ),
         );
         // FA1 (Astra review of PR 259): the editor names the missing member in the one form,
@@ -18118,7 +18118,7 @@ pub mod encounter_groups {
         // names its line, as Arrivals does.
         d.observe(
             "iter-25-B-FA1-missing",
-            d.has("Unknown creature · line\u{a0}13: not in this campaign’s packages.")
+            d.has("Unknown creature · line\u{a0}13: Not in this campaign’s packages.")
                 && d.has(
                     "Choose a replacement, check the packages it uses, or remove this member.",
                 )
@@ -18141,7 +18141,7 @@ pub mod encounter_groups {
         for size in [SMALL, DEFAULT, LARGE] {
             let (aligned, detail) = d.at_size(size, |d| {
                 let text = d.painted_rect_in(
-                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                    "Unknown creature · line\u{a0}13: Not in this campaign’s packages.",
                     egui::Rect::EVERYTHING,
                 );
                 let words = d.painted_rect_in("Campaign → Packages", egui::Rect::EVERYTHING);
@@ -18819,7 +18819,7 @@ pub mod encounter_groups {
             // R1: the group's own XP (`XP 50`) is its heading's hover and description now; the
             // line says the fight after.
             d.has_containing(
-                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                    "Unknown creature · line\u{a0}13: Not in this campaign’s packages.",
                 )
                 // iter-26-R FI8: `Will add:` keeps its first member on its line.
                 && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
@@ -18838,13 +18838,13 @@ pub mod encounter_groups {
         d.observe(
             "T13.1",
             can_join
-                && d.has_containing("not in this campaign’s packages")
+                && d.has_containing("Not in this campaign’s packages")
                 && d.has_containing("Cinder Wolf · line\u{a0}14: Maximum HP would become −28."),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "not in this campaign’s packages"),
+            tones_beside(d, "Not in this campaign’s packages"),
         );
         d.observe(
             "iter-22-B-FT1-arrivals",
@@ -19235,8 +19235,8 @@ pub mod encounter_groups {
         // line, as Arrivals does; never the short `<name>: <cause>` form.
         d.observe(
             "iter-26-B-FJ6",
-            d.has_containing("Unknown creature · line\u{a0}13: not in this campaign’s packages.")
-                && !d.has_containing("Unknown creature: not in this campaign’s packages."),
+            d.has_containing("Unknown creature · line\u{a0}13: Not in this campaign’s packages.")
+                && !d.has_containing("Unknown creature: Not in this campaign’s packages."),
             "The group editor names a saved missing member with its line, in the one fault form",
         );
         // iter-27-B FJ6 closure (AI3, SI2): a member's invalid change is in the same form, with
@@ -19352,7 +19352,7 @@ pub mod encounter_groups {
             d.click("Move down");
             // FN5: the moved group still has its faults, so it says Invalid, not Unsaved.
             d.expect("Invalid");
-            d.has("Unknown creature: not in this campaign’s packages.")
+            d.has("Unknown creature: Not in this campaign’s packages.")
         });
         let checked = crate::encounters::group_checks().1 > before.1;
         d.observe(
@@ -19379,13 +19379,13 @@ pub mod encounter_groups {
         d.click("Discard");
         d.observe(
             "iter-26-B-FJ6-changed",
-            changed && !d.has("Unknown creature: not in this campaign’s packages."),
+            changed && !d.has("Unknown creature: Not in this campaign’s packages."),
             "A changed group's missing member names no line; Discard gives back the saved form",
         );
         // Review 2: a count edit lands after the comparison in its own frame. The input-free
         // frames after it work the comparison out again (the line goes), putting the count back
         // brings the line back, and unchanged frames still do no comparison.
-        const SHORT: &str = "Unknown creature: not in this campaign’s packages.";
+        const SHORT: &str = "Unknown creature: Not in this campaign’s packages.";
         let focused = d.tab_to("How many of Cinder Wolf");
         // The open run takes the arrow keys, so the count is typed.
         d.press_ctrl(Key::A);
@@ -19991,11 +19991,11 @@ pub mod encounter_owned_groups {
             let (member, member_detail) = said_once(
                 d,
                 &[
-                    "not in this campaign’s packages",
+                    "Not in this campaign’s packages",
                     "cannot be saved. See its row",
                 ],
                 "A creature here cannot be saved. See its row.",
-                "not in this campaign’s packages",
+                "Not in this campaign’s packages",
                 "warning",
             );
             std::fs::write(&wolf, text).unwrap();
@@ -20097,21 +20097,24 @@ pub mod encounter_owned_groups {
                 && d.has_containing("No members yet. Add creatures from the search."),
             "A new group belongs to this encounter, and takes what the search adds",
         );
-        // iter-26-B AB1: Save checks the new group too, and refuses it empty, so the draft says
-        // Invalid now and Save and Ctrl+S are blocked: nothing is written.
-        let invalid = d.visible_text("Invalid")
+        // iter-26-B AB1: Save checks the new group too, and refuses it empty, so Save and Ctrl+S
+        // are blocked: nothing is written. R37: a new group with only its name is no fault, so
+        // the draft says New, not Invalid.
+        let new_word = format!("{} New", crate::design::icons::DRAFT);
+        let invalid = d.visible_text(&new_word)
+            && !d.visible_text("Invalid")
             && !d.visible_text("Unsaved")
             && d.is_disabled(SAVE_ENCOUNTER)
             && d.visible_text(&format!("Add a creature to {NEW_NAME} first."));
         // A proof step that ends where it started: not part of the DM's task.
         let kept = d.aside(|d| {
             d.press_ctrl(Key::S);
-            d.app_mut().encounters.draft_dirty() && d.visible_text("Invalid")
+            d.app_mut().encounters.draft_dirty() && d.visible_text(&new_word)
         });
         d.observe(
             "iter-26-B-AB1",
             invalid && kept,
-            format!("With an empty new group, Invalid and Save blocked: {invalid}; Ctrl+S writes nothing: {kept}"),
+            format!("With an empty new group, New and Save blocked: {invalid}; Ctrl+S writes nothing: {kept}"),
         );
         d.state("new-group-in-the-encounter", Sizes::All);
         // Two frames, one adding and one not: both name fields end at one edge at every size.
@@ -20238,13 +20241,18 @@ pub mod encounter_owned_groups {
             d.click("Remove");
             d.expect("Undo remove member");
             let removed = !d.has("1. Wolf") && d.has_containing("Removed Wolf.");
+            // R37: the saved group is now empty, a refused change, not a new draft: Invalid in
+            // the warning tone, never New, and Save encounter waits.
+            let emptied = d.visible_text(&format!("{} Invalid", crate::design::icons::WARN))
+                && !d.visible_text(&new_word)
+                && d.is_disabled(SAVE_ENCOUNTER);
             d.type_into(&notes, "Hungry.");
             d.click("Undo remove member");
             d.expect("1. Wolf");
             // The notes field is multiline: its words are read where they are painted.
             let kept = d.visible_text("Hungry.");
             d.clear_text_in(&notes);
-            removed && kept && !d.has("Undo remove member")
+            removed && emptied && kept && !d.has("Undo remove member")
         });
         let footer_tops = |d: &Driver<'_>| {
             d.place_of("Undo remove member")
@@ -22092,11 +22100,11 @@ pub mod session_plan_groups {
             let member = said_once(
                 d,
                 &[
-                    "not in this campaign’s packages",
+                    "Not in this campaign’s packages",
                     "cannot be saved. See its row",
                 ],
                 "A creature here cannot be saved. See its row.",
-                "not in this campaign’s packages",
+                "Not in this campaign’s packages",
                 "warning",
             );
             std::fs::write(&wolf, text).unwrap();
