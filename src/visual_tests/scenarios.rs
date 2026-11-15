@@ -1493,6 +1493,7 @@ pub mod library_browse {
                             rect.center().y >= row.top()
                                 && rect.center().y <= row.bottom()
                                 && rect.left() > row.center().x
+                                && rect.right() <= row.right() + 0.5
                         })
                     {
                         painted.push(text.galley.job.text.clone());

@@ -913,11 +913,16 @@ fn section_row_counted(
                 c.text,
             );
             if painted {
+                // A search with no match says `0` (`design::count` writes zero as nothing).
+                let words = match count {
+                    0 => "0".to_owned(),
+                    count => design::count(count, "", "").trim().to_owned(),
+                };
                 design::number(
                     ui.painter(),
                     rect.right() - design::S,
                     rect.center().y,
-                    design::count(count, "", "").trim(),
+                    &words,
                     &Type::Small.font(ui),
                     c.muted,
                 );
