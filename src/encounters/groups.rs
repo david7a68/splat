@@ -4838,7 +4838,7 @@ mod tests {
         let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
         // B4, E1: a new group is refused over an unsaved encounter, so the encounter draft is
-        // opened after the group, as the Encounters page does.
+        // opened after the group; what is tested is the Undo with both open.
         encounters.draft = Some(Draft::new());
         encounters.discarded_group = encounters.group_draft.take();
         assert!(encounters.group_discarded_in_plan());
