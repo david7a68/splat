@@ -5273,7 +5273,7 @@ mod tests {
             .overrides
             .insert("level".into(), 3.into());
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert!(error.contains("unknown override level"), "{error}");
+        assert!(error.contains("Unknown override level"), "{error}");
         assert!(!dir.path().join(&draft.path).exists());
     }
 
@@ -6048,7 +6048,7 @@ mod tests {
         draft.add(id);
         let error = draft.save(&campaign, &[]).unwrap_err();
         assert!(
-            error == "Blank: it has no maximum HP. Set it with this member’s Edit button.",
+            error == "Blank: It has no maximum HP. Set it with this member’s Edit button.",
             "{error}"
         );
         draft.setup.members[0].overrides = serde_yaml_ng::from_str("{max_hp: {set: 9}}").unwrap();
