@@ -68,7 +68,7 @@
 //!
 //! ```compile_fail
 //! # use splat::ownership::Diagnosis;
-//! let found = Diagnosis { refused: None, incomplete: None, unreadable: true }; // <- by hand
+//! let found = Diagnosis { refused: None, missing: None, incomplete: None, unreadable: true }; // <- by hand
 //! ```
 use super::{Action, Density, Status, Tone, colors, components::status, icons};
 use eframe::egui::{self, Ui};
@@ -99,11 +99,15 @@ pub enum DraftOrigin {
 ///   refused change. Save waits with the reason.
 /// - [`Diagnosis::refused`]: a change that cannot stand (`Another entry has this id.`):
 ///   `Invalid`, and Save waits with the reason.
+/// - [`Diagnosis::missing`]: a change that names a thing that is gone (a deleted encounter, a
+///   creature this campaign cannot find): `Invalid` in the warning tone (R41), and Save waits
+///   with the reason. It ranks after a refused change and before a missing part.
 /// - [`Diagnosis::unreadable`]: the draft or its file cannot be read (a repair's problem):
 ///   `Invalid`, but Save is not blocked by it, since Save can repair it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Diagnosis<'a> {
     refused: Option<Cow<'a, str>>,
+    missing: Option<Cow<'a, str>>,
     incomplete: Option<Cow<'a, str>>,
     unreadable: bool,
 }
@@ -113,6 +117,7 @@ impl<'a> Diagnosis<'a> {
     pub fn valid() -> Self {
         Self {
             refused: None,
+            missing: None,
             incomplete: None,
             unreadable: false,
         }
@@ -132,6 +137,14 @@ impl<'a> Diagnosis<'a> {
         }
     }
 
+    /// A change that names a thing that is gone: a warning (R41), and Save waits.
+    pub fn missing(why: impl Into<Cow<'a, str>>) -> Self {
+        Self {
+            missing: Some(why.into()),
+            ..Self::valid()
+        }
+    }
+
     pub fn unreadable() -> Self {
         Self {
             unreadable: true,
@@ -139,30 +152,62 @@ impl<'a> Diagnosis<'a> {
         }
     }
 
+    /// The kind that ranks first, by the one rule: unreadable data, a refused change, a thing
+    /// that is gone, then a missing part. `None` when nothing is wrong.
+    pub fn cause(&self) -> Option<InvalidCause> {
+        if self.unreadable {
+            Some(InvalidCause::Unreadable)
+        } else if self.refused.is_some() {
+            Some(InvalidCause::Refused)
+        } else if self.missing.is_some() {
+            Some(InvalidCause::Missing)
+        } else if self.incomplete.is_some() {
+            Some(InvalidCause::Incomplete)
+        } else {
+            None
+        }
+    }
+
+    /// The tone of the first-ranked fault (R41): every place that says this fault (the save
+    /// row's word, a field's message, the footer) paints it in this tone. `None` when nothing
+    /// is wrong.
+    pub fn tone(&self) -> Option<Tone> {
+        self.cause().map(InvalidCause::tone)
+    }
+
     /// Both diagnoses. Each kind keeps its own reason (the later report's, when both name one),
     /// so no kind hides another, and the rank does not depend on the order of the calls.
     pub fn and(self, other: Self) -> Self {
         Self {
             refused: other.refused.or(self.refused),
+            missing: other.missing.or(self.missing),
             incomplete: other.incomplete.or(self.incomplete),
             unreadable: self.unreadable || other.unreadable,
         }
     }
 
-    /// The reason Save waits, by the rank: a refused change before a missing part. Unreadable
-    /// data does not block Save.
+    /// The reason Save waits, by the rank: a refused change, a thing that is gone, then a
+    /// missing part. Unreadable data does not block Save.
     pub fn blocking(&self) -> Option<&str> {
-        self.refused.as_deref().or(self.incomplete.as_deref())
+        self.refused
+            .as_deref()
+            .or(self.missing.as_deref())
+            .or(self.incomplete.as_deref())
     }
 
-    /// Whether the one fault is a missing part (no refused change, no unreadable data).
+    /// Whether the one fault is a missing part (no refused change, nothing gone, no unreadable
+    /// data).
     pub fn only_incomplete(&self) -> bool {
-        self.incomplete.is_some() && self.refused.is_none() && !self.unreadable
+        self.incomplete.is_some()
+            && self.refused.is_none()
+            && self.missing.is_none()
+            && !self.unreadable
     }
 
     pub fn into_owned(self) -> Diagnosis<'static> {
         Diagnosis {
             refused: self.refused.map(|why| Cow::Owned(why.into_owned())),
+            missing: self.missing.map(|why| Cow::Owned(why.into_owned())),
             incomplete: self.incomplete.map(|why| Cow::Owned(why.into_owned())),
             unreadable: self.unreadable,
         }
@@ -179,6 +224,20 @@ pub enum InvalidCause {
     Refused,
     /// The draft or its file cannot be read: the error tone.
     Unreadable,
+    /// The change names a thing that is gone (a deleted encounter, a creature this campaign
+    /// cannot find): the warning tone (R41).
+    Missing,
+}
+
+impl InvalidCause {
+    /// The one tone of this cause, wherever it is said (R41, R37): the status word takes it,
+    /// and so does each message of the same fault.
+    pub fn tone(self) -> Tone {
+        match self {
+            Self::Incomplete | Self::Missing => Tone::Warning,
+            Self::Refused | Self::Unreadable => Tone::Error,
+        }
+    }
 }
 
 /// Who owns the one accent-filled primary action in view.
@@ -224,10 +283,13 @@ impl SaveWord {
     pub fn status(self) -> Status<'static> {
         let d = colors().document;
         let (icon, color) = match self {
-            Self::Invalid(InvalidCause::Incomplete) => Tone::Warning.parts(),
-            Self::Invalid(InvalidCause::Refused | InvalidCause::Unreadable) | Self::NotSaved => {
-                (icons::ERROR, d.invalid)
-            }
+            // The word takes its cause's tone (R37, R41): the one value that also paints the
+            // cause's own message.
+            Self::Invalid(cause) => match cause.tone() {
+                Tone::Error => (icons::ERROR, d.invalid),
+                tone => tone.parts(),
+            },
+            Self::NotSaved => (icons::ERROR, d.invalid),
             Self::New => (icons::DRAFT, d.clean),
             Self::ChangedOnDisk => (icons::WARN, d.external),
             Self::Unsaved => (icons::DRAFT, d.unsaved),
@@ -352,13 +414,20 @@ impl<'a> DraftState<'a> {
         self.kind(|found| found.refused.as_deref())
     }
 
+    fn missing(&self) -> Option<&str> {
+        self.kind(|found| found.missing.as_deref())
+    }
+
     fn incomplete(&self) -> Option<&str> {
         self.kind(|found| found.incomplete.as_deref())
     }
 
-    /// Why Save's check blocks Save, by the rank: a refused change before a missing part.
+    /// Why Save's check blocks Save, by the rank: a refused change, a thing that is gone, then
+    /// a missing part.
     fn refusal(&self) -> Option<&str> {
-        self.refused().or_else(|| self.incomplete())
+        self.refused()
+            .or_else(|| self.missing())
+            .or_else(|| self.incomplete())
     }
 
     pub fn word(&self) -> SaveWord {
@@ -366,6 +435,8 @@ impl<'a> DraftState<'a> {
             SaveWord::Invalid(InvalidCause::Unreadable)
         } else if self.refused().is_some() {
             SaveWord::Invalid(InvalidCause::Refused)
+        } else if self.missing().is_some() {
+            SaveWord::Invalid(InvalidCause::Missing)
         } else if self.incomplete().is_some() {
             match self.origin {
                 DraftOrigin::Saved => SaveWord::Invalid(InvalidCause::Incomplete),
@@ -541,6 +612,28 @@ mod tests {
             (
                 "refused and incomplete in one diagnosis",
                 new().check(incomplete().and(Diagnosis::refused("Bad id."))),
+                SaveWord::Invalid(InvalidCause::Refused),
+                SaveWeight::Secondary,
+                Some("Bad id."),
+                true,
+            ),
+            // R41: a change that names a thing that is gone is Invalid in any origin (a new
+            // draft too), and it ranks after a refused change and before a missing part.
+            (
+                "new missing",
+                new()
+                    .check(incomplete())
+                    .check(Diagnosis::missing("Its encounter was deleted.")),
+                SaveWord::Invalid(InvalidCause::Missing),
+                SaveWeight::Secondary,
+                Some("Its encounter was deleted."),
+                true,
+            ),
+            (
+                "missing, then refused",
+                yes()
+                    .check(Diagnosis::missing("Its encounter was deleted."))
+                    .check(Diagnosis::refused("Bad id.")),
                 SaveWord::Invalid(InvalidCause::Refused),
                 SaveWeight::Secondary,
                 Some("Bad id."),
@@ -734,6 +827,32 @@ mod tests {
         assert_eq!(tone(SaveWord::Invalid(InvalidCause::Incomplete)), warning);
         assert_eq!(tone(SaveWord::Invalid(InvalidCause::Refused)).0, error.0);
         assert_eq!(tone(SaveWord::Invalid(InvalidCause::Unreadable)).0, error.0);
+        assert_eq!(tone(SaveWord::Invalid(InvalidCause::Missing)), warning);
+        // One value: the diagnosis gives its cause, and the word and every message of the fault
+        // take that cause's tone (R41).
+        for (found, cause) in [
+            (Diagnosis::incomplete("a"), InvalidCause::Incomplete),
+            (Diagnosis::missing("a"), InvalidCause::Missing),
+            (Diagnosis::refused("a"), InvalidCause::Refused),
+            (Diagnosis::unreadable(), InvalidCause::Unreadable),
+            (
+                Diagnosis::missing("a").and(Diagnosis::incomplete("b")),
+                InvalidCause::Missing,
+            ),
+            (
+                Diagnosis::missing("a").and(Diagnosis::refused("b")),
+                InvalidCause::Refused,
+            ),
+        ] {
+            assert_eq!(found.cause(), Some(cause), "{found:?}");
+            assert_eq!(found.tone(), Some(cause.tone()), "{found:?}");
+            assert_eq!(
+                tone(SaveWord::Invalid(cause)).0,
+                cause.tone().parts().0,
+                "{cause:?}: the word's icon is its cause's"
+            );
+        }
+        assert_eq!(Diagnosis::valid().tone(), None);
         for fault in [warning, error] {
             assert_ne!(tone(SaveWord::New).0, fault.0, "New has no fault icon");
             assert_ne!(tone(SaveWord::New).1, fault.1, "New has no fault colour");

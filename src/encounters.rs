@@ -52,16 +52,34 @@ impl Invalid {
     fn missing(text: &str) -> Self {
         Self {
             missing: true,
+            // R37: a missing part's tone, the one its diagnosis gives the save row's word.
+            tone: Tone::Warning,
             ..Self::from(text)
         }
     }
 
-    /// The save row's typed diagnosis of this fault.
+    /// The save row's typed diagnosis of this fault. Its tone is the fault's (R41): a deleted
+    /// creature is a thing that is gone, a warning; an unreadable one or a change that cannot
+    /// stand is an error.
     fn diagnosis(&self) -> design::save_row::Diagnosis<'static> {
         if self.missing {
             design::save_row::Diagnosis::incomplete(self.text.clone())
+        } else if self.tone == Tone::Warning {
+            design::save_row::Diagnosis::missing(self.text.clone())
         } else {
             design::save_row::Diagnosis::refused(self.text.clone())
+        }
+    }
+}
+
+/// A group's refusal, with its kind: the encounter page keeps it as its last refusal, and the
+/// save row and the footer give it the refusal's tone (R41).
+impl From<&groups::Refusal> for Invalid {
+    fn from(refusal: &groups::Refusal) -> Self {
+        Self {
+            text: refusal.text().to_owned(),
+            tone: refusal.tone(),
+            missing: refusal.diagnosis().only_incomplete(),
         }
     }
 }
@@ -221,7 +239,7 @@ impl RosterFault {
 struct OwnedGroupsFound {
     found: design::save_row::Diagnosis<'static>,
     origin: Option<design::save_row::DraftOrigin>,
-    footer: Option<String>,
+    footer: Option<EncounterFault>,
 }
 
 /// N1: Save's checks of an encounter's changed groups, ranked: the first refused change outranks
@@ -246,6 +264,8 @@ fn owned_groups_found(
             incomplete.get_or_insert((words, group.origin()));
         } else {
             let words = named_group_words(&group.name(), refusal.text());
+            // Save's words for it, with the refusal's kind and so its tone.
+            let found = refusal.named(words.clone());
             // N2 (lead ruling, R35): a fault with a place of its own (a member's row, Belongs
             // to) keeps its cause there, and the footer always names the next step, so a blocked
             // Save has painted words whether that place is in view or not; never the cause twice.
@@ -259,15 +279,20 @@ fn owned_groups_found(
                     group_words(&group.name())
                 ),
             };
-            refused_footer.get_or_insert(footer);
-            refused.get_or_insert(words);
+            // R41: the footer says the fault in the refusal's tone.
+            refused_footer.get_or_insert(EncounterFault::refusal(footer, &found));
+            refused.get_or_insert(found);
         }
     }
     let origin = incomplete.as_ref().map(|(_, origin)| *origin);
-    let footer = refused_footer.or_else(|| incomplete.as_ref().map(|(words, _)| words.clone()));
+    let footer = refused_footer.or_else(|| {
+        incomplete.as_ref().map(|(words, _)| {
+            EncounterFault::refusal(words.clone(), &Diagnosis::incomplete(words.as_str()))
+        })
+    });
     let found = incomplete
         .map_or_else(Diagnosis::valid, |(words, _)| Diagnosis::incomplete(words))
-        .and(refused.map_or_else(Diagnosis::valid, Diagnosis::refused));
+        .and(refused.unwrap_or_else(Diagnosis::valid));
     OwnedGroupsFound {
         found,
         origin,
@@ -2948,6 +2973,17 @@ enum EncounterFault {
     Invalid(String),
 }
 
+impl EncounterFault {
+    /// Save's refusal `words` in the tone of its diagnosis `found` (R41): the one place that
+    /// turns a refusal into a footer fault, so the footer and the save row's word agree.
+    fn refusal(words: String, found: &design::save_row::Diagnosis<'_>) -> Self {
+        match found.tone() {
+            Some(Tone::Error) => Self::Failed(words),
+            _ => Self::Invalid(words),
+        }
+    }
+}
+
 impl design::outcome::Fault for EncounterFault {
     fn severity(&self) -> design::outcome::Severity {
         match self {
@@ -5341,7 +5377,7 @@ impl Encounters {
         frame: &'f design::outcome::PaneFrame,
         width: f32,
         root: &std::path::Path,
-        groups_reason: Option<String>,
+        groups_reason: Option<EncounterFault>,
     ) -> design::outcome::Messages<'f, FooterPress> {
         use design::outcome::FaultMessage;
         self.record_member_results();
@@ -5386,8 +5422,8 @@ impl Encounters {
             messages.outcome(FaultMessage::new(&fault));
         } else if let Some(reason) = groups_reason {
             // F2, R35: the owned groups' first reason that no row says, painted once (an empty
-            // group, a blank name or side, a refusal with no row of its own).
-            messages.outcome(FaultMessage::new(&EncounterFault::Invalid(reason)));
+            // group, a blank name or side, a refusal with no row of its own), in its tone (R41).
+            messages.outcome(FaultMessage::new(&reason));
         }
         messages
     }
@@ -10818,8 +10854,9 @@ mod tests {
             "Choose a replacement for the Cinder Wolf row before you save or start a fight."
         );
         assert!(invalid.tone == Tone::Warning);
-        // The row says the same fault in the same tone.
+        // The row says the same fault in the same tone, and so does the save row's word (R41).
         assert!(invalid.tone == missing_creature_tone(None));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         let mut encounters = Encounters {
             snapshot: Some(deleted),
             validation_path: Some(draft.path.clone()),
@@ -10862,6 +10899,7 @@ mod tests {
             .catalogue
             .unreadable_ref(draft.setup.roster[0].creature.as_ref().unwrap());
         assert!(invalid.tone == missing_creature_tone(unread));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         assert_eq!(missing_creature_mark(unread).0, icons::ERROR);
         encounters.snapshot = Some(snapshot);
         encounters.draft = Some(draft);
@@ -10887,6 +10925,7 @@ mod tests {
         );
         assert!(invalid.tone == Tone::Warning, "{invalid:?}");
         assert!(invalid.tone == missing_creature_tone(duplicate));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         assert_eq!(missing_creature_mark(duplicate).0, icons::WARN);
         encounters.snapshot = Some(snapshot);
         encounters.error = Some(invalid.text.clone());

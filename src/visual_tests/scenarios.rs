@@ -983,6 +983,34 @@ pub(super) fn painted_paragraph(d: &Driver<'_>, words: &str) -> Option<egui::Rec
 }
 
 /// The tones of the bars beside each visible painted paragraph whose text passes `wanted`.
+/// The tone of each painted status `<icon> <word>` in view (a save row's `Invalid`), by its icon
+/// and its word's colour: `warning`, `error` or `none` (R41: one fault has one tone).
+pub(super) fn status_tones(d: &Driver<'_>, word: &str) -> Vec<&'static str> {
+    let colors = crate::design::colors();
+    let mut tones = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        let job = &text.galley.job;
+        if !clip.intersects(rect) || job.sections.len() != 3 || !job.text.ends_with(word) {
+            return;
+        }
+        let icon = &job.text[job.sections[0].byte_range.clone()];
+        let color = job.sections[2].format.color;
+        tones.push(
+            if icon == crate::design::icons::WARN && color == colors.result.warning {
+                "warning"
+            } else if icon == crate::design::icons::ERROR
+                && (color == colors.result.error || color == colors.document.invalid)
+            {
+                "error"
+            } else {
+                "none"
+            },
+        );
+    });
+    tones
+}
+
 fn tones_where(d: &Driver<'_>, wanted: impl Fn(&str) -> bool) -> Vec<&'static str> {
     let mut paragraphs = Vec::new();
     d.each_painted_text(|text, clip| {
@@ -18556,6 +18584,26 @@ pub mod encounter_groups {
             "At the minimum window, an open form says in view that its change cannot stand",
         );
         d.state("group-invalid-change", Sizes::Default);
+        // s30 B11 (R41): Save refuses the first member fault, the creature that is not in the
+        // packages, a warning in its row. The save row's `Invalid` and the words beside Save
+        // that point at that row take its tone, at each size where they show.
+        let tones = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                (
+                    status_tones(d, "Invalid"),
+                    tones_beside(d, "A creature here cannot be saved. See its row."),
+                )
+            })
+        });
+        d.observe(
+            "s30-B11-tone-member-refusal",
+            tones.iter().all(|(word, _)| word == &["warning"])
+                && tones.iter().any(|(_, beside)| !beside.is_empty())
+                && tones
+                    .iter()
+                    .all(|(word, beside)| beside.iter().all(|tone| word.contains(tone))),
+            format!("Invalid and the words beside Save at 960, 1200 and 1920: {tones:?}"),
+        );
         // The fault sits under the Maximum HP field at its left edge, once, and the preview
         // beside the field takes the error colour.
         for size in [SMALL, DEFAULT] {
@@ -20278,6 +20326,17 @@ pub mod encounter_owned_groups {
                 "iter-29-BC5-G122",
                 d.visible_text(gone) && said == 1,
                 format!("One message says the gone encounter: {said} painted"),
+            );
+            // s30 B11 (R41): a gone encounter is a missing thing, so a warning; the save row's
+            // `Invalid` and the message under Belongs to take that one tone.
+            let (word, cause) = (status_tones(d, "Invalid"), tones_beside(d, gone));
+            d.observe(
+                "s30-B11-tone-gone-encounter",
+                word == ["warning"] && cause == ["warning"],
+                format!(
+                    "At {:?}, Invalid {word:?} and the gone encounter's message {cause:?}",
+                    d.window_size()
+                ),
             );
             // Lead, round 29 (the band at 960): the cause's place is on the save row, so the
             // gap from the save row's word to the first field is main's at every size.
