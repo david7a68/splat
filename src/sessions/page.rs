@@ -404,6 +404,9 @@ enum Tab {
 pub struct Plan<'a> {
     pub fights: &'a [PlanFight],
     pub saved_runs: &'a [crate::encounter_run::SavedRunInfo],
+    /// The revision of the saved runs' facts (`Encounters::saved_runs_revision`): the plan's Add
+    /// result names the fights that keep their HP by them.
+    pub saved_runs_revision: design::memo::Revision,
     pub groups: &'a [std::sync::Arc<crate::encounter_run::RunGroup>],
     /// Why no group can be assembled now.
     pub group_blocked: Option<&'a str>,
@@ -495,14 +498,14 @@ struct Reading {
 }
 
 /// An event just added, with its one step of undo. It goes at the next thing the DM does.
-struct Added {
-    id: String,
-    label: String,
-    /// When it was added, on the frame clock (`crate::frame_clock`).
-    at: f64,
-    count: usize,
-    /// When the add was done: its result's footer order.
-    order: design::ResultOrder,
+/// The timed recording words (`Recording saved`, `Hearing sound`) as of the last owner update,
+/// with a revision that changes only when one comes or goes.
+struct TimedWords(design::memo::Revised<(bool, bool)>);
+
+impl Default for TimedWords {
+    fn default() -> Self {
+        Self(design::memo::Revised::new((false, false)))
+    }
 }
 
 /// Something failed where the DM may not be looking. It stays until they dismiss it.
@@ -738,7 +741,13 @@ pub struct Sessions {
     /// The latest result has something the DM must look at.
     job_warned: bool,
     alerts: Vec<Alert>,
-    added: Option<Added>,
+    /// The plan's Add result (`kept::PlanAdded`), with one step of undo.
+    added: design::Results<kept::OfSession, kept::PlanAdded>,
+    /// Its footer line, kept as data across frames (ruling L9): made again only when the store,
+    /// the book or the saved-run facts changed.
+    added_view: design::results::Retained<kept::OfSession, SessionAct, plan::AddedInputs>,
+    /// The book's revision at the last check that the events hold what the Add left.
+    added_seen: Option<design::memo::Revision>,
     /// A marker's `Add` result, by the session whose recording holds the marker.
     markers: design::Results<kept::OfSession, kept::MarkerAdd>,
     /// `Recording saved: …`, by the session whose recording it names.
@@ -766,8 +775,12 @@ pub struct Sessions {
     moves: design::Results<kept::Page, kept::Moved>,
     /// When a recording last stopped, and the campaign it was recorded in: the owner, so the
     /// rail says it was kept only while that campaign is open (another campaign's rail never
-    /// says it). It ends after `SAVED_WORD_FOR` of the frame clock (`crate::frame_clock`).
+    /// says it). The owner update (`settle_words`) ends it `SAVED_WORD_FOR` after, on the frame
+    /// clock (`crate::frame_clock`); no reader reads the clock.
     saved_at: Option<(Option<Uuid>, f64)>,
+    /// The timed recording words as of the last owner update (`Recording saved` shown, `Hearing
+    /// sound` shown), with their revision (`recording_revision`).
+    timed_words: TimedWords,
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
@@ -1706,9 +1719,6 @@ impl Sessions {
             .collect();
         book.open(self.folder.as_deref());
         self.end_removal_on_note_edit(book);
-        if self.just_saved() {
-            ctx.request_repaint_after(SAVED_WORD_FOR);
-        }
         if let Some(live) = &mut self.live {
             live.recorder.poll();
             if let Health::Stopped(words) = live.recorder.health().clone() {
@@ -1813,6 +1823,9 @@ impl Sessions {
         self.follow_plan_line();
         self.end_plan_answers_of_lost_journeys(book);
         book.poll(ctx);
+        // After the book's last update this frame, so the Add result is checked against the
+        // book its footer will read.
+        self.settle_timed(ctx, book);
     }
 
     fn recording_row_here(&self, session: Uuid) -> bool {
@@ -2309,10 +2322,10 @@ impl Sessions {
             self.process_recording(ctx, &path, settings, book, session);
         }
         if stop {
-            self.finish_recording();
+            self.finish_recording(ctx);
         }
         if let Some(session) = record_again {
-            self.finish_recording();
+            self.finish_recording(ctx);
             if Some(session) != self.selected {
                 self.select(Some(session));
             }
@@ -2651,6 +2664,8 @@ impl Sessions {
         if self.selected != session {
             self.scenes = plan::Scenes::default();
         }
+        // The plan's Add result is the session's open plan's: a select ends it.
+        self.end_plan_add();
         self.selected = session;
         self.caret_to_show = None;
         self.note_scroll_to_top = true;
@@ -2658,7 +2673,6 @@ impl Sessions {
             .and_then(|id| self.notes.iter().find(|note| note.id == id))
             .and_then(|note| Draft::open(&note.path).ok());
         self.reading = None;
-        self.added = None;
         self.open_event = None;
         self.fight = None;
         self.reading_note = session != self.current();
@@ -3334,12 +3348,82 @@ impl Sessions {
             .map(|_| "Recording silence. Check the input in Settings.")
     }
 
-    /// A recording stopped a moment ago, and its file is kept.
+    /// A recording stopped a moment ago, and its file is kept. Its owner update
+    /// (`settle_words`) ends it on the frame clock; this reads no clock.
     pub fn just_saved(&self) -> bool {
-        self.saved_at.is_some_and(|(campaign, at)| {
+        self.saved_at.is_some_and(|(campaign, _)| {
             campaign == self.campaign.as_ref().map(|campaign| campaign.id)
-                && !crate::frame_clock::passed(at, SAVED_WORD_FOR)
         })
+    }
+
+    /// The revision of the timed recording words (`Recording saved`, `Hearing sound`): it
+    /// changes when one of them comes or goes, as of the last owner update, for a reader that
+    /// keeps them. The rail and the page read the words each frame from constant state and
+    /// keep no line yet, so only the tests read it; the retained footer (PR 2b) is its reader.
+    #[cfg(test)]
+    pub(crate) fn recording_revision(&self) -> design::memo::Revision {
+        self.timed_words.0.revision()
+    }
+
+    /// The owner update of the page's timed results and words (ruling L9), at the end of
+    /// `poll`, after the book's last update and before any page or rail reads them: each ends
+    /// here, by the frame clock, and asks for a repaint at its next end, so it ends with no
+    /// input. No reader reads the clock.
+    fn settle_timed(&mut self, ctx: &egui::Context, book: &Book) {
+        self.settle_plan_add(ctx, book);
+        self.settle_words(ctx);
+    }
+
+    /// The plan's Add result: its life ends it (`Results::expire`); so does a book whose events
+    /// no longer hold what the add left (their count, its label), checked only when the book's
+    /// revision changed (a reload, a file event, an edit), never on an unchanged frame.
+    fn settle_plan_add(&mut self, ctx: &egui::Context, book: &Book) {
+        self.added.expire(ctx);
+        let revision = book.revision();
+        if self.added_seen == Some(revision) {
+            return;
+        }
+        self.added_seen = Some(revision);
+        if self.added.is_empty() {
+            return;
+        }
+        let days = crate::timeline::day_numbers(&book.events);
+        self.added.disk_changed(|added| {
+            added.count == book.events.len()
+                && book
+                    .events
+                    .iter()
+                    .position(|event| event.id == added.id)
+                    .is_some_and(|at| book.events[at].label(days[at]) == added.label)
+        });
+    }
+
+    /// The plan's Add result ends: the DM's next act on the plan or its note, or another
+    /// session.
+    pub(super) fn end_plan_add(&mut self) {
+        self.added.owner_changed(&self.of_session(self.selected));
+    }
+
+    /// `Recording saved` ends `SAVED_WORD_FOR` after the stop, and `Hearing sound`
+    /// `recording::HEARD_FOR` after the last sound, on the frame clock; each asks for a repaint
+    /// at its end while it stands. The revision of the two words changes only when one comes or
+    /// goes.
+    fn settle_words(&mut self, ctx: &egui::Context) {
+        if let Some((_, at)) = self.saved_at {
+            if crate::frame_clock::passed(at, SAVED_WORD_FOR) {
+                self.saved_at = None;
+            } else {
+                let left = SAVED_WORD_FOR.as_secs_f64() - (crate::frame_clock::now() - at);
+                ctx.request_repaint_after(Duration::from_secs_f64(left.max(0.0)));
+            }
+        }
+        let hearing = self.live.as_mut().is_some_and(|live| {
+            if let Some(left) = live.recorder.expire() {
+                ctx.request_repaint_after(left);
+            }
+            live.recorder.heard_just_now()
+        });
+        self.timed_words.0.set((self.saved_at.is_some(), hearing));
     }
 
     /// A job finished, and the DM has not looked at it yet.
@@ -3411,8 +3495,11 @@ impl Sessions {
         !self.not_saved().is_empty()
     }
 
-    fn finish_recording(&mut self) {
+    /// Stop the recording, and arm the end of its `Recording saved` (`settle_words`), so a stop
+    /// made after this frame's owner update still ends with no input.
+    fn finish_recording(&mut self, ctx: &egui::Context) {
         self.stop_recorder(true);
+        self.settle_words(ctx);
     }
 
     /// Stop, and say what is true of the file. Returns whether it holds any audio.
@@ -3645,7 +3732,7 @@ impl Sessions {
                 .show(ui)
                 .clicked()
             {
-                self.finish_recording();
+                self.finish_recording(ui.ctx());
             }
             return;
         }
@@ -5729,11 +5816,11 @@ impl Sessions {
             });
         }
         if stop {
-            self.finish_recording();
+            self.finish_recording(ui.ctx());
         }
         if record_again && let Some(session) = self.selected {
             if stalled {
-                self.finish_recording();
+                self.finish_recording(ui.ctx());
             }
             if let Err(error) = self.start_recording(settings, session) {
                 self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
@@ -7888,7 +7975,7 @@ impl Sessions {
     }
 
     pub fn clear_notice(&mut self) {
-        self.added = None;
+        self.end_plan_add();
         // Leaving the Recordings tab ends the marker's result (`MarkerAdd`'s owner event).
         self.markers.owner_changed(&self.of_session(self.selected));
     }
@@ -7968,7 +8055,7 @@ impl Sessions {
             }
         });
         if stop {
-            self.finish_recording();
+            self.finish_recording(ui.ctx());
         }
         if new_session {
             self.open_form();
@@ -9520,7 +9607,8 @@ mod tests {
             )
             .unwrap(),
         });
-        harness.state_mut().0.finish_recording();
+        let ctx = harness.ctx.clone();
+        harness.state_mut().0.finish_recording(&ctx);
         harness.run_steps(2);
         assert_eq!(saved(&harness), Some("Recording saved"), "A's own rail");
         // Round 30 review of PR 400 (F3): the footer's `Recording saved: …` is kept by A's
@@ -9561,7 +9649,8 @@ mod tests {
                 )
                 .unwrap(),
             });
-            harness.state_mut().0.finish_recording();
+            let ctx = harness.ctx.clone();
+            harness.state_mut().0.finish_recording(&ctx);
         }
         let wakes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let heard = wakes.clone();
@@ -9965,10 +10054,15 @@ mod tests {
             )
             .unwrap(),
         });
-        harness.state_mut().0.finish_recording();
+        let ctx = harness.ctx.clone();
+        harness.state_mut().0.finish_recording(&ctx);
         harness.step();
         assert_eq!(saved(&harness), Some("Recording saved"), "the stop says it");
         let stopped = harness.state().0.saved_at.map(|(_, at)| at).unwrap();
+        // Ruling L9: the owner update (`poll`'s `settle_timed`) ends the word, and until then
+        // asks for a repaint at the time left; the rail reads no clock. The words' revision
+        // changes at the end, not on a frame with no change.
+        let said = harness.state().0.recording_revision();
         crate::frame_clock::set(stopped + 7.5);
         harness.step();
         assert_eq!(
@@ -9976,12 +10070,27 @@ mod tests {
             Some("Recording saved"),
             "7.5 s of frames later"
         );
-        crate::frame_clock::set(stopped + 8.5);
+        // egui asks for the repaint one predicted frame early, so it lands at the end.
+        let dt = f64::from(harness.ctx.input(|input| input.predicted_dt));
+        let delay = harness.output().viewport_output[&egui::ViewportId::ROOT]
+            .repaint_delay
+            .as_secs_f64();
+        assert!(
+            (delay - (0.5 - dt)).abs() < 1e-3,
+            "a repaint is asked for at the word's end, 0.5 s on, not {delay}"
+        );
+        assert_eq!(harness.state().0.recording_revision(), said);
+        crate::frame_clock::set(stopped + 8.0);
         harness.step();
         assert_eq!(
             saved(&harness),
             None,
-            "8.5 s of frames later the word has ended"
+            "8 s of frames later the word has ended"
+        );
+        assert_ne!(
+            harness.state().0.recording_revision(),
+            said,
+            "its end is a change of the timed words"
         );
     }
 

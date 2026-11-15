@@ -13555,25 +13555,7 @@ fn long_repair_keeps_save(d: &mut Driver<'_>) {
 }
 
 fn repair_footer_follows(d: &mut Driver<'_>, words: &str, id: &str) {
-    let size = d.window_size();
-    let save = d.place_of("Save repaired note");
-    let footer = footer_with(d, words);
-    let hairline = footer.map(|footer| {
-        d.hairlines_in(egui::Rect::from_min_max(
-            footer.left_top() - egui::vec2(0.0, 1.0),
-            egui::pos2(footer.right(), footer.top() + 2.0),
-        ))
-    });
-    d.observe(
-        id,
-        save.zip(footer).is_some_and(|(save, footer)| {
-            (footer.top() - (save.bottom() + design::S)).abs() <= 1.0
-                && footer.bottom() < size.1 - design::XXL
-        }) && hairline.as_ref().is_some_and(Vec::is_empty),
-        format!(
-            "At {size:?}, the footer is `S` below the save row, with no hairline: save {save:?}, footer {footer:?}, hairlines {hairline:?}"
-        ),
-    );
+    footer_follows(d, "Save repaired note", words, id);
 }
 
 /// The stat block's last section, next to the run panel's footer.

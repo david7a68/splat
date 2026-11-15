@@ -532,6 +532,31 @@ fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
         .min_by(|a, b| a.area().total_cmp(&b.area()))
 }
 
+/// iter-27-A: a short body's footer (the one whose words hold `words`) sits `S` below the body's
+/// last control `last`, clear of the window's bottom, and draws no hairline, as it cuts no body.
+/// World's repair (`repair_footer_follows`) and Rules and runs (migration-32 L1b) use it.
+fn footer_follows(d: &mut Driver<'_>, last: &str, words: &str, id: &str) {
+    let size = d.window_size();
+    let control = d.place_of(last);
+    let footer = footer_with(d, words);
+    let hairline = footer.map(|footer| {
+        d.hairlines_in(egui::Rect::from_min_max(
+            footer.left_top() - egui::vec2(0.0, 1.0),
+            egui::pos2(footer.right(), footer.top() + 2.0),
+        ))
+    });
+    d.observe(
+        id,
+        control.zip(footer).is_some_and(|(control, footer)| {
+            (footer.top() - (control.bottom() + crate::design::S)).abs() <= 1.0
+                && footer.bottom() < size.1 - crate::design::XXL
+        }) && hairline.as_ref().is_some_and(Vec::is_empty),
+        format!(
+            "At {size:?}, the footer is `S` below {last}, with no hairline: {last} {control:?}, footer {footer:?}, hairlines {hairline:?}"
+        ),
+    );
+}
+
 /// The Party member rows in view, top to bottom: (accessible name, rect).
 fn party_rows(d: &Driver<'_>) -> Vec<(String, egui::Rect)> {
     let mut rows: Vec<_> = d
@@ -9457,7 +9482,44 @@ pub mod run_folder_defect {
                 ),
             );
         }
-        d.state("run-folder-edited", Sizes::All);
+        // Migration-32 L1b (SS1, AS1): the folder move's warning follows the short form `S` below
+        // its last control, with no hairline, at every size (the footer placed by hand stood at
+        // the tab's bottom).
+        d.state_prepared("run-folder-edited", Sizes::All, |d| {
+            footer_follows(
+                d,
+                "Move runs and save",
+                "From the new folder",
+                "m32-L1b-run-folder-footer",
+            );
+        });
+        // Migration-32 L1b: the discard's result and its Undo are the pane's footer's, built
+        // from the settings as the frame starts. Discard puts the result `S` below the clean
+        // form; its Undo brings the draft back, with the folder move's warning and no result.
+        d.aside(|d| {
+            d.click(DISCARD);
+            d.expect("Rules and runs draft discarded.");
+            footer_follows(
+                d,
+                "Save run settings",
+                "Rules and runs draft discarded.",
+                "m32-L1b-discard-footer",
+            );
+            let undo = "Undo discard of Rules and runs";
+            let offered = d.has(undo) && !d.has_containing("From the new folder");
+            d.click(undo);
+            d.settle();
+            d.observe(
+                "m32-L1b-discard-undo",
+                offered
+                    && d.has("Move runs and save")
+                    && d.has_containing("From the new folder")
+                    && !d.has_containing("Rules and runs draft discarded."),
+                format!(
+                    "Discard offered {undo} ({offered}); the Undo brings the draft back with the folder move's warning and ends the result"
+                ),
+            );
+        });
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
         d.stop_filming();
