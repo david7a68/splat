@@ -1157,8 +1157,11 @@ mod iter_2_c_tests {
                 .iter()
                 // The fixture's creatures with no XP.
                 .map(|&(count, name)| {
-                    crate::difficulty::Member::new(count, name)
-                        .without_xp(["Nameless Thing", "Wisp"].contains(&name))
+                    crate::difficulty::Member::new(
+                        count,
+                        name,
+                        ["Nameless Thing", "Wisp"].contains(&name),
+                    )
                 })
                 .collect(),
             facts: Vec::new(),
@@ -1310,8 +1313,8 @@ mod iter_2_c_tests {
         let twins = crate::difficulty::Summary {
             party: 5,
             members: vec![
-                crate::difficulty::Member::new(1, "Wolf"),
-                crate::difficulty::Member::renamed(1, "Wolf", "Nameless Thing").without_xp(true),
+                crate::difficulty::Member::new(1, "Wolf", false),
+                crate::difficulty::Member::renamed(1, "Wolf", "Nameless Thing", true),
             ],
             facts: Vec::new(),
         };
@@ -1409,7 +1412,7 @@ mod iter_2_c_tests {
             name: name.into(),
             summary: Some(super::super::history::Roster::new(
                 crate::difficulty::Summary {
-                    members: vec![crate::difficulty::Member::new(1, "Wolf")],
+                    members: vec![crate::difficulty::Member::new(1, "Wolf", false)],
                     ..Default::default()
                 },
                 &Default::default(),

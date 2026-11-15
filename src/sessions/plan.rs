@@ -6307,8 +6307,11 @@ mod tests {
                 .iter()
                 // The fixtures' creatures with no XP.
                 .map(|&(count, name)| {
-                    crate::difficulty::Member::new(count, name)
-                        .without_xp(["Nameless Thing", "Wisp"].contains(&name))
+                    crate::difficulty::Member::new(
+                        count,
+                        name,
+                        ["Nameless Thing", "Wisp"].contains(&name),
+                    )
                 })
                 .collect(),
             facts: Vec::new(),
@@ -6605,12 +6608,14 @@ mod tests {
         );
         let shade = |beside: bool| crate::difficulty::Summary {
             members: beside
-                .then(|| crate::difficulty::Member::new(1, "Wolf"))
+                .then(|| crate::difficulty::Member::new(1, "Wolf", false))
                 .into_iter()
-                .chain([
-                    crate::difficulty::Member::renamed(1, "Shade", "Nameless Thing")
-                        .without_xp(true),
-                ])
+                .chain([crate::difficulty::Member::renamed(
+                    1,
+                    "Shade",
+                    "Nameless Thing",
+                    true,
+                )])
                 .collect(),
             facts: vec![crate::difficulty::Fact::Changed],
             ..Default::default()
@@ -6635,8 +6640,8 @@ mod tests {
         // reason keeps the name.
         let twins = crate::difficulty::Summary {
             members: vec![
-                crate::difficulty::Member::new(1, "Wolf"),
-                crate::difficulty::Member::renamed(1, "Wolf", "Nameless Thing").without_xp(true),
+                crate::difficulty::Member::new(1, "Wolf", false),
+                crate::difficulty::Member::renamed(1, "Wolf", "Nameless Thing", true),
             ],
             ..Default::default()
         };

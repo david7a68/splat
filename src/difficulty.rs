@@ -424,31 +424,26 @@ pub struct Member {
 }
 
 impl Member {
-    /// A creature shown and called by one name.
-    pub fn new(count: usize, name: impl Into<String>) -> Self {
+    /// A creature shown and called by one name. `no_xp` is required: its builder says once,
+    /// from the source the difficulty weighs (`creature_xp` of its entry), whether its XP is
+    /// not known.
+    pub fn new(count: usize, name: impl Into<String>, no_xp: bool) -> Self {
         let name = name.into();
         Self {
             count,
             called: name.clone(),
             name,
-            no_xp: false,
+            no_xp,
         }
     }
 
-    /// The same member, marked as one whose XP is not known. Its builder sets it once, from
-    /// the source the difficulty weighs (`creature_xp` of its entry).
-    pub fn without_xp(mut self, no_xp: bool) -> Self {
-        self.no_xp = no_xp;
-        self
-    }
-
     /// A renamed creature (FL2): shown as `Shade (as Nameless Thing)`, called `Shade`.
-    pub fn renamed(count: usize, shown: &str, base: &str) -> Self {
+    pub fn renamed(count: usize, shown: &str, base: &str, no_xp: bool) -> Self {
         Self {
             count,
             name: format!("{shown} (as {base})"),
             called: shown.to_owned(),
-            no_xp: false,
+            no_xp,
         }
     }
 
@@ -1184,7 +1179,7 @@ mod tests {
                 .iter()
                 // The fixture's creatures with no XP: Nameless Thing and Wisp.
                 .map(|(count, name)| {
-                    Member::new(*count, *name).without_xp(["Nameless Thing", "Wisp"].contains(name))
+                    Member::new(*count, *name, ["Nameless Thing", "Wisp"].contains(name))
                 })
                 .collect(),
             facts: Vec::new(),
@@ -1350,8 +1345,8 @@ mod tests {
         let comma = Summary {
             party: 5,
             members: vec![
-                Member::new(2, "Cinder Wolf"),
-                Member::new(1, "Ghost, of the Mill").without_xp(true),
+                Member::new(2, "Cinder Wolf", false),
+                Member::new(1, "Ghost, of the Mill", true),
             ],
             facts: Vec::new(),
         };
@@ -1484,7 +1479,7 @@ mod tests {
         let summary = Summary {
             party: 5,
             members: (0..40)
-                .map(|at| Member::new(1, format!("Creature {at}")))
+                .map(|at| Member::new(1, format!("Creature {at}"), false))
                 .collect(),
             facts: Vec::new(),
         };

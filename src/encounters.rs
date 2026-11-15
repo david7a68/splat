@@ -1582,10 +1582,9 @@ fn roster_summary(
     known: &BTreeMap<String, String>,
 ) -> crate::difficulty::Summary {
     let mut party = 0;
-    // By the words shown and whether the XP is known; each with the member made once from its
-    // shown and base names.
-    let mut creatures =
-        std::collections::BTreeMap::<(String, bool), (usize, (String, String))>::new();
+    // By the structured parts (shown name, base name, XP state), never the printed words: a
+    // creature named `Wolf (as Bat)` and `Bat` renamed `Wolf` stay two members.
+    let mut creatures = std::collections::BTreeMap::<(String, String, bool), usize>::new();
     for slot in &setup.roster {
         let side = slot
             .overrides
@@ -1608,15 +1607,7 @@ fn roster_summary(
             let name = roster_base_name(slot, entry, known);
             // FL2: a renamed creature names its base, as a group's member summary does.
             let shown = groups::shown_name(&slot.overrides, name.clone());
-            let words = if shown == name {
-                shown.clone()
-            } else {
-                format!("{shown} (as {name})")
-            };
-            creatures
-                .entry((words, no_xp))
-                .or_insert((0, (shown, name)))
-                .0 += 1;
+            *creatures.entry((shown, name, no_xp)).or_default() += 1;
         }
     }
     // G118: typed parts, never built words, so the difficulty line knows which members the
@@ -1627,13 +1618,12 @@ fn roster_summary(
     // difficulty's reason, so the line matches it and does not name it again.
     let members = creatures
         .into_iter()
-        .map(|((_, no_xp), (count, (shown, name)))| {
+        .map(|((shown, name, no_xp), count)| {
             if shown == name {
-                crate::difficulty::Member::new(count, name)
+                crate::difficulty::Member::new(count, name, no_xp)
             } else {
-                crate::difficulty::Member::renamed(count, &shown, &name)
+                crate::difficulty::Member::renamed(count, &shown, &name, no_xp)
             }
-            .without_xp(no_xp)
         })
         .collect();
     // Loot alone does not change a creature.
@@ -11309,6 +11299,54 @@ mod tests {
         assert_eq!(
             line(56),
             "1 × Alpha (as Wolf), 1 × Rival, … · XP not known: Wolf"
+        );
+        // R31 groups by structured parts, never printed words (re-check of PR 390): `Bat`
+        // renamed `Wolf` and a creature named `Wolf (as Bat)` print alike but stay two members,
+        // so where both gave way and `A` stays, the reason names both.
+        let mut twins = Draft::new();
+        for name in ["A", "Bat", "Wolf (as Bat)"] {
+            twins.add(stat_creature(dir.path(), name, 9), false);
+        }
+        slot_override(&mut twins, 1, "{name: Wolf}");
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let (catalogue, known) = (&snapshot.catalogue, &snapshot.known_creature_names);
+        let parts = roster_summary(&twins.setup, catalogue, known);
+        assert_eq!(
+            parts.text(),
+            "1 × A, 1 × Wolf (as Bat), 1 × Wolf (as Bat) · Changed"
+        );
+        let names: Vec<String> = twins
+            .setup
+            .roster
+            .iter()
+            .map(|slot| {
+                let entry = slot
+                    .creature
+                    .as_ref()
+                    .and_then(|reference| catalogue.resolve_ref(reference).ok())
+                    .and_then(|id| catalogue.entries.get(&id))
+                    .map(|entry| &entry.entry);
+                roster_name(slot, entry, known)
+            })
+            .collect();
+        let difficulty = crate::difficulty::Difficulty {
+            unknown: 3,
+            missing: Some(crate::difficulty::Missing {
+                what: crate::difficulty::Unknown::Xp,
+                at: vec![0, 1, 2],
+                names,
+            }),
+            ..Default::default()
+        };
+        let line = crate::difficulty::Line::roster(&difficulty, &parts);
+        let cut: Vec<String> = (20..80)
+            .filter_map(|room| line.fit(|text| text.chars().count() <= room))
+            .map(|fitted| fitted.text())
+            .filter(|text| text.starts_with("1 × A, …"))
+            .collect();
+        assert!(
+            !cut.is_empty() && cut.iter().all(|text| text.ends_with("and 1 more")),
+            "{cut:?}"
         );
         d.setup.roster.truncate(1);
         slot_override(&mut d, 0, "{side: party}");
