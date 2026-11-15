@@ -2425,7 +2425,7 @@ mod tests {
         // place without taking its focus.
         assert!(
             h.query_all_by_label("Campaign name")
-                .any(|node| node.accesskit_node().is_focused()),
+                .any(|node| node.is_focused()),
             "the opened form's name field lost the keyboard focus"
         );
     }
