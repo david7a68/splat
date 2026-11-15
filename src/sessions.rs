@@ -681,6 +681,12 @@ pub(crate) enum TransferFault {
     },
     /// The original changed while it was copied: both files were kept.
     Changed { source: PathBuf, target: PathBuf },
+    /// The original is gone (moved or deleted outside Splat after the scan): it is no longer in
+    /// its folder, and its place is not known. `copy` is a copy this transfer wrote first.
+    Gone {
+        source: PathBuf,
+        copy: Option<PathBuf>,
+    },
 }
 
 impl TransferFault {
@@ -739,6 +745,20 @@ impl TransferFault {
                 folder(source),
                 folder(target)
             ),
+            // Only what is known to exist: the original is not where it was, and the copy this
+            // transfer wrote, if any.
+            Self::Gone { source, copy } => {
+                let mut words = format!(
+                    "{} was not {moved}: it is no longer in {}. It was moved or deleted outside \
+                     Splat.",
+                    name(source),
+                    folder(source)
+                );
+                if let Some(copy) = copy {
+                    words.push_str(&format!(" A copy is in {}.", folder(copy)));
+                }
+                words
+            }
         }
     }
 }
@@ -796,13 +816,32 @@ fn transfer_file(
             error,
         }
     };
+    // A step on the original itself: one that finds it gone does not say where it is.
+    let refused_source = |read: bool| {
+        let source = source.to_owned();
+        move |error: std::io::Error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                TransferFault::Gone { source, copy: None }
+            } else {
+                TransferFault::Refused {
+                    source,
+                    read,
+                    error,
+                }
+            }
+        }
+    };
+    let gone_after_copy = || TransferFault::Gone {
+        source: source.to_owned(),
+        copy: Some(target.to_owned()),
+    };
     let moved = || {
         let target = target.to_owned();
         move |error| TransferFault::Moved { target, error }
     };
     #[cfg(test)]
     if let Some(error) = failing_transfer("start") {
-        return Err(refused(false)(error));
+        return Err(refused_source(false)(error));
     }
     let gone = || std::io::Error::from(std::io::ErrorKind::NotFound);
     let source_folder = source.parent().ok_or_else(gone).map_err(refused(false))?;
@@ -824,12 +863,12 @@ fn transfer_file(
                 return Ok(());
             }
             Err(error) if error.raw_os_error() != Some(libc::EXDEV) => {
-                return Err(refused(false)(error));
+                return Err(refused_source(false)(error));
             }
             Err(_) => {}
         }
     }
-    let bytes = fs::read(source).map_err(refused(true))?;
+    let bytes = fs::read(source).map_err(refused_source(true))?;
     let mut output = tempfile::NamedTempFile::new_in(target_folder).map_err(refused(false))?;
     output
         .write_all(&bytes)
@@ -845,17 +884,35 @@ fn transfer_file(
     };
     sync(target_folder).map_err(both)?;
     before_delete();
-    if fs::read(source).ok().as_deref() != Some(bytes.as_slice()) {
-        return Err(TransferFault::Changed {
-            source: source.to_owned(),
-            target: target.to_owned(),
-        });
+    match fs::read(source) {
+        Ok(now) if now == bytes => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(gone_after_copy());
+        }
+        _ => {
+            return Err(TransferFault::Changed {
+                source: source.to_owned(),
+                target: target.to_owned(),
+            });
+        }
     }
-    #[cfg(test)]
-    if let Some(error) = failing_transfer("remove") {
-        return Err(both(error));
+    let removed = {
+        #[cfg(test)]
+        if let Some(error) = failing_transfer("remove") {
+            Err(error)
+        } else {
+            fs::remove_file(source)
+        }
+        #[cfg(not(test))]
+        fs::remove_file(source)
+    };
+    match removed {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(gone_after_copy());
+        }
+        Err(error) => return Err(both(error)),
     }
-    fs::remove_file(source).map_err(both)?;
     sync(source_folder).map_err(moved())?;
     sync(target_folder).map_err(moved())
 }
@@ -3000,6 +3057,37 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(from.join("b.md")).unwrap(), "B");
         assert_eq!(fs::read_to_string(to.join("b.md")).unwrap(), "B");
+        // Review F2 of PR 431 (re-check): an original that is gone says only what is known.
+        // Gone before the move:
+        fail(Some((0, 2, FailAt::Start)));
+        let gone = transfer_file(&from.join("c.md"), &to.join("c.md"), false, || {}).unwrap_err();
+        fail(None);
+        assert_eq!(
+            gone.words(false),
+            "c.md was not moved: it is no longer in From. It was moved or deleted outside Splat."
+        );
+        // Gone while it was copied: the copy is in To.
+        fs::write(from.join("d.md"), "D").unwrap();
+        let gone = transfer_file(&from.join("d.md"), &to.join("d.md"), true, || {
+            fs::remove_file(from.join("d.md")).unwrap()
+        })
+        .unwrap_err();
+        assert_eq!(
+            gone.words(false),
+            "d.md was not moved: it is no longer in From. It was moved or deleted outside Splat. \
+             A copy is in To."
+        );
+        assert_eq!(fs::read_to_string(to.join("d.md")).unwrap(), "D");
+        // Gone when the original is removed after the copy:
+        fs::write(from.join("e.md"), "E").unwrap();
+        fail(Some((0, 2, FailAt::Remove)));
+        let gone = transfer_file(&from.join("e.md"), &to.join("e.md"), true, || {}).unwrap_err();
+        fail(None);
+        assert_eq!(
+            gone.words(true),
+            "e.md was not moved back: it is no longer in From. It was moved or deleted outside \
+             Splat. A copy is in To."
+        );
     }
 
     #[test]
