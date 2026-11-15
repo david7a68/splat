@@ -899,6 +899,59 @@ pub(super) fn said_once(
     )
 }
 
+/// s30 B11 F6: the save row's fallback for a fault whose own place is out of view (the
+/// compact `Add creatures` tab): painted once, whole, in `tone`, before and after a press of the
+/// blocked Save group and after Ctrl+S. `about` are the words of any painted text that speaks of
+/// the fault. Unlike `said_once`, it asks nothing of the Members tab, where a row below the view
+/// keeps the fallback.
+pub(super) fn fallback_said_once(
+    d: &mut Driver<'_>,
+    about: &[&str],
+    beside: &str,
+    tone: &str,
+) -> (bool, String) {
+    let said = |d: &Driver<'_>| {
+        let mut count = 0;
+        d.each_painted_text(|text, _| {
+            let words = text.galley.job.text.as_str();
+            count += usize::from(about.iter().any(|about| words.contains(about)));
+        });
+        count
+    };
+    let tabs = |d: &Driver<'_>| {
+        d.nodes().into_iter().any(|node| {
+            node.name.starts_with("Add creatures")
+                && !node.disabled
+                && !matches!(
+                    node.role,
+                    egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                )
+        })
+    };
+    let lookup = !tabs(d);
+    if lookup {
+        d.press_ctrl(Key::K);
+    }
+    d.click_starting("Add creatures");
+    let look = |d: &Driver<'_>| (said(d), d.visible_text(beside), tones_beside(d, beside));
+    let tab = look(d);
+    if let Some(save) = d.place_of("Save group") {
+        d.click_rect(save, "Click: Save group, blocked");
+    }
+    let button = look(d);
+    d.press_ctrl(Key::S);
+    let key = look(d);
+    d.click_starting("Members");
+    if lookup {
+        d.press_ctrl(Key::K);
+    }
+    let once = (1, true, vec![tone]);
+    (
+        tab == once && button == once && key == once,
+        format!("Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}"),
+    )
+}
+
 /// `said_once` for a group whose encounter is gone.
 pub(super) fn gone_encounter_said_once(d: &mut Driver<'_>) -> (bool, String) {
     said_once(
@@ -18860,11 +18913,10 @@ pub mod encounter_groups {
         // view (the compact Add creatures tab), the save row says the chosen fault once, whole,
         // in the error tone, by the mouse and the keyboard alike.
         let (mixed, mixed_detail) = d.aside(|d| {
-            said_once(
+            fallback_said_once(
                 d,
                 &["would become −28", "cannot be saved. See its row"],
                 "A creature here cannot be saved. See its row.",
-                "would become −28",
                 "error",
             )
         });
