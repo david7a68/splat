@@ -1373,13 +1373,16 @@ pub mod library_browse {
                     counts.push(text.visual_bounding_rect());
                 }
             });
+            // At 960 the categories are the `Section` drop-down, with no rows.
+            let compact = d.window_size().0 < 1000.0 && d.place_of("Section").is_some();
             d.observe(
                 "s30-B2-all-entries-count",
-                row.is_some_and(|row| {
-                    !counts.iter().any(|count| {
-                        count.center().y >= row.top() && count.center().y <= row.bottom()
-                    })
-                }),
+                (compact && row.is_none())
+                    || row.is_some_and(|row| {
+                        !counts.iter().any(|count| {
+                            count.center().y >= row.top() && count.center().y <= row.bottom()
+                        })
+                    }),
                 format!("All entries {row:?} paints no count beside it: {counts:?}"),
             );
         });

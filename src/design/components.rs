@@ -202,21 +202,6 @@ pub enum ToolbarPress<A> {
 /// The words of `More`, the toolbar's overflow menu.
 const MORE: &str = "More";
 
-/// The width `add` takes on a line, laid out where it would go, painting nothing.
-fn probe_width(ui: &mut Ui, add: impl FnOnce(&mut Ui)) -> f32 {
-    let mut probe = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(Rect::from_min_size(
-                ui.cursor().min,
-                vec2(ui.available_width().max(1.0), 1_000.0),
-            ))
-            .layout(Layout::left_to_right(Align::Center))
-            .invisible(),
-    );
-    add(&mut probe);
-    probe.min_rect().width()
-}
-
 /// The reader's toolbar, a closed part (ruling R38) that also draws the pane's save row. The
 /// mode switch (`Read` and the source mode), then `Back`, then the extras. The mode switch keeps
 /// the room of its wider source label and `Back` decides its key hint from the prefix and a
@@ -360,6 +345,7 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
                     let response = Action::quiet(&format!("{MORE}    "))
                         .name(MORE)
                         .density(Density::Read)
+                        .min_width(more_width)
                         .show(ui);
                     let caret = Rect::from_min_max(
                         pos2(response.rect.right() - L - XS, response.rect.top()),
@@ -440,7 +426,9 @@ fn save_row_with_reason(
         .key("Ctrl+S")
     };
     let gap = ui.spacing().item_spacing.x;
-    // The room for the reason, with the widest word and `Discard`, whatever the draft holds.
+    let small = Type::Small.font(ui);
+    // The room for the reason, with the widest word and `Discard`, whatever the draft holds;
+    // measured from the fonts, so nothing is laid out before the row.
     let word = [
         SaveWord::Invalid,
         SaveWord::ChangedOnDisk,
@@ -450,18 +438,20 @@ fn save_row_with_reason(
         SaveWord::NoChanges,
     ]
     .into_iter()
-    .map(|word| probe_width(ui, |ui| drop(status(ui, word.status()))))
+    .map(|word| {
+        let status = word.status();
+        number_width(ui, &format!("{} {}", status.icon, status.word), &small)
+    })
     .fold(0.0, f32::max);
-    let lock = state.lock_reason().map_or(0.0, |reason| {
-        probe_width(ui, |ui| blocked_reason(ui, Some(reason))) + gap
-    });
+    let lock = state
+        .lock_reason()
+        .map_or(0.0, |reason| number_width(ui, reason, &small) + gap);
     let room = ui.available_width()
         - save_action().natural_width(ui)
         - word
         - Action::quiet("Discard").natural_width(ui)
         - lock
         - 4.0 * gap;
-    let small = Type::Small.font(ui);
     let fits = |words: &str| number_width(ui, words, &small) <= room;
     let on_line = reason.and_then(|(long, short)| {
         if fits(long) {
