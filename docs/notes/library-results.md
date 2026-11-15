@@ -25,7 +25,8 @@ against PR 452's typed footer (head c8921177). Code starts after PR 452 lands an
 use_press_by, owner_changed, disk_changed, reconcile}`; `KeptOutcome::{Notice, Fault}`, `Said`, `Notice`,
 `FaultMessage` with a fault type, `Choice` / `MessageChoice` / `choice!`, `UndoStep::of(...).pressed_as`,
 `locked_when`; `Footer::planned` (the pane places the footer from its plan); `Ban::Footer` with its exact
-per-file counts. If PR 452's repair renames any of these, the code follows; the design does not change.
+per-file counts. From L2a (PR 444, on main): `Retained`, `Projection` and `Results::present`, so a kept
+line is made only when its inputs change. If PR 452's repair renames any of these, the code follows; the design does not change.
 
 ## 3. The store: one mark store, as Encounters' `KeptResult` (PR 452)
 
@@ -142,9 +143,11 @@ The three M9 labels (4b), with Astra's three failing cases of PR 463 as their pr
    (`Undo unregister`), and the AccessKit name stays `Undo unregister Ashen Marches`, as does the hover.
    Mutant: name the action by its visible words → the name loses the package.
 8. Quiet frames: with all three Undos shown and nothing changed, a frame clones no name, builds no step and
-   measures no label: PR 452's footer work counters (plans, sorted lines, named bytes, probes) stay 0, and
-   `outcome_of` runs only when its kind's data or the store's revision changed. Mutant: build the label in
-   the draw → the counters rise.
+   measures no label. Each kept line is a `Retained` projection (L2a, PR 444: `Retained::refresh` makes it
+   only when the store's revision, the key or the owner's inputs changed; `Results::present` mints this
+   frame's `KeptLine`), so `outcome_of` runs only on a change. PR 452's footer work counters (plans, sorted
+   lines, named bytes, probes) stay 0. Mutant: `outcome_of` called in the draw → its call count and the
+   footer's compared bytes rise on a quiet frame.
    The visible witnesses stay in their states: `dependency-copy-reconnected` (library-navigation),
    `package-unregistered-with-undo` (remove-package-in-use), `deleted-draft-let-go` (package-delete-entry),
    at 960, 1200 and 1920.
