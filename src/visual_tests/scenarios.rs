@@ -21227,6 +21227,46 @@ pub mod encounter_owned_groups {
                 .all(|(blocked, shown, steps, causes)| *blocked && *shown && *steps == 1 && *causes <= 1),
             format!("Member fault: (Save blocked, {step:?} painted, next-step lines, cause lines) at 960, 1200, 1920: {said:?}"),
         );
+
+        // N4 (B3b, lead rule): the reason that disables Save now is always painted. A failed
+        // write of the encounter stays as its own line, and the owned group's next step is
+        // painted beside it, once, while the group blocks Save.
+        d.click("Discard");
+        d.expect(&format!("Group name: {GROUP_GOBLINS}"));
+        d.type_into("Read-aloud and notes", " The fire is out.");
+        let folder = file.parent().unwrap().parent().unwrap().join("Encounters");
+        let open = std::fs::metadata(&folder).unwrap().permissions();
+        let mut closed = open.clone();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut closed, 0o555);
+        std::fs::set_permissions(&folder, closed).unwrap();
+        d.click(SAVE_ENCOUNTER);
+        d.settle();
+        let failed = d.has_containing("ermission denied");
+        std::fs::set_permissions(&folder, open).unwrap();
+        d.type_into(&format!("Group notes for {GROUP_GOBLINS}"), "Hungry.");
+        let both = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let mut steps = 0;
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if clip.intersects(rect) {
+                        steps += usize::from(text.galley.job.text.contains(&step));
+                    }
+                });
+                (
+                    d.is_disabled(SAVE_ENCOUNTER),
+                    steps,
+                    d.visible_text("ermission denied"),
+                )
+            })
+        });
+        d.observe(
+            "s30-B3b-N4-error-and-step",
+            failed && both.iter().all(|(blocked, steps, error)| *blocked && *steps == 1 && *error),
+            format!(
+                "After a failed write ({failed}) and a group edit: (Save blocked, next-step lines, write error painted) at 960, 1200, 1920: {both:?}"
+            ),
+        );
         std::fs::write(&file, &text).unwrap();
     }
 }
