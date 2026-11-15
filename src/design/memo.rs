@@ -173,7 +173,8 @@ impl From<bool> for Changed {
 pub struct Revision(NonZeroU64);
 
 impl Revision {
-    fn next() -> Self {
+    /// A new revision, for a store in `design` that publishes its own (`Results::revision`).
+    pub(in crate::design) fn next() -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self(NonZeroU64::new(n).expect("a revision count never wraps"))

@@ -49,6 +49,37 @@ impl Owner for FolderLink {
     }
 }
 
+/// `<event> added to <session>.` with `Undo add`: the plan's Add strip added an event to the
+/// session's timeline. It lives `plan::UNDO_ADD_FOR` on the frame clock; the Sessions owner
+/// update (`Sessions::settle_timed`) ends it then, and when the events no longer hold what the
+/// add left (their count, its label), checked only when the book's revision changed. Another
+/// session, or the DM's next act on the plan or its note, ends it (`owner_changed`).
+pub(super) struct PlanAdded {
+    pub owner: OfSession,
+    /// The added event.
+    pub id: String,
+    /// Its label as the add left it (`Day 2 · Long rest`).
+    pub label: String,
+    /// The session's name at the act (`Session 3`), as the label is fixed at the act.
+    pub to: Option<String>,
+    /// How many events the book held after the add.
+    pub count: usize,
+}
+
+impl Kept for PlanAdded {
+    type Owner = OfSession;
+    const ENDS: Ends = Ends {
+        owner_changed: OwnerChanged::Ends,
+        // The owner update's events check ends it (`Sessions::settle_timed`).
+        disk_changed: DiskChanged::Checked,
+        press: Press::Undo,
+    };
+    const LIFE: Option<std::time::Duration> = Some(super::plan::UNDO_ADD_FOR);
+    fn owner(&self) -> OfSession {
+        self.owner.clone()
+    }
+}
+
 /// `Moved <counts> to <folder>.`: Move files and save moved the session files of one campaign.
 pub(super) struct FolderMoved {
     pub link: FolderLink,
