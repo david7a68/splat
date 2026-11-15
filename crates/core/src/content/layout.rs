@@ -76,11 +76,26 @@ impl From<Fault> for String {
 }
 
 fn words(cause: &str, help: &str) -> String {
+    let cause = cause_words(cause);
     if help.is_empty() {
-        cause.to_owned()
+        cause
     } else {
         format!("{cause} {help}")
     }
+}
+
+/// R36: a fault's cause is a sentence of its own where it follows its place (`Line 13: Not in
+/// this campaign’s packages.`, `Cinder Wolf · line 13: …`, `Names.md: The name table …`): it
+/// starts with a capital. This is the one home of that rule; every form that puts a cause after
+/// a place calls it, so no caller capitalizes its own cause. The word `line` after a name is
+/// the place's, not the cause's, and stays as it is.
+pub fn cause_words(cause: &str) -> String {
+    let cause = cause.trim_start();
+    let mut chars = cause.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 /// What a flag is about. Code that looks for a flag matches its kind, never its words.

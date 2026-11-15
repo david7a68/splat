@@ -18305,7 +18305,7 @@ pub mod encounter_groups {
         // in the editor and Arrivals; the member that is not in the packages stays a warning.
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "not in this campaign’s packages"),
+            tones_beside(d, "Not in this campaign’s packages"),
         );
         d.observe(
             "iter-22-B-FT1-list",
@@ -18512,7 +18512,7 @@ pub mod encounter_groups {
         let (found, invalid) = d.at_size(SMALL, |d| {
             (
                 d.in_view_containing(
-                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                    "Unknown creature · line\u{a0}13: Not in this campaign’s packages.",
                 ),
                 d.in_view_containing("would become −28"),
             )
@@ -18526,7 +18526,7 @@ pub mod encounter_groups {
             tones_beside(d, "would become −28"),
             tones_beside(
                 d,
-                "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                "Unknown creature · line\u{a0}13: Not in this campaign’s packages.",
             ),
         );
         // FA1 (Astra review of PR 259): the editor names the missing member in the one form,
@@ -18534,7 +18534,7 @@ pub mod encounter_groups {
         // names its line, as Arrivals does.
         d.observe(
             "iter-25-B-FA1-missing",
-            d.has("Unknown creature · line\u{a0}13: not in this campaign’s packages.")
+            d.has("Unknown creature · line\u{a0}13: Not in this campaign’s packages.")
                 && d.has(
                     "Choose a replacement, check the packages it uses, or remove this member.",
                 )
@@ -18557,7 +18557,7 @@ pub mod encounter_groups {
         for size in [SMALL, DEFAULT, LARGE] {
             let (aligned, detail) = d.at_size(size, |d| {
                 let text = d.painted_rect_in(
-                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                    "Unknown creature · line\u{a0}13: Not in this campaign’s packages.",
                     egui::Rect::EVERYTHING,
                 );
                 let words = d.painted_rect_in("Campaign → Packages", egui::Rect::EVERYTHING);
@@ -18688,11 +18688,14 @@ pub mod encounter_groups {
         d.type_text("Ash Pack");
         assert!(d.is_disabled(SAVE_GROUP));
         d.expect("Add a creature first.");
-        // AH1: Save refuses the empty group, so the state says Invalid, not Unsaved.
+        // AH1, R37 (Q-m): a new group with only its name is not wrong. It says New, not Invalid
+        // and not Unsaved, while Save waits with the painted reason above.
         d.observe(
             "iter-25-B-AH1-list",
-            d.visible_text("Invalid") && !d.visible_text("Unsaved"),
-            "An empty new group says Invalid beside its blocked Save",
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT))
+                && !d.visible_text("Invalid")
+                && !d.visible_text("Unsaved"),
+            "An empty new group says New with the draft icon beside its blocked Save",
         );
         d.state("group-rejected-empty", Sizes::Default);
         // FH3, SH2: a tall window shows every result and a short one scrolls them; each `Add`
@@ -19205,7 +19208,7 @@ pub mod encounter_groups {
             // R1: the group's own XP (`XP 50`) is its heading's hover and description now; the
             // line says the fight after.
             d.has_containing(
-                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                    "Unknown creature · line\u{a0}13: Not in this campaign’s packages.",
                 )
                 // iter-26-R FI8: `Will add:` keeps its first member on its line.
                 && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
@@ -19224,13 +19227,13 @@ pub mod encounter_groups {
         d.observe(
             "T13.1",
             can_join
-                && d.has_containing("not in this campaign’s packages")
+                && d.has_containing("Not in this campaign’s packages")
                 && d.has_containing("Cinder Wolf · line\u{a0}14: Maximum HP would become −28."),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "not in this campaign’s packages"),
+            tones_beside(d, "Not in this campaign’s packages"),
         );
         d.observe(
             "iter-22-B-FT1-arrivals",
@@ -19621,8 +19624,8 @@ pub mod encounter_groups {
         // line, as Arrivals does; never the short `<name>: <cause>` form.
         d.observe(
             "iter-26-B-FJ6",
-            d.has_containing("Unknown creature · line\u{a0}13: not in this campaign’s packages.")
-                && !d.has_containing("Unknown creature: not in this campaign’s packages."),
+            d.has_containing("Unknown creature · line\u{a0}13: Not in this campaign’s packages.")
+                && !d.has_containing("Unknown creature: Not in this campaign’s packages."),
             "The group editor names a saved missing member with its line, in the one fault form",
         );
         // iter-27-B FJ6 closure (AI3, SI2): a member's invalid change is in the same form, with
@@ -19738,7 +19741,7 @@ pub mod encounter_groups {
             d.click("Move down");
             // FN5: the moved group still has its faults, so it says Invalid, not Unsaved.
             d.expect("Invalid");
-            d.has("Unknown creature: not in this campaign’s packages.")
+            d.has("Unknown creature: Not in this campaign’s packages.")
         });
         let checked = crate::encounters::group_checks().1 > before.1;
         d.observe(
@@ -19765,13 +19768,13 @@ pub mod encounter_groups {
         d.click("Discard");
         d.observe(
             "iter-26-B-FJ6-changed",
-            changed && !d.has("Unknown creature: not in this campaign’s packages."),
+            changed && !d.has("Unknown creature: Not in this campaign’s packages."),
             "A changed group's missing member names no line; Discard gives back the saved form",
         );
         // Review 2: a count edit lands after the comparison in its own frame. The input-free
         // frames after it work the comparison out again (the line goes), putting the count back
         // brings the line back, and unchanged frames still do no comparison.
-        const SHORT: &str = "Unknown creature: not in this campaign’s packages.";
+        const SHORT: &str = "Unknown creature: Not in this campaign’s packages.";
         let focused = d.tab_to("How many of Cinder Wolf");
         // The open run takes the arrow keys, so the count is typed.
         d.press_ctrl(Key::A);
@@ -19796,6 +19799,33 @@ pub mod encounter_groups {
             focused && edited && restored && idle.is_ok(),
             format!(
                 "Count field focused {focused}; after the edit the line went {edited}; restored {restored}; idle {idle:?}"
+            ),
+        );
+        // R37 (B3): a saved group that an edit empties is a refused change, not a new draft:
+        // it says Invalid in the warning tone of its cause, never New, and Save waits with the
+        // reason. At the scenario's end: the editor keeps one member result, so this removes
+        // all three of Lost Patrol's members and does not come back.
+        d.click("More actions for Cinder Wolf");
+        d.click("Remove");
+        d.expect("Removed Cinder Wolf.");
+        d.click("More actions for Unknown creature");
+        d.click("Remove");
+        d.expect("Removed Unknown creature.");
+        d.click("More actions for Goblin Warrior");
+        d.click("Remove");
+        d.expect("Removed Goblin Warrior.");
+        let emptied = (
+            d.visible_text(&format!("{} Invalid", crate::design::icons::WARN)),
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
+            d.visible_text("Unsaved"),
+            d.is_disabled(SAVE_GROUP),
+            d.visible_text("Add a creature first."),
+        );
+        d.observe(
+            "s30-B3-R37-saved-emptied",
+            emptied == (true, false, false, true, true),
+            format!(
+                "Emptied saved group (warning Invalid, New, Unsaved, Save blocked, reason): {emptied:?}"
             ),
         );
     }
@@ -20377,11 +20407,11 @@ pub mod encounter_owned_groups {
             let (member, member_detail) = said_once(
                 d,
                 &[
-                    "not in this campaign’s packages",
+                    "Not in this campaign’s packages",
                     "cannot be saved. See its row",
                 ],
                 "A creature here cannot be saved. See its row.",
-                "not in this campaign’s packages",
+                "Not in this campaign’s packages",
                 "warning",
             );
             std::fs::write(&wolf, text).unwrap();
@@ -20483,21 +20513,24 @@ pub mod encounter_owned_groups {
                 && d.has_containing("No members yet. Add creatures from the search."),
             "A new group belongs to this encounter, and takes what the search adds",
         );
-        // iter-26-B AB1: Save checks the new group too, and refuses it empty, so the draft says
-        // Invalid now and Save and Ctrl+S are blocked: nothing is written.
-        let invalid = d.visible_text("Invalid")
+        // iter-26-B AB1: Save checks the new group too, and refuses it empty, so Save and Ctrl+S
+        // are blocked: nothing is written. R37: a new group with only its name is no fault, so
+        // the draft says New, not Invalid.
+        let new_word = format!("{} New", crate::design::icons::DRAFT);
+        let invalid = d.visible_text(&new_word)
+            && !d.visible_text("Invalid")
             && !d.visible_text("Unsaved")
             && d.is_disabled(SAVE_ENCOUNTER)
             && d.visible_text(&format!("Add a creature to {NEW_NAME} first."));
         // A proof step that ends where it started: not part of the DM's task.
         let kept = d.aside(|d| {
             d.press_ctrl(Key::S);
-            d.app_mut().encounters.draft_dirty() && d.visible_text("Invalid")
+            d.app_mut().encounters.draft_dirty() && d.visible_text(&new_word)
         });
         d.observe(
             "iter-26-B-AB1",
             invalid && kept,
-            format!("With an empty new group, Invalid and Save blocked: {invalid}; Ctrl+S writes nothing: {kept}"),
+            format!("With an empty new group, New and Save blocked: {invalid}; Ctrl+S writes nothing: {kept}"),
         );
         d.state("new-group-in-the-encounter", Sizes::All);
         // Two frames, one adding and one not: both name fields end at one edge at every size.
@@ -20624,13 +20657,18 @@ pub mod encounter_owned_groups {
             d.click("Remove");
             d.expect("Undo remove member");
             let removed = !d.has("1. Wolf") && d.has_containing("Removed Wolf.");
+            // R37: the saved group is now empty, a refused change, not a new draft: Invalid in
+            // the warning tone, never New, and Save encounter waits.
+            let emptied = d.visible_text(&format!("{} Invalid", crate::design::icons::WARN))
+                && !d.visible_text(&new_word)
+                && d.is_disabled(SAVE_ENCOUNTER);
             d.type_into(&notes, "Hungry.");
             d.click("Undo remove member");
             d.expect("1. Wolf");
             // The notes field is multiline: its words are read where they are painted.
             let kept = d.visible_text("Hungry.");
             d.clear_text_in(&notes);
-            removed && kept && !d.has("Undo remove member")
+            removed && emptied && kept && !d.has("Undo remove member")
         });
         let footer_tops = |d: &Driver<'_>| {
             d.place_of("Undo remove member")
@@ -21070,6 +21108,175 @@ pub mod encounter_owned_groups {
             d.has_containing("Encounter deleted") && !d.has_containing("For a deleted encounter"),
             "Arrivals says Encounter deleted for a group whose encounter is gone",
         );
+
+        // B3 final review, F5: the owned groups' check runs after a change, never on an
+        // unchanged frame, and its key reads no group. The count holds both.
+        close_run(d);
+        go_encounters(d);
+        let work = crate::test_support::CachedWork::start("Owned-group check", d, |_| {
+            let (reached, work) = crate::encounters::owned_group_work();
+            crate::test_support::Counts { reached, work }
+        });
+        open_saved_encounter(d, SHRINE);
+        d.expect(&format!("Group name: {GROUP_SHRINE}"));
+        let warm = work.warm(d, true, 1);
+        let idle = work.steady(d, |d| {
+            d.settle();
+            d.at_size(SMALL, |_| ());
+            d.settle();
+            d.has(&format!("Group name: {GROUP_SHRINE}"))
+        });
+        d.observe(
+            "s30-B3-F5-idle",
+            warm.is_ok() && idle.is_ok(),
+            format!("Owned-group check: opened {warm:?}; unchanged frames {idle:?}"),
+        );
+        // F2, R35: a saved owned group whose name is cleared blocks Save before any Save is
+        // pressed, and the footer paints why, in view at every size.
+        let field = format!("Group name: {GROUP_SHRINE}");
+        d.type_into(&field, " ");
+        d.press_ctrl(Key::A);
+        d.press(Key::Delete);
+        let reason = "Enter a group name.";
+        let painted = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.is_disabled(SAVE_ENCOUNTER) && d.visible_text(reason)
+            })
+        });
+        d.observe(
+            "s30-B3-F2-reason",
+            painted.iter().all(|shown| *shown),
+            format!("Blank group name: Save blocked and {reason:?} painted at 960, 1200, 1920: {painted:?}"),
+        );
+        // F1: a different valid name repairs it in the same campaign read: Save waits no more,
+        // and Save writes it.
+        d.type_text("Shrine Vanguard");
+        let repaired = !d.is_disabled(SAVE_ENCOUNTER) && !d.visible_text(reason);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Saved");
+        let saved = d.has("Group name: Shrine Vanguard");
+        // And by the keyboard: blank it, cache the fault, name it again, Ctrl+S.
+        d.type_into("Group name: Shrine Vanguard", " ");
+        d.press_ctrl(Key::A);
+        d.press(Key::Delete);
+        let blocked = d.is_disabled(SAVE_ENCOUNTER);
+        d.type_text("Shrine Reserve");
+        d.press_ctrl(Key::S);
+        d.expect("Saved");
+        let keyed = !d.app_mut().encounters.draft_dirty();
+        d.observe(
+            "s30-B3-F1-renamed",
+            repaired && saved && blocked && keyed,
+            format!(
+                "Repaired name: Save open {repaired}, saved {saved}; blank again blocked {blocked}; Ctrl+S saved {keyed}"
+            ),
+        );
+        // F3, R37: the encounter's own missing name is a missing part, by its kind. A saved
+        // encounter whose name is removed says Invalid in the warning tone; a new one, New.
+        d.type_into("Encounter name: Shrine of Cinders", " ");
+        d.press_ctrl(Key::A);
+        d.press(Key::Delete);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Enter an encounter name.");
+        let saved_word = (
+            d.visible_text(&format!("{} Invalid", crate::design::icons::WARN)),
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
+        );
+        d.click("Discard");
+        d.click("Back to encounters");
+        d.click(NEW_ENCOUNTER);
+        d.press(Key::Delete);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Enter an encounter name.");
+        let new_word = (
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
+            d.visible_text("Invalid"),
+        );
+        d.observe(
+            "s30-B3-F3-encounter-name",
+            saved_word == (true, false) && new_word == (true, false),
+            format!(
+                "No name: saved encounter (warning Invalid, New) {saved_word:?}; new encounter (New, Invalid) {new_word:?}"
+            ),
+        );
+        d.click("Discard");
+        if d.has("Back to encounters") {
+            d.click("Back to encounters");
+        }
+
+        // N1 (B3 re-check): who owns a group is part of Save's check. A clean saved encounter
+        // whose own group has the name of a group for any encounter: making it available to any
+        // encounter blocks Save and paints why, before any Save, in the same campaign read.
+        open_saved_encounter(d, SHRINE);
+        let field = format!("Group name: {GROUP_SHRINE}");
+        d.type_into(&field, " ");
+        d.press_ctrl(Key::A);
+        d.type_text(GROUP_GOBLINS);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Saved");
+        d.settle();
+        d.click_first(&format!("More actions for {GROUP_GOBLINS}"));
+        d.click("Make available to any encounter");
+        d.expect("Undo move");
+        let taken = format!("Another group is named {GROUP_GOBLINS}");
+        let moved = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.is_disabled(SAVE_ENCOUNTER) && d.visible_text(&taken)
+            })
+        });
+        d.observe(
+            "s30-B3-N1-made-available",
+            moved.iter().all(|shown| *shown),
+            format!("A taken name made available: Save blocked and {taken:?} painted at 960, 1200, 1920: {moved:?}"),
+        );
+        d.click("Undo move");
+        d.expect(&format!("Group name: {GROUP_GOBLINS}"));
+        d.click("Back to encounters");
+
+        // N2 (lead ruling, R35): a member fault keeps its cause on its row, and the footer
+        // always names the next step, once, whether the row is in view or not.
+        let file = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join(format!("Encounter Groups/{GROUP_SHRINE}.md"));
+        let text = std::fs::read_to_string(&file).unwrap();
+        let broken = text.replacen("creatures/goblin_warrior", "creatures/no_such_creature", 1);
+        assert_ne!(broken, text);
+        std::fs::write(&file, &broken).unwrap();
+        d.click("Reload from disk");
+        d.settle();
+        open_saved_encounter(d, SHRINE);
+        d.type_into(&format!("Group notes for {GROUP_GOBLINS}"), "Hungry.");
+        let step = format!("Fix the Unknown creature row of {GROUP_GOBLINS} before you save.");
+        let said = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let (mut steps, mut causes) = (0, 0);
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    let words = text.galley.job.text.as_str();
+                    if clip.intersects(rect) {
+                        steps += usize::from(words.contains("before you save."));
+                        causes += usize::from(words.contains("Not in this campaign’s packages"));
+                    }
+                });
+                (
+                    d.is_disabled(SAVE_ENCOUNTER),
+                    d.visible_text(&step),
+                    steps,
+                    causes,
+                )
+            })
+        });
+        d.observe(
+            "s30-B3-N2-member-step",
+            said.iter()
+                .all(|(blocked, shown, steps, causes)| *blocked && *shown && *steps == 1 && *causes <= 1),
+            format!("Member fault: (Save blocked, {step:?} painted, next-step lines, cause lines) at 960, 1200, 1920: {said:?}"),
+        );
+        std::fs::write(&file, &text).unwrap();
     }
 }
 
@@ -22200,18 +22407,20 @@ pub mod session_plan_groups {
             d.expect("Back to the plan");
         });
         // AK1: the empty group's reason has a reserved place, so adding the first creature moves
-        // no field. AH1: Save refuses an empty group, so it says Invalid.
+        // no field. AH1, R37 (Q-m): Save waits for a creature, and a new group with only its
+        // name is not wrong, so it says New with the draft icon, not Invalid and not Unsaved.
         let sizes = [SMALL, DEFAULT, LARGE];
         let empty =
             sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
         d.observe(
             "iter-25-B-AH1",
-            d.visible_text("Invalid")
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT))
+                && !d.visible_text("Invalid")
                 && !d.visible_text("Unsaved")
                 && d.has("Add a creature first.")
                 && d.visible_text(crate::encounters::blocked_draft_switch_reason())
                 && !d.visible_text(crate::encounters::draft_switch_reason()),
-            "An empty new group says Invalid beside its blocked Save, and Discard is the way to switch (FB6)",
+            "An empty new group says New beside its blocked Save, and Discard is the way to switch (FB6)",
         );
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
@@ -22514,11 +22723,11 @@ pub mod session_plan_groups {
             let member = said_once(
                 d,
                 &[
-                    "not in this campaign’s packages",
+                    "Not in this campaign’s packages",
                     "cannot be saved. See its row",
                 ],
                 "A creature here cannot be saved. See its row.",
-                "not in this campaign’s packages",
+                "Not in this campaign’s packages",
                 "warning",
             );
             std::fs::write(&wolf, text).unwrap();

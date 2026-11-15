@@ -503,6 +503,7 @@ impl Repair {
         // not; after Save failed on the disk it stays open to try again, but is not primary; an
         // open run owns the primary action.
         let mut state = DraftState::new(
+            design::save_row::DraftOrigin::Saved, // a repair edits a file on disk
             Changed::from(self.dirty()),
             if run_open {
                 Primary::Elsewhere
@@ -512,7 +513,7 @@ impl Repair {
         )
         .locks_campaign();
         if let Some(problem) = &problem {
-            state = state.refused(problem.as_str());
+            state = state.check(design::save_row::Diagnosis::refused(problem.as_str()));
         }
         if self.failure().is_some() {
             state = state.not_saved();
