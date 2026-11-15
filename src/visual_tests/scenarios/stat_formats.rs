@@ -133,7 +133,7 @@ pub fn run(d: &mut Driver<'_>) {
     // A built-in entry: its source mode is `Markdown source`, the wider label, and it has no
     // extra but Copy.
     search_library(d, "Fire Bolt");
-    d.click_containing("Fire Bolt · ");
+    d.click("Fire Bolt · Spell · Cantrip");
     d.expect("Markdown source");
     toolbars.push(("Fire Bolt, built-in spell", back_and_more(d)));
     let first = toolbars[0]
