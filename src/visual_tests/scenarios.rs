@@ -5948,9 +5948,9 @@ pub mod settings {
         );
         d.state_prepared("add-from-remote", Sizes::All, |d| {
             // The DM's open act at each size: a reveal never starts again on a resize (R34).
-            if d.app().campaigns.importing("9002") {
-                d.click(CANCEL);
-            }
+            // The form open before is closed as setup, not as an act of the DM's.
+            d.app_mut().campaigns.cancel_import();
+            d.settle();
             if !d.has("Add Salt Road from D&D Beyond") {
                 d.click("Add from D&D Beyond");
             }
@@ -11221,9 +11221,9 @@ pub mod signed_in {
         // G138 (AO2, FO7): the kept line names the folder Splat proposes, whole, at every size.
         d.state_prepared("import-remote-campaign", Sizes::All, |d| {
             // The DM's open act at each size: a reveal never starts again on a resize (R34).
-            if d.app().campaigns.importing("9002") {
-                d.click("Cancel");
-            }
+            // The form open before is closed as setup, not as an act of the DM's.
+            d.app_mut().campaigns.cancel_import();
+            d.settle();
             d.click("Add Salt Road from D&D Beyond");
             // No test scroll: the form shows whole when it opens (R30).
             let preview = format!("Will add …/{REMOTE_NAME}");
