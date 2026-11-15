@@ -21315,7 +21315,8 @@ pub mod encounter_owned_groups {
                 d.visible_text(&step),
                 d.visible_text(FULL),
             );
-            d.click("Roster");
+            // The Roster tab's name carries its count (`Roster 8`).
+            d.click_starting("Roster");
             shown
         });
         d.observe(
