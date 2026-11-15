@@ -937,20 +937,13 @@ impl Draft {
                             tone: missing_creature_tone(unreadable),
                             // G125: each row says its deleted entry (`MISSING_CREATURE`), so the
                             // message says only the next act, for every such row.
-                            text: unreadable.map_or_else(
-                                || replace_deleted_rows(&self.deleted_rows(snapshot)),
-                                |note| {
-                                    format!(
-                                        "{}. Open in {} to fix it.",
-                                        note.word,
-                                        if crate::world::repair_in_world(&note.path) {
-                                            "World"
-                                        } else {
-                                            "Library"
-                                        }
-                                    )
-                                },
-                            ),
+                            // SC7, FC3: an unreadable entry too: each row says its cause and
+                            // its `Open in …`, so the message says only the next act, once.
+                            text: if unreadable.is_some() {
+                                fix_unreadable_rows(&self.unreadable_rows(snapshot))
+                            } else {
+                                replace_deleted_rows(&self.deleted_rows(snapshot))
+                            },
                         }
                     })?;
                     if !snapshot.creatures.iter().any(|c| c.id == id) {
@@ -993,6 +986,21 @@ impl Draft {
                 slot.creature.as_ref().is_some_and(|reference| {
                     snapshot.catalogue.resolve_ref(reference).is_err()
                         && snapshot.catalogue.unreadable_ref(reference).is_none()
+                })
+            })
+            .map(|slot| roster_name(slot, None, &snapshot.known_creature_names))
+            .collect()
+    }
+    /// The names of the roster rows whose creature's file cannot be read now, in roster order,
+    /// as each row shows its name.
+    fn unreadable_rows(&self, snapshot: &Snapshot) -> Vec<String> {
+        self.setup
+            .roster
+            .iter()
+            .filter(|slot| {
+                slot.creature.as_ref().is_some_and(|reference| {
+                    snapshot.catalogue.resolve_ref(reference).is_err()
+                        && snapshot.catalogue.unreadable_ref(reference).is_some()
                 })
             })
             .map(|slot| roster_name(slot, None, &snapshot.known_creature_names))
@@ -1824,7 +1832,8 @@ const MISSING_CREATURE: &str = "Not found. Its package entry was deleted.";
 
 /// The message for roster rows whose package entry was deleted: only the next act, naming or
 /// counting the rows by creature. The rows themselves say the cause ([`MISSING_CREATURE`]).
-fn replace_deleted_rows(names: &[String]) -> String {
+/// `the 2 Cinder Wolf rows and the Goblin row`: rows named as the roster shows them, counted.
+fn named_rows(names: &[String]) -> String {
     let mut counted: Vec<(&str, usize)> = Vec::new();
     for name in names {
         match counted.iter_mut().find(|(known, _)| known == name) {
@@ -1839,15 +1848,36 @@ fn replace_deleted_rows(names: &[String]) -> String {
             count => format!("the {count} {name} rows"),
         })
         .collect();
-    let rows = match rows.as_slice() {
+    match rows.as_slice() {
         [] => "those rows".to_owned(),
         [one] => one.clone(),
         [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
-    };
+    }
+}
+
+fn replace_deleted_rows(names: &[String]) -> String {
+    let rows = named_rows(names);
+    // SC5, AC4: the sentence says when the replacement is needed: Save and a fight's start
+    // both wait for it.
     if names.len() == 1 {
-        format!("Choose a replacement for {rows}.")
+        format!("Choose a replacement for {rows} before you save or start a fight.")
     } else {
-        format!("Choose replacements for {rows}.")
+        format!("Choose replacements for {rows} before you save or start a fight.")
+    }
+}
+
+/// The next act for rows whose creature's file cannot be read: the rows say the cause and the
+/// way to the file, so this says only what waits.
+fn fix_unreadable_rows(names: &[String]) -> String {
+    let rows = named_rows(names);
+    // Rows of one creature share its file.
+    let mut creatures: Vec<&String> = names.iter().collect();
+    creatures.sort();
+    creatures.dedup();
+    if creatures.len() == 1 {
+        format!("Fix the file of {rows} before you save or start a fight.")
+    } else {
+        format!("Fix the files of {rows} before you save or start a fight.")
     }
 }
 
@@ -9020,14 +9050,14 @@ mod tests {
         mixed.add(id, false);
         assert_eq!(
             mixed.validate(&snapshot).unwrap_err().text,
-            "Choose replacements for the 2 Cinder Wolf rows and the Goblin row."
+            "Choose replacements for the 2 Cinder Wolf rows and the Goblin row before you save or start a fight."
         );
         // A row with a changed name is named as the roster shows it, also beside a plain row of
         // the same creature.
         mixed.setup.roster[3].overrides = yaml("{name: Ash}").as_mapping().unwrap().clone();
         assert_eq!(
             mixed.validate(&snapshot).unwrap_err().text,
-            "Choose replacements for the Cinder Wolf row, the Goblin row and the Ash row."
+            "Choose replacements for the Cinder Wolf row, the Goblin row and the Ash row before you save or start a fight."
         );
         let mut draft = Draft::new();
         draft.add(id, false);
@@ -9035,7 +9065,7 @@ mod tests {
         let error = draft.validate(&snapshot).unwrap_err();
         assert_eq!(
             error.text,
-            "Choose replacements for the 2 Cinder Wolf rows."
+            "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight."
         );
         let mut encounters = Encounters {
             snapshot: Some(snapshot),
@@ -9048,26 +9078,18 @@ mod tests {
         };
         encounters.draft.as_mut().unwrap().setup.roster.pop();
         encounters.refresh_validation_error(false, true);
-        assert!(
-            encounters
-                .error
-                .as_ref()
-                .unwrap()
-                .starts_with("Choose a replacement for the Cinder Wolf row.")
-        );
+        assert!(encounters.error.as_ref().unwrap().starts_with(
+            "Choose a replacement for the Cinder Wolf row before you save or start a fight."
+        ));
         let missing = encounters.draft.as_ref().unwrap().setup.roster.clone();
         encounters.draft.as_mut().unwrap().setup.roster.clear();
         encounters.refresh_validation_error(false, true);
         assert!(encounters.error.is_none());
         encounters.draft.as_mut().unwrap().setup.roster = missing;
         encounters.refresh_validation_error(false, true);
-        assert!(
-            encounters
-                .error
-                .as_ref()
-                .unwrap()
-                .starts_with("Choose a replacement for the Cinder Wolf row.")
-        );
+        assert!(encounters.error.as_ref().unwrap().starts_with(
+            "Choose a replacement for the Cinder Wolf row before you save or start a fight."
+        ));
 
         // Round 24 review: drawn frames check the refused draft again only when it or the
         // campaign changes: not on unchanged frames or a resize; once after an edit, Discard and
@@ -9125,7 +9147,10 @@ mod tests {
             work: VALIDATIONS.with(std::cell::Cell::get),
         });
         frame(&mut encounters, wide, Vec::new());
-        let shown = shows(&encounters, "Choose a replacement for the Cinder Wolf row.");
+        let shown = shows(
+            &encounters,
+            "Choose a replacement for the Cinder Wolf row before you save or start a fight.",
+        );
         check
             .warm(&mut encounters, shown, 1)
             .expect("refusal-check-warm");
@@ -9134,7 +9159,7 @@ mod tests {
                 for size in [wide, wide, wide, narrow, wide] {
                     frame(encounters, size, Vec::new());
                 }
-                shows(encounters, "Choose a replacement for the Cinder Wolf row.")
+                shows(encounters, "Choose a replacement for the Cinder Wolf row before you save or start a fight.")
             })
             .expect("refusal-check-steady");
         // An edit: the second row comes back, and the reason counts both.
@@ -9146,7 +9171,7 @@ mod tests {
                 frame(encounters, wide, Vec::new());
                 shows(
                     encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows.",
+                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
                 )
             })
             .expect("refusal-check-edit");
@@ -9167,7 +9192,7 @@ mod tests {
                 frame(encounters, wide, Vec::new());
                 shows(
                     encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows.",
+                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
                 )
             })
             .expect("refusal-check-undo");
@@ -9178,7 +9203,7 @@ mod tests {
                 }
                 shows(
                     encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows.",
+                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
                 )
             })
             .expect("refusal-check-steady-after-undo");
@@ -10557,7 +10582,7 @@ mod tests {
         let invalid = draft.validate(&deleted).unwrap_err();
         assert_eq!(
             invalid.text,
-            "Choose a replacement for the Cinder Wolf row."
+            "Choose a replacement for the Cinder Wolf row before you save or start a fight."
         );
         assert!(invalid.tone == Tone::Warning);
         // The row says the same fault in the same tone.
