@@ -2552,11 +2552,12 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     }
     if page == 3 {
         use splat::character::profile;
-        ui.label(format!(
-            "Coins · {}",
-            profile::coins(&record.source.raw)
-                .map_or_else(|| "None".into(), |c| profile::coin_line(&c))
-        ));
+        sheet_label(
+            ui,
+            "Coins",
+            [profile::coins(&record.source.raw)
+                .map_or_else(|| "None".into(), |c| profile::coin_line(&c))],
+        );
     }
     let mut level_counts = std::collections::BTreeMap::new();
     for row in &filtered {
