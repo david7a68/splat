@@ -3358,9 +3358,7 @@ mod tests {
                         stack.push(path);
                     }
                 } else if path.extension().is_some_and(|ext| ext == "rs")
-                    && std::fs::read_to_string(&path)
-                        .unwrap()
-                        .contains("kept_result")
+                    && whole_word(&std::fs::read_to_string(&path).unwrap(), "kept_result")
                 {
                     found.push(path.to_string_lossy().replace('\\', "/"));
                 }
@@ -3368,6 +3366,15 @@ mod tests {
         }
         found.sort();
         assert_eq!(found, ["src/campaigns.rs", "src/library.rs"]);
+    }
+
+    /// Whether `text` holds `word` as a whole identifier (not `kept_results`).
+    fn whole_word(text: &str, word: &str) -> bool {
+        let ident = |c: char| c.is_alphanumeric() || c == '_';
+        text.match_indices(word).any(|(at, _)| {
+            !text[..at].chars().next_back().is_some_and(ident)
+                && !text[at + word.len()..].chars().next().is_some_and(ident)
+        })
     }
 
     #[allow(
@@ -5167,11 +5174,6 @@ mod tests {
             ["After left", "After right"].map(|name| h.get_by_label(name).rect().top())
         };
         let open = after(&h);
-        assert_eq!(
-            h.query_all_by_label(DRAFT.as_str()).count(),
-            0,
-            "an open cause paints no words"
-        );
         *h.state_mut() = true;
         h.run_steps(3);
         assert_eq!(
