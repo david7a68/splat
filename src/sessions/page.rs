@@ -7972,6 +7972,29 @@ impl Sessions {
         draft.save();
     }
 
+    /// The open note's save fails, as a full disk would make it.
+    pub fn simulate_failed_save(&mut self) {
+        let draft = self.draft.as_mut().expect("an open note");
+        draft.state = DraftState::Failed("Not saved. The disk is full.".to_owned());
+    }
+
+    /// The open note's file leaves the folder outside Splat while the DM has unsaved words,
+    /// and the next save finds it gone. Returns where the file went, to put it back.
+    pub fn simulate_note_gone(&mut self) -> (PathBuf, PathBuf) {
+        let draft = self.draft.as_mut().expect("an open note");
+        let path = draft.path.clone();
+        let folder = path.parent().expect("the session folder");
+        let away = folder
+            .parent()
+            .expect("the folder's parent")
+            .join("note-gone-for-a-while.md");
+        fs::rename(&path, &away).expect("the note moves away");
+        draft.body.push_str("\nTyped after the file went.\n");
+        draft.edited();
+        draft.save();
+        (path, away)
+    }
+
     /// Processing of the open session finishes now, as the background job would.
     pub fn simulate_job_finished(&mut self) {
         let session = self.selected.expect("an open session");
