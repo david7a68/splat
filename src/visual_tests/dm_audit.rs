@@ -333,10 +333,7 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
         let mut words = Vec::new();
         d.each_painted_text(|text, _| {
             let line = text.galley.job.text.replace('\u{a0}', " ");
-            if let Some(word) = ["Above High", "Moderate", "High", "Low"]
-                .into_iter()
-                .find(|word| line.ends_with(&format!(" · {word}")))
-            {
+            if let Some(word) = plan_word(&line) {
                 words.push(word);
             }
         });
@@ -1512,4 +1509,47 @@ fn dm_audit_stale_library() {
         "STALE: after overwrite, the roster has row 9: {}",
         d.has_containing("9. ")
     );
+}
+
+/// The difficulty word a planned fight's painted summary line says: the word ends the line, or
+/// its limit follows it (`Low (up to 2,800)`, the one form of `docs/design-system.md`), which
+/// Q-s (R39) keeps before the party's size. The audit and the journeys read the plan with it.
+pub(crate) fn plan_word(line: &str) -> Option<&'static str> {
+    ["Above High", "Moderate", "High", "Low"]
+        .into_iter()
+        .find(|word| {
+            line.ends_with(&format!(" · {word}"))
+                || line
+                    .rsplit_once(&format!(" · {word} (up to "))
+                    .is_some_and(|(_, limit)| limit.ends_with(')') && !limit.contains(" · "))
+        })
+}
+
+/// `plan_word` reads only a word painted as the line's ending form: the word last, or the word
+/// with its limit last. A row without a difficulty word, or with one only inside other words,
+/// gives nothing.
+#[test]
+fn plan_word_reads_only_a_painted_ending_word() {
+    assert_eq!(
+        plan_word("5 party · 2 × Ember Cultist · XP 400 · Low"),
+        Some("Low")
+    );
+    assert_eq!(
+        plan_word("2 × Ember Cultist · XP 400 · Low (up to 2,800)"),
+        Some("Low")
+    );
+    assert_eq!(
+        plan_word("1 × Cinder Tyrant, … · Above High"),
+        Some("Above High")
+    );
+    for line in [
+        "5 party · 1 × Nameless Thing · XP not known",
+        "2 × Ember Cultist · Day 2 of Travel",
+        "Low Road ambush · 2 × Ember Cultist",
+        "High tide · 2 × Wolf · XP 50",
+        "2 × Ember Cultist · Low (up to 2,800) · Day 2",
+        "",
+    ] {
+        assert_eq!(plan_word(line), None, "{line:?}");
+    }
 }

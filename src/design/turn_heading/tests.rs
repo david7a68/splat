@@ -477,7 +477,7 @@ fn the_selector_takes_the_first_fit_in_order() {
     for room in [80, 65, 61, 45, 10] {
         let mut measured = Vec::new();
         let chosen = select::first_fit(
-            &ORDER,
+            ORDER,
             |_| true,
             |width| {
                 measured.push(width);
@@ -497,7 +497,7 @@ fn the_selector_takes_the_first_fit_in_order() {
         );
     }
     let skip = select::first_fit(
-        &ORDER,
+        ORDER,
         |width| width != 60,
         |width| (width <= 65).then_some(()),
     );

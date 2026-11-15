@@ -440,9 +440,10 @@ pub fn run(d: &mut Driver<'_>) {
         }
         for size in sizes {
             let [low, unknown, high] = d.at_size(size, |d| {
-                // Each row by its form, which no other row has: round 28 FE6 lets the party's
-                // size give way first, so a cut row need not start with `5 party`.
-                ["XP 400 ·", UNKNOWN_FORM, "XP 6,300 ·"].map(|form| {
+                // Each row by its word, which no other row has: round 28 FE6 and Q-s (R39) let
+                // the party's size, the limit and the XP number give way, so a row is found by
+                // its word, never by its XP number.
+                [" Low", UNKNOWN_FORM, " High"].map(|form| {
                     let mut found = None;
                     d.each_painted_text(|text, clip| {
                         // A line break stands for the separator it dropped (FI7).
@@ -455,6 +456,8 @@ pub fn run(d: &mut Driver<'_>) {
                         if found.is_none()
                             && clip.intersects(text.visual_bounding_rect())
                             && words.contains(form)
+                            && !words.contains("Above High")
+                            && words.contains(" × ")
                         {
                             found = Some(words);
                         }
@@ -462,28 +465,37 @@ pub fn run(d: &mut Driver<'_>) {
                     found
                 })
             });
-            // FB2: Mill Road's difficulty is on its row at every size; its members give way
-            // first, by whole words, with `…`.
+            // FB2: Mill Road's difficulty is on its row at every size. Q-s (R39): the party's
+            // size gives way first, then the limit, then the XP number, then the members from
+            // their end, by whole words with `…`; the word never gives way.
+            let in_order = |words: &str| super::q_s_order(words) && !words.trim().is_empty();
             d.observe(
                 "T12.1-difficulty",
                 low.as_deref().is_some_and(|low| {
-                    low == format!("5 party · 2 × Ember Cultist · {LOW_FORM}")
-                        || low == "5 party · 2 × Ember Cultist · XP 400 · Low"
+                    in_order(low)
+                        && [
+                            format!("5 party · 2 × Ember Cultist · {LOW_FORM}"),
+                            format!("2 × Ember Cultist · {LOW_FORM}"),
+                            "2 × Ember Cultist · XP 400 · Low".to_owned(),
+                            "2 × Ember Cultist · Low".to_owned(),
+                        ]
+                        .contains(&low.to_owned())
                 }) && unknown.as_deref().is_some_and(|unknown| {
                     // Round 28 FB6: the summary already names the creature, so it stays whole
                     // with the short reason; the name is not cut to be said again.
                     unknown == format!("5 party · 1 × Nameless Thing · {UNKNOWN_FORM}")
                 }) && high.as_deref().is_some_and(|high| {
-                    // Round 28 FE6: the party's size gives way first, then the members.
+                    // The whole members before the word in each of its forms, or the members cut
+                    // from their end before the word alone.
                     let roster = HIGH_SUMMARY.trim_start_matches("5 party · ");
-                    high == format!("{HIGH_SUMMARY} · {HIGH_FORM}")
-                        || high == format!("{HIGH_SUMMARY} · {HIGH_SHORT}")
-                        || high == format!("{roster} · {HIGH_SHORT}")
-                        || high
-                            .strip_suffix(&format!("… · {HIGH_SHORT}"))
-                            .is_some_and(|cut| {
+                    in_order(high)
+                        && (high == format!("{HIGH_SUMMARY} · {HIGH_FORM}")
+                            || high == format!("{roster} · {HIGH_FORM}")
+                            || high == format!("{roster} · {HIGH_SHORT}")
+                            || high == format!("{roster} · High")
+                            || high.strip_suffix("… · High").is_some_and(|cut| {
                                 roster.starts_with(cut.trim_end_matches([' ', '·', ',']))
-                            })
+                            }))
                 }),
                 format!(
                     "At {size:?}, Lookup open {lookup}: the plan's summaries read {low:?}, \
@@ -505,8 +517,9 @@ pub fn run(d: &mut Driver<'_>) {
             .replace('\u{a0}', " ");
         d.observe(
             "iter-27-B-FH6",
+            // Q-s may let the XP number give way on a narrow row; it is never said twice.
             words.contains("Read encounter")
-                && words.matches("XP 6,300").count() == 1
+                && words.matches("XP 6,300").count() <= 1
                 && words.matches(" · High").count() == 1
                 && !words.contains("Read encounter · "),
             format!("At {size:?} the opened row says its difficulty once: {words}"),
@@ -519,6 +532,16 @@ pub fn run(d: &mut Driver<'_>) {
         &[SMALL, DEFAULT, LARGE],
     );
     d.state("plan-opened", Sizes::All);
+    // `plan-row-fit` (SA4, AA3, AM5): Mill Road keeps its creatures before its XP number, and a
+    // row keeps its limit before the party's size, at every size (Q-s, R39).
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (read, wrong) = d.at_size(size, plan_lines_out_of_order);
+        d.observe(
+            "plan-row-fit",
+            read > 0 && wrong.is_empty(),
+            format!("At {size:?}, plan lines read {read}; out of the Q-s order: {wrong:?}"),
+        );
+    }
     // FB4: a fight with no word says `XP not known` on its row, opened or not; FH6: once.
     d.click(HIGH);
     d.click(UNKNOWN);

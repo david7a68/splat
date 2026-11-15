@@ -4,6 +4,7 @@ pub mod column;
 mod comparison;
 pub mod components;
 pub mod extras;
+pub(crate) mod fitting;
 pub mod icons;
 pub mod layout;
 pub mod memo;
