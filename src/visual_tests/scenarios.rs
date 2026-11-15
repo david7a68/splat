@@ -23268,7 +23268,7 @@ pub mod session_plan_groups {
                 .lines()
                 .find(|line| line.starts_with("splat_id: "))
                 .unwrap(),
-            &format!("splat_id: {}", uuid::Uuid::new_v4()),
+            &format!("splat_id: {}", crate::hermetic::new_uuid()),
             1,
         );
         std::fs::write(&file, &replaced).unwrap();
