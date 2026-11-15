@@ -57,10 +57,20 @@ but Copy holds one result: its owner is its kind, a new `set` replaces the old r
 `Gone`. Scope is `()`: today's slots are not hidden by a campaign switch; their own end events decide.
 **One file identity.** Main's `FileKey` is `(Owner::id(), path)`: `Owner::id` drops the owner's kind, and
 settings check package and campaign UUIDs apart (`persistence.rs:56-72`), so a campaign and a package may
-share a UUID. `FileId` keeps the kind. PR 4a makes `FileKey` this type for every user in `library.rs`: the
-kept payloads (Heading, Vital, Discarded via `discard_is_for`, Removed), the reselection after a reload
-(`start_load` / `library.rs:5105`, which today takes the first note with that UUID and path) and the
-diagnostics' file key. Nothing else changes.
+share a UUID. `FileId` keeps the kind. PR 4a moves every file key in `library.rs` to it, also the ones that
+do not use the `FileKey` alias:
+- the kept payloads: Heading, Vital, Discarded (`:4635`, `:8358`, `discard_is_for`, `refresh_destination`
+  `:4969`), Removed;
+- navigation: `place()` (`:991-1000`) stores only the UUID and the path, and `Place::find` (`:4267-4270`)
+  drops the kind. A campaign file and a package file with the same UUID and path: visit the campaign's, then
+  B, then Back, and the package's file wins, because packages load first. `Place` holds a `FileId`;
+- the reselection after a reload (`start_load` `:4992`, `:5112`), the new entry's selection (`new_entry`
+  `:7207`), the duplicate batch (`duplicate_choices` `:666`, `:673`), the diagnostics (`file_key` `:1698`,
+  `files_to_fix` `:1730`), and the footers' egui ids (`:8665`, `:8791`, `:8970`).
+Named, outside 4a: the checks that ask whether a note belongs to a package by its UUID alone (`:1025`,
+`:5096`, `:5494`, `:5632`, `:5934`, `:5988`, `:6998`, `:7842`) can take a campaign with that UUID for the
+package. It is the same cause (an owner key without its kind), but it is about scope, not results: a later
+PR, with its own witness.
 
 ## 4. Each kept result: payload, writer, end events, Undo
 
@@ -147,19 +157,20 @@ line a `Retained` projection. Words use `sentence!`/`choice!`; no new `Sentence:
    `package-about`, Identities `package-folder-copied`, Identity `package-duplicate-id`, Heading and Vital
    `package-rename`, Discarded `library-author`; ScopeNotice has no state: a new end check in
    `library-scope` (open an entry outside the scope).
-4. 4a, one file identity, with Heading and Vital (unit tests through the real fix writers and the real
-   reload, each red when one owner check goes):
-   - same UUID, other kind: campaign A and a registered package with A's UUID (settings allow it) both hold
-     `Rules/X.md`; fix A's heading and A's stat; the package's file gets A's fixed text; reload. The
-     selection stays A's file (reselection by `FileId`), A's Undos show, and on the package's file no Undo
-     shows and a press cannot replace its draft. Red when the kind leaves the identity (the reselection or the
-     kept check: main's code).
-   - same path, other owner: packages P1 and P2 both hold `Rules/X.md` with the same text; fix P1's; open
-     P2's: no Undo, no replacement. Red when the owner id leaves the check (path only).
-   - A → B → A: fix A, open B (no Undo; a press does nothing), open A again: both Undos show again, on the
-     exact text, as on main. Red when a selection ends them.
-   - Two slots: a heading fix after a stat fix keeps the stat Undo (and the other way round). Red when one
-     kind's `set` ends the other.
+4. 4a, one file identity (unit tests through the real fix writers, the real reload and the real Back; each
+   case is set up so that ONLY its owner check stands between B and A's result):
+   - Heading and Vital, each kind on its own: make A's fix; give B (same UUID and other kind, or same path and
+     other owner) A's exact `after` text; select B. Then the show check: no Undo line for B. Then the press
+     check, apart: a press on B (a ticket or flag aimed at A's slot) leaves B's draft as it is. Each assertion
+     goes red when its own owner check is removed (the kind, or the owner id), with the text check left in.
+   - Reload: same UUID, other kind, both files with A's `after` text: after the reload the selection is still
+     A's file and A's Undo shows; B shows none. Red when the reselection drops the kind.
+   - Back: visit the campaign's file, then B, then Back: the campaign's file opens, not the package's with the
+     same UUID and path. Red when `Place` drops the kind.
+   - A → B → A: A's Undo shows again on A's exact `after` text. Red when a selection ends it.
+   - Two slots: make a stat fix, then a heading fix; restore the draft to the stat fix's `after`: the stat
+     Undo shows; restore it to the heading fix's `after`: the heading Undo shows. Red when one kind's `set`
+     ends the other.
 5. 4b, PackageUse: Choose all, campaign file unwritable, Undo → the error shows and the Undo stays; access
    back, Undo → choices restored. Red on main (the payload is gone).
 6. 4b, A, unrelated B, Undo A by ticket: extend `iter-26-L-copy-owner`: a ticket of a replaced result is
