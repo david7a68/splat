@@ -212,7 +212,7 @@ fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
                             .iter()
                             .find(|text| text.text == "Round 123")
                             .expect("the round");
-                        let room = add.left() - S - HAIRLINE_WIDTH - (round.rect.right() + S);
+                        let room = add.left() - GAP - HAIRLINE_WIDTH - (round.rect.right() + GAP);
                         let mut full = 0.0;
                         let _ = frame(&ctx, 600.0, |ui| {
                             full = number_width(ui, &name, &least);

@@ -48,6 +48,10 @@ use super::{
 /// below the roster uses the same width for its own words (`DOCK_ALL_WORDS_FROM`).
 pub(crate) const ADD_WORDS_FROM: f32 = 500.0;
 
+/// The gap between the heading's parts: the round, the name, `Add` and `Next turn`. As before
+/// the part (`S` and the line's item spacing, `S`), so the line keeps its look.
+const GAP: f32 = 2.0 * S;
+
 /// `Next turn`'s key, as the Keys list names it.
 const NEXT_KEY: KeyName = crate::key!("N");
 
@@ -424,7 +428,14 @@ fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
     let full = format!("{}’s turn", heading.name);
     // The name's room: between the round and `Add`, as `paint` places them.
     let room = |letter| {
-        metrics.width - next_width(letter) - S - add_width - S - round.size().x - S - HAIRLINE_WIDTH
+        metrics.width
+            - next_width(letter)
+            - GAP
+            - add_width
+            - GAP
+            - round.size().x
+            - GAP
+            - HAIRLINE_WIDTH
     };
     let sized = |size: f32| {
         let mut font = metrics.name.clone();
@@ -597,7 +608,7 @@ fn paint(
                     .min_width(fitted.next_width)
                     .show(ui)
             });
-            let add_right = next_left - S;
+            let add_right = next_left - GAP;
             let add_left = add_right - fitted.add_width;
             let add = at_right(
                 ui,
@@ -624,8 +635,8 @@ fn paint(
             });
             named(ui, &response, &fitted.access);
             let room = Rect::from_min_max(
-                pos2(round.right() + S, area.top()),
-                pos2(add_left - S - HAIRLINE_WIDTH, area.bottom()),
+                pos2(round.right() + GAP, area.top()),
+                pos2(add_left - GAP - HAIRLINE_WIDTH, area.bottom()),
             );
             let name = Rect::from_min_size(
                 pos2(room.left(), middle - fitted.name.size().y / 2.0),
