@@ -1128,7 +1128,9 @@ impl Note {
     }
     /// How the row matches, as `matching::with_other` ranks it, or None if it does not. Plain
     /// words match the name (in any order, or with a typo), path or section, or a creature's
-    /// facts. `habitat:forest` and the other fact terms match creatures only.
+    /// facts. `habitat:forest` and the other fact terms match creatures only. A creature's name
+    /// ranks in the one creature order (M3, `Typed::creature`), as Lookup and the encounter
+    /// search rank it; every other kind keeps its word tiers.
     fn search_rank(
         &self,
         section: Section,
@@ -1150,7 +1152,13 @@ impl Note {
         let other = self.path.to_lowercase().contains(words)
             || self.section().label().to_lowercase().contains(words)
             || facets.is_some_and(|facets| query.words_in(self.name(), facets));
-        with_other(typed.name(&self.name().to_lowercase()), other)
+        let name = self.name().to_lowercase();
+        let name = if self.entry.as_ref().is_some_and(|e| e.kind == "creature") {
+            typed.creature(&name, crate::matching::words(&name))
+        } else {
+            typed.name(&name)
+        };
+        with_other(name, other)
     }
 }
 #[derive(Default)]
@@ -5794,8 +5802,9 @@ impl Library {
                 .collect();
             if !parsed.words.is_empty() {
                 // Best first: the exact name, then a prefix, then a whole word, then each word in
-                // any order. A path, section or fact match comes next, and a typo comes last. The
-                // sort is stable, so the list's order stays inside each rank.
+                // any order (a creature's whole word and a word that only holds the search are one
+                // tier, M3). A path, section or fact match comes next, and a typo comes last. The
+                // sort is stable, so the list's order (by name) stays inside each rank and origin.
                 found.sort_by_key(|&(rank, i)| {
                     (
                         rank,
