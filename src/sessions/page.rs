@@ -157,6 +157,8 @@ pub(crate) enum FolderFault {
     FilesCame,
     /// Save without moving found other files in the current folder than its warning named.
     FilesChanged,
+    /// Save without moving found no file left in the current folder: Save folder is the way on.
+    FilesGone,
 }
 
 impl From<String> for FolderFault {
@@ -177,7 +179,7 @@ impl Fault for FolderFault {
             Self::Missing(_) => Severity::NeedsFixing,
             Self::CannotRead(_) => Severity::CannotRead,
             Self::NotSaved(_) | Self::NoteNotSaved => Severity::NotSaved,
-            Self::FilesCame | Self::FilesChanged => Severity::NeedsFixing,
+            Self::FilesCame | Self::FilesChanged | Self::FilesGone => Severity::NeedsFixing,
         }
     }
     fn cause(&self) -> Sentence {
@@ -195,6 +197,9 @@ impl Fault for FolderFault {
             ),
             Self::FilesChanged => crate::sentence!(
                 "Not changed. The files in the current folder changed. Check the new counts, then choose again."
+            ),
+            Self::FilesGone => crate::sentence!(
+                "Not changed. The current folder has no files now. Use Save folder."
             ),
         }
     }
@@ -7291,6 +7296,15 @@ impl Sessions {
             block.field(|ui| design::locked(ui, locked, |ui| self.folder_fields(ui, locked)));
         let (block, save) = block
             .save_row(|ui| design::locked(ui, locked, |ui| self.folder_save_row(ui, book, locked)));
+        // A refusal of Save without moving ends when its cause goes (`save_folder_act`).
+        if let Some(FolderFault::FilesChanged | FolderFault::FilesGone) = &self.folder_error {
+            let files = self.folder_files();
+            let offered = self.folder_move_counts(book, &files).is_some();
+            let gone = matches!(self.folder_error, Some(FolderFault::FilesGone));
+            if offered == gone {
+                self.folder_error = None;
+            }
+        }
         let mut messages = RowMessages::new(&frame);
         self.folder_messages(&frame, &mut messages, book, locked.is_some());
         let pressed = block.messages(messages).map(|press| press.id);
@@ -7329,15 +7343,22 @@ impl Sessions {
                 .accesskit_node_builder(response.id, |node| node.set_description(reason));
             response.clone().on_disabled_hover_text(reason);
         }
-        if response.changed()
-            && let Some(link) = self.folder_link()
-        {
-            // The DM's next edit of the folder ends its move's result (`kept::FolderMoved`).
-            self.folder_moves.owner_changed(&link);
+        if response.changed() {
+            // An edit of the draft ends a refusal of Save without moving (`save_folder_act`).
+            if matches!(
+                self.folder_error,
+                Some(FolderFault::FilesChanged | FolderFault::FilesGone)
+            ) {
+                self.folder_error = None;
+            }
+            if let Some(link) = self.folder_link() {
+                // The DM's next edit of the folder ends its move's result (`kept::FolderMoved`).
+                self.folder_moves.owner_changed(&link);
+            }
         }
         if let Some(folder) = &self.folder {
             // One line for every path (the path rule), so a save never moves the save row.
-            design::path_help(ui, "Now: ", folder);
+            design::path_help(ui, "session_folder_now", "Now: ", folder);
             design::help(
                 ui,
                 "Notes, Timeline.md, Templates and Recordings are all here.",
@@ -7458,8 +7479,15 @@ impl Sessions {
                 self.folder_error = Some(FolderFault::FilesCame);
                 return;
             }
+            // The refusals of Save without moving end at the draft's next edit or Discard
+            // (`folder_fields`, Discard), and when their cause goes (`folder_block`): the warning
+            // gone for `FilesChanged`, files back for `FilesGone`.
             FolderAct::WithoutMoving if self.folder_move_counts(book, &now) != shown => {
-                self.folder_error = Some(FolderFault::FilesChanged);
+                self.folder_error = Some(if self.folder_move_counts(book, &now).is_none() {
+                    FolderFault::FilesGone
+                } else {
+                    FolderFault::FilesChanged
+                });
                 return;
             }
             _ => {}
@@ -9328,6 +9356,15 @@ mod tests {
             ) && shows(&harness, "The current folder keeps 3 templates."),
             "Save without moving refuses files its warning did not name"
         );
+        // Re-check of da245d42, P2 1: the refusal ends at the draft's next edit.
+        harness.get_by_label("Folder").click();
+        harness.run_steps(2);
+        harness.get_by_label("Folder").type_text("2");
+        harness.run_steps(3);
+        assert!(
+            !shows(&harness, "Check the new counts") && shows(&harness, MOVE_FILES),
+            "an edit of the folder ends the refusal; the warning and its choices stay"
+        );
         // The folder cannot be read at the press: no choice commits.
         {
             use std::os::unix::fs::PermissionsExt;
@@ -9344,6 +9381,47 @@ mod tests {
         }
         harness.state_mut().0.simulate_folder_scan();
         harness.run_steps(3);
+        // Re-check of da245d42, P2 1 a: the refusal ends when its cause goes. Refused again,
+        // then the original folder typed back: No changes, and no sentence pointing at nothing.
+        fs::write(templates_c.join("Fourth.md"), "Fourth").unwrap();
+        harness.get_by_label("Save without moving").click();
+        harness.run_steps(3);
+        assert!(shows(&harness, "Check the new counts"));
+        harness.state_mut().0.folder_text = DEFAULT_FOLDER.to_owned();
+        harness.run_steps(3);
+        assert!(
+            shows(&harness, "No changes") && !shows(&harness, "Check the new counts"),
+            "the folder typed back ends the refusal with its warning"
+        );
+        // b: at the refused press the folder has no file left. The words name the control that
+        // is there (Save folder), and they end when files come back.
+        harness.state_mut().0.folder_text = "Elsewhere".to_owned();
+        harness.run_steps(3);
+        assert!(shows(&harness, "Save without moving"));
+        fs::remove_dir_all(&templates_c).unwrap();
+        harness.get_by_label("Save without moving").click();
+        harness.run_steps(3);
+        assert_eq!(super::super::folder_setting(&c).unwrap(), DEFAULT_FOLDER);
+        assert!(
+            shows(
+                &harness,
+                "Not changed. The current folder has no files now. Use Save folder."
+            ) && !shows(&harness, "Check the new counts")
+                && !shows(&harness, MOVE_FILES)
+                && !harness
+                    .get_by_label("Save folder")
+                    .accesskit_node()
+                    .is_disabled(),
+            "an empty folder at the press points at Save folder, which is there"
+        );
+        fs::create_dir_all(&templates_c).unwrap();
+        fs::write(templates_c.join("Back.md"), "Back").unwrap();
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(3);
+        assert!(
+            !shows(&harness, "has no files now") && shows(&harness, MOVE_FILES),
+            "files back end the refusal"
+        );
         // Early-pass packet, point 3: the current folder's `Now:` line is one line, so a save to
         // a long folder and back to a short one never moves the save row under it.
         switch(&mut harness, &b);

@@ -3284,15 +3284,21 @@ fn preview_line(ui: &mut Ui, preview: &str) {
 /// that does not fit gives way from the front at a folder boundary and keeps its last part whole
 /// (the path rule); its hover and its accessible description keep it whole.
 ///
-/// The shortened line is kept (`PathLine`, in egui's memory under this `Ui`'s id and `lead`):
-/// its owner is this help line's place. It holds while the path, the lead, the room, the font
-/// and the display scale are the same; any change makes it again, so an unchanged redraw does no
-/// shortening work.
-pub fn path_help(ui: &mut Ui, lead: &str, path: &std::path::Path) -> Response {
+/// The shortened line is kept (`PathLine`, in egui's memory under this `Ui`'s id and the
+/// caller's `slot`): its owner is this help line's place. It holds while the path, the lead, the
+/// room in whole points, the font and the display scale are the same; any change makes it again,
+/// so an unchanged redraw does no shortening work.
+pub fn path_help(
+    ui: &mut Ui,
+    slot: impl std::hash::Hash,
+    lead: &str,
+    path: &std::path::Path,
+) -> Response {
     let font = Type::Small.font(ui);
-    let room = ui.available_width();
+    // Whole points: a fractional change of the room does not make the line again.
+    let room = ui.available_width().floor();
     let scale = ui.ctx().pixels_per_point();
-    let key = ui.id().with(("design_path_help", lead));
+    let key = ui.id().with(("design_path_help", slot));
     let kept = ui
         .ctx()
         .data(|data| data.get_temp::<std::sync::Arc<PathLine>>(key))

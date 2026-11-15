@@ -252,7 +252,8 @@ pub(crate) fn find(path: &str, text: &str) -> (Vec<Suppression>, Vec<String>) {
 const ROW_MESSAGES_USE: (&str, &str) = ("src/sessions/page.rs", "folder_block");
 
 /// How many times `body` calls `RowMessages::new`, also with generic arguments
-/// (`RowMessages::<A>::new`); strings and comments do not count.
+/// (`RowMessages::<A>::new`) and in a qualified type (`<RowMessages<A>>::new`); strings and
+/// comments do not count. A text scan by design: not syntax-aware.
 fn row_messages_calls(body: &str) -> usize {
     let code = code_only(body);
     let bytes = code.as_bytes();
@@ -267,41 +268,49 @@ fn row_messages_calls(body: &str) -> usize {
             }
         };
         skip(&mut i);
-        if bytes[i..].starts_with(b"::") {
-            let mut j = i + 2;
+        // Generic arguments, with a turbofish (`RowMessages::<A>`) or in a qualified type
+        // (`<RowMessages<A>>`).
+        let mut j = i;
+        if bytes[j..].starts_with(b"::") {
+            j += 2;
             skip(&mut j);
-            if bytes.get(j) == Some(&b'<') {
-                let mut depth = 0;
-                while j < bytes.len() {
-                    match bytes[j] {
-                        b'<' => depth += 1,
-                        b'>' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                j += 1;
-                                break;
-                            }
+        }
+        if bytes.get(j) == Some(&b'<') {
+            let mut depth = 0;
+            while j < bytes.len() {
+                match bytes[j] {
+                    b'<' => depth += 1,
+                    b'>' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            j += 1;
+                            break;
                         }
-                        _ => {}
                     }
-                    j += 1;
+                    _ => {}
                 }
-                skip(&mut j);
-                if !bytes[j..].starts_with(b"::") {
-                    continue;
-                }
-                i = j;
+                j += 1;
             }
-            let mut k = i + 2;
-            skip(&mut k);
-            let rest = &bytes[k..];
-            if rest.starts_with(b"new")
-                && !rest
-                    .get(3)
-                    .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
-            {
-                found += 1;
-            }
+            i = j;
+            skip(&mut i);
+        }
+        // The end of a qualified type (`<RowMessages<A>>::new`, `<RowMessages>::new`).
+        if bytes.get(i) == Some(&b'>') {
+            i += 1;
+            skip(&mut i);
+        }
+        if !bytes[i..].starts_with(b"::") {
+            continue;
+        }
+        let mut k = i + 2;
+        skip(&mut k);
+        let rest = &bytes[k..];
+        if rest.starts_with(b"new")
+            && !rest
+                .get(3)
+                .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        {
+            found += 1;
         }
     }
     found
@@ -559,6 +568,14 @@ mod tests {
                 && faults[0].contains("holds 1 `RowMessages::new` calls; R24 allows 0"),
             "a call under another ban's allowance: {faults:?}"
         );
+        // The qualified-type spellings count too (re-check of da245d42, P2 2).
+        let qualified = "    let m = <RowMessages<FolderAct>>::new(&frame);\n";
+        let faults = check(&page(&block(&format!("{one}{qualified}"))), rows);
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 2 `RowMessages::new` calls"),
+            "a qualified-type second call: {faults:?}"
+        );
+        assert_eq!(row_messages_calls("<RowMessages>::new(&frame)"), 1);
         // Words in strings and comments are not calls.
         let words = "    let _ = \"RowMessages::new\"; // RowMessages::new\n";
         assert_eq!(row_messages_calls(words), 0);
