@@ -1213,14 +1213,16 @@ impl Campaigns {
                 // another choice: it starts below, at the message words. Only Undo is quiet.
                 // Review round 26: Undo changes the registration and can change the active
                 // campaign, so it waits for what blocks a campaign change, with the reason.
-                if crate::library::kept_undo_message(
-                    ui,
-                    Tone::Success,
-                    &added,
-                    "Undo register campaign",
-                    locked,
-                    true,
-                ) {
+                let undo =
+                    design::outcome::UndoStep::of(design::outcome::Verb::Register, "campaign")
+                        .pressed_as(());
+                // The page's lock comes from outside this footer (a run, a recording, a draft):
+                // its words are a sentence from elsewhere.
+                let undo = match locked.and_then(design::outcome::Sentence::outside) {
+                    Some(reason) => undo.blocked(reason),
+                    None => undo,
+                };
+                if design::outcome::kept_result(ui, &added, undo, Vec::new()).is_some() {
                     let mut this = me.borrow_mut();
                     if let Err(error) = this.undo_campaign_copy() {
                         this.error = Some(error);

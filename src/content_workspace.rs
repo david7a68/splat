@@ -313,8 +313,8 @@ impl PackageCopy {
 }
 
 /// Why a kept result's Undo is blocked: a file it wrote changed after the write.
-pub(crate) const UNDO_ENDED: &str =
-    "A file changed on disk after this change. Undo is no longer available.";
+pub(crate) const UNDO_ENDED_REASON: crate::design::outcome::Sentence =
+    splat::sentence!("A file changed on disk after this change. Undo is no longer available.");
 
 /// True while the file holds exactly these bytes. A missing or unreadable file does not.
 /// Undo results use this on reload: a result whose files changed would only refuse its Undo.

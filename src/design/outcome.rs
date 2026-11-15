@@ -1863,6 +1863,57 @@ impl<A> From<Said<A>> for KeptOutcome<A> {
     }
 }
 
+/// M2's typed adapter for a kept result that a legacy `Footer::result` closure still draws
+/// (Library's reader results, Campaign's copy result): the result's words in the success tone
+/// and its typed [`Undo`] (with its lock, `blocked` or `locked_when`) and choices, drawn by the
+/// same code as a `Messages` footer's kept line. Its lock's reason is painted under it, at the
+/// message words, whenever the lock holds; no flag can hide it (ruling R35, Q-u). A reason that
+/// an earlier result of the same footer already painted in this pass is not painted again (one
+/// cause once, `docs/design-system.md` "When one cause blocks several controls"); its control
+/// keeps the reason as its hover and accessible description. The id of what the DM pressed.
+///
+/// The words are the caller's: this is the staged path for callers whose results are not yet
+/// in a `Results` store: named debt, its calls counted by `kept_result_calls_only_shrink`.
+pub fn kept_result<A>(
+    ui: &mut Ui,
+    words: &str,
+    undo: Undo<A>,
+    choices: Vec<Choice<A>>,
+) -> Option<A> {
+    let mut typed = Typed::new(
+        Tone::Success,
+        Sentence(Cow::Owned(words.to_owned())),
+        Some(undo),
+        choices,
+    );
+    // The reasons this footer painted in this pass, keyed by the footer being drawn.
+    let footer = ui
+        .ctx()
+        .data(|data| data.get_temp::<egui::Id>(egui::Id::new("design_footer_drawing")));
+    let key = egui::Id::new(("design_kept_result_reasons", footer));
+    let pass = ui.ctx().cumulative_pass_nr();
+    let said = ui.ctx().data(|data| {
+        data.get_temp::<(u64, Vec<String>)>(key)
+            .filter(|(at, _)| *at == pass)
+            .map(|(_, said)| said)
+            .unwrap_or_default()
+    });
+    typed.body.said = said.clone();
+    let pressed = typed.body.draw(ui, MessagePlace::Footer);
+    let mut said = said;
+    said.extend(
+        typed
+            .body
+            .lock_reasons()
+            .filter(|reason| !said.iter().any(|s| s == reason))
+            .map(str::to_owned)
+            .collect::<Vec<_>>(),
+    );
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(key, (pass, said)));
+    typed.id(pressed?)
+}
+
 /// A message as drawn: tone, words, Undo and choices, each with its lock. Owned: it holds no
 /// borrow, so a footer of them can sit beside a body that changes the app.
 struct Body {
@@ -1876,6 +1927,9 @@ struct Body {
     hovers: Vec<Option<String>>,
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
+    /// Lock reasons an earlier message of the same footer painted in this pass
+    /// (`kept_result`): said once, so not painted again here.
+    said: Vec<String>,
 }
 
 /// A body and the caller's ids of its Undo and of each choice, by index.
@@ -1915,6 +1969,7 @@ impl<A> Typed<A> {
                 locks,
                 hovers,
                 file: None,
+                said: Vec::new(),
             },
             undo: undo_id,
             choices: ids,
@@ -2653,6 +2708,10 @@ impl Body {
             .chain(&self.locks);
         for (reason, locked) in locks.flatten() {
             let reason = reason.as_str();
+            // Said above, by an earlier result of the same footer in this pass.
+            if self.said.iter().any(|said| said == reason) {
+                continue;
+            }
             match said.iter_mut().find(|(said, _)| *said == reason) {
                 Some((_, any)) => *any |= *locked,
                 None => said.push((reason, *locked)),
@@ -2708,6 +2767,14 @@ impl Body {
                 add(ui, DRAWN, ui.cursor().top() - before);
             }
         }
+    }
+
+    /// The reasons of its locks that hold now.
+    fn lock_reasons(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(&self.undo_lock)
+            .filter(|_| self.undo.is_some())
+            .chain(&self.locks)
+            .filter_map(holding)
     }
 
     /// A choice's whole width, with the `L` before a red one.
@@ -3231,6 +3298,43 @@ mod tests {
     use super::*;
     use eframe::egui;
     use egui_kittest::{Harness, kittest::Queryable};
+
+    /// M2's staged adapter is named debt: its calls outside `src/design/` can only shrink, as
+    /// their results move into `Results` stores and `Messages` footers.
+    #[test]
+    fn kept_result_calls_only_shrink() {
+        const ALLOWED: &[(&str, usize)] = &[("src/campaigns.rs", 1), ("src/library.rs", 5)];
+        let mut found = Vec::new();
+        let mut stack = vec![std::path::PathBuf::from("src")];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if !path.ends_with("design") {
+                        stack.push(path);
+                    }
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    let text = std::fs::read_to_string(&path).unwrap();
+                    let calls = text.matches("kept_result(").count();
+                    if calls > 0 {
+                        found.push((path.to_string_lossy().replace('\\', "/"), calls));
+                    }
+                }
+            }
+        }
+        for (path, calls) in &found {
+            let allowed = ALLOWED
+                .iter()
+                .find(|(file, _)| file == path)
+                .map_or(0, |(_, count)| *count);
+            assert!(
+                *calls <= allowed,
+                "{path} calls `kept_result` {calls} times; it may call it {allowed} times. Draw a \
+                 new result through a `Results` store and `Messages` in place of the adapter."
+            );
+        }
+        assert!(!found.is_empty(), "the walk found no call: check its root");
+    }
 
     #[allow(
         clippy::disallowed_methods,

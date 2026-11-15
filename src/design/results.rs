@@ -700,7 +700,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/campaigns.rs", "at", &[Ban::Results]),
         ("src/campaigns.rs", "default", &[Ban::Results]),
-        ("src/campaigns.rs", "footer_messages", &[Ban::Results]),
+        (
+            "src/campaigns.rs",
+            "footer_messages",
+            &[Ban::Results, Ban::Words],
+        ),
         ("src/campaigns.rs", "form", &[Ban::Results]),
         (
             "src/campaigns.rs",
@@ -1138,7 +1142,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(2)],
         ),
         ("src/library.rs", "duplicate_choices", &[Ban::Extras(2)]),
-        ("src/library.rs", "kept_undo_message", &[Ban::Extras(2)]),
         ("src/library.rs", "recovery_action", &[Ban::Extras(2)]),
         ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
         ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),

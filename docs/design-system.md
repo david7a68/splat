@@ -708,7 +708,11 @@ play, and a campaign with none, show nothing here. The rows are worked out when 
 definition changes, and a collapsed section draws nothing.
 
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy
-to… requires a campaign or package destination and states that reason on hover. Create copy saves in one step.
+to… requires a campaign or package destination (one places policy with New entry). While it waits for one, its
+reason is painted in `Small` muted words under the reader's toolbar, in the same pane, from the same value that
+disables it (ruling R35; `design::ActionGroup`); hover and the accessible description say it too. A disabled
+control outside a menu always has its reason in painted words in the same pane; a cause that blocks several
+controls is still said once at its cause, such as the save row. Create copy saves in one step.
 Edit the copy selects it and opens Markdown editing. An open encounter draft keeps Add to its encounter as the
 primary completion action. Completion names the destination, with path on hover. A renamed copy changes its
 first H1 only when it matches the source name.

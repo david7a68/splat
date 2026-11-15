@@ -10,7 +10,8 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{
-        self, Action, Density, Status, Tone, Type, colors, icons, outcome::FaultStatus,
+        self, Action, Density, Status, Tone, Type, colors, icons,
+        outcome::{FaultStatus, UndoStep, Verb},
         reader as reader_style,
     },
     history::{self, Step, Trail},
@@ -245,11 +246,6 @@ fn repair_notice(
         })
         .inner
     }
-}
-
-fn copy_destination_reason(campaigns: &Campaigns) -> Option<&'static str> {
-    (campaigns.modules().is_empty() && campaigns.all().is_empty())
-        .then_some("Add a campaign or a package to create entries.")
 }
 
 /// Who owns an entry, and so whether and where it can be saved.
@@ -741,11 +737,58 @@ pub(crate) fn duplicate_repair_consequence(
     }
 }
 
-fn draft_words(campaign: bool) -> &'static str {
-    if campaign {
-        "Save or discard to copy, add an entry, change packages or switch campaign."
-    } else {
-        "Save or discard to copy, add an entry or change packages."
+/// Why the page's other actions wait while a campaign entry's draft has changes.
+static DRAFT_IN_CAMPAIGN: design::outcome::Sentence =
+    splat::sentence!("Save or discard to copy, add an entry, change packages or switch campaign.");
+/// Why the page's other actions wait while a package entry's draft has changes.
+static DRAFT_IN_PACKAGE: design::outcome::Sentence =
+    splat::sentence!("Save or discard to copy, add an entry or change packages.");
+/// Why the page's other actions wait while the open entry's file changed on disk.
+static CHANGED_FILE_FIRST: design::outcome::Sentence =
+    splat::sentence!("Choose what to do with the changed file first.");
+/// Why a kept result's Undo waits while the open entry has a draft (ruling Q-u: a locked Undo
+/// says why on its own line).
+static UNDO_WAITS_FOR_DRAFT: design::outcome::Sentence =
+    splat::sentence!("Save or discard this draft to undo.");
+
+/// Where an entry can go: ONE policy for `Copy to…` (into a package or any campaign: the copy
+/// dialog lists them all) and `New entry` (into a package or the open campaign). Each action's
+/// availability and its words come from here, so the two cannot disagree about why they wait.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Places {
+    packages: bool,
+    campaigns: bool,
+    open_campaign: bool,
+}
+
+impl Places {
+    fn of(campaigns: &Campaigns) -> Self {
+        Self {
+            packages: !campaigns.modules().is_empty(),
+            campaigns: !campaigns.all().is_empty(),
+            open_campaign: campaigns.active_campaign().is_some(),
+        }
+    }
+
+    /// Why `Copy to…` waits: no package and no campaign to copy into.
+    fn copy(self) -> Option<design::outcome::Sentence> {
+        (!self.packages && !self.campaigns)
+            .then(|| splat::sentence!("Add a campaign or a package to copy entries into."))
+    }
+
+    /// Why `New entry` waits: no package and no open campaign to make it in.
+    fn create(self) -> Option<design::outcome::Sentence> {
+        if self.packages || self.open_campaign {
+            None
+        } else if self.campaigns {
+            Some(splat::sentence!(
+                "Open a campaign or add a package to create entries."
+            ))
+        } else {
+            Some(splat::sentence!(
+                "Add a campaign or a package to create entries."
+            ))
+        }
     }
 }
 
@@ -2003,9 +2046,9 @@ impl design::results::Reconcile for Registration {
 
 impl Registration {
     /// Why Undo waits, if it does.
-    fn lock(&self) -> Option<String> {
+    fn lock(&self) -> Option<design::outcome::Sentence> {
         if self.blocked {
-            Some(crate::content_workspace::UNDO_ENDED.to_owned())
+            Some(crate::content_workspace::UNDO_ENDED_REASON)
         } else {
             self.used_by.as_deref().map(used_reason)
         }
@@ -2051,8 +2094,12 @@ fn task_names_package(
 pub(crate) const PACKAGE_LIST_UNSAFE: &str = "The campaign’s package list has a form Splat cannot change safely, so Undo changed nothing. Remove this package from the list by hand, then undo.";
 
 /// Why a registration's Undo waits while another campaign chose the copy.
-fn used_reason(campaign: &str) -> String {
-    format!("{campaign} uses this package. Remove it from {campaign} first, then undo.")
+fn used_reason(campaign: &str) -> design::outcome::Sentence {
+    splat::sentence!(
+        "{} uses this package. Remove it from {} first, then undo.",
+        campaign,
+        campaign
+    )
 }
 
 /// The package a choice in a campaign file names, in each form the file may give: its id, its
@@ -2466,13 +2513,13 @@ struct PageResults {
     /// order from the store), why its Undo waits, and its owner, which its presses name.
     registration: Option<(
         design::results::FooterResult,
-        Option<String>,
+        Option<design::outcome::Sentence>,
         RegistrationOwner,
     )>,
     /// `Use the copy in encounters` shows, with why it waits.
     use_copy: Option<Option<&'static str>>,
     /// That registration's source change: its footer line and why its Undo waits.
-    rosters: Option<(design::results::FooterResult, Option<&'static str>)>,
+    rosters: Option<(design::results::FooterResult, bool)>,
     /// A package unregister's result.
     unregistered: Option<String>,
     /// Why the scope changed to show an entry.
@@ -2513,7 +2560,7 @@ struct ReaderResults {
     page: PageResults,
     /// Every entry in this package is now chosen for this campaign.
     package_use: bool,
-    /// A manifest write's result and its Undo's words.
+    /// A manifest write's result and the file its Undo writes back.
     manifest: Option<(String, String)>,
     /// A folder's separate-entries result.
     identities: Option<String>,
@@ -2521,8 +2568,9 @@ struct ReaderResults {
     identity: Option<String>,
     /// The name of the entry whose draft Read just discarded.
     discarded: Option<String>,
-    /// Why Undo of a file change waits: an open draft. Its reason shows in the save row.
-    locked: Option<&'static str>,
+    /// Why Undo of a file change waits now: the open draft, or its changed file. The Undo
+    /// paints it on its own line (ruling Q-u); while open, the line keeps its room.
+    locked: Option<&'static design::outcome::Sentence>,
 }
 
 /// Which result's Undo was pressed this frame.
@@ -2537,6 +2585,15 @@ struct ResultPress {
 }
 
 impl ReaderResults {
+    /// `step`'s Undo, locked while the open entry's draft (or its changed file) holds it, with
+    /// a stable reason so the lock coming or going moves nothing below it.
+    fn draft_lock(&self, step: UndoStep) -> design::outcome::Undo<()> {
+        step.pressed_as(()).locked_when(
+            self.locked.is_some(),
+            self.locked.unwrap_or(&UNDO_WAITS_FOR_DRAFT).clone(),
+        )
+    }
+
     fn any(&self) -> bool {
         self.page.any()
             || self.package_use
@@ -2668,14 +2725,14 @@ fn show_result(
                 // The Undo sits on the message line, as every Undo after a message does. After
                 // an outside change it stays there, blocked, and the reason follows at the
                 // message words. The result still happened, so its words keep the text colour.
-                if kept_undo_message(
-                    ui,
-                    Tone::Success,
-                    line.words(),
-                    "Undo package registration",
-                    blocked.as_deref(),
-                    true,
-                ) {
+                let undo = UndoStep::of(Verb::Register, "package").pressed_as(());
+                let undo = match blocked {
+                    // A lock that holds for as long as the result shows: an outside change, or
+                    // another campaign that chose the copy.
+                    Some(reason) => undo.blocked(reason.clone()),
+                    None => undo,
+                };
+                if design::outcome::kept_result(ui, line.words(), undo, Vec::new()).is_some() {
                     pressed.page.registration = Some(*owner);
                 }
                 // The other choice starts below, at the message words. Only Undo is quiet.
@@ -2695,16 +2752,16 @@ fn show_result(
         ResultKind::Rosters => {
             if let Some((line, blocked)) = &page.rosters
                 && let Some((.., owner)) = &page.registration
-                && kept_undo_message(
-                    ui,
-                    Tone::Success,
-                    line.words(),
-                    "Undo source change",
-                    *blocked,
-                    true,
-                )
             {
-                pressed.page.rosters = Some(*owner);
+                let undo = UndoStep::of(Verb::Use, "the copy").pressed_as(());
+                let undo = if *blocked {
+                    undo.blocked(crate::content_workspace::UNDO_ENDED_REASON)
+                } else {
+                    undo
+                };
+                if design::outcome::kept_result(ui, line.words(), undo, Vec::new()).is_some() {
+                    pressed.page.rosters = Some(*owner);
+                }
             }
         }
         ResultKind::Unregistered => {
@@ -2725,33 +2782,27 @@ fn show_result(
             }
         }
         ResultKind::Manifest => {
-            if let Some((words, action)) = &results.manifest {
+            if let Some((words, path)) = &results.manifest {
+                let undo = results.draft_lock(UndoStep::of(Verb::Write, path.as_str()));
                 pressed.manifest =
-                    kept_undo_message(ui, Tone::Success, words, action, results.locked, false);
+                    design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
             }
         }
         ResultKind::Identities => {
             if let Some(words) = &results.identities {
-                pressed.identities = kept_undo_message(
-                    ui,
-                    Tone::Success,
-                    words,
-                    "Undo separate entries",
-                    results.locked,
-                    false,
-                );
+                let undo = results.draft_lock(UndoStep::of(Verb::Separate, "entries"));
+                pressed.identities =
+                    design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
             }
         }
         ResultKind::Identity => {
             if let Some(words) = &results.identity {
-                pressed.identity = kept_undo_message(
-                    ui,
-                    Tone::Success,
-                    words,
-                    crate::world::SEPARATE_ENTRY_UNDO,
-                    results.locked,
-                    false,
-                );
+                let step = UndoStep::of(Verb::Separate, "entry");
+                // World's Undo of one separate entry has the same words.
+                debug_assert_eq!(step.label(), crate::world::SEPARATE_ENTRY_UNDO);
+                let undo = results.draft_lock(step);
+                pressed.identity =
+                    design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
             }
         }
         ResultKind::Discarded => {
@@ -2765,69 +2816,6 @@ fn show_result(
 /// The result of `Choose all` on a package About page.
 pub(crate) const PACKAGE_USE_RESULT: &str =
     "Every entry in this package is now chosen for this campaign.";
-
-/// A kept result and its Undo, as `design::undo_message` draws them. When Undo is blocked, only
-/// Undo greys: the result's words keep the text colour, because the change still happened. With
-/// `say_why`, the reason follows in `Small` muted words at the message words. Without it, the
-/// reason is already on screen (a draft's reason in its save row) and on Undo's hover.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-pub(crate) fn kept_undo_message(
-    ui: &mut egui::Ui,
-    tone: Tone,
-    text: &str,
-    action: &str,
-    blocked: Option<&str>,
-    say_why: bool,
-) -> bool {
-    let Some(reason) = blocked else {
-        return design::undo_message(ui, tone, text, action);
-    };
-    let button = Action::quiet(action)
-        .icon(icons::UNDO)
-        .density(Density::Read)
-        .blocked(Some(reason));
-    let button_width = button.natural_width(ui);
-    // `design::message`'s icon for this tone.
-    let icon = match tone {
-        Tone::Info => icons::INFO,
-        Tone::Success => icons::SUCCESS,
-        Tone::Warning => icons::WARN,
-        Tone::Error => icons::ERROR,
-    };
-    let icon_width = design::number_width(ui, icon, &Type::Body.font(ui));
-    // The same geometry as `undo_message`, so blocking Undo moves nothing on its line.
-    let inset = design::S + 1.0 + icon_width + design::XS + ui.spacing().item_spacing.x;
-    let text_width = design::number_width(ui, text, &Type::Body.font(ui)) + inset;
-    let gap = ui.spacing().item_spacing.x;
-    if ui.available_width() < text_width + gap + button_width {
-        design::message(ui, tone, text);
-        ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
-            button.line_start().show(ui);
-        });
-    } else {
-        ui.horizontal_top(|ui| {
-            let width = (ui.available_width() - button_width - gap).max(0.0);
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, 0.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                    design::message(ui, tone, text)
-                },
-            );
-            button.show(ui);
-        });
-    }
-    // The reason starts at the message words, on its own line, in both layouts.
-    if say_why {
-        design::message_choice_row(ui, tone, |ui| design::blocked_reason(ui, Some(reason)));
-    }
-    false
-}
 
 /// Why a link update wrote nothing: the renamed entry changed on disk since the offer was made.
 pub(crate) const LINKS_NOT_CHANGED: &str = "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again.";
@@ -4262,7 +4250,7 @@ impl Library {
             && let Some(name) =
                 used_elsewhere(owner.package, owner.campaign, campaigns.all(), &manifests)
         {
-            return Err(used_reason(&name));
+            return Err(used_reason(&name).as_str().to_owned());
         }
         let rosters = &self.rosters;
         let (registered, ()) = self
@@ -4909,16 +4897,30 @@ impl Library {
     }
 
     fn draft_reason(&self) -> Option<&'static str> {
+        self.draft_lock().map(design::outcome::Sentence::as_str)
+    }
+
+    /// Why the page's other actions wait for the open entry: its changed file, or its draft.
+    fn draft_lock(&self) -> Option<&'static design::outcome::Sentence> {
         if self.disk_change.is_some() {
-            Some("Choose what to do with the changed file first.")
+            Some(&CHANGED_FILE_FIRST)
         } else if self.dirty() {
-            Some(draft_words(
-                self.selected
-                    .and_then(|i| self.loaded.as_ref().map(|l| &l.notes[i].owner))
-                    .is_some_and(|owner| matches!(owner, Owner::Campaign(_))),
-            ))
+            Some(self.draft_words())
         } else {
             None
+        }
+    }
+
+    /// The draft's reason for the open entry, whether or not it has changes now.
+    fn draft_words(&self) -> &'static design::outcome::Sentence {
+        let campaign = self
+            .selected
+            .and_then(|i| self.loaded.as_ref().map(|l| &l.notes[i].owner))
+            .is_some_and(|owner| matches!(owner, Owner::Campaign(_)));
+        if campaign {
+            &DRAFT_IN_CAMPAIGN
+        } else {
+            &DRAFT_IN_PACKAGE
         }
     }
     #[allow(
@@ -5090,14 +5092,13 @@ impl Library {
                 .then(|| design::count(total, "entry", "entries"))
                 .as_deref(),
             |ui| {
-                let no_place =
-                    campaigns.active_campaign().is_none() && campaigns.modules().is_empty();
+                // The places policy that `Copy to…` shares; the page line under the header
+                // paints its reason.
+                let no_place = Places::of(campaigns).create();
                 if !(self.scope == Scope::Campaign && total == 0) {
                     new_entry = Action::secondary("New entry")
                         .icon(icons::ADD)
-                        .blocked(
-                            locked.or(no_place.then_some("Add a campaign or a package first.")),
-                        )
+                        .blocked(locked.or(no_place.as_ref().map(|reason| reason.as_str())))
                         .show(ui)
                         .clicked();
                 }
@@ -5246,19 +5247,21 @@ impl Library {
             self.focus_package_name = self.form;
         }
         if campaigns.active_campaign().is_none() {
+            // New entry's reason, from the places policy it shares with `Copy to…`.
+            let words = format!(
+                "{} {}",
+                if campaigns.all().is_empty() {
+                    "No campaign yet."
+                } else {
+                    "No campaign open."
+                },
+                Places::of(campaigns)
+                    .create()
+                    .as_ref()
+                    .map_or("The Library works without one.", |reason| reason.as_str())
+            );
             ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            if campaigns.all().is_empty() {
-                                "No campaign yet. Add a campaign or a package to create entries."
-                            } else {
-                                "No campaign open. The Library works without one."
-                            },
-                        )
-                        .color(colors().muted),
-                );
+                ui.label(Type::Small.rich(ui, words).color(colors().muted));
                 if Action::primary(if campaigns.all().is_empty() {
                     "Add campaign"
                 } else {
@@ -5319,10 +5322,7 @@ impl Library {
                 .and_then(|owner| self.rosters.get(&owner))
                 .map(|shown| {
                     let blocked = shown.value().blocked;
-                    (
-                        shown.footer(|_| USE_COPY_RESULT.to_owned()),
-                        blocked.then_some(crate::content_workspace::UNDO_ENDED),
-                    )
+                    (shown.footer(|_| USE_COPY_RESULT.to_owned()), blocked)
                 }),
             // Round 25 FG4: the unregister result sits in the pane's message footer, so the scope,
             // the search and the list never move when it comes or goes.
@@ -7336,8 +7336,14 @@ impl Library {
             manifest: self
                 .manifest_write
                 .as_ref()
-                .map(|write| (write.message(), format!("Undo write {}", write.path()))),
-            locked: self.draft_reason(),
+                .map(|write| (write.message(), write.path().to_string())),
+            locked: self.draft_lock().map(|lock| {
+                if self.disk_change.is_some() {
+                    lock
+                } else {
+                    &UNDO_WAITS_FOR_DRAFT
+                }
+            }),
             page: std::mem::take(&mut self.page_results),
             ..Default::default()
         };
@@ -7690,7 +7696,6 @@ impl Library {
             .entry
             .as_ref()
             .is_some_and(|e| !["package", "campaign", "reference"].contains(&e.kind.as_str()));
-        let copy_reason = draft_reason.or_else(|| copy_destination_reason(campaigns));
         let can_make = matches!(note.owner, Owner::Campaign(_))
             && note.entry.as_ref().is_some_and(|e| e.kind == "creature");
         // Round 25 FF3: the campaign choice is a toolbar action, so it never sends the file line's
@@ -7710,9 +7715,45 @@ impl Library {
             }
             _ => None,
         };
-        let mut copy_clicked = false;
-        let mut make_clicked = false;
-        let mut choose_clicked = false;
+        // The extras wait for one of two causes, each from ONE value: the open draft (its save
+        // row states it; each control keeps it as hover and accessible description) or, for
+        // `Copy to…`, the places policy it shares with `New entry` (painted under the row).
+        let draft = match draft_reason {
+            Some(reason) => match design::DraftCause::of(&draft_state, reason) {
+                Some(cause) => design::Availability::Draft(cause),
+                None => design::Availability::Waits(
+                    self.draft_lock()
+                        .cloned()
+                        .unwrap_or_else(|| DRAFT_IN_PACKAGE.clone()),
+                ),
+            },
+            None => design::Availability::Open,
+        };
+        let copy_availability = match (&draft, Places::of(campaigns).copy()) {
+            (design::Availability::Open, Some(reason)) => design::Availability::Waits(reason),
+            _ => draft.clone(),
+        };
+        #[derive(Clone, Copy)]
+        enum Extra {
+            Copy,
+            Make,
+            Choose,
+        }
+        let mut extras = design::ActionGroup::new();
+        if can_copy {
+            extras = extras.action(
+                "Copy to…",
+                Some(icons::COPY),
+                Extra::Copy,
+                copy_availability,
+            );
+        }
+        if can_make {
+            extras = extras.action("Make NPC note", None, Extra::Make, draft.clone());
+        }
+        if let Some(label) = choose {
+            extras = extras.action(label, None, Extra::Choose, draft.clone());
+        }
         let back = Action::quiet("Back")
             .icon(icons::LEGACY_BACK)
             .density(Density::Read);
@@ -7721,50 +7762,11 @@ impl Library {
         } else {
             "Markdown source"
         };
-        let base_width = Action::quiet("Read")
-            .density(Density::Read)
-            .natural_width(ui)
-            + Action::quiet(edit_label)
-                .density(Density::Read)
-                .natural_width(ui)
-            + if self.trail.peek(Step::Back).is_none() {
-                0.0
-            } else {
-                back.natural_width(ui) + design::S
-            };
-        let extras = if can_copy {
-            Action::quiet("Copy to…")
-                .icon(icons::COPY)
-                .density(Density::Read)
-                .natural_width(ui)
-                + design::S
-        } else {
-            0.0
-        } + if can_make {
-            Action::quiet("Make NPC note")
-                .density(Density::Read)
-                .natural_width(ui)
-                + design::S
-        } else {
-            0.0
-        } + choose.map_or(0.0, |label| {
-            Action::quiet(label)
-                .density(Density::Read)
-                .natural_width(ui)
-                + design::S
-        });
-        let with_key = base_width
-            + extras
-            + design::number_width(ui, "Alt+Left", &Type::Small.font(ui))
-            + design::L;
-        let show_key = with_key <= ui.available_width();
-        let overflow = base_width + extras > ui.available_width();
-        ui.horizontal(|ui| {
-            let edit_label = if editable {
-                "Edit Markdown"
-            } else {
-                "Markdown source"
-            };
+        // Ruling R38: the mode switch and `Back` are a fixed prefix, drawn before the extras, so
+        // `Back` keeps its place whatever kind of entry is open. Its key shows when the prefix,
+        // the key and the extras fit; the extras go behind `More` when they do not fit after it.
+        let history = self.trail.peek(Step::Back).is_some();
+        let (back_pressed, extra) = extras.row(ui, |ui, extras_width| {
             let was_source = self.source;
             design::locked(ui, fault.as_ref().map(|_| UNREAD_EDIT), |ui| {
                 design::segmented(ui, &mut self.source, &[(false, "Read"), (true, edit_label)])
@@ -7773,77 +7775,25 @@ impl Library {
                 self.scope_notice = None;
                 self.focus_repair = self.source && note.error.is_some();
             }
-            if !overflow {
-                if can_copy {
-                    copy_clicked = Action::quiet("Copy to…")
-                        .icon(icons::COPY)
-                        .density(Density::Read)
-                        .blocked(copy_reason)
-                        .show(ui)
-                        .clicked();
-                }
-                if can_make {
-                    make_clicked = Action::quiet("Make NPC note")
-                        .density(Density::Read)
-                        .blocked(draft_reason)
-                        .show(ui)
-                        .clicked();
-                }
-                if let Some(label) = choose {
-                    choose_clicked = Action::quiet(label)
-                        .density(Density::Read)
-                        .blocked(draft_reason)
-                        .show(ui)
-                        .clicked();
-                }
+            if !history {
+                return false;
             }
-            if self.trail.peek(Step::Back).is_some()
-                && (if show_key { back.key("Alt+Left") } else { back })
-                    .hint(
-                        "Return to the entry before this link. During a draft, read it in Lookup.",
-                    )
-                    .show(ui)
-                    .clicked()
-            {
-                step = Some(Step::Back);
-            }
-            if overflow {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    egui::containers::menu::MenuButton::from_button(
-                        egui::Button::new(Type::Strong.rich(ui, "More"))
-                            .frame(false)
-                            .min_size(egui::vec2(0.0, Density::Read.control())),
-                    )
-                    .ui(ui, |ui| {
-                        if can_copy {
-                            copy_clicked = Action::quiet("Copy to…")
-                                .icon(icons::COPY)
-                                .density(Density::Read)
-                                .blocked(copy_reason)
-                                .show(ui)
-                                .clicked();
-                        }
-                        if can_make {
-                            make_clicked = Action::quiet("Make NPC note")
-                                .density(Density::Read)
-                                .blocked(draft_reason)
-                                .show(ui)
-                                .clicked();
-                        }
-                        if let Some(label) = choose {
-                            choose_clicked = Action::quiet(label)
-                                .density(Density::Read)
-                                .blocked(draft_reason)
-                                .show(ui)
-                                .clicked();
-                        }
-                        if copy_clicked || make_clicked || choose_clicked {
-                            ui.close();
-                        }
-                    });
-                });
-            }
+            let with_key = back.natural_width(ui)
+                + design::number_width(ui, "Alt+Left", &Type::Small.font(ui))
+                + design::L
+                + extras_width;
+            let show_key = with_key <= ui.available_width();
+            (if show_key { back.key("Alt+Left") } else { back })
+                .hint("Return to the entry before this link. During a draft, read it in Lookup.")
+                .show(ui)
+                .clicked()
         });
+        if back_pressed {
+            step = Some(Step::Back);
+        }
+        let copy_clicked = matches!(extra, Some(Extra::Copy));
+        let make_clicked = matches!(extra, Some(Extra::Make));
+        let choose_clicked = matches!(extra, Some(Extra::Choose));
         // The mode's flags, after the toggle above: the pass that opens Edit Markdown draws the
         // editor's pane (its footer identity and scroll) from the start, not Read's.
         // Read: the reader's messages sit in the pane's message footer, below the body.
@@ -10025,9 +9975,31 @@ mod tests {
     #[test]
     fn copying_without_a_destination_is_blocked() {
         let campaigns = Campaigns::default();
+        let places = Places::of(&campaigns);
         assert_eq!(
-            copy_destination_reason(&campaigns),
+            places.copy().as_ref().map(|reason| reason.as_str()),
+            Some("Add a campaign or a package to copy entries into.")
+        );
+        // One policy for both actions: with nowhere to put an entry, New entry waits too.
+        assert_eq!(
+            places.create().as_ref().map(|reason| reason.as_str()),
             Some("Add a campaign or a package to create entries.")
+        );
+        // A package is a place for both; a campaign that is not open is one only for a copy.
+        let package = Places {
+            packages: true,
+            ..places
+        };
+        assert_eq!((package.copy(), package.create()), (None, None));
+        let closed = Places {
+            campaigns: true,
+            ..places
+        };
+        assert_eq!(closed.copy(), None);
+
+        assert_eq!(
+            closed.create().as_ref().map(|reason| reason.as_str()),
+            Some("Open a campaign or add a package to create entries.")
         );
     }
 
@@ -12070,7 +12042,7 @@ mod tests {
         assert_eq!(fs::read(&campaign_file).unwrap(), cleared);
         fs::write(&campaign_file, saved).unwrap();
 
-        // `Undo package registration`: a copied file changed. Each registration result lives in
+        // `Undo register package`: a copied file changed. Each registration result lives in
         // its store entry, with all its Undo needs (review of PR 367, points 1 to 4).
         let copy_folder = |name: &str| {
             let copied = temp.path().join(name);
@@ -12681,8 +12653,8 @@ mod tests {
             .get(&h)
             .and_then(|shown| shown.value().lock());
         assert!(
-            lock.as_deref()
-                .is_some_and(|lock| lock.starts_with("Other uses this package.")),
+            lock.as_ref()
+                .is_some_and(|lock| lock.as_str().starts_with("Other uses this package.")),
             "point-1-lock: {lock:?}"
         );
         let refused = library.undo_package_registration(&h, &mut app.campaigns);

@@ -95,6 +95,181 @@ pub fn temp_hp_text(temp: i64) -> String {
     format!("{} +{temp}", icons::TEMP_HP)
 }
 
+// ------------------------------------------------------------------------------------------------
+// Action group (M2): one availability value per action gives its lock, its hover, its accessible
+// description and its painted reason.
+
+/// Whether one action of an [`ActionGroup`] runs now, and why not. This ONE value gives the
+/// control's disabled state, its hover and accessible description, and the reason the group
+/// paints: the group takes no `blocked` from its caller and no flag that hides a reason.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Availability {
+    /// It runs now.
+    Open,
+    /// It waits for a cause that the group states: painted once under the group's controls, in
+    /// `Small` muted words at the row's start (ruling R35), whatever other action waits for it.
+    /// For a steady cause (no destination yet): a cause that comes and goes while the DM types
+    /// in the same pane is a [`DraftCause`], so the row never grows under the DM's hands.
+    Waits(super::outcome::Sentence),
+    /// It waits for an open draft, whose save row states the cause (one cause at its source,
+    /// `docs/design-system.md`, "When one cause blocks several controls"). The control keeps
+    /// the reason as its hover and accessible description.
+    Draft(DraftCause),
+}
+
+impl Availability {
+    /// The reason it waits, if it does.
+    pub fn reason(&self) -> Option<&str> {
+        match self {
+            Self::Open => None,
+            Self::Waits(reason) => Some(reason.as_str()),
+            Self::Draft(cause) => Some(cause.reason),
+        }
+    }
+}
+
+/// Proof that a draft's save row states why other actions wait: made only from a
+/// [`DraftState`](super::DraftState) whose save row shows a draft with changes (`Discard`
+/// beside its word) or a file changed on disk.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DraftCause {
+    reason: &'static str,
+}
+
+impl DraftCause {
+    /// `reason` (each other control's hover) while `state`'s row states the draft's cause;
+    /// `None` when it does not, and then the caller has no cause to cite.
+    pub fn of(state: &super::DraftState<'_>, reason: &'static str) -> Option<Self> {
+        (state.discard_shown() || state.word() == super::save_row::SaveWord::ChangedOnDisk)
+            .then_some(Self { reason })
+    }
+}
+
+/// One action of a group: its words, its icon, the caller's id, and its availability.
+struct GroupAction<'a, A> {
+    label: &'a str,
+    icon: Option<&'a str>,
+    id: A,
+    availability: Availability,
+}
+
+impl<A> GroupAction<'_, A> {
+    fn action(&self) -> Action<'_> {
+        let action = Action::quiet(self.label)
+            .density(Density::Read)
+            .blocked(self.availability.reason());
+        match self.icon {
+            Some(icon) => action.icon(icon),
+            None => action,
+        }
+    }
+}
+
+/// A group of quiet toolbar actions that may wait (Library's `Copy to…`, `Make NPC note`,
+/// `Choose for this campaign`). It owns each action's availability AND the reason under its
+/// controls, from one [`Availability`] value per action; the caller never sets `blocked` and
+/// never decides whether a reason is painted. [`row`](Self::row) draws the toolbar row: the
+/// caller's fixed prefix first (a mode switch, `Back`: ruling R38, its place never depends on
+/// the extras), then the group's actions on the row when they fit, else behind `More` at the
+/// row's right end; then each `Waits` cause once, under the row.
+#[must_use = "draw it with `row`"]
+pub struct ActionGroup<'a, A> {
+    actions: Vec<GroupAction<'a, A>>,
+}
+
+impl<A> Default for ActionGroup<'_, A> {
+    fn default() -> Self {
+        Self {
+            actions: Vec::new(),
+        }
+    }
+}
+
+impl<'a, A: Copy> ActionGroup<'a, A> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// An action, quiet at `Density::Read`, that gives `id` back when pressed.
+    pub fn action(
+        mut self,
+        label: &'a str,
+        icon: Option<&'a str>,
+        id: A,
+        availability: Availability,
+    ) -> Self {
+        self.actions.push(GroupAction {
+            label,
+            icon,
+            id,
+            availability,
+        });
+        self
+    }
+
+    /// The width its actions take on a row, each with `S` before it.
+    pub fn width(&self, ui: &Ui) -> f32 {
+        self.actions
+            .iter()
+            .map(|action| action.action().natural_width(ui) + S)
+            .sum()
+    }
+
+    /// The causes it paints: each `Waits` reason once, in the order of its actions.
+    pub fn reasons(&self) -> Vec<&str> {
+        let mut said: Vec<&str> = Vec::new();
+        for action in &self.actions {
+            if let Availability::Waits(reason) = &action.availability
+                && !said.contains(&reason.as_str())
+            {
+                said.push(reason.as_str());
+            }
+        }
+        said
+    }
+
+    /// The toolbar row: `prefix` first (it gets the room the actions need, to decide its own
+    /// optional parts), then the actions when they fit in the room left, else `More` with them
+    /// in its menu at the row's right end; then, under the row, each cause the group states.
+    /// The prefix's value, and the id of the action the DM pressed.
+    pub fn row<P>(self, ui: &mut Ui, prefix: impl FnOnce(&mut Ui, f32) -> P) -> (P, Option<A>) {
+        let width = self.width(ui);
+        let mut pressed = None;
+        let value = ui
+            .horizontal(|ui| {
+                let value = prefix(ui, width);
+                if self.actions.is_empty() {
+                    return value;
+                }
+                if width <= ui.available_width() {
+                    for action in &self.actions {
+                        if action.action().show(ui).clicked() {
+                            pressed = Some(action.id);
+                        }
+                    }
+                } else {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let response = menu_button(ui, "More", false);
+                        super::menu_popup(&*ui, &response).show(|ui| {
+                            for action in &self.actions {
+                                if action.action().show(ui).clicked() {
+                                    pressed = Some(action.id);
+                                    ui.close();
+                                }
+                            }
+                        });
+                    });
+                }
+                value
+            })
+            .inner;
+        for reason in self.reasons() {
+            blocked_reason(ui, Some(reason));
+        }
+        (value, pressed)
+    }
+}
+
 /// Controls that cannot be used for one reason, which each of them says on hover.
 pub fn locked<R>(ui: &mut Ui, reason: Option<&str>, add: impl FnOnce(&mut Ui) -> R) -> R {
     let key = Id::new("locked_control_reason");
