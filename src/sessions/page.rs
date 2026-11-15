@@ -9480,24 +9480,6 @@ mod tests {
             "back in A, the ended result stays ended"
         );
         assert_eq!(saved(&harness), Some("Recording saved"), "back in A");
-        // Round 30 B7d: the word ends by the frame clock (egui's input time), not the wall
-        // clock, so a test's frames decide when it ends: 7.5 s of frames after the stop it
-        // stands; 8.5 s after, it has ended.
-        let stopped = harness.state().0.saved_at.map(|(_, at)| at).unwrap();
-        harness.input_mut().time = Some(stopped + 7.5);
-        harness.step();
-        assert_eq!(
-            saved(&harness),
-            Some("Recording saved"),
-            "7.5 s of frames later"
-        );
-        harness.input_mut().time = Some(stopped + 8.5);
-        harness.step();
-        assert_eq!(
-            saved(&harness),
-            None,
-            "8.5 s of frames later the word has ended"
-        );
         // Round 30 re-check N1 of PR 400: with no input, a kept `Recording saved: …` still ends
         // with its file. X and Y record in two sessions; the idle frame asks to wake by the next
         // disk check; X's file goes; that wake ends X, and Y stays.
@@ -9902,6 +9884,38 @@ mod tests {
             shows(&harness, MOVE_FILES)
                 && shows(&harness, "Choose below to move the files or not."),
             "the lock gone, the choices come back"
+        );
+        // Round 30 B7d: the word ends by the frame clock (egui's input time), not the wall
+        // clock, so a test's frames decide when it ends: 7.5 s of frames after the stop it
+        // stands; 8.5 s after, it has ended.
+        // Last in this test, because it moves the frame clock on.
+        harness.state_mut().0.live = Some(Live {
+            session: Uuid::nil(),
+            label: "Session 1".to_owned(),
+            recorder: crate::recording::Recorder::start(
+                crate::recording::Tool::Simulated,
+                None,
+                audio.path().join("clock.wav"),
+            )
+            .unwrap(),
+        });
+        harness.state_mut().0.finish_recording();
+        harness.step();
+        assert_eq!(saved(&harness), Some("Recording saved"), "the stop says it");
+        let stopped = harness.state().0.saved_at.map(|(_, at)| at).unwrap();
+        harness.input_mut().time = Some(stopped + 7.5);
+        harness.step();
+        assert_eq!(
+            saved(&harness),
+            Some("Recording saved"),
+            "7.5 s of frames later"
+        );
+        harness.input_mut().time = Some(stopped + 8.5);
+        harness.step();
+        assert_eq!(
+            saved(&harness),
+            None,
+            "8.5 s of frames later the word has ended"
         );
     }
 
