@@ -27162,7 +27162,10 @@ pub mod remove_package_in_use {
             d.root.join("modules/ashen-marches/Module.md").is_file(),
             "Unregistering keeps the package files",
         );
-        d.expect("Undo unregister");
+        // M-L0.4b (ruling M9): the Undo names its package; its accessible name is the whole
+        // label at every width.
+        let undo = format!("Undo unregister {MODULE}");
+        d.expect(&undo);
         let with_result = places(d);
         // Round 25 FG2: a finished change is a success message.
         let words = d.painted_rect_in("Ashen Marches is unregistered.", egui::Rect::EVERYTHING);
@@ -27173,7 +27176,7 @@ pub mod remove_package_in_use {
             format!("The unregister result has the success bar: {words:?}"),
         );
         d.state("package-unregistered-with-undo", Sizes::All);
-        d.click("Undo unregister");
+        d.click(&undo);
         d.expect(&format!("More actions for {MODULE}"));
         let registered = d
             .app_mut()
@@ -27197,7 +27200,7 @@ pub mod remove_package_in_use {
         d.click(&format!("More actions for {MODULE}"));
         d.click(&format!("Unregister {MODULE}"));
         d.click("Unregister");
-        d.expect("Undo unregister");
+        d.expect(&undo);
         go_campaign(d);
         d.click("Reload from disk");
         d.expect("Ashen Marches is not registered.");
