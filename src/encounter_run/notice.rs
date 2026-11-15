@@ -781,15 +781,26 @@ mod tests {
                 run.state.cursor = number - 1;
                 run.state.phase = Phase::Running;
                 run.state.round = 1;
+                let run = std::rc::Rc::new(std::cell::RefCell::new(run));
+                let drawn = run.clone();
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(vec2(width, 640.0))
                     .build(move |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
-                            run.live_header(ui, design::RUN_REGULAR);
+                            drawn.borrow_mut().live_header(ui, design::RUN_REGULAR);
                         });
                     });
                 design::theme::install(&harness.ctx);
                 harness.run_steps(2);
+                // M5 at the production boundary: the run's own kept heading chose a candidate,
+                // and unchanged frames choose none again.
+                let scans = run.borrow().turn_heading.scans();
+                harness.run_steps(3);
+                assert!(
+                    scans >= 1 && run.borrow().turn_heading.scans() == scans,
+                    "the run's kept heading chose {scans} then {} times",
+                    run.borrow().turn_heading.scans()
+                );
                 let texts: Vec<_> = harness
                     .output()
                     .shapes
