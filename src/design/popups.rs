@@ -115,6 +115,7 @@ pub struct Dropdown<'a, T, State = NoChoice> {
     name: &'a str,
     choices: Vec<Entry<'a, T>>,
     width: Option<f32>,
+    room: Option<Rect>,
     blocked: Option<&'a str>,
     command: Option<Word>,
     state: PhantomData<State>,
@@ -146,6 +147,7 @@ impl<'a, T> Dropdown<'a, T, NoChoice> {
             name,
             choices: Vec::new(),
             width: None,
+            room: None,
             blocked: None,
             command: None,
             state: PhantomData,
@@ -161,6 +163,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
             name: self.name,
             choices: self.choices,
             width: self.width,
+            room: self.room,
             blocked: self.blocked,
             command: self.command,
             state: PhantomData,
@@ -214,6 +217,14 @@ impl<'a, T, State> Dropdown<'a, T, State> {
         self
     }
 
+    /// A smaller room owned by the control's layout (for example, a header above two
+    /// panes). The part intersects it with the owning pane and clip; it chooses the menu's
+    /// side, width and position inside that room. This cannot widen the parent's room.
+    pub fn within(mut self, room: Rect) -> Self {
+        self.room = Some(room);
+        self
+    }
+
     /// The control cannot open now, and why: a lock instead of the caret, and the reason on
     /// hover and as its accessible description. An open list closes.
     pub fn blocked(mut self, reason: Option<&'a str>) -> Self {
@@ -251,6 +262,10 @@ fn value_font(ui: &Ui) -> egui::FontId {
 }
 
 impl Dropdown<'_, ()> {
+    /// Accessibility marker for the popup group; the gate keeps checking its choices against
+    /// neighbouring splitters and scroll bars after the group receives its proper role.
+    pub(crate) const CHOICES_ROLE: &'static str = "Dropdown choices";
+
     /// The editable value inside a drop-down. Keeps typed and empty words on one baseline,
     /// in the same regular weight as a closed choice. The caller owns the surrounding field
     /// and its choices, and names the response. No font or weight can be passed.
@@ -454,12 +469,23 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         // The list's frame draws its stroke outside its content: the content is that much
         // smaller, so the list is exactly as wide as its control.
         let stroke = ui.style().visuals.window_stroke.width;
-        let inner = width - 2.0 * stroke;
         // Its room: the owning pane's body above its footer, or the visible part of `ui`.
-        let bounds = super::pane::body_room(ui)
+        let mut bounds = super::pane::body_room(ui)
             .unwrap_or_else(|| ui.clip_rect())
+            .intersect(ui.clip_rect())
             .intersect(ui.ctx().content_rect());
-        let rows_width = inner - lane_width();
+        if let Some(room) = self.room {
+            bounds = bounds.intersect(room);
+        }
+        if !bounds.is_positive() {
+            egui::Popup::close_id(ui.ctx(), list);
+            return (None, false);
+        }
+        let width = width.min(bounds.width());
+        let inner = (width - 2.0 * stroke).max(1.0);
+        let rows_width = (inner - lane_width()).max(1.0);
+        let left = rect.left().clamp(bounds.left(), bounds.right() - width);
+        let anchor = Rect::from_min_max(pos2(left, rect.top()), pos2(left + width, rect.bottom()));
         // Each row's top and height in the list, the command's after its rule.
         let mut places = Vec::with_capacity(self.choices.len() + 1);
         let mut top = 0.0;
@@ -484,7 +510,11 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         } else {
             (RectAlign::TOP_START, above)
         };
-        let max = (natural.min(room) - 2.0 * stroke).max(Density::Read.control());
+        if room < Density::Read.control() + 2.0 * stroke {
+            egui::Popup::close_id(ui.ctx(), list);
+            return (None, false);
+        }
+        let max = natural.min(room) - 2.0 * stroke;
         // A row that gained keyboard focus last pass comes into the list's view, centred: the
         // list opens at that offset, at once, so the next key sees the row.
         let reveal_index = list.with("reveal_index");
@@ -503,6 +533,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let mut rows = Vec::new();
         let shown = egui::Popup::from_toggle_button_response(response)
             .id(list)
+            .anchor(anchor)
             .width(inner)
             .frame(list_frame(ui))
             .align(align)
@@ -543,6 +574,13 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     }
                 });
             });
+        if let Some(shown) = &shown {
+            ui.ctx().accesskit_node_builder(shown.response.id, |node| {
+                node.set_role(egui::accesskit::Role::GenericContainer);
+                node.set_label(format!("{} choices", self.name));
+                node.set_role_description(Dropdown::CHOICES_ROLE);
+            });
+        }
         // A choice or the command closes the list, also from the keyboard (egui closes a popup
         // on a pointer click only).
         if picked.is_some() || command {

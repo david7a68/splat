@@ -124,6 +124,8 @@ struct Shown {
 struct Setup {
     /// Its choices: `WORDS`, or this many numbered ones.
     many: Option<usize>,
+    width: Option<f32>,
+    room: Option<Rect>,
     command: bool,
     blocked: bool,
     disabled: bool,
@@ -143,6 +145,12 @@ fn dropdown(ui: &mut Ui, current: &Cell<usize>, setup: Setup) -> DropdownRespons
         } else {
             dropdown.choice(at, word.clone())
         };
+    }
+    if let Some(width) = setup.width {
+        dropdown = dropdown.width(width);
+    }
+    if let Some(room) = setup.room {
+        dropdown = dropdown.within(room);
     }
     if setup.command {
         dropdown = dropdown.command(crate::word!("Add a side"));
@@ -191,44 +199,150 @@ fn pane(ui: &mut Ui, room: f32, low: bool, current: &Cell<usize>, setup: Setup) 
 fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
     for width in [960.0, 1200.0, 1920.0] {
         for low in [false, true] {
-            let ctx = context();
-            let size = vec2(width, 640.0);
-            let room = width - 400.0;
-            let current = Cell::new(1);
-            let draw = |events| {
-                let mut shown = None;
-                frame(&ctx, size, events, |ui| {
-                    shown = Some(pane(ui, room, low, &current, Setup::default()));
-                });
-                shown.expect("drawn")
-            };
-            let first = draw(Vec::new());
-            draw(click(first.control.center()));
-            let shown = draw(Vec::new());
-            assert!(egui::Popup::is_id_open(&ctx, list()), "open at {width}");
-            let popup = list_rect(&ctx);
-            let control = shown.control;
-            assert!(
-                (popup.left() - control.left()).abs() < 1.0
-                    && (popup.width() - control.width()).abs() < 1.0,
-                "as wide as the control at {width}: {popup:?} {control:?}"
-            );
-            assert!(
-                popup.right() <= shown.pane.right() - lane_width() + 1.0,
-                "clear of the lane and the splitter at {width}"
-            );
-            if low {
+            for oversized in [false, true] {
+                let ctx = context();
+                let size = vec2(width, 640.0);
+                let room = width - 400.0;
+                let current = Cell::new(1);
+                let draw = |events| {
+                    let mut shown = None;
+                    frame(&ctx, size, events, |ui| {
+                        shown = Some(pane(
+                            ui,
+                            room,
+                            low,
+                            &current,
+                            Setup {
+                                width: oversized.then_some(room + 100.0),
+                                room: oversized.then(|| {
+                                    Rect::from_min_max(
+                                        ui.max_rect().min,
+                                        pos2(
+                                            ui.max_rect().left() + room - lane_width(),
+                                            ui.max_rect().bottom(),
+                                        ),
+                                    )
+                                }),
+                                ..Setup::default()
+                            },
+                        ));
+                    });
+                    shown.expect("drawn")
+                };
+                let first = draw(Vec::new());
+                draw(click(first.control.left_center() + vec2(10.0, 0.0)));
+                let shown = draw(Vec::new());
+                assert!(egui::Popup::is_id_open(&ctx, list()), "open at {width}");
+                let popup = list_rect(&ctx);
+                let control = shown.control;
+                if oversized {
+                    assert!(
+                        popup.width() < control.width(),
+                        "the menu must shrink at {width}"
+                    );
+                } else {
+                    assert!(
+                        (popup.left() - control.left()).abs() < 1.0
+                            && (popup.width() - control.width()).abs() < 1.0,
+                        "as wide as the control at {width}: {popup:?} {control:?}"
+                    );
+                }
                 assert!(
-                    popup.bottom() <= control.top(),
-                    "above at the foot ({width})"
+                    popup.left() >= shown.pane.left() - 1.0
+                        && popup.right() <= shown.pane.right() - lane_width() + 1.0,
+                    "clear of the lane and the splitter at {width}: {popup:?}"
                 );
-            } else {
-                assert!(
-                    popup.top() >= control.bottom(),
-                    "under the control ({width})"
-                );
+                if low {
+                    assert!(
+                        popup.bottom() <= control.top(),
+                        "above at the foot ({width})"
+                    );
+                } else {
+                    assert!(
+                        popup.top() >= control.bottom(),
+                        "under the control ({width})"
+                    );
+                }
             }
         }
+    }
+    // A header above two panes owns only this strip. Twelve session choices must scroll
+    // inside it, with at least five whole choices visible and the window unchanged.
+    for size in [
+        vec2(960.0, 640.0),
+        vec2(1200.0, 800.0),
+        vec2(1920.0, 1080.0),
+    ] {
+        let ctx = context();
+        let control = Cell::new(Rect::NOTHING);
+        let room = Cell::new(Rect::NOTHING);
+        let current = Cell::new(0);
+        let draw = |events| {
+            frame(&ctx, size, events, |ui| {
+                let bounded = Rect::from_min_max(
+                    pos2(ui.clip_rect().left(), 44.0),
+                    pos2(ui.clip_rect().right(), 280.0),
+                );
+                room.set(bounded);
+                ui.add_space(244.0);
+                let mut dropdown = Dropdown::new(SIDE, "Session for new events")
+                    .choice(0, "No session".to_owned());
+                for number in 1..=12 {
+                    dropdown = dropdown.choice(number, format!("Session {number}: Ferry Watch"));
+                }
+                let mut chosen = current.get();
+                let shown = dropdown.within(bounded).width(220.0).show(ui, &mut chosen);
+                current.set(chosen);
+                control.set(shown.response.rect);
+            })
+        };
+        draw(Vec::new());
+        draw(click(control.get().center()));
+        draw(Vec::new());
+        let open = draw(Vec::new());
+        assert!(egui::Popup::is_id_open(&ctx, list()));
+        let popup = list_rect(&ctx);
+        assert!(
+            room.get().contains_rect(popup),
+            "{size:?}: {popup:?}, {:?}",
+            room.get()
+        );
+        assert!(
+            popup.bottom() <= control.get().top(),
+            "the header menu opens above"
+        );
+        let whole = texts(&open)
+            .iter()
+            .filter(|text| {
+                (text.words == "No session" || text.words.starts_with("Session "))
+                    && popup.contains_rect(text.rect)
+            })
+            .count();
+        assert!(
+            whole >= 5,
+            "{size:?}: only {whole} whole choices fit in {popup:?}"
+        );
+        assert!(
+            popup.height() < 13.0 * Density::Read.control(),
+            "the list scrolls internally"
+        );
+        let before = control.get();
+        for _ in 0..12 {
+            draw(key(Key::ArrowDown));
+            draw(Vec::new());
+        }
+        let last = draw(Vec::new());
+        assert!(
+            texts(&last)
+                .iter()
+                .any(|text| text.words == "Session 12: Ferry Watch"
+                    && popup.contains_rect(text.rect))
+        );
+        assert_eq!(
+            control.get(),
+            before,
+            "opening and scrolling moves no control"
+        );
     }
 }
 
@@ -1377,4 +1491,16 @@ fn chosen_values_use_regular_weight_and_keep_full_choice_words() {
     draw(Vec::new());
     let open = draw(Vec::new());
     assert!(painted(&open).iter().any(|words| words == FULL));
+    assert!(
+        open.platform_output
+            .accesskit_update
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, node)| {
+                node.role() == egui::accesskit::Role::GenericContainer
+                    && node.label() == Some("Adds to choices")
+            }),
+        "the popup is a named group, not a target over its own choices"
+    );
 }
