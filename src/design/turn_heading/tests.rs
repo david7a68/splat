@@ -166,7 +166,7 @@ fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
                     );
                     assert!(
                         shown.chars().next().is_some_and(char::is_alphanumeric)
-                            && (!numbered || shown.ends_with(" 12")),
+                            && (!numbered || shown.trim_end_matches("’s turn").ends_with(" 12")),
                         "{at}: the name keeps its first letter and its copy mark: {shown:?}"
                     );
                     if !is_whole {

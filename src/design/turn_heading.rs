@@ -439,7 +439,10 @@ fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
     let (chosen, (text, size)) = chosen.unwrap_or_else(|| {
         // No candidate fits: the least form (one letter and the copy mark), clipped to its
         // room. Narrower than the run list keeps (454 px) only.
-        let least_form = letters(heading.name, |_| true).unwrap_or_default();
+        let least_form = letters(heading.name, |cut| {
+            cut.chars().take_while(|c| *c != '…').count() <= 1
+        })
+        .unwrap_or_default();
         (ORDER[ORDER.len() - 1], (least_form, metrics.least))
     });
     let name = layout(ui, text, sized(size), metrics.current);
