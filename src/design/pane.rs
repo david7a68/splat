@@ -8,8 +8,10 @@
 //! - **`Body::Content` is the scroll column.** The part makes the vertical `ScrollColumn` (lane
 //!   kept) and runs `add` as its content. Where the content ends is egui's own scroll output, the
 //!   content's height and offset, not a guess from widget rects. The footer sits `S` below the
-//!   content when the content is shorter than the room and not scrolled; it is pinned at the
-//!   pane's bottom otherwise, and then draws a hairline where the content goes on below it. A body
+//!   content when the content is shorter than the room and not scrolled, and may then take the
+//!   room down to the pane's end; it is pinned at the pane's bottom otherwise, at most a third of
+//!   the pane tall (ruling Q-c), and then draws a hairline where the content goes on below it. A
+//!   footer scrolls inside only beyond that room. A body
 //!   that takes all the room (a widget sized to the room, a layout that centres or justifies, a
 //!   column as tall as the room) reads as tall: the footer is pinned below the room and never over
 //!   a control. A header that must not scroll is drawn before the pane. A vertical `ScrollColumn`
@@ -1450,12 +1452,17 @@ impl Footer<'_> {
             ui.ctx().data_mut(|data| data.remove::<f32>(key));
             ui.ctx().request_discard("the message footer emptied");
         }
+        // Ruling Q-c: a pinned footer takes at most a third of the pane; a footer that follows a
+        // short body may take the room down to the pane's end (below).
         let most = (room.height() / 3.0).floor().max(0.0);
-        // Last pass's height; a change is measured below, and the pass is drawn again.
-        let height = if shown { stored.min(most) } else { 0.0 };
+        // Last pass's demand, whole (what the messages want, uncapped); a change is measured
+        // below, and the pass is drawn again.
+        let demand = if shown { stored } else { 0.0 };
+        // The pinned footer's height.
+        let height = demand.min(most);
         let pinned = room.bottom() - height;
-        // The body has the same room whether the footer follows it or is pinned, so it never
-        // changes its own size when the footer moves.
+        // The body has the same room whether the footer follows it or is pinned (it ends `S`
+        // above the pinned footer), so it never changes its own size when the footer moves.
         let limit = if height > 0.0 {
             pinned - S
         } else {
@@ -1659,13 +1666,17 @@ impl Footer<'_> {
         let cut = shown && scroll.is_some_and(Scroll::cut);
         let mut footer = None;
         if shown {
-            let top = match (placement, scroll) {
+            // Where the footer starts, and the most it may take there: below a short body, `S`
+            // after the content and the room down to the pane's end (Q-c); pinned, a third of
+            // the pane. It is as tall as its demand up to that, and scrolls inside beyond it.
+            let (top, most) = match (placement, scroll) {
                 (Placement::Follows, Some(scroll)) => {
-                    (scroll.viewport.top() + scroll.height + S).min(pinned)
+                    let top = (scroll.viewport.top() + scroll.height + S).min(pinned);
+                    (top, room.bottom() - top)
                 }
-                _ => pinned,
+                _ => (pinned, most),
             };
-            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, height));
+            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, demand.min(most)));
             // Nothing in the body under the footer takes a press there, nor in the `S` above it
             // (egui gives a press to a widget a few points away): the footer comes after the body,
             // so this blank target is above the body's, and the footer's own controls above it.
@@ -1679,7 +1690,7 @@ impl Footer<'_> {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(Id::new("design_footer_drawing"), id));
             self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored);
-            if height > 0.0 {
+            if rect.height() > 0.0 {
                 footer = Some(rect);
                 #[cfg(test)]
                 super::components::record_band(ui, room, rect);
