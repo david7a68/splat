@@ -20547,7 +20547,8 @@ pub mod encounter_owned_groups {
             std::fs::write(&wolf, broken).unwrap();
             d.focus_window(false);
             d.focus_window(true);
-            d.wait_for_text("Its file cannot be read.");
+            // The row's heading names the creature it cannot find, whatever its cause.
+            d.wait_for_text("Unknown creature");
             let tones = (
                 status_tones(d, "Invalid"),
                 tones_where(d, |words| words.contains("Its file cannot be read.")),
