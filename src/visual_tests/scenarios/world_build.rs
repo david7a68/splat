@@ -4964,7 +4964,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     );
     d.observe(
         "W2",
-        d.in_view(NEXT_TURN) && d.has("Guard") && !d.has("Change Stat block"),
+        d.in_view(NEXT_TURN) && d.has("Guard") && d.has("Change Stat block"),
         "The compact NPC reader shows its stat block and place beside the run",
     );
     // Round 24 FI6: the one match is the entry on screen, so no `Show 1 result` line shows.
@@ -5292,7 +5292,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "W2",
         d.has("North Gate")
             && d.visible_text("Never names the captain. Owes Nell a favour.")
-            && !d.has("Change Place"),
+            && d.has("Change Place"),
         "After Save, Lookup reads the NPC again with the new place and text",
     );
     body_kept(
