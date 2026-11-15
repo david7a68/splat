@@ -10927,6 +10927,10 @@ pub mod signed_in {
         let (control, rows, blocked) = d.aside(|d| {
             go_campaign(d);
             d.click(LINK_TAB);
+            // R24: the link's block follows the session folder's, so at 960 the picker sits low
+            // in the pane, and a list with no room under it opens above it (the Dropdown's rule).
+            // The DM scrolls the pane to the picker first; the list then opens under it.
+            d.scroll_at(pos2(600.0, 400.0), 10);
             d.click_starting("D&D Beyond campaign link: ");
             d.wait_for_text("Salt Road");
             let nodes = d.nodes();

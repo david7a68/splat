@@ -42,7 +42,7 @@
 //! }
 //! ```
 use super::{
-    Action, Density, FORM_WIDTH, Heading, Status, components::spinner, components::status,
+    Action, Density, FORM_WIDTH, Heading, Status, Type, components::spinner, components::status,
     extras::space, heading, outcome::RowMessages, tokens::S,
 };
 use eframe::egui::{self, Rect, Response, Ui};
@@ -176,6 +176,9 @@ impl<'u> ValueBlock<'u, AfterHeading> {
         let first = ui.cursor().top() <= ui.max_rect().top() + 0.5;
         let spacing = ui.spacing().item_spacing.y;
         if !first {
+            // The heading's words, not its row, start `Heading::above` below the item before
+            // (row 93): the row centres them, so its top comes up by their inset in the row.
+            let inset = (Density::Read.control() - Type::Label.line()) / 2.0;
             space(
                 ui,
                 Heading::Group {
@@ -183,7 +186,8 @@ impl<'u> ValueBlock<'u, AfterHeading> {
                     count: 0,
                 }
                 .above()
-                    - spacing,
+                    - spacing
+                    - inset,
             );
         }
         let title = row.title.to_owned();
