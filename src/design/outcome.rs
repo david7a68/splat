@@ -5944,8 +5944,8 @@ mod tests {
 
         // Ruling L9 (attack finding 2): a press is acted on once, by its ticket, also when its
         // frame is drawn again (a second pass) and when that rerun is declined (one pass at
-        // most). The click's frames (one per input event) draw one more pass when egui may.
-        let mut drawn = Vec::new();
+        // most). The press is a choice whose line stays (`Register as a new campaign`), so a
+        // press kept and given again would act twice.
         for passes in [2_usize, 1] {
             let mut app = two();
             app.two_panes = true;
@@ -5956,27 +5956,24 @@ mod tests {
             let older = order(h.state(), "older");
             // The press's frame asks egui to draw it again.
             h.state_mut().discard = true;
-            h.get_all_by_label("Undo change older")
+            h.get_all_by_label("Register as a new campaign")
                 .nth(1)
                 .unwrap()
-                .click();
+                .click_accesskit();
             let before = h.state().passes;
             h.step();
-            drawn.push(h.state().passes - before);
-            assert!(!h.state().discard, "the frame asked for its rerun");
+            assert_eq!(
+                (h.state().passes - before, h.state().discard),
+                (passes, false),
+                "the press's frame is drawn {passes} times"
+            );
             h.run_steps(3);
             assert_eq!(
-                h.state().presses,
-                [(1, Act::Undo, older)],
+                (h.state().presses.as_slice(), h.state().registered),
+                ([(1, Act::Register, older)].as_slice(), 1),
                 "{passes} passes: one press, by its ticket"
             );
-            assert_eq!(h.state().acted, [Ok("Campaign link saved")]);
         }
-        assert_eq!(
-            drawn[0],
-            drawn[1] + 1,
-            "the rerun was drawn where egui may, and declined where it may not: {drawn:?}"
-        );
     }
 
     /// M2 (packet 2, the cut of ruling 3): through the staged adapter, each locked Undo says its
