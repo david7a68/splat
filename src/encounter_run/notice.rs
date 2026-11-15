@@ -3,9 +3,9 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Command, NOBODY_PRESENT, Panel, Phase, Run, SHEET_SOURCE,
-    view::{DOCK_ALL_WORDS_FROM, dock_name, header_height, log_link, undo_forms},
+    view::{dock_name, log_link, undo_forms},
 };
-use crate::design::{self, Action, Density, RunScale, Status, Tone, Type, colors, icons};
+use crate::design::{self, Density, RunScale, Status, Tone, Type, colors, icons};
 use eframe::egui::{self, Align, Layout, vec2};
 
 /// What sync needs from the DM, on the line above the roster.
@@ -46,44 +46,10 @@ impl Run {
         Some((whole, reminders.len().to_string(), full))
     }
 
-    /// X49: whether Next turn keeps its `N` key letter. When the current turn's name, at its
-    /// least size, is cut beside it and would show more words in its room, the letter gives
-    /// way first. The Keys list still has N.
-    fn turn_name_keeps_room(
-        &self,
-        ui: &egui::Ui,
-        scale: RunScale,
-        name: &str,
-        words: bool,
-    ) -> bool {
-        let turn_size = scale.hp;
-        let least = (scale.name + design::HAIRLINE_WIDTH).min(turn_size);
-        let gap = ui.spacing().item_spacing.x;
-        let next = Action::primary("Next turn")
-            .icon(icons::NEXT)
-            .density(Density::Glance)
-            .key("N")
-            .natural_width(ui);
-        let add = self.add_to_fight(words, Density::Glance).natural_width(ui);
-        let round = design::number_width(
-            ui,
-            &self.state_words(false),
-            &Type::Round.sized(ui, turn_size),
-        );
-        let room = ui.available_width()
-            - (next + add + round + 3.0 * (gap + design::S))
-            - design::HAIRLINE_WIDTH;
-        let font = Type::Name.sized(ui, least);
-        let keyless = Action::primary("Next turn")
-            .icon(icons::NEXT)
-            .density(Density::Glance)
-            .natural_width(ui);
-        design::number_width(ui, name, &font) <= room
-            || dock_name(ui, name, &font, room) == dock_name(ui, name, &font, room + next - keyless)
-    }
-
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
+    /// The heading is one design part (M5, R22): it fits and paints the round, the name, `Add`
+    /// and `Next turn` together, and the key letter gives up its room before the name is cut.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
@@ -92,86 +58,26 @@ impl Run {
         let c = colors();
         let strip = self.strip();
         let name = strip.current.as_deref().unwrap_or_default();
-        let mut next_turn = false;
         let nobody_present = !self.state.participants.iter().any(|p| p.present);
-        // As large as the largest HP, in the row's own face: nothing outweighs the header.
-        let turn_size = scale.hp;
-        let height = header_height(scale);
-        // A narrow roster keeps its room for the turn's name.
-        let words = ui.available_width() >= DOCK_ALL_WORDS_FROM;
-        let keeps_room = self.turn_name_keeps_room(ui, scale, name, words);
-        let next_key = !self.lookup_open && keeps_room;
-        ui.allocate_ui_with_layout(
-            vec2(ui.available_width(), height),
-            Layout::right_to_left(Align::Center),
-            |ui| {
-                ui.set_min_height(height);
-                // FK8, row 62: the key letter hides with Lookup open (the keys do not work then)
-                // or for the turn's name (X49), and its room always stays, so `Add to fight`
-                // never moves when the letter comes and goes.
-                let next = Action::primary("Next turn")
-                    .icon(icons::NEXT)
-                    .density(Density::Glance)
-                    .blocked(nobody_present.then_some(NOBODY_PRESENT));
-                next_turn = design::KeySlot::new(next, crate::key!("N"))
-                    .show(
-                        ui,
-                        if next_key {
-                            design::KeyLetter::Shown
-                        } else {
-                            design::KeyLetter::Hidden
-                        },
-                    )
-                    .clicked();
-                // As the strip pairs Back to run with Next turn: one height, one small gap.
-                design::gap(ui, design::Gap::S);
-                if self.add_to_fight(words, Density::Glance).show(ui).clicked() {
-                    self.show_arrivals();
-                }
-                design::gap(ui, design::Gap::S);
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    let response = ui.label(
-                        Type::Round
-                            .rich(ui, self.state_words(false))
-                            .font(Type::Round.sized(ui, turn_size))
-                            .color(c.text),
-                    );
-                    design::named(
-                        ui,
-                        &response,
-                        &format!("Run · {} · Round {}", self.name, self.state.round),
-                    );
-                    design::gap(ui, design::Gap::S);
-                    // Drop the turn suffix before shortening the identifying name.
-                    let room = ui.available_width() - design::HAIRLINE_WIDTH;
-                    let least = (scale.name + design::HAIRLINE_WIDTH).min(turn_size);
-                    let full = format!("{name}’s turn");
-                    let font = Type::Name.sized(ui, turn_size);
-                    let fit = |text: &str| {
-                        (turn_size * room / design::number_width(ui, text, &font)).min(turn_size)
-                    };
-                    let (text, size) = if fit(&full) >= least {
-                        (full.clone(), fit(&full))
-                    } else if fit(name) >= least {
-                        (name.to_owned(), fit(name))
-                    } else {
-                        let font = Type::Name.sized(ui, least);
-                        (dock_name(ui, name, &font, room), least)
-                    };
-                    let response = ui.add(
-                        egui::Label::new(
-                            Type::Name
-                                .rich(ui, text)
-                                .font(Type::Name.sized(ui, size))
-                                .color(c.turn.current),
-                        )
-                        .truncate(),
-                    );
-                    design::named(ui, &response, &full);
-                    response.on_hover_text(&full);
-                });
+        let presses = design::TurnHeading::new(
+            &self.name,
+            self.state.round,
+            name,
+            scale,
+            self.panel == Panel::Groups && !self.hide_panel,
+            nobody_present.then_some(NOBODY_PRESENT),
+            // FK8, row 62: the keys do not work with Lookup open, so the letter shows nowhere.
+            if self.lookup_open {
+                design::TurnKeys::Elsewhere
+            } else {
+                design::TurnKeys::Work
             },
-        );
+        )
+        .show(ui, &mut self.turn_heading);
+        if presses.add {
+            self.show_arrivals();
+        }
+        let next_turn = presses.next_turn;
         ui.add_space(6.0);
         // Measure the notice first; Undo takes the remaining room on line two.
         let undo_label = self.undo_label();

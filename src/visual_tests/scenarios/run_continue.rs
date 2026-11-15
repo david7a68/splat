@@ -1206,16 +1206,40 @@ pub fn run(d: &mut Driver<'_>) {
         format!("At 1200 with the message, rows in view and a below count: {rows:?}"),
     );
     d.state("undo-steps-unread", Sizes::All);
-    let add_at = |d: &mut Driver<'_>| d.at_size(DEFAULT, |d| d.place_of("Add to fight"));
-    let before = add_at(d);
+    // iter-28-R FK8, amended by ruling R22 (M5): beside Lookup the keys do not work, so Next
+    // turn paints no `N`. In the heading, a line with a name, the letter's room goes with it:
+    // Next turn keeps its right edge and is narrower, and the name gains that room. (The old
+    // check held `Add to fight` still, which R22 replaces.) The dock keeps its fixed slots:
+    // Heal does not move.
+    let places = |d: &mut Driver<'_>| {
+        d.at_size(DEFAULT, |d| {
+            let next = d.place_of(NEXT_TURN);
+            (
+                next,
+                next.map(|rect| d.painted_in(rect)).unwrap_or_default(),
+                d.place_of("Heal"),
+            )
+        })
+    };
+    let (next_before, key_before, heal_before) = places(d);
     open_lookup(d);
-    // iter-28-R FK8: Next turn's key letter hides beside Lookup, but its room stays, so `Add to
-    // fight` keeps its x.
-    let after = add_at(d);
+    let (next_after, key_after, heal_after) = places(d);
+    let keyed = |words: &str| words.split(' ').any(|word| word == "N");
     d.observe(
         "iter-28-R-FK8",
-        matches!((before, after), (Some(a), Some(b)) if (a.left() - b.left()).abs() < 0.5),
-        format!("Add to fight before and beside Lookup: {before:?} {after:?}"),
+        matches!((next_before, next_after), (Some(a), Some(b))
+            if (a.right() - b.right()).abs() < 0.5
+                && (!keyed(&key_before) || b.width() < a.width() - 1.0))
+            && !keyed(&key_after),
+        format!(
+            "Next turn before and beside Lookup: {next_before:?} {key_before:?}, \
+             {next_after:?} {key_after:?}"
+        ),
+    );
+    d.observe(
+        "iter-28-R-FK8-dock",
+        matches!((heal_before, heal_after), (Some(a), Some(b)) if (a.left() - b.left()).abs() < 0.5),
+        format!("The dock's Heal before and beside Lookup: {heal_before:?} {heal_after:?}"),
     );
     whole_at_every_size(
         d,

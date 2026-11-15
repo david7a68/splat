@@ -16,6 +16,7 @@ pub mod save_row;
 pub mod status;
 pub mod theme;
 pub mod tokens;
+pub mod turn_heading;
 pub mod value_block;
 
 #[cfg(test)]
@@ -54,5 +55,7 @@ pub use save_row::{DraftState, save_row};
 #[allow(unused_imports)]
 pub use status::{KindStatus, StatusKind, Tinted};
 pub use tokens::*;
+// M5, ruling R22: the run's turn heading, one closed part.
+pub use turn_heading::{KeptTurnHeading, TurnHeading, TurnKeys};
 // Ruling R24: one block per value of a settings pane.
 pub use value_block::{HeadingNote, HeadingRow, ValueBlock};

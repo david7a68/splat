@@ -188,8 +188,9 @@ fn slot_and_status_slot_keep_the_next_control_still() {
     let after = |value: &str, state: usize| {
         let letter = [KeyLetter::Hidden, KeyLetter::Shown][state];
         let (nodes, painted) = frame_with(&ctx, vec2(600.0, 300.0), Vec::new(), |ui| {
-            // Row 62: a control's key letter comes and goes; the control after it stays, in a
-            // right-to-left row as in Run's header, and in a left-to-right row.
+            // F8: a control's key letter comes and goes; the control after it stays, in a
+            // right-to-left row and in a left-to-right row. (A line with a name releases the
+            // room instead: R22, `design::turn_heading`'s tests.)
             ui.horizontal(|ui| {
                 let _ =
                     KeySlot::new(Action::primary("Next turn"), crate::key!("N")).show(ui, letter);

@@ -1364,8 +1364,9 @@ pub mod doc_parts {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeyLetter {
     Shown,
-    /// The keys do not work here (Lookup has the keyboard), or the letter gives its place to
-    /// other words. Its room stays.
+    /// The keys do not work here (Lookup has the keyboard). Its room stays: this is the fixed
+    /// policy of a line with no name. A line that holds a name releases the room instead
+    /// (R22, `design::TurnHeading`).
     Hidden,
 }
 
@@ -1426,8 +1427,10 @@ macro_rules! key {
 }
 
 /// Fixed room for a control whose key letter comes and goes: as wide as the control with its
-/// key letter, so a control beside it never moves when the letter hides or shows (F8; Run's
-/// `Next turn` with `N`, routing row 62). The width is the control's own measure
+/// key letter, so a control beside it never moves when the letter hides or shows (F8). This is
+/// the key policy of a line with no name, such as the run's dock. A line that holds a name
+/// does not use it: there the hidden letter gives up its room before the name is cut (ruling
+/// R22), and Run's turn heading owns that policy (`design::TurnHeading`). The width is the control's own measure
 /// (`Action::natural_width` of the same action with the key, or the action's own `min_width`
 /// when that is wider), so it cannot drift from the paint; no caller gives a width.
 ///
