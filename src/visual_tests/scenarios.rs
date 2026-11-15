@@ -24706,10 +24706,11 @@ pub mod session_plan {
         // with the event still open.
         d.click(NAV_SESSIONS);
         show_plan(d);
-        if !d.has("Whole run") {
+        // The fight opens while the folder is gone, so its failure is the kept summary when
+        // the folder comes back.
+        if d.has("Whole run") {
             d.click(FIRST);
         }
-        d.expect("Whole run");
         let folder = d.app_mut().encounters.saved_runs()[0]
             .path
             .parent()
@@ -24717,6 +24718,7 @@ pub mod session_plan {
             .to_owned();
         let aside = folder.with_file_name("Runs set aside");
         std::fs::rename(&folder, &aside).unwrap();
+        d.click(FIRST);
         d.settle();
         d.observe(
             "s30-R41-plan-missing",
