@@ -686,6 +686,8 @@ mod tests {
         waiting: bool,
         /// `Open`'s id, as last drawn.
         open_id: Option<Id>,
+        /// Room above `Open`, which moves it down.
+        open_down: f32,
     }
 
     impl Page {
@@ -715,6 +717,7 @@ mod tests {
                 older: Reveal::default(),
                 waiting: false,
                 open_id: None,
+                open_down: 0.0,
             }
         }
     }
@@ -749,6 +752,7 @@ mod tests {
     #[allow(clippy::disallowed_methods, reason = "a test's scroll request")]
     fn content(ui: &mut Ui, page: &mut Page) {
         ui.label("Outer top");
+        room(ui, page.open_down);
         let open = ui.add_enabled(!page.disabled, egui::Button::new("Open"));
         page.open_id = Some(open.id);
         let other = ui.button("Other");
@@ -901,8 +905,8 @@ mod tests {
 
     /// A real press asks once: a second `Act::clicked` in the pass gives nothing. A saved
     /// `Response` of a key activation (a copy keeps its click flag) gives nothing on a later
-    /// pass: with a release inside its old rect, or with an accessibility click while the
-    /// control is disabled.
+    /// pass: with a release inside its old rect after the control moved away, or with an
+    /// accessibility click while the control is disabled.
     #[test]
     fn one_press_gives_one_act() {
         let mut page = quiet();
@@ -923,6 +927,7 @@ mod tests {
         let id = h.state().saved.as_ref().expect("a saved Response").id;
         for disabled in [false, true] {
             h.state_mut().disabled = disabled;
+            h.state_mut().open_down = if disabled { 0.0 } else { 120.0 };
             h.step();
             h.state_mut().replay = true;
             let event = if disabled {
