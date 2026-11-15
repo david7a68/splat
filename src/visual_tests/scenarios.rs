@@ -22899,6 +22899,15 @@ pub mod session_plan_groups {
             d.has("Save group"),
             d.has_containing("Ash Two"),
         );
+        let rivals_in_view = |d: &mut Driver<'_>| {
+            for _ in 0..20 {
+                if d.in_view(GROUP_RIVALS) {
+                    break;
+                }
+                d.scroll_up_at(pos2(600.0, 400.0), 1);
+            }
+        };
+        rivals_in_view(d);
         d.click_first(GROUP_RIVALS);
         let refused = (
             d.has("A group is being assembled in Session 2."),
@@ -22931,6 +22940,7 @@ pub mod session_plan_groups {
         d.type_text("Ford Ambush");
         d.click(NAV_SESSIONS);
         d.click_starting("Session 1: The Crossing ·");
+        rivals_in_view(d);
         d.click_first(GROUP_RIVALS);
         let encounter_reason = crate::design::Unsaved::Encounter.reason();
         d.observe(
