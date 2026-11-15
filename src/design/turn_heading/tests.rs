@@ -1,9 +1,9 @@
 //! The turn heading proves its rules here, once: R22's key release, one complete candidate
-//! inside its room, and one choice per change.
+//! inside its room that never hides the name, and one choice per change.
 use eframe::egui::{self, Rect, pos2, vec2};
 
 use super::*;
-use crate::design::{RUN_REGULAR, theme};
+use crate::design::{RUN_COMPACT, RUN_LARGE, RUN_LIST_KEEPS, RUN_REGULAR, theme};
 
 type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
 
@@ -22,19 +22,25 @@ fn context() -> egui::Context {
     ctx
 }
 
-/// One frame at `width`, drawing each heading on its own line with its own kept result.
+/// One frame whose heading has exactly `width`, drawing `draw` there.
 fn frame(
     ctx: &egui::Context,
     width: f32,
     mut draw: impl FnMut(&mut Ui) -> TurnPresses,
 ) -> (Nodes, Vec<Painted>) {
     let input = egui::RawInput {
-        screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(width, 400.0))),
+        screen_rect: Some(Rect::from_min_size(
+            pos2(0.0, 0.0),
+            vec2(width + 40.0, 400.0),
+        )),
         ..Default::default()
     };
     let output = ctx.run(input, |ctx| {
         egui::CentralPanel::default().show(ctx, |ui| {
-            let _ = draw(ui);
+            ui.allocate_ui(vec2(width, 300.0), |ui| {
+                ui.set_max_width(width);
+                let _ = draw(ui);
+            });
         });
     });
     let mut painted = Vec::new();
@@ -75,94 +81,122 @@ fn bounds(nodes: &Nodes, name: &str) -> Rect {
 }
 
 const LONG: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+/// Longer than any numbered creature name of the visual scenarios, with a copy number.
+const LONG_NUMBERED: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell 12";
 
-fn heading(name: &str, keys: TurnKeys) -> TurnHeading<'_> {
-    TurnHeading::new("Ember Road", 2, name, RUN_REGULAR, false, None, keys)
+fn whole(name: &String) -> TurnName<'_> {
+    TurnName::whole(Some(name))
 }
 
-/// The keyless width of `Next turn`, as the part measures it.
-fn keyless(ctx: &egui::Context) -> f32 {
-    let mut width = 0.0;
+/// The part's own measures: `Next turn` with and without its letter, and the least name font
+/// at `scale`.
+fn measures(ctx: &egui::Context, scale: RunScale) -> (f32, f32, FontId) {
+    let mut out = (0.0, 0.0, FontId::default());
     let _ = frame(ctx, 600.0, |ui| {
-        width = next_turn(Letter::Released, None).natural_width(ui).ceil();
+        out = (
+            next_turn(Letter::Shown, None).natural_width(ui).ceil(),
+            next_turn(Letter::Released, None).natural_width(ui).ceil(),
+            Type::Name.sized(ui, (scale.name + HAIRLINE_WIDTH).min(scale.hp)),
+        );
         TurnPresses::default()
     });
-    width
+    out
 }
 
-/// R22 (root `run-heading-fit`): the hidden key letter gives up its room before the name is
-/// cut. At every width: a shown `N` stands only beside a whole name; a cut name stands beside a
-/// keyless `Next turn` as narrow as its keyless measure; the name's painted words are one
-/// complete candidate, not cut by egui, inside its clip and left of `Add`. Some width chooses
-/// the whole name only because the letter gave up its room (the old fixed slot cut it there),
-/// and some width gains no whole word from the release and still paints the narrow control.
+/// R22 (root `run-heading-fit`) and the lead's ruling 1, from the run list's kept width
+/// (454 px) up, at the three run scales, for a three-digit round:
+/// - a shown `N` stands only beside a whole name; a cut name beside a keyless `Next turn` as
+///   narrow as its keyless measure;
+/// - a candidate always fits there, and the painted name is not cut by egui, is inside its
+///   clip, left of `Add`, starts with a letter of the name and keeps its copy mark;
+/// - a name is cut only where its whole form at the least size does not fit the name's room
+///   (an exact measure, so a size estimate never skips a fit);
+/// - some width shows the whole name only because the letter gave up its room, and some width
+///   gains no whole word from the release and still paints the keyless control.
 #[test]
 fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
     let ctx = context();
-    let keyless = keyless(&ctx);
-    let names = ["Iselle Marrowwind", LONG];
     let mut released_whole = 0;
     let mut released_cut = 0;
-    for name in names {
-        for keys in [TurnKeys::Work, TurnKeys::Elsewhere] {
-            for step in 0..=95 {
-                let width = 380.0 + 10.0 * step as f32;
-                let mut kept = KeptTurnHeading::default();
-                let (nodes, painted) =
-                    frame(&ctx, width, |ui| heading(name, keys).show(ui, &mut kept));
-                let (shown, letter) = kept.shown().expect("a kept heading");
-                let shown = shown.to_owned();
-                let whole = shown == name || shown == format!("{name}’s turn");
-                assert!(
-                    !letter || (whole && keys == TurnKeys::Work),
-                    "{width}: N shows beside {shown:?} ({keys:?})"
-                );
-                let next = bounds(&nodes, "Next turn");
-                if !letter {
+    for scale in [RUN_COMPACT, RUN_REGULAR, RUN_LARGE] {
+        let (keyed, keyless, least) = measures(&ctx, scale);
+        for name in ["Iselle Marrowwind", LONG, LONG_NUMBERED].map(str::to_owned) {
+            let numbered = name == LONG_NUMBERED;
+            for keys in [TurnKeys::Work, TurnKeys::Elsewhere] {
+                let draw = |ui: &mut Ui, kept: &mut KeptTurnHeading| {
+                    TurnHeading::new("Ember Road", 123, whole(&name), scale, false, None, keys)
+                        .show(ui, kept)
+                };
+                for step in 0..=60 {
+                    let width = RUN_LIST_KEEPS + 8.0 * step as f32;
+                    let mut kept = KeptTurnHeading::new();
+                    let (nodes, painted) = frame(&ctx, width, |ui| draw(ui, &mut kept));
+                    let at = format!("{width} px, {name:?}, {keys:?}, hp {}", scale.hp);
                     assert!(
-                        (next.width() - keyless).abs() < 1.0,
-                        "{width}: a keyless Next turn is {} wide, not {keyless}",
-                        next.width()
+                        kept.fits(),
+                        "{at}: a candidate fits at the run list's width"
                     );
-                }
-                let add = bounds(&nodes, "Add to fight");
-                let text = painted
-                    .iter()
-                    .find(|text| text.text == shown)
-                    .unwrap_or_else(|| panic!("{width}: {shown:?} is painted"));
-                assert!(
-                    !text.elided
-                        && text.clip.expand(0.5).contains_rect(text.rect)
-                        && text.rect.right() <= add.left(),
-                    "{width}: {shown:?} at {:?} is whole, inside {:?} and left of Add {add:?}",
-                    text.rect,
-                    text.clip
-                );
-                assert!(
-                    shown.trim_matches('…').chars().any(char::is_alphanumeric),
-                    "{width}: the name paints a letter: {shown:?}"
-                );
-                if keys == TurnKeys::Work && !letter {
-                    // Would the old fixed slot have kept the same words? It reserved the
-                    // keyed width, so the name had that much less room.
-                    let mut old = KeptTurnHeading::default();
-                    let keyed = {
-                        let mut width_with_key = 0.0;
+                    let (shown, letter) = kept.shown().expect("a kept heading");
+                    let shown = shown.to_owned();
+                    let is_whole = shown == name || shown == format!("{name}’s turn");
+                    assert!(
+                        !letter || (is_whole && keys == TurnKeys::Work),
+                        "{at}: N shows beside {shown:?}"
+                    );
+                    let next = bounds(&nodes, "Next turn");
+                    if !letter {
+                        assert!(
+                            (next.width() - keyless).abs() < 1.0,
+                            "{at}: a keyless Next turn is {} wide, not {keyless}",
+                            next.width()
+                        );
+                    }
+                    let add = bounds(&nodes, "Add to fight");
+                    let text = painted
+                        .iter()
+                        .find(|text| text.text == shown)
+                        .unwrap_or_else(|| panic!("{at}: {shown:?} is painted"));
+                    assert!(
+                        !text.elided
+                            && text.clip.expand(0.5).contains_rect(text.rect)
+                            && text.rect.right() <= add.left(),
+                        "{at}: {shown:?} at {:?} is whole, inside {:?} and left of Add {add:?}",
+                        text.rect,
+                        text.clip
+                    );
+                    assert!(
+                        shown.chars().next().is_some_and(char::is_alphanumeric)
+                            && (!numbered || shown.ends_with(" 12")),
+                        "{at}: the name keeps its first letter and its copy mark: {shown:?}"
+                    );
+                    if !is_whole {
+                        // The name's room as painted: from after the round to before `Add`.
+                        let round = painted
+                            .iter()
+                            .find(|text| text.text == "Round 123")
+                            .expect("the round");
+                        let room = add.left() - S - HAIRLINE_WIDTH - (round.rect.right() + S);
+                        let mut full = 0.0;
                         let _ = frame(&ctx, 600.0, |ui| {
-                            width_with_key =
-                                next_turn(Letter::Shown, None).natural_width(ui).ceil();
+                            full = number_width(ui, &name, &least);
                             TurnPresses::default()
                         });
-                        width_with_key
-                    };
-                    let _ = frame(&ctx, width - (keyed - keyless), |ui| {
-                        heading(name, keys).show(ui, &mut old)
-                    });
-                    let (before, _) = old.shown().expect("a kept heading");
-                    if whole && before != shown {
-                        released_whole += 1;
-                    } else if !whole && before == shown {
-                        released_cut += 1;
+                        assert!(
+                            full > room - 1.0,
+                            "{at}: {shown:?} is cut, but the whole name ({full}) fits {room}"
+                        );
+                    }
+                    if keys == TurnKeys::Work && !letter {
+                        // The old fixed slot reserved the keyed width: the name had that much
+                        // less room. Would it have shown the same words?
+                        let mut old = KeptTurnHeading::new();
+                        let _ = frame(&ctx, width - (keyed - keyless), |ui| draw(ui, &mut old));
+                        let (before, _) = old.shown().expect("a kept heading");
+                        if is_whole && before != shown {
+                            released_whole += 1;
+                        } else if !is_whole && before == shown {
+                            released_cut += 1;
+                        }
                     }
                 }
             }
@@ -178,15 +212,39 @@ fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
     );
 }
 
+/// Ruling 1 below the run list's width: where not even one letter and the copy mark fit, no
+/// candidate fits; the part says so and paints that least form, never a bare `…`.
+#[test]
+fn too_narrow_a_heading_fails_with_its_least_form() {
+    let ctx = context();
+    let name = LONG_NUMBERED.to_owned();
+    let mut kept = KeptTurnHeading::new();
+    let _ = frame(&ctx, 200.0, |ui| {
+        TurnHeading::new(
+            "Ember Road",
+            123,
+            whole(&name),
+            RUN_LARGE,
+            false,
+            None,
+            TurnKeys::Work,
+        )
+        .show(ui, &mut kept)
+    });
+    assert!(!kept.fits());
+    assert_eq!(kept.shown().map(|(words, _)| words), Some("S… 12"));
+}
+
 /// The kept result: one choice per change. An unchanged frame builds no string and measures
-/// no candidate; a change of the width, the name, the keys or the round chooses again. Two
-/// headings with their own kept results do not share or reset each other's (consumer spike:
-/// two owned line instances).
+/// no candidate; a change of the width, the name, the keys, the round or the theme's fonts
+/// (same `FontId`, new data: E1) chooses again. Two headings with their own kept results do not
+/// share or reset each other's (consumer spike: two owned line instances).
 #[test]
 fn one_choice_per_change_and_two_owners_keep_their_own() {
     let ctx = context();
-    let mut a = KeptTurnHeading::default();
-    let mut b = KeptTurnHeading::default();
+    let mut a = KeptTurnHeading::new();
+    let mut b = KeptTurnHeading::new();
+    let long = LONG.to_owned();
     let both = |ctx: &egui::Context,
                 width: f32,
                 a: &mut KeptTurnHeading,
@@ -194,16 +252,34 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
                 name: &str,
                 keys: TurnKeys,
                 round: u64| {
+        let name = name.to_owned();
         let _ = frame(ctx, width, |ui| {
-            let _ = TurnHeading::new("Ember Road", round, name, RUN_REGULAR, false, None, keys)
-                .show(ui, a);
-            TurnHeading::new("Road", 1, LONG, RUN_REGULAR, false, None, TurnKeys::Work).show(ui, b)
+            let _ = TurnHeading::new(
+                "Ember Road",
+                round,
+                whole(&name),
+                RUN_REGULAR,
+                false,
+                None,
+                keys,
+            )
+            .show(ui, a);
+            TurnHeading::new(
+                "Road",
+                1,
+                whole(&long),
+                RUN_REGULAR,
+                false,
+                None,
+                TurnKeys::Work,
+            )
+            .show(ui, b)
         });
     };
     for _ in 0..3 {
         both(
             &ctx,
-            960.0,
+            900.0,
             &mut a,
             &mut b,
             "Iselle Marrowwind",
@@ -218,7 +294,7 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
     );
     both(
         &ctx,
-        961.0,
+        901.0,
         &mut a,
         &mut b,
         "Iselle Marrowwind",
@@ -228,7 +304,7 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
     assert_eq!((a.scans(), b.scans()), (2, 2), "a new width chooses again");
     both(
         &ctx,
-        961.0,
+        901.0,
         &mut a,
         &mut b,
         "Brannoch Vale",
@@ -242,7 +318,7 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
     );
     both(
         &ctx,
-        961.0,
+        901.0,
         &mut a,
         &mut b,
         "Brannoch Vale",
@@ -252,7 +328,7 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
     assert_eq!(a.scans(), 4, "Lookup chooses again");
     both(
         &ctx,
-        961.0,
+        901.0,
         &mut a,
         &mut b,
         "Brannoch Vale",
@@ -260,74 +336,66 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
         3,
     );
     assert_eq!((a.scans(), b.scans()), (5, 2), "a new round chooses again");
-    assert_eq!(b.shown().map(|(_, letter)| letter).is_some(), true);
+    // E1: the theme installs its fonts again; every `FontId` is the same.
+    theme::install(&ctx);
+    both(
+        &ctx,
+        901.0,
+        &mut a,
+        &mut b,
+        "Brannoch Vale",
+        TurnKeys::Elsewhere,
+        3,
+    );
+    assert_eq!(
+        (a.scans(), b.scans()),
+        (6, 3),
+        "new font data chooses again"
+    );
+    both(
+        &ctx,
+        901.0,
+        &mut a,
+        &mut b,
+        "Brannoch Vale",
+        TurnKeys::Elsewhere,
+        3,
+    );
+    assert_eq!((a.scans(), b.scans()), (6, 3), "and only once");
 }
 
-/// Consumer spike: the plan row's mixed-XP candidates (ruling Q-s) through the same private
-/// selector. A known Cinder Wolf beside an unknown Shade: dropping the Shade from the summary
-/// adds its name to the missing-XP reason (R31), so a later candidate is wider than an earlier
-/// one. The selector takes the first that fits, measures each legal candidate at most once in
-/// order, and never skips ahead by width.
+/// The selector alone (not evidence for the plan row, whose recipe is a later pull request):
+/// an order whose later candidate is wider than an earlier one. It takes the first that fits,
+/// measures each legal candidate at most once in order, and never skips ahead by width.
 #[test]
-fn consumer_spike_the_plan_rows_mixed_xp_candidates() {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    enum Plan {
-        Whole,
-        NoParty,
-        NoShade,
-        NoWolf,
-        RatingOnly,
-    }
-    const PLAN: [Plan; 5] = [
-        Plan::Whole,
-        Plan::NoParty,
-        Plan::NoShade,
-        Plan::NoWolf,
-        Plan::RatingOnly,
-    ];
-    let words = |plan: Plan| match plan {
-        Plan::Whole => "2 Cinder Wolf, Shade · Hard, no XP for Shade · 4 players · Day 2",
-        Plan::NoParty => "2 Cinder Wolf, Shade · Hard, no XP for Shade · Day 2",
-        // R31: the Shade is no longer shown, so the reason names it in full.
-        Plan::NoShade => "2 Cinder Wolf · Hard, no XP for Shade the Unbound · Day 2",
-        Plan::NoWolf => "Shade · Hard, no XP for Shade · Day 2",
-        Plan::RatingOnly => "Hard · Day 2",
-    };
-    for room in [70, 55, 52, 45, 10] {
+fn the_selector_takes_the_first_fit_in_order() {
+    const ORDER: [u32; 5] = [70, 60, 66, 40, 12];
+    for room in [80, 65, 61, 45, 10] {
         let mut measured = Vec::new();
         let chosen = select::first_fit(
-            &PLAN,
+            &ORDER,
             |_| true,
-            |plan| {
-                measured.push(plan);
-                (words(plan).chars().count() <= room).then_some(words(plan))
+            |width| {
+                measured.push(width);
+                (width <= room).then_some(())
             },
         );
-        let first = PLAN
-            .iter()
-            .position(|plan| words(*plan).chars().count() <= room);
+        let first = ORDER.iter().position(|width| *width <= room);
         assert_eq!(
-            chosen.map(|(plan, _)| plan),
-            first.map(|at| PLAN[at]),
+            chosen.map(|(width, ())| width),
+            first.map(|at| ORDER[at]),
             "room {room}"
         );
         assert_eq!(
             measured,
-            PLAN[..first.map_or(PLAN.len(), |at| at + 1)].to_vec(),
+            ORDER[..first.map_or(ORDER.len(), |at| at + 1)].to_vec(),
             "room {room}: each candidate measured once, in order"
         );
     }
-    // At 55 the wider NoShade does not fit, though the narrower NoWolf after it does.
-    let chosen = select::first_fit(
-        &PLAN,
-        |_| true,
-        |plan| (words(plan).chars().count() <= 55).then_some(()),
+    let skip = select::first_fit(
+        &ORDER,
+        |width| width != 60,
+        |width| (width <= 65).then_some(()),
     );
-    assert_eq!(chosen.map(|(plan, ())| plan), Some(Plan::NoParty));
-    let skip_party = select::first_fit(
-        &PLAN,
-        |plan| plan != Plan::NoParty,
-        |plan| (words(plan).chars().count() <= 55).then_some(()),
-    );
-    assert_eq!(skip_party.map(|(plan, ())| plan), Some(Plan::NoWolf));
+    assert_eq!(skip.map(|(width, ())| width), Some(40));
 }

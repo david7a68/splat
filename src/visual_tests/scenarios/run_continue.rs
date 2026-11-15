@@ -1206,40 +1206,47 @@ pub fn run(d: &mut Driver<'_>) {
         format!("At 1200 with the message, rows in view and a below count: {rows:?}"),
     );
     d.state("undo-steps-unread", Sizes::All);
-    // iter-28-R FK8, amended by ruling R22 (M5): beside Lookup the keys do not work, so Next
-    // turn paints no `N`. In the heading, a line with a name, the letter's room goes with it:
-    // Next turn keeps its right edge and is narrower, and the name gains that room. (The old
-    // check held `Add to fight` still, which R22 replaces.) The dock keeps its fixed slots:
-    // Heal does not move.
+    // iter-28-R FK8, amended by ruling R22 (M5). The old check held `Add to fight` still when
+    // Lookup hid Next turn's `N` (the letter's room stayed). Under R22 the heading, a line with
+    // a name, releases that room: beside Lookup Next turn paints no `N` and keeps its right
+    // edge, `Add to fight` moves right by EXACTLY the released width (by zero when `N` was not
+    // shown), and the name keeps a room that is not empty. Any other shift of Add fails here.
     let places = |d: &mut Driver<'_>| {
         d.at_size(DEFAULT, |d| {
             let next = d.place_of(NEXT_TURN);
+            let name = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.ends_with("’s turn"))
+                .map(|node| node.rect);
             (
                 next,
                 next.map(|rect| d.painted_in(rect)).unwrap_or_default(),
-                d.place_of("Heal"),
+                d.place_of("Add to fight"),
+                name,
             )
         })
     };
-    let (next_before, key_before, heal_before) = places(d);
+    let (next_before, key_before, add_before, _) = places(d);
     open_lookup(d);
-    let (next_after, key_after, heal_after) = places(d);
+    let (next_after, key_after, add_after, name_after) = places(d);
     let keyed = |words: &str| words.split(' ').any(|word| word == "N");
+    let held = match (next_before, next_after, add_before, add_after) {
+        (Some(next_a), Some(next_b), Some(add_a), Some(add_b)) => {
+            let released = next_a.width() - next_b.width();
+            (next_a.right() - next_b.right()).abs() < 0.5
+                && (keyed(&key_before) == (released > 1.0))
+                && ((add_b.left() - add_a.left()) - released).abs() < 0.5
+        }
+        _ => false,
+    };
     d.observe(
         "iter-28-R-FK8",
-        matches!((next_before, next_after), (Some(a), Some(b))
-            if (a.right() - b.right()).abs() < 0.5
-                && (!keyed(&key_before) || b.width() < a.width() - 1.0))
-            && !keyed(&key_after),
+        held && !keyed(&key_after) && name_after.is_some_and(|rect| rect.width() > 1.0),
         format!(
-            "Next turn before and beside Lookup: {next_before:?} {key_before:?}, \
-             {next_after:?} {key_after:?}"
+            "Next turn and Add before and beside Lookup: {next_before:?} {key_before:?} \
+             {add_before:?}, {next_after:?} {key_after:?} {add_after:?}; name {name_after:?}"
         ),
-    );
-    d.observe(
-        "iter-28-R-FK8-dock",
-        matches!((heal_before, heal_after), (Some(a), Some(b)) if (a.left() - b.left()).abs() < 0.5),
-        format!("The dock's Heal before and beside Lookup: {heal_before:?} {heal_after:?}"),
     );
     whole_at_every_size(
         d,

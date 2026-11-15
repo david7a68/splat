@@ -382,6 +382,27 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
             found.push("phrase-owner");
         }
     }
+    // M5 (lead's ruling 3): the run's old ways to cut words, and the turn heading's owners.
+    // `fitting-escape` counts raw `.truncate()` and the old fitting primitives (and any alias,
+    // which names them) in `src/encounter_run/`; `heading-owner` counts the makers of the run's
+    // kept heading and of a `TurnName`, so a second heading or a cut name is a raised line.
+    for line in text.lines().take(last_line) {
+        let line = line.split("//").next().unwrap_or("");
+        if path.starts_with("src/encounter_run") {
+            for escape in [
+                ".truncate()",
+                "words_that_fit",
+                "one_line(",
+                "whole_words_name",
+                "dock_name(",
+            ] {
+                found.extend(line.matches(escape).map(|_| "fitting-escape"));
+            }
+        }
+        for owner in ["KeptTurnHeading::new", "TurnName::whole"] {
+            found.extend(line.matches(owner).map(|_| "heading-owner"));
+        }
+    }
     found.extend((0..reasons_without_end_mark(text, last_line)).map(|_| "reason-end-mark"));
     found.extend((0..arrow_labels(text, last_line)).map(|_| "arrow-label"));
     found
@@ -473,6 +494,12 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Put `#[allow(deprecated)]` on the function that calls, not on the crate"
                 }
                 "reason-end-mark" => "End a blocked reason with `.`, `?` or `!`",
+                "fitting-escape" => {
+                    "Fit the run's words through a design part (`design::TurnHeading`), not a raw cut"
+                }
+                "heading-owner" => {
+                    "The run makes its one kept heading, and a `TurnName` comes from the participant's own name"
+                }
                 "foreground-layer" => "Foreground layers and menus belong to src/design/",
                 "hand-create-reasons" => "Declare a form's reasons with `create_reasons!`",
                 "banned-alias" => {

@@ -1410,7 +1410,7 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
-            turn_heading: crate::design::KeptTurnHeading::default(),
+            turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             pending_lines: BTreeMap::new(),
             #[cfg(test)]
@@ -4746,7 +4746,7 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
-            turn_heading: crate::design::KeptTurnHeading::default(),
+            turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             pending_lines: BTreeMap::new(),
             #[cfg(test)]

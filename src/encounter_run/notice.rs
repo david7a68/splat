@@ -56,13 +56,16 @@ impl Run {
     )]
     pub(super) fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
         let c = colors();
-        let strip = self.strip();
-        let name = strip.current.as_deref().unwrap_or_default();
         let nobody_present = !self.state.participants.iter().any(|p| p.present);
+        // The heading borrows the current participant's own name: no copy, no cut words.
+        let current = self
+            .current()
+            .and_then(|at| self.state.participants.get(at))
+            .map(|p| &p.name);
         let presses = design::TurnHeading::new(
             &self.name,
             self.state.round,
-            name,
+            design::TurnName::whole(current),
             scale,
             self.panel == Panel::Groups && !self.hide_panel,
             nobody_present.then_some(NOBODY_PRESENT),
@@ -78,6 +81,8 @@ impl Run {
             self.show_arrivals();
         }
         let next_turn = presses.next_turn;
+        // The second line's notice and Undo read the strip (outside the heading's kept result).
+        let strip = self.strip();
         ui.add_space(6.0);
         // Measure the notice first; Undo takes the remaining room on line two.
         let undo_label = self.undo_label();

@@ -1,7 +1,8 @@
 //! The run's turn heading (mechanism M5, ruling R22): `Round 2`, the current turn's name,
 //! `Add` and `Next turn` on one line, fitted and painted by this one part.
 //!
-//! A caller gives data: the run's name, the round, the full current name, the run's scale,
+//! A caller gives data: the run's name, the round, the current turn's whole name (a
+//! [`TurnName`], made from the participant's own name field), the run's scale,
 //! whether `Add` is selected, why `Next turn` is blocked, and whether the keys work. It gets
 //! back presses. It cannot measure the controls, paint the heading's words, or give a width:
 //! the part reads each control's width from the same [`Action`] that it paints, finds the
@@ -15,10 +16,18 @@
 //! plain `Action` keys).
 //!
 //! **Kept result.** [`KeptTurnHeading`] holds the one chosen candidate, its galleys and its
-//! words. Its owner is the run view (`Run::turn_heading`); it ends with the run. A frame whose
-//! data and metrics (the heading's width, the pixels per point, the fonts of both control
-//! forms, the allowed name sizes and the colours) equal the kept key builds no string and
-//! measures no candidate. Any change of one of them chooses again.
+//! words. Its owner is the run view (`Run::turn_heading`, made with the run); it ends with the
+//! run. A frame whose data and metrics (the heading's width, the pixels per point, the fonts of
+//! both control forms, the theme's font generation, the allowed name sizes and the colours)
+//! equal the kept key builds no string and measures no candidate in this part. Any change of
+//! one of them chooses again. (The run's second header line and its `Strip` are outside this
+//! claim.)
+//!
+//! **The name is never wholly hidden (lead's ruling 1).** Every shortened candidate keeps at
+//! least the first letter of the name and its copy mark (`T… 12`, never `… 12`). Where not even
+//! that fits, no candidate fits: the part paints that least form clipped to its room. The run
+//! list keeps 454 px (`RUN_LIST_KEEPS`), and there a candidate always fits (the unit sweep
+//! proves it for a three-digit round, the large scale and a long numbered name).
 //!
 //! The type proves construction and paint ownership (rung 1). It does not prove that the
 //! glyphs are inside the room; the run's visual checks do (rung 4).
@@ -35,8 +44,8 @@ use super::{
 };
 
 /// From this width of a run's line, `Add` reads `Add to fight`; below it, `Add`. The dock
-/// below the roster uses the same width for its own words.
-pub const ADD_WORDS_FROM: f32 = 500.0;
+/// below the roster uses the same width for its own words (`DOCK_ALL_WORDS_FROM`).
+pub(crate) const ADD_WORDS_FROM: f32 = 500.0;
 
 /// `Next turn`'s key, as the Keys list names it.
 const NEXT_KEY: KeyName = crate::key!("N");
@@ -56,6 +65,19 @@ pub enum TurnKeys {
 pub struct TurnPresses {
     pub next_turn: bool,
     pub add: bool,
+}
+
+/// The current turn's whole name, as the run holds it: made from the participant's own name
+/// field, never from words a caller cut. Outside `src/design/`, its maker is counted by the
+/// lint (`heading-owner`, one use), so a second maker is a visible change.
+#[derive(Clone, Copy, Debug)]
+pub struct TurnName<'a>(&'a str);
+
+impl<'a> TurnName<'a> {
+    /// The participant's name field itself; no current turn is `None`.
+    pub fn whole(name: Option<&'a String>) -> Self {
+        Self(name.map_or("", String::as_str))
+    }
 }
 
 /// The run's turn heading. Make it with [`TurnHeading::new`], which takes every input; show it
@@ -78,7 +100,7 @@ impl<'a> TurnHeading<'a> {
     pub fn new(
         run: &'a str,
         round: u64,
-        name: &'a str,
+        name: TurnName<'a>,
         scale: RunScale,
         add_selected: bool,
         next_blocked: Option<&'a str>,
@@ -87,7 +109,7 @@ impl<'a> TurnHeading<'a> {
         Self {
             run,
             round,
-            name,
+            name: name.0,
             scale,
             add_selected,
             next_blocked,
@@ -124,8 +146,8 @@ impl<'a> TurnHeading<'a> {
 }
 
 /// `Add to fight`, which opens Arrivals: `Add` with the icon on a narrow line. The run's setup
-/// header uses it too, so both say the same.
-pub fn add_to_fight(words: bool, density: Density, selected: bool) -> Action<'static> {
+/// header uses it too (`Run::add_to_fight`), so both say the same.
+pub(crate) fn add_to_fight(words: bool, density: Density, selected: bool) -> Action<'static> {
     let action = if words {
         Action::secondary("Add to fight").icon(icons::ADD)
     } else {
@@ -149,14 +171,22 @@ fn next_turn(letter: Letter, blocked: Option<&str>) -> Action<'_> {
     }
 }
 
-/// The run view's one kept heading. See the module's words for its key and its end.
-#[derive(Default)]
+/// The run view's one kept heading. See the module's words for its key and its end. It has no
+/// `Default`: the run makes it once with [`KeptTurnHeading::new`] (counted outside
+/// `src/design/` by the lint's `heading-owner` rule), never a draw path.
 pub struct KeptTurnHeading {
     line: Option<Kept>,
     scans: u64,
 }
 
 impl KeptTurnHeading {
+    pub fn new() -> Self {
+        Self {
+            line: None,
+            scans: 0,
+        }
+    }
+
     /// How many times the part chose a candidate: once per change of the data or the metrics.
     #[cfg(test)]
     pub(crate) fn scans(&self) -> u64 {
@@ -173,6 +203,12 @@ impl KeptTurnHeading {
             )
         })
     }
+
+    /// Whether the kept candidate fits its room (false: the clipped least form).
+    #[cfg(test)]
+    pub(crate) fn fits(&self) -> bool {
+        self.line.as_ref().is_some_and(|line| line.fitted.fits)
+    }
 }
 
 struct Kept {
@@ -185,6 +221,8 @@ struct Kept {
 struct Metrics {
     width: f32,
     pixels_per_point: f32,
+    /// The theme's font generation: font data replaced under the same `FontId` (E1).
+    fonts: u64,
     /// The largest and the least name size.
     turn: f32,
     least: f32,
@@ -206,6 +244,7 @@ impl Metrics {
         Self {
             width: ui.available_width(),
             pixels_per_point: ui.ctx().pixels_per_point(),
+            fonts: super::theme::font_generation(ui.ctx()),
             turn,
             least: (scale.name + HAIRLINE_WIDTH).min(turn),
             heading: Type::Heading.font(ui),
@@ -263,6 +302,8 @@ struct Fitted {
     access: String,
     /// `Iselle Marrowwind’s turn`, the name's hover and accessible name.
     full: String,
+    /// False: no candidate fits, and the least form is painted clipped.
+    fits: bool,
 }
 
 /// Which words of the name a candidate paints.
@@ -274,7 +315,8 @@ enum Words {
     Name,
     /// Whole words at the least size, then `…` (`Iselle…`, `Ember Cultist… 12`).
     Short,
-    /// The first word's letters that fit, then `…`: only when not even one whole word fits.
+    /// The first word's letters that fit, then `…` and the copy mark: only when not even one
+    /// whole word fits. Fails when not even one letter fits.
     Letters,
 }
 
@@ -356,20 +398,25 @@ fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
         font
     };
     // A whole text from the largest size down: the largest size at which it is inside `room`,
-    // if that is not below the least.
+    // if that is not below the least. The proportional estimate only picks where to start;
+    // the least size is always measured exactly, so an estimate never skips a fit.
     let scaled = |text: &str, room: f32| -> Option<(String, f32)> {
-        let width = number_width(ui, text, &sized(metrics.turn));
-        let mut size = (metrics.turn * room / width.max(1.0)).min(metrics.turn);
-        while size >= metrics.least {
-            if number_width(ui, text, &sized(size)) <= room {
+        let width = |size: f32| number_width(ui, text, &sized(size));
+        let estimate = metrics.turn * room / width(metrics.turn).max(1.0);
+        let mut size = (estimate + 0.5).min(metrics.turn);
+        while size > metrics.least {
+            if width(size) <= room {
                 return Some((text.to_owned(), size));
             }
             size -= 0.25;
         }
-        None
+        (width(metrics.least) <= room).then(|| (text.to_owned(), metrics.least))
     };
     let least = sized(metrics.least);
-    let (chosen, (text, size)) = select::first_fit(
+    let inside = |text: String, room: f32| {
+        (number_width(ui, &text, &least) <= room).then_some((text, metrics.least))
+    };
+    let chosen = select::first_fit(
         &ORDER,
         |candidate| candidate.keys.is_none_or(|keys| keys == heading.keys),
         |candidate| {
@@ -377,17 +424,23 @@ fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
             match candidate.words {
                 Words::Turn => scaled(&full, room),
                 Words::Name => scaled(heading.name, room),
-                Words::Short => {
-                    let short = whole_words_name(ui, heading.name, &least, room);
-                    (number_width(ui, &short, &least) <= room).then_some((short, metrics.least))
+                // Ruling 1: a shortened name starts with its own letters (`… 12` is no name).
+                Words::Short => Some(whole_words_name(ui, heading.name, &least, room))
+                    .filter(|short| !short.starts_with('…'))
+                    .and_then(|short| inside(short, room)),
+                Words::Letters => {
+                    letters(heading.name, |cut| number_width(ui, cut, &least) <= room)
+                        .and_then(|cut| inside(cut, room))
                 }
-                Words::Letters => Some((letters(ui, heading.name, &least, room), metrics.least)),
             }
         },
-    )
-    .unwrap_or_else(|| {
-        // `Letters` always fits, so this is not reached; paint the ellipsis.
-        (ORDER[ORDER.len() - 1], ("…".to_owned(), metrics.least))
+    );
+    let fits = chosen.is_some();
+    let (chosen, (text, size)) = chosen.unwrap_or_else(|| {
+        // No candidate fits: the least form (one letter and the copy mark), clipped to its
+        // room. Narrower than the run list keeps (454 px) only.
+        let least_form = letters(heading.name, |_| true).unwrap_or_default();
+        (ORDER[ORDER.len() - 1], (least_form, metrics.least))
     });
     let name = layout(ui, text, sized(size), metrics.current);
     Fitted {
@@ -399,6 +452,7 @@ fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
         name,
         access: format!("Run · {} · Round {}", heading.run, heading.round),
         full,
+        fits,
     }
 }
 
@@ -406,26 +460,30 @@ fn layout(ui: &Ui, text: String, font: FontId, color: Color32) -> Arc<Galley> {
     ui.fonts_mut(|fonts| fonts.layout_no_wrap(text, font, color))
 }
 
-/// The first word's letters that fit in `width`, then `…`; `…` alone when no letter fits.
-/// Only for a name whose first word is wider than its room (R15's lone word).
-fn letters(ui: &Ui, name: &str, font: &FontId, width: f32) -> String {
-    let first: Vec<char> = name
-        .split_whitespace()
-        .next()
-        .unwrap_or(name)
-        .chars()
-        .collect();
-    (1..first.len())
+/// The most letters of the name's first word that `fit` allows, then `…`, then the copy mark
+/// of a numbered name (`Seraph… 12`, `S… 12`). At least one letter: `None` when not even that
+/// fits. Only for a name whose first word is wider than its room (R15's lone word).
+fn letters(name: &str, fit: impl Fn(&str) -> bool) -> Option<String> {
+    let words: Vec<&str> = name.split_whitespace().collect();
+    let first: Vec<char> = words.first().copied().unwrap_or(name).chars().collect();
+    let mark = words
+        .last()
+        .filter(|last| {
+            words.len() > 1
+                && (last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1)
+        })
+        .map_or_else(String::new, |last| format!(" {last}"));
+    (1..=first.len())
         .rev()
-        .map(|count| format!("{}…", first[..count].iter().collect::<String>()))
-        .find(|cut| number_width(ui, cut, font) <= width)
-        .unwrap_or_else(|| "…".to_owned())
+        .map(|count| format!("{}…{mark}", first[..count].iter().collect::<String>()))
+        .find(|cut| fit(cut))
 }
 
 /// Whole words of a creature's name that fit in `width`, then `…`. A name does not end on a
 /// joining word, and a copy number or letter stays after the `…` (`Ember Cultist… 12`). The
-/// dock and the run's Undo shorten names with it too.
-pub fn whole_words_name(ui: &Ui, name: &str, font: &FontId, width: f32) -> String {
+/// Legacy users outside the part (counted by the lint's `fitting-escape` rule): the run's
+/// `dock_name`, for the dock's conflict words and the run's Undo.
+pub(crate) fn whole_words_name(ui: &Ui, name: &str, font: &FontId, width: f32) -> String {
     let fitted = words_that_fit(ui, name, font, width);
     if fitted == name {
         return fitted;
