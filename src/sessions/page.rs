@@ -773,8 +773,7 @@ pub struct Sessions {
     last_check: Option<Instant>,
     last_scan: Option<Instant>,
     /// Row 123: a count that changes when a listing of the folder (`refresh`) finds other notes
-    /// (an id, a file, a second file or a label), so a plan line's owner is checked against the notes
-    /// only then.
+    /// (an id, a file or a label), so a plan line's owner is checked against the notes only then.
     pub(super) notes_revision: u64,
     /// The campaign's manifest changed, so what holds a copy of it must reload.
     pub manifest_changed: Option<PathBuf>,
@@ -798,6 +797,11 @@ pub struct Sessions {
     pub wants_group_undo: bool,
     /// The session whose plan a group is being assembled in. It is the one that gets the link.
     group_session: Option<Uuid>,
+    /// B4 review F1: the plan's group whose name the DM pressed while an unsaved draft refuses
+    /// to open it (the session, the group's path). The plan paints the refusing reason under
+    /// that group's line. It ends at the next press of a group's name, and (in `lib.rs`, every
+    /// frame) when nothing unsaved refuses any more or another session is selected.
+    pub plan_group_refused: Option<(Option<Uuid>, String)>,
     /// Notes that kept a group's old name, because they could not be written.
     rename_problem: Option<String>,
     /// The open fight's Arrivals panel, for a planned group that has come.
@@ -2530,15 +2534,7 @@ impl Sessions {
         };
         let changed = place(&notes) != place(&self.notes);
         self.wants_index_refresh |= changed;
-        // A second file for a session (a backup, a sync copy) changes which file a plan line's
-        // Undo may write, so it counts too.
-        let copies = |notes: &[Note]| -> Vec<(Uuid, Vec<PathBuf>)> {
-            notes
-                .iter()
-                .map(|note| (note.id, note.also.clone()))
-                .collect()
-        };
-        if changed || copies(&notes) != copies(&self.notes) {
+        if changed {
             // Row 123: a plan line's owners are checked again only now.
             self.notes_revision += 1;
         }

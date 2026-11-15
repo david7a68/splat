@@ -277,9 +277,42 @@ fn arrow_only(label: &str) -> bool {
     !label.is_empty() && label.chars().filter(|c| !c.is_whitespace()).all(arrow)
 }
 
-/// Actions whose label is only an arrow, read by `syn`: the first argument of
-/// `Action::quiet`, `secondary`, `primary` or `destructive` when it is a string literal of
-/// arrows alone, on lines up to `last_line`.
+/// The name of the deprecated bare back arrow in `design::icons`, spelled in two parts so that
+/// its STAGED text count (`design::results::STAGED`) counts only real uses.
+const LEGACY: &str = concat!("LEGACY", "_BACK");
+
+/// Whether a path's last segment names an arrow glyph: the legacy back arrow, or any of
+/// Phosphor's `ARROW_…` and `CARET_…` families (`egui_phosphor::regular::ARROW_ELBOW_UP_LEFT`).
+fn arrow_name(name: &str) -> bool {
+    name == LEGACY || name.starts_with("ARROW_") || name.starts_with("CARET_")
+}
+
+/// Whether a label argument is an arrow alone: a string literal of arrows, or a path whose last
+/// segment names an arrow ([`arrow_name`]), also inside parentheses or a reference.
+fn arrow_argument(argument: Option<&syn::Expr>) -> bool {
+    match argument {
+        Some(syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(label),
+            ..
+        })) => arrow_only(&label.value()),
+        Some(syn::Expr::Path(path)) => path
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| arrow_name(&segment.ident.to_string())),
+        Some(syn::Expr::Reference(reference)) => arrow_argument(Some(&reference.expr)),
+        Some(syn::Expr::Paren(inner)) => arrow_argument(Some(&inner.expr)),
+        Some(syn::Expr::Group(inner)) => arrow_argument(Some(&inner.expr)),
+        _ => false,
+    }
+}
+
+/// Controls whose label is only an arrow, read by `syn`, on lines up to `last_line`: the first
+/// argument of `Action::quiet`, `secondary`, `primary` or `destructive`, of `Link::new` and
+/// `Button::new`, of a `.link(…)`, `.button(…)` or `.small_button(…)` call, and the icon of
+/// `icon_button(ui, icon, name)`, when it is a literal of arrows alone or names an arrow glyph
+/// (the legacy back arrow, `egui_phosphor::regular::ARROW_LEFT`). Limit: an arrow behind another
+/// name (a local `const` or binding) passes; the legacy arrow's STAGED count is the second net.
 fn arrow_labels(text: &str, last_line: usize) -> usize {
     use syn::{
         spanned::Spanned,
@@ -298,22 +331,38 @@ fn arrow_labels(text: &str, last_line: usize) -> usize {
                     .iter()
                     .map(|segment| segment.ident.to_string())
                     .collect();
-                let constructor = names.len() >= 2
-                    && names[names.len() - 2] == "Action"
-                    && ["quiet", "secondary", "primary", "destructive"]
-                        .contains(&names[names.len() - 1].as_str());
-                if constructor
+                let last = names.last().map_or("", String::as_str);
+                let owner = names
+                    .len()
+                    .checked_sub(2)
+                    .map_or("", |at| names[at].as_str());
+                let label = if owner == "Action"
+                    && ["quiet", "secondary", "primary", "destructive"].contains(&last)
+                    || ["Link", "Button"].contains(&owner) && last == "new"
+                {
+                    call.args.first()
+                } else if last == "icon_button" {
+                    call.args.iter().nth(1)
+                } else {
+                    None
+                };
+                if label.is_some()
                     && call.span().start().line <= self.last_line
-                    && let Some(syn::Expr::Lit(syn::ExprLit {
-                        lit: syn::Lit::Str(label),
-                        ..
-                    })) = call.args.first()
-                    && arrow_only(&label.value())
+                    && arrow_argument(label)
                 {
                     self.bad += 1;
                 }
             }
             visit::visit_expr_call(self, call);
+        }
+        fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+            if ["link", "button", "small_button"].contains(&call.method.to_string().as_str())
+                && call.span().start().line <= self.last_line
+                && arrow_argument(call.args.first())
+            {
+                self.bad += 1;
+            }
+            visit::visit_expr_method_call(self, call);
         }
     }
     let Ok(file) = syn::parse_file(text) else {
@@ -360,8 +409,10 @@ fn phrase_owner(path: &str, words: &str) -> bool {
 /// - `crate-wide-allow`: such an inner attribute at a crate root, which would cover every module.
 /// - `reason-end-mark`: a blocked reason without `.`, `?` or `!`.
 /// - `phrase-owner`: a phrase in a string literal outside its owner file.
-/// - `arrow-label`: an action whose label is only an arrow (`Action::quiet("←")`); a back link
-///   that starts a line is `TitleLine::back`, whose word is always shown (K4b).
+/// - `arrow-label`: a control whose label is only an arrow, as a literal or by the glyph's name
+///   (`Action::quiet("←")`, the legacy back arrow by name; see `arrow_labels`). An
+///   editor's back is `EditorHead`; a back link that starts a line is `TitleLine::back`; both
+///   always show their word (K4b, R38).
 fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     let mut found = Vec::new();
     let crate_root = path.ends_with("src/lib.rs") || path.ends_with("src/main.rs");
@@ -482,7 +533,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
                 }
                 "arrow-label" => {
-                    "Give the action its word: a back link that starts a line is `TitleLine::back(word!(…), BackEdge)`"
+                    "Give the control its word: an editor's back is `EditorHead` (its `BackTo` gives the word) above its name row; a back link that starts a line is `TitleLine::back` with its word"
                 }
                 _ => "Use design tokens",
             };
@@ -617,13 +668,37 @@ fn the_message_rules_find_what_they_should() {
         ),
         ["arrow-label"]
     );
+    // R38: a bare back arrow by name, as both Encounters editors had it, and the other controls
+    // that take a label.
     for code in [
-        "fn f() { Action::quiet(\"← Back\").show(ui); }",
-        "fn f() { Action::quiet(\"Back\").icon(icons::UNDO).show(ui); }",
-        "fn f() { Action::quiet(icons::EXPAND).show(ui); }",
-        "fn f() { other::quiet(\"←\"); }",
+        format!(
+            "fn f() {{ Action::quiet(icons::{LEGACY}).name(\"Back to encounters\").show(ui); }}"
+        ),
+        "fn f() { Action::quiet(egui_phosphor::regular::ARROW_LEFT).show(ui); }".to_owned(),
+        "fn f() { Action::quiet(ARROW_U_UP_LEFT).show(ui); }".to_owned(),
+        "fn f() { Action::quiet(egui_phosphor::regular::ARROW_ELBOW_UP_LEFT).show(ui); }"
+            .to_owned(),
+        "fn f() { Action::quiet((egui_phosphor::regular::ARROW_LEFT)).show(ui); }".to_owned(),
+        "fn f() { Action::quiet((\"←\")).show(ui); }".to_owned(),
+        format!("fn f() {{ design::icon_button(ui, icons::{LEGACY}, \"Back\"); }}"),
+        "fn f() { icon_button(ui, \"←\", \"Back\"); }".to_owned(),
+        "fn f() { ui.link(\"←\"); }".to_owned(),
+        "fn f() { ui.add(egui::Link::new(egui_phosphor::regular::CARET_LEFT)); }".to_owned(),
+        "fn f() { ui.add(egui::Button::new(\"‹\")); }".to_owned(),
+        format!("fn f() {{ ui.button(&icons::{LEGACY}); }}"),
     ] {
-        assert!(rules("src/a.rs", code).is_empty(), "{code}");
+        assert_eq!(rules("src/a.rs", &code), ["arrow-label"], "{code}");
+    }
+    for code in [
+        "fn f() { Action::quiet(\"← Back\").show(ui); }".to_owned(),
+        "fn f() { Action::quiet(\"Back\").icon(icons::UNDO).show(ui); }".to_owned(),
+        "fn f() { Action::quiet(icons::EXPAND).show(ui); }".to_owned(),
+        "fn f() { other::quiet(\"←\"); }".to_owned(),
+        format!("fn f() {{ Action::quiet(\"Back\").icon(icons::{LEGACY}).show(ui); }}"),
+        "fn f() { icon_button(ui, icons::CLOSE, \"Close\"); }".to_owned(),
+        "fn f() { ui.link(\"Encounters\"); }".to_owned(),
+    ] {
+        assert!(rules("src/a.rs", &code).is_empty(), "{code}");
     }
 
     // Levels across files: a child under an allow must write its own level.

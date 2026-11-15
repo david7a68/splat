@@ -188,14 +188,6 @@ impl File {
             Self::Recording => "that session’s recordings folder",
         }
     }
-
-    /// The file itself: `that session’s note file`.
-    fn file(self) -> &'static str {
-        match self {
-            Self::SessionNote => "that session’s note file",
-            Self::Recording => "that recording file",
-        }
-    }
 }
 
 /// A change the DM makes by hand.
@@ -223,9 +215,6 @@ pub enum FailedAct {
     /// Nothing changed: `The plan line for Shrine of Cinders was not removed from Session 1:
     /// The Crossing.`
     NotRemoved { what: Thing, from: Name },
-    /// The change is in the open draft of `place`, and the draft was not saved: `The plan line
-    /// for Bell was taken out of the draft of Session 1, and the draft was not saved.`
-    LeftDraft { what: Thing, place: Name },
     /// Nothing changed: `The recording for Session 1 was not deleted from Session 1: The
     /// Crossing.`
     NotDeleted { what: Thing, from: Name },
@@ -247,28 +236,14 @@ pub enum Cause {
     Unreadable(File),
     /// `The session note could not be saved.` An error.
     NotSaved(File),
-    /// `Two files hold the session note.` A warning: Splat cannot tell which one to change.
-    TwoFiles(File),
 }
 
-/// The DM's next step: a bounded operation on a real target, whose words this part writes.
+/// The DM's next step: a bounded operation on a real target, whose words this part writes. A
+/// refused act has one next step, by hand (ruling R45): the act it answers is not offered again.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Recovery {
     /// `Open that session’s notes and remove the plan line there.`
     ByHand { file: File, change: Change },
-    /// `Open that session’s notes and choose which words to keep.`
-    Choose(File),
-    /// The change waits in the open draft: `Open that session’s notes and save them.`
-    SaveDraft(File),
-    /// Nothing changed because the file could not be written: `Press Undo again when the folder
-    /// can be written, or open that session’s notes and remove the plan line there.`
-    RetryOrByHand { file: File, change: Change },
-    /// `Put that session’s note file back in its folder, then press Undo again.`
-    PutBack(File),
-    /// `Check that session’s note file in its folder, then press Undo again.`
-    CheckFile(File),
-    /// `Keep one copy of that session’s note file in its folder, then press Undo again.`
-    KeepOneFile(File),
 }
 
 /// A refused act's answer: what was not done, why, and the next step. Its fields are private, it
@@ -293,19 +268,11 @@ impl Refusal {
     /// is an error; a file that changed, went or holds another note is a warning.
     pub fn tone(&self) -> Tone {
         match self.cause {
-            Cause::Changed(_)
-            | Cause::Conflict(_)
-            | Cause::Gone(_)
-            | Cause::Replaced(_)
-            | Cause::TwoFiles(_) => Tone::Warning,
+            Cause::Changed(_) | Cause::Conflict(_) | Cause::Gone(_) | Cause::Replaced(_) => {
+                Tone::Warning
+            }
             Cause::Unreadable(_) | Cause::NotSaved(_) => Tone::Error,
         }
-    }
-
-    /// Its next step, for the owner's end events: a recovery that succeeded ends it
-    /// (`Results::end_recovered`).
-    pub fn recovery(&self) -> Recovery {
-        self.recovery
     }
 
     /// The whole answer: the act not done, the cause, the next step.
@@ -326,12 +293,6 @@ impl Refusal {
                 what.kind.noun(),
                 what.name.as_str(),
                 place(from)
-            ),
-            FailedAct::LeftDraft { what, place: at } => crate::sentence!(
-                "The {} for {} was taken out of the draft of {}, and the draft was not saved.",
-                what.kind.noun(),
-                what.name.as_str(),
-                place(at)
             ),
             FailedAct::NotDeleted { what, from } => crate::sentence!(
                 "The {} for {} was not deleted from {}.",
@@ -354,33 +315,11 @@ impl Refusal {
             Cause::NotSaved(file) => {
                 crate::sentence!("The {} could not be saved.", file.noun())
             }
-            Cause::TwoFiles(file) => crate::sentence!("Two files hold the {}.", file.noun()),
         };
         let next = match self.recovery {
             Recovery::ByHand { file, change } => {
                 crate::sentence!("Open {} and {} there.", file.opens(), change.words())
             }
-            Recovery::Choose(file) => {
-                crate::sentence!("Open {} and choose which words to keep.", file.opens())
-            }
-            Recovery::SaveDraft(file) => crate::sentence!("Open {} and save them.", file.opens()),
-            Recovery::RetryOrByHand { file, change } => crate::sentence!(
-                "Press Undo again when the folder can be written, or open {} and {} there.",
-                file.opens(),
-                change.words()
-            ),
-            Recovery::PutBack(file) => crate::sentence!(
-                "Put {} back in its folder, then press Undo again.",
-                file.file()
-            ),
-            Recovery::CheckFile(file) => crate::sentence!(
-                "Check {} in its folder, then press Undo again.",
-                file.file()
-            ),
-            Recovery::KeepOneFile(file) => crate::sentence!(
-                "Keep one copy of {} in its folder, then press Undo again.",
-                file.file()
-            ),
         };
         act.then(cause).then(next)
     }
