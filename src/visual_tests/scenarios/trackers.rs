@@ -598,10 +598,10 @@ pub fn run(d: &mut Driver<'_>) {
         "The view lists the pinned trackers, then More trackers, and no Due row yet",
     );
     // FE1: every pinned line stands in the panel's columns, not only the lines of Seals: each
-    // value ends at one edge. Where every line's first two actions fit after the values
-    // (1920x1080) each first action starts at one edge after them; at 960x640 and 1200x800
-    // beside Lookup `Enter room` and `Cistern or Sands` do not (round 30 `tracker-action-wrap`),
-    // and every line's actions start under its name.
+    // value ends at one edge. Where every line's first two actions fit after the values, each
+    // first action starts at one edge after them; beside Lookup at 960x640, 1200x800 and
+    // 1920x1080 `Enter room` and `Cistern or Sands` do not (round 30 `tracker-action-wrap`), and
+    // every line's actions start under its name, sharing rows.
     // At 960x640 the last lines are below the panel's fold: the view scrolls to them, and back.
     // A proof step that comes back to the top: not part of the DM's task.
     let small = d.aside(panel_columns_scrolled);
@@ -609,7 +609,7 @@ pub fn run(d: &mut Driver<'_>) {
     let big = d.at_size(LARGE, panel_columns);
     d.observe(
         "T19.2",
-        columns_hold(&small, false) && columns_hold(&wide, false) && columns_hold(&big, true),
+        columns_hold(&small, false) && columns_hold(&wide, false) && columns_hold(&big, false),
         format!(
             "Values, actions and names of the pinned lines: {:?} {:?} {:?} at 960x640, {:?} {:?} at 1200x800, {:?} {:?} at 1920x1080",
             small.values, small.actions, small.names, wide.values, wide.actions, big.values, big.actions

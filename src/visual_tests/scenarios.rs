@@ -17475,20 +17475,31 @@ pub mod session_recording {
             format!("After Discard the editor holds the moved file {moved_path:?}: {bound:?}"),
         );
         // Round 30 `session-pane-footer-owner` (FN5, SN3, AN4): the discard is the note's, so
-        // beside the plan its result and Undo stand below the note, in the session pane's footer.
-        let editor = d
-            .nodes()
-            .into_iter()
-            .find(|node| node.name == "Note text")
-            .map(|node| node.rect);
-        let result = d.painted_rect_in("Draft discarded.", egui::Rect::EVERYTHING);
-        let undo = d.place_of("Undo discard");
+        // beside the plan (1200x800) its result and Undo stand in the session pane's footer,
+        // which reaches under the note, not in the plan's column.
+        let (placed, detail) = d.at_size(DEFAULT, |d| {
+            let editor = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == "Note text")
+                .map(|node| node.rect);
+            let result = d.painted_rect_in("Draft discarded.", egui::Rect::EVERYTHING);
+            let band = result.and_then(|result| {
+                d.footer_bands()
+                    .into_iter()
+                    .find(|band| band.expand(0.5).contains_rect(result))
+            });
+            (
+                editor.zip(band).is_some_and(|(editor, band)| {
+                    band.right() > editor.left() + crate::design::L && d.in_view("Undo discard")
+                }),
+                format!("editor {editor:?}, result {result:?}, its footer {band:?}"),
+            )
+        });
         d.observe(
             "round-30-note-result-below-note",
-            editor.zip(result).zip(undo).is_some_and(|((editor, result), undo)| {
-                result.top() >= editor.bottom() - 0.5 && undo.top() >= editor.bottom() - 0.5
-            }),
-            format!("Draft discarded. and Undo discard below the note: editor {editor:?}, result {result:?}, undo {undo:?}"),
+            placed,
+            format!("Draft discarded. and Undo discard in the footer under the note: {detail}"),
         );
         d.state("note-discarded", Sizes::Default);
         d.click("Undo discard");
