@@ -17929,7 +17929,9 @@ pub mod session_recording {
             d.press_ctrl(Key::K);
         }
         d.state_prepared("recording-view-menu-boundary", Sizes::Small, |d| {
-            d.click_starting("Recording view:");
+            if !d.has("Recording view choices") {
+                d.click_starting("Recording view:");
+            }
         });
         d.press(Key::Escape);
     }
@@ -21737,7 +21739,9 @@ pub mod run_add_creature {
         d.begin_task();
         d.type_into(FIELD, "Boundary visitor");
         d.state_prepared("new-creature-side-menu-boundary", Sizes::Small, |d| {
-            d.click_starting("Side of the new creature:");
+            if !d.has("Side of the new creature choices") {
+                d.click_starting("Side of the new creature:");
+            }
         });
         d.press(Key::Escape);
     }

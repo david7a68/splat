@@ -552,7 +552,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         if let Some(room) = self.room {
             bounds = bounds.intersect(room);
         }
-        if !bounds.is_positive() || rect.top() < bounds.top() || rect.bottom() > bounds.bottom() {
+        if !bounds.is_positive() || rect.top() >= bounds.bottom() || rect.bottom() <= bounds.top() {
             egui::Popup::close_id(ui.ctx(), list);
             return None;
         }
@@ -575,6 +575,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             .filter(|kept| {
                 kept.requested == width
                     && kept.room_width == bounds.width()
+                    && kept.bounded == self.room.is_some()
                     && kept.font == font
                     && kept.small == small
                     && kept.scale == scale
@@ -594,11 +595,16 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                 let longest = words
                     .iter()
                     .flat_map(|(label, reason)| {
-                        label.split_whitespace().map(|word| (word, &font)).chain(
-                            reason.iter().flat_map(|reason| {
+                        let labels: Box<dyn Iterator<Item = &str>> = if self.room.is_some() {
+                            Box::new(std::iter::once(*label))
+                        } else {
+                            Box::new(label.split_whitespace())
+                        };
+                        labels
+                            .map(|word| (word, &font))
+                            .chain(reason.iter().flat_map(|reason| {
                                 reason.split_whitespace().map(|word| (word, &small))
-                            }),
-                        )
+                            }))
                     })
                     .map(|(word, font)| super::number_width(ui, word, font))
                     .fold(0.0, f32::max);
@@ -624,6 +630,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                         .collect(),
                     requested: width,
                     room_width: bounds.width(),
+                    bounded: self.room.is_some(),
                     menu_width,
                     font,
                     small,
@@ -742,6 +749,7 @@ struct RowMetrics {
     words: Vec<(String, Option<String>)>,
     requested: f32,
     room_width: f32,
+    bounded: bool,
     menu_width: f32,
     font: egui::FontId,
     small: egui::FontId,

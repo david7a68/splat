@@ -286,7 +286,7 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
         let current = Cell::new(0);
         let draw = |events| {
             frame(&ctx, size, events, |ui| {
-                let bounded = Rect::from_min_max(pos2(8.0, 44.0), pos2(400.0, size.y - 8.0));
+                let bounded = Rect::from_min_max(pos2(8.0, 44.0), pos2(400.0, 400.0));
                 room.set(bounded);
                 ui.allocate_exact_size(vec2(0.0, 172.0), Sense::hover());
                 ui.horizontal(|ui| {
@@ -330,7 +330,7 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
             whole >= 5,
             "{size:?}: only {whole} whole row targets in {popup:?}"
         );
-        if size.y == 640.0 {
+        {
             let metrics = ctx
                 .data(|data| data.get_temp::<std::sync::Arc<RowMetrics>>(list().with("metrics")))
                 .unwrap();
@@ -339,6 +339,16 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
                 "the long menu scrolls internally"
             );
         }
+        let painted = draw(Vec::new());
+        let labels: Vec<_> = texts(&painted)
+            .into_iter()
+            .filter(|text| text.words.starts_with("Session "))
+            .collect();
+        assert!(!labels.is_empty());
+        assert!(
+            labels.iter().all(|text| text.lines.len() == 1),
+            "a bounded menu uses the full label width when it fits"
+        );
         let before = control.get();
         for _ in 0..12 {
             draw(key(Key::ArrowDown));
@@ -430,6 +440,24 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
         "a stale room cannot open beyond its edge"
     );
     assert_eq!(focused(&ctx), Some(SIDE.id()));
+    // A control partly clipped by either edge still opens into the visible room.
+    // Recording's service control can meet this case after the pane footer grows.
+    for partial in [
+        Rect::from_min_max(pos2(0.0, rect.center().y), pos2(960.0, 640.0)),
+        Rect::from_min_max(pos2(0.0, 0.0), pos2(960.0, rect.center().y)),
+    ] {
+        room.set(partial);
+        egui::Popup::open_id(&ctx, list());
+        draw(Vec::new());
+        draw(Vec::new());
+        assert!(
+            egui::Popup::is_id_open(&ctx, list()),
+            "a partly visible control can open: {partial:?}, {rect:?}"
+        );
+        assert!(partial.contains_rect(list_rect(&ctx)));
+        egui::Popup::close_id(&ctx, list());
+        draw(Vec::new());
+    }
 }
 
 /// In a real pane: a 316 px column ending at a splitter, a scrolled body with the drop-down near
@@ -1655,6 +1683,7 @@ fn closed_dropdowns_measure_no_choice_rows_and_open_metrics_follow_inputs() {
     let current = Cell::new(0);
     let width = Cell::new(180.0);
     let changed = Cell::new(false);
+    let bounded = Cell::new(false);
     let control = Cell::new(Rect::NOTHING);
     let draw = |events| {
         frame(&ctx, vec2(960.0, 640.0), events, |ui| {
@@ -1670,6 +1699,9 @@ fn closed_dropdowns_measure_no_choice_rows_and_open_metrics_follow_inputs() {
                 menu = menu.choice(number, format!("Choice {number}"));
             }
             let mut chosen = current.get();
+            if bounded.get() {
+                menu = menu.within(ui.clip_rect());
+            }
             control.set(menu.width(width.get()).show(ui, &mut chosen).response.rect);
             current.set(chosen);
         })
@@ -1709,6 +1741,13 @@ fn closed_dropdowns_measure_no_choice_rows_and_open_metrics_follow_inputs() {
         ROW_METRICS_MADE.with(Cell::get),
         first + 1500,
         "font changes invalidate the cache"
+    );
+    bounded.set(true);
+    draw(Vec::new());
+    assert_eq!(
+        ROW_METRICS_MADE.with(Cell::get),
+        first + 2000,
+        "the explicit room width policy invalidates the cache"
     );
     draw(key(Key::Escape));
     draw(Vec::new());
