@@ -2070,7 +2070,11 @@ impl Run {
                     let (die, bonus, total) = roll(&mut state.random, p)?;
                     p.initiative = Some(total);
                     p.shared_roll = None;
-                    words.push(format!("{}: {die} {bonus:+} = {total}", p.name));
+                    words.push(format!(
+                        "{}: {die} {} = {total}",
+                        p.name,
+                        crate::design::signed(bonus)
+                    ));
                 }
             }
             Grouping::BySide => {
@@ -2089,7 +2093,11 @@ impl Run {
                             }
                             None => {
                                 let (die, bonus, total) = roll(&mut state.random, p)?;
-                                words.push(format!("{} rolled {die} {bonus:+} = {total}", p.side));
+                                words.push(format!(
+                                    "{} rolled {die} {} = {total}",
+                                    p.side,
+                                    crate::design::signed(bonus)
+                                ));
                                 total
                             }
                         };
@@ -2401,7 +2409,11 @@ impl Run {
                         .iter()
                         .map(|i| next.participants[*i].name.clone())
                         .collect();
-                    results.push(format!("{}: {die} {bonus:+} = {total}", names.join(", ")));
+                    results.push(format!(
+                        "{}: {die} {} = {total}",
+                        names.join(", "),
+                        crate::design::signed(bonus)
+                    ));
                     let roll_key = next.participants[members[0]].key.clone();
                     for i in members {
                         next.participants[*i].shared_roll = Some(roll_key.clone());
@@ -11348,6 +11360,15 @@ mod tests {
             .map(|p| p.initiative)
             .collect();
         assert_eq!(totals, vec![Some(12), Some(5), Some(14)]);
+        // M-R0.3: a bonus is signed as everywhere a bonus shows (`design::signed`): `+2`, and a
+        // minus sign, never a hyphen, before 1.
+        let words = run.state.log.last().cloned().unwrap_or_default();
+        assert!(
+            words.contains("10 +2 = 12")
+                && words.contains("6 \u{2212}1 = 5")
+                && !words.contains("-1"),
+            "m-r0-3-signed: {words}"
+        );
         run.apply(Command::AddGroup(mixed_group(), Some(9)))
             .unwrap();
         assert!(

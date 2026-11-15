@@ -27,6 +27,11 @@ use uuid::Uuid;
 struct GroupDrag(Uuid);
 
 pub(super) const AMOUNT: &str = "Amount";
+/// The run's one damage and healing amount: one field, keyed by its run.
+const AMOUNT_FIELD: design::FieldName = crate::field_id!("run_amount");
+/// A group's typed initiative total in Arrivals, keyed by the group (two groups can have one
+/// name).
+const ARRIVAL_TOTAL_FIELD: design::FieldName = crate::field_id!("run_arrival_total");
 const OTHER_EFFECT_FIELD: design::FieldName = crate::field_id!("run_other_effect");
 const OUTCOME_FIELD: design::FieldName = crate::field_id!("run_outcome");
 const DM_NOTE_FIELD: design::FieldName = crate::field_id!("run_dm_note");
@@ -86,7 +91,12 @@ pub(crate) fn other_effects_list<'a>(
         ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| {
             ui.set_max_width(row);
             design::row_menu(ui, effect, |ui| {
-                if ui.button("Remove").clicked() {
+                // A menu's choice is a quiet action, as the Encounters row menus' are.
+                if Action::quiet("Remove")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
                     removed = Some(at);
                     ui.close();
                 }
@@ -617,6 +627,11 @@ impl Run {
         false
     }
 
+    /// The Amount field's id: the dock draws it, and the keys read whether it has focus.
+    pub(super) fn amount_id(&self) -> egui::Id {
+        AMOUNT_FIELD.of(self.id).id()
+    }
+
     pub(super) fn run_command(&mut self, command: Command) {
         let follow = matches!(command, Command::Next | Command::Begin | Command::Continue);
         // A field that reports each key keeps the keyboard, or the next digit lands in the
@@ -774,7 +789,7 @@ impl Run {
         if ui.ctx().memory(|memory| memory.top_modal_layer()).is_some() {
             return;
         }
-        let amount_id = design::focus_id(AMOUNT);
+        let amount_id = self.amount_id();
         let focused = ui.ctx().memory(|memory| memory.focused());
         if focused.is_some_and(|id| id != amount_id) && ui.ctx().wants_keyboard_input() {
             return;
@@ -4347,7 +4362,7 @@ impl Run {
             let response = design::locked(ui, group.problem.as_deref(), |ui| {
                 design::number_field_with_id(
                     ui,
-                    design::focus_id(&field).with(group.id),
+                    ARRIVAL_TOTAL_FIELD.of(group.id).id(),
                     &field,
                     text,
                     "Roll",
@@ -5153,14 +5168,15 @@ impl Run {
                                         );
                                         for mode in &roll_choices {
                                             // FJ4 (iter-27-R): the selected choice has a check,
-                                            // not only its fill; every word keeps one x.
-                                            let selected = *mode == default_roll;
-                                            let item = ui.selectable_label(
-                                                selected,
-                                                checked_choice(ui, selected, mode.label()),
-                                            );
-                                            design::named(ui, &item, mode.label());
-                                            if item.clicked() {
+                                            // not only its fill; every word keeps one x. The
+                                            // shared choice row owns both.
+                                            if design::choice(
+                                                ui,
+                                                *mode == default_roll,
+                                                mode.label(),
+                                            )
+                                            .clicked()
+                                            {
                                                 command = Some(Command::RollNpcs(*mode));
                                             }
                                         }
@@ -7595,36 +7611,6 @@ pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
 
 fn hp_word(p: &Participant) -> Option<(&'static str, &'static str, egui::Color32)> {
     design::hp_word(p.hp, p.max_hp)
-}
-
-/// A menu choice's words after a check slot: the check shows on the selected choice, and the
-/// slot is kept on the others, so every choice's words start at one x (FJ4).
-fn checked_choice(ui: &egui::Ui, selected: bool, words: &str) -> egui::text::LayoutJob {
-    let font = Type::Body.font(ui);
-    let c = colors();
-    let mut job = egui::text::LayoutJob::default();
-    for (text, color) in [
-        (
-            format!("{} ", icons::OK),
-            if selected {
-                c.text
-            } else {
-                egui::Color32::TRANSPARENT
-            },
-        ),
-        (words.to_owned(), c.text),
-    ] {
-        job.append(
-            &text,
-            0.0,
-            egui::TextFormat {
-                font_id: font.clone(),
-                color,
-                ..Default::default()
-            },
-        );
-    }
-    job
 }
 
 /// The death-save counts in words: `1 success · 0 failures`.
