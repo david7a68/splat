@@ -606,7 +606,6 @@ mod tests {
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let mut forms = std::collections::BTreeSet::new();
-        let mut seen = Vec::new();
         for locks in [false, true] {
             for width in (240..=900).step_by(4) {
                 let mut tops = Vec::new();
@@ -615,12 +614,14 @@ mod tests {
                     for _ in 0..2 {
                         let _ = ctx.run(egui::RawInput::default(), |ctx| {
                             egui::CentralPanel::default().show(ctx, |ui| {
-                                ui.set_max_width(width as f32);
-                                let before = ui.available_width();
-                                let row = save_row_with(ui, &state, "Save", Some(reason(locked)));
-                                let _ = row;
-                                top = ui.label("After").rect.top();
-                                seen.push((width, before, top));
+                                let rect = egui::Rect::from_min_size(
+                                    ui.cursor().min,
+                                    egui::vec2(width as f32, 1_000.0),
+                                );
+                                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                    let _ = save_row_with(ui, &state, "Save", Some(reason(locked)));
+                                    top = ui.label("After").rect.top();
+                                });
                             });
                         });
                     }
@@ -635,8 +636,7 @@ mod tests {
         }
         assert!(
             forms.len() >= 2,
-            "the sweep reached the slot under the row: {forms:?}; first {:?}",
-            &seen[..seen.len().min(8)]
+            "the sweep reached the slot under the row: {forms:?}"
         );
     }
 
