@@ -284,7 +284,7 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
                     pos2(ui.clip_rect().right(), 280.0),
                 );
                 room.set(bounded);
-                ui.add_space(244.0);
+                ui.allocate_exact_size(vec2(0.0, 244.0), Sense::hover());
                 let mut dropdown = Dropdown::new(SIDE, "Session for new events")
                     .choice(0, "No session".to_owned());
                 for number in 1..=12 {
