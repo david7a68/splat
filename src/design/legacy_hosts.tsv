@@ -136,7 +136,6 @@ scroll-area	src/encounters.rs	Encounters::creature_pane	1	Encounters
 scroll-area	src/encounters.rs	Encounters::creature_search_with_summary	1	Encounters
 scroll-area	src/encounters.rs	Encounters::roster_pane	1	Encounters
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
-scroll-area	src/library.rs	Library::show	1	Library
 scroll-area	src/markdown_view.rs	reader_table	1	Reader
 scroll-area	src/sessions/page.rs	Sessions::banner	1	Sessions
 scroll-area	src/sessions/page.rs	Sessions::list_pane	1	Sessions

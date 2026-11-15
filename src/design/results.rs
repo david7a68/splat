@@ -1167,7 +1167,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "reader_messages",
             &[Ban::Results, Ban::Footer],
         ),
-        ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
@@ -1295,13 +1294,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
-        (
-            "src/library.rs",
-            "new_entry",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
+        ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
-        ("src/library.rs", "show", &[Ban::Layout(2)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
         (
