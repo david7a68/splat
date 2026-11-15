@@ -1326,4 +1326,70 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
         ),
         ["hp-fraction-owner"]
     );
+    // `fact-owner` (M5, review of PR 470): a local copy of the fact part is found by what it
+    // does, under any name, in any file; the part itself is its owner.
+    let copy = r#"fn sheet_label2(ui: &mut Ui, label: &str, values: &[&str]) {
+        let values = values.join(" · ");
+        ui.label(format!("{label}: {values}"));
+    }"#;
+    for path in ["src/party.rs", "src/a.rs"] {
+        assert_eq!(
+            rules(path, copy),
+            ["fact-owner"],
+            "a renamed helper in {path}"
+        );
+    }
+    assert!(
+        rules("src/design/fact.rs", copy).is_empty(),
+        "the part owns it"
+    );
+    assert_eq!(
+        rules(
+            "src/party.rs",
+            r#"fn senses_line() { ui.label(format!("{}: {}", "Senses", senses.join(" · "))); }"#
+        ),
+        ["fact-owner"],
+        "the join given as the value"
+    );
+    // A tile label with no colon, raw or not, counted once at its format site; a rolling tile
+    // by hand.
+    assert_eq!(
+        rules(
+            "src/party.rs",
+            r##"fn overview() {
+                let label = format!(r#"{}{} {}"#, a, b, c);
+                match bonus {
+                    Some(bonus) => roll_metric(ui, &label, &value, &link),
+                    None => metric(ui, &label, value),
+                }
+            }"##
+        ),
+        ["fact-owner"]
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            r#"fn tiles() { design::stat_tile(ui, &format!("{} {}", a, b), "15"); }"#
+        ),
+        ["fact-owner"]
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            r#"fn dex() { crate::rolls::link(ui, value, Type::NumeralLarge, &link); }"#
+        ),
+        ["fact-owner"]
+    );
+    // Not a fact: a join with no colon form, a status word beside a tile, a rebound name.
+    for code in [
+        r#"fn row() { let s = parts.join(" · "); ui.label(format!("{} rows", s)); }"#,
+        r#"fn reference() { stat_tile(ui, "AC", &ac); let icon = format!("{} {word}", a); }"#,
+        r#"fn passive() {
+            let label = format!("{} {}", a, b);
+            for (label, key) in pairs { metric(ui, label, value(key)); }
+        }"#,
+        r#"fn facts(ui: &mut Ui) { design::fact::line(ui, "Senses", senses); }"#,
+    ] {
+        assert!(rules("src/a.rs", code).is_empty(), "{code}");
+    }
 }
