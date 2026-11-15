@@ -2498,17 +2498,19 @@ impl Encounters {
             && ui
                 .ctx()
                 .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        // R38: the destination word, then the arrow, on a line of its own above the name row.
         let (back_word, back_name) = if in_plan {
-            ("Plan", "Back to the plan")
+            (crate::word!("Plan"), "Back to the plan")
         } else {
-            ("Encounters", "Back to encounters")
+            (crate::word!("Encounters"), "Back to encounters")
         };
+        let back_lock = design::BackLock::first_unsaved(&[(design::Unsaved::Group, dirty)]);
         let compact = ui.available_width() < 760.0;
 
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
-        let (mut back, mut save, mut discard) = (false, false, false);
+        let (mut save, mut discard) = (false, false);
         let mut name_right = f32::INFINITY;
         // AK1, AB2: the header is one block that ends where the members column ends. Save group
         // sits at that edge on the save row, above the member actions and beside the save state
@@ -2546,13 +2548,8 @@ impl Encounters {
         }
         .min_width(save_width)
         .blocked(state.save_blocked());
+        let back = design::BackLine::new(back_word, back_name, back_lock).show(ui);
         ui.horizontal(|ui| {
-            back = Action::quiet(icons::LEGACY_BACK)
-                .name(back_name)
-                .hint(back_word)
-                .blocked_if(dirty, "Save or discard this group first.")
-                .show(ui)
-                .clicked();
             let gap = ui.spacing().item_spacing.x;
             let room = (block_right.min(title_right - button.natural_width(ui) - gap)
                 - ui.cursor().left())

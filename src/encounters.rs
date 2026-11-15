@@ -3109,7 +3109,7 @@ pub const ENCOUNTER_DRAFT: &str = "Encounter draft";
 pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
-const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
+const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
 impl Encounters {
     pub fn refocus_draft(&mut self) {
         self.focus_name = true;
@@ -5902,7 +5902,6 @@ impl Encounters {
         });
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
-        let mut back = false;
         let mut save = false;
         let mut discard = false;
         let mut run_it = false;
@@ -5981,12 +5980,19 @@ impl Encounters {
                 .unwrap_or(f32::INFINITY)
         };
         let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
+        // R38: the destination word, then the arrow, on a line of its own above the name row.
+        // Unsaved encounter changes hold it first, then an unsaved creature, as before.
+        let back_lock = design::BackLock::first_unsaved(&[
+            (design::Unsaved::Encounter, dirty),
+            (design::Unsaved::Creature, creature_dirty),
+        ]);
+        let (back_word, back_name) = if from_session.is_some() {
+            (crate::word!("Session"), "Back to session")
+        } else {
+            (crate::word!("Encounters"), "Back to encounters")
+        };
+        let back = design::BackLine::new(back_word, back_name, back_lock).show(ui);
         ui.horizontal_wrapped(|ui| {
-            let back_name = if from_session.is_some() {
-                "Back to session"
-            } else {
-                "Back to encounters"
-            };
             // X51, SB1: Save and Start keep their width on line one, and the name field takes
             // the rest. The actions are measured, as they are drawn. They take a line of their
             // own only when the saved name does not fit beside them: the saved name, not the
@@ -6027,16 +6033,6 @@ impl Encounters {
                 };
             let saved_name =
                 design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
-            back = Action::quiet(icons::LEGACY_BACK)
-                .name(back_name)
-                .hint(back_name)
-                .blocked(
-                    dirty
-                        .then_some("Save or discard this encounter first.")
-                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE)),
-                )
-                .show(ui)
-                .clicked();
             // The field's margins are outside its desired width.
             let rest = ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
             let stack_actions = rest < saved_name.max(Density::Scan.control());
@@ -6170,9 +6166,13 @@ impl Encounters {
                 // FB6: while Save is blocked, Discard is the one way out.
                 blocked_reason(ui, state.lock_reason());
             }
+            // The creature's reason has one home: the back line paints it while it holds Back;
+            // while the encounter's changes hold Back, this row says it for Start and Save.
+            let creature_here =
+                creature_dirty && back_lock.held_by() != Some(design::Unsaved::Creature);
             blocked_reason(
                 ui,
-                creature_dirty
+                creature_here
                     .then_some(BLOCKED_BY_CREATURE)
                     .or(loading.then_some("Still reading this campaign."))
                     .or(

@@ -465,6 +465,132 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             );
         }
     }
+
+    // R38, R35: an editor's back line, as both Encounters editors draw it. Its destination word
+    // starts at the text edge with the arrow after it, on a line of its own; the name field
+    // starts at the same edge on the next line; while a draft holds it, that draft's reason is
+    // painted after the link (not only on hover) and the link cannot be followed; and the name
+    // field does not move between the open and the held line. The widths: the narrowest pane,
+    // the encounter editor at 960 beside Lookup (454 px), and a wide editor.
+    const ENCOUNTERS: Word = crate::word!("Encounters");
+    const NAME: FieldName = crate::field_id!("test_back_line_name");
+    for width in [NARROWEST_PANE, 454.0, need + 0.5] {
+        let mut field_rects = Vec::new();
+        for held in [None, Some(Unsaved::Encounter), Some(Unsaved::Creature)] {
+            let lock = BackLock::first_unsaved(&[
+                (Unsaved::Encounter, held == Some(Unsaved::Encounter)),
+                (Unsaved::Creature, held.is_some()),
+            ]);
+            assert_eq!(lock.held_by(), held, "the first unsaved draft holds Back");
+            let mut left = 0.0;
+            let mut followed = None;
+            let mut name = String::from("Bridge Ambush");
+            let mut draw = |ui: &mut Ui, left: &mut f32, followed: &mut Option<bool>| {
+                let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
+                *left = rect.left();
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    *followed =
+                        Some(BackLine::new(ENCOUNTERS, "Back to encounters", lock).show(ui));
+                    ui.horizontal(|ui| {
+                        let _ = line_field(ui, NAME.of(RowIndex(0)), "Name", &mut name, "", 200.0);
+                    });
+                });
+            };
+            let _ = frame_with(&ctx, vec2(width + 40.0, 400.0), Vec::new(), |ui| {
+                draw(ui, &mut left, &mut followed);
+            });
+            // A press on the link, in a second frame at the same place.
+            let link = {
+                let (nodes, _) = frame_with(&ctx, vec2(width + 40.0, 400.0), Vec::new(), |ui| {
+                    draw(ui, &mut left, &mut followed);
+                });
+                bounds(&nodes, "Back to encounters")
+            };
+            let press = |pressed| egui::Event::PointerButton {
+                pos: link.center(),
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            let _ = frame_with(
+                &ctx,
+                vec2(width + 40.0, 400.0),
+                vec![egui::Event::PointerMoved(link.center()), press(true)],
+                |ui| draw(ui, &mut left, &mut followed),
+            );
+            let (nodes, painted) =
+                frame_with(&ctx, vec2(width + 40.0, 400.0), vec![press(false)], |ui| {
+                    draw(ui, &mut left, &mut followed);
+                });
+            assert_eq!(
+                followed,
+                Some(held.is_none()),
+                "followed only while open ({held:?}) at {width}"
+            );
+            let target = bounds(&nodes, "Back to encounters");
+            let ink = painted
+                .iter()
+                .find(|text| text.text == "Encounters")
+                .unwrap_or_else(|| panic!("the destination word is painted at {width}"));
+            assert!(painted_whole(&painted, "Encounters"), "whole at {width}");
+            assert!(
+                (ink.rect.left() - left).abs() <= 1.5,
+                "the word starts at the text edge {left}: {:?} at {width}",
+                ink.rect
+            );
+            let icon = painted
+                .iter()
+                .find(|text| text.text == BACK_LINK_ICON && target.contains_rect(text.rect))
+                .unwrap_or_else(|| panic!("the arrow inside the link at {width}"));
+            assert!(
+                icon.rect.left() > ink.rect.right(),
+                "the arrow after the word"
+            );
+            let field = bounds(&nodes, "Name");
+            assert!(
+                field.top() >= target.bottom() - 0.5,
+                "the name row is below the back line: {field:?} {target:?} at {width}"
+            );
+            assert!(
+                (field.left() - left).abs() <= 1.5,
+                "the name field starts at the text edge {left}: {field:?} at {width}"
+            );
+            field_rects.push(field);
+            match held {
+                Some(draft) => {
+                    let reason = painted
+                        .iter()
+                        .find(|text| text.text == draft.reason())
+                        .unwrap_or_else(|| panic!("{draft:?}'s reason painted at {width}"));
+                    assert!(
+                        reason.shown && reason.clip.expand(0.5).contains_rect(reason.rect),
+                        "{draft:?}'s reason whole at {width}"
+                    );
+                    assert!(
+                        reason.rect.left() >= target.right() + L - 1.0
+                            && reason.rect.top() < target.bottom()
+                            && reason.rect.bottom() <= field.top() + 0.5,
+                        "the reason is beside the link, above the name: {:?} {target:?} at {width}",
+                        reason.rect
+                    );
+                    assert!(
+                        reason.rect.right() <= left + width + 0.5,
+                        "inside the line at {width}"
+                    );
+                }
+                None => assert!(
+                    !painted
+                        .iter()
+                        .any(|text| Unsaved::ALL.iter().any(|d| text.text == d.reason())),
+                    "no reason while open at {width}"
+                ),
+            }
+        }
+        assert!(
+            field_rects.windows(2).all(|pair| pair[0] == pair[1]),
+            "the name field keeps its place, open and held: {field_rects:?} at {width}"
+        );
+    }
 }
 
 /// The longest word a `Word` may have, in the widest letters and with an icon, is painted whole

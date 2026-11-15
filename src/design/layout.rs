@@ -1899,6 +1899,7 @@ impl<'a> TitleLine<'a> {
             edge,
             context: None,
             blocked: None,
+            name: None,
         }
     }
 }
@@ -1947,6 +1948,8 @@ pub struct BackLink<'a> {
     edge: BackEdge,
     context: Option<&'a str>,
     blocked: Option<&'a str>,
+    /// The accessible name when it is longer than the word (only [`BackLine`] sets it).
+    name: Option<&'static str>,
 }
 
 impl<'a> BackLink<'a> {
@@ -1976,9 +1979,12 @@ impl<'a> BackLink<'a> {
     fn draw(self, ui: &mut Ui) -> Response {
         let icon_font = Type::Body.font(ui);
         let icon = number_width(ui, BACK_LINK_ICON, &icon_font).ceil();
-        let action = Action::quiet(self.word.as_str())
+        let mut action = Action::quiet(self.word.as_str())
             .density(Density::Read)
             .blocked(self.blocked);
+        if let Some(name) = self.name {
+            action = action.name(name);
+        }
         let action = match self.edge {
             BackEdge::Text => action.line_start(),
             BackEdge::Segments => action,
@@ -2003,6 +2009,193 @@ impl<'a> BackLink<'a> {
             ui.label(Type::Small.rich(ui, context).color(colors().muted));
         }
         response
+    }
+}
+
+/// An unsaved draft that holds an editor, so that its back line cannot be followed. Each one
+/// owns the words of its reason (R35: the same value disables Back and gives the painted words).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unsaved {
+    /// The group editor's draft.
+    Group,
+    /// The encounter editor's draft.
+    Encounter,
+    /// A creature being edited inside the encounter editor.
+    Creature,
+}
+
+impl Unsaved {
+    const ALL: [Self; 3] = [Self::Group, Self::Encounter, Self::Creature];
+
+    /// The painted reason: what to do before Back can be followed.
+    pub const fn reason(self) -> &'static str {
+        match self {
+            Self::Group => "Save or discard this group first.",
+            Self::Encounter => "Save or discard this encounter first.",
+            Self::Creature => "Save or discard the changes to this creature first.",
+        }
+    }
+
+    const fn bit(self) -> u8 {
+        1 << self as u8
+    }
+}
+
+/// Whether a [`BackLine`] can be followed now. It is made from every draft that can hold the
+/// editor, in the order of their priority, with whether each is unsaved now; the first unsaved
+/// one holds it. There is no other constructor, so a back line always names every draft that can
+/// hold it: the line keeps room for the longest of their reasons, and a reason that comes or goes
+/// moves nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BackLock {
+    /// The drafts that can hold this editor, one bit each.
+    can: u8,
+    held: Option<Unsaved>,
+}
+
+impl BackLock {
+    /// The first unsaved draft of `drafts` holds Back. Name each draft once.
+    pub fn first_unsaved(drafts: &[(Unsaved, bool)]) -> Self {
+        let mut lock = Self { can: 0, held: None };
+        for &(draft, unsaved) in drafts {
+            debug_assert!(lock.can & draft.bit() == 0, "{draft:?} is named twice");
+            lock.can |= draft.bit();
+            if unsaved && lock.held.is_none() {
+                lock.held = Some(draft);
+            }
+        }
+        lock
+    }
+
+    /// The draft that holds Back now, if any.
+    pub fn held_by(self) -> Option<Unsaved> {
+        self.held
+    }
+
+    /// The painted reason now, if Back is held.
+    pub fn reason(self) -> Option<&'static str> {
+        self.held.map(Unsaved::reason)
+    }
+
+    /// Every reason this line can show.
+    fn reasons(self) -> impl Iterator<Item = &'static str> {
+        Unsaved::ALL
+            .into_iter()
+            .filter(move |draft| self.can & draft.bit() != 0)
+            .map(Unsaved::reason)
+    }
+}
+
+/// An editor's back line (R17, R38): a line of its own above the editor's name row, with the
+/// destination word at the text edge, then the return arrow, and, while a draft holds the editor,
+/// that draft's reason painted after it in muted `Small` words (R35). The link is the same
+/// [`BackLink`] as Sessions' and Timeline's, so it has their geometry.
+///
+/// The line reserves its height for the longest reason its [`BackLock`] can show, at the room
+/// left after the link, so the name row below does not move when a draft becomes unsaved or is
+/// saved. The press is returned only while the line is open.
+///
+/// Duty left to the caller, checked in debug builds: draw it in a top-down `Ui`, before the
+/// name row, never inside a row (`ui.horizontal`). The word is the destination; the accessible
+/// name, when longer, must hold the word.
+///
+/// ```
+/// # use splat::layout::{BackLine, BackLock, Unsaved};
+/// # fn draw(ui: &mut eframe::egui::Ui, dirty: bool) {
+/// let lock = BackLock::first_unsaved(&[(Unsaved::Group, dirty)]);
+/// let back = BackLine::new(splat::word!("Encounters"), "Back to encounters", lock).show(ui);
+/// # let _ = back;
+/// # }
+/// ```
+///
+/// A back line has no form without its destination word:
+///
+/// ```compile_fail,E0308
+/// # use splat::layout::{BackLine, BackLock, Unsaved};
+/// let lock = BackLock::first_unsaved(&[(Unsaved::Group, false)]);
+/// let _ = BackLine::new("←", "Back to encounters", lock);
+/// ```
+#[must_use = "call show"]
+pub struct BackLine {
+    to: Word,
+    name: &'static str,
+    lock: BackLock,
+}
+
+impl BackLine {
+    pub fn new(to: Word, name: &'static str, lock: BackLock) -> Self {
+        debug_assert!(
+            name.to_lowercase().contains(&to.as_str().to_lowercase()),
+            "the accessible name `{name}` holds the word `{}`",
+            to.as_str()
+        );
+        Self { to, name, lock }
+    }
+
+    /// Draw the line. True when the DM follows the link (never while it is held).
+    pub fn show(self, ui: &mut Ui) -> bool {
+        debug_assert!(
+            !ui.layout().is_horizontal(),
+            "a back line is a line of its own, not part of a row"
+        );
+        let link = BackLink {
+            word: self.to,
+            edge: BackEdge::Text,
+            context: None,
+            blocked: self.lock.reason(),
+            name: Some(self.name),
+        };
+        let link_height = Density::Read.control();
+        let gap = ui.spacing().item_spacing.x;
+        let font = Type::Small.font(ui);
+        let icon = number_width(ui, BACK_LINK_ICON, &Type::Body.font(ui)).ceil();
+        let link_width = Action::quiet(self.to.as_str())
+            .density(Density::Read)
+            .line_start()
+            .natural_width(ui)
+            .ceil()
+            + XS
+            + icon;
+        // The reasons start `L` after the link; the line keeps the height of the tallest.
+        let width = ui.available_width();
+        let room = (width - link_width - L).max(Density::Scan.control());
+        let text = colors().muted;
+        let tallest = self
+            .lock
+            .reasons()
+            .map(|reason| {
+                ui.fonts_mut(|fonts| fonts.layout(reason.to_owned(), font.clone(), text, room))
+                    .size()
+                    .y
+            })
+            .fold(0.0_f32, f32::max);
+        let first_line = ui.fonts_mut(|fonts| fonts.row_height(&font));
+        // The first line of the reason is centred on the link; more lines go below it.
+        let offset = ((link_height - first_line) / 2.0).max(0.0);
+        let height = link_height.max(offset + tallest);
+        ui.allocate_ui_with_layout(
+            vec2(width, height),
+            Layout::left_to_right(Align::Min),
+            |ui| {
+                ui.set_min_size(vec2(width, height));
+                let response = link.draw(ui);
+                if let Some(reason) = self.lock.reason() {
+                    ui.add_space((L - gap).max(0.0));
+                    ui.allocate_ui_with_layout(
+                        vec2(room, height),
+                        Layout::top_down(Align::Min),
+                        |ui| {
+                            ui.add_space(offset);
+                            ui.add(
+                                egui::Label::new(Type::Small.rich(ui, reason).color(text)).wrap(),
+                            );
+                        },
+                    );
+                }
+                response.clicked() && self.lock.held.is_none()
+            },
+        )
+        .inner
     }
 }
 
