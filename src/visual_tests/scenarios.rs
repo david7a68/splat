@@ -14789,8 +14789,8 @@ pub mod session_notes {
     }
 
     /// The session note's warning in the bottom banner: painted exactly once (inside its clip),
-    /// its words whole in view and naming the note with `cause`, and each of `controls` (by its
-    /// accessible name) wholly in view.
+    /// its words whole in view and naming the note with `cause`, and each of `controls` (a
+    /// control by its accessible name, not a label of that name) wholly in view, not clipped.
     fn banner_whole(d: &mut Driver<'_>, id: &str, cause: &str, controls: &[&str]) {
         let copies = painted_starts(d, "The note of Session ", 0).len();
         let words = d.nodes().into_iter().find(|node| {
@@ -14802,9 +14802,14 @@ pub mod session_notes {
             .iter()
             .copied()
             .filter(|control| {
-                !d.nodes()
-                    .iter()
-                    .any(|node| node.name == *control && node.fully_in_view())
+                !d.nodes().iter().any(|node| {
+                    node.name == *control
+                        && !matches!(
+                            node.role,
+                            egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                        )
+                        && node.fully_in_view()
+                })
             })
             .collect();
         let size = d.window_size();
