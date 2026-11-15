@@ -1238,6 +1238,7 @@ mod tests {
             encounter: "Ford Ambush".into(),
             label: "Ford Ambush".into(),
             standing: crate::encounter_run::Standing::Unfinished,
+            setup: false,
             saved_at: None,
             unsent: Vec::new(),
         }

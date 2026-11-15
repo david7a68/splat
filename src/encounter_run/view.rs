@@ -3210,38 +3210,49 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn notes_tab(&self, ui: &mut egui::Ui) {
+    fn notes_tab(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
+        let mut pressed = false;
         egui::ScrollArea::vertical()
             .id_salt("run_encounter_notes")
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if prep.is_empty() {
-                    design::empty_state(
-                        ui,
-                        icons::SESSIONS,
-                        "No prep notes yet",
-                        "Add read-aloud text or notes when you edit the encounter.",
-                        |ui| {
-                            if let Some(item) = self.content.as_ref().and_then(|index| {
-                                index.items.iter().find(|item| {
-                                    Some(item.entry.id) == self.source
-                                        && item.entry.kind == "encounter"
-                                })
-                            }) && Action::quiet("Edit encounter")
-                                .line_start()
-                                .show(ui)
-                                .clicked()
-                            {
-                                ui.ctx().data_mut(|data| {
-                                    data.insert_temp(
-                                        egui::Id::new("edit_run_encounter"),
-                                        item.entry.path.clone(),
-                                    )
-                                });
-                            }
-                        },
-                    );
+                    // Round 30 AP1: a sentence that names an act offers it. The run's own
+                    // record of its encounter decides, not Lookup's index, which can lag behind
+                    // a fight made a moment ago. With no saved encounter, it says why.
+                    match self.source {
+                        Some(id) => design::empty_state(
+                            ui,
+                            icons::SESSIONS,
+                            "No prep notes yet",
+                            "Add read-aloud text or notes when you edit the encounter.",
+                            |ui| {
+                                if Action::quiet("Edit encounter")
+                                    .line_start()
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    pressed = true;
+                                    ui.ctx().data_mut(|data| {
+                                        data.insert_temp(egui::Id::new("edit_run_encounter"), id);
+                                    });
+                                }
+                                // R35: why the press did not open it, under the action, until
+                                // the next press. The run owns it and ends with the run.
+                                if let Some(refusal) = &self.prep_refusal {
+                                    design::blocked_reason(ui, Some(refusal.reason()));
+                                }
+                            },
+                        ),
+                        None => design::empty_state(
+                            ui,
+                            icons::SESSIONS,
+                            "No prep notes",
+                            "This fight did not start from a saved encounter, so it has no prep notes.",
+                            |_| {},
+                        ),
+                    }
                 } else {
                     design::heading(ui, design::Heading::Label(READ_ALOUD));
                     style::markdown(ui, prep);
@@ -3253,6 +3264,9 @@ impl Run {
                     });
                 }
             });
+        if pressed {
+            self.prep_refusal = None;
+        }
     }
 
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
@@ -5020,7 +5034,7 @@ impl Run {
                         ui,
                         icons::SESSIONS,
                         "No log entries yet",
-                        "Begin combat or add a note to record what happens.",
+                        "Begin combat, or add a note on the Correct tab, to record what happens.",
                         |_| {},
                     );
                 }
