@@ -742,6 +742,9 @@ pub struct Sessions {
     markers: design::Results<kept::OfSession, kept::MarkerAdd>,
     /// `Recording saved: …`, by the session whose recording it names.
     saved: design::Results<kept::OfSession, RecordingSaved>,
+    /// A test's full disk: every write of the note fails with these words.
+    #[cfg(test)]
+    failing_save: Option<String>,
     notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
@@ -796,10 +799,13 @@ pub struct Sessions {
     /// The session whose plan a group is being assembled in. It is the one that gets the link.
     group_session: Option<Uuid>,
     /// B4 review F1: the plan's group whose name the DM pressed while an unsaved draft refuses
-    /// to open it (the session, the group's path). The plan paints the refusing reason under
-    /// that group's line. It ends at the next press of a group's name, and (in `lib.rs`, every
-    /// frame) when nothing unsaved refuses any more or another session is selected.
-    pub plan_group_refused: Option<(Option<Uuid>, String)>,
+    /// to open it: the session and the group's stable id (B4b N2: not its path, which another
+    /// group can take). The plan paints the refusing reason under that group's line. It ends at
+    /// the next press of a group's name; when the plan's groups are read and that group is not
+    /// among them (removed, renamed away, its file replaced by another group); and, in
+    /// `lib.rs` while it is stored, when nothing unsaved refuses any more or another session
+    /// is selected.
+    pub plan_group_refused: Option<(Option<Uuid>, Uuid)>,
     /// Notes that kept a group's old name, because they could not be written.
     rename_problem: Option<String>,
     /// The open fight's Arrivals panel, for a planned group that has come.
@@ -2561,6 +2567,11 @@ impl Sessions {
             .flatten()
         {
             draft.save();
+        }
+        // A test's full disk (`simulate_failed_save`): the note's write fails every time.
+        #[cfg(test)]
+        if let (Some(words), Some(draft)) = (&self.failing_save, &mut self.draft) {
+            draft.state = DraftState::Failed(words.clone());
         }
     }
 
@@ -7978,10 +7989,19 @@ impl Sessions {
         draft.save();
     }
 
-    /// The open note's save fails, as a full disk would make it.
+    /// The disk refuses the open note's writes, as a full disk would: the DM has typed, the save
+    /// fails, and every later save through `flush` fails again until `simulate_failed_save_ends`.
     pub fn simulate_failed_save(&mut self) {
+        self.failing_save = Some("Not saved. The disk is full.".to_owned());
         let draft = self.draft.as_mut().expect("an open note");
-        draft.state = DraftState::Failed("Not saved. The disk is full.".to_owned());
+        draft.body.push_str("\nTyped while the disk was full.\n");
+        draft.edited();
+        self.flush();
+    }
+
+    /// The disk takes writes again.
+    pub fn simulate_failed_save_ends(&mut self) {
+        self.failing_save = None;
     }
 
     /// The open note's file leaves the folder outside Splat while the DM has unsaved words,

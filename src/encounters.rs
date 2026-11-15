@@ -3279,6 +3279,12 @@ pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
+#[cfg(test)]
+thread_local! {
+    /// B4b N1: how often `plan_group_blocked` compared the drafts, on this thread.
+    pub(crate) static PLAN_BLOCK_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// What a plan or run route that opens a draft got (B4 review F1): the caller gives the draft
 /// its host only when it is `Opened`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3911,10 +3917,21 @@ impl Encounters {
                 .collect()
         })
     }
+    /// The stable id of the plan's group at `path`, if the campaign has it.
+    pub fn plan_group_id(&self, path: &str) -> Option<Uuid> {
+        self.snapshot
+            .as_ref()?
+            .groups
+            .iter()
+            .find(|group| group.path == path)
+            .map(|group| group.id)
+    }
     /// Why a group cannot be assembled from the plan now.
     /// The unsaved draft that refuses it says which it is, from the back lines' recipe (R38):
     /// the encounter, its group or a creature, each with its own reason.
     pub fn plan_group_blocked(&self) -> Option<&'static str> {
+        #[cfg(test)]
+        PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         design::first_unsaved(self)
             .map(design::Unsaved::reason)
             .or(self
