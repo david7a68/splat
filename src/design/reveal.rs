@@ -381,7 +381,8 @@ pub(super) fn region<R>(ui: &mut Ui, key: Id, viewport: Rect, add: impl FnOnce(&
         origin: origin.y,
         offset: viewport.top(),
     };
-    let content = ui.id();
+    // The stack names a `Ui` by its unique id (`owning_region`).
+    let content = ui.unique_id();
     ui.ctx()
         .data_mut(|data| data.insert_temp(region_id(content), region));
     // The DM's input, read before any child can consume a key: outside an act's frame, and in
