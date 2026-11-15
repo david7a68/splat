@@ -5172,6 +5172,44 @@ mod tests {
         h.get_by_label("Delete Ash").click();
         h.run_steps(2);
         assert_eq!(h.state().deleted, 1);
+
+        // Ruling M8: a footer choice says what it does in a help line under it, painted, as a
+        // body fault's repair does (`action_help`), wide and narrow: each choice on a line of its
+        // own from the words, its help under it at its words, the red one below the safe one's
+        // help; the press still comes back.
+        for narrow in [None, Some(320.0)] {
+            let mut app = one();
+            app.moves = Some(["Ash", "Elm"]);
+            app.deletes = true;
+            app.helps = true;
+            app.narrow = narrow;
+            let mut h = harness_sized(app, 960.0);
+            const MOVE_HELP: &str = "Elm keeps its place in the notes.";
+            const DELETE_HELP: &str = "Its file goes to the bin.";
+            let rect = |h: &Harness<'_, App>, name: &str| h.get_by_label(name).rect();
+            let help = |h: &Harness<'_, App>, words: &str| {
+                h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                    .rect()
+            };
+            let (moving, delete) = (rect(&h, "Move Ash before Elm"), rect(&h, "Delete Ash"));
+            let (move_help, delete_help) = (help(&h, MOVE_HELP), help(&h, DELETE_HELP));
+            assert!(
+                painted(&h, MOVE_HELP) && painted(&h, DELETE_HELP),
+                "{narrow:?}: the help is painted, not only a hover"
+            );
+            assert!(
+                move_help.top() >= moving.bottom() - 1.0
+                    && (move_help.left() - moving.left()).abs() < 1.0,
+                "{narrow:?}: Move's help under it, at its words: {moving:?} {move_help:?}"
+            );
+            assert!(
+                delete.top() >= move_help.bottom() && delete_help.top() >= delete.bottom() - 1.0,
+                "{narrow:?}: Delete on its own line, its help under it: {move_help:?} {delete:?} {delete_help:?}"
+            );
+            h.get_by_label("Delete Ash").click();
+            h.run_steps(2);
+            assert_eq!(h.state().deleted, 1, "{narrow:?}: its press comes back");
+        }
     }
 
     /// M3 gap 3, in the pilot: a press made on the line before its entry changed in place (in
@@ -5570,6 +5608,8 @@ mod tests {
             pub moves: Option<[&'static str; 2]>,
             /// It also has a red choice with data, given before `Move` (the part puts it after).
             pub deletes: bool,
+            /// Its `Move` and `Delete` say what they do, in help lines (ruling M8).
+            pub helps: bool,
             pub deleted: usize,
             /// What each Undo press did to the store: the words it took back, or `Gone`.
             pub acted: Vec<Result<&'static str, &'static str>>,
@@ -5622,6 +5662,7 @@ mod tests {
                     let two_choices = app.two_choices;
                     let moves = app.moves;
                     let deletes = app.deletes;
+                    let helps = app.helps;
                     let line = shown.outcome(&frame, |saved| {
                         match (owner, older_line) {
                             ("newer", OlderLine::Discard(_)) if same_verb => {
@@ -5684,16 +5725,28 @@ mod tests {
                             });
                             if let Some([a, b]) = moves {
                                 if deletes {
-                                    said = said.choice(Choice::named_as(
+                                    let mut delete = Choice::named_as(
                                         ChoiceKind::Lose,
                                         crate::choice!("Delete {}", a),
                                         Act::Delete,
-                                    ));
+                                    );
+                                    if helps {
+                                        delete = delete
+                                            .help(crate::sentence!("Its file goes to the bin."));
+                                    }
+                                    said = said.choice(delete);
                                 }
-                                said = said.choice(Choice::named(
+                                let mut moving = Choice::named(
                                     crate::choice!("Move {} before {}", a, b),
                                     Act::Rename,
-                                ));
+                                );
+                                if helps {
+                                    moving = moving.help(crate::sentence!(
+                                        "{} keeps its place in the notes.",
+                                        b
+                                    ));
+                                }
+                                said = said.choice(moving);
                             }
                             if two_choices {
                                 said = said.choice(Choice::new(
