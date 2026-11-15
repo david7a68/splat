@@ -7036,6 +7036,8 @@ mod tests {
         b_file(1);
         sessions.draft.as_mut().unwrap().save();
         b_file(0);
+        // The next frame's `poll` follows the plan lines' notes.
+        sessions.follow_plan_line();
         assert_eq!(
             sessions.plan_line_refusal_for(Some(b)),
             None,
