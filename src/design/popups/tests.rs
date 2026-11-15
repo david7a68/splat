@@ -371,11 +371,70 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
                     .any(|text| text.words == "Session 12: Ferry Watch"
                         && popup.contains_rect(text.rect))
             );
+            let rows = ctx
+                .data(|data| data.get_temp::<Vec<Id>>(list().with("rows")))
+                .unwrap();
+            let last_row = ctx.read_response(*rows.last().unwrap()).unwrap();
+            assert!(
+                popup.contains_rect(last_row.rect),
+                "ArrowDown brings the last whole row target inside the menu: {:?}",
+                last_row.rect
+            );
             assert_eq!(
                 control.get(),
                 before,
                 "opening and scrolling moves no control"
             );
+        }
+    }
+    // The real header owner must also end its room at the list's footer band. A short
+    // event list puts that band much higher than the window bottom, even with 12 sessions.
+    {
+        use egui_kittest::kittest::Queryable;
+        use crate::timeline::{Book, Kind, page::{SessionLink, TimelinePage}};
+        for size in [vec2(960.0, 640.0), vec2(1200.0, 800.0), vec2(1920.0, 1080.0)] {
+            for count in [4, 12] {
+                for (name, menu) in [
+                    ("Session for new events", "Session for new events choices"),
+                    ("Show one session: All sessions", "Show one session choices"),
+                ] {
+                    let mut book = Book::default();
+                    let id = book.add(Kind::LongRest, None);
+                    book.merged_outside = true;
+                    let mut page = TimelinePage::default();
+                    page.reveal(&id, &book);
+                    let links: Vec<_> = (1..=count).map(|number| SessionLink {
+                        id: uuid::Uuid::new_v4(),
+                        label: format!("Session {number}: Ferry Watch"),
+                        mentions: Vec::new(),
+                    }).collect();
+                    let campaign = uuid::Uuid::new_v4();
+                    let mut harness = egui_kittest::Harness::builder()
+                        .with_size(size)
+                        .build_state(
+                            move |ctx, (page, book, notes): &mut (TimelinePage, Book, crate::sessions::page::Sessions)| {
+                                egui::CentralPanel::default().show(ctx, |ui| {
+                                    page.show(ui, book, campaign, &links, None, notes);
+                                });
+                            },
+                            (page, book, crate::sessions::page::Sessions::default()),
+                        );
+                    theme::install(&harness.ctx);
+                    harness.run_steps(4);
+                    harness.get_by_label(name).click();
+                    harness.run_steps(4);
+                    let popup = harness.get_by_label(menu).rect();
+                    let footers: Vec<_> = crate::design::footer_bands(&harness.ctx)
+                        .into_iter()
+                        .filter(|band| band.left() < popup.right() && band.right() > popup.left())
+                        .collect();
+                    assert!(!footers.is_empty(), "the fixture must have the list footer");
+                    assert!(
+                        footers.iter().all(|band| popup.bottom() <= band.top() + 0.5),
+                        "{size:?}, {count} sessions, {name}: menu {popup:?} crosses footer bands {footers:?}"
+                    );
+                }
+            }
         }
     }
     // A short room gives only one whole row on either side. A stale room or a room with
