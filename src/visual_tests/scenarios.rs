@@ -3327,6 +3327,11 @@ pub mod campaign_content {
                 d.visible_text(PACKAGES_DISCARDED)
             ),
         );
+        // Round 30: the write's result is the footer's only Undo of its verb, so it paints
+        // `Undo write` (its name stays whole); at 1920 this frame then differs from
+        // `packages-partial-selection` only by that short footer line. The write, its result
+        // and its Undo are asserted above.
+        d.expect_same("the footer's one new line, a lone Undo in its short form");
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
         });

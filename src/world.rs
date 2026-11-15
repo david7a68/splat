@@ -4085,8 +4085,15 @@ impl Reader {
             .map(|unread| unread.reason.clone())
     }
 
+    /// Whether a missing link's `Not found` takes a line of its own under its name: in World's
+    /// narrow reader, not in Lookup's, whose link fault reads on one line as its other values
+    /// do (round 24 FD6).
+    fn missing_stacked(&self, ui: &egui::Ui) -> bool {
+        !self.compact && Self::stacked(ui)
+    }
+
     fn relationship_value_width(&self, ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
-        let stacked = Self::stacked(ui);
+        let stacked = self.missing_stacked(ui);
         let cap = Self::relationship_width(ui);
         let mut values = Vec::new();
         // Missing links, measured as `missing_link` draws them.
@@ -4716,7 +4723,7 @@ impl Reader {
     ) -> Option<Go> {
         let mut go = None;
         let value_width = self.relationship_value_width(ui, item, index);
-        let stacked = Self::stacked(ui);
+        let stacked = self.missing_stacked(ui);
         for (key, label) in [("creature", "Stat block"), ("in", "Place")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
