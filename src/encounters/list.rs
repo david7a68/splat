@@ -313,15 +313,7 @@ pub(super) fn list_row(
                             Some(fitted) => (fitted.lead, Some(fitted.form)),
                             None => (fit_detail(ui, detail, &font, room), None),
                         };
-                        let whole: std::borrow::Cow<'_, str> = match kept_hover {
-                            Some(hover) => hover.into(),
-                            None => {
-                                match difficulty.and_then(crate::difficulty::Difficulty::form) {
-                                    Some(form) => format!("{detail} · {form}").into(),
-                                    None => detail.into(),
-                                }
-                            }
-                        };
+                        let whole = row_whole(kept_hover, detail, difficulty);
                         let warning = visible_detail.split(" · ").position(|part| {
                             matches!(part, "Changed on disk" | "Offered in no fight")
                         });
@@ -400,6 +392,23 @@ pub(super) fn list_row(
         // The row registers its rect, so its second line is known as a row detail, not help.
         design::register_row(ui, row.response.rect);
     });
+}
+
+/// A row's whole second line, for its hover and its accessible name: a Ready row's kept hover,
+/// else the shown detail and the form. An empty kept hover (a roster with no participants)
+/// gives way to the shown detail (`No participants yet`), so the status is never lost.
+fn row_whole<'a>(
+    kept: Option<&'a str>,
+    detail: &'a str,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) -> std::borrow::Cow<'a, str> {
+    match kept.filter(|hover| !hover.is_empty()) {
+        Some(hover) => hover.into(),
+        None => match difficulty.and_then(crate::difficulty::Difficulty::form) {
+            Some(form) => format!("{detail} · {form}").into(),
+            None => detail.into(),
+        },
+    }
 }
 
 /// A row's second line in `width`. A paused run's last change gives up its words first, by whole
@@ -1146,7 +1155,11 @@ mod iter_2_c_tests {
             party: 5,
             members: members
                 .iter()
-                .map(|&(count, name)| crate::difficulty::Member::new(count, name))
+                // The fixture's creatures with no XP.
+                .map(|&(count, name)| {
+                    crate::difficulty::Member::new(count, name)
+                        .without_xp(["Nameless Thing", "Wisp"].contains(&name))
+                })
                 .collect(),
             facts: Vec::new(),
         };
@@ -1156,6 +1169,13 @@ mod iter_2_c_tests {
         // The counts in `design::count`'s grouped form, as the summary always said them.
         assert_eq!(roster(&[(999, "Wolf")]).text(), "5 party · 999 × Wolf");
         assert_eq!(roster(&[(1000, "Wolf")]).text(), "5 party · 1,000 × Wolf");
+        // P3 (final review of PR 390): an encounter with no participants keeps its status in
+        // its hover and accessible name.
+        let empty = super::super::history::Roster::new(Default::default(), &Default::default());
+        assert_eq!(
+            row_whole(Some(&empty.hover), "No participants yet", None),
+            "No participants yet"
+        );
         let widths: Vec<f32> = (200..=520).step_by(4).map(|width| width as f32).collect();
         let lines = |rating: &crate::difficulty::Difficulty,
                      summary: &crate::difficulty::Summary,
@@ -1283,6 +1303,29 @@ mod iter_2_c_tests {
                 &"5 party · 1 × Wolf, 1 × Nameless Thing · XP not known: Nameless Thing".to_owned()
             ),
             "{mixed:?}"
+        );
+        // R31 by the member, never by a name (final review of PR 390): Nameless Thing renamed
+        // `Wolf` beside a known Wolf; both are called `Wolf`. A known creature is shown, so the
+        // reason keeps the name; where the unknown one gave way, the reason names it.
+        let twins = crate::difficulty::Summary {
+            party: 5,
+            members: vec![
+                crate::difficulty::Member::new(1, "Wolf"),
+                crate::difficulty::Member::renamed(1, "Wolf", "Nameless Thing").without_xp(true),
+            ],
+            facts: Vec::new(),
+        };
+        let twins = lines(&missing(&["Wolf"]), &twins, "XP not known");
+        for line in &twins {
+            if line.contains(" × ") {
+                assert!(line.contains("XP not known: W"), "{line:?}");
+            }
+        }
+        assert!(
+            twins.contains(
+                &"5 party · 1 × Wolf, 1 × Wolf (as Nameless Thing) · XP not known: Wolf".to_owned()
+            ) && twins.contains(&"1 × Wolf, … · XP not known: Wolf".to_owned()),
+            "{twins:?}"
         );
     }
 

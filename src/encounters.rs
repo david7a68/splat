@@ -1563,8 +1563,10 @@ fn roster_summary(
     known: &BTreeMap<String, String>,
 ) -> crate::difficulty::Summary {
     let mut party = 0;
-    // By the words shown; each with the member made once from its shown and base names.
-    let mut creatures = std::collections::BTreeMap::<String, (usize, (String, String))>::new();
+    // By the words shown and whether the XP is known; each with the member made once from its
+    // shown and base names.
+    let mut creatures =
+        std::collections::BTreeMap::<(String, bool), (usize, (String, String))>::new();
     for slot in &setup.roster {
         let side = slot
             .overrides
@@ -1574,16 +1576,17 @@ fn roster_summary(
         if side.trim() == "party" {
             party += 1;
         } else {
+            let entry = slot
+                .creature
+                .as_ref()
+                .and_then(|reference| catalogue.resolve_ref(reference).ok())
+                .and_then(|id| catalogue.entries.get(&id))
+                .map(|entry| &entry.entry);
+            // R31: from the source `roster_difficulty` weighs, so the member knows itself
+            // whether its XP is missing; no name decides it.
+            let no_xp = entry.and_then(crate::difficulty::creature_xp).is_none();
             // FC3: a creature whose entry is gone keeps the name its row shows.
-            let name = roster_base_name(
-                slot,
-                slot.creature
-                    .as_ref()
-                    .and_then(|reference| catalogue.resolve_ref(reference).ok())
-                    .and_then(|id| catalogue.entries.get(&id))
-                    .map(|entry| &entry.entry),
-                known,
-            );
+            let name = roster_base_name(slot, entry, known);
             // FL2: a renamed creature names its base, as a group's member summary does.
             let shown = groups::shown_name(&slot.overrides, name.clone());
             let words = if shown == name {
@@ -1591,7 +1594,10 @@ fn roster_summary(
             } else {
                 format!("{shown} (as {name})")
             };
-            creatures.entry(words).or_insert((0, (shown, name))).0 += 1;
+            creatures
+                .entry((words, no_xp))
+                .or_insert((0, (shown, name)))
+                .0 += 1;
         }
     }
     // G118: typed parts, never built words, so the difficulty line knows which members the
@@ -1601,13 +1607,14 @@ fn roster_summary(
     // G118: a renamed member is CALLED by its shown name, the name `roster_name` gives the
     // difficulty's reason, so the line matches it and does not name it again.
     let members = creatures
-        .into_values()
-        .map(|(count, (shown, name))| {
+        .into_iter()
+        .map(|((_, no_xp), (count, (shown, name)))| {
             if shown == name {
                 crate::difficulty::Member::new(count, name)
             } else {
                 crate::difficulty::Member::renamed(count, &shown, &name)
             }
+            .without_xp(no_xp)
         })
         .collect();
     // Loot alone does not change a creature.

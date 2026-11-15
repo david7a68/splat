@@ -845,10 +845,11 @@ fn planned_summary_on_road(
         Member,
         Day,
     }
-    // G118: the units from the typed parts, never from the words. A member carries the name
-    // it is called by, which the reason's names are matched against.
-    let mut units: Vec<(&str, String, Turn, Option<&str>)> = Vec::new();
-    let first = |units: &Vec<(&str, String, Turn, Option<&str>)>| units.is_empty();
+    // G118: the units from the typed parts, never from the words. A member unit keeps its
+    // member, which R31 asks whether its XP is known.
+    type Units<'u> = Vec<(&'u str, String, Turn, Option<&'u crate::difficulty::Member>)>;
+    let mut units: Units<'_> = Vec::new();
+    let first = |units: &Units<'_>| units.is_empty();
     if typed.party > 0 {
         units.push((
             "",
@@ -863,7 +864,7 @@ fn planned_summary_on_road(
             (false, 0) => " · ",
             _ => ", ",
         };
-        units.push((before, member.words(), Turn::Member, Some(member.called())));
+        units.push((before, member.words(), Turn::Member, Some(member)));
     }
     for fact in &typed.facts {
         let before = if first(&units) { "" } else { " · " };
@@ -913,87 +914,81 @@ fn planned_summary_on_road(
         }
         fits
     };
-    let (full, short) = match missing {
-        // W1-D2, X1: whose input is not known, in the `XP not known` place: whole, else the
-        // first name shortened from its end. Where even its first letter has no room, the
-        // summary gives way first; the reason alone only where nothing else fits.
+    let (shown, parts, cut) = match missing {
+        // W1-D2, X1, R31: whose input is not known, in the `XP not known` place. A candidate is
+        // a set of units and the reason for EXACTLY those units (`Missing::unsaid`), and only
+        // whole candidates are compared: most units first, the names whole, else the first
+        // name shortened from its end. Where even its first letter has no room, the summary
+        // gives way first; the reason alone only where nothing else fits. Each step shows
+        // fewer units, so the search ends.
         Some(missing) => {
-            let fits_with = |facts: &str, words: &str| {
-                rows(&with_form(facts, &words.replace(' ', "\u{a0}"))) <= lines
-            };
             let short = missing.short();
-            // R31 (round 28 FB6; review of PR 324), the rule of `difficulty::Line` by the same
-            // function: where every creature the line shows lacks its XP, the summary already
-            // says whose, so it stays whole with the short reason; cutting a member to name it
-            // again says less. Beside a creature with a known XP, the reason keeps the names.
-            // Members are matched by the name each is called by; facts are not creatures.
             let unsaid = |count: usize| {
                 let gone = &giving_way[..units.len() - count];
                 missing.unsaid(
                     units
                         .iter()
                         .enumerate()
-                        .filter(|(at, _)| !gone.contains(at))
-                        .filter_map(|(_, unit)| unit.3),
+                        .filter_map(|(at, unit)| Some((unit.3?, !gone.contains(&at)))),
                 )
             };
-            let all = unsaid(units.len());
-            let named = !missing.names.is_empty() && all.names.is_empty();
-            let whole_summary = named && fits_with(summary, short);
-            let mut fitted = if whole_summary {
-                Some(short.to_owned())
-            } else if named {
-                // No room for the whole summary: it gives way below, and the names of the
-                // members it no longer shows follow the reason.
-                missing.fitted(|words| fits_with(summary, words))
-            } else {
-                all.fitted(|words| fits_with(summary, words))
-            };
-            if !whole_summary
-                && fitted.as_deref() == Some(short)
-                && let Some(first) = missing.names.first().and_then(|name| name.chars().next())
-            {
-                let least = format!("{short}: {first}…").replace(' ', "\u{a0}");
-                let kept = most(&least);
-                fitted = if kept > 0 {
-                    let facts = cut_at(kept);
-                    unsaid(kept)
-                        .fitted(|words| fits_with(&facts, words))
-                        .or_else(|| Some(short.to_owned()))
+            let candidate = |count: usize, words: &str| {
+                let form = words.replace(' ', "\u{a0}");
+                if count == units.len() {
+                    with_form(summary, &form)
+                } else if count == 0 {
+                    laid(form)
                 } else {
-                    // No fact or member keeps its place: the named reason alone, in the room the
-                    // summary leaves (review of PR 299).
-                    missing.fitted(|words| rows(&laid(words.replace(' ', "\u{a0}"))) <= lines)
+                    with_form(&cut_at(count), &form)
+                }
+            };
+            let fits = |count: usize, words: &str| rows(&candidate(count, words)) <= lines;
+            let chosen = (1..=units.len()).rev().find_map(|count| {
+                let reason = unsaid(count);
+                let words = if reason.names.is_empty() {
+                    short.to_owned()
+                } else {
+                    reason
+                        .fitted(|words| fits(count, words))
+                        .filter(|words| words != short)?
                 };
-            }
-            let form = nb(vec![(fitted.unwrap_or_else(|| short.to_owned()), false)]);
-            (form.clone(), form)
+                fits(count, &words).then_some((count, words))
+            });
+            let (count, words) = chosen.unwrap_or_else(|| {
+                // No fact or member keeps its place: the named reason alone, in the room the
+                // summary leaves (review of PR 299).
+                let words = unsaid(0)
+                    .fitted(|words| fits(0, words))
+                    .unwrap_or_else(|| short.to_owned());
+                (0, words)
+            });
+            let form = nb(vec![(words.clone(), false)]);
+            (candidate(count, &words), form, count < units.len())
         }
         None => {
             let full = nb(parts);
             let short = difficulty
                 .and_then(|difficulty| difficulty.rating.as_ref())
                 .map_or_else(|| full.clone(), |rating| nb(rating.parts(false)));
-            (full, short)
+            let whole = [&full, &short]
+                .into_iter()
+                .map(|parts| (with_form(summary, &joined(parts)), parts))
+                .find(|(shown, _)| rows(shown) <= lines);
+            if let Some((shown, parts)) = whole {
+                (shown, parts.clone(), false)
+            } else {
+                // The most whole facts and members that keep the lines, by halves; with none,
+                // the form alone.
+                let form = joined(&short);
+                let fits = most(&form);
+                let shown = if fits == 0 {
+                    form
+                } else {
+                    with_form(&cut_at(fits), &form)
+                };
+                (shown, short.clone(), true)
+            }
         }
-    };
-    let whole = [&full, &short]
-        .into_iter()
-        .map(|parts| (with_form(summary, &joined(parts)), parts))
-        .find(|(shown, _)| rows(shown) <= lines);
-    let (shown, parts, cut) = if let Some((shown, parts)) = whole {
-        (shown, parts.clone(), false)
-    } else {
-        // The most whole facts and members that keep the lines, by halves; with none, the
-        // form alone.
-        let form = joined(&short);
-        let fits = most(&form);
-        let shown = if fits == 0 {
-            form
-        } else {
-            with_form(&cut_at(fits), &form)
-        };
-        (shown, short.clone(), true)
     };
     let form = joined(&parts);
     let facts = shown.strip_suffix(form.as_str()).unwrap_or("");
@@ -1005,7 +1000,11 @@ fn planned_summary_on_road(
     let response = ui.add(egui::Label::new(job).wrap());
     // The accessible name keeps the whole summary and the whole form.
     let plain_form = missing.map_or_else(
-        || joined(&full).replace('\u{a0}', " "),
+        || {
+            difficulty
+                .and_then(crate::difficulty::Difficulty::form)
+                .unwrap_or_default()
+        },
         |missing| {
             missing
                 .words()
@@ -6306,7 +6305,11 @@ mod tests {
             party,
             members: members
                 .iter()
-                .map(|&(count, name)| crate::difficulty::Member::new(count, name))
+                // The fixtures' creatures with no XP.
+                .map(|&(count, name)| {
+                    crate::difficulty::Member::new(count, name)
+                        .without_xp(["Nameless Thing", "Wisp"].contains(&name))
+                })
                 .collect(),
             facts: Vec::new(),
         }
@@ -6604,11 +6607,10 @@ mod tests {
             members: beside
                 .then(|| crate::difficulty::Member::new(1, "Wolf"))
                 .into_iter()
-                .chain([crate::difficulty::Member::renamed(
-                    1,
-                    "Shade",
-                    "Nameless Thing",
-                )])
+                .chain([
+                    crate::difficulty::Member::renamed(1, "Shade", "Nameless Thing")
+                        .without_xp(true),
+                ])
                 .collect(),
             facts: vec![crate::difficulty::Fact::Changed],
             ..Default::default()
@@ -6628,6 +6630,62 @@ mod tests {
             Some("1 × Wolf · XP not known: Nameless Thing"),
             "a creature the row does not show is named"
         );
+        // R31 by the member, never by a name (final review of PR 390): Nameless Thing renamed
+        // `Wolf` beside a known Wolf. Both are called `Wolf`; a known creature is shown, so the
+        // reason keeps the name.
+        let twins = crate::difficulty::Summary {
+            members: vec![
+                crate::difficulty::Member::new(1, "Wolf"),
+                crate::difficulty::Member::renamed(1, "Wolf", "Nameless Thing").without_xp(true),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(
+            wide(&twins, &missing(&["Wolf"])).as_deref(),
+            Some("1 × Wolf, 1 × Wolf (as Nameless Thing) · XP not known: Wolf"),
+            "a known creature is shown, so the reason keeps the name"
+        );
+        // A stage and its reason are chosen together (final review of PR 390): at every width
+        // the line obeys R31 for the units it shows. Nameless Thing (no XP) and then Wolf
+        // (known): Wolf gives way first; then the line says whose, and the reason is short.
+        let sweep = |typed: &crate::difficulty::Summary| {
+            let mut seen = Vec::new();
+            for width in (100..=600).step_by(2).map(|width| width as f32) {
+                let mut painted = None;
+                for _ in 0..2 {
+                    let output = ctx.run(Default::default(), |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            ui.scope(|ui| {
+                                ui.set_width(width);
+                                planned_summary(ui, typed, Some(&unknown(Unknown::Xp)));
+                            });
+                        });
+                    });
+                    painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => {
+                            Some(text.galley.job.text.replace(['\u{a0}', '\n'], " "))
+                                .filter(|words| words.contains("not known"))
+                        }
+                        _ => None,
+                    });
+                }
+                seen.push((width, painted.unwrap_or_default()));
+            }
+            seen
+        };
+        let lines = sweep(&roster(0, &[(1, "Nameless Thing"), (1, "Wolf")]));
+        let mut says_whose = 0;
+        for (width, line) in &lines {
+            if line.contains("1 × Wolf") {
+                assert!(line.contains("XP not known: N"), "at {width} px: {line:?}");
+            } else if line.contains("1 × Nameless Thing") {
+                assert!(line.ends_with("XP not known"), "at {width} px: {line:?}");
+                says_whose += 1;
+            } else {
+                assert!(line.contains("XP not known"), "at {width} px: {line:?}");
+            }
+        }
+        assert!(says_whose > 0, "no width cut Wolf alone: {lines:?}");
     }
 
     #[test]

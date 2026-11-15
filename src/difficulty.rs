@@ -151,26 +151,29 @@ impl Missing {
             .or_else(|| Some(self.short().to_owned()))
     }
 
-    /// Ruling R31, for every line that shows a roster with this reason: the names the reason
-    /// still says, given the CALLED names of the creatures the line still shows
-    /// (`Member::called`; facts are not creatures). Where every creature shown lacks its XP,
-    /// the line already says whose: only the missing ones it does not show are named. Where a
-    /// creature with a known XP is shown beside them, or none is shown, every name stays:
-    /// saying whose input is missing is worth the repeated name.
-    pub fn unsaid<'a>(&self, shown: impl IntoIterator<Item = &'a str>) -> Self {
-        let shown: Vec<&str> = shown.into_iter().collect();
+    /// Ruling R31, for every line that shows a roster with this reason, decided by the
+    /// MEMBERS, never by comparing names: each member of the roster with whether the line
+    /// still shows it. Where every member shown lacks its XP, the line already says whose:
+    /// the reason names only the members without XP that it does not show (each name once,
+    /// for display). Where a member with a known XP is shown, or none is shown, every name
+    /// stays: saying whose input is missing is worth the repeated name.
+    pub fn unsaid<'a>(&self, members: impl IntoIterator<Item = (&'a Member, bool)>) -> Self {
+        let members: Vec<(&Member, bool)> = members.into_iter().collect();
+        let mut shown = members.iter().filter(|(_, shown)| *shown).peekable();
         let says_whose = self.what == Unknown::Xp
-            && !shown.is_empty()
-            && shown
-                .iter()
-                .all(|called| self.names.iter().any(|name| name == called));
+            && shown.peek().is_some()
+            && shown.all(|(member, _)| member.no_xp);
+        if !says_whose {
+            return self.clone();
+        }
+        let mut names: Vec<String> = Vec::new();
+        for (member, shown) in &members {
+            if member.no_xp && !shown && !names.contains(&member.called) {
+                names.push(member.called.clone());
+            }
+        }
         Self {
-            names: self
-                .names
-                .iter()
-                .filter(|name| !(says_whose && shown.contains(&name.as_str())))
-                .cloned()
-                .collect(),
+            names,
             ..self.clone()
         }
     }
@@ -416,6 +419,8 @@ pub struct Member {
     count: usize,
     name: String,
     called: String,
+    /// Its XP is not known (R31 asks this of the member, never of a name).
+    no_xp: bool,
 }
 
 impl Member {
@@ -426,7 +431,15 @@ impl Member {
             count,
             called: name.clone(),
             name,
+            no_xp: false,
         }
+    }
+
+    /// The same member, marked as one whose XP is not known. Its builder sets it once, from
+    /// the source the difficulty weighs (`creature_xp` of its entry).
+    pub fn without_xp(mut self, no_xp: bool) -> Self {
+        self.no_xp = no_xp;
+        self
     }
 
     /// A renamed creature (FL2): shown as `Shade (as Nameless Thing)`, called `Shade`.
@@ -435,12 +448,8 @@ impl Member {
             count,
             name: format!("{shown} (as {base})"),
             called: shown.to_owned(),
+            no_xp: false,
         }
-    }
-
-    /// The name a reason uses for it, which the line matches against.
-    pub fn called(&self) -> &str {
-        &self.called
     }
 
     /// The member as the line shows it: `1,000 × Wolf` (counts grouped, `design::count`).
@@ -582,8 +591,8 @@ struct Unit<'a> {
     gives: Option<usize>,
     /// A unit of a summary: the summary ends with `…` where it was cut.
     summary: bool,
-    /// The member this unit shows, by its name (an opaque value).
-    member: Option<String>,
+    /// The member this unit shows (R31 asks it whether its XP is known).
+    member: Option<Member>,
     /// Built words (a fact, not a member): before it goes, it shortens from its end.
     opaque: bool,
     _line: std::marker::PhantomData<&'a ()>,
@@ -687,7 +696,7 @@ impl<'a> Line<'a> {
                 words: member.words(),
                 gives: None,
                 summary: true,
-                member: Some(member.called.clone()),
+                member: Some(member.clone()),
                 opaque: false,
                 _line: std::marker::PhantomData,
             });
@@ -827,13 +836,12 @@ impl<'a> Line<'a> {
         text
     }
 
-    /// The called names of the members still on the line at `stage` (R31: by identity).
-    fn shown<'s>(&'s self, stage: &'s Stage) -> impl Iterator<Item = &'s str> + 's {
-        self.units
-            .iter()
-            .enumerate()
-            .filter(|(at, _)| !stage.gone.contains(&Give::Unit(*at)))
-            .filter_map(|(_, unit)| unit.member.as_deref())
+    /// Each member of the line with whether it is still on the line at `stage` (R31).
+    fn members<'s>(&'s self, stage: &'s Stage) -> impl Iterator<Item = (&'s Member, bool)> + 's {
+        self.units.iter().enumerate().filter_map(move |(at, unit)| {
+            let member = unit.member.as_ref()?;
+            Some((member, !stage.gone.contains(&Give::Unit(at))))
+        })
     }
 
     fn with_label(&self, parts: Vec<Part>) -> Vec<Part> {
@@ -929,7 +937,7 @@ impl<'a> Line<'a> {
             (None, Some(missing)) => {
                 // R31 (AB4, FB5, SB5): where every creature still shown lacks its XP, they are
                 // not named again; beside a known one, the reason keeps the names.
-                let unsaid = |stage: &Stage| missing.unsaid(self.shown(stage));
+                let unsaid = |stage: &Stage| missing.unsaid(self.members(stage));
                 let reason = |words: String| self.with_label(vec![(words, false)]);
                 let whole = |stage: &Stage| {
                     unsaid(stage)
@@ -1174,7 +1182,10 @@ mod tests {
             party,
             members: members
                 .iter()
-                .map(|(count, name)| Member::new(*count, *name))
+                // The fixture's creatures with no XP: Nameless Thing and Wisp.
+                .map(|(count, name)| {
+                    Member::new(*count, *name).without_xp(["Nameless Thing", "Wisp"].contains(name))
+                })
                 .collect(),
             facts: Vec::new(),
         };
@@ -1306,13 +1317,15 @@ mod tests {
             two.fit(fits(200)).unwrap().text(),
             "5 party · 1 × Nameless Thing, 1 × Ox · XP not known: Nameless Thing and 1 more"
         );
-        // Every creature shown lacks its XP: the line says whose; the one it does not show is
-        // named.
-        let both = Line::roster(&unknown, typed(5, &[(1, "Nameless Thing")]));
+        // Every creature shown lacks its XP: the line says whose; the one it no longer shows
+        // is named.
+        let both = Line::roster(&unknown, typed(5, &[(1, "Nameless Thing"), (1, "Wisp")]));
+        let at = |room| both.fit(fits(room)).unwrap().text();
         assert_eq!(
-            both.fit(fits(200)).unwrap().text(),
-            "5 party · 1 × Nameless Thing · XP not known: Wisp"
+            at(200),
+            "5 party · 1 × Nameless Thing, 1 × Wisp · XP not known"
         );
+        assert_eq!(at(42), "1 × Nameless Thing, … · XP not known: Wisp");
         // FK3, SK3, FJ3 (R1): a joining group whose fight has no word still says `Fight after`,
         // with `XP not known` in the word's place and whose XP it is.
         let ghost = Difficulty {
@@ -1338,7 +1351,7 @@ mod tests {
             party: 5,
             members: vec![
                 Member::new(2, "Cinder Wolf"),
-                Member::new(1, "Ghost, of the Mill"),
+                Member::new(1, "Ghost, of the Mill").without_xp(true),
             ],
             facts: Vec::new(),
         };
