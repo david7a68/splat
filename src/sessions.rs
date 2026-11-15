@@ -330,7 +330,7 @@ pub(crate) fn remember_notes(folder: &Path, notes: &[Note]) -> Result<(), String
     if fs::read(&path).is_ok_and(|bytes| bytes == text.as_bytes()) {
         return Ok(());
     }
-    replace_file(&path, &text)
+    replace_file_io(&path, &text).map_err(|error| not_saved(&error))
 }
 
 /// Notes that claim a session but cannot be read, by file name. Their files are safe.
@@ -680,25 +680,36 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
     front.insert("session_date".into(), new.date.to_owned().into());
     let front = serde_yaml_ng::to_string(&front).map_err(|e| e.to_string())?;
     let text = format!("---\n{front}---\n{}", fill_template(new));
-    write_new(&path, &text)?;
+    write_new_io(&path, &text).map_err(|error| not_created(&error))?;
     let note = parse_note(&path, &text).ok_or("The new note could not be read back.")?;
     remember_notes(folder, std::slice::from_ref(&note))?;
     Ok(note)
 }
 
 fn write_new(path: &Path, text: &str) -> Result<(), String> {
-    let parent = path.parent().ok_or("Invalid location.")?;
-    let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
-    temp.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-    temp.as_file().sync_all().map_err(|e| e.to_string())?;
-    temp.persist_noclobber(path).map_err(|e| e.to_string())?;
-    sync_folder(parent)?;
-    Ok(())
+    write_new_io(path, text).map_err(|e| e.to_string())
+}
+
+/// `write_new` with the system error kept, so a note's save can say what happened in plain
+/// words (`not_saved`).
+fn write_new_io(path: &Path, text: &str) -> std::io::Result<()> {
+    #[cfg(test)]
+    if let Some(code) = FAILING_WRITES.with(std::cell::Cell::get) {
+        return Err(std::io::Error::from_raw_os_error(code));
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("Invalid location."))?;
+    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+    temp.write_all(text.as_bytes())?;
+    temp.as_file().sync_all()?;
+    temp.persist_noclobber(path).map_err(|e| e.error)?;
+    sync_folder_io(parent)
 }
 
 /// Change a note's title or date, and leave any other property the DM added.
 pub fn update_details(note: &Note, title: &str, date: &str, number: u32) -> Result<Note, String> {
-    let text = fs::read_to_string(&note.path).map_err(|e| e.to_string())?;
+    let text = fs::read_to_string(&note.path).map_err(|error| not_read(&error))?;
     let patched = patch_fields(
         &text,
         &[
@@ -743,7 +754,7 @@ pub fn update_details(note: &Note, title: &str, date: &str, number: u32) -> Resu
         }
         _ => patched,
     };
-    replace_file(&note.path, &patched)?;
+    replace_file_io(&note.path, &patched).map_err(|error| not_saved(&error))?;
     parse_note(&note.path, &patched).ok_or_else(|| "The note could not be read back.".to_owned())
 }
 
@@ -753,24 +764,64 @@ pub fn note_identity(path: &Path, text: &str) -> Option<Uuid> {
 }
 
 pub(crate) fn replace_file(path: &Path, text: &str) -> Result<(), String> {
-    let parent = path.parent().ok_or("Invalid location.")?;
-    let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    replace_file_io(path, text).map_err(|e| e.to_string())
+}
+
+/// `replace_file` with the system error kept, so a note's save can say what happened in plain
+/// words (`not_saved`).
+fn replace_file_io(path: &Path, text: &str) -> std::io::Result<()> {
+    #[cfg(test)]
+    if let Some(code) = FAILING_WRITES.with(std::cell::Cell::get) {
+        return Err(std::io::Error::from_raw_os_error(code));
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("Invalid location."))?;
+    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
     temp.write_all(text.as_bytes())
-        .and_then(|()| temp.as_file().sync_all())
-        .map_err(|e| e.to_string())?;
-    temp.persist(path).map_err(|e| e.to_string())?;
-    sync_folder(parent)?;
-    Ok(())
+        .and_then(|()| temp.as_file().sync_all())?;
+    temp.persist(path).map_err(|e| e.error)?;
+    sync_folder_io(parent)
 }
 
 pub(crate) fn sync_folder(path: &Path) -> Result<(), String> {
+    sync_folder_io(path).map_err(|e| e.to_string())
+}
+
+fn sync_folder_io(path: &Path) -> std::io::Result<()> {
     #[cfg(unix)]
-    fs::File::open(path)
-        .and_then(|file| file.sync_all())
-        .map_err(|e| e.to_string())?;
+    fs::File::open(path).and_then(|file| file.sync_all())?;
     #[cfg(not(unix))]
     let _ = path;
     Ok(())
+}
+
+/// Round 30 B7d: a note's failed save in plain words from the error's KIND, never the system's
+/// words: `Not saved.`, the cause and the recovery of the World page's file faults
+/// (`world::file_fault`, the one mapping). Every painter of a note's failed save reads this
+/// value: the Sessions banner on every page, the Notes status, an act's `NotSaved` result.
+fn not_saved(error: &std::io::Error) -> String {
+    let fault = crate::world::file_fault::FileFault::write("", error);
+    format!("Not saved. {}. {}", fault.cause(), fault.recovery())
+}
+
+/// A new session note that could not be written (Create session), in the same plain words.
+fn not_created(error: &std::io::Error) -> String {
+    let fault = crate::world::file_fault::FileFault::write("", error);
+    format!("Not created. {}. {}", fault.cause(), fault.recovery())
+}
+
+/// A note that could not be read before a change to it (Save details), in the same plain words.
+fn not_read(error: &std::io::Error) -> String {
+    let fault = crate::world::file_fault::FileFault::read("", error);
+    format!("Not saved. {}. {}", fault.cause(), fault.recovery())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's failing disk for the write helpers (`replace_file_io`, `write_new_io`): each
+    /// fails with this system error code before anything is written.
+    pub(crate) static FAILING_WRITES: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1427,6 +1478,10 @@ pub struct Draft {
     last_edit: Option<Instant>,
     /// Changes when the words or the file change. No two drafts share one.
     revision: u64,
+    /// A test's failing disk: each write fails with this system error code (28 is a full disk),
+    /// before anything is written or the baseline moves.
+    #[cfg(test)]
+    pub(crate) failing_write: Option<i32>,
 }
 
 /// A revision no draft has had.
@@ -1470,7 +1525,15 @@ impl Draft {
             save_again_error: None,
             last_edit: None,
             revision: next_revision(),
+            #[cfg(test)]
+            failing_write: None,
         })
+    }
+
+    /// The file's words as this draft last read or wrote them.
+    #[cfg(test)]
+    pub(crate) fn baseline(&self) -> Option<&str> {
+        self.baseline.as_deref()
     }
 
     /// Changes whenever the words or the file change, so a reader can skip an unchanged draft.
@@ -1560,13 +1623,20 @@ impl Draft {
 
     fn write(&mut self) {
         let text = format!("{}{}", self.prefix, self.body);
-        match replace_file(&self.path, &text) {
+        #[cfg(test)]
+        let written = match self.failing_write {
+            Some(code) => Err(std::io::Error::from_raw_os_error(code)),
+            None => replace_file_io(&self.path, &text),
+        };
+        #[cfg(not(test))]
+        let written = replace_file_io(&self.path, &text);
+        match written {
             Ok(()) => {
                 self.baseline = Some(text);
                 self.state = DraftState::Saved;
             }
             Err(error) => {
-                self.state = DraftState::Failed(format!("Not saved. {error}"));
+                self.state = DraftState::Failed(not_saved(&error));
             }
         }
     }
@@ -1601,7 +1671,7 @@ impl Draft {
             return;
         }
         let text = format!("{prefix}{}", self.body);
-        match write_new(&self.path, &text) {
+        match write_new_io(&self.path, &text) {
             Ok(()) => {
                 self.prefix = prefix;
                 if restored.is_some() {
@@ -1610,7 +1680,7 @@ impl Draft {
                 self.baseline = Some(text);
                 self.state = DraftState::Saved;
             }
-            Err(error) => self.refuse_save_again(format!("Not saved. {error}")),
+            Err(error) => self.refuse_save_again(not_saved(&error)),
         }
     }
 
@@ -2289,6 +2359,50 @@ pub fn remove_rewards(text: &str, written: &Rewarded) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+
+    /// Round 30 B7d: a note's failed save says plain words from the error's kind, one sentence
+    /// each, ending with a full stop, never the system's words; the draft's own write uses it.
+    #[test]
+    fn a_failed_note_save_says_plain_words_from_the_error_kind() {
+        use std::io::ErrorKind;
+        let permission = "Not saved. No permission to save. Give your user account permission to change the file and its folder.";
+        for (kind, words) in [
+            (
+                ErrorKind::StorageFull,
+                "Not saved. Disk is full. Free some space on the disk, then try again.",
+            ),
+            (ErrorKind::PermissionDenied, permission),
+            (
+                ErrorKind::ReadOnlyFilesystem,
+                "Not saved. Disk is read-only. Make the disk writable, or move the campaign to a disk you can write to.",
+            ),
+            (
+                ErrorKind::Interrupted,
+                "Not saved. File cannot be saved. Check that the disk that holds it is connected, then try again.",
+            ),
+        ] {
+            let said = not_saved(&std::io::Error::new(kind, "raw words (os error 99)"));
+            assert_eq!(said, words, "{kind:?}");
+            assert!(
+                !said.contains("os error") && !said.contains("raw"),
+                "{said}"
+            );
+        }
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("Session 1.md");
+        fs::write(&path, "---\nsession_id: 1\n---\n# One\n").unwrap();
+        let mut draft = Draft::open(&path).unwrap();
+        draft.failing_write = Some(28);
+        draft.body.push_str("More words.\n");
+        draft.edited();
+        draft.save();
+        assert_eq!(
+            draft.state,
+            DraftState::Failed(
+                "Not saved. Disk is full. Free some space on the disk, then try again.".into()
+            )
+        );
+    }
     use super::*;
 
     /// F7: a block goes at the end of `## Loot and rewards`, or under that heading added at the
@@ -2761,6 +2875,16 @@ mod tests {
             remember_notes(dir.path(), &list_notes(dir.path())).unwrap();
             assert_eq!(file(&index), written, "an idle scan replaced the index");
         }
+        // Round 30 B7d (review F2 of PR 416): a failed Create session says plain words, never
+        // the system's, and leaves no file.
+        FAILING_WRITES.with(|code| code.set(Some(28)));
+        let refused = create_note(dir.path(), &new_note(13, "Full", "Words")).unwrap_err();
+        FAILING_WRITES.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not created. Disk is full. Free some space on the disk, then try again."
+        );
+        assert_eq!(list_notes(dir.path()).len(), 1);
     }
 
     #[test]
@@ -2845,6 +2969,17 @@ mod tests {
             text.contains("tags: [dnd]") && text.ends_with("My words\n"),
             "{text}"
         );
+        // Round 30 B7d (review F2 of PR 416): a failed Save details says plain words, never the
+        // system's, and leaves the file as it was.
+        let before = fs::read_to_string(&path).unwrap();
+        FAILING_WRITES.with(|code| code.set(Some(13)));
+        let refused = update_details(&note, "Other", "2026-02-03", 4).unwrap_err();
+        FAILING_WRITES.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not saved. No permission to save. Give your user account permission to change the file and its folder."
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
     }
 
     #[test]

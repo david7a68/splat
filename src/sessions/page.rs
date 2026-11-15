@@ -498,7 +498,8 @@ struct Reading {
 struct Added {
     id: String,
     label: String,
-    at: Instant,
+    /// When it was added, on the frame clock (`crate::frame_clock`).
+    at: f64,
     count: usize,
     /// When the add was done: its result's footer order.
     order: design::ResultOrder,
@@ -742,9 +743,6 @@ pub struct Sessions {
     markers: design::Results<kept::OfSession, kept::MarkerAdd>,
     /// `Recording saved: …`, by the session whose recording it names.
     saved: design::Results<kept::OfSession, RecordingSaved>,
-    /// A test's full disk: every write of the note fails with these words.
-    #[cfg(test)]
-    failing_save: Option<String>,
     notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
@@ -768,8 +766,8 @@ pub struct Sessions {
     moves: design::Results<kept::Page, kept::Moved>,
     /// When a recording last stopped, and the campaign it was recorded in: the owner, so the
     /// rail says it was kept only while that campaign is open (another campaign's rail never
-    /// says it). It ends after `SAVED_WORD_FOR`.
-    saved_at: Option<(Option<Uuid>, Instant)>,
+    /// says it). It ends after `SAVED_WORD_FOR` of the frame clock (`crate::frame_clock`).
+    saved_at: Option<(Option<Uuid>, f64)>,
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
@@ -2616,11 +2614,6 @@ impl Sessions {
         {
             draft.save();
         }
-        // A test's full disk (`simulate_failed_save`): the note's write fails every time.
-        #[cfg(test)]
-        if let (Some(words), Some(draft)) = (&self.failing_save, &mut self.draft) {
-            draft.state = DraftState::Failed(words.clone());
-        }
     }
 
     pub fn folder_missing(&self) -> bool {
@@ -3344,7 +3337,7 @@ impl Sessions {
     pub fn just_saved(&self) -> bool {
         self.saved_at.is_some_and(|(campaign, at)| {
             campaign == self.campaign.as_ref().map(|campaign| campaign.id)
-                && at.elapsed() < SAVED_WORD_FOR
+                && !crate::frame_clock::passed(at, SAVED_WORD_FOR)
         })
     }
 
@@ -3447,7 +3440,7 @@ impl Sessions {
         if tell && has_audio {
             self.saved_at = Some((
                 self.campaign.as_ref().map(|campaign| campaign.id),
-                Instant::now(),
+                crate::frame_clock::now(),
             ));
             // The result is its recording's (`RecordingSaved`), not the page's one notice.
             self.saved.record(RecordingSaved {
@@ -8037,19 +8030,22 @@ impl Sessions {
         draft.save();
     }
 
-    /// The disk refuses the open note's writes, as a full disk would: the DM has typed, the save
-    /// fails, and every later save through `flush` fails again until `simulate_failed_save_ends`.
+    /// The disk refuses the open note's writes, as a full disk would: the DM has typed, and every
+    /// write fails at its result with the system's full-disk error (code 28), before anything is
+    /// written, until `simulate_failed_save_ends`. A direct retry fails too.
     pub fn simulate_failed_save(&mut self) {
-        self.failing_save = Some("Not saved. The disk is full.".to_owned());
         let draft = self.draft.as_mut().expect("an open note");
+        draft.failing_write = Some(28);
         draft.body.push_str("\nTyped while the disk was full.\n");
         draft.edited();
-        self.flush();
+        draft.save();
     }
 
     /// The disk takes writes again.
     pub fn simulate_failed_save_ends(&mut self) {
-        self.failing_save = None;
+        if let Some(draft) = &mut self.draft {
+            draft.failing_write = None;
+        }
     }
 
     /// The open note's file leaves the folder outside Splat while the DM has unsaved words,
@@ -9933,6 +9929,38 @@ mod tests {
             shows(&harness, MOVE_FILES)
                 && shows(&harness, "Choose below to move the files or not."),
             "the lock gone, the choices come back"
+        );
+        // Round 30 B7d: the word ends by the frame clock (`crate::frame_clock`), not the wall
+        // clock, so a test's frames decide when it ends: 7.5 s of frames after the stop it
+        // stands; 8.5 s after, it has ended.
+        // Last in this test, because it moves the frame clock on.
+        harness.state_mut().0.live = Some(Live {
+            session: Uuid::nil(),
+            label: "Session 1".to_owned(),
+            recorder: crate::recording::Recorder::start(
+                crate::recording::Tool::Simulated,
+                None,
+                audio.path().join("clock.wav"),
+            )
+            .unwrap(),
+        });
+        harness.state_mut().0.finish_recording();
+        harness.step();
+        assert_eq!(saved(&harness), Some("Recording saved"), "the stop says it");
+        let stopped = harness.state().0.saved_at.map(|(_, at)| at).unwrap();
+        crate::frame_clock::set(stopped + 7.5);
+        harness.step();
+        assert_eq!(
+            saved(&harness),
+            Some("Recording saved"),
+            "7.5 s of frames later"
+        );
+        crate::frame_clock::set(stopped + 8.5);
+        harness.step();
+        assert_eq!(
+            saved(&harness),
+            None,
+            "8.5 s of frames later the word has ended"
         );
     }
 

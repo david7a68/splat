@@ -15037,6 +15037,19 @@ pub mod session_notes {
         // Undo) is wholly in view, not clipped.
         d.click(NAV_SESSIONS);
         d.settle();
+        // Round 30 B7d (review F2 of PR 411): the full disk fails each write at its result, so
+        // the file and the draft's baseline keep the words from before until a retry succeeds.
+        let note = d.app_mut().sessions.draft_snapshot().expect("an open note");
+        let (file_before, baseline_before) = (
+            std::fs::read_to_string(&note.path).unwrap(),
+            note.baseline().map(str::to_owned),
+        );
+        let kept = |d: &mut Driver<'_>| {
+            let now = d.app_mut().sessions.draft_snapshot().expect("an open note");
+            std::fs::read_to_string(&note.path).unwrap() == file_before
+                && now.baseline().map(str::to_owned) == baseline_before
+                && matches!(now.state, crate::sessions::DraftState::Failed(_))
+        };
         d.app_mut().sessions.simulate_failed_save();
         // Timeline still holds the event form the scenario opened (Rest at the mill).
         d.click(NAV_TIMELINE);
@@ -15045,20 +15058,42 @@ pub mod session_notes {
             banner_whole(
                 d,
                 "round-30-note-warnings-elsewhere",
-                "was not saved.",
+                "was not saved. Disk is full. Free some space on the disk, then try again.",
                 &["Try to save again", "Title"],
             );
+            // Round 30 B7d: the painted words are plain, never the system's (`os error`).
+            let mut system = Vec::new();
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.contains("os error") {
+                    system.push(text.galley.job.text.clone());
+                }
+            });
+            d.observe(
+                "round-30-note-save-plain-words",
+                system.is_empty(),
+                format!("No painted words carry the system's error text: {system:?}"),
+            );
         });
+        // The captured state's own saves failed too; so does the DM's retry while the disk is
+        // full.
+        let kept_through_the_state = kept(d);
+        d.click("Try to save again");
+        d.settle();
+        let kept_through_a_retry = kept(d);
         d.app_mut().sessions.simulate_failed_save_ends();
         d.click("Try to save again");
         d.settle();
         let retried = !d.nodes().iter().any(|node| {
             node.name.starts_with("The note of Session ") && node.name.contains("was not saved.")
-        });
+        }) && std::fs::read_to_string(&note.path)
+            .unwrap()
+            .contains("Typed while the disk was full.");
         d.observe(
             "round-30-note-warnings-elsewhere",
-            retried,
-            "Try to save again ends the failure on Timeline",
+            kept_through_the_state && kept_through_a_retry && retried,
+            format!(
+                "The file and the baseline keep the old words through the state's saves ({kept_through_the_state}) and a retry on a full disk ({kept_through_a_retry}); the retry after it saves the words and ends the failure ({retried})"
+            ),
         );
         let (path, away) = d.app_mut().sessions.simulate_note_gone();
         d.settle();
@@ -15095,15 +15130,26 @@ pub mod session_notes {
                 .nodes()
                 .into_iter()
                 .find(|node| node.fully_in_view() && node.name.starts_with("The note of Session "));
+            // Review F1 of PR 411: the result's Undo stands whole above the banner too.
+            let undo = d.nodes().into_iter().find(|node| {
+                node.name == "Undo delete"
+                    && node.role == egui::accesskit::Role::Button
+                    && node.fully_in_view()
+            });
             d.observe(
                 "round-30-note-warning-beside-a-pinned-result",
                 result
                     .as_ref()
                     .zip(banner.as_ref())
-                    .is_some_and(|(result, banner)| result.rect.bottom() <= banner.rect.top()),
+                    .zip(undo.as_ref())
+                    .is_some_and(|((result, banner), undo)| {
+                        result.rect.bottom() <= banner.rect.top()
+                            && undo.rect.bottom() <= banner.rect.top()
+                    }),
                 format!(
-                    "The pinned result {:?} stands whole above the banner {:?}",
+                    "The pinned result {:?} and its Undo {:?} stand whole above the banner {:?}",
                     result.map(|node| node.rect),
+                    undo.map(|node| node.rect),
                     banner.map(|node| node.rect)
                 ),
             );
@@ -16706,6 +16752,19 @@ pub mod session_recording {
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.expect("0:00 recorded · Hearing sound");
         d.state_prepared("recording-listed", Sizes::Default, |d| {
+            // Round 30 B7d (review F1 of PR 416): the sound words end by the frame clock, so each
+            // size hears again before its capture, as `recording-hearing` does, and the row says
+            // it at every captured size.
+            d.app_mut()
+                .sessions
+                .simulate_recorder_health(Health::Hearing);
+            d.settle();
+            let size = d.window_size();
+            d.observe(
+                "round-30-recording-listed-hearing",
+                d.has_containing("0:00 recorded · Hearing sound"),
+                format!("At {size:?} the listed recording says it hears sound"),
+            );
             // R5: the rail and the Recordings tab's row.
             check_live_recording_colours(d, &[Surface::Rail, Surface::RecordingsTab]);
             // AT1: with no fight open, the party bar keeps every first name at 960. Portraits give

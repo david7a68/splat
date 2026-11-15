@@ -53,6 +53,7 @@ mod encounter_settings;
 mod encounters;
 mod file_batch;
 mod folder_check;
+mod frame_clock;
 mod hermetic;
 mod history;
 mod library;
@@ -2732,6 +2733,7 @@ impl eframe::App for Splat {
     }
 
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        crate::frame_clock::tick(ctx);
         if !self.started {
             self.start(ctx);
         }

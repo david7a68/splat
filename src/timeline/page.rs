@@ -317,7 +317,16 @@ impl RestRulingAction {
 pub struct JustAdded {
     file: super::TimelineFile,
     id: String,
-    at: Instant,
+    /// When it was added, on the frame clock (`crate::frame_clock`).
+    at: f64,
+}
+
+impl JustAdded {
+    /// Does the result end now: `UNDO_ADD_FOR` passed on the frame clock, or another event is
+    /// selected (`selected`)?
+    fn ends(&self, selected: Option<&String>) -> bool {
+        crate::frame_clock::passed(self.at, UNDO_ADD_FOR) || selected != Some(&self.id)
+    }
 }
 
 impl design::results::Kept for JustAdded {
@@ -1123,10 +1132,11 @@ impl TimelinePage {
         }
         // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
         let file = book.file();
-        if self.added.get(&file).is_some_and(|shown| {
-            let added = shown.value();
-            added.at.elapsed() >= UNDO_ADD_FOR || self.selected.as_ref() != Some(&added.id)
-        }) {
+        if self
+            .added
+            .get(&file)
+            .is_some_and(|shown| shown.value().ends(self.selected.as_ref()))
+        {
             self.added.owner_changed(&file);
         }
         if let Some(shown) = self.added.get(&file) {
@@ -1811,7 +1821,7 @@ impl TimelinePage {
             self.added.record(JustAdded {
                 file: book.file(),
                 id,
-                at: Instant::now(),
+                at: crate::frame_clock::now(),
             });
         }
         if let Some(words) = self.dated.clone()
@@ -1848,7 +1858,7 @@ impl TimelinePage {
                 self.added.record(JustAdded {
                     file: book.file(),
                     id,
-                    at: Instant::now(),
+                    at: crate::frame_clock::now(),
                 });
             }
             return;
@@ -2003,6 +2013,33 @@ fn header_kind(event: &Event) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Round 30 B7d: the Add result ends by the frame clock, so a test's frames decide when:
+    /// 29 s after the add it stands, 31 s after it has ended. Another selection ends it at once.
+    #[test]
+    fn the_add_result_ends_by_the_frame_clock() {
+        crate::frame_clock::set(100.0);
+        let added = JustAdded {
+            file: super::super::TimelineFile(std::path::PathBuf::from("Timeline.md")),
+            id: "e1".to_owned(),
+            at: crate::frame_clock::now(),
+        };
+        let selected = Some("e1".to_owned());
+        crate::frame_clock::set(129.0);
+        assert!(
+            !added.ends(selected.as_ref()),
+            "29 s of frames later it stands"
+        );
+        assert!(
+            added.ends(Some(&"e2".to_owned())),
+            "another selection ends it"
+        );
+        crate::frame_clock::set(131.0);
+        assert!(
+            added.ends(selected.as_ref()),
+            "31 s of frames later it has ended"
+        );
+    }
 
     #[test]
     fn iter3_c_closed_long_rest_rows_show_both_rulings() {
