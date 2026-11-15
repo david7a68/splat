@@ -185,6 +185,25 @@
 use super::components::{Footer, ResultOrder};
 use eframe::egui::Ui;
 
+mod refusal;
+pub use refusal::{Cause, Change, FailedAct, Fallback, File, Kind, Name, Recovery, Refusal, Thing};
+
+/// A new order for an act done now: a result recorded, an Undo attempt refused.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the store is where an order is issued"
+)]
+fn act_order() -> ResultOrder {
+    ResultOrder::issue()
+}
+
+/// A refused attempt kept on its entry: the attempt's own order (the entry keeps its ticket) and
+/// the refusal.
+struct Refused {
+    order: ResultOrder,
+    refusal: Refusal,
+}
+
 /// The object a kept result belongs to: an entry in its root, a note, a run step. The store keys
 /// every lookup and every change by the owner's scope and the owner together, so an owner whose
 /// `PartialEq` compares its id only still never meets another scope's result.
@@ -255,6 +274,7 @@ pub enum Press {
 pub struct Shown<'a, T> {
     order: ResultOrder,
     value: &'a T,
+    refused: Option<&'a Refused>,
 }
 
 impl<'a, T> Shown<'a, T> {
@@ -267,6 +287,13 @@ impl<'a, T> Shown<'a, T> {
     pub fn value(&self) -> &'a T {
         self.value
     }
+
+    /// The refusal of this entry's last attempt, while it stands
+    /// ([`Results::undo_or_refuse`]).
+    pub fn refusal(&self) -> Option<&'a Refusal> {
+        self.refused.map(|refused| &refused.refusal)
+    }
+
     /// This result as a typed footer line for this frame's pane (package M), made from its own
     /// value and carrying this entry's [`Ticket`]. The call takes the view, so the store's
     /// borrow ends here: the pane's body may change the store or its owner. The line borrows the
@@ -276,7 +303,30 @@ impl<'a, T> Shown<'a, T> {
         frame: &'f super::outcome::PaneFrame,
         make: impl FnOnce(&T) -> super::outcome::KeptOutcome<A>,
     ) -> super::outcome::KeptLine<'f, A> {
-        super::outcome::KeptLine::new(frame, Ticket { order: self.order }, make(self.value))
+        self.outcome_told_apart(frame, None, make)
+    }
+
+    /// `outcome`, with the place of a refused attempt's answer told apart by `apart`
+    /// (`Refusal::words_told_apart`), for a reader that shows two answers that would read alike.
+    pub fn outcome_told_apart<'f, A>(
+        self,
+        frame: &'f super::outcome::PaneFrame,
+        apart: Option<&Name>,
+        make: impl FnOnce(&T) -> super::outcome::KeptOutcome<A>,
+    ) -> super::outcome::KeptLine<'f, A> {
+        let refused = self.refused.map(|refused| {
+            (
+                refused.order,
+                refused.refusal.words_told_apart(apart),
+                refused.refusal.tone(),
+            )
+        });
+        super::outcome::KeptLine::new(
+            frame,
+            Ticket { order: self.order },
+            make(self.value),
+            refused,
+        )
     }
 
     /// This result's footer line: its words, made from its own value, with its own order.
@@ -313,6 +363,12 @@ impl<T> Shown<'_, T> {
     /// This entry's ticket, for the store's own tests.
     #[cfg(test)]
     pub(in crate::design) fn ticket_for_test(&self, _frame: &super::outcome::PaneFrame) -> Ticket {
+        Ticket { order: self.order }
+    }
+
+    /// This entry's ticket, for a caller's tests of its press.
+    #[cfg(test)]
+    pub(crate) fn ticket_for_caller_test(&self) -> Ticket {
         Ticket { order: self.order }
     }
 }
@@ -412,6 +468,9 @@ struct Entry<O, T> {
     owner: O,
     order: ResultOrder,
     value: T,
+    /// The refusal of its last attempt ([`Results::undo_or_refuse`]): it ends with the entry, at
+    /// the entry's next attempt, and at [`Results::end_refusals`].
+    refused: Option<Refused>,
 }
 
 impl<O: Owner, T> Entry<O, T> {
@@ -445,17 +504,15 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     /// Keep the result of an action done now. It gets a new order, newer than every result
     /// before it, and it ends its owner's earlier result of this kind. Call it where the action
     /// is done; Undo and then the same action again is a new action with a new order.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the store is where an order is issued"
-    )]
     pub fn record(&mut self, value: T) {
         let owner = value.owner();
         self.entries.retain(|entry| !entry.is(&owner));
+        let order = act_order();
         self.entries.push(Entry {
             owner,
-            order: ResultOrder::issue(),
+            order,
             value,
+            refused: None,
         });
     }
 
@@ -464,6 +521,14 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         self.entries
             .iter()
             .find(|entry| entry.is(owner))
+            .map(Self::shown)
+    }
+
+    /// The entry `ticket` names, if it still stands.
+    pub fn get_by(&self, ticket: &Ticket) -> Option<Shown<'_, T>> {
+        self.entries
+            .iter()
+            .find(|entry| entry.order == ticket.order)
             .map(Self::shown)
     }
 
@@ -481,6 +546,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         Shown {
             order: entry.order,
             value: &entry.value,
+            refused: entry.refused.as_ref(),
         }
     }
 
@@ -529,6 +595,69 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             Ok(done) => Ok((self.entries.remove(at).value, done)),
             Err(error) => Err(ByTicket::Failed(error)),
         }
+    }
+
+    /// The opt-in recorded Undo: as [`Results::undo_by`], and a refused attempt is kept. On
+    /// `Err` the entry stays with its ticket (its controls keep their ids, a press made on its
+    /// line still reaches it) and holds the refusal with a new order of its own, the attempt's,
+    /// which ranks its answer (ruling R33). Its line then opens with the refusal's words. The
+    /// refusal ends with the entry (a successful Undo, a new result of the same owner, an end
+    /// event), at the entry's next attempt, and at [`Results::end_refusals`].
+    pub fn undo_or_refuse<R>(
+        &mut self,
+        ticket: Ticket,
+        run: impl FnOnce(&T) -> Result<R, Refusal>,
+    ) -> Result<(T, R), ByTicket<()>> {
+        const {
+            assert!(
+                matches!(T::ENDS.press, Press::Undo),
+                "this kind has no Undo: its press is not `Press::Undo`"
+            )
+        };
+        let at = self
+            .entries
+            .iter()
+            .position(|entry| entry.order == ticket.order)
+            .ok_or(ByTicket::Gone)?;
+        let result = run(&self.entries[at].value);
+        let order = act_order();
+        match result {
+            Ok(done) => Ok((self.entries.remove(at).value, done)),
+            Err(refusal) => {
+                self.entries[at].refused = Some(Refused { order, refusal });
+                Err(ByTicket::Failed(()))
+            }
+        }
+    }
+
+    /// The state a result rests on changed (its file's words, its draft). `holds` revises each
+    /// value in place (its Undo may wait) and says whether its result still holds. One that does
+    /// not hold ends, unless it holds a refused attempt: that answer to the DM's act is not ended
+    /// by the change that caused it; its own events end it. Call it at the change, never each
+    /// frame.
+    pub fn source_changed(&mut self, mut holds: impl FnMut(&mut T) -> bool) {
+        self.entries
+            .retain_mut(|entry| holds(&mut entry.value) || entry.refused.is_some());
+    }
+
+    /// The refused attempt of each entry for which `ends` is true ends (its object went away;
+    /// another act on its owner). The entry itself then stays only while `holds` says its result
+    /// still holds. How many refusals ended.
+    pub fn end_refusals(
+        &mut self,
+        mut ends: impl FnMut(&T) -> bool,
+        mut holds: impl FnMut(&T) -> bool,
+    ) -> usize {
+        let mut ended = 0;
+        self.entries.retain_mut(|entry| {
+            if entry.refused.is_some() && ends(&entry.value) {
+                entry.refused = None;
+                ended += 1;
+                return holds(&entry.value);
+            }
+            true
+        });
+        ended
     }
 
     /// The offer `ticket` names, used up by its press; `None` when it was replaced or ended.
@@ -733,7 +862,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "components",
             &[Ban::Results, Ban::Layout(4)],
         ),
-        ("src/design/results.rs", "record", &[Ban::Results]),
+        ("src/design/results.rs", "act_order", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
         ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         (
@@ -862,7 +991,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "scenes_are_note_acts_with_their_own_undo statement",
             &[Ban::Results],
         ),
-        ("src/sessions/plan.rs", "keep_plan_line", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),
@@ -1374,6 +1502,20 @@ pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, u
 #[cfg(test)]
 pub(crate) const STAGED: &[Staged] = &[
     (
+        "Outcome::Refused(",
+        "Answer a refused act with a typed `Refusal` on its entry (`Results::undo_or_refuse`): it names the thing, the cause and a next step, and ranks as an act (M1).",
+        &[
+            ("src/design/outcome.rs", 1),
+            ("src/design/pane.rs", 5),
+            ("src/sessions/carry.rs", 1),
+            ("src/sessions/plan.rs", 2),
+            ("src/timeline/page.rs", 1),
+            ("src/trackers/history.rs", 1),
+            ("src/trackers/view.rs", 1),
+            ("src/world.rs", 1),
+        ],
+    ),
+    (
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[
@@ -1385,7 +1527,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/library.rs", 14),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 1),
-            ("src/sessions/plan.rs", 7),
+            ("src/sessions/plan.rs", 6),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],
@@ -1519,6 +1661,19 @@ mod tests {
         campaign: "Ashfall",
     };
 
+    /// A footer line for the test of the one footer order (`outcome::footer_order`).
+    struct Line(
+        super::super::components::FooterRank,
+        Option<ResultOrder>,
+        &'static str,
+    );
+
+    impl super::super::outcome::Ranked for Line {
+        fn key(&self) -> (super::super::components::FooterRank, Option<ResultOrder>) {
+            (self.0, self.1)
+        }
+    }
+
     fn done(note: Note, words: &'static str) -> Done {
         Done { note, words }
     }
@@ -1586,6 +1741,128 @@ mod tests {
         assert_eq!(undone, Some(Ok((done(A, "A."), 2))));
         assert_eq!(words(&results, "Tidewater"), ["B."]);
         assert_eq!(results.undo(&A, |_| Ok::<(), ()>(())), None, "A has gone");
+
+        // M1: the recorded Undo. A refused attempt keeps the entry and its ticket, holds the
+        // refusal with an order of its own, and outlives the change that caused it.
+        use super::super::components::FooterRank;
+        use super::super::outcome::{footer_order, refusal_rank};
+        results.record(done(A, "A."));
+        let a = results.get(&A).unwrap().order();
+        let refusal = |cause| {
+            Refusal::new(
+                FailedAct::NotRemoved {
+                    what: Thing::new(Kind::PlanLine, Name::new("Bell").unwrap()),
+                    from: Name::new("Session 1").unwrap(),
+                },
+                cause,
+                Recovery::ByHand {
+                    file: File::SessionNote,
+                    change: Change::RemovePlanLine,
+                },
+            )
+        };
+        let changed = || refusal(Cause::Changed(File::SessionNote));
+        let refused = results.undo_or_refuse(Ticket { order: a }, |_| Err::<(), _>(changed()));
+        assert_eq!(refused, Err(ByTicket::Failed(())));
+        let shown = results.get_by(&Ticket { order: a }).unwrap();
+        assert_eq!(shown.order(), a, "the ticket stays");
+        assert_eq!(shown.refusal(), Some(&changed()));
+        let attempt = shown.refused.unwrap().order;
+        assert!(
+            attempt > a && attempt > b,
+            "the attempt has an order of its own"
+        );
+        // R41: the tone comes from the diagnosis.
+        assert_eq!(changed().tone(), crate::design::Tone::Warning);
+        assert_eq!(
+            refusal(Cause::Gone(File::SessionNote)).tone(),
+            crate::design::Tone::Warning
+        );
+        assert_eq!(
+            refusal(Cause::Unreadable(File::SessionNote)).tone(),
+            crate::design::Tone::Error
+        );
+        // The change that caused the refusal does not end it; a result with none ends.
+        results.source_changed(|_| false);
+        assert_eq!(
+            words(&results, "Tidewater"),
+            ["A."],
+            "B ended, A's answer stays"
+        );
+        // R42 as amended, in one feed: standing lines keep their places; answers stand newest
+        // first in their group; a refusal leads only while it is the footer's newest answer, then
+        // it stands with the results with no Undo, by its attempt's order, and stays.
+        let order = |lines: &mut Vec<Line>| {
+            footer_order(lines);
+            lines.iter().map(|line| line.2).collect::<Vec<_>>()
+        };
+        let older = Some(a);
+        let feed = |newest: Option<ResultOrder>, more: Vec<Line>| {
+            let mut lines = vec![
+                Line(FooterRank::Undo, older, "older success with Undo"),
+                Line(FooterRank::Reason, None, "standing fault"),
+                Line(FooterRank::Notice, None, "standing notice"),
+                Line(refusal_rank(attempt, newest), Some(attempt), "A refused"),
+            ];
+            lines.extend(more);
+            lines
+        };
+        assert_eq!(
+            order(&mut feed(Some(attempt), Vec::new())),
+            [
+                "A refused",
+                "older success with Undo",
+                "standing fault",
+                "standing notice"
+            ],
+            "A's refusal is the newest answer: it leads"
+        );
+        // A later act that leaves no line here moves nothing.
+        let _ = act_order();
+        assert_eq!(order(&mut feed(Some(attempt), Vec::new()))[0], "A refused");
+        // A later success with no Undo is the newest answer: A goes below it, and stays; the
+        // standing lines keep their places above both.
+        results.record(done(B, "B."));
+        let b = results.get(&B).unwrap().order();
+        assert_eq!(
+            order(&mut feed(
+                Some(b),
+                vec![Line(FooterRank::Notice, Some(b), "B, no Undo")]
+            )),
+            [
+                "older success with Undo",
+                "standing fault",
+                "standing notice",
+                "B, no Undo",
+                "A refused"
+            ]
+        );
+        assert!(
+            results.get(&A).unwrap().refusal().is_some(),
+            "pushed down, not ended"
+        );
+        // A's next attempt that works ends its words and its data together; B stays.
+        assert!(
+            results
+                .undo_or_refuse(Ticket { order: a }, |_| Ok(()))
+                .is_ok()
+        );
+        assert!(results.get(&A).is_none());
+        assert_eq!(words(&results, "Tidewater"), ["B."], "B stays");
+        // `end_refusals` ends only the refusals it names; the entry stays only while it holds.
+        results.record(done(A, "A."));
+        let a = results.get(&A).unwrap().order();
+        let _ = results.undo_or_refuse(Ticket { order: a }, |_| Err::<(), _>(changed()));
+        assert_eq!(results.end_refusals(|value| value.note == B, |_| false), 0);
+        assert!(
+            results.get(&A).unwrap().refusal().is_some(),
+            "another owner's end: A stays"
+        );
+        assert_eq!(
+            results.end_refusals(|value| value.note == A, |value| value.words == "B."),
+            1
+        );
+        assert_eq!(words(&results, "Tidewater"), ["B."]);
     }
 
     /// A campaign switch hides a result and does not end it; one campaign never shows another's

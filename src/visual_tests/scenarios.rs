@@ -21131,13 +21131,29 @@ pub mod encounter_owned_groups {
         });
         open_saved_encounter(d, SHRINE);
         d.expect(&format!("Group name: {GROUP_SHRINE}"));
+        // B3b: the window starts with the campaign read settled (no load pending), and the
+        // key's inputs are recorded before and after it, so a change names its input. The
+        // inputs are this page's only: another app's group edits (the suite runs scenarios on
+        // parallel threads) never reach them.
+        d.settle();
+        let inputs = |d: &mut Driver<'_>| d.app_mut().encounters.owned_group_inputs();
         let warm = work.warm(d, true, 1);
+        let before = inputs(d);
         let idle = work.steady(d, |d| {
             d.settle();
             d.at_size(SMALL, |_| ());
             d.settle();
             d.has(&format!("Group name: {GROUP_SHRINE}"))
         });
+        let after = inputs(d);
+        let held = before.is_some() && before == after && before.is_some_and(|i| !i.3);
+        let idle = if held {
+            idle
+        } else {
+            Err(format!(
+                "the key's inputs changed in the window: {before:?} then {after:?}"
+            ))
+        };
         d.observe(
             "s30-B3-F5-idle",
             warm.is_ok() && idle.is_ok(),
