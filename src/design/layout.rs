@@ -3320,6 +3320,123 @@ fn preview_line(ui: &mut Ui, lead: &str, path: &str) {
     named(ui, &response, &preview);
 }
 
+/// A help line that names a path (`Now: …/campaigns/emberfall/Sessions`): one `Small` muted
+/// line whatever the path, so a longer or a shorter path never moves what follows it. A path
+/// that does not fit gives way from the front at a folder boundary and keeps its last part whole
+/// (the path rule); its hover and its accessible description keep it whole.
+///
+/// The shortened line is kept (`PathLine`, in egui's memory under this `Ui`'s id and the
+/// caller's `slot`): its owner is this help line's place. It holds while the path, the lead, the
+/// room in whole points, the font and the display scale are the same; any change makes it again,
+/// so an unchanged redraw does no shortening work.
+pub fn path_help(
+    ui: &mut Ui,
+    slot: impl std::hash::Hash,
+    lead: &str,
+    path: &std::path::Path,
+) -> Response {
+    let font = Type::Small.font(ui);
+    // Whole points: a fractional change of the room does not make the line again.
+    let room = ui.available_width().floor();
+    let scale = ui.ctx().pixels_per_point();
+    let key = ui.id().with(("design_path_help", slot));
+    let kept = ui
+        .ctx()
+        .data(|data| data.get_temp::<std::sync::Arc<PathLine>>(key))
+        .filter(|line| {
+            line.path == path
+                && line.lead == lead
+                && line.room == room
+                && line.font == font
+                && line.scale == scale
+        });
+    let line = match kept {
+        Some(line) => line,
+        None => {
+            let line = std::sync::Arc::new(PathLine::make(ui, lead, path, room, &font, scale));
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(key, line.clone()));
+            line
+        }
+    };
+    let response = ui
+        .add(
+            egui::Label::new(
+                Type::Small
+                    .rich(ui, line.shown.as_str())
+                    .color(colors().muted),
+            )
+            .truncate(),
+        )
+        .on_hover_text(line.whole.as_str());
+    ui.ctx()
+        .accesskit_node_builder(response.id, |node| node.set_description(line.whole.clone()));
+    response
+}
+
+/// A `path_help` line as drawn for one path, lead, room, font and display scale.
+struct PathLine {
+    path: std::path::PathBuf,
+    lead: String,
+    room: f32,
+    font: egui::FontId,
+    scale: f32,
+    whole: String,
+    shown: String,
+}
+
+#[cfg(test)]
+thread_local! {
+    static PATH_CUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times `path_help` shortened a path on this thread (test builds).
+#[cfg(test)]
+pub(crate) fn path_cuts() -> usize {
+    PATH_CUTS.with(std::cell::Cell::get)
+}
+
+impl PathLine {
+    fn make(
+        ui: &Ui,
+        lead: &str,
+        path: &std::path::Path,
+        room: f32,
+        font: &egui::FontId,
+        scale: f32,
+    ) -> Self {
+        #[cfg(test)]
+        PATH_CUTS.with(|cuts| cuts.set(cuts.get() + 1));
+        let text = path.display().to_string();
+        let whole = format!("{lead}{text}");
+        let one_row = |text: &str| -> String {
+            text.chars()
+                .map(|c| if c.is_control() { ' ' } else { c })
+                .collect()
+        };
+        let mut shown = one_row(&whole);
+        if number_width(ui, &shown, font) > room {
+            // Each cut starts at a separator, so the shown path starts with a whole folder; the
+            // last cut keeps the last part whole when nothing shorter fits.
+            for (at, _) in text.char_indices().filter(|(_, c)| *c == '/' || *c == '\\') {
+                shown = one_row(&format!("{lead}…{}", &text[at..]));
+                if number_width(ui, &shown, font) <= room {
+                    break;
+                }
+            }
+        }
+        Self {
+            path: path.to_owned(),
+            lead: lead.to_owned(),
+            room,
+            font: font.clone(),
+            scale,
+            whole,
+            shown,
+        }
+    }
+}
+
 /// A menu that opens under `response`, for a row or a control with more actions. The one place
 /// a menu popup is made outside `row_menu`, so a placement rule for menus has one home.
 ///

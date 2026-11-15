@@ -933,12 +933,20 @@ Its state says Not connected · showing the name saved on this computer.
 
 A session-folder change counts notes, events, templates and recordings left behind, and says what the safe
 choice costs: `If you save without moving, Splat no longer shows these files.` Offer Move files and save
-or Save without moving. The session folder's warning, its save error and its move result sit in the Link and
-folder pane's message footer, so the first typed letter, a refusal or a move never moves the save row. The
-session folder's heading and save row stand above the pane, at its top, so Save is in view at every size
-without a scroll; its field and help are the pane's content, after the link. Folder help
-uses `design::help`. Move files and save is primary when no other primary is in view; it is secondary while a
-run is open or the campaign details form is open. Refuse collisions and copy every owned file before changing the manifest. A run-folder
+or Save without moving. The Link and folder pane is one block per value (ruling R24, `design::ValueBlock`):
+its heading row, its field with its help, its save row, then the save row's own messages `S` below it. The
+session folder's block comes first, then the campaign folder's and D&D Beyond's. The three heading rows have one
+form (`HeadingRow`): the heading, its note (a state) on the same line, and its action at the right edge, one
+control high. The session folder's warning, its save error and its move result are its block's messages (the
+typed `Row` place), so the first typed letter, a refusal or a move never moves the save row or its field; they
+may move the blocks below. The link's and the details form's messages stay in the pane's footer. While a run locks the page, its sentence (`Close the run to change the folder, the session folder or the
+link.`) is the tab's first line, above the first block, said once; each locked control keeps it on hover and in its
+accessible description. Folder help
+uses `design::help`; the current folder's `Now:` line is one line (`design::path_help`: the path rule, whole on
+hover and in its accessible description), so a save never moves the save row. The save row's commit place holds
+`Save folder` in every state: while the current folder keeps files it waits, disabled with its reason, and Move files
+and save and Save without moving are the warning's quiet choices under it, so a second press where Save was never
+moves files. Refuse collisions and copy every owned file before changing the manifest. A run-folder
 change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
 shows only while no run is open. It stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block

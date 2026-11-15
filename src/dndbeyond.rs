@@ -410,10 +410,6 @@ impl DndBeyond {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -421,33 +417,40 @@ impl DndBeyond {
         local: &mut Campaigns,
         blocked: Option<&str>,
     ) {
-        // Row 93: a heading in a row adds no space; the row gives the space above it, so its
-        // heading starts `Heading::above` below the rule over it, as a column's heading does.
-        crate::design::gap(ui, crate::design::Gap::XS);
-        ui.horizontal(|ui| {
-            crate::design::heading(
-                ui,
-                crate::design::Heading::Group {
-                    title: "D&D Beyond",
-                    count: 0,
-                },
-            );
-            if self.pending.is_some() {
-                crate::design::spinner(ui);
-                ui.weak("Refreshing…");
-            } else if session.is_none() {
-                ui.weak("Not connected · showing the name saved on this computer");
-            } else {
-                crate::design::status(
-                    ui,
-                    crate::design::Status {
-                        icon: crate::design::icons::ONLINE,
-                        word: "Connected",
-                        color: crate::design::colors().connection.connected,
-                    },
-                );
-            }
-        });
+        // Ruling R24, row 93: the block's heading row is the one form of the Link and folder
+        // page's three values; its note is the link's state.
+        use crate::design::HeadingNote;
+        let note = if self.pending.is_some() {
+            HeadingNote::Busy("Refreshing…")
+        } else if session.is_none() {
+            HeadingNote::Muted("Not connected · showing the name saved on this computer")
+        } else {
+            HeadingNote::Status(crate::design::Status {
+                icon: crate::design::icons::ONLINE,
+                word: "Connected",
+                color: crate::design::colors().connection.connected,
+            })
+        };
+        let (block, _) = crate::design::ValueBlock::new(
+            ui,
+            crate::design::HeadingRow::new("D&D Beyond").note(note),
+        );
+        let (block, ()) = block.field(|ui| self.show_link(ui, session, local, blocked));
+        block.end();
+    }
+
+    /// The link's field: the campaign picker, its refresh and its help.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
+    fn show_link(
+        &mut self,
+        ui: &mut egui::Ui,
+        session: Option<Session>,
+        local: &mut Campaigns,
+        blocked: Option<&str>,
+    ) {
         let Some(campaign) = local.active_campaign() else {
             ui.label("Select a local campaign to configure its D&D Beyond link.");
             return;
