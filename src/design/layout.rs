@@ -1078,10 +1078,7 @@ impl ScrollColumn {
             egui::ScrollArea::vertical()
         }
         .id_salt(self.id)
-        .auto_shrink([false, self.fit_height])
-        // R43: a programmatic scroll arrives in the pass that handles it; egui stores no
-        // animation target for it.
-        .animated(false);
+        .auto_shrink([false, self.fit_height]);
         if let Some(height) = self.max_height {
             area = area.max_height(height);
         }

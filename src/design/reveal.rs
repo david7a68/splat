@@ -14,7 +14,8 @@
 //!   input first, also before the target has drawn; then progress, measured by the column's real
 //!   offset and the target's place in its content. The scroll is the offset the column applies
 //!   at the start of its next pass (`take_offset`), after it checked that pass's input. Nothing
-//!   in the app animates a programmatic scroll (R43, [`super::theme::install`]).
+//!   in the app animates a programmatic scroll (R43, [`super::theme::install`]); the part's own
+//!   offset is not an egui request at all.
 //! - **It ends for good** ([`End`]): the target whole in view; a frame with no progress; a form
 //!   taller than the view after one scroll to its top (Q2.1); any input of the DM's, read where
 //!   the column starts (a wheel, a press or drag, a key, typed, pasted or composed text, an
@@ -1214,8 +1215,9 @@ mod tests {
         );
     }
 
-    /// R43: the installed style animates no scroll, and a programmatic scroll in a column
-    /// arrives whole in one pass.
+    /// R43: the installed style animates no scroll: a programmatic scroll in a column lands
+    /// whole in the second pass after its request (egui applies its zero-length target when the
+    /// next pass begins), and nothing moves after.
     #[test]
     fn no_programmatic_scroll_animates() {
         let ctx = Context::default();
@@ -1227,8 +1229,7 @@ mod tests {
         );
         let mut h = harness(quiet());
         h.state_mut().jump = true;
-        h.step();
-        h.step();
+        h.run_steps(3);
         let first = top(&h, "Page end");
         h.run_steps(10);
         assert!(
