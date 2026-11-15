@@ -7395,7 +7395,8 @@ mod tests {
         use super::super::{
             layout::ScrollColumn,
             pane::{
-                Body, Fills, FillsReason, footer_rect, pane_record, pane_records, short_body_gap,
+                Body, Fills, FillsReason, Placement, footer_rect, pane_record, pane_records,
+                short_body_gap,
             },
         };
         use std::{cell::Cell, rc::Rc};
@@ -7828,7 +7829,8 @@ mod tests {
                 let (record, footer, end) = run(&mut harness);
                 let footer = footer.expect("the footer shows");
                 assert!(
-                    record.fits() && (footer.top() - (end + S)).abs() <= 1.0,
+                    record.placement() == Placement::Follows
+                        && (footer.top() - (end + S)).abs() <= 1.0,
                     "Q-c at {size:?} with {count} reasons: the footer {footer:?} follows the body's end {end} by `S`"
                 );
                 if footer.height() > third + 1.0 {
@@ -7849,7 +7851,7 @@ mod tests {
             let (record, footer, end) = run(&mut harness);
             let footer = footer.expect("the footer shows");
             assert!(
-                record.fits()
+                record.placement() == Placement::Follows
                     && (footer.top() - (end + S)).abs() <= 1.0
                     && (footer.bottom() - room.bottom()).abs() <= 1.0
                     && whole(&harness, 0, footer)
@@ -7864,7 +7866,7 @@ mod tests {
             let (record, footer, end) = run(&mut harness);
             let footer = footer.expect("the footer shows");
             assert!(
-                record.fits()
+                record.placement() == Placement::Follows
                     && (footer.top() - (end + S)).abs() <= 1.0
                     && (footer.bottom() - room.bottom()).abs() <= 1.0,
                 "Q-c at {size:?}: a body {:?} px tall in a view of {view} is followed: footer {footer:?}, body end {end}",
@@ -7874,7 +7876,7 @@ mod tests {
             let (record, footer, _) = run(&mut harness);
             let footer = footer.expect("the footer shows");
             assert!(
-                !record.fits()
+                record.placement() == Placement::Pinned
                     && (footer.bottom() - room.bottom()).abs() <= 1.0
                     && (footer.height() - third).abs() <= 1.0,
                 "Q-c at {size:?}: a body {:?} px tall in a view of {view} pins the footer {footer:?} at a third ({third}) of the pane",
