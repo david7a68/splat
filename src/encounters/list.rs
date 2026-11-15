@@ -1096,7 +1096,7 @@ mod iter_2_c_tests {
                     });
                 });
                 let line = output.shapes.iter().find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.contains("XP 6,300") => {
+                    egui::Shape::Text(text) if text.galley.job.text.ends_with("Above High") => {
                         Some(text.galley.job.text.clone())
                     }
                     _ => None,
@@ -1107,13 +1107,30 @@ mod iter_2_c_tests {
         };
         let rated = lines(Some(&rating));
         const FORM: &str = " · XP 6,300 · Above High";
+        // Q-s (iter-29 G120): the word never gives way; `5 party` goes first, then the XP number,
+        // then the creatures from the end. So a line that lost a creature lost those two too.
         for line in &rated {
-            let shown = line.strip_suffix(FORM);
+            assert!(line.ends_with("Above High"), "{line:?}");
+            if !line.contains("Cinder Tyrant") || !line.contains("Ember Cultist") {
+                assert!(
+                    !line.contains("XP 6,300") && !line.contains("5 party"),
+                    "{line:?}"
+                );
+            }
+            // What is left of the summary is the summary's own start, in order: whole, or cut
+            // with `…` where it gave way, never corrupt partial words.
+            let shown = line
+                .strip_suffix(" · Above High")
+                .map(|rest| rest.strip_suffix(" · XP 6,300").unwrap_or(rest))
+                .unwrap_or("");
+            let shown = shown.strip_prefix("5 party · ").unwrap_or(shown);
+            let tail = detail.strip_prefix("5 party · ").unwrap();
             assert!(
-                shown.is_some_and(|shown| shown == detail
+                shown.is_empty()
+                    || shown == tail
                     || shown.strip_suffix('…').is_some_and(|cut| {
-                        detail.starts_with(cut.trim_end_matches([' ', '·', ',']))
-                    })),
+                        tail.starts_with(cut.trim_end_matches([' ', '·', ',']))
+                    }),
                 "{line:?}"
             );
         }

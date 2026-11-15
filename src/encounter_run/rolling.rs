@@ -1373,7 +1373,9 @@ impl Run {
         // X65: notes and Lookup hide the panel with the saves, so one word leads there. It is
         // first on this line, so no control of the dock moves and the selected name keeps
         // its slot when a row drops to 0 HP.
-        let death_saves = self.state.participants[self.selected].hp == Some(0);
+        // FK5 (iter-29 G130): the word leads only where the panel has death saves to show
+        // (`shows_death_saves`): an enemy at 0 HP with no save recorded has none.
+        let death_saves = self.state.participants[self.selected].shows_death_saves();
         let open_side = ui
             .horizontal(|ui| {
                 // FK7: a quiet action that starts the line; its word starts at the dock's text
@@ -1484,6 +1486,40 @@ mod tests {
         }
         run.apply(Command::Begin).unwrap();
         run
+    }
+
+    /// FK5 (iter-29 G130): the compact line's `Death saves` leads to the panel's death saves,
+    /// so it shows only where the panel has them: a party row at 0 HP, not an enemy at 0 HP
+    /// with no save recorded.
+    #[test]
+    fn the_compact_line_offers_death_saves_only_where_the_panel_has_them() {
+        use egui_kittest::kittest::Queryable;
+        use std::{cell::RefCell, rc::Rc};
+        let mut run = live();
+        // The fixture's creature starts with a recorded success; this enemy has none.
+        let p = &mut run.state.participants[0];
+        (p.hp, p.successes, p.failures) = (Some(0), 0, 0);
+        run.selected = 0;
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 200.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| shown.borrow_mut().compact_actions(ui));
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Death saves").is_none(),
+            "iter-29-R1-G130: an enemy at 0 HP"
+        );
+        run.borrow_mut().state.participants[0].side = "party".into();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Death saves").is_some(),
+            "a party row at 0 HP"
+        );
     }
 
     fn attack() -> RollLink {
