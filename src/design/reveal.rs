@@ -143,7 +143,9 @@ impl Act {
             frame,
             id,
             exempt,
-            column: owning_region(ui).map(|(_, region)| region.key),
+            column: owning_region(ui)
+                .filter(|(_, region)| region.hosts)
+                .map(|(_, region)| region.key),
         })
     }
 
@@ -152,7 +154,9 @@ impl Act {
     #[cfg(test)]
     pub(crate) fn test(ui: &Ui, salt: impl Hash) -> Self {
         Self {
-            column: owning_region(ui).map(|(_, region)| region.key),
+            column: owning_region(ui)
+                .filter(|(_, region)| region.hosts)
+                .map(|(_, region)| region.key),
             ..Self::outside(ui.ctx(), salt)
         }
     }
@@ -188,7 +192,8 @@ pub enum End {
     /// The keyboard focus moved after the ask (other than the opener's one focus in the form).
     Focus,
     OwnerGone,
-    /// The pressed control is not in a `ScrollColumn`: nothing the part may scroll.
+    /// The pressed control is not in a `ScrollColumn` that hosts reveals (R46): nothing the
+    /// part may scroll.
     Unowned,
     Bound,
     Replaced,
@@ -293,8 +298,8 @@ impl Reveal {
     /// Ask at `act` for the form `target` of `visit` (the owner's object and what it shows now,
     /// such as the remote campaign and the campaign open) to come whole into view, in the column
     /// of the pressed control. An act of an older frame asks for nothing; an act outside a
-    /// `ScrollColumn` ends `Unowned`; a new ask replaces the request before it, also another
-    /// owner's in the same column.
+    /// `ScrollColumn` that hosts reveals (`ScrollColumn::hosts_reveals`, R46) ends `Unowned`; a
+    /// new ask replaces the request before it, also another owner's in the same column.
     pub fn ask(&mut self, act: Act, visit: impl Hash, target: impl Hash) {
         if act.ctx.cumulative_frame_nr() != act.frame {
             return;
@@ -428,7 +433,7 @@ fn focus_allowed(ctx: &Context, run: &mut Run, form: Option<Rect>) -> bool {
 /// Whether a reveal runs in the column that `ui` is drawn in: the pane's focus reveal then makes
 /// no request into it.
 pub(super) fn holds(ui: &Ui) -> bool {
-    let Some((_, region)) = owning_region(ui) else {
+    let Some((_, region)) = owning_region(ui).filter(|(_, region)| region.hosts) else {
         return false;
     };
     running(ui.ctx())
@@ -487,12 +492,22 @@ fn dm_input(facts: &Facts, run: &Run) -> bool {
     false
 }
 
+/// A `ScrollColumn`: its persistent key, and whether it may host a reveal (R46,
+/// `ScrollColumn::hosts_reveals`).
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Column {
+    pub key: Id,
+    pub hosts: bool,
+}
+
 /// A `ScrollColumn`'s facts in one pass, recorded where its content starts.
 #[derive(Clone, Copy, Debug)]
 struct Region {
     pass: u64,
     /// The column's persistent key, which [`take_offset`] reads.
     key: Id,
+    /// The column may host a reveal: only then does an act bind it.
+    hosts: bool,
     /// The visible view, in screen points: the area's native viewport inside its clip.
     view: Rect,
     /// The content's top, in screen points.
@@ -522,7 +537,12 @@ fn owning_region(ui: &Ui) -> Option<(Id, Region)> {
 
 /// The offset the request of the column `key` queued for this pass, taken once, after this
 /// pass's input is checked. `ScrollColumn` calls it before its area begins.
-pub(super) fn take_offset(ui: &Ui, key: Id) -> Option<f32> {
+pub(super) fn take_offset(ui: &Ui, column: Column) -> Option<f32> {
+    // A column that hosts no reveal holds no request: no registry read.
+    if !column.hosts {
+        return None;
+    }
+    let key = column.key;
     let frame = ui.ctx().cumulative_frame_nr();
     let run = running(ui.ctx())
         .into_iter()
@@ -548,12 +568,19 @@ pub(super) fn take_offset(ui: &Ui, key: Id) -> Option<f32> {
 /// Run `add` as the content of the scroll column `key`, whose content `Ui` is `ui` and whose
 /// viewport (egui's, in content points) is `viewport`; then resolve the request of this column.
 /// `ScrollColumn` calls it; only it may.
-pub(super) fn region<R>(ui: &mut Ui, key: Id, viewport: Rect, add: impl FnOnce(&mut Ui) -> R) -> R {
+pub(super) fn region<R>(
+    ui: &mut Ui,
+    column: Column,
+    viewport: Rect,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let key = column.key;
     let origin = ui.max_rect().min.to_vec2();
     let view = viewport.translate(origin).intersect(ui.clip_rect());
     let region = Region {
         pass: ui.ctx().cumulative_pass_nr(),
         key,
+        hosts: column.hosts,
         view,
         origin: origin.y,
         offset: viewport.top(),
@@ -561,6 +588,10 @@ pub(super) fn region<R>(ui: &mut Ui, key: Id, viewport: Rect, add: impl FnOnce(&
     let content = ui.unique_id();
     ui.ctx()
         .data_mut(|data| data.insert_temp(region_id(content), region));
+    if !column.hosts {
+        // No request can bind here: no input copy and no registry read.
+        return add(ui);
+    }
     // The DM's input, read before any child can consume a key.
     let facts = facts(ui);
     let inner = add(ui);
@@ -700,6 +731,10 @@ mod tests {
         open_id: Option<Id>,
         /// Room above `Open`, which moves it down.
         open_down: f32,
+        /// Room between the form and `Page end`.
+        after: f32,
+        /// The outer column does not host reveals.
+        plain: bool,
     }
 
     impl Page {
@@ -730,6 +765,8 @@ mod tests {
                 waiting: false,
                 open_id: None,
                 open_down: 0.0,
+                after: 0.0,
+                plain: false,
             }
         }
     }
@@ -806,6 +843,7 @@ mod tests {
             room(ui, page.above);
             target(ui, page);
         }
+        room(ui, page.after);
         let end = ui.label("Page end").rect;
         if std::mem::take(&mut page.jump) {
             ui.scroll_to_rect(end, None);
@@ -824,7 +862,11 @@ mod tests {
                         // A scroll area that is not a `ScrollColumn`.
                         super::super::sideways_scroll(ui, "raw", |ui| content(ui, page));
                     } else {
-                        super::super::ScrollColumn::new("outer").show(ui, |ui| content(ui, page));
+                        let mut column = super::super::ScrollColumn::new("outer");
+                        if !page.plain {
+                            column = column.hosts_reveals();
+                        }
+                        column.show(ui, |ui| content(ui, page));
                     }
                 },
                 page,
@@ -1224,6 +1266,92 @@ mod tests {
             (top(&h, "Outer top") - before).abs() < 0.5,
             "the column moved after the focus change"
         );
+    }
+
+    /// R46: a column that does not host reveals binds no request: the act ends `Unowned` and
+    /// nothing moves.
+    #[test]
+    fn only_a_column_that_hosts_reveals_binds() {
+        let mut page = Page::new();
+        page.plain = true;
+        let mut h = harness(page);
+        let before = top(&h, "Target top");
+        h.run_steps(8);
+        assert_eq!(h.state().reveal.ended(), Some(End::Unowned));
+        assert!(
+            (top(&h, "Target top") - before).abs() < 0.5,
+            "a column that hosts no reveal moved"
+        );
+    }
+
+    /// The tops of the page's markers, for a picture-by-picture comparison.
+    fn picture(h: &egui_kittest::Harness<'_, Page>) -> [f32; 3] {
+        [
+            top(h, "Outer top"),
+            top(h, "Target top"),
+            top(h, "Page end"),
+        ]
+    }
+
+    /// From the pass in which the reveal ended, every following pass shows the same picture.
+    fn still_after(h: &mut egui_kittest::Harness<'_, Page>, case: &str) {
+        let last = picture(h);
+        for step in 0..10 {
+            h.step();
+            assert_eq!(
+                picture(h),
+                last,
+                "{case}: the column moved {step} passes after the reveal ended ({:?})",
+                h.state().reveal.ended()
+            );
+        }
+    }
+
+    /// F1 (R46): an older egui request in the reveal's column never lands after the reveal
+    /// ended. (a) A raw request in pass A, then an open whose form is whole, in pass B; (b) the
+    /// same, with text typed in B; (c) a raw request in the same pass as the part's own move.
+    #[test]
+    fn no_older_request_lands_after_a_reveal_ends() {
+        // (a) The page end sits 40 points below the view, so the raw request moves the column a
+        // little and the form stays whole.
+        let mut page = quiet();
+        page.above = 0.0;
+        let mut h = harness(page);
+        let end = h.get_by_label("Page end").rect().bottom();
+        h.state_mut().after = HEIGHT + 40.0 - end;
+        h.run_steps(2);
+        h.state_mut().jump = true;
+        h.step();
+        h.state_mut().ask = true;
+        h.step();
+        assert_eq!(h.state().reveal.ended(), Some(End::Whole), "(a)");
+        still_after(&mut h, "(a)");
+        // (b) A running reveal, cancelled by text in its own pass, after a raw request.
+        let mut h = harness(quiet());
+        h.state_mut().after = 400.0;
+        h.state_mut().jump = true;
+        h.step();
+        h.state_mut().ask = true;
+        h.event(egui::Event::Text("s".into()));
+        h.step();
+        assert_eq!(h.state().reveal.ended(), Some(End::ByTheDm), "(b)");
+        still_after(&mut h, "(b)");
+        // (c) The open's own move and a raw request to the page's end in one pass: the reveal's
+        // offset wins and the form shows whole; nothing moves after.
+        let mut h = harness(quiet());
+        h.state_mut().after = 400.0;
+        h.state_mut().ask = true;
+        h.state_mut().jump = true;
+        h.step();
+        for _ in 0..4 {
+            if !h.state().reveal.running() {
+                break;
+            }
+            h.step();
+        }
+        assert_eq!(h.state().reveal.ended(), Some(End::Whole), "(c)");
+        assert!(in_view(&h), "(c): the form is not whole");
+        still_after(&mut h, "(c)");
     }
 
     /// R43: the installed style animates no scroll: a programmatic scroll in a column lands

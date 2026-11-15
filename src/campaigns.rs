@@ -2196,15 +2196,17 @@ mod tests {
                         let room = |ui: &mut egui::Ui| {
                             ui.allocate_exact_size(egui::vec2(1.0, 900.0), egui::Sense::hover());
                         };
-                        design::ScrollColumn::new("column").show(ui, |ui| {
-                            room(ui);
-                            if opening.replace(false) {
-                                let act = design::reveal::Act::test(ui, 0);
-                                campaigns.start_import(act, "7", "Salt Road");
-                            }
-                            campaigns.show_import_form(ui, "7");
-                            room(ui);
-                        });
+                        design::ScrollColumn::new("column")
+                            .hosts_reveals()
+                            .show(ui, |ui| {
+                                room(ui);
+                                if opening.replace(false) {
+                                    let act = design::reveal::Act::test(ui, 0);
+                                    campaigns.start_import(act, "7", "Salt Road");
+                                }
+                                campaigns.show_import_form(ui, "7");
+                                room(ui);
+                            });
                     },
                     campaigns,
                 );
@@ -2328,6 +2330,30 @@ mod tests {
             (after - before).abs() < 0.5 && !h.state().reveal_running() && !in_view(&h, 300.0),
             "a resize after the DM typed moved the form: Add campaign {before} then {after}"
         );
+        // After the reveal ended, the DM scrolls the form away and types in its focused name
+        // field: egui's caret follow still brings the field back (R46 keeps caret navigation).
+        let mut h = scrolled(400.0);
+        h.run_steps(8);
+        assert_eq!(h.state().reveal_ended(), Some(design::reveal::End::Whole));
+        wheel(&mut h, 600.0);
+        h.run_steps(6);
+        let name = |h: &egui_kittest::Harness<'_, Campaigns>| {
+            h.query_all_by_label("Campaign name")
+                .find(|node| node.is_focused())
+                .map(|node| node.rect())
+        };
+        let away = name(&h).expect("the focused name field");
+        assert!(
+            away.top() > 400.0,
+            "the wheel did not take the field away: {away:?}"
+        );
+        h.event(egui::Event::Text("e".into()));
+        h.run_steps(4);
+        let back = name(&h).expect("the focused name field");
+        assert!(
+            back.top() >= -0.5 && back.bottom() <= 400.5,
+            "typing in the field scrolled out of view did not bring it back: {back:?}"
+        );
         // Untouched, a smaller window does not bring the reveal back (R34: it never repeats):
         // the form stays where it is, with no second scroll.
         let mut h = scrolled(400.0);
@@ -2356,7 +2382,8 @@ mod tests {
                     |ui, (campaigns, dndbeyond): &mut (Campaigns, crate::dndbeyond::DndBeyond)| {
                         dndbeyond.poll(ui.ctx(), 0, true, campaigns);
                         let footer = design::Footer::new("settings_footer", WIDTH);
-                        footer.pane(ui, design::Body::Content, |ui| {
+                        let scroll = design::pane::ContentScroll::default().hosts_reveals();
+                        footer.pane_content(ui, scroll, |ui| {
                             // 700 px of the account section above the list.
                             ui.allocate_exact_size(egui::vec2(1.0, 700.0), egui::Sense::hover());
                             campaigns.show(ui, Some(session.clone()), dndbeyond, None);

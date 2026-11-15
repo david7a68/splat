@@ -1016,6 +1016,7 @@ pub struct ScrollColumn {
     offset: Option<f32>,
     sideways: bool,
     full_width: bool,
+    hosts_reveals: bool,
 }
 
 impl ScrollColumn {
@@ -1028,7 +1029,17 @@ impl ScrollColumn {
             offset: None,
             sideways: false,
             full_width: false,
+            hosts_reveals: false,
         }
+    }
+
+    /// R46: this column may host a reveal (`design::reveal`). Its programmatic scrolls land in
+    /// the pass that handles them and egui stores no target for them, so no older request (a
+    /// focus scroll, a caret follow) lands after a reveal ended. A reveal asked from any other
+    /// column ends `Unowned`; those columns keep egui's one delayed jump (R43).
+    pub fn hosts_reveals(mut self) -> Self {
+        self.hosts_reveals = true;
+        self
     }
 
     pub fn max_height(mut self, height: f32) -> Self {
@@ -1078,7 +1089,8 @@ impl ScrollColumn {
             egui::ScrollArea::vertical()
         }
         .id_salt(self.id)
-        .auto_shrink([false, self.fit_height]);
+        .auto_shrink([false, self.fit_height])
+        .animated(!self.hosts_reveals);
         if let Some(height) = self.max_height {
             area = area.max_height(height);
         }
@@ -1093,13 +1105,16 @@ impl ScrollColumn {
 
     /// The area for this pass in `ui` (the `Ui` it is shown in), and its persistent key for a
     /// reveal (`design::reveal`): a reveal's offset, written in the last frame, wins once.
-    fn area_in(&self, ui: &Ui) -> (egui::ScrollArea, Id) {
-        let key = ui.make_persistent_id(("design_reveal_column", self.id));
+    fn area_in(&self, ui: &Ui) -> (egui::ScrollArea, super::reveal::Column) {
+        let column = super::reveal::Column {
+            key: ui.make_persistent_id(("design_reveal_column", self.id)),
+            hosts: self.hosts_reveals,
+        };
         let mut area = self.area();
-        if let Some(offset) = super::reveal::take_offset(ui, key) {
+        if let Some(offset) = super::reveal::take_offset(ui, column) {
             area = area.vertical_scroll_offset(offset);
         }
-        (area, key)
+        (area, column)
     }
 
     /// Run `add` in a child `Ui` with the app's scroll style, and the content's width: the
@@ -1122,9 +1137,9 @@ impl ScrollColumn {
         // at the text edge (P3a): the surface covers the hang, and nothing moves.
         let Some(reach) = super::pane::column_reach(ui, lane_width()) else {
             return Self::styled(ui, |ui, width| {
-                let (area, key) = self.area_in(ui);
+                let (area, column) = self.area_in(ui);
                 area.show_viewport(ui, |ui, viewport| {
-                    super::reveal::region(ui, key, viewport, |ui| {
+                    super::reveal::region(ui, column, viewport, |ui| {
                         if !sideways {
                             ui.set_max_width(width);
                         }
@@ -1138,9 +1153,9 @@ impl ScrollColumn {
         };
         super::pane::reaching(ui, reach, |ui| {
             Self::styled(ui, |ui, width| {
-                let (area, key) = self.area_in(ui);
+                let (area, column) = self.area_in(ui);
                 area.show_viewport(ui, |ui, viewport| {
-                    super::reveal::region(ui, key, viewport, |ui| {
+                    super::reveal::region(ui, column, viewport, |ui| {
                         if !sideways {
                             ui.set_max_width(width);
                         }
@@ -1169,9 +1184,9 @@ impl ScrollColumn {
         add: impl FnOnce(&mut Ui) -> R,
     ) -> ScrollAreaOutput<R> {
         Self::styled(ui, |ui, width| {
-            let (area, key) = self.area_in(ui);
+            let (area, column) = self.area_in(ui);
             area.show_viewport(ui, |ui, viewport| {
-                super::reveal::region(ui, key, viewport, |ui| {
+                super::reveal::region(ui, column, viewport, |ui| {
                     ui.set_max_width(width);
                     add(ui)
                 })
@@ -1216,9 +1231,9 @@ impl ScrollColumn {
         }
         Self::styled(ui, |ui, width| {
             let (full, id) = (self.full_width, self.id);
-            let (area, key) = self.area_in(ui);
+            let (area, column) = self.area_in(ui);
             area.show_viewport(ui, |ui, viewport| {
-                super::reveal::region(ui, key, viewport, |ui| {
+                super::reveal::region(ui, column, viewport, |ui| {
                     ui.set_max_width(width);
                     if full {
                         ui.set_min_width(width);
