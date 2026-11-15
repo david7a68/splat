@@ -773,65 +773,95 @@ impl GroupDraft {
     /// Save's check, without writing. A refusal says whether the editor already shows the fault
     /// in its place (a member row's missing creature or change that cannot stand, or the empty
     /// group's reason beside Save), so the footer does not repeat it.
+    ///
+    /// Lead ruling (s30 B11, R41): of all the faults, Save names the most severe by the diagnosis
+    /// rank (`Diagnosis::outranks`: a change that cannot stand before a thing that is gone, before
+    /// a missing part), then the first in order among equals: the group's own fields, then the
+    /// members in their order. So the save row's word, the words beside Save, the footer's next
+    /// step and the Session plan's editor all read the one chosen fault.
     pub(super) fn check(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), Refusal> {
         #[cfg(test)]
         GROUP_CHECKS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
-        let missing = self.check_group(snapshot, saving)?;
+        // A refusal in the error tone is a change that cannot stand: nothing a group's check
+        // finds outranks it (F4: it never meets unreadable data), so the first one ends the check.
+        let ends = |refusal: &Refusal| refusal.tone() == Tone::Error;
+        let mut chosen = match self.check_group(snapshot, saving) {
+            Err(refusal) if ends(&refusal) => return Err(refusal),
+            Err(refusal) => Some(refusal),
+            Ok(missing) => missing,
+        };
         for member in &self.setup.members {
-            // The row says a missing creature as a warning, a change that cannot stand as an
-            // error (`FaultKind::InvalidChange`).
-            // FA1: Save's check names a member as every view does. A draft's lines may have
-            // moved since the note was read, so it names no line.
-            let changed = member
-                .overrides
-                .get("name")
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-            let resolved_id = snapshot.catalogue.resolve_ref(&member.creature);
-            let base = resolved_id
-                .as_ref()
-                .ok()
-                .and_then(|id| snapshot.catalogue.entries.get(id))
-                .map(|entry| entry.entry.name.clone());
-            let shown = match (&changed, &base) {
-                (Some(changed), _) if !changed.trim().is_empty() => changed.trim().to_owned(),
-                (_, Some(base)) => base.clone(),
-                _ => missing_member_name(None, member.creature.link.as_deref()),
+            let Err(refusal) = self.check_member(member, snapshot) else {
+                continue;
             };
-            let in_place =
-                |text: String, kind: FaultKind| Refusal::in_row(text, kind, member.id.0, &shown);
-            let fault = |cause: &str| member_fault(&shown, base.as_deref(), None, cause);
-            let not_in_place = |cause: &str| Refusal::refused(fault(cause), RefusalPlace::Footer);
-            if !(1..=MAX_COUNT).contains(&member.count) {
-                return Err(not_in_place(&format!(
-                    "count must be from 1 to {MAX_COUNT}"
-                )));
+            if ends(&refusal) {
+                return Err(refusal);
             }
-            let id = resolved_id.map_err(|_| {
-                in_place(
-                    fault("not in this campaign’s packages"),
-                    FaultKind::NotInPackages,
-                )
-            })?;
-            let creature = snapshot
-                .creatures
-                .iter()
-                .find(|c| c.id == id)
-                .ok_or_else(|| not_in_place("this creature is unavailable in campaign content"))?;
-            if creature.linked {
-                return Err(not_in_place(LINKED_CAUSE));
-            }
-            let invalid = FaultKind::InvalidChange;
-            let overrides =
-                Overrides::parse(&member.overrides).map_err(|e| in_place(fault(&e), invalid))?;
-            let resolved = overrides
-                .resolve_for(&snapshot.catalogue.entries[&id].entry, &self.setup.side)
-                .map_err(|e| in_place(fault(&e), invalid))?;
-            if resolved.max_hp.is_none() {
-                return Err(not_in_place(NO_MAX_HP_CAUSE));
+            if chosen
+                .as_ref()
+                .is_none_or(|kept| refusal.diagnosis().outranks(kept.diagnosis()))
+            {
+                chosen = Some(refusal);
             }
         }
-        missing.map_or(Ok(()), Err)
+        chosen.map_or(Ok(()), Err)
+    }
+
+    /// One member's fault, if it has one: the first that its checks find.
+    fn check_member(&self, member: &MemberDraft, snapshot: &Snapshot) -> Result<(), Refusal> {
+        // The row says a missing creature as a warning, a change that cannot stand as an
+        // error (`FaultKind::InvalidChange`).
+        // FA1: Save's check names a member as every view does. A draft's lines may have
+        // moved since the note was read, so it names no line.
+        let changed = member
+            .overrides
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let resolved_id = snapshot.catalogue.resolve_ref(&member.creature);
+        let base = resolved_id
+            .as_ref()
+            .ok()
+            .and_then(|id| snapshot.catalogue.entries.get(id))
+            .map(|entry| entry.entry.name.clone());
+        let shown = match (&changed, &base) {
+            (Some(changed), _) if !changed.trim().is_empty() => changed.trim().to_owned(),
+            (_, Some(base)) => base.clone(),
+            _ => missing_member_name(None, member.creature.link.as_deref()),
+        };
+        let in_place =
+            |text: String, kind: FaultKind| Refusal::in_row(text, kind, member.id.0, &shown);
+        let fault = |cause: &str| member_fault(&shown, base.as_deref(), None, cause);
+        let not_in_place = |cause: &str| Refusal::refused(fault(cause), RefusalPlace::Footer);
+        if !(1..=MAX_COUNT).contains(&member.count) {
+            return Err(not_in_place(&format!(
+                "count must be from 1 to {MAX_COUNT}"
+            )));
+        }
+        let id = resolved_id.map_err(|_| {
+            in_place(
+                fault("not in this campaign’s packages"),
+                FaultKind::NotInPackages,
+            )
+        })?;
+        let creature = snapshot
+            .creatures
+            .iter()
+            .find(|c| c.id == id)
+            .ok_or_else(|| not_in_place("this creature is unavailable in campaign content"))?;
+        if creature.linked {
+            return Err(not_in_place(LINKED_CAUSE));
+        }
+        let invalid = FaultKind::InvalidChange;
+        let overrides =
+            Overrides::parse(&member.overrides).map_err(|e| in_place(fault(&e), invalid))?;
+        let resolved = overrides
+            .resolve_for(&snapshot.catalogue.entries[&id].entry, &self.setup.side)
+            .map_err(|e| in_place(fault(&e), invalid))?;
+        if resolved.max_hp.is_none() {
+            return Err(not_in_place(NO_MAX_HP_CAUSE));
+        }
+        Ok(())
     }
     /// The group's own fields, before its members.
     /// `Err` for a change that cannot stand; `Ok(Some(..))` for the first missing part, which the

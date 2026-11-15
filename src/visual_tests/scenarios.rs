@@ -18673,25 +18673,25 @@ pub mod encounter_groups {
             "At the minimum window, an open form says in view that its change cannot stand",
         );
         d.state("group-invalid-change", Sizes::Default);
-        // s30 B11 (R41): Save refuses the first member fault, the creature that is not in the
-        // packages, a warning in its row. The save row's `Invalid` and the words beside Save
-        // that point at that row take its tone, at each size where they show.
+        // s30 B11 (R41; lead ruling): Save refuses the MOST SEVERE member fault, then the first
+        // in member order: Cinder Wolf's change that cannot stand (an error) outranks the
+        // creature that is not in the packages (a warning) before it. The save row's `Invalid`,
+        // the refused row's own fault and any words beside Save take its tone, at each size.
         let tones = [SMALL, DEFAULT, LARGE].map(|size| {
             d.at_size(size, |d| {
                 (
                     status_tones(d, "Invalid"),
+                    tones_beside(d, "Maximum HP would become −28"),
                     tones_beside(d, "A creature here cannot be saved. See its row."),
                 )
             })
         });
         d.observe(
             "s30-B11-tone-member-refusal",
-            tones.iter().all(|(word, _)| word == &["warning"])
-                && tones.iter().any(|(_, beside)| !beside.is_empty())
-                && tones
-                    .iter()
-                    .all(|(word, beside)| beside.iter().all(|tone| word.contains(tone))),
-            format!("Invalid and the words beside Save at 960, 1200 and 1920: {tones:?}"),
+            tones.iter().all(|(word, row, beside)| {
+                word == &["error"] && row == &["error"] && beside.iter().all(|tone| *tone == "error")
+            }),
+            format!("Invalid, the refused row and the words beside Save at 960, 1200 and 1920: {tones:?}"),
         );
         // The fault sits under the Maximum HP field at its left edge, once, and the preview
         // beside the field takes the error colour.

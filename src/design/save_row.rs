@@ -168,6 +168,21 @@ impl<'a> Diagnosis<'a> {
         }
     }
 
+    /// Whether this diagnosis's first-ranked fault outranks `other`'s, by the one rule of
+    /// [`Self::cause`]. Equals do not outrank each other, so a caller that keeps the first of
+    /// equals keeps the order of report among them (lead ruling, s30 B11: a group names its most
+    /// severe member fault, then the first in member order).
+    pub fn outranks(&self, other: &Diagnosis<'_>) -> bool {
+        let rank = |cause: Option<InvalidCause>| match cause {
+            None => 0,
+            Some(InvalidCause::Incomplete) => 1,
+            Some(InvalidCause::Missing) => 2,
+            Some(InvalidCause::Refused) => 3,
+            Some(InvalidCause::Unreadable) => 4,
+        };
+        rank(self.cause()) > rank(other.cause())
+    }
+
     /// The tone of the first-ranked fault (R41): every place that says this fault (the save
     /// row's word, a field's message, the footer) paints it in this tone. `None` when nothing
     /// is wrong.
@@ -853,6 +868,19 @@ mod tests {
             );
         }
         assert_eq!(Diagnosis::valid().tone(), None);
+        // The rank of `cause` orders whole diagnoses too; equals do not outrank each other.
+        let ranked = [
+            Diagnosis::valid(),
+            Diagnosis::incomplete("a"),
+            Diagnosis::missing("a"),
+            Diagnosis::refused("a"),
+            Diagnosis::unreadable(),
+        ];
+        for (i, low) in ranked.iter().enumerate() {
+            for (j, high) in ranked.iter().enumerate() {
+                assert_eq!(high.outranks(low), j > i, "{high:?} over {low:?}");
+            }
+        }
         for fault in [warning, error] {
             assert_ne!(tone(SaveWord::New).0, fault.0, "New has no fault icon");
             assert_ne!(tone(SaveWord::New).1, fault.1, "New has no fault colour");
