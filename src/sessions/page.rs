@@ -7986,7 +7986,7 @@ impl Sessions {
         let folder = path.parent().expect("the session folder");
         let away = folder
             .parent()
-            .expect("the folder's parent")
+            .expect("the parent of the folder")
             .join("note-gone-for-a-while.md");
         fs::rename(&path, &away).expect("the note moves away");
         draft.body.push_str("\nTyped after the file went.\n");
