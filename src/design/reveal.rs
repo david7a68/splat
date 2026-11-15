@@ -294,7 +294,7 @@ impl Reveal {
             deadline: act.frame + DEADLINE,
             left: PASSES,
             column: act.column.unwrap_or(Id::NULL),
-            focus: act.ctx.memory(|memory| memory.focused()),
+            focus: focus(&act.ctx, act.id),
             focus_moved: false,
             marked: None,
             drawn: false,
@@ -364,6 +364,13 @@ impl Reveal {
             run.marked = Some((target_rect, content, ui.ctx().cumulative_pass_nr()));
         }
     }
+}
+
+/// The keyboard focus, other than the pressed control's own (which the press may give it, and
+/// which ends when the opened form replaces the control).
+fn focus(ctx: &Context, act: Id) -> Option<Id> {
+    ctx.memory(|memory| memory.focused())
+        .filter(|focused| *focused != act)
 }
 
 /// Whether a reveal runs in the column that `ui` is drawn in: the pane's focus reveal then makes
@@ -464,7 +471,7 @@ pub(super) fn take_offset(ui: &Ui, key: Id) -> Option<f32> {
         return None;
     }
     // A focus change since the last pass, other than the opener's one focus in the form.
-    let focused = ui.ctx().memory(|memory| memory.focused());
+    let focused = focus(ui.ctx(), run.act_id);
     if focused != run.focus {
         let inside = run.marked.is_some_and(|(form, ..)| {
             focused
@@ -544,7 +551,7 @@ fn resolve(ui: &Ui, run: &mut Run, region: &Region, content: Id, input: bool) {
         .filter(|&(_, at, marked)| at == content && marked == pass)
         .map(|(rect, ..)| rect);
     // The focus at the ask may change once, to a control inside the form (the opener's focus).
-    let focused = ui.ctx().memory(|memory| memory.focused());
+    let focused = focus(ui.ctx(), run.act_id);
     if focused != run.focus {
         let inside = target.is_some_and(|target| {
             focused
