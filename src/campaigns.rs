@@ -2421,5 +2421,12 @@ mod tests {
             cut(&h),
             h.state().0.reveal_ended()
         );
+        // The opened form's name field keeps the keyboard: the reveal reads the focused field's
+        // place without taking its focus.
+        assert!(
+            h.query_all_by_label("Campaign name")
+                .any(|node| node.accesskit_node().is_focused()),
+            "the opened form's name field lost the keyboard focus"
+        );
     }
 }
