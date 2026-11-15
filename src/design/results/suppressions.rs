@@ -21,6 +21,10 @@ pub(crate) enum Ban {
     Sentence,
     /// Package M: `Footer::outcome_at`, a result with a hand-issued order (staged).
     Order,
+    /// Ruling Q-x: `Messages::answer`, the answer to the DM's last act that leads the footer. The
+    /// part cannot prove that a fault is the newest answer to an act, so each use is a counted
+    /// review decision.
+    Answer,
     /// Package M: the body places `banner`, `row_fault`, `PagePlaceholder::show`, `BodyFault::show`
     /// and `RowMessages::new` (ruling R24). A named escape: a body message is a review decision.
     Body,
@@ -46,6 +50,16 @@ pub(crate) enum Ban {
 }
 
 impl Ban {
+    /// The bans whose call text names nothing else, so a call of one in an item whose row does
+    /// not list it is refused even when the row lists another ban. (`Results`, `Words` and
+    /// `Body` match ordinary calls too: `::issue_count_title`, `outside_after`, `.show(`; they
+    /// need a token-exact match first.)
+    pub(crate) const EXACT: [Ban; 3] = [Ban::Sentence, Ban::Order, Ban::Answer];
+
+    /// The bans an allowed item may call exactly once (`Messages::answer`: ruling Q-x's one
+    /// answer to the DM's last act, one call site).
+    pub(crate) const ONCE: [Ban; 1] = [Ban::Answer];
+
     /// Text that one of this ban's calls leaves in a function that still needs its allow.
     fn calls(self) -> &'static [&'static str] {
         match self {
@@ -62,6 +76,7 @@ impl Ban {
                 "__checked",
             ],
             Self::Order => &["outcome_at"],
+            Self::Answer => &[".answer(", "Messages::answer"],
             Self::Body => &["banner", "row_fault", ".show(", "RowMessages::new"],
             // Counted in the item's tokens instead (`check`).
             Self::Layout(_)
@@ -317,6 +332,26 @@ fn row_messages_calls(body: &str) -> usize {
 }
 
 /// Every suppression in `files` against `table`: one row per suppression (file, item, bans).
+/// How many calls of an exact-text ban `body` holds, with strings and comments blanked. A
+/// `Messages::answer` is counted called or referenced (`let f = Messages::answer;`), and not
+/// when an identifier character follows (`Messages::answer_all`). A text scan, as
+/// `row_messages_calls`: not syntax-aware (a token-aware checker is a known limit).
+fn exact_calls(ban: Ban, body: &str) -> usize {
+    let code = code_only(body);
+    ban.calls()
+        .iter()
+        .map(|call| {
+            code.match_indices(call)
+                .filter(|(at, _)| {
+                    !call.ends_with(|c: char| c.is_alphanumeric() || c == '_')
+                        || !code[at + call.len()..]
+                            .starts_with(|c: char| c.is_alphanumeric() || c == '_')
+                })
+                .count()
+        })
+        .sum()
+}
+
 pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) -> Vec<String> {
     let mut faults = Vec::new();
     let mut rows: Vec<(&str, &str, &[Ban])> = table.to_vec();
@@ -373,6 +408,25 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                                 "{path}:{}: `{}` does not lex: {error}",
                                 suppression.line, suppression.item
                             )),
+                        }
+                    }
+                    // A call of a ban that the row does not list is not allowed by the row's
+                    // other bans (a `Ban::Order` row does not allow `answer`).
+                    for ban in Ban::EXACT {
+                        if !bans.contains(&ban) && exact_calls(ban, &suppression.body) > 0 {
+                            faults.push(format!(
+                                "{path}:{}: `{}` calls {ban:?} but its row in `design::results::STAGED_ALLOWS` does not list it.",
+                                suppression.line, suppression.item
+                            ));
+                        }
+                    }
+                    for ban in Ban::ONCE {
+                        let calls = exact_calls(ban, &suppression.body);
+                        if bans.contains(&ban) && calls != 1 {
+                            faults.push(format!(
+                                "{path}:{}: `{}` holds {calls} {ban:?} calls; its row allows exactly one.",
+                                suppression.line, suppression.item
+                            ));
                         }
                     }
                     // R24: `RowMessages::new` is counted on its own, in every allowed item,
@@ -496,6 +550,47 @@ mod tests {
         let order = "#[allow(\n    clippy::disallowed_methods,\n    reason = \"staged\"\n)]\nfn draw() {\n    footer.outcome_at(order, done, &mut pressed);\n}\n";
         assert_eq!(check(&file(order), &[]).len(), 1, "{order}");
         assert!(check(&file(order), &[("src/new.rs", "draw", &[Ban::Order])]).is_empty());
+        // Ruling Q-x: an `answer` call needs `Ban::Answer` in its own row; a row for another
+        // ban (a `Ban::Order` row) does not allow it.
+        let answer = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    footer.outcome_at(order, done, &mut pressed);\n    messages.answer(fault);\n}\n";
+        assert_eq!(
+            check(&file(answer), &[("src/new.rs", "draw", &[Ban::Order])]).len(),
+            1,
+            "{answer}"
+        );
+        assert!(
+            check(
+                &file(answer),
+                &[("src/new.rs", "draw", &[Ban::Order, Ban::Answer])]
+            )
+            .is_empty()
+        );
+        // Exactly one `answer` call in the item allowed for it: a second call fails, also a
+        // qualified one or a reference; a qualified call under another ban's allowance fails.
+        let twice = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    messages.answer(fault);\n    messages.answer(other);\n}\n";
+        assert_eq!(
+            check(&file(twice), &[("src/new.rs", "draw", &[Ban::Answer])]).len(),
+            1,
+            "{twice}"
+        );
+        let qualified = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    messages.answer(fault);\n    Messages::answer(&mut messages, other);\n}\n";
+        assert_eq!(
+            check(&file(qualified), &[("src/new.rs", "draw", &[Ban::Answer])]).len(),
+            1,
+            "{qualified}"
+        );
+        let referenced = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    messages.answer(fault);\n    let again = Messages::answer;\n}\n";
+        assert_eq!(
+            check(&file(referenced), &[("src/new.rs", "draw", &[Ban::Answer])]).len(),
+            1,
+            "{referenced}"
+        );
+        let other = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    footer.outcome_at(order, done, &mut pressed);\n    Messages::answer(&mut messages, fault);\n}\n";
+        assert_eq!(
+            check(&file(other), &[("src/new.rs", "draw", &[Ban::Order])]).len(),
+            1,
+            "{other}"
+        );
         let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
         assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());
         // Review of PR 308: a by-owner Undo added to an item already allowed for another ban

@@ -3117,6 +3117,9 @@ fn scroll_part<R>(
 /// Where a footer message stands in the footer's one order.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub(super) enum FooterRank {
+    /// The answer to the DM's last act, when it failed (ruling Q-x, `Messages::answer`): it is
+    /// newer than every kept result, so it comes first.
+    Answer,
     /// A result whose Undo is live.
     Undo,
     /// Why Save or the draft waits: Save's reason, a parse error, a disk failure.

@@ -2218,6 +2218,8 @@ pub struct Messages<'f, A: 'static> {
     footer: Footer<'static>,
     sink: PressSink<A>,
     frame: std::marker::PhantomData<&'f PaneFrame>,
+    /// Whether this frame's footer has its one `answer` (ruling Q-x).
+    answered: bool,
 }
 
 impl<'f, A: 'static> Messages<'f, A> {
@@ -2229,6 +2231,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             footer: Footer::new(id, width),
             sink: PressSink(std::rc::Rc::default()),
             frame: std::marker::PhantomData,
+            answered: false,
         }
     }
 
@@ -2268,6 +2271,23 @@ impl<'f, A: 'static> Messages<'f, A> {
         let words = Cow::Owned(typed.body.words.as_str().to_owned());
         let draw = self.draw(typed, None);
         self.footer.push(rank, None, words, draw);
+        self
+    }
+
+    /// The answer to the DM's last act when it failed (ruling Q-x): a fault that the caller
+    /// holds as its newest answer and ends at the next act. It comes first in the footer, before
+    /// every kept result, which are answers to older acts. One per footer (a second is refused in
+    /// debug builds and tests); Clippy refuses it outside a counted use (`Ban::Answer`).
+    pub fn answer(&mut self, fault: FaultMessage<A>) -> &mut Self {
+        debug_assert!(
+            !self.answered,
+            "a footer holds one answer to the DM's last act"
+        );
+        self.answered = true;
+        let (_, typed) = Outcome::from(fault).parts();
+        let words = Cow::Owned(typed.body.words.as_str().to_owned());
+        let draw = self.draw(typed, None);
+        self.footer.push(FooterRank::Answer, None, words, draw);
         self
     }
 
