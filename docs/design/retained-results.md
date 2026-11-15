@@ -144,3 +144,29 @@ Add loses one staged `ResultOrder::issue` and one `outcome_at` (their `STAGED_AL
 - A frame-bound line ends the store's borrow; the types do not stop the pane's body from changing the
   store between `present` and the footer's paint (as today). The truth claim is for the frame's start.
 - Every other result owner keeps the frame-bound path; the footer renderer is PR 2b.
+
+## 7. The retained footer (layout PR 2b)
+
+`Messages` keeps its lines as typed data (`FooterLine`: rank, act order, the typed message, a kept line's
+ticket); nothing is lowered to a closure. The pane draws them through `TypedFooter`, which keeps one plan
+per footer id in egui's memory: the lines' one order (`footer_order`'s rule), the accessible name, the room
+the lines take (`bare`) and the room their open locks' reasons want (`reserved`).
+
+- **When the plan is made.** By the pass that draws the lines, so its measure is the paint's own (the
+  typography, wraps, actions and reasons that are drawn), and only when the lines changed (compared as data
+  with the last ones: a compare as large as their words, counted), or the width, the scale or the style. An
+  unchanged frame sorts, names and measures nothing (`FooterWork` counts plans, sorted lines, named bytes and
+  reason probes), and the pane knows the footer's demand before it draws (`Footer::planned`).
+- **Reasons' room (R29), per footer.** A fresh plan decides `give_up` from its own numbers and the room where
+  the footer stands; a pass that makes a plan measures with the footer's own last decision (`id.with("give_up")`).
+  No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay for the
+  legacy footer only (`Reasons::Legacy`).
+- **Presses.** One press slot per `Messages` per pass, taken by `pane`; nothing keeps a press across passes, so
+  a press is acted on once, also when egui draws the frame again or declines to.
+- **The old path.** `Footer::legacy_reason`, `legacy_notice`, `legacy_kept`, `legacy_kept_line` (and the
+  staged `result`) are banned by Clippy, listed per function (`Ban::Footer`, exact) and counted per file
+  (`STAGED`). First callers moved: Rules and runs (its discard joins the page's `kept` store), Settings and
+  Link and folder (Campaigns, the account, D&D Beyond).
+- **Limits.** Building `Messages` each frame (the caller's words) and comparing them stays O(the footer's
+  words); a caller that keeps owner revisions could skip both, which is later work. Fonts changed with
+  `set_fonts` are not part of the plan's key (only width, scale and style).
