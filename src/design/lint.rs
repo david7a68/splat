@@ -464,19 +464,198 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
 
 /// Format strings are Rust literals, so read them through `syn`, including raw and multiline
 /// literals. The formatter owns HP fractions; sheet facts go through the separator-free part.
+///
+/// `fact-owner` (ruling M5): a sheet fact is drawn only by `design::fact`. Outside
+/// `src/design/fact.rs`, read by `syn` per function (a method too), following each value to
+/// where it is used, it counts a local copy of the part:
+/// - a fact format: a format string with `{…}: {…}` whose value is joined by the middle dot,
+///   given as an argument (`values.join(" · ")`) or read through a name a `let` bound to such a
+///   join (`{values}`), whatever the helper is called;
+/// - a tile label with no colon: a format string of placeholders and spaces only (`{}{} {}`,
+///   raw or not) given as the label of a stat tile (`stat_tile`, `roll_tile`, `metric`,
+///   `roll_metric`), directly or through a name a `let` bound to it; the part's form is
+///   `fact::tile_label`;
+/// - a rolling tile: `rolls::link(…, Type::NumeralLarge, …)`; the part is `fact::roll_tile`.
+///
+/// The named legacy exceptions are counts in the allowlist.
 fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
+    use syn::spanned::Spanned;
     use syn::visit::Visit;
+    /// The stat tile calls whose second argument is the tile's label.
+    const TILES: [&str; 4] = ["stat_tile", "roll_tile", "metric", "roll_metric"];
+    /// What one function does that a fact's part owns.
+    #[derive(Default, Clone)]
+    struct Fact {
+        /// The names a `let` binds to values joined by the middle dot.
+        dot_names: std::collections::BTreeSet<String>,
+        /// The names a `let` binds to a format of placeholders and spaces only.
+        bare_names: std::collections::BTreeSet<String>,
+        /// The local copies found.
+        copies: usize,
+    }
+    /// A format string of placeholders and spaces only, two placeholders or more and a space.
+    fn bare(words: &str) -> bool {
+        if words.contains("{{") || words.contains("}}") {
+            return false;
+        }
+        let (mut places, mut rest, mut inside) = (0, String::new(), false);
+        for c in words.chars() {
+            match (inside, c) {
+                (false, '{') => inside = true,
+                (true, '}') => {
+                    inside = false;
+                    places += 1;
+                }
+                (true, _) => {}
+                (false, c) => rest.push(c),
+            }
+        }
+        places >= 2 && !rest.is_empty() && rest.chars().all(|c| c == ' ')
+    }
+    /// A macro's arguments, when they parse as expressions.
+    fn macro_args(mac: &syn::Macro) -> Option<Vec<syn::Expr>> {
+        mac.parse_body_with(
+            syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated,
+        )
+        .ok()
+        .map(|args| args.into_iter().collect())
+    }
+    /// The format string of a macro call (`format!("…", …)`), raw or not.
+    fn template(expr: &syn::Expr) -> Option<String> {
+        let syn::Expr::Macro(call) = expr else {
+            return None;
+        };
+        match macro_args(&call.mac)?.first()? {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(words),
+                ..
+            }) => Some(words.value()),
+            _ => None,
+        }
+    }
+    /// `expr` without the references around it (`&label`).
+    fn unref(expr: &syn::Expr) -> &syn::Expr {
+        match expr {
+            syn::Expr::Reference(reference) => unref(&reference.expr),
+            other => other,
+        }
+    }
+    /// The one name `expr` is (`label`), if it is a plain name.
+    fn ident(expr: &syn::Expr) -> Option<String> {
+        match unref(expr) {
+            syn::Expr::Path(path) => path.path.get_ident().map(ToString::to_string),
+            _ => None,
+        }
+    }
+    /// Whether `expr` joins values with the middle dot (`.join(" · ")`).
+    fn dot_join(expr: &syn::Expr) -> bool {
+        struct Join(bool);
+        impl<'ast> Visit<'ast> for Join {
+            fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+                if call.method == "join"
+                    && let Some(syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(separator),
+                        ..
+                    })) = call.args.first()
+                    && separator.value().contains('·')
+                {
+                    self.0 = true;
+                }
+                syn::visit::visit_expr_method_call(self, call);
+            }
+        }
+        let mut join = Join(false);
+        join.visit_expr(expr);
+        join.0
+    }
+    /// The names a format string reads inline: `{values}`, `{values:>8}`.
+    fn inline_names(words: &str) -> Vec<String> {
+        words
+            .split('{')
+            .skip(1)
+            .filter_map(|rest| rest.split('}').next())
+            .map(|inside| inside.split(':').next().unwrap_or("").trim().to_owned())
+            .filter(|name| {
+                !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+            })
+            .collect()
+    }
     struct Formats<'a> {
         path: &'a str,
         function: String,
         last_line: usize,
         found: Vec<&'static str>,
+        fact: Fact,
+    }
+    impl Formats<'_> {
+        /// Visits one function's body with its own fact state, then counts its copies.
+        fn function(&mut self, name: String, visit: impl FnOnce(&mut Self)) {
+            let previous = std::mem::replace(&mut self.function, name);
+            let outer = std::mem::take(&mut self.fact);
+            visit(self);
+            if !self.path.ends_with("src/design/fact.rs") {
+                self.found
+                    .extend((0..self.fact.copies).map(|_| "fact-owner"));
+            }
+            self.fact = outer;
+            self.function = previous;
+        }
+        fn counts(&self, span: proc_macro2::Span) -> bool {
+            span.start().line <= self.last_line
+        }
     }
     impl<'ast> Visit<'ast> for Formats<'_> {
+        fn visit_local(&mut self, local: &'ast syn::Local) {
+            if let (syn::Pat::Ident(name), Some(init)) = (&local.pat, &local.init) {
+                let name = name.ident.to_string();
+                if dot_join(&init.expr) {
+                    self.fact.dot_names.insert(name.clone());
+                }
+                if template(&init.expr).is_some_and(|words| bare(&words)) {
+                    self.fact.bare_names.insert(name);
+                }
+            }
+            syn::visit::visit_local(self, local);
+        }
         fn visit_item_fn(&mut self, item: &'ast syn::ItemFn) {
-            let previous = std::mem::replace(&mut self.function, item.sig.ident.to_string());
-            syn::visit::visit_item_fn(self, item);
-            self.function = previous;
+            self.function(item.sig.ident.to_string(), |this| {
+                syn::visit::visit_item_fn(this, item);
+            });
+        }
+        fn visit_impl_item_fn(&mut self, item: &'ast syn::ImplItemFn) {
+            self.function(item.sig.ident.to_string(), |this| {
+                syn::visit::visit_impl_item_fn(this, item);
+            });
+        }
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if let syn::Expr::Path(function) = &*call.func
+                && self.counts(function.path.span())
+            {
+                let names: Vec<String> = function
+                    .path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect();
+                let last = names.last().map_or("", String::as_str);
+                // A tile's label with no colon, given here or through a name.
+                if TILES.contains(&last)
+                    && let Some(label) = call.args.iter().nth(1)
+                    && (template(unref(label)).is_some_and(|words| bare(&words))
+                        || ident(label).is_some_and(|name| self.fact.bare_names.contains(&name)))
+                {
+                    self.fact.copies += 1;
+                }
+                // A rolling tile by hand.
+                let numeral = call.args.iter().any(|argument| {
+                    matches!(argument, syn::Expr::Path(path)
+                        if path.path.segments.last().is_some_and(|segment| segment.ident == "NumeralLarge"))
+                });
+                if names.ends_with(&["rolls".to_owned(), "link".to_owned()]) && numeral {
+                    self.fact.copies += 1;
+                }
+            }
+            syn::visit::visit_expr_call(self, call);
         }
         fn visit_macro(&mut self, mac: &'ast syn::Macro) {
             // Macro tokens are not expressions in syn's default visitor. Parse expression
@@ -484,16 +663,43 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
             if let Ok(args) = mac.parse_body_with(
                 syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated,
             ) {
+                // A fact format: `{…}: {…}` whose value is joined by the middle dot, given as an
+                // argument or read inline through a name bound to such a join.
+                if let Some(syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(words),
+                    ..
+                })) = args.first()
+                    && self.counts(words.span())
+                    && words.value().contains("}: {")
+                {
+                    let names = &self.fact.dot_names;
+                    let inline = inline_names(&words.value())
+                        .iter()
+                        .any(|name| names.contains(name));
+                    let given = args.iter().skip(1).any(|argument| {
+                        dot_join(argument)
+                            || ident(argument).is_some_and(|name| names.contains(&name))
+                    });
+                    if inline || given {
+                        self.fact.copies += 1;
+                    }
+                }
                 let mut nested = Formats {
                     path: self.path,
                     function: self.function.clone(),
                     last_line: self.last_line,
                     found: Vec::new(),
+                    fact: Fact {
+                        dot_names: self.fact.dot_names.clone(),
+                        bare_names: self.fact.bare_names.clone(),
+                        copies: 0,
+                    },
                 };
                 for argument in &args {
                     nested.visit_expr(argument);
                 }
                 self.found.extend(nested.found);
+                self.fact.copies += nested.fact.copies;
             }
         }
         fn visit_path(&mut self, path: &'ast syn::Path) {
@@ -575,6 +781,7 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
         function: String::new(),
         last_line,
         found: Vec::new(),
+        fact: Fact::default(),
     };
     formats.visit_file(&syn::parse_file(text).expect("format lint source parses"));
     formats.found
@@ -699,6 +906,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 }
                 "phrase-owner" => {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
+                }
+                "fact-owner" => {
+                    "Draw a sheet's fact with `design::fact::line`, a tile label that holds its number with `fact::tile_label` and a rolling tile with `fact::roll_tile` (M5)"
                 }
                 "arrow-label" => {
                     "Give the control its word: an editor's back is `EditorHead` (its `BackTo` gives the word) above its name row; a back link that starts a line is `TitleLine::back` with its word"
