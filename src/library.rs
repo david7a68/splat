@@ -11477,6 +11477,12 @@ mod tests {
                     })
                     .collect();
             }
+            assert!(
+                painted
+                    .iter()
+                    .any(|text| text.starts_with("The first heading says")),
+                "at {width}: the footer holds the heading warning: {painted:?}"
+            );
             let reason = DRAFT_IN_CAMPAIGN.as_str();
             assert_eq!(
                 painted
