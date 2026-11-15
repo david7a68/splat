@@ -2611,6 +2611,10 @@ struct ReaderResults {
     /// Why Undo of a file change waits now: the open draft, or its changed file. The Undo
     /// paints it on its own line (ruling Q-u); while open, the line keeps its room.
     locked: Option<&'static design::outcome::Sentence>,
+    /// Whether that lock can come in place: in Edit Markdown, or with a draft already open. In
+    /// Read with no draft, it comes only with a change of mode, which lays the pane out again,
+    /// so the Undo keeps no room for it.
+    lock_can_come: bool,
 }
 
 /// Which result's Undo was pressed this frame.
@@ -2630,7 +2634,11 @@ impl ReaderResults {
     /// coming or going moves nothing below it. A reason shared by several Undos repeats: open
     /// debt (packet 2, the cut of ruling 3).
     fn draft_lock(&self, step: UndoStep) -> design::outcome::Undo<()> {
-        step.pressed_as(()).locked_when(
+        let undo = step.pressed_as(());
+        if !self.lock_can_come && self.locked.is_none() {
+            return undo;
+        }
+        undo.locked_when(
             self.locked.is_some(),
             self.locked.unwrap_or(&UNDO_WAITS_FOR_DRAFT).clone(),
         )
@@ -7429,6 +7437,7 @@ impl Library {
             } else {
                 None
             },
+            lock_can_come: self.source || self.dirty() || self.disk_change.is_some(),
             page: std::mem::take(&mut self.page_results),
             ..Default::default()
         };

@@ -313,8 +313,16 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
                     &[(false, "Read"), (true, self.source_label)],
                 )
             });
-            // The wider source label's room: `Back` starts at one x for every entry.
-            let reserve = segment_width(ui, self.wider_label) - before;
+            // The wider source label's room: `Back` starts at one x for every entry. In a reader
+            // too narrow for it and `More`, `More` keeps its room first (beside Lookup at 960).
+            let reserve = (segment_width(ui, self.wider_label) - before).min(
+                ui.available_width()
+                    - more_width
+                    - gap
+                    - self.back.map_or(0.0, |(icon, hint)| {
+                        Self::back_action(icon, hint, false).natural_width(ui) + gap
+                    }),
+            );
             if reserve > 0.0 {
                 space(ui, reserve);
             }
