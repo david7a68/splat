@@ -2356,7 +2356,7 @@ the File gone state, says so, and offers `Save these words as a new file`; no ed
 A new file takes a new identity only once it exists: if a file arrived at that path, nothing is written, the draft
 keeps its identity and the File gone state, and the warning says why above the choices. Discarded or reloaded
 words stay recoverable when the draft follows a later outside edit; their Undo then meets the conflict choice. When Splat found the note under a new name, the warning
-says so: `This note was moved or renamed. It is now <file>. Your draft is still here.`; `gone from the folder`
+says so: `The note of <session> was moved or renamed. It is now <file>. Your draft is still here.`; `gone from the folder`
 is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard`. After
 `Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
 
@@ -2364,10 +2364,16 @@ A session notice that arrives on its own, not as the result of the DM's action o
 banner where the recording banners sit, never above the tabs or the note: processing finished (`“<session>” is
 processed. …`, with the close icon named `Dismiss`), a copy that claims the session, notes whose properties cannot
 be read, and a note or template draft whose file changed on disk, went, moved or could not be saved, with their
-choices. In the banner they follow the recording alerts, whose order and one primary stay as they are, and each
+choices. The session note's warning and its choices stand in the banner on every page, not only beside the note,
+and they name the note, with each cause and its tone: `The note of <session> changed on disk. …`, `… is gone from
+the folder. …`, `… was moved or renamed. …`, `… was not saved. <reason>` (an error). A template's warning keeps
+`This note`. In the banner they follow the recording alerts, whose order and one primary stay as they are, and each
 wraps at `LIST_MEASURE`. The result of the DM's own action on the page, and the notices about this page, sit in
 the session pane's message footer (`design::Footer`), below the pane's body, so the title line, Last time,
-the tabs, the plan's rows and the recording row never move when one comes: `Recording saved: …`, `Recording
+the tabs, the plan's rows and the recording row never move when one comes. With plan and note side by side, that
+footer stands below both columns; the plan's column keeps only the plan's own results; on the narrow Plan tab the
+plan's one footer holds both. `Recording saved: …` is its recording's: it shows in its session's footer while its
+file stands, and a recording that starts in that session, a campaign change or its Dismiss ends it: `Recording saved: …`, `Recording
 deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run stays or moved, `No entry
 is named …`, `Draft discarded.` or `Reloaded from disk.` with their Undo, the warning that this is not the session
 being played or that its date has passed, and the chosen input that is not connected. The line below the title
