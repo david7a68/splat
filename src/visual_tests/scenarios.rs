@@ -101,6 +101,78 @@ fn check_choices_at_text(
 /// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
 /// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
 /// words' first line, within 1 px.
+/// R38, R35 (structural B4): an Encounters editor's back line at 960, 1200 and 1920, read from
+/// the painted text after each resize. The link (accessible `name`) paints its destination
+/// `word` whole at the editor's text edge with the return arrow after it, inside the window; the
+/// name field (`field`, the start of its accessible name) is on the next line at the same edge;
+/// and while a draft holds the editor, `reason` is painted on the back line after the link.
+/// Each fault is one line; none is a pass.
+fn back_line_faults(
+    d: &mut Driver<'_>,
+    word: &str,
+    name: &str,
+    field: &str,
+    reason: Option<&str>,
+) -> Vec<String> {
+    let mut faults = Vec::new();
+    for size in [SMALL, DEFAULT, LARGE] {
+        let found = d.at_size(size, |d| {
+            let mut faults = Vec::new();
+            let (width, height) = d.window_size();
+            let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
+            let Some(link) = d.place_of(name) else {
+                return vec![format!("{size:?}: no {name:?}")];
+            };
+            let Some(ink) = d.painted_word_rect(word, link) else {
+                return vec![format!("{size:?}: {word:?} is not painted in {link:?}")];
+            };
+            if !d.painted_whole_in(word, link) || !window.contains_rect(link) {
+                faults.push(format!("{size:?}: {word:?} not whole in view at {link:?}"));
+            }
+            let arrow = d.painted_rect_in(egui_phosphor::regular::ARROW_U_UP_LEFT, link);
+            if !arrow.is_some_and(|arrow| arrow.left() > ink.right()) {
+                faults.push(format!("{size:?}: no arrow after {word:?}: {arrow:?}"));
+            }
+            let field = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with(field))
+                .map(|node| node.rect);
+            match field {
+                Some(field) if field.top() >= link.bottom() - 0.5 => {
+                    if (field.left() - ink.left()).abs() > 1.5 {
+                        faults.push(format!(
+                            "{size:?}: {word:?} at x {} and the name field at x {}",
+                            ink.left(),
+                            field.left()
+                        ));
+                    }
+                }
+                other => faults.push(format!(
+                    "{size:?}: the name field is not on the line below {link:?}: {other:?}"
+                )),
+            }
+            let line = egui::Rect::from_x_y_ranges(link.right()..=width, link.y_range());
+            let painted =
+                reason.map(|reason| d.painted_rect_in(reason, line.expand2(egui::vec2(0.0, 8.0))));
+            match (reason, painted.flatten()) {
+                (Some(reason), None) => {
+                    faults.push(format!(
+                        "{size:?}: {reason:?} is not painted beside the link"
+                    ));
+                }
+                (Some(reason), Some(rect)) if !window.contains_rect(rect) => {
+                    faults.push(format!("{size:?}: {reason:?} is cut at {rect:?}"));
+                }
+                _ => {}
+            }
+            faults
+        });
+        faults.extend(found);
+    }
+    faults
+}
+
 fn check_dismiss_at_message_end(d: &mut Driver<'_>, id: &str, words: &str) {
     let name = crate::design::outcome::DISMISS_NAME;
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
@@ -4860,6 +4932,20 @@ pub mod encounter_build {
         d.click(SYNC_OPTION);
         d.expect("Unsaved");
         let edited_x = run_state_x(d);
+        // R38, R35 (structural B4): the encounter editor's back line; the first edit holds it,
+        // with the encounter's reason painted beside the link.
+        let faults = back_line_faults(
+            d,
+            "Encounters",
+            "Back to encounters",
+            "Encounter name",
+            Some("Save or discard the open encounter first."),
+        );
+        d.observe(
+            "s30-B4-back-line-encounter",
+            faults.is_empty(),
+            format!("The encounter editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         d.observe(
             "iter-26-B-FB5",
             clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
@@ -18156,6 +18242,13 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
+        // R38 (structural B4): the back line, its word whole at the text edge, the name below.
+        let faults = back_line_faults(d, "Encounters", "Back to encounters", "Group name", None);
+        d.observe(
+            "s30-B4-back-line-group",
+            faults.is_empty(),
+            format!("The group editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         // FD3: where FORM_WIDTH ends first, the name and Belongs to still share one edge, and it
         // is clearly apart from the members column's.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -18281,8 +18374,16 @@ pub mod encounter_groups {
                         .iter()
                         .find(|node| node.name == heading && node.in_view())?
                         .rect;
+                    // The form's own column: from the heading to the right edge of its `Done`.
+                    // The Add creatures column beside it is not what follows a heading (B4: its
+                    // rows lined up with a heading at 960 once the back line moved the form).
+                    let form_right = nodes
+                        .iter()
+                        .find(|node| node.name == "Done with changes")
+                        .map_or(label.right() + 400.0, |done| done.rect.right());
                     let column = |rect: &egui::Rect| {
-                        rect.left() < label.right() + 400.0 && rect.right() > label.left()
+                        rect.left() < (label.right() + 400.0).min(form_right)
+                            && rect.right() > label.left()
                     };
                     let above = nodes
                         .iter()
@@ -20458,9 +20559,21 @@ pub mod encounter_owned_groups {
         };
         // The member first, then the group: the group's result leads; Undo of the member
         // brings Wolf back and the group stays moved.
+        let shrine_menu_in_view = |d: &mut Driver<'_>| {
+            let menu = format!("More actions for {GROUP_SHRINE}");
+            for _ in 0..20 {
+                if d.in_view(&menu) {
+                    break;
+                }
+                d.scroll_up_at(pos2(250.0, 400.0), 1);
+            }
+        };
         let member_then_group = d.aside(|d| {
             d.click("More actions for Wolf");
             d.click("Remove");
+            // B4: at 960 the editor's body is 34 px shorter (its back line), so after the footer
+            // grows the group's menu is above the view: the DM scrolls up to it.
+            shrine_menu_in_view(d);
             d.click_first(&format!("More actions for {GROUP_SHRINE}"));
             d.click("Make available to any encounter");
             d.expect("Undo move");
@@ -20475,6 +20588,7 @@ pub mod encounter_owned_groups {
         // The group first, then the member: the member's result leads; Undo of the group brings
         // it back and Wolf stays removed.
         let group_then_member = d.aside(|d| {
+            shrine_menu_in_view(d);
             d.click_first(&format!("More actions for {GROUP_SHRINE}"));
             d.click("Make available to any encounter");
             d.expect("Undo move");
@@ -21954,6 +22068,20 @@ pub mod session_plan_groups {
                 "A wide group editor keeps the note beside it; smaller pages keep the Note tab",
             );
         });
+        // R38, R35 (structural B4): the plan's group editor has the same back line, and the
+        // typed name holds it with its reason painted beside the link.
+        let faults = back_line_faults(
+            d,
+            "Plan",
+            "Back to the plan",
+            "Group name",
+            Some("Save or discard this group first."),
+        );
+        d.observe(
+            "s30-B4-back-line-plan-group",
+            faults.is_empty(),
+            format!("The plan's group editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         d.observe(
             "T14.6",
             d.has_containing("Session 1: The Crossing"),
@@ -22294,6 +22422,15 @@ pub mod session_plan_groups {
             d.focus_window(true);
             // The row's heading names the gone creature, whichever place says the fault.
             d.wait_for_text("Unknown creature");
+            // B4: at 960 the back line moves the plan's editor 34 px down, so the member row's
+            // fault is below the view on the Members tab. The DM scrolls the row into view.
+            d.click_starting("Members");
+            for _ in 0..10 {
+                if d.visible_text("not in this campaign’s packages") {
+                    break;
+                }
+                d.scroll_at(pos2(600.0, 450.0), 1);
+            }
             let member = said_once(
                 d,
                 &[
@@ -22976,6 +23113,85 @@ pub mod session_plan_groups {
         );
         d.click("Edit group Split Watch");
         d.expect("Group name: Split Watch");
+
+        // B4 review F1: an unsaved group keeps its host. A new group in Session 2 with a member,
+        // left unsaved; in Session 1 the DM presses a planned group's name. The press is refused
+        // with the group's reason under that line; the draft stays Session 2's, and Save adds it
+        // to Session 2's plan only.
+        d.click("Back to the plan");
+        d.click_starting("Session 2: The Ford ·");
+        show_plan(d);
+        d.click("Add a group");
+        d.click("New group");
+        d.expect("Back to the plan");
+        d.type_text("Ash Two");
+        d.type_into(FIND_CREATURE, "wolf");
+        d.click_beside_exact("Wolf", ADD);
+        d.click_starting("Session 1: The Crossing ·");
+        let reason = crate::design::Unsaved::Group.reason();
+        let before = (
+            d.has_containing("A group is being assembled in Session 2."),
+            d.has("Save group"),
+            d.has_containing("Ash Two"),
+        );
+        let rivals_in_view = |d: &mut Driver<'_>| {
+            for _ in 0..20 {
+                if d.in_view(GROUP_RIVALS) {
+                    break;
+                }
+                d.scroll_up_at(pos2(600.0, 400.0), 1);
+            }
+        };
+        rivals_in_view(d);
+        d.click_first(GROUP_RIVALS);
+        let refused = (
+            d.has_containing("A group is being assembled in Session 2."),
+            d.has("Save group"),
+            d.has(&format!("Group name: {GROUP_RIVALS}")),
+            d.visible_text(reason),
+        );
+        // Back to the draft's own session (the link names it while the host is kept).
+        if d.has("Return to the session being played") {
+            d.click("Return to the session being played");
+        } else {
+            d.click_starting("Session 2: The Ford ·");
+        }
+        if d.has("Group name: Ash Two") {
+            d.click("Save group");
+            d.wait_for_text("Ash Two");
+        }
+        let in_two = d.has_containing("Ash Two");
+        d.click_starting("Session 1: The Crossing ·");
+        d.expect(&format!("Add {GROUP_RIVALS} to fight"));
+        let in_one = d.has_containing("Ash Two");
+        d.observe(
+            "s30-B4-F1-group-keeps-its-host",
+            before == (true, false, false)
+                && refused == (true, false, false, true)
+                && in_two
+                && !in_one,
+            format!(
+                "Before the press (warning, Save, Ash Two in Session 1): {before:?}; after the refused press (warning, Save, Rival Team open, reason painted): {refused:?}; after Save, Ash Two in Session 2's plan {in_two}, in Session 1's {in_one}"
+            ),
+        );
+        // The same press with an unsaved encounter and no group editor: the encounter's reason
+        // is painted in the plan, not only in Encounters.
+        d.click(NAV_ENCOUNTERS);
+        d.click(NEW_ENCOUNTER);
+        d.type_text("Ford Ambush");
+        d.click(NAV_SESSIONS);
+        d.click_starting("Session 1: The Crossing ·");
+        rivals_in_view(d);
+        d.click_first(GROUP_RIVALS);
+        let encounter_reason = crate::design::Unsaved::Encounter.reason();
+        d.observe(
+            "s30-B4-F1-encounter-refusal-painted",
+            d.visible_text(encounter_reason) && !d.has(&format!("Group name: {GROUP_RIVALS}")),
+            format!(
+                "With an unsaved encounter, the plan says why the group did not open: {}",
+                d.visible_text(encounter_reason)
+            ),
+        );
     }
 }
 
