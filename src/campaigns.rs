@@ -8,6 +8,45 @@ use eframe::egui;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+/// What a press in the campaign messages of a footer asks for (`Campaigns::footer_messages`,
+/// done by `Campaigns::footer_act`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CampaignAct {
+    UndoDiscard,
+    UndoRegister,
+    BuildEncounter,
+    RegisterAsNew,
+}
+
+/// A failed act of the Settings and Link and folder footers (a campaign's, the account's, D&D
+/// Beyond's), in its own words: the check's or the system's.
+pub struct NotDone(crate::design::outcome::Sentence);
+
+impl NotDone {
+    pub fn words(words: &str) -> Self {
+        Self(footer_words(words))
+    }
+}
+
+impl crate::design::outcome::Fault for NotDone {
+    fn severity(&self) -> crate::design::outcome::Severity {
+        crate::design::outcome::Severity::NotSaved
+    }
+    fn cause(&self) -> crate::design::outcome::Sentence {
+        self.0.clone()
+    }
+}
+
+/// Words of the Settings and Link and folder footers made from data (a result that names a
+/// campaign, a check's or the system's error) as a sentence: the one escape of these footers.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the footer’s results and errors are made from data, or come from the system"
+)]
+pub fn footer_words(words: &str) -> crate::design::outcome::Sentence {
+    crate::design::outcome::Sentence::outside(words).unwrap_or(crate::sentence!("It did not work."))
+}
+
 pub struct Campaigns {
     store: Option<Store>,
     data: UserData,
@@ -1177,90 +1216,108 @@ impl Campaigns {
     /// `list` is true in Settings, where the add results belong.
     /// `blocked` is the page's lock (a run, a recording, an unsaved draft): the footer is outside
     /// the list's lock, so an action here that changes the campaigns takes it too.
+    /// The lines are typed data (layout PR 2b); a press comes back from the pane, and the host
+    /// gives it to `footer_act`.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: the discard’s and the add’s results keep the orders their acts issued (`outcome_at`), and the page’s lock words are app-owned `&str` (design::results::STAGED_ALLOWS)"
     )]
-    pub fn footer_messages<'a>(
-        me: &'a std::cell::RefCell<&mut Campaigns>,
-        footer: &mut design::Footer<'a>,
+    pub fn footer_messages<A: From<CampaignAct> + 'static>(
+        &self,
+        messages: &mut design::outcome::Messages<'_, A>,
         list: bool,
-        blocked: Option<&'a str>,
+        blocked: Option<&str>,
     ) {
-        const DISCARDED: &str = "Campaign details draft discarded.";
-        let (discarded, added, copy, error, locked, (discarded_order, added_order)) = {
-            let this = me.borrow();
-            let locked =
-                blocked.or((!this.writable).then_some("Reload valid campaign settings first."));
-            (
-                this.editing.is_some() && this.discarded_details.is_some(),
-                this.added.clone().filter(|_| list),
-                this.campaign_copy.is_some(),
-                this.error.clone(),
-                locked,
-                (this.discarded_order, this.added_order),
+        use design::outcome::{
+            Choice, FaultMessage, KeptOutcome, MessageChoice, Notice, Said, Sentence, UndoStep,
+            Verb,
+        };
+        let locked =
+            blocked.or((!self.writable).then_some("Reload valid campaign settings first."));
+        if self.editing.is_some() && self.discarded_details.is_some() {
+            messages.outcome_at(
+                self.discarded_order,
+                KeptOutcome::Notice(
+                    Notice::new(crate::sentence!("Campaign details draft discarded.")),
+                    UndoStep::of(Verb::Discard, "Campaign details")
+                        .pressed_as(A::from(CampaignAct::UndoDiscard)),
+                ),
+            );
+        }
+        let added = self.added.as_deref().filter(|_| list);
+        let copy = self.campaign_copy.is_some();
+        // Build an encounter is another choice after the result's words; only Undo is quiet.
+        let build = || {
+            Choice::new(
+                MessageChoice::Choice("Build an encounter"),
+                A::from(CampaignAct::BuildEncounter),
             )
         };
-        if discarded {
-            footer.result(discarded_order, DISCARDED, true, move |ui| {
-                if design::draft_discarded(ui, "Campaign details") {
-                    let mut this = me.borrow_mut();
-                    if let Some((name, path)) = this.discarded_details.take() {
-                        this.name = name;
-                        this.path = path;
-                    }
-                }
-            });
+        if let Some(added) = added.filter(|_| copy) {
+            // Review round 26: Undo changes the registration and can change the active campaign,
+            // so it waits for what blocks a campaign change, with the reason. The page's lock
+            // comes and goes (a run, a recording, a draft): `locked_when`, so its line keeps its
+            // room while it is open and nothing below moves. Its words come from `blocked_switch`
+            // in `src/lib.rs` as app-owned `&str`; while open, the room is the draft's.
+            let reason = locked
+                .and_then(Sentence::outside)
+                .unwrap_or(splat::sentence!(
+                    "Save or discard your changes to change campaigns."
+                ));
+            let undo = UndoStep::of(Verb::Register, "campaign")
+                .pressed_as(A::from(CampaignAct::UndoRegister))
+                .locked_when(locked.is_some(), reason);
+            messages.outcome_at(
+                self.added_order,
+                Said::new(footer_words(added)).undo(undo).choice(build()),
+            );
         }
-        if let Some(added) = added.clone().filter(|_| copy) {
-            footer.result(added_order, added.clone(), true, move |ui| {
-                // The registration result and its Undo are one message. Build an encounter is
-                // another choice: it starts below, at the message words. Only Undo is quiet.
-                // Review round 26: Undo changes the registration and can change the active
-                // campaign, so it waits for what blocks a campaign change, with the reason.
-                // `Undo register campaign`: one step for the drawing and for the count.
-                let step =
-                    design::outcome::UndoStep::of(design::outcome::Verb::Register, "campaign");
-                let group = design::outcome::KeptGroup::of([&step]);
-                let undo = step.pressed_as(());
-                // The page's lock comes and goes (a run, a recording, a draft): `locked_when`, so
-                // its line keeps its room while it is open and nothing below moves. Its words
-                // come from `blocked_switch` in `src/lib.rs` as app-owned `&str` (the counted
-                // `Ban::Words` allowance of this function); while open, the room is the draft's.
+        if let Some(error) = &self.error {
+            let mut fault = FaultMessage::new(&NotDone::words(error));
+            if error.contains("registered at another folder") {
                 let reason = locked
-                    .and_then(design::outcome::Sentence::outside)
-                    .unwrap_or(splat::sentence!(
-                        "Save or discard your changes to change campaigns."
-                    ));
-                let undo = undo.locked_when(locked.is_some(), reason);
-                if design::outcome::kept_result(ui, &group, &added, undo, Vec::new()).is_some() {
-                    let mut this = me.borrow_mut();
-                    if let Err(error) = this.undo_campaign_copy() {
-                        this.error = Some(error);
-                    }
-                }
-                let build = design::message_choice_row(ui, Tone::Success, |ui| {
-                    Action::secondary("Build an encounter")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
+                    .or(self.name.trim().is_empty().then_some("Type a name first."))
+                    .and_then(Sentence::outside);
+                let choice = Choice::new(
+                    MessageChoice::Choice("Register as a new campaign"),
+                    A::from(CampaignAct::RegisterAsNew),
+                );
+                fault = fault.choice(match reason {
+                    Some(reason) => choice.locked_when(true, reason),
+                    None => choice,
                 });
-                if build {
-                    me.borrow_mut().build_encounter();
-                }
-            });
-        }
-        if let Some(error) = error {
-            footer.reason(error.clone(), move |ui| {
-                Self::draw_error(me, ui, &error, locked)
-            });
+            }
+            messages.outcome(fault);
         }
         if let Some(added) = added.filter(|_| !copy) {
-            footer.result(added_order, added.clone(), false, move |ui| {
-                if design::message_with_action(ui, Tone::Success, &added, "Build an encounter") {
-                    me.borrow_mut().build_encounter();
+            messages.outcome_at(
+                self.added_order,
+                Said::new(footer_words(added)).choice(build()),
+            );
+        }
+    }
+
+    /// What a press in the campaign messages of a footer asks for (`footer_messages`), done
+    /// after the pane is drawn.
+    pub fn footer_act(&mut self, act: CampaignAct) {
+        match act {
+            CampaignAct::UndoDiscard => {
+                if let Some((name, path)) = self.discarded_details.take() {
+                    self.name = name;
+                    self.path = path;
                 }
-            });
+            }
+            CampaignAct::UndoRegister => {
+                if let Err(error) = self.undo_campaign_copy() {
+                    self.error = Some(error);
+                }
+            }
+            CampaignAct::BuildEncounter => self.build_encounter(),
+            CampaignAct::RegisterAsNew => {
+                if let Err(error) = self.register_campaign_copy() {
+                    self.error = Some(error);
+                }
+            }
         }
     }
 

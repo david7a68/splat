@@ -466,17 +466,17 @@ impl Settings {
     /// in the Settings footer, so their recovery stays in view whatever the cookie field holds.
     /// A failed Connect's cause sits beside Connect instead (round 27 FA1); an ended session is
     /// the account's state, said in the account column. Each lives until the next request.
-    /// The message owns its words, so the pane's body can change the account while the footer
-    /// waits for it (`Footer::pane`).
-    pub fn footer_messages(&self, footer: &mut design::Footer<'_>) {
+    /// The message is typed data, so the pane's body can change the account while the footer
+    /// waits for it (`Messages::pane`).
+    pub fn footer_messages<A: 'static>(&self, messages: &mut design::outcome::Messages<'_, A>) {
         if let Some(error) = self
             .error
-            .clone()
+            .as_deref()
             .filter(|error| !self.connect_failed && *error != SESSION_ENDED)
         {
-            footer.reason(error.clone(), move |ui| {
-                design::message(ui, Tone::Error, &error);
-            });
+            messages.outcome(design::outcome::FaultMessage::new(
+                &crate::campaigns::NotDone::words(error),
+            ));
         }
     }
 
@@ -839,9 +839,14 @@ mod tests {
             .with_size(egui::vec2(1200.0, 800.0))
             .build_ui_state(
                 |ui, settings: &mut Settings| {
-                    let mut footer = design::Footer::new("settings_footer", 600.0);
-                    settings.footer_messages(&mut footer);
-                    footer.pane(ui, design::Body::Content, |ui| settings.show(ui));
+                    let frame = design::outcome::PaneFrame::new(ui);
+                    let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new(
+                        &frame,
+                        "settings_footer",
+                        600.0,
+                    );
+                    settings.footer_messages(&mut messages);
+                    let _ = messages.pane(ui, design::Body::Content, |ui| settings.show(ui));
                 },
                 std::mem::take(&mut settings),
             );
