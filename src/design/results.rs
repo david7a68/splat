@@ -1000,7 +1000,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
             &[Ban::Layout(1), Ban::ByOwner(1)],
         ),
-        ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         ("src/world/repair.rs", "source_editor", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.

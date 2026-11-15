@@ -694,9 +694,12 @@ impl TimelinePage {
                 short_session(&session.label),
             );
         }
-        dropdown
+        let shown = dropdown
             .width(design::READER_MEASURE / 4.0)
             .show(ui, &mut chosen);
+        // Keep the established control name; Dropdown's current text value holds the full
+        // session label, while the painted control shows its short form.
+        design::named(ui, &shown.response, "Session for new events");
         if chosen != current {
             self.new_events_to = Some(chosen);
         }

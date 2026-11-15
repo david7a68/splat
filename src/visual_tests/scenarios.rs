@@ -13980,7 +13980,7 @@ pub mod session_notes {
 
         // Reading last week's note does not send tonight's run there.
         d.click(NAV_TIMELINE);
-        d.click_starting("Session for new events:");
+        d.click("Session for new events");
         d.click("No session");
         d.click(NAV_SESSIONS);
         d.click("New session");
@@ -22750,7 +22750,7 @@ pub mod session_plan {
     /// New events go to this session, by the Timeline page's own control.
     fn go_timeline_choose_session(d: &mut Driver<'_>, session: &str) {
         d.click(NAV_TIMELINE);
-        d.click_starting("Session for new events:");
+        d.click("Session for new events");
         d.click_starting(session);
     }
 
