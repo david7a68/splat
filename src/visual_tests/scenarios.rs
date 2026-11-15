@@ -3329,8 +3329,10 @@ pub mod campaign_content {
         );
         // Round 30: the write's result is the footer's only Undo of its verb, so it paints
         // `Undo write` (its name stays whole); at 1920 this frame then differs from
-        // `packages-partial-selection` only by that short footer line. The write, its result
-        // and its Undo are asserted above.
+        // `packages-partial-selection` only by that short footer line. Above: the file was
+        // missing, its bytes are back as saved, and its Undo is drawn (`wait_for_control`);
+        // the state's own check paints the Undo's icon. The result's words are asserted after
+        // this state, with the failed Undo.
         d.expect_same("the footer's one new line, a lone Undo in its short form");
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
@@ -6886,6 +6888,29 @@ pub mod run_lookup {
         look_up(d, &OTHER_NOTE.to_lowercase());
         d.state("lookup-with-draft-open", Sizes::All);
         lookup_open_action_painted(d, "s30-SK8-open-words", &[SMALL, DEFAULT, LARGE]);
+        // Round 30 final review F1 (ruling R35): the locked open action's reason is painted in
+        // Lookup's pane, at every size, whether the action stands on the title line or on its
+        // own line.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let reason = "To open this in Library, save or discard the Library draft first.";
+            let painted = d.at_size(size, |d| {
+                let panel = d.place_of(LOOKUP_SPLITTER)?;
+                d.painted_rect_in(
+                    reason,
+                    egui::Rect::from_min_max(
+                        egui::pos2(panel.right(), f32::NEG_INFINITY),
+                        egui::pos2(f32::INFINITY, f32::INFINITY),
+                    ),
+                )
+            });
+            d.observe(
+                "s30-SK8-open-lock-reason",
+                painted.is_some(),
+                format!(
+                    "At {size:?}, Lookup paints the locked open action's reason at {painted:?}"
+                ),
+            );
+        }
         d.goal("try a lookup with a draft open");
         d.press(Key::Escape);
         let kept = d

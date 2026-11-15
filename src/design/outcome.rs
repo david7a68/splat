@@ -635,11 +635,12 @@ impl UndoStep {
         }
     }
 
-    /// The verb a footer counts for `alone`: a verb's step that names an object.
+    /// The verb a footer counts for `alone`: every verb's step, with or without an object, so
+    /// `Undo add scene` beside `Undo add` keeps its object.
     fn counted(&self) -> Option<Verb> {
         match &self.step {
-            Step::Verb(verb, Some(_)) => Some(*verb),
-            _ => None,
+            Step::Verb(verb, _) => Some(*verb),
+            Step::Act(_) => None,
         }
     }
 
@@ -4004,6 +4005,21 @@ mod tests {
             ["Undo discard"],
             "lone: the short form, the whole name"
         );
+        // Round 30 final review F2: one verb with and without an object in one footer. The
+        // step with an object is not alone, so it keeps its object beside the other.
+        let mut mixed = two();
+        mixed.older_line = OlderLine::MixedAdd;
+        let h = harness_sized(mixed, 960.0);
+        let (_, scene) = visible(&h, "Undo add scene");
+        let (_, bare) = visible(&h, "Undo add");
+        assert_eq!(
+            (scene, bare),
+            (
+                vec!["Undo add scene".to_owned()],
+                vec!["Undo add".to_owned()]
+            ),
+            "mixed: Undo add scene beside Undo add"
+        );
         // A long object with no joining word: cut by whole words in the visible words only.
         let long = "Bridge Ambush at the Ravenholm Ironside Crossing";
         let mut narrow = two();
@@ -4468,6 +4484,9 @@ mod tests {
             Discard(&'static str),
             /// `Removed <name>.` with `Undo remove <name>`.
             Remove(&'static str),
+            /// `Day 2 added.` with `Undo add` (no object), and on the newer line `Scene added.`
+            /// with `Undo add scene`: one verb, with and without an object (the Session plan).
+            MixedAdd,
         }
         /// Settings' page lock (a round 26 review repair): long enough to wrap in a narrow pane.
         pub(super) const LOCK: Sentence =
@@ -4558,6 +4577,12 @@ mod tests {
                                     .undo(Act::Undo)
                                     .into();
                             }
+                            ("newer", OlderLine::MixedAdd) => {
+                                return KeptOutcome::Notice(
+                                    Notice::new(crate::sentence!("Scene added.")),
+                                    UndoStep::of(Verb::Add, "scene").pressed_as(Act::Undo),
+                                );
+                            }
                             (_, OlderLine::Said) | ("newer" | "third", _) => {}
                             ("older", OlderLine::Discard(name)) => {
                                 return KeptOutcome::Notice(
@@ -4567,6 +4592,12 @@ mod tests {
                             }
                             (_, OlderLine::Remove(name)) => {
                                 return Done::new(Verb::Remove, name).undo(Act::Undo).into();
+                            }
+                            ("older", OlderLine::MixedAdd) => {
+                                return KeptOutcome::Notice(
+                                    Notice::new(crate::sentence!("Day 2 added.")),
+                                    UndoStep::verb(Verb::Add).pressed_as(Act::Undo),
+                                );
                             }
                             _ => {}
                         }

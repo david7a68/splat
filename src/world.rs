@@ -1121,10 +1121,15 @@ impl NoteFault {
         }
     }
 
-    /// The row's words where `words` does not fit whole: the fault without the file's name.
-    /// The other same-name row still shows its own file name, so the two stay apart.
-    pub(crate) fn narrow_words(&self) -> Option<&'static str> {
-        matches!(self, Self::Renamed(Some(_))).then_some("File name differs")
+    /// The row's words where `words` does not fit whole. A same-name note keeps its file's
+    /// name, which tells its row from the other same-name rows (each may have this fault too);
+    /// its warning mark and the header count still say there is a fault, and its reader names
+    /// both names.
+    pub(crate) fn narrow_words(&self) -> Option<String> {
+        match self {
+            Self::Renamed(Some(file)) => Some(file.clone()),
+            _ => None,
+        }
     }
 }
 
@@ -5652,8 +5657,10 @@ mod tests {
             "File name differs · Vell.md"
         );
         assert_eq!(
-            NoteFault::Renamed(Some("Vell.md".into())).narrow_words(),
-            Some("File name differs")
+            NoteFault::Renamed(Some("Vell.md".into()))
+                .narrow_words()
+                .as_deref(),
+            Some("Vell.md")
         );
         assert_eq!(
             faults.of_note(at_path(&gate_path)).cloned(),

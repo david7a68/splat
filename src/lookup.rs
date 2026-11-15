@@ -2283,30 +2283,43 @@ impl Lookup {
             .density(Density::Read)
     }
 
+    /// Why the open action is locked, from the one fact that locks it: an unsaved Library draft.
+    /// The lock, its hover and accessible text, and the painted line take these words.
+    fn open_lock(&self) -> Option<String> {
+        let words = self.open_action_words()?;
+        self.library_draft.then(|| {
+            format!(
+                "To open this in {}, save or discard the Library draft first.",
+                words.trim_start_matches("Open in ")
+            )
+        })
+    }
+
+    /// The open action's locked reason, painted once in Lookup above the entry, from the text
+    /// edge, wherever the action stands (ruling R35). Nothing while the action is open.
+    fn open_lock_line(&self, ui: &mut egui::Ui) {
+        design::blocked_reason(ui, self.open_lock().as_deref());
+    }
+
     /// The open action, locked while a Library draft is unsaved. Returns whether it was pressed.
     fn open_action(&self, ui: &mut egui::Ui, own_line: bool) -> bool {
         let Some(words) = self.open_action_words() else {
             return false;
         };
-        design::locked(
-            ui,
-            self.library_draft
-                .then_some("Save or discard the Library draft first."),
-            |ui| {
-                // On a line of its own the action has no icon, as `Show N results` has: the
-                // panel's margin is narrower than an icon's hang, so its words start at the
-                // text edge (N4).
-                if own_line {
-                    Action::quiet(words)
-                        .density(Density::Read)
-                        .line_start()
-                        .show(ui)
-                        .clicked()
-                } else {
-                    Self::open_action_of(words).show(ui).clicked()
-                }
-            },
-        )
+        design::locked(ui, self.open_lock().as_deref(), |ui| {
+            // On a line of its own the action has no icon, as `Show N results` has: the
+            // panel's margin is narrower than an icon's hang, so its words start at the
+            // text edge (N4).
+            if own_line {
+                Action::quiet(words)
+                    .density(Density::Read)
+                    .line_start()
+                    .show(ui)
+                    .clicked()
+            } else {
+                Self::open_action_of(words).show(ui).clicked()
+            }
+        })
     }
 
     /// An entry or a found note, which Trackers keeps while it is in view.
@@ -2827,6 +2840,7 @@ impl Lookup {
         if !open_on_title && self.open_action(ui, true) {
             self.open_in_library = Some(current.entry.clone());
         }
+        self.open_lock_line(ui);
         let mut nav = self.reader.choices(ui, &index);
         if ui.rect_contains_pointer(ui.available_rect_before_wrap())
             && ui.input(|input| input.smooth_scroll_delta.y != 0.0)

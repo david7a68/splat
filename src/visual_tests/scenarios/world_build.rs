@@ -2643,6 +2643,41 @@ pub fn facts(d: &mut Driver<'_>) {
     let one = painted(d, horn_undo);
     d.click("Open: Who signed the pact?");
     let two = (painted(d, horn_undo), painted(d, pact_undo));
+    // A second tick makes both Undos paint their whole labels, so an Undo may move from beside
+    // its result to the line below it. At 960 nothing is lost: each result's words and each
+    // Undo stay whole in view.
+    let whole_at_960 = d.at_size(SMALL, |d| {
+        let nodes = d.nodes();
+        let undo_whole = |name: &str| {
+            nodes
+                .iter()
+                .any(|node| node.name == name && node.fully_in_view())
+        };
+        let words = |words: &str| d.painted_rect_in(words, egui::Rect::EVERYTHING);
+        (
+            undo_whole(horn_undo)
+                && undo_whole(pact_undo)
+                && words("\u{201c}Can a horn ring be sold?\u{201d} ticked in Horn Rings.")
+                    .is_some()
+                && words("\u{201c}Who signed the pact?\u{201d} ticked in Ash Pact.").is_some(),
+            format!(
+                "{:?}",
+                nodes
+                    .iter()
+                    .filter(|node| node.name.starts_with("Undo tick"))
+                    .map(|node| (&node.name, node.shown))
+                    .collect::<Vec<_>>()
+            ),
+        )
+    });
+    d.observe(
+        "s30-FE11-two-ticks-whole-at-960",
+        whole_at_960.0,
+        format!(
+            "Both results and both whole Undos are whole in view at 960: {}",
+            whole_at_960.1
+        ),
+    );
     d.click(horn_undo);
     let after = painted(d, pact_undo);
     d.observe(
@@ -10620,6 +10655,54 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.press(Key::Escape);
     d.click("Undo change to Name");
     d.wait_for_text("Rename the note to Mara Vell");
+    // Round 30 final review F3: two different notes with one name, each in a file of another
+    // name, so both rows have this fault. Where the fault's words and the file do not fit a
+    // row whole, each row keeps its own file's name, so the two rows stay apart.
+    entry(
+        d,
+        "NPCs/Iron Vey of the Northern Watch.md",
+        "Iron Vey",
+        "npc",
+        "",
+    );
+    entry(
+        d,
+        "NPCs/Iron Vey of the Southern Ford.md",
+        "Iron Vey",
+        "npc",
+        "",
+    );
+    reload(d);
+    d.click(NAV_WORLD);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let apart = d.at_size(size, |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Iron Vey · ") && node.in_view())
+                .collect();
+            let told = |file: &str, word: &str| {
+                rows.iter()
+                    .find(|row| row.name.contains(file))
+                    .and_then(|row| d.painted_rect_in(word, row.rect))
+                    .is_some()
+            };
+            (
+                rows.len() == 2
+                    && told("Iron Vey of the Northern Watch.md", "Northern")
+                    && told("Iron Vey of the Southern Ford.md", "Southern"),
+                rows.iter().map(|row| row.name.clone()).collect::<Vec<_>>(),
+            )
+        });
+        d.observe(
+            "s30-F3-same-name-renamed-rows",
+            apart.0,
+            format!(
+                "At {size:?}, the two same-name rows paint their own files: {:?}",
+                apart.1
+            ),
+        );
+    }
 }
 
 pub fn package_folder_copied(d: &mut Driver<'_>) {
