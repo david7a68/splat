@@ -1623,6 +1623,22 @@ mod tests {
         campaign: "Ashfall",
     };
 
+    /// A footer line for the test of the one footer order (`outcome::footer_order`).
+    struct Line(
+        super::super::components::FooterRank,
+        Option<ResultOrder>,
+        &'static str,
+    );
+
+    impl super::super::outcome::Ranked for Line {
+        fn key(&self) -> (super::super::components::FooterRank, Option<ResultOrder>) {
+            (self.0, self.1)
+        }
+        fn lead(&mut self) {
+            self.0 = super::super::components::FooterRank::Answer;
+        }
+    }
+
     fn done(note: Note, words: &'static str) -> Done {
         Done { note, words }
     }
@@ -1694,7 +1710,7 @@ mod tests {
         // M1: the recorded Undo. A refused attempt keeps the entry and its ticket, holds the
         // refusal with an order of its own, and outlives the change that caused it.
         use super::super::components::FooterRank;
-        use super::super::outcome::{Ranked, footer_order};
+        use super::super::outcome::footer_order;
         results.record(done(A, "A."));
         let a = results.get(&A).unwrap().order();
         let refusal = |cause| {
@@ -1740,15 +1756,6 @@ mod tests {
         );
         // R42, in one feed: the line of the newest act leads, whatever its kind; an act that
         // leaves no line moves nothing.
-        struct Line(FooterRank, Option<ResultOrder>, &'static str);
-        impl Ranked for Line {
-            fn key(&self) -> (FooterRank, Option<ResultOrder>) {
-                (self.0, self.1)
-            }
-            fn lead(&mut self) {
-                self.0 = FooterRank::Answer;
-            }
-        }
         let order = |lines: &mut Vec<Line>| {
             footer_order(lines);
             lines.iter().map(|line| line.2).collect::<Vec<_>>()

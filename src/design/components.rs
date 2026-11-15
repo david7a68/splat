@@ -6434,11 +6434,12 @@ mod tests {
             words(&["A again.", "B.", "Reason.", "Notice."]),
             "A again leads B"
         );
-        // Results with no live Undo follow the notices, newest first.
+        // Results with no live Undo follow the notices, newest first; but the newest act's line
+        // leads, whatever its kind (ruling R42).
         let (old, new) = (ResultOrder::issue(), ResultOrder::issue());
         assert_eq!(
             painted(&[("Old.", old, false), ("New.", new, false), ("B.", b, true)]),
-            words(&["B.", "Reason.", "Notice.", "New.", "Old."]),
+            words(&["New.", "B.", "Reason.", "Notice.", "Old."]),
             "plain results"
         );
     }
