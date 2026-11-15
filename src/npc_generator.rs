@@ -167,9 +167,14 @@ impl Tables {
                     tables.sources.push(format!("{key}: {path}"));
                 }
                 Some(error) => tables.problems.push(TableProblem {
+                    // R36: the cause after the file's name is a sentence: a capital first.
                     message: format!(
                         "{path}: {} Built-in {} stand in until it is fixed.",
-                        error.replacen("the table", &format!("the {label} table"), 1),
+                        splat::content::layout::cause_words(&error.replacen(
+                            "the table",
+                            &format!("the {label} table"),
+                            1
+                        )),
                         if key == NAME_KEY {
                             "names"
                         } else {
@@ -288,7 +293,7 @@ mod tests {
         assert!(
             tables.problems[0]
                 .message
-                .contains("Names.md: the name table stops at 1, but 1d6 rolls up to 6.")
+                .contains("Names.md: The name table stops at 1, but 1d6 rolls up to 6.")
         );
         assert_eq!(tables.problems[0].marker, NAME_KEY);
         let npc = generate(&tables, &mut Random::seeded(3)).unwrap();

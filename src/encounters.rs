@@ -41,6 +41,29 @@ const PARTY_FROM_CAMPAIGN: &str = "This encounter fills some rows from the campa
 struct Invalid {
     text: String,
     tone: Tone,
+    /// F3, R37: a required part of the encounter is missing (its name), as against a change
+    /// that cannot stand. Set where the fault is found (`Invalid::missing`), never read back from
+    /// the words; with the draft's origin it gives the save row's word.
+    missing: bool,
+}
+
+impl Invalid {
+    /// A required part is missing.
+    fn missing(text: &str) -> Self {
+        Self {
+            missing: true,
+            ..Self::from(text)
+        }
+    }
+
+    /// The save row's typed diagnosis of this fault.
+    fn diagnosis(&self) -> design::save_row::Diagnosis<'static> {
+        if self.missing {
+            design::save_row::Diagnosis::incomplete(self.text.clone())
+        } else {
+            design::save_row::Diagnosis::refused(self.text.clone())
+        }
+    }
 }
 
 impl std::fmt::Debug for Invalid {
@@ -54,6 +77,7 @@ impl From<String> for Invalid {
         Self {
             text,
             tone: Tone::Error,
+            missing: false,
         }
     }
 }
@@ -190,6 +214,124 @@ impl RosterFault {
     }
 }
 
+/// Save's checks of an encounter's changed groups (`owned_groups_found`): one ranked
+/// diagnosis, the origin of the first group that only lacks a part, and the reason the footer
+/// paints, if any (F2, R35): the first refusal that no group row or field already says.
+#[derive(Clone)]
+struct OwnedGroupsFound {
+    found: design::save_row::Diagnosis<'static>,
+    origin: Option<design::save_row::DraftOrigin>,
+    footer: Option<String>,
+}
+
+/// N1: Save's checks of an encounter's changed groups, ranked: the first refused change outranks
+/// the first missing part, whose group's origin comes with it (R37).
+fn owned_groups_found(
+    groups: &[GroupDraft],
+    snapshot: &Snapshot,
+    encounter: Uuid,
+) -> OwnedGroupsFound {
+    use design::save_row::Diagnosis;
+    let (mut refused, mut incomplete, mut refused_footer) = (None, None, None);
+    for group in groups.iter().filter(|group| group.dirty()) {
+        let Err(refusal) = group.check(snapshot, Some(encounter)) else {
+            continue;
+        };
+        if refusal.diagnosis().only_incomplete() {
+            let words = if group.is_empty() {
+                empty_group_words(&group.name())
+            } else {
+                named_group_words(&group.name(), refusal.text())
+            };
+            incomplete.get_or_insert((words, group.origin()));
+        } else {
+            let words = named_group_words(&group.name(), refusal.text());
+            // N2 (lead ruling, R35): a fault with a place of its own (a member's row, Belongs
+            // to) keeps its cause there, and the footer always names the next step, so a blocked
+            // Save has painted words whether that place is in view or not; never the cause twice.
+            let footer = match refusal.place() {
+                groups::RefusalPlace::Footer | groups::RefusalPlace::SaveRow => words.clone(),
+                groups::RefusalPlace::Member(..) => {
+                    fix_group_row(refusal.row().unwrap_or("marked"), &group.name())
+                }
+                groups::RefusalPlace::BelongsTo => format!(
+                    "Choose who {} belongs to before you save.",
+                    group_words(&group.name())
+                ),
+            };
+            refused_footer.get_or_insert(footer);
+            refused.get_or_insert(words);
+        }
+    }
+    let origin = incomplete.as_ref().map(|(_, origin)| *origin);
+    let footer = refused_footer.or_else(|| incomplete.as_ref().map(|(words, _)| words.clone()));
+    let found = incomplete
+        .map_or_else(Diagnosis::valid, |(words, _)| Diagnosis::incomplete(words))
+        .and(refused.map_or_else(Diagnosis::valid, Diagnosis::refused));
+    OwnedGroupsFound {
+        found,
+        origin,
+        footer,
+    }
+}
+
+/// F5: the key of the owned-group check: the campaign's read, the encounter draft, its number
+/// of groups and the count of group revisions issued. Constant work per frame: no group is
+/// read. Every edit of a group issues a revision (`GroupDraft::touch`), so a changed group
+/// changes the key; a group added or removed changes the number.
+fn owned_groups_key(snapshot: &Snapshot, draft: &Draft) -> (Uuid, Uuid, usize, u64) {
+    (
+        snapshot.revision,
+        draft.id,
+        draft.groups.len(),
+        groups::revisions_issued(),
+    )
+}
+
+#[cfg(test)]
+thread_local! {
+    /// (frames that asked for the owned-group check, groups that the check or its key read)
+    static OWNED_GROUP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+/// The counts of the owned-group check, for `CachedWork` (F5).
+#[cfg(test)]
+pub(crate) fn owned_group_work() -> (usize, usize) {
+    OWNED_GROUP_WORK.with(std::cell::Cell::get)
+}
+
+/// The next step for a group's member row that blocks Save (N2): `Fix the Cinder Wolf row of
+/// Ash Hounds before you save.`
+fn fix_group_row(row: &str, group: &str) -> String {
+    format!(
+        "Fix the {row} row of {} before you save.",
+        group_words(group)
+    )
+}
+
+/// A group as a sentence names it: its name, or `the new group` while it has none.
+fn group_words(name: &str) -> String {
+    match name.trim() {
+        "" => "the new group".to_owned(),
+        name => name.to_owned(),
+    }
+}
+
+/// A group's refusal as the encounter's Save says it: `Group <name>: <words>`.
+fn named_group_words(name: &str, words: &str) -> String {
+    match name.trim() {
+        "" => words.to_owned(),
+        name => format!("Group {name}: {words}"),
+    }
+}
+
+/// An empty group's reason in the encounter editor: `Add a creature to <name> first.`
+fn empty_group_words(name: &str) -> String {
+    match name.trim() {
+        "" => "Add a creature to the new group first.".to_owned(),
+        name => format!("Add a creature to {name} first."),
+    }
+}
+
 /// Where the editor leaves the roster's unread rows, for the roster to show in their places.
 fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
     egui::Id::new(("roster_fault_rows", draft))
@@ -232,7 +374,10 @@ fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
 }
 
 fn row_fault_words(name: &str, line: usize, problem: &str) -> String {
-    format!("{name} · line {line}: {problem}")
+    format!(
+        "{name} · line {line}: {}",
+        splat::content::layout::cause_words(problem)
+    )
 }
 
 /// Read rejected rows from a fresh parse, before catalogue reference resolution.
@@ -415,6 +560,9 @@ struct Draft {
     recovery: disk::Recovery,
     id: Uuid,
     path: String,
+    /// Whether this encounter was ever saved (R37): `New` from `Draft::new`, `Saved` from
+    /// `Draft::open` and the first successful save. Its own fact, not `baseline`.
+    origin: design::save_row::DraftOrigin,
     baseline: Option<String>,
     source: String,
     name: String,
@@ -471,6 +619,7 @@ impl Draft {
             recovery: Default::default(),
             id,
             path: format!("Encounters/{id}.md"),
+            origin: design::save_row::DraftOrigin::New,
             baseline: None,
             source,
             name: name.clone(),
@@ -524,6 +673,7 @@ impl Draft {
             recovery: Default::default(),
             id: entry.id,
             path: path.into(),
+            origin: design::save_row::DraftOrigin::Saved,
             baseline: Some(text.clone()),
             source: text,
             saved_name: entry.name.clone(),
@@ -599,10 +749,7 @@ impl Draft {
         self.groups
             .iter()
             .find(|group| group.is_empty() && group.dirty())
-            .map(|group| match group.name().trim() {
-                "" => "Add a creature to the new group first.".to_owned(),
-                name => format!("Add a creature to {name} first."),
-            })
+            .map(|group| empty_group_words(&group.name()))
     }
     /// Read this encounter's own groups, once the campaign has been read.
     fn read_groups(&mut self, root: &std::path::Path, snapshot: &Snapshot) -> Result<(), String> {
@@ -805,6 +952,7 @@ impl Draft {
         crate::file_batch::apply(&changes)?;
         self.source = text.clone();
         self.baseline = Some(text);
+        self.origin = design::save_row::DraftOrigin::Saved;
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
         self.saved_body = self.body.clone();
@@ -837,7 +985,7 @@ impl Draft {
             return Err(reason.into());
         }
         if self.name.trim().is_empty() {
-            return Err("Enter an encounter name.".into());
+            return Err(Invalid::missing("Enter an encounter name."));
         }
         // The Loot list writes that section, so a second one typed in the notes would be lost.
         if self.loot_owned && splat::content::loot::has_section(&self.body) {
@@ -878,23 +1026,17 @@ impl Draft {
                         // The kind of fault sets the tone, here where the message is made.
                         let unreadable = snapshot.catalogue.unreadable_ref(reference);
                         Invalid {
+                            missing: false,
                             tone: missing_creature_tone(unreadable),
                             // G125: each row says its deleted entry (`MISSING_CREATURE`), so the
                             // message says only the next act, for every such row.
-                            text: unreadable.map_or_else(
-                                || replace_deleted_rows(&self.deleted_rows(snapshot)),
-                                |note| {
-                                    format!(
-                                        "{}. Open in {} to fix it.",
-                                        note.word,
-                                        if crate::world::repair_in_world(&note.path) {
-                                            "World"
-                                        } else {
-                                            "Library"
-                                        }
-                                    )
-                                },
-                            ),
+                            // SC7, FC3: an unreadable entry too: each row says its cause and
+                            // its `Open in …`, so the message says only the next act, once.
+                            text: if unreadable.is_some() {
+                                fix_unreadable_rows(&self.unreadable_rows(snapshot))
+                            } else {
+                                replace_deleted_rows(&self.deleted_rows(snapshot))
+                            },
                         }
                     })?;
                     if !snapshot.creatures.iter().any(|c| c.id == id) {
@@ -937,6 +1079,21 @@ impl Draft {
                 slot.creature.as_ref().is_some_and(|reference| {
                     snapshot.catalogue.resolve_ref(reference).is_err()
                         && snapshot.catalogue.unreadable_ref(reference).is_none()
+                })
+            })
+            .map(|slot| roster_name(slot, None, &snapshot.known_creature_names))
+            .collect()
+    }
+    /// The names of the roster rows whose creature's file cannot be read now, in roster order,
+    /// as each row shows its name.
+    fn unreadable_rows(&self, snapshot: &Snapshot) -> Vec<String> {
+        self.setup
+            .roster
+            .iter()
+            .filter(|slot| {
+                slot.creature.as_ref().is_some_and(|reference| {
+                    snapshot.catalogue.resolve_ref(reference).is_err()
+                        && snapshot.catalogue.unreadable_ref(reference).is_some()
                 })
             })
             .map(|slot| roster_name(slot, None, &snapshot.known_creature_names))
@@ -1764,7 +1921,8 @@ const MISSING_CREATURE: &str = "Not found. Its package entry was deleted.";
 
 /// The message for roster rows whose package entry was deleted: only the next act, naming or
 /// counting the rows by creature. The rows themselves say the cause ([`MISSING_CREATURE`]).
-fn replace_deleted_rows(names: &[String]) -> String {
+/// `the 2 Cinder Wolf rows and the Goblin row`: rows named as the roster shows them, counted.
+fn named_rows(names: &[String]) -> String {
     let mut counted: Vec<(&str, usize)> = Vec::new();
     for name in names {
         match counted.iter_mut().find(|(known, _)| known == name) {
@@ -1779,15 +1937,36 @@ fn replace_deleted_rows(names: &[String]) -> String {
             count => format!("the {count} {name} rows"),
         })
         .collect();
-    let rows = match rows.as_slice() {
+    match rows.as_slice() {
         [] => "those rows".to_owned(),
         [one] => one.clone(),
         [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
-    };
+    }
+}
+
+fn replace_deleted_rows(names: &[String]) -> String {
+    let rows = named_rows(names);
+    // SC5, AC4: the sentence says when the replacement is needed: Save and a fight's start
+    // both wait for it.
     if names.len() == 1 {
-        format!("Choose a replacement for {rows}.")
+        format!("Choose a replacement for {rows} before you save or start a fight.")
     } else {
-        format!("Choose replacements for {rows}.")
+        format!("Choose replacements for {rows} before you save or start a fight.")
+    }
+}
+
+/// The next act for rows whose creature's file cannot be read: the rows say the cause and the
+/// way to the file, so this says only what waits.
+fn fix_unreadable_rows(names: &[String]) -> String {
+    let rows = named_rows(names);
+    // Rows of one creature share its file.
+    let mut creatures: Vec<&String> = names.iter().collect();
+    creatures.sort();
+    creatures.dedup();
+    if creatures.len() == 1 {
+        format!("Fix the file of {rows} before you save or start a fight.")
+    } else {
+        format!("Fix the files of {rows} before you save or start a fight.")
     }
 }
 
@@ -2897,6 +3076,10 @@ pub struct Encounters {
     /// Save's check of the open group draft (FN5, AI2), with the snapshot revision and the
     /// draft's own revision it was made for. A frame with no change does not check again.
     group_check: Option<((Uuid, u64), Option<groups::Refusal>)>,
+    /// N1: Save's checks of the open encounter's changed groups, as one ranked diagnosis with
+    /// the origin of the first group that only lacks a part. Keyed by the snapshot revision and
+    /// the changed groups' own revisions, so an unchanged frame does not check them again.
+    owned_group_check: Option<((Uuid, Uuid, usize, u64), OwnedGroupsFound)>,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
@@ -3168,7 +3351,10 @@ impl Encounters {
                 .as_ref()
                 .and_then(groups::Refusal::footer)
                 .map(str::to_owned);
-            (refusal.map(|refusal| Invalid::from(refusal.text)), shown)
+            (
+                refusal.map(|refusal| Invalid::from(refusal.text().to_owned())),
+                shown,
+            )
         } else {
             let invalid = self
                 .draft
@@ -3191,6 +3377,32 @@ impl Encounters {
     fn refused(&mut self, invalid: Option<Invalid>) {
         self.refusal_watch |= invalid.is_some();
         self.validation_error = invalid;
+    }
+    /// N1: Save's checks of the open encounter's changed groups as one ranked diagnosis: the
+    /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
+    /// part, whose group's origin comes with it. Checked again only when the campaign's read or a
+    /// changed group's own revision changes.
+    fn owned_groups_diagnosis(&mut self) -> OwnedGroupsFound {
+        let (Some(snapshot), Some(draft)) = (self.snapshot.as_ref(), self.draft.as_ref()) else {
+            return OwnedGroupsFound {
+                found: design::save_row::Diagnosis::valid(),
+                origin: None,
+                footer: None,
+            };
+        };
+        #[cfg(test)]
+        OWNED_GROUP_WORK.with(|work| work.set((work.get().0 + 1, work.get().1)));
+        let key = owned_groups_key(snapshot, draft);
+        if let Some((cached, found)) = &self.owned_group_check
+            && *cached == key
+        {
+            return found.clone();
+        }
+        #[cfg(test)]
+        OWNED_GROUP_WORK.with(|work| work.set((work.get().0, work.get().1 + draft.groups.len())));
+        let found = owned_groups_found(&draft.groups, snapshot, draft.id);
+        self.owned_group_check = Some((key, found.clone()));
+        found
     }
     /// Whether the shown message is the last failed check of the draft.
     fn shows_validation_error(&self) -> bool {
@@ -5101,7 +5313,7 @@ impl Encounters {
         frame: &'f design::outcome::PaneFrame,
         width: f32,
         root: &std::path::Path,
-        empty_group: Option<String>,
+        groups_reason: Option<String>,
     ) -> design::outcome::Messages<'f, FooterPress> {
         use design::outcome::FaultMessage;
         self.record_member_results();
@@ -5144,7 +5356,9 @@ impl Encounters {
                 EncounterFault::Failed(error)
             };
             messages.outcome(FaultMessage::new(&fault));
-        } else if let Some(reason) = empty_group {
+        } else if let Some(reason) = groups_reason {
+            // F2, R35: the owned groups' first reason that no row says, painted once (an empty
+            // group, a blank name or side, a refusal with no row of its own).
             messages.outcome(FaultMessage::new(&EncounterFault::Invalid(reason)));
         }
         messages
@@ -5955,7 +6169,45 @@ impl Encounters {
         // AB1: Save checks every changed group too, so an empty one makes the draft Invalid now,
         // not after a refused Save. It is the frame's own state, read without parsing.
         let empty_group = self.draft.as_ref().and_then(Draft::empty_group_reason);
-        let refusal = roster_reason.clone().or(empty_group.clone()).or(refusal);
+        // The typed check of the save row (R37, E2, N1): Save's checks of every changed group,
+        // ranked as the group editor ranks them, then a roster fault or the last refusal, which
+        // is a refused change. A missing part alone takes that group's origin (a new group with
+        // only its name is `New` in a saved encounter too); otherwise the encounter's own.
+        // F3: the encounter's own last refusal keeps its kind: a missing name is a missing part.
+        // F2: the footer paints the groups' first reason that no row says (R35).
+        let groups = self.owned_groups_diagnosis();
+        let own = refusal
+            .is_some()
+            .then(|| self.validation_error.as_ref().map(Invalid::diagnosis))
+            .flatten();
+        let draft_origin = self
+            .draft
+            .as_ref()
+            .map_or(design::save_row::DraftOrigin::Saved, |draft| draft.origin);
+        // A missing part says `New` only when every missing part is new: the encounter's own
+        // takes its origin, a group's that group's.
+        let missing_origins = [
+            groups.origin,
+            own.as_ref()
+                .filter(|own| own.only_incomplete())
+                .map(|_| draft_origin),
+        ];
+        let origin = if missing_origins.contains(&Some(design::save_row::DraftOrigin::Saved)) {
+            design::save_row::DraftOrigin::Saved
+        } else if missing_origins.contains(&Some(design::save_row::DraftOrigin::New)) {
+            design::save_row::DraftOrigin::New
+        } else {
+            draft_origin
+        };
+        let found = groups
+            .found
+            .clone()
+            .and(roster_reason.clone().map_or_else(
+                design::save_row::Diagnosis::valid,
+                design::save_row::Diagnosis::refused,
+            ))
+            .and(own.unwrap_or_else(design::save_row::Diagnosis::valid));
+        let groups_footer = groups.footer;
         // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
         // the campaign lock (migrate:O, rows 42 and 51). The encounter draft says `Invalid`
         // only while it has changes; its rows name the faults of a clean one.
@@ -5971,10 +6223,9 @@ impl Encounters {
             } else {
                 design::save_row::Primary::Draft
             };
-            let mut state = design::DraftState::new(changed, primary).locks_campaign();
-            if let Some(refusal) = &refusal {
-                state = state.refused_when_changed(refusal.clone());
-            }
+            let mut state = design::DraftState::new(origin, changed, primary)
+                .locks_campaign()
+                .check_when_changed(found);
             if saved_note.is_some() {
                 state = state.just_saved();
             }
@@ -6296,7 +6547,7 @@ impl Encounters {
             &frame,
             ui.available_width(),
             &active.path,
-            empty_group.filter(|_| dirty),
+            groups_footer.filter(|_| dirty),
         );
         let paned = messages.pane(
             ui,
@@ -7989,14 +8240,14 @@ mod tests {
                 vec![flag(3, "the date was not read.")],
                 vec![],
                 "Encounters/Shrine.md",
-                vec!["Encounters/Shrine.md, line 3: the date was not read."],
+                vec!["Encounters/Shrine.md, line 3: The date was not read."],
                 None,
             ),
             (
                 vec![flag(20, "the change was not read.")],
                 vec![row("Ember Cultist", 20)],
                 "Encounters/Shrine.md",
-                vec!["Ember Cultist · line 20: the change was not read."],
+                vec!["Ember Cultist · line 20: The change was not read."],
                 Some(fix_roster_rows(1)),
             ),
             (
@@ -8009,9 +8260,9 @@ mod tests {
                 vec![row("Ember Cultist", 20), row("Row on line 21", 21)],
                 long,
                 vec![
-                    "Ember Cultist · line 20: the change “HP lots” was not read.",
-                    "Row on line 21 · line 21: the creature cell is empty.",
-                    "Line 4: the date was not read.",
+                    "Ember Cultist · line 20: The change “HP lots” was not read.",
+                    "Row on line 21 · line 21: The creature cell is empty.",
+                    "Line 4: The date was not read.",
                 ],
                 Some(fix_roster_rows(2)),
             ),
@@ -8939,14 +9190,14 @@ mod tests {
         mixed.add(id, false);
         assert_eq!(
             mixed.validate(&snapshot).unwrap_err().text,
-            "Choose replacements for the 2 Cinder Wolf rows and the Goblin row."
+            "Choose replacements for the 2 Cinder Wolf rows and the Goblin row before you save or start a fight."
         );
         // A row with a changed name is named as the roster shows it, also beside a plain row of
         // the same creature.
         mixed.setup.roster[3].overrides = yaml("{name: Ash}").as_mapping().unwrap().clone();
         assert_eq!(
             mixed.validate(&snapshot).unwrap_err().text,
-            "Choose replacements for the Cinder Wolf row, the Goblin row and the Ash row."
+            "Choose replacements for the Cinder Wolf row, the Goblin row and the Ash row before you save or start a fight."
         );
         let mut draft = Draft::new();
         draft.add(id, false);
@@ -8954,7 +9205,7 @@ mod tests {
         let error = draft.validate(&snapshot).unwrap_err();
         assert_eq!(
             error.text,
-            "Choose replacements for the 2 Cinder Wolf rows."
+            "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight."
         );
         let mut encounters = Encounters {
             snapshot: Some(snapshot),
@@ -8967,26 +9218,18 @@ mod tests {
         };
         encounters.draft.as_mut().unwrap().setup.roster.pop();
         encounters.refresh_validation_error(false, true);
-        assert!(
-            encounters
-                .error
-                .as_ref()
-                .unwrap()
-                .starts_with("Choose a replacement for the Cinder Wolf row.")
-        );
+        assert!(encounters.error.as_ref().unwrap().starts_with(
+            "Choose a replacement for the Cinder Wolf row before you save or start a fight."
+        ));
         let missing = encounters.draft.as_ref().unwrap().setup.roster.clone();
         encounters.draft.as_mut().unwrap().setup.roster.clear();
         encounters.refresh_validation_error(false, true);
         assert!(encounters.error.is_none());
         encounters.draft.as_mut().unwrap().setup.roster = missing;
         encounters.refresh_validation_error(false, true);
-        assert!(
-            encounters
-                .error
-                .as_ref()
-                .unwrap()
-                .starts_with("Choose a replacement for the Cinder Wolf row.")
-        );
+        assert!(encounters.error.as_ref().unwrap().starts_with(
+            "Choose a replacement for the Cinder Wolf row before you save or start a fight."
+        ));
 
         // Round 24 review: drawn frames check the refused draft again only when it or the
         // campaign changes: not on unchanged frames or a resize; once after an edit, Discard and
@@ -9044,7 +9287,10 @@ mod tests {
             work: VALIDATIONS.with(std::cell::Cell::get),
         });
         frame(&mut encounters, wide, Vec::new());
-        let shown = shows(&encounters, "Choose a replacement for the Cinder Wolf row.");
+        let shown = shows(
+            &encounters,
+            "Choose a replacement for the Cinder Wolf row before you save or start a fight.",
+        );
         check
             .warm(&mut encounters, shown, 1)
             .expect("refusal-check-warm");
@@ -9053,7 +9299,7 @@ mod tests {
                 for size in [wide, wide, wide, narrow, wide] {
                     frame(encounters, size, Vec::new());
                 }
-                shows(encounters, "Choose a replacement for the Cinder Wolf row.")
+                shows(encounters, "Choose a replacement for the Cinder Wolf row before you save or start a fight.")
             })
             .expect("refusal-check-steady");
         // An edit: the second row comes back, and the reason counts both.
@@ -9065,7 +9311,7 @@ mod tests {
                 frame(encounters, wide, Vec::new());
                 shows(
                     encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows.",
+                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
                 )
             })
             .expect("refusal-check-edit");
@@ -9086,7 +9332,7 @@ mod tests {
                 frame(encounters, wide, Vec::new());
                 shows(
                     encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows.",
+                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
                 )
             })
             .expect("refusal-check-undo");
@@ -9097,7 +9343,7 @@ mod tests {
                 }
                 shows(
                     encounters,
-                    "Choose replacements for the 2 Cinder Wolf rows.",
+                    "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
                 )
             })
             .expect("refusal-check-steady-after-undo");
@@ -10534,7 +10780,7 @@ mod tests {
         let invalid = draft.validate(&deleted).unwrap_err();
         assert_eq!(
             invalid.text,
-            "Choose a replacement for the Cinder Wolf row."
+            "Choose a replacement for the Cinder Wolf row before you save or start a fight."
         );
         assert!(invalid.tone == Tone::Warning);
         // The row says the same fault in the same tone.
