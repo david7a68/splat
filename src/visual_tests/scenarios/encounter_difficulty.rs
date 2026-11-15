@@ -519,6 +519,16 @@ pub fn run(d: &mut Driver<'_>) {
         &[SMALL, DEFAULT, LARGE],
     );
     d.state("plan-opened", Sizes::All);
+    // `plan-row-fit` (SA4, AA3, AM5): Mill Road keeps its creatures before its XP number, and a
+    // row keeps its limit before the party's size, at every size (Q-s, R39).
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (read, wrong) = d.at_size(size, plan_lines_out_of_order);
+        d.observe(
+            "plan-row-fit",
+            read > 0 && wrong.is_empty(),
+            format!("At {size:?}, plan lines read {read}; out of the Q-s order: {wrong:?}"),
+        );
+    }
     // FB4: a fight with no word says `XP not known` on its row, opened or not; FH6: once.
     d.click(HIGH);
     d.click(UNKNOWN);

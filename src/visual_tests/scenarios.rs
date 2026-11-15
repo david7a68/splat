@@ -24797,6 +24797,13 @@ pub mod session_plan {
         d.click(NAV_LOOKUP);
 
         d.state_prepared("plan-with-fights", Sizes::AllAndHiDpi, |d| {
+            // `plan-row-fit` (AM5): the plan rows follow Q-s at this size.
+            let (read, wrong) = plan_lines_out_of_order(d);
+            d.observe(
+                "plan-row-fit",
+                read > 0 && wrong.is_empty(),
+                format!("Plan lines read {read}; out of the Q-s order: {wrong:?}"),
+            );
             assert!(
                 d.in_view(&format!("Resume: {FIRST}")),
                 "iter-9-C-FT1: the paused plan row has Resume"
@@ -28369,4 +28376,31 @@ fn lookup_show_all(d: &mut Driver<'_>, six: &str) {
         format!("With {broad:?} matches and the list closed, the action says {reopen:?}"),
     );
     d.replace_text_in(SEARCH_LOOKUP, words);
+}
+
+/// Q-s, R39 (`plan-row-fit`): the painted plan and roster summary lines that end with a known
+/// word, and those of them out of the ruled order. `5 party` gives way before the limit, the
+/// limit before the XP number, and the XP number before any member; so a line that cuts a member
+/// (`…`) has no XP number, and a line that keeps the party keeps the limit (`Above High` has
+/// none). Returns how many lines it read, so a check can require one.
+pub(crate) fn plan_lines_out_of_order(d: &Driver<'_>) -> (usize, Vec<String>) {
+    let mut read = 0;
+    let mut wrong = Vec::new();
+    d.each_painted_text(|text, _| {
+        let words = text.galley.job.text.replace(['\u{a0}', '\n'], " ");
+        let rated = ["Low", "Moderate", "High"]
+            .iter()
+            .any(|word| words.contains(word));
+        if !(rated && words.contains(" × ")) {
+            return;
+        }
+        read += 1;
+        let xp_before_member = words.contains('…') && words.contains("XP ");
+        let party_before_limit =
+            words.contains(" party") && !words.contains("(up to") && !words.contains("Above High");
+        if xp_before_member || party_before_limit {
+            wrong.push(words);
+        }
+    });
+    (read, wrong)
 }
