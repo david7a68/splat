@@ -372,13 +372,13 @@ impl DndBeyond {
                                         color: crate::design::colors().muted,
                                     },
                                 );
-                            } else if !local.importing(&remote.id)
-                                && crate::design::Action::secondary("Add…")
+                            } else if !local.importing(&remote.id) {
+                                let add = crate::design::Action::secondary("Add…")
                                     .name(&format!("Add {} from D&D Beyond", remote.name))
-                                    .show(ui)
-                                    .clicked()
-                            {
-                                local.start_import(&remote.id, &remote.name);
+                                    .show(ui);
+                                if let Some(act) = crate::design::reveal::Act::clicked(ui, &add) {
+                                    local.start_import(act, &remote.id, &remote.name);
+                                }
                             }
                         });
                     });
