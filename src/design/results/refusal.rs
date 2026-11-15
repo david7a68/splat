@@ -388,6 +388,8 @@ pub enum FailedAct {
     NotPutBack { what: Thing, into: Name },
     /// The plan's links: `No links to Hobb were changed.`
     LinksNotChanged { to: Name },
+    /// The Undo of a links update: `The links to Hobb were not put back in Session 1.`
+    LinksNotPutBack { to: Name, within: Name },
 }
 
 /// Why the act was refused: a typed diagnosis, which also gives the tone (R41). The part writes
@@ -434,6 +436,9 @@ pub enum Cause {
     NeedsChoice(Name),
     /// `More than one note can answer to Hobb.` A warning.
     Ambiguous(Name),
+    /// `Session 1 changed after its links were updated.` A warning: the Undo would lose that
+    /// change.
+    EditedSince(Name),
 }
 
 /// A step in the app the DM takes before the act can work. The part writes its words.
@@ -515,9 +520,17 @@ pub enum Recovery {
 }
 
 /// A refused act's answer: what was not done, why, and the next step. Its fields are private, it
-/// has no `Default` and no conversion from text: [`Refusal::new`] takes all three parts.
+/// has no `Default` and no conversion from text: [`Refusal::new`] takes all three parts. They
+/// are held in one box, so a `Result` that carries a refusal stays one pointer wide whatever the
+/// vocabulary grows to.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Refusal {
+pub struct Refusal(Box<Parts>);
+
+// A `Result` that carries a refusal stays small (Clippy's `result_large_err`).
+const _: () = assert!(std::mem::size_of::<Refusal>() == std::mem::size_of::<usize>());
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Parts {
     act: FailedAct,
     cause: Cause,
     recovery: Recovery,
@@ -525,18 +538,18 @@ pub struct Refusal {
 
 impl Refusal {
     pub fn new(act: FailedAct, cause: Cause, recovery: Recovery) -> Self {
-        Self {
+        Self(Box::new(Parts {
             act,
             cause,
             recovery,
-        }
+        }))
     }
 
     /// The tone of its answer, from its diagnosis (R41): a file that cannot be read or written
     /// is an error; a file that changed, went or holds another note, and a rule of the app that
     /// the act did not meet, are a warning.
     pub fn tone(&self) -> Tone {
-        match self.cause {
+        match self.0.cause {
             Cause::Changed(_)
             | Cause::Conflict(_)
             | Cause::Gone(_)
@@ -552,7 +565,8 @@ impl Refusal {
             | Cause::NotOnTimeline
             | Cause::CreatureDeleted(_)
             | Cause::NeedsChoice(_)
-            | Cause::Ambiguous(_) => Tone::Warning,
+            | Cause::Ambiguous(_)
+            | Cause::EditedSince(_) => Tone::Warning,
             Cause::Unreadable(_)
             | Cause::NotSaved(_)
             | Cause::NotChanged(_)
@@ -573,7 +587,7 @@ impl Refusal {
             Some(apart) => format!("{} · {}", name.as_str(), apart.as_str()),
             None => name.as_str().to_owned(),
         };
-        let act = match &self.act {
+        let act = match &self.0.act {
             FailedAct::NotRemoved { what, from } => crate::sentence!(
                 "The {} was not removed from {}.",
                 what.phrase(),
@@ -609,8 +623,13 @@ impl Refusal {
             FailedAct::LinksNotChanged { to } => {
                 crate::sentence!("No links to {} were changed.", place(to))
             }
+            FailedAct::LinksNotPutBack { to, within } => crate::sentence!(
+                "The links to {} were not put back in {}.",
+                to.as_str(),
+                place(within)
+            ),
         };
-        let cause = match &self.cause {
+        let cause = match &self.0.cause {
             Cause::Changed(file) => crate::sentence!("{} changed on disk.", file.subject()),
             Cause::Conflict(file) => crate::sentence!(
                 "{} has unsaved words, and its file changed on disk.",
@@ -657,8 +676,11 @@ impl Refusal {
             Cause::Ambiguous(name) => {
                 crate::sentence!("More than one note can answer to {}.", name.as_str())
             }
+            Cause::EditedSince(note) => {
+                crate::sentence!("{} changed after its links were updated.", note.as_str())
+            }
         };
-        let next = match &self.recovery {
+        let next = match &self.0.recovery {
             Recovery::ByHand { file, change } => {
                 crate::sentence!("Open {} and {} there.", file.opens(), change.words())
             }
@@ -961,6 +983,19 @@ mod tests {
                 ),
                 "No links to Hobb were changed. More than one note can answer to Hobb. Choose the \
                  group in each note first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::LinksNotPutBack {
+                        to: name("Hobb"),
+                        within: name("Session 1: The Road"),
+                    },
+                    Cause::EditedSince(name("Session 1: The Road")),
+                    Recovery::First(Step::Resolve(name("Session 1: The Road"))),
+                ),
+                "The links to Hobb were not put back in Session 1: The Road. Session 1: The Road \
+                 changed after its links were updated. Resolve Session 1: The Road first.",
                 Tone::Warning,
             ),
             (
