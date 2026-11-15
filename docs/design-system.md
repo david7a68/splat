@@ -393,9 +393,20 @@ Lookup has no file line: there an empty value block draws nothing, and the prose
 the kind line, as a spell's does, and so does a plain note's prose. Lookup's reader keeps the app's row spacing whether a search or a link
 opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
 history. Every way to open another entry records the entry it leaves: a link, a list row, the About row and the header
-count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
-campaign-choice actions (`Choose for this campaign`, `Choose all`), then Back. Drop Back's key hint first; fold Copy, Make NPC note and the campaign choice into quiet More when needed, with
-Back before More. Every toolbar action, Make NPC note and the actions in More included, is a Read control
+count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line and is one closed part (`design::ReaderToolbar`, ruling R38): Read and the source
+mode at the left, keeping the room of the wider source label (`Markdown source`), then Back, then the copy, creation
+and campaign-choice actions (`Choose for this campaign`, `Choose all`). Back's place is fixed: it does not move
+between entry kinds or with the count of actions after it. Back shows its key hint when the modes, Back with its key
+and a `More` fit; else it drops the hint. The actions follow Back when they fit, else they fold into quiet More
+at the row's right end. A steady reason an action waits for (no place to copy to) is painted once under the row; the
+open draft's reason is painted once, by the same part. With a save row it stands on the save row's own line: the
+long whole sentence when it fits, else the short one (`Save or discard first.`, its hover and name the long one),
+chosen from the row's width alone (Save's wider weight, the widest state word, `Discard` and any campaign-switch
+reason counted in every state), so nothing moves when the draft becomes dirty and nothing shows while it is clean.
+Only a row too narrow for the short form keeps a slot under it, in both states. With no save row (a comparison or
+a fault owns the pane, or the entry cannot be edited) it stands on the toolbar's own line after the actions when it
+fits whole, else on the line under the toolbar; it is never left out. The waiting actions say the same words on
+hover and as their accessible description. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name: where two
@@ -524,7 +535,8 @@ whole at minimum width. Its menu is as wide as the control, so it stays in the c
 a long package name wraps. An empty search or filter names its scope (`No entries match in Can use. Try fewer
 words, or search Everything.`), and quiet `Search Everything` starts the next line at the text edge: it keeps
 the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
-Hide All entries without a search. Empty categories and their headings stay hidden. Fixed scope names
+All entries stays in its place in every state; with an empty search it paints no count (the header has it; its
+accessible name keeps it), and with a search it shows the count as the other rows do. Empty categories and their headings stay hidden. Fixed scope names
 wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
 or without its mark, so a fault moves no row below it. The row always keeps `About`, the word that says what it opens; a
 name that does not fit after it shortens by whole words (`⚠ About Ashen…`). Both the scope menu and
@@ -723,7 +735,11 @@ play, and a campaign with none, show nothing here. The rows are worked out when 
 definition changes, and a collapsed section draws nothing.
 
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy
-to… requires a campaign or package destination and states that reason on hover. Create copy saves in one step.
+to… requires a campaign or package destination (one places policy with New entry). While it waits for one, its
+reason is painted in `Small` muted words under the reader's toolbar, in the same pane, from the same value that
+disables it (ruling R35; `design::ReaderToolbar`); hover and the accessible description say it too. A disabled
+control outside a menu always has its reason in painted words in the same pane; a cause that blocks several
+controls is still said once at its cause, such as the save row. Create copy saves in one step.
 Edit the copy selects it and opens Markdown editing. An open encounter draft keeps Add to its encounter as the
 primary completion action. Completion names the destination, with path on hover. A renamed copy changes its
 first H1 only when it matches the source name.

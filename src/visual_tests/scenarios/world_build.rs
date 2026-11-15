@@ -7478,7 +7478,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         let open = d.place_of("Open in Library").expect("Safe manifest repair is present");
         let replace = d.place_of("Replace with a basic Package.md").expect("Manifest replacement is present");
         let notice = d.painted_left("Ashen Marches: Package.md cannot be read").expect("Manifest warning is visible");
-        let help = d.painted_left("Keeps the package name and its links.").expect("Replacement consequence is visible");
+        let help = d.painted_left("This keeps the package name and its links.").expect("Replacement consequence is visible");
         d.observe("iter-7-C-FD4-order", open.top() <= replace.top() && (open.top() < replace.top() || open.right() <= replace.left()),
             "Open in Library precedes manifest replacement");
         d.observe("iter-7-C-FD4-edge", (open.left() - notice).abs() <= 1.0 && (help - notice).abs() <= 1.0,
@@ -7487,7 +7487,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Open in Library has a secondary border");
         d.observe("iter-7-C-FD5", d.visible_text("Package.md cannot be read (line 4). Entries are still available."),
             "The manifest fault and availability sentence have a full stop between them");
-        d.observe("iter-6-C-AD1", d.visible_text("Keeps the package name and its links.")
+        d.observe("iter-6-C-AD1", d.visible_text("This keeps the package name and its links.")
             && d.visible_text("including its description.")
             && d.visible_text("The entries stay unchanged."),
             "Manifest replacement states the package name, links, description and unchanged entries");
@@ -11627,7 +11627,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.click(&format!(
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
-    d.wait_for_text("Undo separate entries");
+    d.wait_for_control("Undo separate entries");
     d.expect(&format!(
         "{count} files in ashen-marches-copy/ are now separate entries."
     ));
@@ -11696,7 +11696,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
     let batch_words = format!("{count} files in ashen-marches-copy/ are now separate entries.");
-    d.wait_for_text("Undo separate entries");
+    d.wait_for_control("Undo separate entries");
     d.expect(&batch_words);
     let wolf = copied_entries
         .iter()
@@ -12885,6 +12885,50 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
                 && !d.has_containing("was deleted on disk")
                 && d.has("Technical details"),
             "The draft's choices never save over the unreadable file",
+        );
+        // B2 packet 3 (F1): the draft's reason is always painted, exactly once: here, with no
+        // save row, on the toolbar's own line after its actions when it fits whole (at 1920,
+        // so no line is added and the draft's editor keeps its whole border), else on the
+        // line under the toolbar. The waiting actions say the same words on hover and as their
+        // accessible description; the body keeps its own sentence and choices.
+        let mut reasons = Vec::new();
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text == crate::design::save_row::CHANGED_ON_DISK
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                reasons.push(text.visual_bounding_rect());
+            }
+        });
+        let toolbar = d.place_of(EDIT_MARKDOWN);
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.role == egui::accesskit::Role::MultilineTextInput);
+        let cites = d
+            .descriptions()
+            .iter()
+            .any(|words| words == crate::design::save_row::CHANGED_ON_DISK);
+        let wide = d.window_size().0 >= 1900.0;
+        d.observe(
+            "s30-B2-disk-reason-painted",
+            d.visible_text(&conflict)
+                && d.has("Try again")
+                && cites
+                && reasons.len() == 1
+                && editor.is_some()
+                && (!wide
+                    || toolbar.is_some_and(|toolbar| {
+                        (reasons[0].center().y - toolbar.center().y).abs() <= crate::design::S
+                    }) && editor.as_ref().is_some_and(|editor| {
+                        editor.shown.min.distance(editor.rect.min) <= 0.5
+                            && editor.shown.max.distance(editor.rect.max) <= 0.5
+                            && editor.rect.bottom() + crate::design::S <= d.window_size().1
+                    })),
+            format!(
+                "The reason is painted once {reasons:?} (on the toolbar line {toolbar:?} at 1920), \
+                 the actions cite it ({cites}), the body keeps {conflict:?}; editor {:?}",
+                editor.as_ref().map(|editor| (editor.rect, editor.shown))
+            ),
         );
     });
     assert!(d.app_mut().library.dirty(), "the draft stays");
