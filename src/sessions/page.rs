@@ -288,6 +288,32 @@ fn folder_moved<A>(moved: &kept::FolderMoved) -> design::outcome::Done<A> {
     design::outcome::Done::new(Verb::Move, format!("{} to {}", moved.counts, moved.typed))
 }
 
+/// Round 30 `recording-result-owner` (FG1, SG3): `Recording saved: <title>.`, kept by the
+/// session whose recording it names. It shows in that session's footer only, and only while its
+/// file stands: every listing of the recordings asks the disk (`refresh_recordings`), and one
+/// that no longer finds the file ends it, whichever session is open. Leaving the tab the DM was
+/// on (`clear_success`), its `Dismiss`, the next recording of the same session and a campaign
+/// switch (another folder) end it too.
+struct RecordingSaved {
+    owner: kept::OfSession,
+    path: PathBuf,
+}
+
+impl design::results::Kept for RecordingSaved {
+    type Owner = kept::OfSession;
+    const ENDS: design::results::Ends = design::results::Ends {
+        // Leaving the tab ends it, as every success of the page (`clear_success`).
+        owner_changed: design::results::OwnerChanged::Ends,
+        // It holds while its file stands (`refresh_recordings`).
+        disk_changed: design::results::DiskChanged::Checked,
+        // `Dismiss` uses it up.
+        press: design::results::Press::Use,
+    };
+    fn owner(&self) -> kept::OfSession {
+        self.owner.clone()
+    }
+}
+
 /// What the DM chose in the session page's message footer, done after the footer is drawn.
 #[derive(Clone, Debug, PartialEq)]
 enum SessionAct {
@@ -300,6 +326,8 @@ enum SessionAct {
     OpenSettings,
     UndoCarry(Uuid),
     UndoMarker,
+    /// `Dismiss` of `Recording saved: …` (`RecordingSaved`).
+    DismissSaved,
     /// `Undo reload` or `Undo discard` of the draft's dropped words.
     UndoDrop,
     /// `Undo delete` of a deleted template.
@@ -309,6 +337,37 @@ enum SessionAct {
     NewSession,
     /// A press in the plan's part of the footer: the plan acts on it (`plan_pane`).
     Plan(plan::FooterAct),
+}
+
+/// Which footer holds the session page's own results and notices (`session_messages`): those
+/// of the session, of its note and of its recordings. None of them is the plan's, so the plan's
+/// pane holds them only where it is the one pane in view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PageFooter {
+    /// The narrow Plan tab: the plan is all the pane shows, and its one footer holds the plan's
+    /// results and the page's.
+    Plan,
+    /// The session pane's own footer, below all it shows: plan and note side by side (across
+    /// both, below the taller), the note, the recordings, a conflict.
+    Session,
+}
+
+impl SessionView {
+    /// Round 30 `session-pane-footer-owner` (FF3, FM9, FN5, SN3, AN4): a result stands in the
+    /// pane of its object. The page's results belong to the session, its note or a recording,
+    /// so they stand in the footer of the pane that holds the whole session, never in the plan's
+    /// column beside the note. The one place that decides it: `session_pane` and
+    /// `session_content` both ask here.
+    fn page_footer(&self) -> PageFooter {
+        match self {
+            Self::Tab {
+                shown: Tab::Plan,
+                beside: false,
+                ..
+            } => PageFooter::Plan,
+            Self::Tab { .. } | Self::Conflict => PageFooter::Session,
+        }
+    }
 }
 
 /// What the session page's pane shows, as its header worked it out.
@@ -670,6 +729,8 @@ pub struct Sessions {
     added: Option<Added>,
     /// A marker's `Add` result, by the session whose recording holds the marker.
     markers: design::Results<kept::OfSession, kept::MarkerAdd>,
+    /// `Recording saved: …`, by the session whose recording it names.
+    saved: design::Results<kept::OfSession, RecordingSaved>,
     notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
@@ -1677,6 +1738,34 @@ impl Sessions {
         })
     }
 
+    /// Round 30 `record-again-repeat` (FG8, SG6, AG5): the one row that offers `Record again`.
+    /// One press starts one new file, so the act stands once: on the newest row whose recording
+    /// stopped by itself (live and stalled, or stored as stopped). An older stopped row keeps its
+    /// state, its words and `Process`, and does not look tied to the new file.
+    fn record_again_row(&self) -> Option<usize> {
+        self.recordings.iter().position(|recording| {
+            let live = self
+                .live
+                .as_ref()
+                .filter(|live| live.recorder.path() == recording.path);
+            match live {
+                Some(live) => {
+                    matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
+                }
+                None => {
+                    recording
+                        .status
+                        .as_deref()
+                        .is_some_and(|words| words.starts_with("Stopped by itself:"))
+                        && self
+                            .job
+                            .as_ref()
+                            .is_none_or(|(job, _)| job.recording != recording.path)
+                }
+            }
+        })
+    }
+
     fn recording_recovery_row(&self) -> Option<usize> {
         self.recordings.iter().position(|recording| {
             let stalled = self.live.as_ref().is_some_and(|live| {
@@ -1736,11 +1825,6 @@ impl Sessions {
         self.notice.is_some() && self.notice == self.arrived_notice
     }
 
-    /// The session's own banner notices are in view: the notes, or the Notes panel.
-    fn notes_in_view(&self) -> bool {
-        (self.on_page && self.view == View::Notes && self.form.is_none()) || self.notes_open
-    }
-
     /// Round 26 FM7: the session's own Recordings tab shows the processed row, so the DM has
     /// read the `is processed` notice there. Its banner does not show, and the view ends it.
     fn processed_notice_read_here(&self) -> bool {
@@ -1764,7 +1848,7 @@ impl Sessions {
                 && (self.notice_session.is_none() || self.notice_session == self.selected))
             || (notes && selected.is_some_and(|note| !note.also.is_empty()))
             || (notes && !self.unreadable.is_empty())
-            || (self.notes_in_view() && self.draft.as_ref().is_some_and(Draft::needs_attention))
+            || self.draft.as_ref().is_some_and(Draft::needs_attention)
             || (self.on_page
                 && self.view == View::Templates
                 && self
@@ -1843,10 +1927,13 @@ impl Sessions {
                 ),
             );
         }
-        if self.notes_in_view()
-            && let Some(draft) = self.draft.as_mut().filter(|draft| draft.needs_attention())
-        {
-            Self::draft_warning(ui, draft);
+        // Round 30 `note-conflict-cross-page-banner` (SM2): the session note's warning and its
+        // choices stand on every page, not only where the note is in view, so the DM can choose
+        // where the rail's `Notes changed` is read. Its words name the note, from the one value
+        // that every page uses (`note_name`).
+        let name = self.note_name();
+        if let Some(draft) = self.draft.as_mut().filter(|draft| draft.needs_attention()) {
+            Self::draft_warning(ui, draft, name.as_deref());
         }
         if self.on_page
             && self.view == View::Templates
@@ -1855,8 +1942,30 @@ impl Sessions {
                 .as_mut()
                 .filter(|draft| draft.needs_attention())
         {
-            Self::draft_warning(ui, draft);
+            Self::draft_warning(ui, draft, None);
         }
+    }
+
+    /// The session note's name for its warning: `Session 1: The Bridge`, or its file's name
+    /// when the note is no longer listed.
+    fn note_name(&self) -> Option<String> {
+        let draft = self.draft.as_ref()?;
+        Some(
+            self.notes
+                .iter()
+                .find(|note| Some(note.id) == self.selected)
+                .map_or_else(
+                    || {
+                        draft
+                            .path
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned()
+                    },
+                    Note::label,
+                ),
+        )
     }
 
     fn banner_has_primary(&self, settings: &ProcessingSettings, run_open: bool) -> bool {
@@ -2390,6 +2499,8 @@ impl Sessions {
             (Some(folder), Some(session)) => list_recordings(folder, session),
             _ => Vec::new(),
         };
+        // A saved recording's result ends with its file, in whichever session it is.
+        self.saved.disk_changed(|saved| saved.path.exists());
     }
 
     /// Save what can be saved. Called on the way to anything that can lose a draft.
@@ -2566,7 +2677,10 @@ impl Sessions {
         }
     }
 
-    /// The words for working in a session other than the one being played.
+    /// The words for working in a session other than the one being played. Round 30
+    /// `session-not-played-repeat` (FF9, FN15, SF4, AF6): each fact once, the destination first.
+    /// The file that takes what the DM writes is named once, at the start; the session being
+    /// played follows, by its file name only when the two share a number.
     fn not_being_played(&self) -> Option<Sentence> {
         if self.selected.is_none() || self.selected == self.current() {
             return None;
@@ -2580,23 +2694,17 @@ impl Sessions {
             .iter()
             .find(|note| Some(note.id) == self.current());
         let destination = note.path.file_name().unwrap_or_default().to_string_lossy();
-        Some(
-            if let Some(played) = played.filter(|played| played.number == note.number) {
-                let (open, played) = session_warning_names(note, played);
-                crate::sentence!(
-                    "{} is not the session being played. The session being played is {}. What you write and add on this page goes into {}.",
-                    open,
-                    played,
-                    destination
-                )
-            } else {
-                crate::sentence!(
-                    "Session {} is not the session being played. What you write and add on this page goes into {}.",
-                    note.number,
-                    destination
-                )
-            },
-        )
+        Some(match played {
+            Some(played) => crate::sentence!(
+                "What you write and add on this page goes into {}. The session being played is {}.",
+                destination,
+                session_warning_names(note, played).1
+            ),
+            None => crate::sentence!(
+                "What you write and add on this page goes into {}. It is not the session being played.",
+                destination
+            ),
+        })
     }
 
     /// `not_being_played`, or, while a group is being assembled in another session, where.
@@ -2674,6 +2782,13 @@ impl Sessions {
             .or_else(|| self.alerts.last().map(|alert| alert.session))
             .or(self.processed_session)
             .or(self.notice_session)
+            .or_else(|| {
+                let root = self.folder.clone().unwrap_or_default();
+                self.saved
+                    .newest_first(&root)
+                    .next()
+                    .and_then(|saved| saved.value().owner.session)
+            })
         {
             self.open(session);
             self.tab = Tab::Recordings;
@@ -3219,25 +3334,24 @@ impl Sessions {
             // An empty file is not a recording, and it must not look like one.
             let _ = fs::remove_file(&path);
         }
-        if tell {
+        if tell && has_audio {
+            self.saved_at = Some((
+                self.campaign.as_ref().map(|campaign| campaign.id),
+                Instant::now(),
+            ));
+            // The result is its recording's (`RecordingSaved`), not the page's one notice.
+            self.saved.record(RecordingSaved {
+                owner: self.of_session(Some(session)),
+                path: path.clone(),
+            });
+        } else if tell {
             self.notice_session = Some(session);
             self.notice = new_notice(
                 &mut self.notice_order,
-                if has_audio {
-                    self.saved_at = Some((
-                        self.campaign.as_ref().map(|campaign| campaign.id),
-                        Instant::now(),
-                    ));
-                    (
-                        Tone::Success,
-                        format!("Recording saved: {}.", recording_title(&path)),
-                    )
-                } else {
-                    (
-                        Tone::Warning,
-                        format!("Nothing was recorded for “{label}”."),
-                    )
-                },
+                (
+                    Tone::Warning,
+                    format!("Nothing was recorded for “{label}”."),
+                ),
             );
         }
         self.refresh_recordings();
@@ -3748,7 +3862,9 @@ impl Sessions {
         clippy::disallowed_methods,
         reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft) {
+    /// A draft's warning and its choices. `name` names a session note (`note_name`); a
+    /// template's warning says `This note`.
+    fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft, name: Option<&str>) {
         // A new file could not be made: why, above the choices that are still open.
         if draft.state == DraftState::Missing
             && let Some(error) = &draft.save_again_error
@@ -3758,29 +3874,31 @@ impl Sessions {
         // Every choice below starts at its message's text. The red choice keeps an `L` gap.
         match draft.state.clone() {
             DraftState::Conflict => {
-                design::message_with_actions(
-                    ui,
-                    Tone::Warning,
-                    "This note changed on disk. Your draft is safe until you choose. Other sessions open after that.",
-                    |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            if Action::secondary("Overwrite with my draft")
-                                .show(ui)
-                                .clicked()
-                            {
-                                draft.overwrite();
-                            }
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            if Action::destructive("Reload and lose my draft")
-                                .show(ui)
-                                .clicked()
-                                && draft.reload_keeping_undo().is_err()
-                            {
-                                draft.state = DraftState::Missing;
-                            }
-                        });
-                    },
+                let words = format!(
+                    "{} changed on disk. Your draft is safe until you choose. Other sessions open after that.",
+                    name.map_or_else(
+                        || "This note".to_owned(),
+                        |name| format!("The note of {name}")
+                    )
                 );
+                design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        if Action::secondary("Overwrite with my draft")
+                            .show(ui)
+                            .clicked()
+                        {
+                            draft.overwrite();
+                        }
+                        ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        if Action::destructive("Reload and lose my draft")
+                            .show(ui)
+                            .clicked()
+                            && draft.reload_keeping_undo().is_err()
+                        {
+                            draft.state = DraftState::Missing;
+                        }
+                    });
+                });
             }
             // After Discard with no file left, the editor holds the last saved words, not a
             // draft: the one way on is a new file.
@@ -5074,6 +5192,7 @@ impl Sessions {
         book: &Book,
         primary: bool,
         destination_here: bool,
+        record_again_here: bool,
     ) {
         let c = colors();
         let live = self
@@ -5344,7 +5463,9 @@ impl Sessions {
                     .as_ref()
                     .is_some_and(|words| words.starts_with("Stopped by itself:"))
             {
+                // The recovery of the newest stopped recording, with `Record again`.
                 if missing_input
+                    && record_again_here
                     && (if primary && !self.run_open {
                         Action::primary("Choose an input")
                     } else {
@@ -5356,23 +5477,24 @@ impl Sessions {
                 {
                     self.wants_recording_input = true;
                 }
-                record_again = (if primary
-                    && !self.run_open
-                    && !missing_input
-                    && self.live.is_none()
-                    && self.job.is_none()
-                {
-                    Action::primary("Record again")
-                } else {
-                    Action::secondary("Record again")
-                })
-                .density(Density::Read)
-                .blocked_if(
-                    self.live.is_some() || self.job.is_some(),
-                    "Stop recording or wait for processing to finish.",
-                )
-                .show(ui)
-                .clicked();
+                record_again = record_again_here
+                    && (if primary
+                        && !self.run_open
+                        && !missing_input
+                        && self.live.is_none()
+                        && self.job.is_none()
+                    {
+                        Action::primary("Record again")
+                    } else {
+                        Action::secondary("Record again")
+                    })
+                    .density(Density::Read)
+                    .blocked_if(
+                        self.live.is_some() || self.job.is_some(),
+                        "Stop recording or wait for processing to finish.",
+                    )
+                    .show(ui)
+                    .clicked();
             }
             // Stop recording keeps the first slot for as long as the recording is live. A stall
             // or silence comes by itself, so its actions go after Stop, never before it (FM2).
@@ -5381,7 +5503,7 @@ impl Sessions {
                     .density(Density::Read)
                     .show(ui)
                     .clicked();
-                if stalled {
+                if stalled && record_again_here {
                     record_again = (if self.run_open || !primary {
                         Action::secondary("Record again")
                     } else {
@@ -5567,6 +5689,7 @@ impl Sessions {
 
     /// A message of success has done its work once the DM has moved on.
     fn clear_success(&mut self) {
+        self.saved.owner_changed(&self.of_session(self.selected));
         // News of another session's job waits until the DM has seen it.
         if matches!(self.notice, Some((Tone::Success, _)))
             && (self.notice_session.is_none() || self.notice_session == self.selected)
@@ -6146,6 +6269,7 @@ impl Sessions {
                         .is_none_or(|live| live.recorder.path() != recording.path)
             });
             let primary = recovery.or(destination);
+            let record_again = self.record_again_row();
             for (index, recording) in recordings.iter().enumerate() {
                 design::gap(ui, design::Gap::S);
                 let row = ui.scope_builder(
@@ -6158,6 +6282,7 @@ impl Sessions {
                             book,
                             primary == Some(index) && !self.confirm_record && !banner_primary,
                             destination == Some(index),
+                            record_again == Some(index),
                         );
                     },
                 );
@@ -6415,9 +6540,24 @@ impl Sessions {
                 .into()
             }));
         }
+        let mine = self.of_session(self.selected);
+        // Round 30 `recording-result-owner`: a saved recording's result, in its own session's
+        // footer while its file stands (`RecordingSaved`).
+        if let Some(shown) = self.saved.get(&mine) {
+            messages.kept(shown.outcome(frame, |saved| {
+                Said::new(crate::sentence!(
+                    "Recording saved: {}.",
+                    recording_title(&saved.path)
+                ))
+                .choice(Choice::new(
+                    MessageChoice::Dismiss(Lost::Nothing),
+                    SessionAct::DismissSaved,
+                ))
+                .into()
+            }));
+        }
         // Round 27 FI3, FN2: a marker's Add result, in its own session's footer while its event
         // stands. The marker row keeps `✓ On the timeline`.
-        let mine = self.of_session(self.selected);
         if let Some(shown) = self
             .markers
             .get(&mine)
@@ -6474,6 +6614,11 @@ impl Sessions {
                     book.undo_add(&added.id);
                 }
             }
+            SessionAct::DismissSaved => {
+                if let Some(ticket) = press.ticket {
+                    let _ = self.saved.use_press_by(ticket);
+                }
+            }
             _ => return Some(press),
         }
         None
@@ -6492,7 +6637,10 @@ impl Sessions {
                 }
             }
             // The kept results' presses (`kept_press`).
-            SessionAct::UndoMove | SessionAct::UndoIdentity | SessionAct::UndoMarker => {}
+            SessionAct::UndoMove
+            | SessionAct::UndoIdentity
+            | SessionAct::UndoMarker
+            | SessionAct::DismissSaved => {}
             SessionAct::Dismiss => {
                 self.notice = None;
                 self.notice_session = None;
@@ -6581,15 +6729,9 @@ impl Sessions {
         // The body (Last time, the tabs and their pane) is the pane's; the part places the
         // footer below it.
         let view = self.session_header(ui, book, plan, &note, title_on_own_line);
-        // The plan's views: the plan's pane holds the page's messages too, in its one footer,
-        // which follows the plan's rows.
-        if matches!(
-            view,
-            SessionView::Tab {
-                shown: Tab::Plan,
-                ..
-            }
-        ) {
+        // The narrow Plan tab: the plan's pane holds the page's messages too, in its one footer,
+        // which follows the plan's rows (`SessionView::page_footer`).
+        if view.page_footer() == PageFooter::Plan {
             self.session_content(ui, settings, book, plan, view, &note);
             return;
         }
@@ -6721,6 +6863,9 @@ impl Sessions {
         view: SessionView,
         note: &Note,
     ) {
+        // The page's messages go to the plan's footer only where `page_footer` says so; beside
+        // the note, the plan's column keeps the plan's own results alone.
+        let page = (view.page_footer() == PageFooter::Plan).then_some((settings, note));
         let SessionView::Tab {
             shown,
             beside,
@@ -6744,7 +6889,7 @@ impl Sessions {
                     ui.spacing_mut().item_spacing.x = design::L;
                     page_column(ui, plan_width, height, |ui| {
                         fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
-                            self.plan_pane(ui, book, plan, Some((settings, note)))
+                            self.plan_pane(ui, book, plan, page)
                         });
                     });
                     page_column(ui, note_width, height, |ui| {
@@ -6764,7 +6909,7 @@ impl Sessions {
                         ui.set_max_width(toolbar_width + ui.spacing().scroll.allocated_width());
                     }
                     fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
-                        self.plan_pane(ui, book, plan, Some((settings, note)))
+                        self.plan_pane(ui, book, plan, page)
                     })
                 })
                 .inner

@@ -13484,7 +13484,7 @@ pub mod session_notes {
         check_choices_at_text(
             d,
             "iter-15-C-FT1-conflict",
-            "This note changed on disk.",
+            "changed on disk. Your draft is safe until you choose.",
             &["Overwrite with my draft", "Reload and lose my draft"],
             Some("Reload and lose my draft"),
             &[SMALL, DEFAULT, LARGE],
@@ -13495,7 +13495,7 @@ pub mod session_notes {
         // Two stacked messages share one left edge for their choices: each message's text.
         for (words, choices, gap) in [
             (
-                "This note changed on disk.",
+                "changed on disk. Your draft is safe until you choose.",
                 &["Overwrite with my draft", "Reload and lose my draft"][..],
                 Some("Reload and lose my draft"),
             ),
@@ -13524,7 +13524,7 @@ pub mod session_notes {
         check_choices_at_text(
             d,
             "iter-15-C-ST1",
-            "This note changed on disk.",
+            "changed on disk. Your draft is safe until you choose.",
             &["Overwrite with my draft", "Reload and lose my draft"],
             Some("Reload and lose my draft"),
             &[DEFAULT],
@@ -13557,6 +13557,22 @@ pub mod session_notes {
         d.observe_both("iter-1-C-FT3", "The rail names the changed notes", |d| {
             d.rail_words().contains("Notes changed")
         });
+        // Round 30 `note-conflict-cross-page-banner` (SM2): on the Timeline the bottom banner
+        // keeps the conflict's words, naming the note, and its two choices, whole in view.
+        d.observe_both(
+            "round-30-note-conflict-elsewhere",
+            "The conflict names its note and keeps its choices on another page",
+            |d| {
+                d.nodes().iter().any(|node| {
+                    node.fully_in_view()
+                        && node.name.starts_with("The note of Session ")
+                        && node
+                            .name
+                            .contains(" changed on disk. Your draft is safe until you choose.")
+                }) && d.in_view("Overwrite with my draft")
+                    && d.in_view("Reload and lose my draft")
+            },
+        );
         d.state("note-conflict-elsewhere", Sizes::All);
         d.click("Notes changed on disk");
         d.expect("Overwrite with my draft");
@@ -14015,7 +14031,7 @@ pub mod session_notes {
         d.observe(
             "T11.3",
             d.has_containing(
-                "Session 1 is not the session being played. What you write and add on this page goes into Session 1 - Ash on the Road.md.",
+                "What you write and add on this page goes into Session 1 - Ash on the Road.md. The session being played is Session 2.",
             ),
             "Adding an event to an older session says so before it happens",
         );
@@ -14042,7 +14058,7 @@ pub mod session_notes {
         d.observe(
             "T11.8",
             d.has_containing(
-                "Session 1 is not the session being played. What you write and add on this page goes into Session 1 - Ash on the Road.md.",
+                "What you write and add on this page goes into Session 1 - Ash on the Road.md. The session being played is Session 2.",
             ),
             "Writing in an older note says so",
         );
@@ -17552,24 +17568,34 @@ pub mod session_recording {
             .iter()
             .find(|note| note.id != played.id && note.number == played.number)
             .unwrap();
+        let destination = recovered.path.file_name().unwrap().to_string_lossy();
         let expected = format!(
-            "{} is not the session being played. The session being played is {}.",
-            recovered.path.file_name().unwrap().to_string_lossy(),
+            "What you write and add on this page goes into {destination}. The session being played is {}.",
             played.path.file_name().unwrap().to_string_lossy()
         );
         d.state_prepared("recording-summary-narrow", Sizes::All, |d| {
             d.observe(
                 "iter-9-C-FT9",
                 d.visible_text(&format!(
-                    "What you write and add on this page goes into {}.",
-                    recovered.path.file_name().unwrap().to_string_lossy()
+                    "What you write and add on this page goes into {destination}."
                 )),
                 "The warning names the note where writing goes",
             );
+            // Round 30 `session-not-played-repeat` (FN15): the notice starts with where the
+            // writing goes and names that file once.
+            let notice = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("The session being played is"))
+                .map(|node| node.name);
             d.observe(
                 "iter-8-C-ST2-files",
-                d.visible_text(&expected),
-                "Duplicate session numbers name both note files",
+                d.visible_text(&expected)
+                    && notice.as_deref().is_some_and(|notice| {
+                        notice.starts_with("What you write")
+                            && notice.matches(destination.as_ref()).count() == 1
+                    }),
+                format!("Duplicate session numbers name both note files, each once: {notice:?}"),
             );
             assert!(d.in_view("Return to the session being played"));
         });
