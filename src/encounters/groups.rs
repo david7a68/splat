@@ -3281,15 +3281,24 @@ pub(crate) fn member_comparisons() -> (usize, usize) {
 /// A new revision for a group draft (`GroupDraft::touch`): larger than every one before it.
 static NEXT_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
+thread_local! {
+    /// F5: the group revisions issued on this thread. The page and its drafts live on the
+    /// thread that draws them, so another thread's drafts (another app in the same process, as
+    /// the visual suite runs them) never change it.
+    static ISSUED_HERE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 fn next_revision() -> u64 {
+    ISSUED_HERE.with(|issued| issued.set(issued.get() + 1));
     NEXT_REVISION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// F5: the count of group revisions issued so far. Every edit of any group draft (`touch`), a
-/// new draft and an opened one issue a revision, so an unchanged count means that no group
-/// changed: a stored edit generation that a cache reads in constant time.
+/// F5: the count of group revisions issued on this thread so far. Every edit of a group draft
+/// (`touch`), a new draft and an opened one issue a revision on the thread that draws it, so an
+/// unchanged count means that no group of this page changed: a stored edit generation that a
+/// cache reads in constant time. Revisions themselves stay unique across threads.
 pub(super) fn revisions_issued() -> u64 {
-    NEXT_REVISION.load(std::sync::atomic::Ordering::Relaxed)
+    ISSUED_HERE.with(std::cell::Cell::get)
 }
 
 /// What a group is, in its own editor and in the frame an encounter's editor gives it. There,
@@ -5339,6 +5348,24 @@ mod tests {
         fs::write(&unreadable, [0xff_u8, 0xfe, 0x00]).unwrap();
         assert!(GroupDraft::open(dir.path(), &format!("{FOLDER}/Broken.md")).is_err());
         fs::remove_file(&unreadable).unwrap();
+
+        // F5 (B3b): the edit generation that keys the owned-group check counts this thread's
+        // group revisions only; a group draft made and edited on another thread (another app
+        // in the same process) leaves it as it was.
+        let before = revisions_issued();
+        std::thread::spawn(|| {
+            let mut other = GroupDraft::new();
+            other.touch();
+        })
+        .join()
+        .unwrap();
+        assert_eq!(
+            revisions_issued(),
+            before,
+            "another thread's drafts do not change it"
+        );
+        GroupDraft::new().touch();
+        assert!(revisions_issued() > before, "this thread's do");
 
         // E3: the origin is the group's own fact. A saved group whose file is lost, whose
         // lost file the DM accepted (the comparison text goes, as `disk_choice` does), and
