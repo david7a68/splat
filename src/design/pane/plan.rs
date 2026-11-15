@@ -309,7 +309,6 @@ pub(in crate::design) struct PlanState {
     owner: &'static str,
     env: Option<Revised<MeasureEnv>>,
     plan: Memo<(Revision, Revision), BlockPlan>,
-    key: Option<(Revision, Revision)>,
     work: Work,
 }
 
@@ -319,7 +318,6 @@ impl PlanState {
             owner,
             env: None,
             plan: Memo::new(),
-            key: None,
             work: Work::default(),
         }
     }
@@ -342,19 +340,27 @@ impl PlanState {
             None => self.env.insert(Revised::new(env)),
         };
         let key = (content.revision(), kept.revision());
-        self.key = Some(key);
         let work = &mut self.work;
         self.plan
             .get_or(key, || BlockPlan::measure(content, kept, work))
     }
 
-    /// The mask of the last plan at `offset` in a view `view` tall; its diagnostics are counted.
-    pub(in crate::design) fn mask(&mut self, offset: f32, view: f32) -> Option<Mask> {
-        let mask = self.plan.get(self.key?)?.mask(self.owner, offset, view);
+    /// The mask of `content`'s plan in `env` (the kept plan while neither changed) at `offset` in
+    /// a view `view` tall; its diagnostics are counted. It plans first, so it never reads a plan
+    /// of older content.
+    pub(in crate::design) fn mask(
+        &mut self,
+        content: &Revised<Vec<Block>>,
+        env: MeasureEnv,
+        offset: f32,
+        view: f32,
+    ) -> Mask {
+        let owner = self.owner;
+        let mask = self.plan(content, env).mask(owner, offset, view);
         self.work.entries_read += mask.read;
         self.work.no_whole += usize::from(mask.no_whole.is_some());
         self.work.too_tall += usize::from(mask.too_tall.is_some());
-        Some(mask)
+        mask
     }
 
     pub(in crate::design) fn work(&self) -> Work {

@@ -2311,10 +2311,7 @@ mod row_cut_tests {
             "plan-i12: one plan"
         );
         for frame in 0..10 {
-            let _ = state.plan(&content, env);
-            let mask = state
-                .mask(7.0 * frame as f32, 300.0)
-                .expect("plan-i12: a mask");
+            let mask = state.mask(&content, env, 7.0 * frame as f32, 300.0);
             assert!(
                 mask.read <= 2 * (usize::BITS - n.leading_zeros()) as usize + 2,
                 "plan-i12: a mask reads O(log n) entries: {}",
