@@ -499,7 +499,8 @@ struct Reading {
 struct Added {
     id: String,
     label: String,
-    at: Instant,
+    /// When it was added, on the frame clock (`crate::frame_clock`).
+    at: f64,
     count: usize,
     /// When the add was done: its result's footer order.
     order: design::ResultOrder,
@@ -764,12 +765,8 @@ pub struct Sessions {
     moves: design::Results<kept::Page, kept::Moved>,
     /// When a recording last stopped, and the campaign it was recorded in: the owner, so the
     /// rail says it was kept only while that campaign is open (another campaign's rail never
-    /// says it). It ends after `SAVED_WORD_FOR` of the frame clock (`frame_time`).
+    /// says it). It ends after `SAVED_WORD_FOR` of the frame clock (`crate::frame_clock`).
     saved_at: Option<(Option<Uuid>, f64)>,
-    /// Round 30 B7d: the frame clock in seconds (`egui::InputState::time`), read at each `poll`.
-    /// The app's timed words read it, not the wall clock, so a test's frames decide when such a
-    /// word ends and two runs of one scenario show the same words.
-    frame_time: f64,
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
@@ -1662,7 +1659,6 @@ impl Sessions {
 
     /// Follow the active campaign, watch the recorder and the job, and save what is due.
     pub fn poll(&mut self, ctx: &egui::Context, active: Option<&Campaign>, book: &mut Book) {
-        self.frame_time = ctx.input(|input| input.time);
         if self.campaign.as_ref().map(|c| (c.id, &c.path)) != active.map(|c| (c.id, &c.path)) {
             self.open_campaign(active);
         }
@@ -3305,7 +3301,7 @@ impl Sessions {
     pub fn just_saved(&self) -> bool {
         self.saved_at.is_some_and(|(campaign, at)| {
             campaign == self.campaign.as_ref().map(|campaign| campaign.id)
-                && self.frame_time - at < SAVED_WORD_FOR.as_secs_f64()
+                && !crate::frame_clock::passed(at, SAVED_WORD_FOR)
         })
     }
 
@@ -3408,7 +3404,7 @@ impl Sessions {
         if tell && has_audio {
             self.saved_at = Some((
                 self.campaign.as_ref().map(|campaign| campaign.id),
-                self.frame_time,
+                crate::frame_clock::now(),
             ));
             // The result is its recording's (`RecordingSaved`), not the page's one notice.
             self.saved.record(RecordingSaved {
@@ -9898,7 +9894,7 @@ mod tests {
                 && shows(&harness, "Choose below to move the files or not."),
             "the lock gone, the choices come back"
         );
-        // Round 30 B7d: the word ends by the frame clock (egui's input time), not the wall
+        // Round 30 B7d: the word ends by the frame clock (`crate::frame_clock`), not the wall
         // clock, so a test's frames decide when it ends: 7.5 s of frames after the stop it
         // stands; 8.5 s after, it has ended.
         // Last in this test, because it moves the frame clock on.
@@ -9916,14 +9912,14 @@ mod tests {
         harness.step();
         assert_eq!(saved(&harness), Some("Recording saved"), "the stop says it");
         let stopped = harness.state().0.saved_at.map(|(_, at)| at).unwrap();
-        harness.input_mut().time = Some(stopped + 7.5);
+        crate::frame_clock::set(stopped + 7.5);
         harness.step();
         assert_eq!(
             saved(&harness),
             Some("Recording saved"),
             "7.5 s of frames later"
         );
-        harness.input_mut().time = Some(stopped + 8.5);
+        crate::frame_clock::set(stopped + 8.5);
         harness.step();
         assert_eq!(
             saved(&harness),

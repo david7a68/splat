@@ -4215,7 +4215,7 @@ impl Sessions {
                 order: design::ResultOrder::issue(),
                 id: id.clone(),
                 label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
-                at: Instant::now(),
+                at: crate::frame_clock::now(),
                 count: book.events.len(),
             });
             self.open_event = None;
@@ -5282,7 +5282,7 @@ impl Sessions {
                 .iter()
                 .position(|event| event.id == just.id)
                 .map(|at| book.events[at].label(days[at]));
-            if just.at.elapsed() >= UNDO_ADD_FOR
+            if crate::frame_clock::passed(just.at, UNDO_ADD_FOR)
                 || just.count != book.events.len()
                 || current.as_ref() != Some(&just.label)
             {
@@ -8068,7 +8068,7 @@ mod tests {
             order: design::ResultOrder::issue(),
             id,
             label,
-            at: Instant::now(),
+            at: crate::frame_clock::now(),
             count,
         };
         harness.state_mut().0.added = Some(added);
@@ -8080,6 +8080,27 @@ mod tests {
         assert!(
             harness.query_by_label("Open: Pay the toll").is_some(),
             "a result in the footer does not fold the scenes"
+        );
+        // Round 30 B7d: the Add result and its Undo end by the frame clock: 29 s of frames
+        // after the add they stand, 31 s after they are gone.
+        let added_at = harness
+            .state()
+            .0
+            .added
+            .as_ref()
+            .map(|added| added.at)
+            .unwrap();
+        crate::frame_clock::set(added_at + 29.0);
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo add").is_some(),
+            "29 s of frames later the Undo stands"
+        );
+        crate::frame_clock::set(added_at + 31.0);
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo add").is_none(),
+            "31 s of frames later the result has ended"
         );
         harness.state_mut().0.added = None;
         harness.set_size(egui::vec2(design::FORM_WIDTH, 800.0));
