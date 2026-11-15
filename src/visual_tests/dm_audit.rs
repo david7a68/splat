@@ -1524,3 +1524,32 @@ pub(crate) fn plan_word(line: &str) -> Option<&'static str> {
                     .is_some_and(|(_, limit)| limit.ends_with(')') && !limit.contains(" · "))
         })
 }
+
+/// `plan_word` reads only a word painted as the line's ending form: the word last, or the word
+/// with its limit last. A row without a difficulty word, or with one only inside other words,
+/// gives nothing.
+#[test]
+fn plan_word_reads_only_a_painted_ending_word() {
+    assert_eq!(
+        plan_word("5 party · 2 × Ember Cultist · XP 400 · Low"),
+        Some("Low")
+    );
+    assert_eq!(
+        plan_word("2 × Ember Cultist · XP 400 · Low (up to 2,800)"),
+        Some("Low")
+    );
+    assert_eq!(
+        plan_word("1 × Cinder Tyrant, … · Above High"),
+        Some("Above High")
+    );
+    for line in [
+        "5 party · 1 × Nameless Thing · XP not known",
+        "2 × Ember Cultist · Day 2 of Travel",
+        "Low Road ambush · 2 × Ember Cultist",
+        "High tide · 2 × Wolf · XP 50",
+        "2 × Ember Cultist · Low (up to 2,800) · Day 2",
+        "",
+    ] {
+        assert_eq!(plan_word(line), None, "{line:?}");
+    }
+}
