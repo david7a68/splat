@@ -1131,6 +1131,11 @@ impl CampaignContent {
         if let Some(old) = &self.active
             && campaign.is_none_or(|campaign| campaign.id != old.id)
         {
+            // A check (or an Apply) still running belongs to the visit that started it: a change
+            // of campaign drops it, also when the DM comes back before it completes (A -> B -> A).
+            self.reconcile.pending = None;
+            self.reconcile.applying = false;
+            self.reconcile.campaign = None;
             end_results(&mut self.results, old.id, |payload| {
                 matches!(
                     payload,
@@ -1479,17 +1484,17 @@ impl CampaignContent {
             _ => None,
         });
         if let Some(answer) = answer {
-            match &answer.cause {
-                Cause::NotSaved { path } => {
-                    messages.answer(FaultMessage::new(&ContentFault::RepairNotSaved {
-                        path,
-                        cause: &answer.words,
-                    }));
-                }
+            let fault = match &answer.cause {
+                Cause::NotSaved { path } => FaultMessage::new(&ContentFault::RepairNotSaved {
+                    path,
+                    cause: &answer.words,
+                }),
                 Cause::Refused { .. } | Cause::Failed => {
-                    messages.answer(FaultMessage::new(&ContentFault::Error(&answer.words)));
+                    FaultMessage::new(&ContentFault::Error(&answer.words))
                 }
-            }
+            };
+            // The one counted use (`Ban::Answer`, exactly one call).
+            messages.answer(fault);
         }
         for shown in self.results.newest_first(&active.id) {
             let line = shown.outcome(frame, |kept| outcome_of(&kept.payload, locked));
@@ -3624,6 +3629,29 @@ mod tests {
                 .map(|answer| (answer.campaign, &answer.words))
         );
         assert_eq!(content.reconcile.campaign, None, "B's check is due");
+        // A -> B -> A before the Apply completes: the change of campaign (run by `tick`, also
+        // while the page is hidden) drops the pending completion; the old one never enters A's
+        // new visit.
+        let temp = tempfile::tempdir().unwrap();
+        let (first, second) = (
+            campaign(&temp.path().join("a")),
+            campaign(&temp.path().join("b")),
+        );
+        content.active = Some(first.clone());
+        content.reconcile.campaign = Some(first.id);
+        let (tx, rx) = mpsc::channel();
+        content.reconcile.pending = Some(rx);
+        content.forget_discards_of_other_campaigns(Some(&second));
+        content.forget_discards_of_other_campaigns(Some(&first));
+        let _ = tx.send(Checked {
+            applied: Some(Err("A sheet has local edits.".into())),
+            proposals: Ok(Vec::new()),
+        });
+        content.finish_check(Some(first.id));
+        assert!(
+            content.answer.is_none() && content.reconcile.pending.is_none(),
+            "an Apply from A's earlier visit entered A's new state"
+        );
     }
 
     #[test]

@@ -56,6 +56,10 @@ impl Ban {
     /// need a token-exact match first.)
     pub(crate) const EXACT: [Ban; 3] = [Ban::Sentence, Ban::Order, Ban::Answer];
 
+    /// The bans an allowed item may call exactly once (`Messages::answer`: ruling Q-x's one
+    /// answer to the DM's last act, one call site).
+    pub(crate) const ONCE: [Ban; 1] = [Ban::Answer];
+
     /// Text that one of this ban's calls leaves in a function that still needs its allow.
     fn calls(self) -> &'static [&'static str] {
         match self {
@@ -330,6 +334,19 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                             ));
                         }
                     }
+                    for ban in Ban::ONCE {
+                        let calls: usize = ban
+                            .calls()
+                            .iter()
+                            .map(|call| suppression.body.matches(call).count())
+                            .sum();
+                        if bans.contains(&ban) && calls != 1 {
+                            faults.push(format!(
+                                "{path}:{}: `{}` holds {calls} {ban:?} calls; its row allows exactly one.",
+                                suppression.line, suppression.item
+                            ));
+                        }
+                    }
                     if !holds {
                         faults.push(format!(
                             "{path}:{}: the suppression on `{}` has no staged call left. Remove it and its row in `design::results::STAGED_ALLOWS`.",
@@ -452,6 +469,13 @@ mod tests {
                 &[("src/new.rs", "draw", &[Ban::Order, Ban::Answer])]
             )
             .is_empty()
+        );
+        // Exactly one `answer` call in the item allowed for it: a second call fails.
+        let twice = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    messages.answer(fault);\n    messages.answer(other);\n}\n";
+        assert_eq!(
+            check(&file(twice), &[("src/new.rs", "draw", &[Ban::Answer])]).len(),
+            1,
+            "{twice}"
         );
         let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
         assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());

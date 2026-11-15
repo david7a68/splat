@@ -20,8 +20,8 @@ pub struct Campaigns {
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
-    /// The import form opened and shows whole once (`reveal_whole`).
-    reveal_import: bool,
+    /// The open import form's reveal (R30): its one owner is that form.
+    reveal: ImportReveal,
     /// Edit details was pressed on Link and folder: the details form comes into view once, with
     /// its Save, in that pane (round 28: the session folder's save row stands above the pane).
     reveal_details: bool,
@@ -68,7 +68,7 @@ impl Default for Campaigns {
             writable: false,
             editing: None,
             focus_name: false,
-            reveal_import: false,
+            reveal: ImportReveal::default(),
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
@@ -127,7 +127,7 @@ impl Campaigns {
         // The form opens with the name field taking the keyboard, and shows whole (the folder
         // Splat proposes and its preview too: G138).
         self.focus_name = true;
-        self.reveal_import = true;
+        self.reveal.start(self.data.active_campaign_id);
     }
 
     pub fn cancel_import(&mut self) {
@@ -360,7 +360,7 @@ impl Campaigns {
             writable: true,
             editing: None,
             focus_name: false,
-            reveal_import: false,
+            reveal: ImportReveal::default(),
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
@@ -628,6 +628,8 @@ impl Campaigns {
             String::new()
         };
         self.remote = None;
+        // The form closes: its reveal ends with it.
+        self.reveal = ImportReveal::default();
     }
 
     pub fn active_campaign(&self) -> Option<Campaign> {
@@ -1291,7 +1293,8 @@ impl Campaigns {
     pub fn show_import_form(&mut self, ui: &mut egui::Ui, remote_id: &str) {
         if self.remote.as_ref().is_some_and(|(id, _)| id == remote_id) {
             let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
-            reveal_whole(ui, form, std::mem::take(&mut self.reveal_import));
+            let active = self.data.active_campaign_id;
+            self.reveal.step(ui, form, active);
         }
     }
 
@@ -1592,33 +1595,117 @@ fn folder_preview(path: &str) -> Option<String> {
     )
 }
 
-/// R30, as the add field: when the import form opens (`opening`), and when its view changes size
-/// while it is open (a resize is not the DM's own scrolling), the least scroll that shows the
-/// whole form (its fields, Add campaign, Cancel and the preview), repeated each pass until it is in
-/// view (a pass drawn again may drop a scroll), or its bottom is, for a form taller than its view.
-/// `scroll_to_rect` with no alignment is that least scroll, through the collapsing header and the
-/// pane's column, as this page's Edit details form reveals itself.
-fn reveal_whole(ui: &egui::Ui, form: egui::Rect, opening: bool) {
-    let pending = ui.id().with("import_form_reveal");
-    let view_key = ui.id().with("import_form_view");
-    let view = ui.clip_rect();
-    let resized = ui
-        .data(|data| data.get_temp::<egui::Vec2>(view_key))
-        .is_some_and(|last| (last - view.size()).length() > 0.5);
-    ui.data_mut(|data| data.insert_temp(view_key, view.size()));
-    if opening || resized {
-        ui.data_mut(|data| data.insert_temp(pending, true));
+/// R30 for the open import form: the least scroll that shows the whole form (its fields, Add
+/// campaign, Cancel and the preview), as the add field shows its own. One owner: the open form
+/// (`Campaigns::remote`); `clear_form` ends it with the form.
+///
+/// It starts when the form opens, and after a resize only if the form was whole in view before
+/// it (the DM was still looking at it). It ends at the first of: the form is whole in view; a
+/// frame shows no progress; the form is taller than the view (then its top shows); any scroll
+/// input or typing by the DM; the form not drawn in a frame (the page left); a change of
+/// campaign; [`ImportReveal::PASSES`] frames. Nothing repaints for it once it has ended.
+#[derive(Default)]
+struct ImportReveal {
+    /// Frames left while it runs; 0: ended.
+    left: u8,
+    /// The campaign open when it started.
+    campaign: Option<Uuid>,
+    /// The form's top and the frame of the last scroll it asked for.
+    asked: Option<(f32, u64)>,
+    /// The view's size and whether the form was whole in it, in the last frame that drew it.
+    view: Option<(egui::Vec2, bool)>,
+    /// The last frame that drew the form.
+    frame: Option<u64>,
+}
+
+impl ImportReveal {
+    /// A hard bound, in frames.
+    const PASSES: u8 = 4;
+
+    fn start(&mut self, campaign: Option<Uuid>) {
+        self.left = Self::PASSES;
+        self.campaign = campaign;
+        self.asked = None;
     }
-    if !ui.data(|data| data.get_temp::<bool>(pending).unwrap_or(false)) {
-        return;
+
+    fn end(&mut self) {
+        self.left = 0;
+        self.asked = None;
     }
-    let shown = form.bottom() <= view.bottom() + 0.5
-        && (form.top() >= view.top() - 0.5 || form.height() > view.height());
-    if shown {
-        ui.data_mut(|data| data.remove::<bool>(pending));
-    } else {
+
+    /// One pass of the open form at `form`, in the campaign open now.
+    fn step(&mut self, ui: &egui::Ui, form: egui::Rect, campaign: Option<Uuid>) {
+        let frame = ui.ctx().cumulative_frame_nr();
+        if self.frame.is_some_and(|last| frame > last + 1) {
+            // The form was not drawn in a frame: the DM left the page.
+            self.end();
+            self.view = None;
+        }
+        self.frame = Some(frame);
+        let view = ui.clip_rect();
+        let whole = form.top() >= view.top() - 0.5 && form.bottom() <= view.bottom() + 0.5;
+        if let Some((size, was_whole)) = self.view
+            && (size - view.size()).length() > 0.5
+            && was_whole
+        {
+            self.start(campaign);
+        }
+        self.view = Some((view.size(), whole));
+        if self.left == 0 {
+            return;
+        }
+        let by_the_dm = ui.input(|input| {
+            input.raw_scroll_delta != egui::Vec2::ZERO
+                || input.pointer.is_decidedly_dragging()
+                || [
+                    egui::Key::PageUp,
+                    egui::Key::PageDown,
+                    egui::Key::Home,
+                    egui::Key::End,
+                    egui::Key::ArrowUp,
+                    egui::Key::ArrowDown,
+                ]
+                .into_iter()
+                .any(|key| input.key_pressed(key))
+                || input
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, egui::Event::Text(_)))
+        });
+        if whole || by_the_dm || campaign != self.campaign {
+            self.end();
+            return;
+        }
+        match self.asked {
+            // A pass drawn again in the same frame asks again; it is not a new frame.
+            Some((_, at)) if at == frame => {}
+            // A frame after the last ask that shows no progress: stop.
+            Some((top, _)) if (top - form.top()).abs() < 0.5 => {
+                self.end();
+                return;
+            }
+            _ => self.left -= 1,
+        }
+        if form.height() > view.height() {
+            // Taller than the view: its top shows, and the reveal ends.
+            ui.scroll_to_rect(
+                egui::Rect::from_min_size(form.min, egui::vec2(form.width(), 1.0)),
+                Some(egui::Align::TOP),
+            );
+            self.end();
+            return;
+        }
+        self.asked = Some((form.top(), frame));
         ui.scroll_to_rect(form, None);
-        ui.ctx().request_repaint();
+        if self.left > 0 {
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// Whether it runs (tests).
+    #[cfg(test)]
+    fn running(&self) -> bool {
+        self.left > 0
     }
 }
 
@@ -1982,7 +2069,7 @@ mod tests {
             writable: true,
             editing: None,
             focus_name: false,
-            reveal_import: false,
+            reveal: ImportReveal::default(),
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
@@ -2151,5 +2238,87 @@ mod tests {
             shown.right() <= WIDTH && (shown.width() - natural).abs() < 1.0,
             "the preview {shown:?} is not whole ({natural} px of words)"
         );
+
+        // R30: the form's reveal in a column that scrolls, the form far below the view.
+        let scrolled = |height: f32| {
+            let mut campaigns = Campaigns::at(settings.join("settings.json"));
+            campaigns.start_import("7", "Salt Road");
+            egui_kittest::Harness::builder()
+                .with_size(egui::vec2(WIDTH, height))
+                .build_ui_state(
+                    |ui, campaigns: &mut Campaigns| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("column")
+                            .show(ui, |ui| {
+                                ui.add_space(900.0);
+                                campaigns.show_import_form(ui, "7");
+                                ui.add_space(900.0);
+                            });
+                    },
+                    campaigns,
+                )
+        };
+        let in_view = |h: &egui_kittest::Harness<'_, Campaigns>, height: f32| {
+            ["Add campaign", "Cancel", words].iter().all(|name| {
+                h.query_all_by_label(name).next().is_some_and(|node| {
+                    let rect = node.rect();
+                    rect.top() >= -0.5 && rect.bottom() <= height + 0.5
+                })
+            })
+        };
+        let wheel = |h: &mut egui_kittest::Harness<'_, Campaigns>, by: f32| {
+            h.event(egui::Event::PointerMoved(egui::pos2(WIDTH / 2.0, 100.0)));
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, by),
+                modifiers: egui::Modifiers::NONE,
+            });
+        };
+        // It opens: the whole form comes into view, and the reveal ends.
+        let mut h = scrolled(400.0);
+        h.run_steps(8);
+        assert!(in_view(&h, 400.0), "the opened form shows whole");
+        assert!(!h.state().reveal.running());
+        // A wheel turn while the reveal could still act is not pulled back. The fight comes
+        // where a reveal cannot finish: a form taller than its view, which never shows whole.
+        // Its top shows once; 200 px of the DM's wheel up from there stays.
+        let mut h = scrolled(120.0);
+        h.run_steps(8);
+        let revealed = h.get_by_label("Add campaign").rect().top();
+        let mut h = scrolled(120.0);
+        h.step();
+        wheel(&mut h, 200.0);
+        h.run_steps(12);
+        let top = h.get_by_label("Add campaign").rect().top();
+        assert!(
+            top > revealed + 150.0 && !h.state().reveal.running(),
+            "a wheel turn during the reveal was pulled back: Add campaign at {top}, the reveal \
+             put it at {revealed}"
+        );
+        // After the DM scrolled the form away, a resize does not bring it back.
+        let mut h = scrolled(400.0);
+        h.run_steps(8);
+        wheel(&mut h, 3000.0);
+        h.run_steps(4);
+        assert!(!in_view(&h, 400.0));
+        h.set_size(egui::vec2(WIDTH, 460.0));
+        h.run_steps(8);
+        assert!(
+            !in_view(&h, 460.0) && !h.state().reveal.running(),
+            "a resize pulled the view back to a form the DM had scrolled away"
+        );
+        // A form taller than its view: its top shows and the reveal ends within its bound.
+        let mut h = scrolled(120.0);
+        let mut frames = 0;
+        while h.state().reveal.running() && frames < 20 {
+            h.step();
+            frames += 1;
+        }
+        assert!(
+            frames <= usize::from(ImportReveal::PASSES) + 1 && !h.state().reveal.running(),
+            "a form taller than its view kept its reveal for {frames} frames"
+        );
+        h.run_steps(4);
+        assert!(!h.state().reveal.running(), "an ended reveal started again");
     }
 }
