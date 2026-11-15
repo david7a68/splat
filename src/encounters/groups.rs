@@ -5474,7 +5474,7 @@ mod tests {
         for _ in 0..2 {
             let refusal = pair.check(&snapshot, None).unwrap_err();
             assert_eq!(refusal.tone(), Tone::Error, "{refusal:?}");
-            assert!(refusal.text().contains("count must be"), "{refusal:?}");
+            assert!(refusal.text().contains("Count must be"), "{refusal:?}");
             pair.setup.members.reverse();
         }
         for groups in [
