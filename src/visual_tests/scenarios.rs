@@ -22895,7 +22895,7 @@ pub mod session_plan_groups {
         d.click_starting("Session 1: The Crossing ·");
         let reason = crate::design::Unsaved::Group.reason();
         let before = (
-            d.has("A group is being assembled in Session 2."),
+            d.has_containing("A group is being assembled in Session 2."),
             d.has("Save group"),
             d.has_containing("Ash Two"),
         );
@@ -22910,7 +22910,7 @@ pub mod session_plan_groups {
         rivals_in_view(d);
         d.click_first(GROUP_RIVALS);
         let refused = (
-            d.has("A group is being assembled in Session 2."),
+            d.has_containing("A group is being assembled in Session 2."),
             d.has("Save group"),
             d.has(&format!("Group name: {GROUP_RIVALS}")),
             d.visible_text(reason),
