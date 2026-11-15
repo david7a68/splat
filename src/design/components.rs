@@ -393,7 +393,16 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
             DraftRow::Save { label, width } => Some(
                 ui.scope(|ui| {
                     ui.set_max_width(width);
-                    save_row_with_reason(ui, draft, label, cites.then_some((long, short)), held)
+                    super::save_row::save_row_with(
+                        ui,
+                        draft,
+                        label,
+                        cites.then_some(super::save_row::RowReason {
+                            long,
+                            short,
+                            locked: held,
+                        }),
+                    )
                 })
                 .inner,
             ),
@@ -405,106 +414,6 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
             save,
         }
     }
-}
-
-/// `design::save_row`'s row (its word, `Discard` and its lock reason at the left, Save with
-/// `Ctrl+S` at the right, from the same `DraftState` methods), with the reason of the toolbar's
-/// waiting actions in the room between them: the long form when it fits whole, else the short
-/// one, measured before paint with `Discard` and the widest word, so the choice does not change
-/// when the draft becomes dirty. Painted while `locked`; nothing is painted while open. Only a
-/// row too narrow for the short form keeps a slot under it, in both states.
-fn save_row_with_reason(
-    ui: &mut Ui,
-    state: &super::DraftState<'_>,
-    save: &str,
-    reason: Option<(&str, &str)>,
-    locked: bool,
-) -> super::save_row::SaveRow {
-    use super::save_row::{SaveWeight, SaveWord};
-    let save_action = || {
-        match state.save_weight() {
-            SaveWeight::Primary => Action::primary(save),
-            SaveWeight::Secondary => Action::secondary(save),
-        }
-        .density(Density::Read)
-        .blocked(state.save_blocked())
-        .key("Ctrl+S")
-    };
-    let gap = ui.spacing().item_spacing.x;
-    let small = Type::Small.font(ui);
-    // The room for the reason, with the widest word and `Discard`, whatever the draft holds;
-    // measured from the fonts, so nothing is laid out before the row.
-    let word = [
-        SaveWord::Invalid,
-        SaveWord::ChangedOnDisk,
-        SaveWord::NotSaved,
-        SaveWord::Unsaved,
-        SaveWord::Saved,
-        SaveWord::NoChanges,
-    ]
-    .into_iter()
-    .map(|word| {
-        let status = word.status();
-        number_width(ui, &format!("{} {}", status.icon, status.word), &small)
-    })
-    .fold(0.0, f32::max);
-    let lock = state
-        .lock_reason()
-        .map_or(0.0, |reason| number_width(ui, reason, &small) + gap);
-    let room = ui.available_width()
-        - save_action().natural_width(ui)
-        - word
-        - Action::quiet("Discard").natural_width(ui)
-        - lock
-        - 4.0 * gap;
-    let fits = |words: &str| number_width(ui, words, &small) <= room;
-    let on_line = reason.and_then(|(long, short)| {
-        if fits(long) {
-            Some(long)
-        } else if fits(short) {
-            Some(short)
-        } else {
-            None
-        }
-    });
-    let mut pressed = super::save_row::SaveRow::default();
-    ui.horizontal(|ui| {
-        ui.set_min_height(Density::Scan.control());
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            pressed.save = save_action().show(ui).clicked();
-            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                status(ui, state.word().status());
-                if state.discard_shown() {
-                    pressed.discard = Action::quiet("Discard").show(ui).clicked();
-                }
-                if let Some(reason) = state.lock_reason() {
-                    blocked_reason(ui, Some(reason));
-                }
-                if locked && let Some(words) = on_line {
-                    let response = ui.label(Type::Small.rich(ui, words).color(colors().muted));
-                    if let Some((long, _)) = reason
-                        && words != long
-                    {
-                        named(ui, &response, long);
-                        let _ = response.on_hover_text(long);
-                    }
-                }
-            });
-        });
-    });
-    // Too narrow for the short form: a slot under the row, its room kept while open.
-    if let Some((long, _)) = reason
-        && on_line.is_none()
-    {
-        if locked {
-            blocked_reason(ui, Some(long));
-        } else {
-            ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
-                blocked_reason(ui, Some(long));
-            });
-        }
-    }
-    pressed
 }
 
 /// Controls that cannot be used for one reason, which each of them says on hover.

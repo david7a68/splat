@@ -438,19 +438,82 @@ pub struct SaveRow {
 /// The save row of `state`, as wide as the `Ui`: the word, `Discard` and any lock reason at the
 /// left, `save` (its words, such as `Save` or `Save changes`) at the right with `Ctrl+S`.
 pub fn save_row(ui: &mut Ui, state: &DraftState<'_>, save: &str) -> SaveRow {
+    save_row_with(ui, state, save, None)
+}
+
+/// Why other actions of the pane wait for this draft (M2, the reader toolbar's draft reason):
+/// a long and a short whole form, both the toolbar part's own words, and whether it holds.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::design) struct RowReason<'r> {
+    pub long: &'r str,
+    pub short: &'r str,
+    pub locked: bool,
+}
+
+/// `save_row`, with `reason` in the room between the left parts and Save: the long form when it
+/// fits whole, else the short one, measured before paint from the fonts with `Discard` and the
+/// widest word, so the choice does not change when the draft becomes dirty. Painted while it
+/// holds; nothing while open. Only a row too narrow for the short form keeps a slot under it,
+/// in both states (R29), so nothing moves while the DM types.
+pub(in crate::design) fn save_row_with(
+    ui: &mut Ui,
+    state: &DraftState<'_>,
+    save: &str,
+    reason: Option<RowReason<'_>>,
+) -> SaveRow {
+    let save_action = || {
+        match state.save_weight() {
+            SaveWeight::Primary => Action::primary(save),
+            SaveWeight::Secondary => Action::secondary(save),
+        }
+        .density(Density::Read)
+        .blocked(state.save_blocked())
+        .key("Ctrl+S")
+    };
+    let gap = ui.spacing().item_spacing.x;
+    let small = super::Type::Small.font(ui);
+    let on_line = reason.and_then(|reason| {
+        // The widest word and its icon, whatever the draft holds.
+        let word = [
+            SaveWord::Invalid(InvalidCause::Incomplete),
+            SaveWord::Invalid(InvalidCause::Refused),
+            SaveWord::Invalid(InvalidCause::Unreadable),
+            SaveWord::New,
+            SaveWord::ChangedOnDisk,
+            SaveWord::NotSaved,
+            SaveWord::Unsaved,
+            SaveWord::Saved,
+            SaveWord::NoChanges,
+        ]
+        .into_iter()
+        .map(|word| {
+            let status = word.status();
+            super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
+        })
+        .fold(0.0, f32::max);
+        let lock = state
+            .lock_reason()
+            .map_or(0.0, |words| super::number_width(ui, words, &small) + gap);
+        let room = ui.available_width()
+            - save_action().natural_width(ui)
+            - word
+            - Action::quiet("Discard").natural_width(ui)
+            - lock
+            - 4.0 * gap;
+        let fits = |words: &str| super::number_width(ui, words, &small) <= room;
+        if fits(reason.long) {
+            Some(reason.long)
+        } else if fits(reason.short) {
+            Some(reason.short)
+        } else {
+            None
+        }
+    });
     let mut pressed = SaveRow::default();
     ui.horizontal(|ui| {
         ui.set_min_height(Density::Scan.control());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            pressed.save = match state.save_weight() {
-                SaveWeight::Primary => Action::primary(save),
-                SaveWeight::Secondary => Action::secondary(save),
-            }
-            .density(Density::Read)
-            .blocked(state.save_blocked())
-            .key("Ctrl+S")
-            .show(ui)
-            .clicked();
+            pressed.save = save_action().show(ui).clicked();
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 status(ui, state.word().status());
                 if state.discard_shown() {
@@ -459,9 +522,32 @@ pub fn save_row(ui: &mut Ui, state: &DraftState<'_>, save: &str) -> SaveRow {
                 if let Some(reason) = state.lock_reason() {
                     super::blocked_reason(ui, Some(reason));
                 }
+                if let Some(reason) = reason
+                    && reason.locked
+                    && let Some(words) = on_line
+                {
+                    let response =
+                        ui.label(super::Type::Small.rich(ui, words).color(colors().muted));
+                    if words != reason.long {
+                        super::named(ui, &response, reason.long);
+                        let _ = response.on_hover_text(reason.long);
+                    }
+                }
             });
         });
     });
+    // Too narrow for the short form: a slot under the row, its room kept while open.
+    if let Some(reason) = reason
+        && on_line.is_none()
+    {
+        if reason.locked {
+            super::blocked_reason(ui, Some(reason.long));
+        } else {
+            ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
+                super::blocked_reason(ui, Some(reason.long));
+            });
+        }
+    }
     pressed
 }
 
