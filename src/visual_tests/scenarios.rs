@@ -20328,9 +20328,21 @@ pub mod encounter_owned_groups {
         };
         // The member first, then the group: the group's result leads; Undo of the member
         // brings Wolf back and the group stays moved.
+        let shrine_menu_in_view = |d: &mut Driver<'_>| {
+            let menu = format!("More actions for {GROUP_SHRINE}");
+            for _ in 0..20 {
+                if d.in_view(&menu) {
+                    break;
+                }
+                d.scroll_up_at(pos2(250.0, 400.0), 1);
+            }
+        };
         let member_then_group = d.aside(|d| {
             d.click("More actions for Wolf");
             d.click("Remove");
+            // B4: at 960 the editor's body is 34 px shorter (its back line), so after the footer
+            // grows the group's menu is above the view: the DM scrolls up to it.
+            shrine_menu_in_view(d);
             d.click_first(&format!("More actions for {GROUP_SHRINE}"));
             d.click("Make available to any encounter");
             d.expect("Undo move");
@@ -20345,6 +20357,7 @@ pub mod encounter_owned_groups {
         // The group first, then the member: the member's result leads; Undo of the group brings
         // it back and Wolf stays removed.
         let group_then_member = d.aside(|d| {
+            shrine_menu_in_view(d);
             d.click_first(&format!("More actions for {GROUP_SHRINE}"));
             d.click("Make available to any encounter");
             d.expect("Undo move");
