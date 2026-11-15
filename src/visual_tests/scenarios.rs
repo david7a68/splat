@@ -3605,13 +3605,13 @@ pub mod campaign_content {
                 d.visible_text(PACKAGES_DISCARDED)
             ),
         );
-        // Round 30: the write's result is the footer's only Undo of its verb, so it paints
-        // `Undo write` (its name stays whole); at 1920 this frame then differs from
-        // `packages-partial-selection` only by that short footer line. Above: the file was
+        // The write's result is the footer's only Undo of its verb; it paints its whole words
+        // (`Undo write Campaign.md`, ruling M9) where they fit. At 1920 this frame then differs
+        // from `packages-partial-selection` only by that one footer line. Above: the file was
         // missing, its bytes are back as saved, and its Undo is drawn (`wait_for_control`);
         // the state's own check paints the Undo's icon. The result's words are asserted after
         // this state, with the failed Undo.
-        d.expect_same("the footer's one new line, a lone Undo in its short form");
+        d.expect_same("the footer's one new line, a lone Undo");
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
         });
