@@ -662,9 +662,9 @@
     ["N4/quiet-action-line-start","42-read-aloud-field","960x640","Button \"Filter creatures\"",1]
   ],
   "session-plan-groups": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Add\"",1],
     ["G1b/pressed-control-moved","02-plan-group-assembled","960x640","Button \"Add\"",1],
     ["G1b/pressed-control-moved","10-plan-group-in-another-session","960x640","Button \"Add\"",1],
+    ["G1b/pressed-control-moved","16-plan-group-refused","960x640","Button \"Add\"",1],
     ["G3/far-action","03-plan-group-saved","1920x1080","Button \"Edit group Ash Pack\"",1],
     ["G3/far-action","04-plan-with-groups","1920x1080","Button \"Edit group Ash Pack\"",1],
     ["G3/far-action","04-plan-with-groups","1920x1080","Button \"Edit group Rival Team\"",1],

@@ -23151,12 +23151,15 @@ pub mod session_plan_groups {
             d.visible_text(reason),
         );
         // B4b: the refused press as a captured state, its reason whole, once, under Rival Team.
-        let mut under = (false, String::new());
+        let mut under = (true, String::new());
         d.state_prepared("plan-group-refused", Sizes::Standard, |d| {
-            under = refusal_under(d, reason, GROUP_RIVALS);
-            let key = format!("{:?}", d.window_size());
-            under.1 = format!("{key}: {}", under.1);
+            let (ok, words) = refusal_under(d, reason, GROUP_RIVALS);
+            under.0 &= ok;
+            under
+                .1
+                .push_str(&format!("{:?}: {words}; ", d.window_size()));
         });
+        under.0 &= under.1.matches("; ").count() == 2;
         d.observe("s30-B4b-refusal-under-its-group", under.0, under.1);
         // Back to the draft's own session (the link names it while the host is kept).
         if d.has("Return to the session being played") {
@@ -23206,12 +23209,15 @@ pub mod session_plan_groups {
                 d.visible_text(encounter_reason)
             ),
         );
-        let mut under = (false, String::new());
+        let mut under = (true, String::new());
         d.state_prepared("plan-encounter-refused", Sizes::Standard, |d| {
-            under = refusal_under(d, encounter_reason, GROUP_RIVALS);
-            let key = format!("{:?}", d.window_size());
-            under.1 = format!("{key}: {}", under.1);
+            let (ok, words) = refusal_under(d, encounter_reason, GROUP_RIVALS);
+            under.0 &= ok;
+            under
+                .1
+                .push_str(&format!("{:?}: {words}; ", d.window_size()));
         });
+        under.0 &= under.1.matches("; ").count() == 2;
         d.observe(
             "s30-B4b-encounter-refusal-under-its-group",
             under.0,
