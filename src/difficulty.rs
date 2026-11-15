@@ -63,7 +63,7 @@ pub struct Scale {
 }
 
 /// The four words, in rising order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Word {
     Low,
     Moderate,
@@ -83,7 +83,7 @@ impl Word {
 }
 
 /// A fight's XP and, when every input is known, its word.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Difficulty {
     /// The sum of the XP that is known.
     pub xp: u64,
@@ -100,7 +100,7 @@ pub struct Difficulty {
 }
 
 /// The inputs that are not known, so that an opened row can say why it has no word (W1-D2).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Missing {
     pub what: Unknown,
     /// Each one by its place in what `Scale::weigh` was given: among the foes, or in the party
@@ -110,7 +110,7 @@ pub struct Missing {
     pub names: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Unknown {
     Xp,
     Level,
@@ -149,6 +149,33 @@ impl Missing {
             })
             .find(|words| fits(words))
             .or_else(|| Some(self.short().to_owned()))
+    }
+
+    /// Ruling R31, for every line that shows a roster with this reason, decided by the
+    /// MEMBERS, never by comparing names: each member of the roster with whether the line
+    /// still shows it. Where every member shown lacks its XP, the line already says whose:
+    /// the reason names only the members without XP that it does not show (each name once,
+    /// for display). Where a member with a known XP is shown, or none is shown, every name
+    /// stays: saying whose input is missing is worth the repeated name.
+    pub fn unsaid<'a>(&self, members: impl IntoIterator<Item = (&'a Member, bool)>) -> Self {
+        let members: Vec<(&Member, bool)> = members.into_iter().collect();
+        let mut shown = members.iter().filter(|(_, shown)| *shown).peekable();
+        let says_whose = self.what == Unknown::Xp
+            && shown.peek().is_some()
+            && shown.all(|(member, _)| member.no_xp);
+        if !says_whose {
+            return self.clone();
+        }
+        let mut names: Vec<String> = Vec::new();
+        for (member, shown) in &members {
+            if member.no_xp && !shown && !names.contains(&member.called) {
+                names.push(member.called.clone());
+            }
+        }
+        Self {
+            names,
+            ..self.clone()
+        }
     }
 
     /// The reason with no names, where a line has no room for them.
@@ -193,7 +220,7 @@ impl Difficulty {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Rating {
     pub word: Word,
     /// The party's budget for Low, Moderate and High.
@@ -383,12 +410,72 @@ pub struct Line<'a> {
     label: Option<&'static str>,
 }
 
-/// One creature of a roster's summary: how many, and its name as the roster shows it. The name
-/// is an opaque value; it may hold any characters, commas too.
+/// One creature of a roster's summary: how many, its words as the roster shows them, and the
+/// name it is CALLED by (the name a missing-XP reason uses for it). Both come from one
+/// constructor, so they cannot drift: a renamed creature shows `Shade (as Nameless Thing)` and
+/// is called `Shade`. The names are opaque values; they may hold any characters, commas too.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Member {
-    pub count: usize,
-    pub name: String,
+    count: usize,
+    name: String,
+    called: String,
+    /// Its XP is not known (R31 asks this of the member, never of a name).
+    no_xp: bool,
+}
+
+impl Member {
+    /// A creature shown and called by one name. `no_xp` is required: its builder says once,
+    /// from the source the difficulty weighs (`creature_xp` of its entry), whether its XP is
+    /// not known.
+    pub fn new(count: usize, name: impl Into<String>, no_xp: bool) -> Self {
+        let name = name.into();
+        Self {
+            count,
+            called: name.clone(),
+            name,
+            no_xp,
+        }
+    }
+
+    /// A renamed creature (FL2): shown as `Shade (as Nameless Thing)`, called `Shade`.
+    pub fn renamed(count: usize, shown: &str, base: &str, no_xp: bool) -> Self {
+        Self {
+            count,
+            name: format!("{shown} (as {base})"),
+            called: shown.to_owned(),
+            no_xp,
+        }
+    }
+
+    /// The member as the line shows it: `1,000 × Wolf` (counts grouped, `design::count`).
+    pub fn words(&self) -> String {
+        format!(
+            "{} × {}",
+            crate::design::count(self.count, "", ""),
+            self.name
+        )
+    }
+}
+
+/// A roster's fact after its members. Typed, so that no caller can put roster words here
+/// where the line could not see the members in them.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Fact {
+    /// A creature of the roster is changed from its entry.
+    Changed,
+    /// Built words, for this module's tests of opaque text (`Summary::from_built`).
+    #[cfg(test)]
+    Built(String),
+}
+
+impl Fact {
+    pub fn words(&self) -> &str {
+        match self {
+            Self::Changed => "Changed",
+            #[cfg(test)]
+            Self::Built(words) => words,
+        }
+    }
 }
 
 /// A roster's summary as typed parts, in the line's order: the party count, the members, then
@@ -397,17 +484,34 @@ pub struct Member {
 pub struct Summary {
     pub party: usize,
     pub members: Vec<Member>,
-    pub facts: Vec<String>,
+    pub facts: Vec<Fact>,
 }
 
 impl Summary {
-    /// TRANSITIONAL, at the edge only (`From<&str>`): the Encounters list still hands its Ready
-    /// row's summary as built words (`encounters::roster_summary`; the typed handoff is routed
-    /// to the Encounters package). Only a leading party count (`5 party`) is read; everything
+    /// The whole summary as words, in the line's order, with nothing given way:
+    /// `5 party · 2 × Cinder Wolf, 1 × Ember Cultist · Changed`. For a place that shows the
+    /// summary as plain words (a row's hover, the plan); a difficulty line takes the parts.
+    pub fn text(&self) -> String {
+        let mut parts = Vec::new();
+        if self.party > 0 {
+            parts.push(party_words(self.party));
+        }
+        if !self.members.is_empty() {
+            let members: Vec<String> = self.members.iter().map(Member::words).collect();
+            parts.push(members.join(", "));
+        }
+        parts.extend(self.facts.iter().map(|fact| fact.words().to_owned()));
+        parts.join(" · ")
+    }
+
+    /// Built words, kept for this module's tests of opaque text. No caller hands built words
+    /// to a line: `Line::roster` takes a `Summary`, and `&str` is not one (the Ready row hands
+    /// typed parts since G118). Only a leading party count (`5 party`) is read; everything
     /// after it is ONE opaque fact: never parsed into members, never narrowed member by member.
     /// It is shown as it came; after the XP number (Q-s) it shortens from its end where a
     /// separator stands (`, `, ` · `) with `…`, as the line did before typed parts, and goes last. A name such as
     /// `Ghost, 02 × Echo` keeps its words: never reformatted, only cut from the end.
+    #[cfg(test)]
     pub fn from_built(text: &str) -> Self {
         let (party, rest) = match text.split_once(" · ") {
             Some((first, rest)) => (first, rest),
@@ -425,16 +529,10 @@ impl Summary {
             party,
             members: Vec::new(),
             facts: (!rest.is_empty())
-                .then(|| rest.to_owned())
+                .then(|| Fact::Built(rest.to_owned()))
                 .into_iter()
                 .collect(),
         }
-    }
-}
-
-impl From<&str> for Summary {
-    fn from(text: &str) -> Self {
-        Self::from_built(text)
     }
 }
 
@@ -446,10 +544,6 @@ impl From<&Summary> for Summary {
 
 fn party_words(party: usize) -> String {
     crate::design::count(party, "party", "party")
-}
-
-fn member_words(member: &Member) -> String {
-    format!("{} × {}", member.count, member.name)
 }
 
 /// Arrivals' heading line of a group, after its name (the name is the heading's own and never
@@ -492,8 +586,8 @@ struct Unit<'a> {
     gives: Option<usize>,
     /// A unit of a summary: the summary ends with `…` where it was cut.
     summary: bool,
-    /// The member this unit shows, by its name (an opaque value).
-    member: Option<String>,
+    /// The member this unit shows (R31 asks it whether its XP is known).
+    member: Option<Member>,
     /// Built words (a fact, not a member): before it goes, it shortens from its end.
     opaque: bool,
     _line: std::marker::PhantomData<&'a ()>,
@@ -594,10 +688,10 @@ impl<'a> Line<'a> {
         for (at, member) in summary.members.iter().enumerate() {
             units.push(Unit {
                 before: if at == 0 { " · " } else { ", " },
-                words: member_words(member),
+                words: member.words(),
                 gives: None,
                 summary: true,
-                member: Some(member.name.clone()),
+                member: Some(member.clone()),
                 opaque: false,
                 _line: std::marker::PhantomData,
             });
@@ -605,7 +699,7 @@ impl<'a> Line<'a> {
         for fact in &summary.facts {
             units.push(Unit {
                 before: " · ",
-                words: fact.clone(),
+                words: fact.words().to_owned(),
                 gives: None,
                 summary: true,
                 member: None,
@@ -737,10 +831,11 @@ impl<'a> Line<'a> {
         text
     }
 
-    /// Whether a member that is still on the line is this creature: equal names, nothing else.
-    fn shows(&self, stage: &Stage, name: &str) -> bool {
-        self.units.iter().enumerate().any(|(at, unit)| {
-            unit.member.as_deref() == Some(name) && !stage.gone.contains(&Give::Unit(at))
+    /// Each member of the line with whether it is still on the line at `stage` (R31).
+    fn members<'s>(&'s self, stage: &'s Stage) -> impl Iterator<Item = (&'s Member, bool)> + 's {
+        self.units.iter().enumerate().filter_map(move |(at, unit)| {
+            let member = unit.member.as_ref()?;
+            Some((member, !stage.gone.contains(&Give::Unit(at))))
         })
     }
 
@@ -835,16 +930,9 @@ impl<'a> Line<'a> {
                 Some(fallback(line(&last, form(&last), true)))
             }
             (None, Some(missing)) => {
-                // A member that the summary still shows is not named again (AB4, FB5, SB5).
-                let unsaid = |stage: &Stage| Missing {
-                    names: missing
-                        .names
-                        .iter()
-                        .filter(|name| !self.shows(stage, name))
-                        .cloned()
-                        .collect(),
-                    ..missing.clone()
-                };
+                // R31 (AB4, FB5, SB5): where every creature still shown lacks its XP, they are
+                // not named again; beside a known one, the reason keeps the names.
+                let unsaid = |stage: &Stage| missing.unsaid(self.members(stage));
                 let reason = |words: String| self.with_label(vec![(words, false)]);
                 let whole = |stage: &Stage| {
                     unsaid(stage)
@@ -886,10 +974,21 @@ impl<'a> Line<'a> {
 /// owner and no other run can read its answers. Each line is kept under its own id with one
 /// key: its content key, its room, its font and the display scale. On a frame where the key is
 /// unchanged, the line is not built and nothing is measured; a new key replaces the entry.
-#[derive(Default)]
-pub(crate) struct Kept<K> {
-    fits: std::collections::HashMap<K, (u64, Option<Fitted>)>,
+///
+/// The kept answer is a fitted line (`V`'s default), or an owner's own answer for a line it
+/// lays out itself (the session plan's row keeps its laid-out line).
+pub(crate) struct Kept<K, V = Option<Fitted>> {
+    fits: std::collections::HashMap<K, (u64, V)>,
     shortest: std::collections::HashMap<K, (u64, f32)>,
+}
+
+impl<K, V> Default for Kept<K, V> {
+    fn default() -> Self {
+        Self {
+            fits: std::collections::HashMap::new(),
+            shortest: std::collections::HashMap::new(),
+        }
+    }
 }
 
 impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
@@ -903,15 +1002,9 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         font: &egui::FontId,
         line: impl FnOnce() -> Line<'a>,
     ) -> Option<Fitted> {
-        let key = key(ui, (content, room.to_bits(), font));
-        if let Some((kept, answer)) = self.fits.get(id)
-            && *kept == key
-        {
-            return answer.clone();
-        }
-        let answer = line().fit_or_wrap(|text| crate::design::number_width(ui, text, font) <= room);
-        self.fits.insert(id.clone(), (key, answer.clone()));
-        answer
+        self.answer(ui, id, content, room, font, || {
+            line().fit_or_wrap(|text| crate::design::number_width(ui, text, font) <= room)
+        })
     }
 
     /// The width of [`Line::shortest`] in `font` (0 with no line).
@@ -937,16 +1030,40 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         width
     }
 
-    /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
-    #[cfg(test)]
-    pub(crate) fn holds(&self, id: &K) -> bool {
-        self.fits.contains_key(id) || self.shortest.contains_key(id)
-    }
-
     #[cfg(test)]
     pub(crate) fn seed(&mut self, id: K) {
         self.fits.insert(id.clone(), (0, None));
         self.shortest.insert(id, (0, 0.0));
+    }
+}
+
+impl<K: std::hash::Hash + Eq + Clone, V: Clone> Kept<K, V> {
+    /// As `fit`, for an owner whose answer is more than the line (G118: the Ready row's
+    /// words where the fight has no form). `answer` runs only when the key changes.
+    pub(crate) fn answer(
+        &mut self,
+        ui: &egui::Ui,
+        id: &K,
+        content: impl std::hash::Hash,
+        room: f32,
+        font: &egui::FontId,
+        answer: impl FnOnce() -> V,
+    ) -> V {
+        let key = key(ui, (content, room.to_bits(), font));
+        if let Some((kept, answer)) = self.fits.get(id)
+            && *kept == key
+        {
+            return answer.clone();
+        }
+        let answer = answer();
+        self.fits.insert(id.clone(), (key, answer.clone()));
+        answer
+    }
+
+    /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
+    #[cfg(test)]
+    pub(crate) fn holds(&self, id: &K) -> bool {
+        self.fits.contains_key(id) || self.shortest.contains_key(id)
     }
 
     /// Drop the lines whose owner no longer shows them (a group no longer offered).
@@ -1073,9 +1190,9 @@ mod tests {
             party,
             members: members
                 .iter()
-                .map(|(count, name)| Member {
-                    count: *count,
-                    name: (*name).to_owned(),
+                // The fixture's creatures with no XP: Nameless Thing and Wisp.
+                .map(|(count, name)| {
+                    Member::new(*count, *name, ["Nameless Thing", "Wisp"].contains(name))
                 })
                 .collect(),
             facts: Vec::new(),
@@ -1201,11 +1318,22 @@ mod tests {
         assert_eq!(at(36), "1 × Nameless Thing · XP not known");
         assert_eq!(at(32), "… · XP not known: Nameless Thing");
         assert!(!visitor.fit(fits(200)).unwrap().cut);
+        // R31: beside a creature with a known XP (Ox), the reason keeps every name: it says
+        // whose input is missing.
         let two = Line::roster(&unknown, typed(5, &[(1, "Nameless Thing"), (1, "Ox")]));
         assert_eq!(
             two.fit(fits(200)).unwrap().text(),
-            "5 party · 1 × Nameless Thing, 1 × Ox · XP not known: Wisp"
+            "5 party · 1 × Nameless Thing, 1 × Ox · XP not known: Nameless Thing and 1 more"
         );
+        // Every creature shown lacks its XP: the line says whose; the one it no longer shows
+        // is named.
+        let both = Line::roster(&unknown, typed(5, &[(1, "Nameless Thing"), (1, "Wisp")]));
+        let at = |room| both.fit(fits(room)).unwrap().text();
+        assert_eq!(
+            at(200),
+            "5 party · 1 × Nameless Thing, 1 × Wisp · XP not known"
+        );
+        assert_eq!(at(42), "1 × Nameless Thing, … · XP not known: Wisp");
         // FK3, SK3, FJ3 (R1): a joining group whose fight has no word still says `Fight after`,
         // with `XP not known` in the word's place and whose XP it is.
         let ghost = Difficulty {
@@ -1230,14 +1358,8 @@ mod tests {
         let comma = Summary {
             party: 5,
             members: vec![
-                Member {
-                    count: 2,
-                    name: "Cinder Wolf".into(),
-                },
-                Member {
-                    count: 1,
-                    name: "Ghost, of the Mill".into(),
-                },
+                Member::new(2, "Cinder Wolf", false),
+                Member::new(1, "Ghost, of the Mill", true),
             ],
             facts: Vec::new(),
         };
@@ -1251,16 +1373,17 @@ mod tests {
         };
         let typed = Line::roster(&ghost, &comma);
         let at = |room| typed.fit(fits(room)).unwrap().text();
+        // R31: Cinder Wolf's XP is known, so the reason names the ghost.
         assert_eq!(
             at(200),
-            "5 party · 2 × Cinder Wolf, 1 × Ghost, of the Mill · XP not known"
+            "5 party · 2 × Cinder Wolf, 1 × Ghost, of the Mill · XP not known: Ghost, of the Mill"
         );
         for room in (1..=80).rev() {
             let text = at(room);
             assert!(text.chars().count() <= room, "{room}: {text}");
             assert!(
-                text.matches("Ghost").count() <= 1,
-                "the name once at {room}: {text}"
+                text.matches("Ghost").count() <= 1 + usize::from(text.contains("1 × Ghost")),
+                "the name once in the reason at {room}: {text}"
             );
             assert!(
                 !text.contains("1 × Ghost,…") && !text.contains("Ghost, …"),
@@ -1369,10 +1492,7 @@ mod tests {
         let summary = Summary {
             party: 5,
             members: (0..40)
-                .map(|at| Member {
-                    count: 1,
-                    name: format!("Creature {at}"),
-                })
+                .map(|at| Member::new(1, format!("Creature {at}"), false))
                 .collect(),
             facts: Vec::new(),
         };

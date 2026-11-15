@@ -766,7 +766,7 @@ fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
 #[cfg(test)]
 fn planned_summary(
     ui: &mut egui::Ui,
-    summary: &str,
+    summary: &crate::difficulty::Summary,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) {
     planned_summary_on_road(ui, summary, None, difficulty);
@@ -775,13 +775,106 @@ fn planned_summary(
 /// `planned_summary` with a journey's day after the summary (`road_day`). Round 28 FE6: the day
 /// ties the fight to its journey, so it gives way last: the party's size first, then the
 /// roster's members from the end, then the day.
+/// A planned fight's line, laid out once for its room and kept (`Kept`): what an unchanged
+/// frame paints, with no fitting and no string building.
+#[derive(Clone)]
+pub(super) struct KeptPlanLine {
+    text: PlanText,
+    name: String,
+    hover: PlanHover,
+}
+
+#[derive(Clone)]
+enum PlanText {
+    /// No form: the summary alone.
+    Alone(String),
+    Form(egui::text::LayoutJob),
+}
+
+#[derive(Clone)]
+enum PlanHover {
+    None,
+    Text(String),
+    /// The word's budget, after the whole summary where it was cut.
+    Rating(crate::difficulty::Rating, Option<String>),
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test builds: how many plan lines were fitted (laid out), so a test can see that an
+    /// unchanged frame fits none.
+    static PLAN_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The plan's kept lines: one per planned fight, by the session, the fight's place in the plan
+/// and its note. The Sessions page owns them (`Sessions::plan_lines`).
+pub(super) type PlanLines = crate::difficulty::Kept<(Option<Uuid>, usize, Uuid), KeptPlanLine>;
+
+/// `planned_summary` with a journey's day after the summary (`road_day`), not kept (tests).
+#[cfg(test)]
 fn planned_summary_on_road(
     ui: &mut egui::Ui,
-    summary: &str,
+    typed: &crate::difficulty::Summary,
     day: Option<&str>,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) {
-    let roster = summary;
+    let line = prepare_plan_line(ui, typed, day, difficulty);
+    show_plan_line(ui, &line);
+}
+
+/// A kept plan line: fitted again only when its fight's roster key, its day, its room, its
+/// font or the display scale changes.
+fn kept_plan_line(
+    ui: &mut egui::Ui,
+    kept: &mut PlanLines,
+    id: (Option<Uuid>, usize, Uuid),
+    fight: &PlanFight,
+    day: Option<&str>,
+) {
+    let font = Type::Small.font(ui);
+    let room = ui.available_width();
+    let line = kept.answer(ui, &id, (fight.key, day), room, &font, || {
+        let words = fight.summary.text();
+        let day = road_day(ui, &words, day);
+        prepare_plan_line(ui, &fight.summary, day.as_deref(), Some(&fight.difficulty))
+    });
+    show_plan_line(ui, &line);
+}
+
+fn show_plan_line(ui: &mut egui::Ui, line: &KeptPlanLine) {
+    let response = match &line.text {
+        PlanText::Alone(alone) => ui.add(
+            egui::Label::new(Type::Small.rich(ui, alone.clone()).color(colors().muted)).wrap(),
+        ),
+        PlanText::Form(job) => ui.add(egui::Label::new(job.clone()).wrap()),
+    };
+    design::named(ui, &response, &line.name);
+    match &line.hover {
+        PlanHover::None => {}
+        PlanHover::Text(hover) => {
+            response.on_hover_text(hover);
+        }
+        PlanHover::Rating(rating, cut) => {
+            let response = match cut {
+                Some(summary) => response.on_hover_text(summary),
+                None => response,
+            };
+            crate::difficulty::describe(ui, response, rating);
+        }
+    }
+}
+
+fn prepare_plan_line(
+    ui: &egui::Ui,
+    typed: &crate::difficulty::Summary,
+    day: Option<&str>,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) -> KeptPlanLine {
+    #[cfg(test)]
+    PLAN_FITS.with(|fits| fits.set(fits.get() + 1));
+    // G118: the roster's typed parts; its words only for the layout and the name.
+    let words = typed.text();
+    let roster = words.as_str();
     let with_day = match day {
         Some(day) if !roster.trim().is_empty() => format!("{roster} · {day}"),
         Some(day) => day.to_owned(),
@@ -802,10 +895,12 @@ fn planned_summary_on_road(
     };
     let alone = laid(fight_summary_text(summary));
     let Some(parts) = difficulty.and_then(crate::difficulty::Difficulty::parts) else {
-        let response = ui.add(egui::Label::new(Type::Small.rich(ui, alone).color(c.muted)).wrap());
         // The breaks only steer the wrap; the name keeps the summary's words.
-        design::named(ui, &response, summary);
-        return;
+        return KeptPlanLine {
+            text: PlanText::Alone(alone),
+            name: summary.to_owned(),
+            hover: PlanHover::None,
+        };
     };
     // The form keeps its words together and wraps whole. Where the row has no room for it,
     // the word's limit gives way first, then the summary from its end.
@@ -843,30 +938,34 @@ fn planned_summary_on_road(
         Member,
         Day,
     }
-    let mut units: Vec<(&str, &str, Turn)> = Vec::new();
-    for (index, fact) in roster
-        .split(" · ")
-        .filter(|_| !roster.trim().is_empty())
-        .enumerate()
-    {
-        let members: Vec<&str> = fact.split(", ").collect();
-        for (at, member) in members.iter().enumerate() {
-            let before = match (index, at) {
-                (0, 0) => "",
-                (_, 0) => " · ",
-                _ => ", ",
-            };
-            let turn = if index == 0 && members.len() == 1 && member.ends_with(" party") {
-                Turn::Party
-            } else {
-                Turn::Member
-            };
-            units.push((before, member, turn));
-        }
+    // G118: the units from the typed parts, never from the words. A member unit keeps its
+    // member, which R31 asks whether its XP is known.
+    type Units<'u> = Vec<(&'u str, String, Turn, Option<&'u crate::difficulty::Member>)>;
+    let mut units: Units<'_> = Vec::new();
+    let first = |units: &Units<'_>| units.is_empty();
+    if typed.party > 0 {
+        units.push((
+            "",
+            design::count(typed.party, "party", "party"),
+            Turn::Party,
+            None,
+        ));
+    }
+    for (at, member) in typed.members.iter().enumerate() {
+        let before = match (first(&units), at) {
+            (true, _) => "",
+            (false, 0) => " · ",
+            _ => ", ",
+        };
+        units.push((before, member.words(), Turn::Member, Some(member)));
+    }
+    for fact in &typed.facts {
+        let before = if first(&units) { "" } else { " · " };
+        units.push((before, fact.words().to_owned(), Turn::Member, None));
     }
     if let Some(day) = day {
         let before = if units.is_empty() { "" } else { " · " };
-        units.push((before, day, Turn::Day));
+        units.push((before, day.to_owned(), Turn::Day, None));
     }
     // The units in the order they give way.
     let mut giving_way: Vec<usize> = (0..units.len()).collect();
@@ -876,9 +975,9 @@ fn planned_summary_on_road(
         let gone = &giving_way[..units.len() - count];
         let mut pieces: Vec<(&str, &str)> = Vec::new();
         let mut cut_before = false;
-        for (at, (before, unit, turn)) in units.iter().enumerate() {
+        for (at, (before, unit, turn, _)) in units.iter().enumerate() {
             if !gone.contains(&at) {
-                pieces.push((before, unit));
+                pieces.push((before, unit.as_str()));
                 cut_before = false;
             } else if *turn != Turn::Party && !cut_before {
                 pieces.push((before, "…"));
@@ -908,76 +1007,81 @@ fn planned_summary_on_road(
         }
         fits
     };
-    let (full, short) = match missing {
-        // W1-D2, X1: whose input is not known, in the `XP not known` place: whole, else the
-        // first name shortened from its end. Where even its first letter has no room, the
-        // summary gives way first; the reason alone only where nothing else fits.
+    let (shown, parts, cut) = match missing {
+        // W1-D2, X1, R31: whose input is not known, in the `XP not known` place. A candidate is
+        // a set of units and the reason for EXACTLY those units (`Missing::unsaid`), and only
+        // whole candidates are compared: most units first, the names whole, else the first
+        // name shortened from its end. Where even its first letter has no room, the summary
+        // gives way first; the reason alone only where nothing else fits. Each step shows
+        // fewer units, so the search ends.
         Some(missing) => {
-            let fits_with = |facts: &str, words: &str| {
-                rows(&with_form(facts, &words.replace(' ', "\u{a0}"))) <= lines
-            };
             let short = missing.short();
-            // Round 28 FB6: where every creature of the roster lacks its XP, the summary already
-            // says whose, so it stays whole with the short reason; cutting a member to name it
-            // again says less. With a creature whose XP is known beside them, the reason keeps
-            // its names (review of PR 324: say whose input is missing).
-            let mut members = units
-                .iter()
-                .filter(|(_, _, turn)| *turn == Turn::Member)
-                .map(|(_, unit, _)| unit.rsplit_once(" × ").map_or(*unit, |(_, named)| named))
-                .peekable();
-            let named = missing.what == crate::difficulty::Unknown::Xp
-                && members.peek().is_some()
-                && members.all(|member| missing.names.iter().any(|name| name == member));
-            let whole_summary = named && fits_with(summary, short);
-            let mut fitted = if whole_summary {
-                Some(short.to_owned())
-            } else {
-                missing.fitted(|words| fits_with(summary, words))
+            let unsaid = |count: usize| {
+                let gone = &giving_way[..units.len() - count];
+                missing.unsaid(
+                    units
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(at, unit)| Some((unit.3?, !gone.contains(&at)))),
+                )
             };
-            if !whole_summary
-                && fitted.as_deref() == Some(short)
-                && let Some(first) = missing.names.first().and_then(|name| name.chars().next())
-            {
-                let least = format!("{short}: {first}…").replace(' ', "\u{a0}");
-                let kept = most(&least);
-                fitted = if kept > 0 {
-                    let facts = cut_at(kept);
-                    missing.fitted(|words| fits_with(&facts, words))
+            let candidate = |count: usize, words: &str| {
+                let form = words.replace(' ', "\u{a0}");
+                if count == units.len() {
+                    with_form(summary, &form)
+                } else if count == 0 {
+                    laid(form)
                 } else {
-                    // No fact or member keeps its place: the named reason alone, in the room the
-                    // summary leaves (review of PR 299).
-                    missing.fitted(|words| rows(&laid(words.replace(' ', "\u{a0}"))) <= lines)
+                    with_form(&cut_at(count), &form)
+                }
+            };
+            let fits = |count: usize, words: &str| rows(&candidate(count, words)) <= lines;
+            let chosen = (1..=units.len()).rev().find_map(|count| {
+                let reason = unsaid(count);
+                let words = if reason.names.is_empty() {
+                    short.to_owned()
+                } else {
+                    reason
+                        .fitted(|words| fits(count, words))
+                        .filter(|words| words != short)?
                 };
-            }
-            let form = nb(vec![(fitted.unwrap_or_else(|| short.to_owned()), false)]);
-            (form.clone(), form)
+                fits(count, &words).then_some((count, words))
+            });
+            let (count, words) = chosen.unwrap_or_else(|| {
+                // No fact or member keeps its place: the named reason alone, in the room the
+                // summary leaves (review of PR 299).
+                let words = unsaid(0)
+                    .fitted(|words| fits(0, words))
+                    .unwrap_or_else(|| short.to_owned());
+                (0, words)
+            });
+            let form = nb(vec![(words.clone(), false)]);
+            (candidate(count, &words), form, count < units.len())
         }
         None => {
             let full = nb(parts);
             let short = difficulty
                 .and_then(|difficulty| difficulty.rating.as_ref())
                 .map_or_else(|| full.clone(), |rating| nb(rating.parts(false)));
-            (full, short)
+            let whole = [&full, &short]
+                .into_iter()
+                .map(|parts| (with_form(summary, &joined(parts)), parts))
+                .find(|(shown, _)| rows(shown) <= lines);
+            if let Some((shown, parts)) = whole {
+                (shown, parts.clone(), false)
+            } else {
+                // The most whole facts and members that keep the lines, by halves; with none,
+                // the form alone.
+                let form = joined(&short);
+                let fits = most(&form);
+                let shown = if fits == 0 {
+                    form
+                } else {
+                    with_form(&cut_at(fits), &form)
+                };
+                (shown, short.clone(), true)
+            }
         }
-    };
-    let whole = [&full, &short]
-        .into_iter()
-        .map(|parts| (with_form(summary, &joined(parts)), parts))
-        .find(|(shown, _)| rows(shown) <= lines);
-    let (shown, parts, cut) = if let Some((shown, parts)) = whole {
-        (shown, parts.clone(), false)
-    } else {
-        // The most whole facts and members that keep the lines, by halves; with none, the
-        // form alone.
-        let form = joined(&short);
-        let fits = most(&form);
-        let shown = if fits == 0 {
-            form
-        } else {
-            with_form(&cut_at(fits), &form)
-        };
-        (shown, short.clone(), true)
     };
     let form = joined(&parts);
     let facts = shown.strip_suffix(form.as_str()).unwrap_or("");
@@ -986,27 +1090,23 @@ fn planned_summary_on_road(
     crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
     job.wrap.max_width = width;
     let job = even_separators(ui, job);
-    let response = ui.add(egui::Label::new(job).wrap());
     // The accessible name keeps the whole summary and the whole form.
     let plain_form = missing.map_or_else(
-        || joined(&full).replace('\u{a0}', " "),
+        || {
+            difficulty
+                .and_then(crate::difficulty::Difficulty::form)
+                .unwrap_or_default()
+        },
         |missing| {
             missing
                 .words()
                 .unwrap_or_else(|| missing.short().to_owned())
         },
     );
-    design::named(ui, &response, &format!("{summary} · {plain_form}"));
+    let name = format!("{summary} · {plain_form}");
     let difficulty = difficulty.expect("the form came from it");
-    match (&difficulty.rating, &difficulty.missing) {
-        (Some(rating), _) => {
-            let response = if cut {
-                response.on_hover_text(summary)
-            } else {
-                response
-            };
-            crate::difficulty::describe(ui, response, rating);
-        }
+    let hover = match (&difficulty.rating, &difficulty.missing) {
+        (Some(rating), _) => PlanHover::Rating(rating.clone(), cut.then(|| summary.to_owned())),
         // W1-D2: whose input is not known, on hover.
         (None, Some(missing)) => {
             let names = missing.words().unwrap_or_default();
@@ -1015,11 +1115,18 @@ fn planned_summary_on_road(
                 (true, false) => format!("{summary}\n{names}"),
                 (false, _) => names,
             };
-            if !hover.is_empty() {
-                response.on_hover_text(hover);
+            if hover.is_empty() {
+                PlanHover::None
+            } else {
+                PlanHover::Text(hover)
             }
         }
-        (None, None) => {}
+        (None, None) => PlanHover::None,
+    };
+    KeptPlanLine {
+        text: PlanText::Form(job),
+        name,
+        hover,
     }
 }
 
@@ -2149,7 +2256,8 @@ fn plan_fight_stubs(names: &[String]) -> Vec<PlanFight> {
             id: Uuid::nil(),
             name: name.clone(),
             path: String::new(),
-            summary: String::new(),
+            summary: Default::default(),
+            key: 0,
             difficulty: Default::default(),
         })
         .collect()
@@ -3374,6 +3482,14 @@ impl Sessions {
         );
     }
 
+    /// G118: the one end of the plan's kept lines. Only the lines of the planned fights in
+    /// `ids` stay (none at a campaign switch); a fight removed or replaced, another session or
+    /// another campaign ends its line.
+    pub(super) fn forget_plan_lines(&mut self, ids: &[(Option<Uuid>, usize, Uuid)]) {
+        self.plan_lines.retain(|id| ids.contains(id));
+        self.plan_lines_seen = ids.to_vec();
+    }
+
     /// The session as a list, top to bottom: what happened, then what is still to come. It
     /// replaces a walk between Encounters, Timeline and the note.
     #[allow(
@@ -3933,6 +4049,8 @@ impl Sessions {
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
                 let days = self.planned_days(book, session, plan);
+                let ids: Vec<_> = planned.iter().enumerate().map(|(at, fight)| (session, at, fight.id)).collect();
+                if ids != self.plan_lines_seen { self.forget_plan_lines(&ids); }
                 for (position, fight) in planned.iter().enumerate() {
                     let day = planned_day(&days, &planned, position);
                     self.removed_fight_message(ui, session, position);
@@ -3958,7 +4076,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { planned_summary_on_road(ui, &fight.summary, road_day(ui, &fight.summary, day.as_deref()).as_deref(), Some(&fight.difficulty)); }
+                            } else { kept_plan_line(ui, &mut self.plan_lines, (session, position, fight.id), fight, day.as_deref()); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -5115,7 +5233,8 @@ mod tests {
             id: uuid::Uuid::nil(),
             name: name.into(),
             path: path.into(),
-            summary: String::new(),
+            summary: Default::default(),
+            key: 0,
             difficulty: Default::default(),
         }
     }
@@ -5455,7 +5574,8 @@ mod tests {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let rating = rated(crate::difficulty::above_high());
-        let summary = "5 party · 2 × Ember Cultist";
+        let summary = &roster(5, &[(2, "Ember Cultist")]);
+        let words_of = summary.text();
         let day = "Day 2 of The road to the ford beyond the old northern quarry";
         let (mut full, mut short) = (0, 0);
         let _ = ctx.run(Default::default(), |ctx| {
@@ -5472,7 +5592,7 @@ mod tests {
                     let road = ui
                         .scope(|ui| {
                             ui.set_width(width as f32);
-                            let words = road_day(ui, summary, Some(day));
+                            let words = road_day(ui, &words_of, Some(day));
                             match words.as_deref() {
                                 Some(words) if words.contains("of The road") => full += 1,
                                 Some(_) => short += 1,
@@ -5501,7 +5621,7 @@ mod tests {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.scope(|ui| {
                             ui.set_width(width as f32);
-                            words = road_day(ui, summary, Some(day));
+                            words = road_day(ui, &words_of, Some(day));
                             planned_summary_on_road(ui, summary, words.as_deref(), Some(&rating));
                         });
                     });
@@ -6283,6 +6403,25 @@ mod tests {
         }
     }
 
+    /// A planned fight's roster as typed parts (G118): the party count and each member.
+    fn roster(party: usize, members: &[(usize, &str)]) -> crate::difficulty::Summary {
+        crate::difficulty::Summary {
+            party,
+            members: members
+                .iter()
+                // The fixtures' creatures with no XP.
+                .map(|&(count, name)| {
+                    crate::difficulty::Member::new(
+                        count,
+                        name,
+                        ["Nameless Thing", "Wisp"].contains(&name),
+                    )
+                })
+                .collect(),
+            facts: Vec::new(),
+        }
+    }
+
     /// V9 and W1-D2: the planned fight's row has the same blank on each side of every
     /// separator, with the form (FB6) and with `XP not known` when no word shows (FB4). FH6:
     /// the opened line under it says the difficulty no more.
@@ -6338,7 +6477,7 @@ mod tests {
                 ctx.run(Default::default(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.set_width(design::LIST_MEASURE);
-                        planned_summary(ui, "5 party · 2 × Ember Cultist", Some(&difficulty));
+                        planned_summary(ui, &roster(5, &[(2, "Ember Cultist")]), Some(&difficulty));
                     });
                 })
             };
@@ -6386,7 +6525,16 @@ mod tests {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let rating = rated(crate::difficulty::above_high());
-        let summary = "5 party · Cinder Tyrant · 2 × Ember Cultist, 1 × Wolf";
+        let typed = roster(
+            5,
+            &[(1, "Cinder Tyrant"), (2, "Ember Cultist"), (1, "Wolf")],
+        );
+        let words = typed.text();
+        let summary = words.as_str();
+        assert_eq!(
+            summary,
+            "5 party · 1 × Cinder Tyrant, 2 × Ember Cultist, 1 × Wolf"
+        );
         let (mut whole, mut cut) = (0, 0);
         for width in (120..=640).step_by(4).map(|width| width as f32) {
             let mut heights = (0.0, 0.0);
@@ -6398,7 +6546,7 @@ mod tests {
                         let height = |ui: &mut egui::Ui, rating| {
                             ui.scope(|ui| {
                                 ui.set_width(width);
-                                planned_summary(ui, summary, rating);
+                                planned_summary(ui, &typed, rating);
                             })
                             .response
                             .rect
@@ -6446,9 +6594,9 @@ mod tests {
                 assert!(
                     kept.is_empty()
                         || [
-                            "Cinder Tyrant · 2 × Ember Cultist, 1 × Wolf",
-                            "Cinder Tyrant · 2 × Ember Cultist",
-                            "Cinder Tyrant",
+                            "1 × Cinder Tyrant, 2 × Ember Cultist, 1 × Wolf",
+                            "1 × Cinder Tyrant, 2 × Ember Cultist",
+                            "1 × Cinder Tyrant",
                         ]
                         .iter()
                         .any(|unit| kept.replace(" · ", " ") == unit.replace(" · ", " ")),
@@ -6472,9 +6620,10 @@ mod tests {
                 names: vec!["Nameless Thing".into()],
             }),
         };
-        let one = "1 × Nameless Thing";
-        let wolf = "1 × Ember Wolf";
-        let case = |summary: &str, difficulty: &Difficulty, reason: &str| {
+        let one = &roster(0, &[(1, "Nameless Thing")]);
+        let wolf = &roster(0, &[(1, "Ember Wolf")]);
+        let case = |typed: &crate::difficulty::Summary, difficulty: &Difficulty, reason: &str| {
+            let summary = &typed.text();
             let mut painted = None;
             let mut widths = None;
             for _ in 0..3 {
@@ -6490,7 +6639,7 @@ mod tests {
                         widths = Some((alone, after, width, wide(summary)));
                         ui.scope(|ui| {
                             ui.set_width(width);
-                            planned_summary(ui, summary, Some(difficulty));
+                            planned_summary(ui, typed, Some(difficulty));
                         });
                     });
                 });
@@ -6517,29 +6666,174 @@ mod tests {
             Some("1 × Nameless Thing · XP not known"),
             "FB6: the member stays whole and is not named twice, at {width} px"
         );
-        // Review of PR 324: with a creature whose XP is known beside it, the summary does not say
-        // whose XP is missing, so the reason keeps the name, with room for it.
-        let mixed = "1 × Wolf, 1 × Nameless Thing";
-        let mut painted = None;
-        for _ in 0..2 {
-            let output = ctx.run(Default::default(), |ctx| {
+        // R31 (review of PR 324, kept): with a creature whose XP is known beside it, the
+        // summary does not say whose XP is missing, so the reason keeps the name. Where every
+        // creature shown lacks its XP, the reason is short. Members are matched by the name
+        // each is called by, never by parsed words; `Changed` is not a creature (G118).
+        let wide = |typed: &crate::difficulty::Summary, difficulty: &Difficulty| {
+            let mut painted = None;
+            for _ in 0..2 {
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.scope(|ui| {
+                            ui.set_width(600.0);
+                            planned_summary(ui, typed, Some(difficulty));
+                        });
+                    });
+                });
+                painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.replace('\u{a0}', " "))
+                        .filter(|words| words.contains("not known")),
+                    _ => None,
+                });
+            }
+            painted
+        };
+        let missing = |names: &[&str]| Difficulty {
+            unknown: names.len() as u64,
+            missing: Some(Missing {
+                what: Unknown::Xp,
+                at: (0..names.len()).collect(),
+                names: names.iter().map(|name| (*name).to_owned()).collect(),
+            }),
+            ..unknown(Unknown::Xp)
+        };
+        let mixed = roster(0, &[(1, "Wolf"), (1, "Nameless Thing")]);
+        assert_eq!(
+            wide(&mixed, &unknown(Unknown::Xp)).as_deref(),
+            Some("1 × Wolf, 1 × Nameless Thing · XP not known: Nameless Thing"),
+            "a mixed roster names whose XP is missing"
+        );
+        let two = roster(0, &[(1, "Nameless Thing"), (1, "Wisp")]);
+        assert_eq!(
+            wide(&two, &missing(&["Nameless Thing", "Wisp"])).as_deref(),
+            Some("1 × Nameless Thing, 1 × Wisp · XP not known"),
+            "two creatures that both lack their XP: the summary says whose"
+        );
+        let shade = |beside: bool| crate::difficulty::Summary {
+            members: beside
+                .then(|| crate::difficulty::Member::new(1, "Wolf", false))
+                .into_iter()
+                .chain([crate::difficulty::Member::renamed(
+                    1,
+                    "Shade",
+                    "Nameless Thing",
+                    true,
+                )])
+                .collect(),
+            facts: vec![crate::difficulty::Fact::Changed],
+            ..Default::default()
+        };
+        assert_eq!(
+            wide(&shade(false), &missing(&["Shade"])).as_deref(),
+            Some("1 × Shade (as Nameless Thing) · Changed · XP not known"),
+            "a renamed creature alone is matched by the name it is called by"
+        );
+        assert_eq!(
+            wide(&shade(true), &missing(&["Shade"])).as_deref(),
+            Some("1 × Wolf, 1 × Shade (as Nameless Thing) · Changed · XP not known: Shade"),
+            "beside a known creature, the reason keeps the called name"
+        );
+        assert_eq!(
+            wide(&roster(0, &[(1, "Wolf")]), &unknown(Unknown::Xp)).as_deref(),
+            Some("1 × Wolf · XP not known: Nameless Thing"),
+            "a creature the row does not show is named"
+        );
+        // R31 by the member, never by a name (final review of PR 390): Nameless Thing renamed
+        // `Wolf` beside a known Wolf. Both are called `Wolf`; a known creature is shown, so the
+        // reason keeps the name.
+        let twins = crate::difficulty::Summary {
+            members: vec![
+                crate::difficulty::Member::new(1, "Wolf", false),
+                crate::difficulty::Member::renamed(1, "Wolf", "Nameless Thing", true),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(
+            wide(&twins, &missing(&["Wolf"])).as_deref(),
+            Some("1 × Wolf, 1 × Wolf (as Nameless Thing) · XP not known: Wolf"),
+            "a known creature is shown, so the reason keeps the name"
+        );
+        // A stage and its reason are chosen together (final review of PR 390): at every width
+        // the line obeys R31 for the units it shows. Nameless Thing (no XP) and then Wolf
+        // (known): Wolf gives way first; then the line says whose, and the reason is short.
+        let sweep = |typed: &crate::difficulty::Summary| {
+            let mut seen = Vec::new();
+            for width in (100..=600).step_by(2).map(|width| width as f32) {
+                let mut painted = None;
+                for _ in 0..2 {
+                    let output = ctx.run(Default::default(), |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            ui.scope(|ui| {
+                                ui.set_width(width);
+                                planned_summary(ui, typed, Some(&unknown(Unknown::Xp)));
+                            });
+                        });
+                    });
+                    painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => {
+                            Some(text.galley.job.text.replace(['\u{a0}', '\n'], " "))
+                                .filter(|words| words.contains("not known"))
+                        }
+                        _ => None,
+                    });
+                }
+                seen.push((width, painted.unwrap_or_default()));
+            }
+            seen
+        };
+        let lines = sweep(&roster(0, &[(1, "Nameless Thing"), (1, "Wolf")]));
+        let mut says_whose = 0;
+        for (width, line) in &lines {
+            if line.contains("1 × Wolf") {
+                assert!(line.contains("XP not known: N"), "at {width} px: {line:?}");
+            } else if line.contains("1 × Nameless Thing") {
+                assert!(line.ends_with("XP not known"), "at {width} px: {line:?}");
+                says_whose += 1;
+            } else {
+                assert!(line.contains("XP not known"), "at {width} px: {line:?}");
+            }
+        }
+        assert!(says_whose > 0, "no width cut Wolf alone: {lines:?}");
+        // G118 (re-check of PR 390): the plan keeps each fitted line. An unchanged redraw fits
+        // none; a new width or a new roster fits again; a removed fight's line goes.
+        let mut sessions = super::super::Sessions::default();
+        let fight = |key: u64, summary: &crate::difficulty::Summary| PlanFight {
+            saved: None,
+            id: Uuid::from_u128(1),
+            name: "Mill Road".into(),
+            path: "Encounters/Mill Road.md".into(),
+            summary: summary.clone(),
+            key,
+            difficulty: unknown(Unknown::Xp),
+        };
+        let id = (None, 0, Uuid::from_u128(1));
+        let fitted = || PLAN_FITS.with(std::cell::Cell::get);
+        let mut draw = |fight: &PlanFight, width: f32| {
+            let _ = ctx.run(Default::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.scope(|ui| {
-                        ui.set_width(600.0);
-                        planned_summary(ui, mixed, Some(&unknown(Unknown::Xp)));
+                        ui.set_width(width);
+                        kept_plan_line(ui, &mut sessions.plan_lines, id, fight, None);
                     });
                 });
             });
-            painted = output.shapes.iter().find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) => Some(text.galley.job.text.replace('\u{a0}', " "))
-                    .filter(|words| words.contains("not known")),
-                _ => None,
-            });
-        }
-        assert_eq!(
-            painted.as_deref(),
-            Some("1 × Wolf, 1 × Nameless Thing · XP not known: Nameless Thing"),
-            "a mixed roster names whose XP is missing"
+        };
+        let first = fight(1, &mixed);
+        draw(&first, 400.0);
+        let before = fitted();
+        draw(&first, 400.0);
+        draw(&first, 400.0);
+        assert_eq!(fitted(), before, "an unchanged redraw fits no line");
+        draw(&first, 300.0);
+        assert_eq!(fitted(), before + 1, "a new width fits again");
+        draw(&fight(2, &two), 300.0);
+        assert_eq!(fitted(), before + 2, "a new roster fits again");
+        assert!(sessions.plan_lines.holds(&id));
+        sessions.forget_plan_lines(&[(None, 0, Uuid::from_u128(2))]);
+        assert!(
+            !sessions.plan_lines.holds(&id),
+            "a removed fight's line goes"
         );
     }
 

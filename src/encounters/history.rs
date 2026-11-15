@@ -14,11 +14,48 @@ pub(crate) struct Template {
     pub path: String,
     pub id: Uuid,
     pub name: String,
-    pub summary: Option<String>,
+    /// Its roster's summary, worked out in memory from its saved setup (never written).
+    pub summary: Option<Roster>,
     /// How hard its saved roster is for the party. Shown only while it is ready to run.
     pub difficulty: crate::difficulty::Difficulty,
     /// It stays in Ready while a run is unfinished, with Start fight blocked.
     pub repeatable: bool,
+}
+
+/// G118: an encounter's roster summary as the list holds it. The typed parts go to its
+/// difficulty line (so a member the summary shows is not named again after `XP not known`); the
+/// same parts as words are its hover and the plan's text. Built once, where the template is
+/// built from its setup; nothing of it is read from or written to a file.
+pub(crate) struct Roster {
+    pub parts: crate::difficulty::Summary,
+    pub words: String,
+    /// The row's hover: the words, then the difficulty's form (`… · XP not known`).
+    pub hover: String,
+    /// The Ready row's line key: a hash of the parts and the fight's difficulty, so the kept
+    /// line is built again when, and only when, what it says changes. One hash per build here,
+    /// none per frame.
+    pub key: u64,
+}
+
+impl Roster {
+    pub fn new(
+        parts: crate::difficulty::Summary,
+        difficulty: &crate::difficulty::Difficulty,
+    ) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (&parts, difficulty).hash(&mut hasher);
+        let words = parts.text();
+        Self {
+            hover: match difficulty.form() {
+                Some(form) if !words.is_empty() => format!("{words} · {form}"),
+                _ => words.clone(),
+            },
+            words,
+            key: hasher.finish(),
+            parts,
+        }
+    }
 }
 
 pub(super) struct ReadyRow<'a> {
