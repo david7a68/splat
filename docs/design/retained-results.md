@@ -165,11 +165,13 @@ names it, the action's width), the room the lines take (`bare`), the room their 
   paints at its last height and measures, as before; its placement in that same frame comes with PR 456 (L1c).
 - **Reasons' room (R29), per footer.** A fresh plan decides `give_up` from its own numbers and the room where
   the footer stands; a pass that makes a plan measures with the footer's own last decision, kept with its
-  plan. No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay
+  plan. It keeps each reservation's room also when it gives that room up, so after the pane grows (the plan
+  holds: height is not in its key) a quiet frame takes the room and lays out no reason. No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay
   for the legacy footer only (`Reasons::Legacy`).
 - **Lifetime.** The plans of one context live in one store (`FooterPlans`). A footer that no frame drew since
-  the last one has ended (its pane closed, its owner changed), and its plan, with its lines, is dropped when a
-  footer next draws: the store holds the footers of about two frames.
+  the last one has ended (its pane closed, its owner changed), and its plan, with its lines, is dropped by the
+  store's sweep, once per frame when the first footer draws: the store holds the footers of about two frames.
+  The sweep visits each kept footer once (`FooterWork::swept`), and the store's spare room shrinks with it.
 - **Presses.** One press slot per `Messages` per pass, taken by `pane`; nothing keeps a press across passes, so
   a press is acted on once, also when egui draws the frame again or declines to.
 - **The old path.** `Footer::legacy_reason`, `legacy_notice`, `legacy_kept`, `legacy_kept_line` (and the

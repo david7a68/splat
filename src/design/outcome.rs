@@ -2778,10 +2778,31 @@ struct Retained {
 
 /// Every typed footer's retained data in one context, by footer id. A footer that no frame drew
 /// since the last one has ended (its pane closed, its owner or campaign changed): its data is
-/// dropped when any footer next draws. So the store holds the footers of about two frames,
-/// whatever was shown before.
+/// dropped by the store's sweep, once per frame, when the first footer draws. So the store holds
+/// the footers of about two frames, whatever was shown before.
 #[derive(Clone, Default)]
-struct FooterPlans(std::collections::HashMap<egui::Id, Retained>);
+struct FooterPlans {
+    plans: std::collections::HashMap<egui::Id, Retained>,
+    /// The frame of the last sweep.
+    swept: Option<u64>,
+}
+
+impl FooterPlans {
+    /// Once per frame: drop each footer that no frame drew since the last one. It visits each
+    /// kept footer once (counted), and its spare room is kept within a few times the footers it
+    /// holds, so the scan is as large as the footers in view, not as many as were ever shown.
+    fn sweep(&mut self, frame: u64) {
+        if self.swept == Some(frame) {
+            return;
+        }
+        self.swept = Some(frame);
+        count(|work| work.swept += self.plans.len());
+        self.plans.retain(|_, kept| kept.drawn + 1 >= frame);
+        if self.plans.capacity() > 4 * self.plans.len().max(8) {
+            self.plans.shrink_to_fit();
+        }
+    }
+}
 
 fn plans_id() -> egui::Id {
     egui::Id::new("design_typed_footer_plans")
@@ -2792,7 +2813,7 @@ fn plans_id() -> egui::Id {
 pub(crate) fn kept_footer_plans(ctx: &egui::Context) -> usize {
     ctx.data_mut(|data| {
         data.get_temp_mut_or_default::<FooterPlans>(plans_id())
-            .0
+            .plans
             .len()
     })
 }
@@ -2814,6 +2835,8 @@ pub(crate) struct FooterWork {
     pub verbs: usize,
     /// Undo labels built and fitted to their room (`Body::undo_form`).
     pub undo_fits: usize,
+    /// Footers visited by the plan store's sweep (`FooterPlans::sweep`).
+    pub swept: usize,
     /// Lines compared with the retained ones, and the bytes of their words.
     pub compared: usize,
     pub compared_bytes: usize,
@@ -2830,6 +2853,7 @@ thread_local! {
             laid: 0,
             verbs: 0,
             undo_fits: 0,
+            swept: 0,
             compared: 0,
             compared_bytes: 0,
         })
@@ -2858,7 +2882,7 @@ pub(crate) fn footer_work() -> FooterWork {
 impl<A: 'static> TypedFooter<A> {
     /// The footer's lines against the retained ones: the same revision while they are the same
     /// (a compare as large as their data: no sort, no measure), else a new one. It also marks
-    /// the footer drawn in this frame and drops every footer that no frame drew since the last.
+    /// the footer drawn in this frame, and the frame's first footer sweeps the store.
     fn revision(&self, ctx: &egui::Context, id: egui::Id) -> Retained {
         let frame = ctx.cumulative_frame_nr();
         let gone: Vec<bool> = self
@@ -2868,8 +2892,8 @@ impl<A: 'static> TypedFooter<A> {
             .collect();
         ctx.data_mut(|data| {
             let plans = data.get_temp_mut_or_default::<FooterPlans>(plans_id());
-            plans.0.retain(|_, kept| kept.drawn + 1 >= frame);
-            if let Some(kept) = plans.0.get_mut(&id) {
+            plans.sweep(frame);
+            if let Some(kept) = plans.plans.get_mut(&id) {
                 kept.drawn = frame;
                 let same = kept.lines.len() == self.lines.len()
                     && kept.lines.iter().zip(&self.lines).zip(&gone).all(
@@ -2885,7 +2909,7 @@ impl<A: 'static> TypedFooter<A> {
                     return kept.clone();
                 }
             }
-            let give_up = plans.0.get(&id).is_some_and(|kept| kept.give_up);
+            let give_up = plans.plans.get(&id).is_some_and(|kept| kept.give_up);
             let retained = Retained {
                 lines: std::sync::Arc::new(
                     self.lines
@@ -2905,7 +2929,7 @@ impl<A: 'static> TypedFooter<A> {
                 give_up,
                 drawn: frame,
             };
-            plans.0.insert(id, retained.clone());
+            plans.plans.insert(id, retained.clone());
             retained
         })
     }
@@ -3103,7 +3127,7 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
         }
         ui.ctx().data_mut(|data| {
             let plans = data.get_temp_mut_or_default::<FooterPlans>(plans_id());
-            plans.0.insert(
+            plans.plans.insert(
                 id,
                 Retained {
                     plan: Some(std::sync::Arc::new(plan)),
@@ -3294,7 +3318,8 @@ pub(in crate::design) struct FooterPass {
     /// that does not measure takes this room and lays out no reason.
     rooms: std::sync::Arc<[f32]>,
     next: usize,
-    /// What a measuring pass found for each, in drawing order.
+    /// What a measuring pass found for each, in drawing order: also for a reason whose room
+    /// that pass gives up, so a pass after the pane grows takes it.
     measured: Vec<f32>,
     /// The footer line drawn now (its index in the footer's lines).
     line: usize,
@@ -3507,9 +3532,11 @@ impl Body {
             Reasons::Planned(sums) => {
                 if drawn {
                     sums.drawn += room;
-                    sums.measured.push(room);
                 } else {
+                    // Each reservation's room, kept whether this pass draws it or gives it up:
+                    // a later pass with room for it takes this room and lays out no reason.
                     sums.reserved += room;
+                    sums.measured.push(room);
                 }
             }
         };
@@ -6118,11 +6145,20 @@ mod tests {
         let mut h = harness_sized(app, 1200.0);
         h.run_steps(4);
         let quiet = footer_work();
+        let frame = h.ctx.cumulative_frame_nr();
         h.run_steps(6);
         let after = footer_work();
+        let frames = h.ctx.cumulative_frame_nr() - frame;
         assert!(
             after.compared > quiet.compared,
             "the frames reached the footers"
+        );
+        // Review of PR 452 (re-check, P3): the plan store is swept once per frame, each kept
+        // footer visited once, not once per footer that draws.
+        let swept = (after.swept - quiet.swept) as u64;
+        assert!(
+            swept > 0 && swept <= frames * kept_footer_plans(&h.ctx) as u64,
+            "the store is swept once per frame: {swept} visits in {frames} frames"
         );
         assert_eq!(
             (
@@ -6195,6 +6231,29 @@ mod tests {
             1,
             "five owners in turn: each one's plan went when it changed"
         );
+        // Re-check P3: after many footers end at once, the sweep's scan shrinks with the store
+        // (`HashMap::retain` visits its spare room too).
+        h.ctx.data_mut(|data| {
+            let plans = data.get_temp_mut_or_default::<FooterPlans>(plans_id());
+            let kept = plans.plans.values().next().expect("one plan").clone();
+            for n in 0..200 {
+                let ended = Retained {
+                    drawn: 0,
+                    ..kept.clone()
+                };
+                plans
+                    .plans
+                    .insert(egui::Id::new(("ended footer", n)), ended);
+            }
+        });
+        h.run_steps(3);
+        let room = h.ctx.data_mut(|data| {
+            data.get_temp_mut_or_default::<FooterPlans>(plans_id())
+                .plans
+                .capacity()
+        });
+        assert_eq!(kept_footer_plans(&h.ctx), 1, "the ended footers went");
+        assert!(room <= 32, "and the store's spare room with them: {room}");
 
         // Two panes side by side: a short one whose footer has no room for its reasons'
         // reservations, and a tall one that has. Each decides for itself (no shared state): the
@@ -6237,6 +6296,37 @@ mod tests {
         assert!(
             mixed[0] < mixed[1] - 1.0,
             "the short pane gives its reservation up: {mixed:?}"
+        );
+        // Review of PR 452 (re-check, P2): the short pane gives its reservation up, a result
+        // changes while it stays short (its new plan is made with the room given up), then only
+        // the pane grows. The plan holds (the same lines, width, scale and style); its quiet
+        // frames take each reason's measured room and lay out none, as a pane that was tall
+        // throughout does.
+        let mut app = two();
+        app.heights = Some([230.0, 760.0]);
+        let mut h = harness_sized(app, 960.0);
+        h.set_size(egui::vec2(960.0, 800.0));
+        h.run_steps(8);
+        h.state_mut().in_body = Some(InBody::Add("third"));
+        h.run_steps(8);
+        assert!(
+            gaps(&h)[0] < gaps(&h)[1] - 1.0,
+            "still short: the reservation is given up"
+        );
+        h.state_mut().heights = Some([760.0, 760.0]);
+        h.run_steps(8);
+        let settled = footer_work();
+        h.run_steps(6);
+        let still = footer_work();
+        assert_eq!(
+            (still.plans - settled.plans, still.laid - settled.laid),
+            (0, 0),
+            "grown, the pane's plan holds and its quiet frames lay out no reservation"
+        );
+        let grown = gaps(&h);
+        assert!(
+            (grown[0] - grown[1]).abs() < 0.5,
+            "grown, it keeps the room as the tall pane does: {grown:?}"
         );
 
         // Ruling L9 (attack finding 2): a press is acted on once, by its ticket, also when its
