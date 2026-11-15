@@ -3403,6 +3403,18 @@ impl Encounters {
     /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
     /// part, whose group's origin comes with it. Checked again only when the campaign's read or a
     /// changed group's own revision changes.
+    /// F5 (B3b): the owned-group check's key inputs now, and whether a campaign read is still
+    /// pending: a test holds them fixed and names the input that changed.
+    #[cfg(test)]
+    pub(crate) fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
+        let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
+        Some((
+            snapshot.revision,
+            draft.groups.len(),
+            groups::revisions_issued(),
+            self.pending.is_some(),
+        ))
+    }
     fn owned_groups_diagnosis(&mut self) -> OwnedGroupsFound {
         let (Some(snapshot), Some(draft)) = (self.snapshot.as_ref(), self.draft.as_ref()) else {
             return OwnedGroupsFound {
