@@ -3984,6 +3984,15 @@ mod tests {
             ["Undo discard of Bridge Ambush"],
             "wide: the whole form"
         );
+        // Two Undos of one verb with different objects: each paints its whole form, so the
+        // short form never hides the only difference between two visible Undos (a fight
+        // planned from two sessions, lane B1).
+        let (_, other) = visible(&h, "Undo discard of Shrine of Cinders");
+        assert_eq!(
+            other,
+            ["Undo discard of Shrine of Cinders"],
+            "two of one verb: the other paints its whole form too"
+        );
         // Round 30 FE11: the only Undo of its verb in its footer paints `Undo discard`, as its
         // result names the object; its accessible name stays whole.
         let mut lone = two();

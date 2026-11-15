@@ -3315,7 +3315,7 @@ pub mod campaign_content {
         );
         d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
         d.click("Write Campaign.md again");
-        d.wait_for_text("Undo write Campaign.md");
+        d.wait_for_control("Undo write Campaign.md");
         assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
         // Round 23 FA8: the discarded package draft belonged to the file that went missing. Its
         // Undo does not come back with the written file.
@@ -3377,7 +3377,7 @@ pub mod campaign_content {
         );
         d.state("missing-campaign-manifest-without-copy", Sizes::All);
         d.click("Write a new Campaign.md");
-        d.wait_for_text("Undo write Campaign.md");
+        d.wait_for_control("Undo write Campaign.md");
         assert!(manifest.exists());
     }
 

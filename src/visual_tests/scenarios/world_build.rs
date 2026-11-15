@@ -670,7 +670,7 @@ pub fn broken(d: &mut Driver<'_>) {
     reload(d);
     d.click_containing("Old Warden · ");
     d.click("Rename the note to Gate Warden");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     let renamed = fs::read_to_string(&warden).unwrap();
     d.click_containing("Things to check · ");
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
@@ -1409,7 +1409,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Discard");
     let discard = d.name_starting("Undo discard of ");
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     let first = newer_above(d, "Undo change to Name", &discard);
     d.click("Undo change to Name");
     d.settle();
@@ -1419,7 +1419,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "A's rename undone"
     );
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     d.click("Edit Lamp");
     d.type_into("Status", "asleep");
     d.click("Discard");
@@ -1481,7 +1481,7 @@ pub fn broken(d: &mut Driver<'_>) {
         ),
     );
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     assert_eq!(
         fs::read_to_string(&lamp).unwrap(),
         lamp_renamed,
@@ -1533,7 +1533,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "Emberfall's file rename offers no Undo on Quiet Harbor's note at the same path",
     );
     d.click("Rename the note to Repaired watchkeeper");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     let quiet_after = fs::read_to_string(&quiet_note).unwrap();
     assert!(
         quiet_after.contains("splat_name: Repaired watchkeeper\n"),
@@ -6639,7 +6639,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("package-wrong-folder-picked", Sizes::All);
     crate::hermetic::closed::next_folder(moved.clone());
     d.click("Find the folder…");
-    d.wait_for_text("Undo recover modules/watch-package");
+    d.wait_for_control("Undo recover modules/watch-package");
     d.expect("Ashen Marches found in modules/watch-package/.");
     d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
         check_undo_icon(d, "Undo recover modules/watch-package", "iter-6-C-AD3");
@@ -6647,7 +6647,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Undo recover modules/watch-package");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
-    d.wait_for_text("Undo recover modules/watch-package");
+    d.wait_for_control("Undo recover modules/watch-package");
     go_library(d);
     d.click("Packages");
     d.click("Reload from disk");
@@ -6953,7 +6953,7 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Module.md cannot be read (line 4)");
     d.click("Replace with a basic Module.md");
-    d.wait_for_text("Undo write Module.md");
+    d.wait_for_control("Undo write Module.md");
     d.state_prepared("legacy-manifest-replaced-in-campaign", Sizes::All, |d| {
         check_undo_icon(d, "Undo write Module.md", "iter-8-E-FD7-campaign-undo");
         d.observe(
@@ -6980,7 +6980,7 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.click("Open in Library");
     d.expect("Markdown editor");
     d.click("Replace with a basic Module.md");
-    d.wait_for_text("Undo write Module.md");
+    d.wait_for_control("Undo write Module.md");
     // The result takes the slot below the save row, so the editor keeps its place.
     let with_result = editor_below_read(d);
     d.observe(
@@ -7292,7 +7292,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     let creatures = folder.join("Creatures/Cinder Wolf.md");
     let creature_before = fs::read_to_string(&creatures).unwrap();
     d.click("Replace with a basic Package.md");
-    d.wait_for_text("Undo write Package.md");
+    d.wait_for_control("Undo write Package.md");
     let basic = fs::read_to_string(&path).unwrap();
     assert_eq!(
         crate::content_workspace::note_id(&basic),
@@ -7356,7 +7356,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         "Ashen Marches: Package.md cannot be read",
         "Replace with a basic Package.md",
     );
-    d.wait_for_text("Undo write Package.md");
+    d.wait_for_control("Undo write Package.md");
     d.click_below(
         "Ember Reach: Package.md cannot be read",
         "Replace with a basic Package.md",
@@ -10118,7 +10118,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     };
     let search_before = tops(d);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate Rook Ambry copy.md");
+    d.wait_for_control("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     // iter-27-B FF8, AF1, SF1: the result and its Undo are in the editor's footer, below the
     // search's results, and the search and its filter do not move.
@@ -10468,7 +10468,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate Rook Ambry copy.md");
+    d.wait_for_control("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
@@ -10499,7 +10499,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.click_starting("Rook Ambry.md ·");
     d.expect("Make Rook Ambry copy.md a separate note");
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate Rook Ambry copy.md");
+    d.wait_for_control("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
     fs::write(&original, same_name).unwrap();
@@ -10543,7 +10543,7 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.state("renamed-npc-keeps-old-name-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Rename the note to Mara Vell");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     let (success, detail) = finished_change_tone(d, "Name changed to Mara Vell.");
     d.observe("iter-20-D-FD5-name", success, detail);
     for size in [SMALL, DEFAULT, LARGE] {
