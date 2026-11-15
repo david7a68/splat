@@ -3195,7 +3195,7 @@ pub struct Encounters {
     refusal_watch: bool,
     /// B4c: the plan refusal's check, keyed by the snapshot revision and `plan_epoch`: whether
     /// the refusal for that group still stands. An unchanged frame does not compare the drafts.
-    plan_refusal_check: Option<((Option<Uuid>, u64, Uuid), bool)>,
+    plan_refusal_check: Option<(PlanRefusalKey, bool)>,
     /// Bumped on each frame with an editing input and the frame after it, while a plan refusal
     /// is stored (as `edit_epoch`, for every page).
     plan_epoch: u64,
@@ -3420,6 +3420,10 @@ pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
+/// The key of the plan refusal's cached check: the campaign read's revision, the edit epoch and
+/// the refused group's id.
+type PlanRefusalKey = (Option<Uuid>, u64, Uuid);
+
 #[cfg(test)]
 thread_local! {
     /// B4b N1, B4c F1: how often a draft was compared for being unsaved (`DraftOwner::unsaved`),
