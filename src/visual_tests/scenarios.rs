@@ -23159,7 +23159,7 @@ pub mod session_plan_groups {
                 .1
                 .push_str(&format!("{:?}: {words}; ", d.window_size()));
         });
-        under.0 &= under.1.matches("; ").count() == 2;
+        under.0 &= under.1.contains("(960.0, 640.0)") && under.1.contains("(1200.0, 800.0)");
         d.observe("s30-B4b-refusal-under-its-group", under.0, under.1);
         // Back to the draft's own session (the link names it while the host is kept).
         if d.has("Return to the session being played") {
@@ -23217,7 +23217,7 @@ pub mod session_plan_groups {
                 .1
                 .push_str(&format!("{:?}: {words}; ", d.window_size()));
         });
-        under.0 &= under.1.matches("; ").count() == 2;
+        under.0 &= under.1.contains("(960.0, 640.0)") && under.1.contains("(1200.0, 800.0)");
         d.observe(
             "s30-B4b-encounter-refusal-under-its-group",
             under.0,
