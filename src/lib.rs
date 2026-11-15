@@ -2421,12 +2421,20 @@ impl Splat {
                 self.page = Page::Library;
             }
         }
-        if let Some(path) =
-            ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("edit_run_encounter")))
+        // Prep's `Edit encounter` names the run's encounter by its ID; the Encounters page finds
+        // it in its own list. When it cannot open, the reason goes back to the run's Prep.
+        if let Some(id) =
+            ctx.data_mut(|data| data.remove_temp::<uuid::Uuid>(egui::Id::new("edit_run_encounter")))
             && let Some(campaign) = self.campaigns.active_campaign()
         {
-            self.encounters.edit_path(&path, &campaign);
-            self.page = Page::Encounters;
+            match self.encounters.edit_from_plan(id, None, &campaign) {
+                Ok(()) => self.page = Page::Encounters,
+                Err(reason) => {
+                    if let Some(run) = self.encounters.run_mut() {
+                        run.prep_refusal = Some(reason);
+                    }
+                }
+            }
         }
         if ctx
             .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("open_campaign_packages")))

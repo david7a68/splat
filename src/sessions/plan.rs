@@ -5222,6 +5222,7 @@ mod tests {
             encounter: name.into(),
             label: "Round 2".into(),
             standing: crate::encounter_run::Standing::Unfinished,
+            setup: false,
             saved_at: None,
             unsent: vec![],
         }
@@ -6280,6 +6281,7 @@ mod tests {
             encounter: "Bridge Ambush".into(),
             label: "Round 2".into(),
             standing: Standing::Unfinished,
+            setup: false,
             saved_at: None,
             unsent: vec!["Kestrel".into()],
         };
@@ -8141,6 +8143,7 @@ mod tests {
                 encounter: "Bridge Ambush".into(),
                 label: String::new(),
                 standing: crate::encounter_run::Standing::Unfinished,
+                setup: false,
                 saved_at: None,
                 unsent: Vec::new(),
             };

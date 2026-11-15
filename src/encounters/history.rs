@@ -83,8 +83,9 @@ pub(super) struct Arranged<'a> {
     pub ready: Vec<ReadyRow<'a>>,
     pub history: Vec<PastSession<'a>>,
     pub unreadable: Vec<&'a SavedRunInfo>,
-    /// The run list could not be read: the lists say so, never that they are empty (AB1).
-    pub runs_unread: bool,
+    /// The run list could not be read, and why: the lists say so, never that they are empty
+    /// (AB1, R41).
+    pub runs_unread: Option<&'a crate::encounter_run::RunFolderFault>,
 }
 
 impl Arranged<'_> {
@@ -239,6 +240,7 @@ mod tests {
             encounter: name.into(),
             label: String::new(),
             standing,
+            setup: false,
             saved_at: None,
             unsent: Vec::new(),
         }

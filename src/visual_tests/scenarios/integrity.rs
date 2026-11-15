@@ -189,24 +189,34 @@ fn missing_folders(
     d.click(NAV_ENCOUNTERS);
     d.app_mut().encounters.read_runs_again(campaign);
     d.settle();
-    d.expect("Run folder not found");
+    d.expect("Splat cannot find the run folder ");
     d.expect("Choose folder");
-    // FB6: the run folder's fault has the session folder's wording.
+    // FB6, R41 (round 30 G157): a missing run folder is said in one sentence that names it and
+    // what the DM can do, as the session folder's fault does; no label, no content issue.
     d.observe(
-        "iter-23-Q-FB6",
-        d.has_containing("Run folder not found:")
-            && d.has_containing("It may have been moved or renamed."),
-        "A missing run folder says it may have been moved or renamed",
+        "s30-R41-missing",
+        d.has_containing("Splat cannot find the run folder ")
+            && d.has_containing(
+                "It may have been moved or renamed. Choose its new place, or put it back.",
+            )
+            && !d.has_containing("Run folder not found")
+            && !d.has_containing("content issue"),
+        "A missing run folder says Splat cannot find it, once, and what the DM can do",
     );
     d.observe_both(
         "i19-P2",
         "A missing run folder leaves no Resume or paused run",
         |d| !d.has("Resume") && !d.has_containing("Paused run ·"),
     );
-    // AB1: a list that cannot be read says so, never that it is empty.
+    // AB1, R41: a list that cannot be read says so in the cause's words (cannot find, for a
+    // folder that is not there), never that it is empty.
+    const UNFINISHED_GONE: &str =
+        "Splat cannot find the run folder, so it cannot show unfinished runs.";
+    const ENDED_GONE: &str = "Splat cannot find the run folder, so it cannot show ended fights.";
     let unread = |d: &Driver<'_>| {
-        d.has(crate::encounters::UNFINISHED_UNREAD)
-            && d.has(crate::encounters::ENDED_UNREAD)
+        d.has(UNFINISHED_GONE)
+            && d.has(ENDED_GONE)
+            && !d.has_containing("cannot read the run folder")
             && !d.has_containing("No unfinished runs")
             && !d.has_containing("No ended fights yet")
     };
@@ -238,9 +248,7 @@ fn missing_folders(
     d.settle();
     d.observe(
         "iter-25-B-AB1-back",
-        !d.has(crate::encounters::UNFINISHED_UNREAD)
-            && !d.has(crate::encounters::ENDED_UNREAD)
-            && d.has_containing(&runs[0].encounter),
+        !d.has(UNFINISHED_GONE) && !d.has(ENDED_GONE) && d.has_containing(&runs[0].encounter),
         "When the folder is back, its runs show again",
     );
     // A run folder whose parent cannot be looked in is not a folder that was never made: the

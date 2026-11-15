@@ -569,13 +569,6 @@ fn paused_run_detail(
     parts.join(" · ")
 }
 
-/// AB1: what In progress and History say while the run list cannot be read. The warning above
-/// the lists names the folder and offers Choose folder.
-pub(crate) const UNFINISHED_UNREAD: &str =
-    "Splat cannot read the run folder, so it cannot show unfinished runs.";
-pub(crate) const ENDED_UNREAD: &str =
-    "Splat cannot read the run folder, so it cannot show ended fights.";
-
 pub(super) fn in_progress_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -587,8 +580,10 @@ pub(super) fn in_progress_list(
 ) {
     let (blocked, loading) = availability;
     in_progress_heading(ui, page.in_progress.len());
-    if page.runs_unread {
-        blocked_reason(ui, Some(UNFINISHED_UNREAD));
+    // AB1, R41: while the run list cannot be read, the list says why in the fault's words
+    // (`cannot find` against `cannot read`); the footer names the folder and offers Choose folder.
+    if let Some(fault) = page.runs_unread {
+        blocked_reason(ui, Some(fault.list_words(false)));
     } else if page.in_progress.is_empty() {
         blocked_reason(
             ui,
@@ -833,9 +828,9 @@ pub(super) fn history_list(
     action: &mut Option<ListAction>,
 ) -> Option<egui::Rangef> {
     design::gap(ui, design::Gap::L);
-    if page.runs_unread {
+    if let Some(fault) = page.runs_unread {
         heading(ui, "HISTORY", 0);
-        blocked_reason(ui, Some(ENDED_UNREAD));
+        blocked_reason(ui, Some(fault.list_words(true)));
         return None;
     }
     if page.ended_count() == 0 && page.unreadable.is_empty() {
@@ -1440,6 +1435,7 @@ mod iter_2_c_tests {
             encounter: templates[at].name.clone(),
             label: String::new(),
             standing,
+            setup: false,
             saved_at: None,
             unsent: vec![],
         };
@@ -1469,6 +1465,7 @@ mod iter_2_c_tests {
             encounter: "Bridge Ambush".into(),
             label: "Setup · Paused · Last: Added a wolf · Saved just now".into(),
             standing: crate::encounter_run::Standing::Unfinished,
+            setup: true,
             saved_at: Some(1_767_229_200 + n as u64 * 60),
             unsent: vec![],
         });
