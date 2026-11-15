@@ -520,7 +520,7 @@
     ["N4/quiet-action-line-start","08-encounter-editor","960x640","Button \"Filter creatures\"",1]
   ],
   "recording-banner-priority": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Record again\"",1],
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Record again\"",3],
     ["G1b/pressed-control-moved","03-blocked-banner-retry","960x640","Button \"Record again\"",1],
     ["G6/footer-far-below-body","05-recording-retry-with-input","1920x1080","Pane 0E31",1]
   ],
