@@ -1277,9 +1277,10 @@ footer (`Footer`). The page's footer holds its kept results with their Undo (a d
 group or encounter), newest first, then its errors, then the run folder's warning. The editor's footer holds the
 discard's result, a group taken from the encounter, the roster replacement's result, then Save's reason (the last
 refusal, an empty group, the unread rows' warning). The group editor's footer holds the discard's result and the
-newest member result, then Save's reason, then the file's warnings. Rules and runs draws its footer below the form, at
-the tab's bottom: the discard's result, the reasons (an error, the unread choice's warning with its file line), then
-the folder move's warning. Faults that belong to one row, member or field stay there.
+newest member result, then Save's reason, then the file's warnings. Rules and runs gives its form to its pane
+(`Footer::pane`): the footer starts `S` below the form while the form fits, and is pinned at the tab's bottom only when
+the form scrolls. It holds the discard's result, the reasons (an error, the unread choice's warning with its file
+line), then the folder move's warning. Faults that belong to one row, member or field stay there.
 
 Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, READY TO RUN, GROUPS and
 HISTORY in that order. The counts are in those headings (`IN PROGRESS 2`), so the page header's context stays

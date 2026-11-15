@@ -9493,6 +9493,33 @@ pub mod run_folder_defect {
                 "m32-L1b-run-folder-footer",
             );
         });
+        // Migration-32 L1b: the discard's result and its Undo are the pane's footer's, built
+        // from the settings as the frame starts. Discard puts the result `S` below the clean
+        // form; its Undo brings the draft back, with the folder move's warning and no result.
+        d.aside(|d| {
+            d.click(DISCARD);
+            d.expect("Rules and runs draft discarded.");
+            footer_follows(
+                d,
+                "Save run settings",
+                "Rules and runs draft discarded.",
+                "m32-L1b-discard-footer",
+            );
+            let undo = "Undo discard of Rules and runs";
+            let offered = d.has(undo) && !d.has_containing("From the new folder");
+            d.click(undo);
+            d.settle();
+            d.observe(
+                "m32-L1b-discard-undo",
+                offered
+                    && d.has("Move runs and save")
+                    && d.has_containing("From the new folder")
+                    && !d.has_containing("Rules and runs draft discarded."),
+                format!(
+                    "Discard offered {undo} ({offered}); the Undo brings the draft back with the folder move's warning and ends the result"
+                ),
+            );
+        });
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
         d.stop_filming();

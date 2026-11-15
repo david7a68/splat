@@ -894,11 +894,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creature_pane",
             &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
-        (
-            "src/encounters.rs",
-            "run_settings",
-            &[Ban::Results, Ban::Pane(1)],
-        ),
+        ("src/encounters.rs", "run_settings", &[Ban::Results]),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
         ("src/library.rs", "add_reader_result", &[Ban::Results]),
         // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
