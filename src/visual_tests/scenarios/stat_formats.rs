@@ -1,7 +1,24 @@
 //! F2 tables feed Library, encounter search, and the reader beside a run.
 use super::*;
 
+/// R38 (round 30 FH2): `Back`'s rect and `More`'s height at the three sizes, for the entry open
+/// now. `Back` has one place whatever the entry's kind and its extras; `More` is a Read control.
+fn back_and_more(d: &mut Driver<'_>) -> Vec<(Option<egui::Rect>, Option<f32>)> {
+    [SMALL, DEFAULT, (1920.0, 1080.0)]
+        .into_iter()
+        .map(|size| {
+            d.at_size(size, |d| {
+                (
+                    d.place_of("Back"),
+                    d.place_of("More").map(|more| more.height()),
+                )
+            })
+        })
+        .collect()
+}
+
 pub fn run(d: &mut Driver<'_>) {
+    let mut toolbars = Vec::new();
     go_library(d);
     search_library(d, "Slate Wolf");
     d.click_containing("Slate Wolf · Creature");
@@ -70,6 +87,7 @@ pub fn run(d: &mut Driver<'_>) {
         );
     });
 
+    toolbars.push(("Flagged Wolf, campaign creature", back_and_more(d)));
     search_library(d, "Flagged Spark");
     d.expect("1 value not read");
     d.click_containing("Flagged Spark · ");
@@ -87,6 +105,7 @@ pub fn run(d: &mut Driver<'_>) {
         "The bad cell has a line warning; the effect stays readable without raw data",
     );
     d.state("flagged-spell-cell", Sizes::All);
+    toolbars.push(("Flagged Spark, campaign spell", back_and_more(d)));
     search_library(d, "Bound Charm");
     d.click_containing("Bound Charm · ");
     d.expect("Wondrous Item, Uncommon (Requires Attunement)");
@@ -110,6 +129,44 @@ pub fn run(d: &mut Driver<'_>) {
         "The item keeps attunement in its identity line without a repeated fact",
     );
     d.state("item-facts", Sizes::All);
+    toolbars.push(("Bound Charm, campaign item", back_and_more(d)));
+    // A built-in entry: its source mode is `Markdown source`, the wider label, and it has no
+    // extra but Copy.
+    search_library(d, "Fire Bolt");
+    d.click("Fire Bolt · Spell · Cantrip");
+    d.expect("Markdown source");
+    toolbars.push(("Fire Bolt, built-in spell", back_and_more(d)));
+    let first = toolbars[0]
+        .1
+        .iter()
+        .map(|(back, _)| *back)
+        .collect::<Vec<_>>();
+    d.observe(
+        "s30-B2-R38-back-place",
+        first.iter().all(Option::is_some)
+            && toolbars.iter().all(|(_, sizes)| {
+                sizes.iter().zip(&first).all(|((back, _), first)| {
+                    back.zip(*first).is_some_and(|(a, b)| {
+                        (a.min - b.min).length() <= 0.5 && (a.width() - b.width()).abs() <= 0.5
+                    })
+                })
+            }),
+        format!(
+            "Back has one rect at each size (960, 1200, 1920) for every entry kind: {toolbars:?}"
+        ),
+    );
+    d.observe(
+        "s30-B2-R38-more-read",
+        toolbars.iter().any(|(_, sizes)| sizes[0].1.is_some())
+            && toolbars.iter().all(|(_, sizes)| {
+                sizes.iter().all(|(_, more)| {
+                    more.is_none_or(|height| {
+                        (height - crate::design::Density::Read.control()).abs() <= 0.5
+                    })
+                })
+            }),
+        format!("More is a Read control (28 px) wherever it shows: {toolbars:?}"),
+    );
 
     go_encounters(d);
     open_saved_encounter(d, RUN);

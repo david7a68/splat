@@ -2315,6 +2315,35 @@ fn plan_line_words(planned: &PlannedLine, several: bool) -> (Sentence, UndoStep)
     (words, step.tell_apart(format!("for {name} in {place}")))
 }
 
+/// What tells a new plan line apart from the lines that read alike (`alike`: each one's journey
+/// label, number and stored words): nothing when there is none; else its journey's label; else,
+/// when another alike line has that label, the label and the next number. The words are then
+/// compared with the stored words of every alike line, and the number goes on until no line has
+/// them (review N6: a journey titled `Travel · 2` meets the numbered `Travel · 2`). Lines already
+/// kept never change their words.
+fn told_apart(journey_label: &str, alike: &[(&str, u32, Option<&str>)]) -> (Option<String>, u32) {
+    if alike.is_empty() {
+        return (None, 1);
+    }
+    let same = alike
+        .iter()
+        .filter(|(label, ..)| *label == journey_label)
+        .map(|(_, ordinal, _)| *ordinal)
+        .max();
+    let (mut apart, mut ordinal) = match same {
+        None => (journey_label.to_owned(), 1),
+        Some(last) => (format!("{journey_label} · {}", last + 1), last + 1),
+    };
+    while alike
+        .iter()
+        .any(|(.., taken)| *taken == Some(apart.as_str()))
+    {
+        ordinal += 1;
+        apart = format!("{journey_label} · {ordinal}");
+    }
+    (Some(apart), ordinal)
+}
+
 /// The session's label, then what tells the line apart: `Session 1: Road · Travel · 2`.
 fn plan_line_place(planned: &PlannedLine) -> String {
     match &planned.apart {
@@ -3787,7 +3816,7 @@ impl Sessions {
             .map(crate::sessions::Note::label)
             .unwrap_or_default();
         let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
-        let alike: Vec<(bool, u32)> = self
+        let alike: Vec<(&str, u32, Option<&str>)> = self
             .travel
             .planned
             .newest_first(&campaign)
@@ -3797,18 +3826,15 @@ impl Sessions {
                     && other.chosen.name == chosen.name
                     && other.session == session
             })
-            .map(|other| (other.journey_label == journey_label, other.ordinal))
+            .map(|other| {
+                (
+                    other.journey_label.as_str(),
+                    other.ordinal,
+                    other.apart.as_deref(),
+                )
+            })
             .collect();
-        let same = alike
-            .iter()
-            .filter(|(same, _)| *same)
-            .map(|(_, ordinal)| *ordinal)
-            .max();
-        let (apart, ordinal) = match (alike.is_empty(), same) {
-            (true, _) => (None, 1),
-            (false, None) => (Some(journey_label.clone()), 1),
-            (false, Some(last)) => (Some(format!("{journey_label} · {}", last + 1)), last + 1),
-        };
+        let (apart, ordinal) = told_apart(&journey_label, &alike);
         self.travel.forget_look();
         self.travel.planned.record(PlannedLine {
             seen,
@@ -7027,6 +7053,42 @@ mod tests {
         });
         assert_eq!(painted.len(), 2, "{painted:?}");
         assert_ne!(painted[0], painted[1], "{painted:?}");
+        // Review N6: a third alike line, from a journey titled like another line's numbered
+        // words (`Travel · 2`), gets words of its own; the kept lines keep theirs.
+        let kept = |sessions: &Sessions, notes: &[Uuid]| -> Vec<Option<String>> {
+            let campaign = sessions.campaign.as_ref().map(|campaign| campaign.id);
+            sessions
+                .travel
+                .planned
+                .newest_first(&campaign)
+                .filter(|shown| notes.contains(&shown.value().note))
+                .map(|shown| shown.value().apart.clone())
+                .collect()
+        };
+        let before = kept(&sessions, &[b, twin.id]);
+        let third = new_note(1, "Road");
+        let third_road = book.add(Kind::Travel, Some(third.id));
+        book.event_mut(&third_road).unwrap().checks = book.event_mut(&road).unwrap().checks.clone();
+        book.event_mut(&third_road).unwrap().title = "Travel · 2".into();
+        sessions.notes.push(third.clone());
+        sessions.notes_revision += 1;
+        sessions
+            .plan_from_timeline(&book, &third_road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        let all = kept(&sessions, &[b, twin.id, third.id]);
+        assert_eq!(all.len(), 3, "{all:?}");
+        assert!(
+            all[0].is_some() && !all[1..].contains(&all[0]),
+            "the third line's words are its own: {all:?}"
+        );
+        assert_eq!(all[1..], before[..], "the kept lines keep their words");
+        assert_eq!(
+            told_apart(
+                "Travel · 2",
+                &[("Travel", 1, None), ("Travel", 2, Some("Travel · 2"))]
+            ),
+            (Some("Travel · 2 · 2".to_owned()), 2)
+        );
     }
 
     #[test]
