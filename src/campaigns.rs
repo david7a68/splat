@@ -2184,9 +2184,11 @@ mod tests {
         // R30: the form's reveal in a column that scrolls, the form far below the view.
         let scrolled = |height: f32| {
             let campaigns = Campaigns::at(settings.join("settings.json"));
-            // The form opens in the first frame, by an act in the column.
-            let mut opened = false;
-            egui_kittest::Harness::builder()
+            // The form opens in the caller's first step (the harness runs frames as it is
+            // built), by an act in the column.
+            let open = std::rc::Rc::new(std::cell::Cell::new(false));
+            let opening = open.clone();
+            let h = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(WIDTH, height))
                 .build_ui_state(
                     move |ui, campaigns: &mut Campaigns| {
@@ -2196,7 +2198,7 @@ mod tests {
                         };
                         design::ScrollColumn::new("column").show(ui, |ui| {
                             room(ui);
-                            if !std::mem::replace(&mut opened, true) {
+                            if opening.replace(false) {
                                 let act = design::reveal::Act::test(ui, 0);
                                 campaigns.start_import(act, "7", "Salt Road");
                             }
@@ -2205,7 +2207,9 @@ mod tests {
                         });
                     },
                     campaigns,
-                )
+                );
+            open.set(true);
+            h
         };
         let in_view = |h: &egui_kittest::Harness<'_, Campaigns>, height: f32| {
             ["Add campaign", "Cancel", words].iter().all(|name| {
@@ -2292,8 +2296,8 @@ mod tests {
             egui::Event::Paste("Salt".into()),
             egui::Event::Ime(egui::ImeEvent::Commit("Salt".into())),
         ] {
-            // The form opened in the harness's first frame; the event comes in the next.
             let mut h = scrolled(400.0);
+            h.step();
             h.event(event.clone());
             h.step();
             let typed = h.get_by_label("Add campaign").rect().top();
