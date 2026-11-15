@@ -12732,6 +12732,7 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
                 && d.has("Try again")
                 && cites
                 && reasons.len() == 1
+                && editor.is_some()
                 && (!wide
                     || toolbar.is_some_and(|toolbar| {
                         (reasons[0].center().y - toolbar.center().y).abs() <= crate::design::S
