@@ -362,6 +362,30 @@ fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
     egui::Id::new(("roster_fault_rows", draft))
 }
 
+/// Save's reason for the encounter's unread roster rows (`reason`), as its typed diagnosis.
+/// Lead ruling (s30 B11, R41): an unread roster row is a row of a file that is there and cannot
+/// be read, so it is an error wherever the editor says it: Save's reason (`Invalid`), the
+/// message above the roster and the row's own mark. This is the one value they read; a roster
+/// row whose creature file is missing stays a warning (`missing_creature_tone`).
+fn unread_rows_found(reason: String) -> design::save_row::Diagnosis<'static> {
+    design::save_row::Diagnosis::refused(reason)
+}
+
+/// The tone of every place that says an unread roster row: its diagnosis's.
+fn unread_row_tone() -> Tone {
+    unread_rows_found(String::new())
+        .tone()
+        .unwrap_or(Tone::Error)
+}
+
+/// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
+fn unread_row_mark() -> (&'static str, egui::Color32) {
+    match unread_row_tone() {
+        Tone::Error => (icons::ERROR, colors().result.error),
+        _ => (icons::WARN, colors().result.warning),
+    }
+}
+
 /// A roster row's own mark for its unread row fault (FC3): short, as a row's other faults are.
 fn roster_row_fault_words(line: usize) -> String {
     format!("Line {line} not read")
@@ -379,16 +403,14 @@ fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
                     egui::Label::new(Type::Strong.rich(ui, &fault.name).color(colors().text))
                         .truncate(),
                 );
-                // FA5, AA2: the whole mark, icon and words, in the warning tone, as run setup
-                // marks the same row; the name keeps the text colour.
+                // FA5, AA2: the whole mark, icon and words, in the fault's tone (R41: an unread
+                // row is an error, `unread_row_mark`); the name keeps the text colour.
+                let (icon, color) = unread_row_mark();
                 ui.add(
                     egui::Label::new(
                         Type::Small
-                            .rich(
-                                ui,
-                                format!("{} {}", icons::WARN, roster_row_fault_words(fault.line)),
-                            )
-                            .color(colors().result.warning),
+                            .rich(ui, format!("{icon} {}", roster_row_fault_words(fault.line)))
+                            .color(color),
                     )
                     .wrap(),
                 );
@@ -474,27 +496,43 @@ fn unread_notes(
     path: &str,
     flags: &[splat::content::layout::Flag],
     faults: &[RosterFault],
-) -> Vec<String> {
+) -> Vec<(String, Tone)> {
     flags
         .iter()
         .map(|flag| {
             let row = faults.iter().find(|fault| fault.line == flag.line);
-            // A flag read back from a saved copy has only its sentence, which names its line:
-            // it follows the file or the row, and no line is added.
-            let Some(words) = flag.words() else {
-                return match row {
-                    _ if faults.is_empty() => format!("{path}: {}", flag.message),
-                    Some(fault) => format!("{}: {}", fault.name, flag.message),
-                    None => flag.message.clone(),
-                };
+            // R41: a flag of an unread roster row in that fault's tone; any other a warning.
+            let tone = if row.is_some() {
+                unread_row_tone()
+            } else {
+                Tone::Warning
             };
-            match row {
-                _ if faults.is_empty() => format!("{path}, line {}: {words}", flag.line),
-                Some(fault) => row_fault_words(&fault.name, flag.line, &words),
-                None => flag.message.clone(),
-            }
+            (unread_note(path, flag, row, faults), tone)
         })
         .collect()
+}
+
+/// One flag's words (`unread_notes`).
+fn unread_note(
+    path: &str,
+    flag: &splat::content::layout::Flag,
+    row: Option<&RosterFault>,
+    faults: &[RosterFault],
+) -> String {
+    // A flag read back from a saved copy has only its sentence, which names its line: it
+    // follows the file or the row, and no line is added.
+    let Some(words) = flag.words() else {
+        return match row {
+            _ if faults.is_empty() => format!("{path}: {}", flag.message),
+            Some(fault) => format!("{}: {}", fault.name, flag.message),
+            None => flag.message.clone(),
+        };
+    };
+    match row {
+        _ if faults.is_empty() => format!("{path}, line {}: {words}", flag.line),
+        Some(fault) => row_fault_words(&fault.name, flag.line, &words),
+        None => flag.message.clone(),
+    }
 }
 
 /// `N content issues to repair`: the words of a page's collapsing content issue count.
@@ -534,28 +572,29 @@ pub(crate) fn file_line(ui: &mut egui::Ui, root: &std::path::Path, relative: &st
     ui.horizontal_wrapped(|ui| crate::world::entry_file_links(ui, &path, true));
 }
 
-/// The encounter file's unread rows, one warning each. The last warning says what to do, and the
-/// file's path and links start at its words, as every message's actions do.
+/// The encounter file's unread rows, one message each: an unread roster row in its error tone
+/// (`unread_row_tone`, R41), any other flag of the file as a warning. The last message says what
+/// to do, and the file's path and links start at its words, as every message's actions do.
 fn unread_roster_rows(
     ui: &mut egui::Ui,
     root: &std::path::Path,
     path: &str,
-    notes: &[String],
+    notes: &[(String, Tone)],
     faults: usize,
 ) {
-    let Some((last, before)) = notes.split_last() else {
+    let Some(((last, last_tone), before)) = notes.split_last() else {
         return;
     };
-    for note in before {
-        design::message(ui, Tone::Warning, note);
+    for (note, tone) in before {
+        design::message(ui, *tone, note);
     }
     if faults == 0 {
-        design::message(ui, Tone::Warning, last);
+        design::message(ui, *last_tone, last);
         return;
     }
     design::message_with_actions(
         ui,
-        Tone::Warning,
+        unread_row_tone(),
         &format!("{last} {}", fix_roster_rows(faults)),
         |ui| file_line(ui, root, path),
     );
@@ -1007,7 +1046,11 @@ impl Draft {
             &self.path,
             &roster_faults(&entry, &snapshot.known_creature_names),
         ) {
-            return Err(reason.into());
+            // R41: in the tone of its diagnosis, as the message above the roster says it.
+            return Err(Invalid {
+                tone: unread_row_tone(),
+                ..reason.into()
+            });
         }
         if self.name.trim().is_empty() {
             return Err(Invalid::missing("Enter an encounter name."));
@@ -6290,10 +6333,11 @@ impl Encounters {
         let found = groups
             .found
             .clone()
-            .and(roster_reason.clone().map_or_else(
-                design::save_row::Diagnosis::valid,
-                design::save_row::Diagnosis::refused,
-            ))
+            .and(
+                roster_reason
+                    .clone()
+                    .map_or_else(design::save_row::Diagnosis::valid, unread_rows_found),
+            )
             .and(own.unwrap_or_else(design::save_row::Diagnosis::valid));
         let groups_footer = groups.footer;
         // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
@@ -6617,7 +6661,11 @@ impl Encounters {
         );
         if let Some((notes, faults, path)) = unread_rows.filter(|(notes, ..)| !notes.is_empty()) {
             let root = active.path.clone();
-            let words = notes.join(" ");
+            let words = notes
+                .iter()
+                .map(|(note, _)| note.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
             unread.reason(words, move |ui| {
                 unread_roster_rows(ui, &root, &path, &notes, faults);
             });
@@ -8307,13 +8355,18 @@ mod tests {
         let saved = |line: usize, message: &str| -> splat::content::layout::Flag {
             serde_json::from_value(serde_json::json!({"line": line, "message": message})).unwrap()
         };
+        // R41 (lead ruling, s30 B11): an unread roster row's note is an error; another flag of
+        // the file is a warning.
         assert_eq!(
             unread_notes(
                 "Encounters/Shrine.md",
                 &[saved(3, "Line 3: the date was not read.")],
                 &[]
             ),
-            ["Encounters/Shrine.md: Line 3: the date was not read."]
+            [(
+                "Encounters/Shrine.md: Line 3: the date was not read.".to_owned(),
+                Tone::Warning
+            )]
         );
         assert_eq!(
             unread_notes(
@@ -8321,7 +8374,10 @@ mod tests {
                 &[saved(20, "Line 20: the change was not read.")],
                 &[row("Ember Cultist", 20)]
             ),
-            ["Ember Cultist: Line 20: the change was not read."]
+            [(
+                "Ember Cultist: Line 20: the change was not read.".to_owned(),
+                Tone::Error
+            )]
         );
         for (flags, rows, path, expected, sentence) in [
             (
@@ -8356,7 +8412,23 @@ mod tests {
             ),
         ] {
             let notes = unread_notes(path, &flags, &rows);
-            assert_eq!(notes, expected);
+            let (words, tones): (Vec<String>, Vec<Tone>) = notes.iter().cloned().unzip();
+            assert_eq!(words, expected);
+            // R41: each roster row's note in the error tone of Save's reason for it.
+            for (flag, tone) in flags.iter().zip(&tones) {
+                let roster_row = rows.iter().any(|row| row.line == flag.line);
+                assert_eq!(
+                    *tone,
+                    if roster_row {
+                        unread_rows_found(String::new()).tone().unwrap()
+                    } else {
+                        Tone::Warning
+                    },
+                    "line {}",
+                    flag.line
+                );
+            }
+            assert_eq!(unread_row_tone(), Tone::Error);
             // The run setup and Save's reason give each row the editor's words (iter-23 FA4).
             for row in &rows {
                 let flag = flags.iter().find(|flag| flag.line == row.line).unwrap();
@@ -8364,7 +8436,7 @@ mod tests {
                     problem: flag.words().unwrap(),
                     ..row.clone()
                 };
-                assert!(notes.contains(&fault.words()), "{}", fault.words());
+                assert!(words.contains(&fault.words()), "{}", fault.words());
                 let reason = roster_fault_reason(path, std::slice::from_ref(&fault)).unwrap();
                 assert!(
                     reason.contains(fault.words().trim_end_matches('.')),
@@ -8416,7 +8488,7 @@ mod tests {
                     links, 0,
                     "a fault that is not a roster row has no file line"
                 );
-                assert_eq!(find(&notes[0]).len(), 1);
+                assert_eq!(find(&words[0]).len(), 1);
                 continue;
             };
             assert_eq!(
@@ -8429,8 +8501,8 @@ mod tests {
                 .collect();
             assert_eq!(ended.len(), 1, "only the last warning says what to do");
             let last = ended[0].1;
-            assert!(ended[0].0.starts_with(notes.last().unwrap().as_str()));
-            for note in &notes[..notes.len() - 1] {
+            assert!(ended[0].0.starts_with(words.last().unwrap().as_str()));
+            for note in &words[..words.len() - 1] {
                 let found = find(note);
                 assert_eq!(
                     found.len(),

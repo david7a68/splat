@@ -759,7 +759,9 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     // FC3: the row that blocks Start fight shows in its place, after the last row that reads,
-    // and marks itself once, in the warning tone; no other row does.
+    // and marks itself once; no other row does. s30 B11 (R41, lead ruling): an unread roster row
+    // is a row of a file that cannot be read, so its mark and the message above the roster are
+    // errors, as Save's reason for it is.
     // One label can give two nodes with one rect; a row is one place.
     let mut marked: Vec<(String, egui::Rect)> = d
         .nodes()
@@ -791,17 +793,19 @@ pub fn run(d: &mut Driver<'_>) {
         .find(|node| node.name.ends_with("Line 20 not read"))
         .map(|node| node.rect);
     let last_read = d.place_of("6. Ember Cultist");
+    let message = super::tones_beside(d, "Ember Cultist · line 20: The change");
     d.observe(
         "iter-25-B-FC3",
         marked.len() == 1
-            && marked[0].0 == format!("{} Line 20 not read", crate::design::icons::WARN)
+            && marked[0].0 == format!("{} Line 20 not read", crate::design::icons::ERROR)
             // iter-26-B FA5, AA2: the icon and the words, every painted part of the mark.
             && !tones.is_empty()
-            && tones.iter().all(|tone| *tone == crate::design::colors().result.warning)
+            && tones.iter().all(|tone| *tone == crate::design::colors().result.error)
+            && message == ["error"]
             && mark
                 .zip(last_read)
                 .is_some_and(|(mark, row)| mark.top() > row.bottom()),
-        format!("Marked roster rows {marked:?}, mark colours {tones:?}, mark {mark:?} after row 6 {last_read:?}"),
+        format!("Marked roster rows {marked:?}, mark colours {tones:?}, message {message:?}, mark {mark:?} after row 6 {last_read:?}"),
     );
     d.state("flagged-roster-at-start-fight", Sizes::All);
     // B4 review F2: at 1920 the roster's last control, its whole target, stays in view under the
