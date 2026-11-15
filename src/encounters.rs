@@ -2552,6 +2552,8 @@ struct Snapshot {
     saved_options: crate::encounter_settings::Options,
     campaign_text: String,
     runs: Vec<crate::encounter_run::SavedRunInfo>,
+    /// Each read of `runs` (`take_run_list`): a new revision, for `RunFacts`.
+    runs_read: crate::design::memo::Revised<()>,
     /// AB1, R41: the run list could not be read, and why. The footer says it in its tone, and
     /// In progress and History say it instead of their empty states. It ends when a read
     /// succeeds.
@@ -2827,6 +2829,7 @@ impl Snapshot {
             saved_options: options,
             campaign_text: document.text,
             runs: Vec::new(),
+            runs_read: crate::design::memo::Revised::new(()),
             runs_unread: None,
             runs_missing: None,
             catalogue,
@@ -2849,6 +2852,7 @@ impl Snapshot {
     ) {
         self.runs_missing = None;
         self.runs_unread = None;
+        self.runs_read.revise(|_| crate::design::memo::Changed::Yes);
         match read {
             Ok(runs) => self.runs = runs,
             Err(error) => {
@@ -3168,10 +3172,34 @@ impl design::results::Kept for MemberMark {
     }
 }
 
+/// What the saved runs say that a kept result reads (`timeline::fights_that_keep_hp`: which
+/// fights keep their saved HP): which read of the run list it is, and the open run's own facts
+/// over it (its id, and whether it is running). Its revision changes when either changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RunFacts {
+    listed: Option<crate::design::memo::Revision>,
+    open: Option<(Uuid, bool)>,
+}
+
+/// [`RunFacts`] with its revision, kept by the page.
+struct RunFactsRevised(crate::design::memo::Revised<RunFacts>);
+
+impl Default for RunFactsRevised {
+    fn default() -> Self {
+        Self(crate::design::memo::Revised::new(RunFacts {
+            listed: None,
+            open: None,
+        }))
+    }
+}
+
 #[derive(Default)]
 pub struct Encounters {
     active: Option<Campaign>,
     snapshot: Option<Snapshot>,
+    /// The saved-run facts that the Session plan's and the Timeline's Add results read, with
+    /// their revision (`saved_runs_revision`). Noted at the end of each `poll`.
+    run_facts: RunFactsRevised,
     /// G118: the Ready rows' difficulty lines, by template id, each under its `Roster::key`,
     /// room, font and scale. The page owns them; a new key replaces an entry, and a template
     /// that leaves the snapshot loses its entry at the next snapshot revision.
@@ -4464,6 +4492,39 @@ impl Encounters {
     }
     /// Keep the snapshot current. The shell calls this every frame.
     pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+        self.poll_reads(ctx, campaigns);
+        self.note_run_facts();
+    }
+
+    /// The revision of the saved-run facts (`RunFacts`): it changes when the run list is read
+    /// again (a deleted or restored run, a reload) or the open run starts, ends or leaves Setup,
+    /// as of this frame's `poll`. A kept result whose words name the fights that keep their
+    /// saved HP keys its words by it (`sessions::page::Plan::saved_runs_revision`, the Timeline's
+    /// `set_saved_runs`).
+    pub fn saved_runs_revision(&self) -> crate::design::memo::Revision {
+        self.run_facts.0.revision()
+    }
+
+    /// Note the saved-run facts: a revision and the open run's timeline fact (its id, state and
+    /// name, as the app reads each frame), never the run list.
+    fn note_run_facts(&mut self) {
+        let facts = RunFacts {
+            listed: self
+                .snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.runs_read.revision()),
+            open: self.run.as_ref().map(|run| {
+                let fact = run.timeline_fact();
+                (
+                    fact.id,
+                    matches!(fact.state, crate::timeline::RunState::Running),
+                )
+            }),
+        };
+        self.run_facts.0.set(facts);
+    }
+
+    fn poll_reads(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
         #[cfg(test)]
         if self.hold_reads {
             return;
@@ -8002,10 +8063,94 @@ impl Encounters {
         // discard's result and the reasons go in the tab's footer, so their coming and going
         // moves no field or Save.
         let rule_words: Vec<String> = rule_flags.iter().map(|flag| flag.message.clone()).collect();
-        let mut folder_warning = None;
-        let mut discard_shown = false;
-        ui.scope_builder(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
-            ui.cursor().min, egui::vec2(ui.available_width().min(design::FORM_WIDTH), ui.available_height()))), |ui| {
+        // The footer's facts come from the settings as this frame starts, as the pane takes its
+        // messages before it draws the form: a change the form makes shows in the next frame,
+        // which the input that made the change draws.
+        let folder_before = snapshot.options.folder.clone();
+        let left_before = snapshot
+            .options
+            .runs_left_in(&snapshot.saved_options, &active);
+        let folder_warning = match &left_before {
+            Ok(left) if !left.is_empty() => {
+                let run_files = left.len();
+                let runs: Vec<_> = left
+                    .iter()
+                    .filter_map(|path| crate::encounter_run::Run::open(path, active.id).ok())
+                    .filter(|run| !run.state_words(true).starts_with("Ended"))
+                    .collect();
+                Some(
+                    if run_files == 1
+                        && let Some(run) = runs.first()
+                    {
+                        format!(
+                            "{} ({}) stays in {}. From the new folder, Splat will not show it or resume it.",
+                            run.name,
+                            run.state_words(true),
+                            snapshot.saved_options.folder
+                        )
+                    } else {
+                        format!(
+                            "{} {} in {}. {} are unfinished. From the new folder, Splat will not show these runs or resume them.",
+                            design::count(run_files, "saved run", "saved runs"),
+                            if run_files == 1 { "stays" } else { "stay" },
+                            snapshot.saved_options.folder,
+                            runs.len()
+                        )
+                    },
+                )
+            }
+            _ => None,
+        };
+        let discard_shown =
+            snapshot.options == snapshot.saved_options && self.discarded_options.is_some();
+        // The tab's footer: the discard's Undo, the reasons, then the notices. The pane places
+        // it `S` below the form while the form fits, and at the tab's bottom only when the form
+        // scrolls, so the form keeps its place whatever the footer holds.
+        let undo_discard = std::cell::Cell::new(false);
+        let undo = &undo_discard;
+        let mut footer =
+            design::Footer::new(("run_settings_footer", active.id), design::FORM_WIDTH);
+        if discard_shown && let Some(order) = self.discarded_options_order {
+            let words = "Rules and runs draft discarded.";
+            footer.result(order, words, true, move |ui| {
+                if design::draft_discarded(ui, "Rules and runs") {
+                    undo.set(true);
+                }
+            });
+        }
+        if let Some(e) = self.error.clone() {
+            footer.reason(e.clone(), move |ui| {
+                design::message(ui, Tone::Error, &e);
+            });
+        }
+        // The warning names the line; the file's path and links start at the last warning's
+        // words.
+        if let Some((last, before)) = rule_words.split_last() {
+            let (last, before, root) = (last.clone(), before.to_vec(), active.path.clone());
+            footer.reason(rule_words.join(" "), move |ui| {
+                for text in &before {
+                    design::message(ui, Tone::Warning, text);
+                }
+                design::message_with_actions(ui, Tone::Warning, &last, |ui| {
+                    file_line(ui, &root, "Campaign.md");
+                });
+            });
+        }
+        if let Some(words) = folder_warning {
+            footer.notice(words.clone(), move |ui| {
+                design::message(ui, Tone::Warning, &words);
+            });
+        }
+        if draft_open {
+            let words = "Save or discard the open encounter to change run settings.";
+            footer.notice(words, move |ui| {
+                design::message(ui, Tone::Info, words);
+            });
+        }
+        footer.pane(ui, design::Body::Content, |ui| {
+        ui.vertical(|ui| {
+        // The form is as wide as the tab, at most `FORM_WIDTH`.
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         design::locked(ui, closed_while, |ui| {
             design::labelled_field(
                 ui,
@@ -8086,24 +8231,18 @@ impl Encounters {
                 });
             }
             let changed = snapshot.options != snapshot.saved_options;
-            let left = snapshot.options.runs_left_in(&snapshot.saved_options, &active);
+            // The run files the folder change leaves: read once a frame, and again only when
+            // the field changed the folder in this frame.
+            let left = if snapshot.options.folder == folder_before {
+                left_before
+            } else {
+                snapshot.options.runs_left_in(&snapshot.saved_options, &active)
+            };
             let run_files = left.as_ref().map_or(0, Vec::len);
             let folder_changed = snapshot.options.directory(&active).ok() != snapshot.saved_options.directory(&active).ok();
             let blocked = if run_open { Some("Close the open run to save run settings.") }
                 else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
                 else if !changed && rule_flags.is_empty() { Some("No changes to save.") } else { None };
-            if run_files > 0 {
-                let runs: Vec<_> = left.as_ref().ok().into_iter().flatten()
-                    .filter_map(|path| crate::encounter_run::Run::open(path, active.id).ok())
-                    .filter(|run| !run.state_words(true).starts_with("Ended"))
-                    .collect();
-                let words = if run_files == 1 && let Some(run) = runs.first() {
-                    format!("{} ({}) stays in {}. From the new folder, Splat will not show it or resume it.", run.name, run.state_words(true), snapshot.saved_options.folder)
-                } else {
-                    format!("{} {} in {}. {} are unfinished. From the new folder, Splat will not show these runs or resume them.", design::count(run_files, "saved run", "saved runs"), if run_files == 1 { "stays" } else { "stay" }, snapshot.saved_options.folder, runs.len())
-                };
-                folder_warning = Some(words);
-            }
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
                 // other change too.
@@ -8145,7 +8284,6 @@ impl Encounters {
                 } else if !changed {
                     design::save_row_state(ui, Status { icon: icons::OK, word: "No changes", color: colors().muted }, false, None);
                 }
-                discard_shown = !changed && self.discarded_options.is_some();
                 if snapshot.options != snapshot.saved_options {
                     // FB6: while Save is blocked, Discard is the one way out.
                     design::blocked_reason(
@@ -8223,6 +8361,7 @@ impl Encounters {
             });
         });
         });
+        });
         if settings_saved {
             self.saved = true;
             self.reload(ui.ctx(), active.clone(), campaigns.modules().to_vec());
@@ -8230,52 +8369,6 @@ impl Encounters {
         if let Some(e) = error {
             self.error = Some(e);
         }
-        // The footer takes the bottom of the tab, below the form, so the form keeps its place
-        // whatever it holds. Its order: the discard's Undo, the reasons, then the notices.
-        let undo_discard = std::cell::Cell::new(false);
-        let undo = &undo_discard;
-        let mut footer =
-            design::Footer::new(("run_settings_footer", active.id), design::FORM_WIDTH);
-        if discard_shown && let Some(order) = self.discarded_options_order {
-            let words = "Rules and runs draft discarded.";
-            footer.result(order, words, true, move |ui| {
-                if design::draft_discarded(ui, "Rules and runs") {
-                    undo.set(true);
-                }
-            });
-        }
-        if let Some(e) = self.error.clone() {
-            footer.reason(e.clone(), move |ui| {
-                design::message(ui, Tone::Error, &e);
-            });
-        }
-        // The warning names the line; the file's path and links start at the last warning's
-        // words.
-        if let Some((last, before)) = rule_words.split_last() {
-            let (last, before, root) = (last.clone(), before.to_vec(), active.path.clone());
-            footer.reason(rule_words.join(" "), move |ui| {
-                for text in &before {
-                    design::message(ui, Tone::Warning, text);
-                }
-                design::message_with_actions(ui, Tone::Warning, &last, |ui| {
-                    file_line(ui, &root, "Campaign.md");
-                });
-            });
-        }
-        if let Some(words) = folder_warning {
-            footer.notice(words.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &words);
-            });
-        }
-        if draft_open {
-            let words = "Save or discard the open encounter to change run settings.";
-            footer.notice(words, move |ui| {
-                design::message(ui, Tone::Info, words);
-            });
-        }
-        // The form above is drawn already and ends above the footer's room, so no body is
-        // bounded by its top.
-        let _ = footer.show_by_hand(ui);
         if undo_discard.get()
             && let Some(options) = self.discarded_options.take()
             && let Some(snapshot) = self.snapshot.as_mut()
@@ -11499,6 +11592,17 @@ mod tests {
         played.record_run(&fact(), None, true);
         played.record_run(&later, None, true);
         editor.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
+        // Ruling L9, early review F1 of PR 444: the revision of the saved-run facts, which the
+        // Add results' words key by, holds on a poll with no change, and moves when the run
+        // list is read again or a run opens.
+        editor.note_run_facts();
+        let facts = editor.saved_runs_revision();
+        editor.note_run_facts();
+        assert_eq!(
+            editor.saved_runs_revision(),
+            facts,
+            "no change, no new revision"
+        );
         editor.follow_continue_rule(&played);
         assert_eq!(
             editor.history_blocked,
@@ -11508,6 +11612,12 @@ mod tests {
         taken["id"] = serde_json::json!(later.id);
         fs::write(&path, serde_json::to_vec_pretty(&taken).unwrap()).unwrap();
         editor.read_runs_again(&campaign);
+        editor.note_run_facts();
+        assert_ne!(
+            editor.saved_runs_revision(),
+            facts,
+            "the run list read again is new facts"
+        );
         editor.open_saved_run(&path, &campaign);
         editor.follow_continue_rule(&played);
         assert_eq!(
@@ -11517,7 +11627,15 @@ mod tests {
         fs::write(&path, &bytes).unwrap();
         editor.snapshot = None;
 
+        editor.note_run_facts();
+        let no_run = editor.saved_runs_revision();
         editor.run = Some(editor.start_run(&campaign, &[]).unwrap());
+        editor.note_run_facts();
+        assert_ne!(
+            editor.saved_runs_revision(),
+            no_run,
+            "an open run's facts are over the list"
+        );
         let current = editor.run().unwrap().live_info().unwrap().id;
         editor.open_saved_run(&path, &campaign);
         assert_eq!(editor.run().unwrap().live_info().unwrap().id, current);

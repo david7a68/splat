@@ -211,8 +211,11 @@ pub struct Recorder {
     grew: Instant,
     heard: Instant,
     /// When sound was last heard, on the frame clock (`crate::frame_clock`): `Hearing sound`
-    /// ends `HEARD_FOR` later by the frame clock. `heard` stays the wall clock for silence.
+    /// ends `HEARD_FOR` later by the frame clock, in the owner update (`expire`). `heard` stays
+    /// the wall clock for silence.
     heard_at: f64,
+    /// `Hearing sound` stands: set when sound is heard, ended by `expire`.
+    hearing: bool,
     checked: Instant,
 }
 
@@ -271,6 +274,7 @@ impl Recorder {
             grew: now,
             heard: now,
             heard_at: crate::frame_clock::now(),
+            hearing: true,
             checked: now,
         }
     }
@@ -285,9 +289,24 @@ impl Recorder {
         self.size.saturating_sub(WAV_HEADER as u64) / BYTES_PER_SECOND
     }
 
-    /// Sound in the last few seconds.
+    /// Sound in the last few seconds, as of the last owner update (`expire`). It reads no clock.
     pub fn heard_just_now(&self) -> bool {
-        !crate::frame_clock::passed(self.heard_at, HEARD_FOR)
+        self.hearing
+    }
+
+    /// The owner update of `Hearing sound`, on every frame, outside `poll`'s wall-clock pause:
+    /// it ends `HEARD_FOR` after the last sound on the frame clock. While it stands, the frame
+    /// clock's time left, for a repaint at its end.
+    pub fn expire(&mut self) -> Option<std::time::Duration> {
+        if !self.hearing {
+            return None;
+        }
+        if crate::frame_clock::passed(self.heard_at, HEARD_FOR) {
+            self.hearing = false;
+            return None;
+        }
+        let left = HEARD_FOR.as_secs_f64() - (crate::frame_clock::now() - self.heard_at);
+        Some(std::time::Duration::from_secs_f64(left.max(0.0)))
     }
 
     pub fn health(&self) -> &Health {
@@ -298,6 +317,7 @@ impl Recorder {
     pub fn simulate_health(&mut self, health: Health) {
         self.heard = Instant::now();
         self.heard_at = crate::frame_clock::now();
+        self.hearing = true;
         self.health = health;
     }
 
@@ -338,6 +358,7 @@ impl Recorder {
             if peak.is_some_and(|peak| peak >= SILENCE_PEAK) {
                 self.heard = now;
                 self.heard_at = crate::frame_clock::now();
+                self.hearing = true;
                 self.health = Health::Hearing;
             } else if now.duration_since(self.heard) >= SILENT_AFTER {
                 self.health = Health::Silent;
@@ -860,7 +881,9 @@ mod tests {
     }
 
     /// Round 30 B7d: `Hearing sound` ends `HEARD_FOR` after the last sound by the frame clock,
-    /// so a test's frames decide when the word turns to `Quiet`.
+    /// so a test's frames decide when the word turns to `Quiet`. Ruling L9: it ends in the
+    /// owner update (`expire`, on every frame, simulated capture too), which says the time left
+    /// for a repaint; the reader reads no clock.
     #[test]
     fn hearing_ends_by_the_frame_clock() {
         let dir = tempfile::tempdir().unwrap();
@@ -869,14 +892,21 @@ mod tests {
         crate::frame_clock::set(10.0);
         recorder.simulate_health(Health::Hearing);
         crate::frame_clock::set(14.5);
+        let left = recorder.expire();
         assert!(
             recorder.heard_just_now(),
             "4.5 s of frames later it still hears"
         );
-        crate::frame_clock::set(15.5);
+        assert!(
+            left.is_some_and(|left| (left.as_secs_f64() - 0.5).abs() < 1e-9),
+            "a repaint at its end, 0.5 s on: {left:?}"
+        );
+        crate::frame_clock::set(15.0);
+        assert!(recorder.heard_just_now(), "no reader ends it");
+        assert_eq!(recorder.expire(), None);
         assert!(
             !recorder.heard_just_now(),
-            "5.5 s of frames later it is quiet"
+            "5 s of frames later the owner update has made it quiet"
         );
     }
 

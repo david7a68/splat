@@ -226,7 +226,16 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Choose in Rules and runs");
     d.expect("Combat initiative choice");
     d.expect("Roll NPC initiative");
-    d.state("rules-and-runs-flagged-choice", Sizes::All);
+    // Migration-32 L1b (SD4, AD1): the unread choice's warning follows the short form `S` below
+    // Save, with no hairline, at every size (the footer placed by hand stood at the tab's bottom).
+    d.state_prepared("rules-and-runs-flagged-choice", Sizes::All, |d| {
+        footer_follows(
+            d,
+            "Save run settings",
+            "Line 23: Combat initiative",
+            "m32-L1b-rules-flag-footer",
+        );
+    });
     // An unchanged form with an unread rule choice says what its enabled Save writes.
     const REPAIR_STATE: &str = "Save replaces the unread choice on line 23 with these settings";
     d.observe(
