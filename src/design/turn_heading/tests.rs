@@ -84,8 +84,9 @@ const LONG: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
 /// Longer than any numbered creature name of the visual scenarios, with a copy number.
 const LONG_NUMBERED: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell 12";
 
-fn whole(name: &String) -> TurnName<'_> {
-    TurnName::whole(Some(name))
+/// A roster of these names.
+fn roster(names: &[String]) -> impl Fn(&mut dyn FnMut(&str)) + '_ {
+    move |visit: &mut dyn FnMut(&str)| names.iter().for_each(|name| visit(name))
 }
 
 /// The part's own measures: `Next turn` with and without its letter, and the least name font
@@ -122,15 +123,51 @@ fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
         let (keyed, keyless, least) = measures(&ctx, scale);
         for name in ["Iselle Marrowwind", LONG, LONG_NUMBERED].map(str::to_owned) {
             let numbered = name == LONG_NUMBERED;
+            let alone = [name.clone()];
+            let alone = roster(&alone);
+            // G1b: the same roster with the longest name beside this one.
+            let beside = [name.clone(), LONG_NUMBERED.to_owned()];
+            let beside = roster(&beside);
             for keys in [TurnKeys::Work, TurnKeys::Elsewhere] {
                 let draw = |ui: &mut Ui, kept: &mut KeptTurnHeading| {
-                    TurnHeading::new("Ember Road", 123, whole(&name), scale, false, None, keys)
-                        .show(ui, kept)
+                    TurnHeading::new(
+                        "Ember Road",
+                        123,
+                        TurnName::whole(Some(&name), &alone),
+                        scale,
+                        false,
+                        None,
+                        keys,
+                    )
+                    .show(ui, kept)
                 };
                 for step in 0..=60 {
                     let width = RUN_LIST_KEEPS + 8.0 * step as f32;
                     let mut kept = KeptTurnHeading::new();
                     let (nodes, painted) = frame(&ctx, width, |ui| draw(ui, &mut kept));
+                    // G1b: pressing Next turn changes the current name, never the letter. With
+                    // the longest name in the roster, this name and that one get one letter.
+                    let letter_with = |current: &String| {
+                        let mut kept = KeptTurnHeading::new();
+                        let _ = frame(&ctx, width, |ui| {
+                            TurnHeading::new(
+                                "Ember Road",
+                                123,
+                                TurnName::whole(Some(current), &beside),
+                                scale,
+                                false,
+                                None,
+                                keys,
+                            )
+                            .show(ui, &mut kept)
+                        });
+                        kept.shown().expect("a kept heading").1
+                    };
+                    assert_eq!(
+                        letter_with(&name),
+                        letter_with(&LONG_NUMBERED.to_owned()),
+                        "{width} px: the letter changes with the current name"
+                    );
                     let at = format!("{width} px, {name:?}, {keys:?}, hp {}", scale.hp);
                     assert!(
                         kept.fits(),
@@ -218,12 +255,14 @@ fn the_key_letter_gives_up_its_room_before_the_name_is_cut() {
 fn too_narrow_a_heading_fails_with_its_least_form() {
     let ctx = context();
     let name = LONG_NUMBERED.to_owned();
+    let names = [name.clone()];
+    let names = roster(&names);
     let mut kept = KeptTurnHeading::new();
     let _ = frame(&ctx, 200.0, |ui| {
         TurnHeading::new(
             "Ember Road",
             123,
-            whole(&name),
+            TurnName::whole(Some(&name), &names),
             RUN_LARGE,
             false,
             None,
@@ -245,6 +284,8 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
     let mut a = KeptTurnHeading::new();
     let mut b = KeptTurnHeading::new();
     let long = LONG.to_owned();
+    let longs = [long.clone()];
+    let longs = roster(&longs);
     let both = |ctx: &egui::Context,
                 width: f32,
                 a: &mut KeptTurnHeading,
@@ -253,11 +294,13 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
                 keys: TurnKeys,
                 round: u64| {
         let name = name.to_owned();
+        let names = [name.clone()];
+        let names = roster(&names);
         let _ = frame(ctx, width, |ui| {
             let _ = TurnHeading::new(
                 "Ember Road",
                 round,
-                whole(&name),
+                TurnName::whole(Some(&name), &names),
                 RUN_REGULAR,
                 false,
                 None,
@@ -267,7 +310,7 @@ fn one_choice_per_change_and_two_owners_keep_their_own() {
             TurnHeading::new(
                 "Road",
                 1,
-                whole(&long),
+                TurnName::whole(Some(&long), &longs),
                 RUN_REGULAR,
                 false,
                 None,

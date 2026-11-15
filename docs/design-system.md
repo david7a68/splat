@@ -1571,7 +1571,9 @@ after the DM stops sync for that character; an untouched linked row has no sync 
 The header has two lines. Round and current turn use bold sans larger than row names, beside Next turn.
 When the turn heading does not fit, drop `’s turn` before shortening the name. When the name at its least size
 does not fit beside Next turn, Next turn gives up its `N` key letter and the letter's room before the name is cut
-(R22; the Keys list keeps N). With Lookup open the letter and its room are gone. `design::TurnHeading` owns this line.
+(R22; the Keys list keeps N). The letter shows only while every name of the roster fits whole beside it, so
+pressing Next turn never brings or takes the letter, and no control moves under the pointer. With Lookup open the
+letter and its room are gone. `design::TurnHeading` owns this line.
 Keep the final copy number, such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
 remainder less `L`. Undo always keeps the word `Undo`: shorten the target first, then drop the `Next:` notice

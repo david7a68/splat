@@ -62,10 +62,12 @@ impl Run {
             .current()
             .and_then(|at| self.state.participants.get(at))
             .map(|p| &p.name);
+        let participants = &self.state.participants;
+        let roster = |name: &mut dyn FnMut(&str)| participants.iter().for_each(|p| name(&p.name));
         let presses = design::TurnHeading::new(
             &self.name,
             self.state.round,
-            design::TurnName::whole(current),
+            design::TurnName::whole(current, &roster),
             scale,
             self.panel == Panel::Groups && !self.hide_panel,
             nobody_present.then_some(NOBODY_PRESENT),

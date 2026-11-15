@@ -10,8 +10,9 @@
 //! and the controls together) from a private ordered list, and paints that candidate.
 //!
 //! **Key policy of a name line (R22).** In a line that holds a name, the key letter `N` gives
-//! up its room before the name is cut: a candidate with the letter is tried only while the
-//! name is whole beside it. With the keyboard elsewhere (Lookup open) the letter is never a
+//! up its room before the name is cut: a candidate with the letter is tried only while every
+//! name of the roster is whole beside it at the least size, so pressing `Next turn` never
+//! changes the letter and no control moves under the pointer (G1b). With the keyboard elsewhere (Lookup open) the letter is never a
 //! candidate. A line with no name keeps its controls' places by its own layout (the dock's keys are
 //! plain `Action` keys).
 //!
@@ -70,13 +71,26 @@ pub struct TurnPresses {
 /// The current turn's whole name, as the run holds it: made from the participant's own name
 /// field, never from words a caller cut. Outside `src/design/`, its maker is counted by the
 /// lint (`heading-owner`, one use), so a second maker is a visible change.
-#[derive(Clone, Copy, Debug)]
-pub struct TurnName<'a>(&'a str);
+#[derive(Clone, Copy)]
+pub struct TurnName<'a> {
+    name: &'a str,
+    roster: RosterNames<'a>,
+}
+
+/// Every name that can have the turn: a visitor over the participants' own name fields, in the
+/// run's order. The key letter's choice reads all of them (see `TurnName::whole`).
+pub type RosterNames<'a> = &'a dyn Fn(&mut dyn FnMut(&str));
 
 impl<'a> TurnName<'a> {
-    /// The participant's name field itself; no current turn is `None`.
-    pub fn whole(name: Option<&'a String>) -> Self {
-        Self(name.map_or("", String::as_str))
+    /// The current participant's name field itself (no current turn is `None`), and the roster
+    /// it is one of. `N` shows only while EVERY roster name fits whole beside it, so pressing
+    /// `Next turn` never brings the letter or takes it away: neither `Next turn` nor `Add`
+    /// moves under the DM's pointer (G1b), and a cut name still never stands beside `N` (R22).
+    pub fn whole(name: Option<&'a String>, roster: RosterNames<'a>) -> Self {
+        Self {
+            name: name.map_or("", String::as_str),
+            roster,
+        }
     }
 }
 
@@ -87,6 +101,7 @@ pub struct TurnHeading<'a> {
     run: &'a str,
     round: u64,
     name: &'a str,
+    roster: RosterNames<'a>,
     scale: RunScale,
     add_selected: bool,
     next_blocked: Option<&'a str>,
@@ -109,7 +124,8 @@ impl<'a> TurnHeading<'a> {
         Self {
             run,
             round,
-            name: name.0,
+            name: name.name,
+            roster: name.roster,
             scale,
             add_selected,
             next_blocked,
@@ -262,6 +278,7 @@ struct Key {
     run: String,
     round: u64,
     name: String,
+    roster: Vec<String>,
     keys: TurnKeys,
     scale: RunScale,
     metrics: Metrics,
@@ -273,10 +290,26 @@ impl Key {
             run: heading.run.to_owned(),
             round: heading.round,
             name: heading.name.to_owned(),
+            roster: {
+                let mut roster = Vec::new();
+                (heading.roster)(&mut |name| roster.push(name.to_owned()));
+                roster
+            },
             keys: heading.keys,
             scale: heading.scale,
             metrics,
         }
+    }
+
+    /// The roster's names, compared in place in order.
+    fn same_roster(&self, heading: &TurnHeading<'_>) -> bool {
+        let mut at = 0;
+        let mut same = true;
+        (heading.roster)(&mut |name| {
+            same &= self.roster.get(at).is_some_and(|kept| kept == name);
+            at += 1;
+        });
+        same && at == self.roster.len()
     }
 
     /// Compares in place: no string is made.
@@ -284,6 +317,7 @@ impl Key {
         self.run == heading.run
             && self.round == heading.round
             && self.name == heading.name
+            && self.same_roster(heading)
             && self.keys == heading.keys
             && self.scale == heading.scale
             && self.metrics == *metrics
@@ -413,12 +447,22 @@ fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
         (width(metrics.least) <= room).then(|| (text.to_owned(), metrics.least))
     };
     let least = sized(metrics.least);
+    // The letter may show only while every roster name fits whole beside it (G1b, R22).
+    let roster_fits = {
+        let room = room(Letter::Shown);
+        let mut fits = true;
+        (heading.roster)(&mut |name| fits &= number_width(ui, name, &least) <= room);
+        fits
+    };
     let inside = |text: String, room: f32| {
         (number_width(ui, &text, &least) <= room).then_some((text, metrics.least))
     };
     let chosen = select::first_fit(
         &ORDER,
-        |candidate| candidate.keys.is_none_or(|keys| keys == heading.keys),
+        |candidate| {
+            candidate.keys.is_none_or(|keys| keys == heading.keys)
+                && (candidate.letter == Letter::Released || roster_fits)
+        },
         |candidate| {
             let room = room(candidate.letter);
             match candidate.words {
