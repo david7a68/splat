@@ -650,11 +650,9 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let places = &metrics.places;
         let top = metrics.top;
         let natural = top + 2.0 * stroke;
-        let natural = if self.room.is_some() {
-            natural
-        } else {
-            natural.min(ui.style().spacing.combo_height)
-        };
+        // The part's normal maximum keeps a long list in its own scroll column.
+        // An explicit room narrows the placement; it does not remove this height cap.
+        let natural = natural.min(ui.style().spacing.combo_height);
         let below = bounds.bottom() - rect.bottom() - XS;
         let above = rect.top() - bounds.top() - XS;
         let (align, room) = if natural <= below || below >= above {

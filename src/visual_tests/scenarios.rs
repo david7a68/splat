@@ -14952,6 +14952,7 @@ pub mod session_notes {
                 .map(|node| node.rect);
             let splitter = d.place_of("Resize timeline details column");
             let (_, height) = d.window_size();
+            let footers = d.footer_bands();
             d.observe(
                 "s30-B10-header-menu-boundary",
                 menu.zip(control).is_some_and(|(menu, control)| {
@@ -14959,7 +14960,7 @@ pub mod session_notes {
                         && menu.bottom() <= height
                         && splitter.is_none_or(|edge| menu.right() <= edge.left())
                 }),
-                format!("{name}: menu {menu:?}, control {control:?}, detail splitter {splitter:?}, window height {height}"),
+                format!("{name}: menu {menu:?}, control {control:?}, detail splitter {splitter:?}, footer bands {footers:?}, window height {height}"),
             );
         };
         d.state_prepared("adds-to-session-menu", Sizes::All, |d| {

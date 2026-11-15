@@ -280,92 +280,103 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
         vec2(1200.0, 800.0),
         vec2(1920.0, 1080.0),
     ] {
-        let ctx = context();
-        let control = Cell::new(Rect::NOTHING);
-        let room = Cell::new(Rect::NOTHING);
-        let current = Cell::new(0);
-        let draw = |events| {
-            frame(&ctx, size, events, |ui| {
-                let bounded = Rect::from_min_max(pos2(8.0, 44.0), pos2(400.0, 400.0));
-                room.set(bounded);
-                ui.allocate_exact_size(vec2(0.0, 172.0), Sense::hover());
-                ui.horizontal(|ui| {
-                    ui.allocate_exact_size(vec2(300.0, 0.0), Sense::hover());
-                    let mut dropdown = Dropdown::new(SIDE, "Session for new events")
-                        .choice(0, "No session".to_owned());
-                    for number in 1..=12 {
-                        dropdown =
-                            dropdown.choice(number, format!("Session {number}: Ferry Watch"));
-                    }
-                    let mut chosen = current.get();
-                    let shown = dropdown.within(bounded).width(122.0).show(ui, &mut chosen);
-                    current.set(chosen);
-                    control.set(shown.response.rect);
-                });
-            })
-        };
-        draw(Vec::new());
-        draw(click(control.get().center()));
-        draw(Vec::new());
-        draw(Vec::new());
-        assert!(egui::Popup::is_id_open(&ctx, list()));
-        let popup = list_rect(&ctx);
-        assert!(
-            room.get().contains_rect(popup),
-            "{size:?}: {popup:?}, {:?}",
-            room.get()
-        );
-        assert!(
-            popup.top() >= control.get().bottom(),
-            "the menu opens below"
-        );
-        let whole = ctx
-            .data(|data| data.get_temp::<Vec<Id>>(list().with("rows")))
-            .unwrap()
-            .iter()
-            .filter_map(|id| ctx.read_response(*id))
-            .filter(|row| popup.contains_rect(row.rect))
-            .count();
-        assert!(
-            whole >= 5,
-            "{size:?}: only {whole} whole row targets in {popup:?}"
-        );
-        {
-            let metrics = ctx
-                .data(|data| data.get_temp::<std::sync::Arc<RowMetrics>>(list().with("metrics")))
-                .unwrap();
+        for footer_bottom in [400.0, size.y - 8.0] {
+            let ctx = context();
+            let control = Cell::new(Rect::NOTHING);
+            let room = Cell::new(Rect::NOTHING);
+            let current = Cell::new(0);
+            let draw = |events| {
+                frame(&ctx, size, events, |ui| {
+                    let bounded = Rect::from_min_max(pos2(8.0, 44.0), pos2(400.0, footer_bottom));
+                    room.set(bounded);
+                    ui.allocate_exact_size(vec2(0.0, 172.0), Sense::hover());
+                    ui.horizontal(|ui| {
+                        ui.allocate_exact_size(vec2(300.0, 0.0), Sense::hover());
+                        let mut dropdown = Dropdown::new(SIDE, "Session for new events")
+                            .choice(0, "No session".to_owned());
+                        for number in 1..=12 {
+                            dropdown =
+                                dropdown.choice(number, format!("Session {number}: Ferry Watch"));
+                        }
+                        let mut chosen = current.get();
+                        let shown = dropdown.within(bounded).width(122.0).show(ui, &mut chosen);
+                        current.set(chosen);
+                        control.set(shown.response.rect);
+                    });
+                })
+            };
+            draw(Vec::new());
+            draw(click(control.get().center()));
+            draw(Vec::new());
+            draw(Vec::new());
+            assert!(egui::Popup::is_id_open(&ctx, list()));
+            let popup = list_rect(&ctx);
+            println!("B10_NEW_12 size {size:?} menu {popup:?} room_bottom {footer_bottom}");
             assert!(
-                popup.height() < metrics.top,
-                "the long menu scrolls internally"
+                popup.height()
+                    <= ctx.style().spacing.combo_height
+                        + 2.0 * ctx.style().visuals.window_stroke.width,
+                "explicit rooms keep the part's normal height maximum: {popup:?}"
+            );
+            assert!(
+                room.get().contains_rect(popup),
+                "{size:?}: {popup:?}, {:?}",
+                room.get()
+            );
+            assert!(
+                popup.top() >= control.get().bottom(),
+                "the menu opens below"
+            );
+            let whole = ctx
+                .data(|data| data.get_temp::<Vec<Id>>(list().with("rows")))
+                .unwrap()
+                .iter()
+                .filter_map(|id| ctx.read_response(*id))
+                .filter(|row| popup.contains_rect(row.rect))
+                .count();
+            assert!(
+                whole >= 5,
+                "{size:?}: only {whole} whole row targets in {popup:?}"
+            );
+            {
+                let metrics = ctx
+                    .data(|data| {
+                        data.get_temp::<std::sync::Arc<RowMetrics>>(list().with("metrics"))
+                    })
+                    .unwrap();
+                assert!(
+                    popup.height() < metrics.top,
+                    "the long menu scrolls internally"
+                );
+            }
+            let painted = draw(Vec::new());
+            let labels: Vec<_> = texts(&painted)
+                .into_iter()
+                .filter(|text| text.words.starts_with("Session "))
+                .collect();
+            assert!(!labels.is_empty());
+            assert!(
+                labels.iter().all(|text| text.lines.len() == 1),
+                "a bounded menu uses the full label width when it fits"
+            );
+            let before = control.get();
+            for _ in 0..12 {
+                draw(key(Key::ArrowDown));
+                draw(Vec::new());
+            }
+            let last = draw(Vec::new());
+            assert!(
+                texts(&last)
+                    .iter()
+                    .any(|text| text.words == "Session 12: Ferry Watch"
+                        && popup.contains_rect(text.rect))
+            );
+            assert_eq!(
+                control.get(),
+                before,
+                "opening and scrolling moves no control"
             );
         }
-        let painted = draw(Vec::new());
-        let labels: Vec<_> = texts(&painted)
-            .into_iter()
-            .filter(|text| text.words.starts_with("Session "))
-            .collect();
-        assert!(!labels.is_empty());
-        assert!(
-            labels.iter().all(|text| text.lines.len() == 1),
-            "a bounded menu uses the full label width when it fits"
-        );
-        let before = control.get();
-        for _ in 0..12 {
-            draw(key(Key::ArrowDown));
-            draw(Vec::new());
-        }
-        let last = draw(Vec::new());
-        assert!(
-            texts(&last)
-                .iter()
-                .any(|text| text.words == "Session 12: Ferry Watch"
-                    && popup.contains_rect(text.rect))
-        );
-        assert_eq!(
-            control.get(),
-            before,
-            "opening and scrolling moves no control"
-        );
     }
     // A short room gives only one whole row on either side. A stale room or a room with
     // less than one row closes through the same cleanup as Escape, returning the keyboard.
