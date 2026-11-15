@@ -15204,7 +15204,9 @@ pub mod session_notes {
             );
         };
         d.state_prepared("adds-to-session-menu", Sizes::All, |d| {
-            d.click("Session for new events");
+            if !d.has("No session") {
+                d.click("Session for new events");
+            }
             d.click("Session 4: Ferry Watch");
             d.observe(
                 "s30-B10-chosen-value-accessible-value",

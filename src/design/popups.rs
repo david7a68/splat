@@ -655,23 +655,30 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let natural = natural.min(ui.style().spacing.combo_height);
         let below = bounds.bottom() - rect.bottom() - XS;
         let above = rect.top() - bounds.top() - XS;
-        let (align, room) = if natural <= below || below >= above {
+        let reveal_index = list.with("reveal_index");
+        let pending = ui
+            .ctx()
+            .data(|data| data.get_temp::<Option<usize>>(reveal_index))
+            .flatten();
+        // Admit the actual row at the viewport's starting/reveal position. Wrapped labels
+        // and blocked reasons can make it taller than a one-line Read control.
+        let whole_row = places
+            .get(pending.unwrap_or(0))
+            .map_or(Density::Read.control(), |(_, height)| *height)
+            + 2.0 * stroke;
+        let (align, room) = if below >= whole_row && (natural <= below || below >= above) {
             (RectAlign::BOTTOM_START, below)
         } else {
             (RectAlign::TOP_START, above)
         };
-        if room < Density::Read.control() + 2.0 * stroke {
+        if natural.min(room) < whole_row {
             egui::Popup::close_id(ui.ctx(), list);
             return None;
         }
         let max = natural.min(room) - 2.0 * stroke;
         // A row that gained keyboard focus last pass comes into the list's view, centred: the
         // list opens at that offset, at once, so the next key sees the row.
-        let reveal_index = list.with("reveal_index");
-        let pending = ui
-            .ctx()
-            .data(|data| data.get_temp::<Option<usize>>(reveal_index))
-            .flatten();
+
         let mut column = ScrollColumn::new(list.with("scroll"))
             .max_height(max)
             .min_scrolled_height(max)
