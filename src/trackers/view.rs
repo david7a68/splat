@@ -51,10 +51,12 @@ struct Columns {
     name: f32,
     /// The value column: as wide as the widest value slot of the panel.
     value: f32,
-    /// Does every line's first quick action fit after the value column? Then each line's
-    /// actions follow its value, all from one edge, and wrap to the line's start; else every
-    /// line has its actions on the rows under it, from its name's edge, so no line's first
-    /// action starts at another edge.
+    /// Does every line's first two quick actions (its one action, when it has one) fit after the
+    /// value column? Then each line's actions follow its value, all from one edge, and wrap to
+    /// the first action's edge; else every line has its actions on the rows under it, from its
+    /// name's edge, where they share rows across the panel. So no action stands alone on a row
+    /// beside its value while the next one could share it (round 30 `tracker-action-wrap`), and
+    /// no line's first action starts at another edge.
     beside: bool,
 }
 
@@ -87,16 +89,21 @@ fn measure_columns(ui: &egui::Ui, rules: &Rules, state: &State, view: &mut ViewS
     let value_font = Type::Numeral.font(ui);
     let mut name: f32 = 0.0;
     let mut value: f32 = 0.0;
+    // The room a line's actions need beside its value: its first two, with the gap between.
     let mut first: f32 = 0.0;
     for tracker in &rules.trackers {
         let Ok(def) = &tracker.def else { continue };
-        if let Some(quick) = def.quick.first() {
-            first = first.max(
-                Action::secondary(&quick.label)
-                    .density(Density::Read)
-                    .natural_width(ui),
-            );
-        }
+        let lead = def.quick.iter().take(2).enumerate().map(|(at, quick)| {
+            let gap = if at == 0 {
+                0.0
+            } else {
+                ui.spacing().item_spacing.x
+            };
+            gap + Action::secondary(&quick.label)
+                .density(Density::Read)
+                .natural_width(ui)
+        });
+        first = first.max(lead.sum());
         let indent = if def.per.is_empty() { 0.0 } else { design::L };
         for instance in def.instances() {
             let line = instance.unwrap_or(&def.name);
@@ -745,8 +752,8 @@ fn tracker_lines(
             );
         };
         if columns.beside {
-            // The actions follow the value, and the ones that do not fit wrap to the first
-            // action's edge, never left of the line's name.
+            // The actions follow the value, at least two to a row, and the ones that do not fit
+            // wrap to the first action's edge, never left of the line's name.
             ui.with_layout(top, |ui| {
                 head(ui, view);
                 design::gap(ui, Gap::S);
@@ -756,8 +763,8 @@ fn tracker_lines(
                 });
             });
         } else {
-            // A first action does not fit after the values: every line has its actions on the
-            // rows under it, from its name's edge.
+            // A line's first two actions do not fit after the values: every line has its actions
+            // on the rows under it, from its name's edge, as many to a row as the panel holds.
             ui.vertical(|ui| {
                 one_line(ui);
                 ui.with_layout(top, |ui| head(ui, view));

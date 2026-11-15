@@ -598,9 +598,10 @@ pub fn run(d: &mut Driver<'_>) {
         "The view lists the pinned trackers, then More trackers, and no Due row yet",
     );
     // FE1: every pinned line stands in the panel's columns, not only the lines of Seals: each
-    // value ends at one edge. Where every first action fits after the values (1200x800 and
-    // 1920x1080) each first action starts at one edge after them; at 960x640 beside Lookup
-    // `Enter room` does not, and every line's actions start under its name.
+    // value ends at one edge. Where every line's first two actions fit after the values
+    // (1920x1080) each first action starts at one edge after them; at 960x640 and 1200x800
+    // beside Lookup `Enter room` and `Cistern or Sands` do not (round 30 `tracker-action-wrap`),
+    // and every line's actions start under its name.
     // At 960x640 the last lines are below the panel's fold: the view scrolls to them, and back.
     // A proof step that comes back to the top: not part of the DM's task.
     let small = d.aside(panel_columns_scrolled);
@@ -608,22 +609,41 @@ pub fn run(d: &mut Driver<'_>) {
     let big = d.at_size(LARGE, panel_columns);
     d.observe(
         "T19.2",
-        columns_hold(&small, false) && columns_hold(&wide, true) && columns_hold(&big, true),
+        columns_hold(&small, false) && columns_hold(&wide, false) && columns_hold(&big, true),
         format!(
             "Values, actions and names of the pinned lines: {:?} {:?} {:?} at 960x640, {:?} {:?} at 1200x800, {:?} {:?} at 1920x1080",
             small.values, small.actions, small.names, wide.values, wide.actions, big.values, big.actions
         ),
     );
-    // FA2: at 1200x800 beside Lookup `Lose seal` wraps; it stays right of its line's name, at
-    // the first action's edge, and closer to its own line than to the next.
-    let (wide_held, wraps, wide_where) = d.at_size(DEFAULT, seal_actions_with_their_line);
-    let (big_held, _, big_where) = d.at_size(LARGE, seal_actions_with_their_line);
-    let (small_held, _, small_where) = seal_actions_with_their_line(d);
+    // FA2: a line's actions stay right of its name, at its first action's edge, and closer to
+    // their own line than to the next. Round 30 `tracker-action-wrap` (FD3, FE4, SD2, AD4): a
+    // line's actions share a row while they fit, so at every size `Lose seal` stands on `Take
+    // seal`'s row, and `Cistern or Sands` on `Enter room`'s: no action stands alone on a row
+    // while the next one fits beside it.
+    let (wide_held, wide_wraps, wide_where) = d.at_size(DEFAULT, seal_actions_with_their_line);
+    let (big_held, big_wraps, big_where) = d.at_size(LARGE, seal_actions_with_their_line);
+    let (small_held, small_wraps, small_where) = seal_actions_with_their_line(d);
+    let race_row = |d: &Driver<'_>| {
+        let (enter, cistern) = (d.place_of("Enter room"), d.place_of("Cistern or Sands"));
+        (
+            enter
+                .zip(cistern)
+                .is_some_and(|(enter, cistern)| (enter.top() - cistern.top()).abs() <= 0.5),
+            format!("{enter:?} {cistern:?}"),
+        )
+    };
+    let (wide_race, wide_race_at) = d.at_size(DEFAULT, race_row);
+    let (big_race, big_race_at) = d.at_size(LARGE, race_row);
     d.observe(
         "T19.2",
-        wide_held && wraps > 0 && big_held && small_held,
+        wide_held
+            && big_held
+            && small_held
+            && wide_wraps + big_wraps + small_wraps == 0
+            && wide_race
+            && big_race,
         format!(
-            "A wrapped action stays with its line: {wraps} wrapped at 1200x800, {wide_where}; at 1920x1080 {big_where}; at 960x640 {small_where}"
+            "A line's actions share a row and stay with their line: {wide_wraps} wrapped at 1200x800, {wide_where}, race {wide_race_at}; at 1920x1080 {big_wraps}, {big_where}, race {big_race_at}; at 960x640 {small_wraps}, {small_where}"
         ),
     );
     d.state("trackers-beside-the-plan", Sizes::All);
