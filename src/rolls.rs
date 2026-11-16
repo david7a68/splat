@@ -906,14 +906,19 @@ fn parse_actions(text: &str) -> Vec<(usize, Chip)> {
     let mut chips: Vec<(usize, Chip)> = Vec::new();
     for (at, paragraph) in text.split("\n\n").map(str::trim).enumerate() {
         // Spellcasting stays prose; its lists of spells are tiles of their own (`library::spells`).
-        if paragraph.starts_with(['>', '|', '#', '<']) || paragraph.starts_with("Spellcasting") {
+        if paragraph.starts_with(['>', '|', '#', '<'])
+            || paragraph.starts_with("Spellcasting")
+            || crate::library::spells::spellcasting(paragraph)
+        {
             continue;
         }
         let Some(title) = design::reader::run_in_title(paragraph) else {
             continue;
         };
         let label = title.split(" (").next().unwrap_or(title);
-        let spans = dice_text::find(paragraph, label);
+        // A book may print the parts' labels in italics: `*Melee Attack Roll:* +5`.
+        let plain = paragraph.replace('*', "");
+        let spans = dice_text::find(&plain, label);
         let pick = |test: fn(&RollLink) -> bool| spans.iter().map(|s| &s.link).find(|l| test(l));
         let link = pick(|l| {
             matches!(
@@ -1392,7 +1397,7 @@ fn feet_after<'t>(text: &'t str, key: &str) -> Option<&'t str> {
 
 /// An area in lower-case rules text, `10-foot emanation` or `20-foot-radius sphere`, as
 /// `10-ft emanation`.
-fn area(text: &str) -> Option<String> {
+pub(crate) fn area(text: &str) -> Option<String> {
     const SHAPES: [&str; 7] = [
         "cone",
         "cube",
@@ -1409,6 +1414,15 @@ fn area(text: &str) -> Option<String> {
             continue;
         }
         let rest = &text[at + "-foot".len()..];
+        // A line gives its length first: `90-foot-long, 5-foot-wide line`.
+        if let Some(after) = rest.strip_prefix("-long")
+            && after
+                .split(['.', ';'])
+                .next()
+                .is_some_and(|words| words.split_whitespace().any(|w| w.starts_with("line")))
+        {
+            return Some(format!("{}-ft line", &size[size.len() - digits..]));
+        }
         let (radius, rest) = match rest
             .strip_prefix("-radius")
             .or_else(|| rest.strip_prefix(" radius"))
@@ -2413,6 +2427,20 @@ mod tests {
         assert_eq!(
             facts("Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage."),
             "Reach 5 ft"
+        );
+        // A book may print the parts' labels in italics; the tile reads the same.
+        let italic =
+            "Bite. *Melee Attack Roll:* +4, reach 5 ft. *Hit:* 7 (2d4 + 2) Piercing damage.";
+        assert_eq!(chips(italic)[0].label, "Bite +4");
+        assert_eq!(facts(italic), "Reach 5 ft");
+        let italic_save = "Burst. *Dexterity Saving Throw:* DC 12, each creature in a 10-foot Emanation. *Failure:* 7 (2d6) Fire damage. *Success:* Half damage.";
+        assert_eq!(facts(italic_save), "10-ft emanation · half on a success");
+        // A line gives its length first.
+        assert_eq!(
+            facts(
+                "Lightning Breath. Dexterity Saving Throw: DC 19, each creature in a 90-foot-long, 5-foot-wide Line. Failure: 55 (10d10) Lightning damage. Success: Half damage."
+            ),
+            "90-ft line · half on a success"
         );
         assert_eq!(
             facts(

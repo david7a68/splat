@@ -124,11 +124,24 @@ enum Mark {
 }
 
 /// The first `<Ability> saving throw`, and the ability.
+/// Not `saving throws`, which a benefit names (`Advantage on Constitution saving throws`),
+/// and not a save with its own DC (`make a DC 15 Intelligence saving throw`), which the caster
+/// makes, not its targets.
 fn save_at(text: &str) -> Option<(usize, &'static str)> {
-    text.match_indices(" saving throw").find_map(|(at, _)| {
+    text.match_indices(" saving throw").find_map(|(at, words)| {
+        if text[at + words.len()..].starts_with('s') {
+            return None;
+        }
         let head = &text[..at];
         let word = &head[head.rfind(' ').map_or(0, |space| space + 1)..];
-        ability(word).map(|ability| (at - word.len(), ability))
+        let before = head[..head.len() - word.len()].trim_end();
+        let own_dc = before
+            .trim_end_matches(|c: char| c.is_ascii_digit())
+            .ends_with("DC ")
+            && before.ends_with(|c: char| c.is_ascii_digit());
+        ability(word)
+            .filter(|_| !own_dc)
+            .map(|ability| (at - word.len(), ability))
     })
 }
 
@@ -180,7 +193,9 @@ fn damage_after(text: &str, marker: usize) -> Vec<DamagePart> {
                 .min()
                 .map_or(scope.len(), |n| term_end + n);
             let clause = &scope[term_end..clause_end];
-            let later = clause.contains(" at the end of") || clause.contains(" at the start of");
+            let later = clause.contains(" at the end of")
+                || clause.contains(" at the start of")
+                || clause.contains(" when ");
             let conditional = clause.contains(" if ");
             let another_choice = !parts.is_empty() && between.contains(" or ");
             if !later && !conditional && !another_choice {
@@ -347,6 +362,13 @@ mod tests {
             panic!("Spirit Guardians saves");
         };
         assert_eq!(damage, vec![part("3d8", "Radiant")]);
+        // Damage when something happens later is not part of the save's roll.
+        let dream = "The target must make a Wisdom saving throw. On a failed save, the target gains no benefit from its rest, and it takes 3d6 Psychic damage when it wakes up.";
+        let Some(RollLink::SaveDc { damage, .. }) = spell_roll("Dream", dream, 5, 5, &CASTER)
+        else {
+            panic!("Dream saves");
+        };
+        assert!(damage.is_empty());
         // Two types on a failure both count; a growth that names one type adds to it alone.
         let strike = "Each creature in a 10-foot-radius, 40-foot-high Cylinder centered on a point within range makes a Dexterity saving throw. A creature takes 5d6 Fire damage and 5d6 Radiant damage on a failed save or half as much damage on a successful one.\n\nUsing a Higher-Level Spell Slot. The Fire damage and the Radiant damage increase by 1d6 for each spell slot level above 5.";
         let Some(RollLink::SaveDc { damage, half, .. }) =
@@ -376,6 +398,14 @@ mod tests {
         // A cantrip's damage grows with a level a stat block does not give.
         let flame = "the target must succeed on a Dexterity saving throw or take 1d8 Radiant damage.\n\nCantrip Upgrade. The damage increases by 1d8 when you reach levels 5 (2d8), 11 (3d8), and 17 (4d8).";
         assert_eq!(spell_roll("Sacred Flame", flame, 0, 0, &CASTER), None);
+        // A benefit that names saves is no save, and a save with its own DC is the caster's.
+        let gaseous = "A willing creature you touch shape-shifts into a misty cloud. While in this form, the target has Advantage on Strength, Dexterity, and Constitution saving throws.";
+        assert_eq!(spell_roll("Gaseous Form", gaseous, 3, 3, &CASTER), None);
+        let contact = "When you cast this spell, make a DC 15 Intelligence saving throw. On a failed save, you take 6d6 Psychic damage.";
+        assert_eq!(
+            spell_roll("Contact Other Plane", contact, 5, 5, &CASTER),
+            None
+        );
     }
 
     #[test]

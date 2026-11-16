@@ -103,7 +103,8 @@ What Splat shows:
 
 Accepted limits, do not report: Ice Knife rolls only its hit; Spirit Guardians rolls only
 its first damage choice; a spell whose save is made by someone other than its targets
-(Sanctuary) still rolls a save; a range of `Self` with an area shows only `Self`.
+(Sanctuary) still rolls a save. A spell that an action casts outside a Spellcasting list
+(`Frightful Presence. The dragon casts Fear ...`) has no tile yet.
 
 Use `doubtful`, not `wrong`, when the rules leave room for Splat's reading. Before you
 report a problem, read the stat block or the spell's text again and quote what it says in

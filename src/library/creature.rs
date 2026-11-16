@@ -368,7 +368,7 @@ fn prose(
         } else {
             reader_style::source_prose(ui, paragraph);
         }
-        if paragraph.starts_with("Spellcasting.") {
+        if super::spells::spellcasting(paragraph) {
             spellcasting = Some(paragraph.to_owned());
         }
     }

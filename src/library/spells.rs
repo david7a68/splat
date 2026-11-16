@@ -128,10 +128,24 @@ pub(crate) fn caster(entry: &Entry, spellcasting: &str) -> Caster {
                 .parse()
                 .ok()
         });
+    let dc = data.or(words);
     Caster {
-        dc: data.or(words),
-        attack: Caster::attack_in(spellcasting),
+        dc,
+        // A spell attack bonus is always the save DC less 8, so a stat block that prints
+        // only the DC still gives it.
+        attack: Caster::attack_in(spellcasting).or(dc.map(|dc| dc - 8)),
     }
+}
+
+/// Whether a paragraph is a Spellcasting feature whose lists follow it: `Spellcasting.`,
+/// `Spellcasting (Snake Form Only).`, `Innate Spellcasting.`.
+pub(crate) fn spellcasting(paragraph: &str) -> bool {
+    crate::design::reader::run_in_title(paragraph).is_some_and(|title| {
+        title
+            .split(" (")
+            .next()
+            .is_some_and(|name| name == "Spellcasting" || name.ends_with(" Spellcasting"))
+    })
 }
 
 /// A spell's rules text: its printed description, without the lines of facts at its top.
@@ -176,7 +190,7 @@ fn spell_level(spell: &Entry) -> Option<u32> {
 
 /// A spell's tile facts at the level it is cast: `Level 2 · Action · 120 feet ·
 /// Concentration`, and `half on a success` when a save halves its damage.
-fn facts(spell: &Entry, cast: Option<u32>, chip: Option<&Chip>) -> String {
+fn facts(spell: &Entry, cast: Option<u32>, chip: Option<&Chip>, text: &str) -> String {
     let mut facts = Vec::new();
     match cast {
         Some(0) => facts.push("Cantrip".to_owned()),
@@ -193,13 +207,18 @@ fn facts(spell: &Entry, cast: Option<u32>, chip: Option<&Chip>) -> String {
         };
         facts.extend(fact("Casting Time"));
         // A range of `Self` is left out of the table; the printed text keeps it.
-        facts.extend(fact("Range").or_else(|| {
+        let range = fact("Range").or_else(|| {
             spell.body.lines().find_map(|line| {
                 let range = line.trim().strip_prefix("Range:")?;
                 let range = range.trim().trim_end_matches('\\').trim();
                 (!range.is_empty()).then(|| range.to_owned())
             })
-        }));
+        });
+        // The area its text gives, unless the range names it: `Self (15-foot Cube)`.
+        let area = crate::rolls::area(&text.to_lowercase())
+            .filter(|_| !range.as_deref().is_some_and(|range| range.contains('(')));
+        facts.extend(range);
+        facts.extend(area);
         if fields
             .get("concentration")
             .and_then(serde_yaml_ng::Value::as_bool)
@@ -243,7 +262,7 @@ fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caste
                 .zip(cast)
                 .and_then(|(level, cast)| spell_roll(name, &text, level, cast, &caster))
                 .and_then(|link| Chip::new(link, text.clone()));
-            let facts = facts(spell, cast, chip.as_ref());
+            let facts = facts(spell, cast, chip.as_ref(), &text);
             let chip = chip.map(|chip| Chip {
                 facts: Some(facts.clone()),
                 ..chip
@@ -277,17 +296,25 @@ pub(crate) fn line(
         if name.is_empty() {
             continue;
         }
+        // Books print an apostrophe as `’` or `'`; the two name the same spell.
+        let straight = name.replace('’', "'");
+        let curly = name.replace('\'', "’");
+        let named = |name: &str| {
+            [name, &straight, &curly]
+                .into_iter()
+                .find_map(|name| links.spell_named(name))
+        };
         let found = references
             .iter()
             .flatten()
-            .find(|(_, spell)| spell.eq_ignore_ascii_case(name))
+            .find(|(_, spell)| spell.replace('’', "'").eq_ignore_ascii_case(&straight))
             .cloned()
-            .or_else(|| links.spell_named(name))
+            .or_else(|| named(name))
             // The SRD drops the name of a spell's maker: `Vellora’s Hideous Laughter` is
             // `Hideous Laughter` there.
             .or_else(|| {
-                let (_, rest) = name.split_once("’s ").or_else(|| name.split_once("'s "))?;
-                links.spell_named(rest)
+                let (_, rest) = straight.split_once("'s ")?;
+                named(rest)
             });
         match found.and_then(|(open, _)| Some((open, links.entry(open)?))) {
             Some((open, spell)) => tiles.push(tile(name, open, spell, cast, caster)),
@@ -320,7 +347,7 @@ pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
     let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
     let mut open = false;
     for paragraph in body.split("\n\n").map(str::trim).filter(|p| !p.is_empty()) {
-        if paragraph.starts_with("Spellcasting.") {
+        if spellcasting(paragraph) {
             groups.push((paragraph, Vec::new()));
             open = true;
         } else if open && aside(paragraph) {
@@ -514,6 +541,56 @@ mod tests {
         .unwrap();
         assert!(laughter.missing.is_empty());
         assert_eq!(laughter.tiles[0].name, "Vellora’s Hideous Laughter");
+        let straight = line(
+            "1/Day: Vellora's Hideous Laughter",
+            Caster::default(),
+            &[],
+            &index,
+        );
+        assert!(straight.unwrap().missing.is_empty(), "either apostrophe");
+        // A spell's own name may have either apostrophe, as may the list that names it.
+        let source = splat::content::formats::fixture(
+            "Vellora.md",
+            "splat_id: 5b0e2f38-6a7c-4d1e-9a52-0c3f1e2d4b67\nsplat_kind: spell\nsplat_name: Vellora's Storm\nsplat_spell: {level: 5}\n",
+            "",
+        )
+        .unwrap();
+        let loaded = super::super::Loaded {
+            notes: vec![super::super::Note {
+                entry: Some(Entry::parse("Vellora.md", &source).unwrap()),
+                path: "Vellora.md".into(),
+                text: source.clone(),
+                error: None,
+                fault: None,
+                manifest_gone: false,
+                owner: super::super::Owner::Builtin,
+            }],
+            ..Default::default()
+        };
+        let curly = line("1/Day: Vellora’s Storm", Caster::default(), &[], &loaded).unwrap();
+        assert!(
+            curly.missing.is_empty(),
+            "a curly apostrophe finds a straight one"
+        );
+        // A Spellcasting feature may have more words in its title.
+        assert!(spellcasting("Spellcasting (Snake Form Only). It casts:"));
+        assert!(spellcasting("Innate Spellcasting. It casts:"));
+        assert!(!spellcasting("Spell Turning. It reflects spells."));
+        // A stat block that prints only the DC still gives the attack bonus: DC less 8.
+        let path = "definitions/creatures/druid.md";
+        let druid = Entry::parse(
+            path,
+            splat::content::definitions::source_file(path).unwrap(),
+        )
+        .unwrap();
+        let numbers = caster(&druid, "Spellcasting. It casts (spell save DC 13):");
+        assert_eq!((numbers.dc, numbers.attack), (Some(13), Some(5)));
+        // A tile's facts give the area of the spell's text.
+        let fireball = line("1/Day: Fireball", numbers, &[], &index).unwrap();
+        assert_eq!(
+            fireball.tiles[0].facts,
+            "Level 3 · Action · 150 feet · 20-ft-radius sphere · half on a success"
+        );
         // Only a label that says how often is a list of spells.
         assert!(list_line("1/Day Each (Elder Only): Fly"));
         assert!(list_line("Cantrips (at will): fire bolt, light"));
