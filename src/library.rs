@@ -1444,6 +1444,8 @@ pub(crate) struct Loaded {
     /// deleted draft's warning show them in every frame. A reload (a new `Loaded`) or an edited
     /// note (`invalidate`) finds them again.
     dependents: std::sync::Mutex<std::collections::HashMap<EntryRef, DependentNames>>,
+    /// Creatures' Spellcasting resolved through these notes, cleared with the other caches.
+    spells: spells::SpellCache,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -2059,6 +2061,7 @@ impl Loaded {
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
+        self.spells.clear();
         self.subtitles.take();
         self.counts.take();
         self.duplicate_ids.take();
@@ -2219,10 +2222,17 @@ impl view::Links for Loaded {
         Some((index, self.notes[index].name().to_owned()))
     }
     fn find_spell(&self, reference: &content::Reference) -> Option<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         let index = self.resolve_spell(reference)?;
         Some((index, self.notes[index].name().to_owned()))
     }
+    fn spell_cache(&self) -> Option<&spells::SpellCache> {
+        Some(&self.spells)
+    }
     fn spells_named_in(&self, text: &str) -> Vec<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         self.notes
             .iter()
             .enumerate()
@@ -2234,6 +2244,8 @@ impl view::Links for Loaded {
             .collect()
     }
     fn spell_named(&self, name: &str) -> Option<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         self.notes
             .iter()
             .position(|note| {
@@ -4177,6 +4189,8 @@ struct RepairLink {
 #[cfg(test)]
 thread_local! {
     static REPAIR_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Each spell the Library's notes look up for a stat block.
+    static SPELL_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The row that links a repair's reference. Every repair lookup goes through here, and the
@@ -8477,6 +8491,7 @@ impl Library {
                 Some(text) => self.loaded.as_mut().unwrap().notes[i].text = text,
                 None => file_gone = true,
             }
+            self.loaded.as_mut().unwrap().invalidate();
         }
         let draft_reason = self.draft_reason();
         let parsed_draft = self.parsed_draft(i);
@@ -11957,7 +11972,7 @@ mod tests {
     }
     #[test]
     fn creature_spell_links_open_named_spells_and_protect_drafts() {
-        let notes = [
+        let mut notes: Vec<Note> = [
             "creatures/adult_bronze_dragon",
             "spells/detect_magic",
             "spells/guiding_bolt",
@@ -11966,6 +11981,7 @@ mod tests {
             "spells/thaumaturgy",
             "spells/detect_thoughts",
             "spells/water_breathing",
+            "creatures/druid",
         ]
         .map(|name| {
             let path = format!("definitions/{name}.md");
@@ -11982,6 +11998,14 @@ mod tests {
         })
         .into_iter()
         .collect();
+        // The Druid's list lines end with `\`, and here it also casts a spell no note has.
+        let druid = notes.last_mut().unwrap();
+        druid.text = druid.text.replacen(
+            "\n\nSpellcasting. The druid",
+            "\n\nDread Word. The druid casts Vellora's Storm, using the same spellcasting ability as Spellcasting.\n\nSpellcasting. The druid",
+            1,
+        );
+        druid.entry = Some(Entry::parse(&druid.path, &druid.text).unwrap());
         let loaded = Loaded {
             notes,
             ..Default::default()
@@ -12053,6 +12077,15 @@ mod tests {
                 };
                 frame(vec![]);
                 let output = frame(vec![]);
+                // The stat block's spells were resolved once, with the notes' other caches:
+                // another unchanged frame looks none up.
+                let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+                frame(vec![]);
+                assert_eq!(
+                    SPELL_LOOKUPS.with(std::cell::Cell::get),
+                    looked,
+                    "an unchanged frame looks no spell up"
+                );
                 let texts: Vec<_> = output
                     .shapes
                     .iter()
@@ -12161,8 +12194,58 @@ mod tests {
                 }
             }
         }
-        // Conflicting identities must not choose an arbitrary destination.
+        // A stat block whose lists end their lines with `\` and that casts a spell no note has:
+        // an unchanged frame looks none up either.
+        library.open_entry(8);
+        let ctx = egui::Context::default();
+        let mut frame = || {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900.0, 6000.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        library.editor(ui, "Definition · creature", &Campaigns::default())
+                    });
+                },
+            )
+        };
+        frame();
+        let output = frame();
+        let drawn = |words: &str| {
+            output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.starts_with(words))
+            })
+        };
+        assert!(
+            drawn("Dread Word.") && drawn("At Will"),
+            "the Druid is drawn"
+        );
+        let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+        frame();
+        assert_eq!(
+            SPELL_LOOKUPS.with(std::cell::Cell::get),
+            looked,
+            "an unchanged frame of the Druid looks no spell up"
+        );
+        // A change to the notes clears what was resolved through them, with their other caches.
         let loaded = library.loaded.as_mut().unwrap();
+        let dragon = loaded.notes[0].entry.clone().unwrap();
+        spells::resolve(&dragon, &*loaded);
+        let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+        spells::resolve(&dragon, &*loaded);
+        assert_eq!(SPELL_LOOKUPS.with(std::cell::Cell::get), looked);
+        loaded.invalidate();
+        spells::resolve(&dragon, &*loaded);
+        assert!(
+            SPELL_LOOKUPS.with(std::cell::Cell::get) > looked,
+            "a change resolves again"
+        );
+        // Conflicting identities must not choose an arbitrary destination.
         let duplicate = &loaded.notes[2];
         loaded.notes.push(Note {
             path: "duplicate.md".into(),

@@ -8,7 +8,6 @@ use splat::content::{
     Entry, Reference,
     spell_rolls::{Caster, spell_roll},
 };
-use splat::memo::Memo;
 use std::sync::Arc;
 
 /// One spell of a list line.
@@ -261,47 +260,28 @@ fn facts(spell: &Entry, cast: Option<u32>, chip: Option<&Chip>, text: &str) -> S
     facts.join(" · ")
 }
 
-/// One spell's tile, kept by the spell, the level cast and the caster's numbers, so a frame
-/// that draws the same list reads no spell text again.
+/// One spell's tile: its facts, its rules text, and what it rolls when this caster casts it
+/// at `cast`. Built only when an entry is resolved, which its links' cache keeps.
 fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caster) -> SpellTile {
-    static TILES: Memo<Arc<SpellTile>> = Memo::new(256);
-    let cast_bytes = cast.map_or([0xff; 4], u32::to_le_bytes);
-    let numbers =
-        [caster.dc, caster.attack, caster.modifier].map(|n| n.map_or([0xff; 8], i64::to_le_bytes));
-    let tile = TILES.get_or(
-        &[
-            name.as_bytes(),
-            open.to_le_bytes().as_slice(),
-            spell.id.as_bytes().as_slice(),
-            spell.body.as_bytes(),
-            cast_bytes.as_slice(),
-            numbers[0].as_slice(),
-            numbers[1].as_slice(),
-            numbers[2].as_slice(),
-        ],
-        || {
-            let text = rules_text(spell);
-            let level = spell_level(spell);
-            let cast = cast.or(level);
-            let chip = level
-                .zip(cast)
-                .and_then(|(level, cast)| spell_roll(name, &text, level, cast, &caster))
-                .and_then(|link| Chip::new(link, text.clone()));
-            let facts = facts(spell, cast, chip.as_ref(), &text);
-            let chip = chip.map(|chip| Chip {
-                facts: Some(facts.clone()),
-                ..chip
-            });
-            Arc::new(SpellTile {
-                name: name.to_owned(),
-                open,
-                facts,
-                text,
-                chip,
-            })
-        },
-    );
-    (*tile).clone()
+    let text = rules_text(spell);
+    let level = spell_level(spell);
+    let cast = cast.or(level);
+    let chip = level
+        .zip(cast)
+        .and_then(|(level, cast)| spell_roll(name, &text, level, cast, &caster))
+        .and_then(|link| Chip::new(link, text.clone()));
+    let facts = facts(spell, cast, chip.as_ref(), &text);
+    let chip = chip.map(|chip| Chip {
+        facts: Some(facts.clone()),
+        ..chip
+    });
+    SpellTile {
+        name: name.to_owned(),
+        open,
+        facts,
+        text,
+        chip,
+    }
 }
 
 /// A tile's facts without `Concentration`, which a list item may waive.
@@ -504,48 +484,129 @@ pub(crate) struct Resolved {
     pub references: Vec<Option<(usize, String)>>,
     /// Each list line, trimmed, with its tiles.
     lines: Vec<(String, SpellLine)>,
-    /// Each paragraph that casts spells by name, trimmed, with its tiles.
-    casts: Vec<(String, SpellLine)>,
+    /// Each paragraph that casts spells by name, by its words, with its tiles, or `None` when
+    /// it names no spell that can be found.
+    casts: Vec<(String, Option<SpellLine>)>,
+    /// Each Spellcasting paragraph with its lists, as the reader joins them, with the spells
+    /// their words name, for the line of spells that no list shows.
+    named: Vec<(String, Vec<(usize, String)>)>,
     pub rolls: Vec<Chip>,
+}
+
+/// Text as its words alone, so the reader's text and the body's compare equal: the reader
+/// joins and breaks lines differently and drops a line break's `\`.
+fn words(text: &str) -> String {
+    text.split(|c: char| c.is_whitespace() || c == '\\')
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 impl Resolved {
     /// The tiles of a list line, as its paragraph prints it.
     pub(crate) fn line(&self, text: &str) -> Option<&SpellLine> {
-        let text = text.trim().trim_end_matches('\\').trim_end();
+        let text = words(text);
         self.lines
             .iter()
-            .find(|(line, _)| line == text)
+            .find(|(line, _)| *line == text)
             .map(|(_, line)| line)
     }
 
-    /// The tiles of a paragraph that casts spells by name.
-    pub(crate) fn cast(&self, paragraph: &str) -> Option<&SpellLine> {
-        let paragraph = paragraph.trim();
+    /// The spells that a Spellcasting paragraph and its lists name, by their joined words.
+    pub(crate) fn named_in(&self, text: &str) -> Option<&[(usize, String)]> {
+        let text = words(text);
+        self.named
+            .iter()
+            .find(|(named, _)| *named == text)
+            .map(|(_, named)| named.as_slice())
+    }
+
+    /// What a paragraph that casts spells by name resolved to: `Some(None)` when it names no
+    /// spell that can be found, `None` when the paragraph was not resolved.
+    pub(crate) fn cast(&self, paragraph: &str) -> Option<Option<&SpellLine>> {
+        let paragraph = words(paragraph);
         self.casts
             .iter()
-            .find(|(text, _)| text == paragraph)
-            .map(|(_, line)| line)
+            .find(|(text, _)| *text == paragraph)
+            .map(|(_, line)| line.as_ref())
     }
 }
 
-/// An entry's Spellcasting, resolved. With a version of the links' content to key on (the
-/// content index of Lookup and a run), it is kept from frame to frame, so an unchanged frame
-/// looks nothing up; without one (the Library, whose notes change in place), the caller
-/// resolves it once per frame.
-pub(crate) fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
-    static RESOLVED: Memo<Arc<Resolved>> = Memo::new(64);
-    match links.generation() {
-        Some(generation) => RESOLVED.get_or(
-            &[
-                entry.id.as_bytes().as_slice(),
-                entry.body.as_bytes(),
-                generation.to_le_bytes().as_slice(),
-            ],
-            || Arc::new(build(entry, links)),
-        ),
-        None => Arc::new(build(entry, links)),
+/// Resolved Spellcasting, kept by the content it was resolved from, with that content's other
+/// caches: the Library's notes clear theirs whenever a note changes (`Loaded::invalidate`),
+/// and a content index, which never changes, keeps its own until it is replaced. An entry
+/// is found again by all that resolving it reads: its id, its text and its fields (the
+/// save DC and the spells its data gives), so a changed draft resolves again.
+#[derive(Default)]
+pub(crate) struct SpellCache(std::sync::Mutex<Vec<(Kept, Arc<Resolved>)>>);
+
+/// What a resolved entry is known by.
+struct Kept {
+    id: uuid::Uuid,
+    body: String,
+    fields: splat::content::Fields,
+}
+
+impl Kept {
+    fn of(entry: &Entry) -> Self {
+        Self {
+            id: entry.id,
+            body: entry.body.clone(),
+            fields: entry.fields.clone(),
+        }
     }
+
+    fn is(&self, entry: &Entry) -> bool {
+        self.id == entry.id && self.body == entry.body && *self.fields == *entry.fields
+    }
+}
+
+impl SpellCache {
+    /// How many entries are kept: the oldest goes first.
+    const KEEP: usize = 64;
+
+    /// Forget everything resolved: the content it was resolved from changed.
+    pub(crate) fn clear(&mut self) {
+        self.0
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+
+    fn get(&self, entry: &Entry) -> Option<Arc<Resolved>> {
+        let kept = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        kept.iter()
+            .find(|(known, _)| known.is(entry))
+            .map(|(_, resolved)| Arc::clone(resolved))
+    }
+
+    fn keep(&self, entry: &Entry, resolved: &Arc<Resolved>) {
+        let mut kept = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if kept.len() >= Self::KEEP {
+            kept.remove(0);
+        }
+        kept.push((Kept::of(entry), Arc::clone(resolved)));
+    }
+}
+
+/// An entry's Spellcasting, resolved once and kept by the links' cache, so an unchanged frame
+/// looks nothing up. Links with no cache resolve it on each call.
+pub(crate) fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
+    let Some(cache) = links.spell_cache() else {
+        return Arc::new(build(entry, links));
+    };
+    if let Some(resolved) = cache.get(entry) {
+        return resolved;
+    }
+    let resolved = Arc::new(build(entry, links));
+    cache.keep(entry, &resolved);
+    resolved
 }
 
 fn build(entry: &Entry, links: &dyn Links) -> Resolved {
@@ -553,8 +614,17 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
         references: references(entry, links),
         ..Resolved::default()
     };
-    // The numbers of the Spellcasting paragraph whose lists come next, if any.
+    // The numbers of the Spellcasting paragraph whose lists come next, if any, and its words
+    // with its lists', joined as the reader joins them.
     let mut lists: Option<Caster> = None;
+    let mut group = String::new();
+    let end_group = |group: &mut String, resolved: &mut Resolved| {
+        if !group.is_empty() {
+            let named = links.spells_named_in(group);
+            resolved.named.push((words(group), named));
+            group.clear();
+        }
+    };
     for paragraph in entry
         .body
         .split("\n\n")
@@ -562,7 +632,9 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
         .filter(|p| !p.is_empty())
     {
         if spellcasting(paragraph) {
+            end_group(&mut group, &mut resolved);
             lists = Some(caster(entry, paragraph));
+            group.push_str(paragraph);
             continue;
         }
         if let Some(caster) = lists {
@@ -575,21 +647,29 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
                         resolved
                             .rolls
                             .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
-                        let text = text.trim().trim_end_matches('\\').trim_end();
-                        resolved.lines.push((text.to_owned(), found));
+                        resolved.lines.push((words(text), found));
                     }
                 }
+                group.push_str("\n\n");
+                group.push_str(paragraph);
                 continue;
             }
             lists = None;
+            end_group(&mut group, &mut resolved);
         }
-        if let Some(found) = cast_line(entry, paragraph, &resolved.references, links) {
-            resolved
-                .rolls
-                .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
-            resolved.casts.push((paragraph.to_owned(), found));
+        // A paragraph that casts by name is kept also when no spell it names is found, so
+        // the reader does not look again.
+        if cast_names(paragraph).is_some() {
+            let found = cast_line(entry, paragraph, &resolved.references, links);
+            if let Some(found) = &found {
+                resolved
+                    .rolls
+                    .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
+            }
+            resolved.casts.push((words(paragraph), found));
         }
     }
+    end_group(&mut group, &mut resolved);
     resolved
 }
 
@@ -725,7 +805,9 @@ mod tests {
     /// Links that count their lookups, with a version of their content to key on, or none.
     struct Counting<'a> {
         index: &'a crate::lookup::ContentIndex,
-        generation: Option<u64>,
+        cache: Option<SpellCache>,
+        /// Use the content index's own cache.
+        index_cache: bool,
         lookups: std::cell::Cell<usize>,
     }
 
@@ -749,8 +831,11 @@ mod tests {
         fn entry(&self, index: usize) -> Option<&Entry> {
             Links::entry(self.index, index)
         }
-        fn generation(&self) -> Option<u64> {
-            self.generation
+        fn spell_cache(&self) -> Option<&SpellCache> {
+            if self.index_cache {
+                return Links::spell_cache(self.index);
+            }
+            self.cache.as_ref()
         }
     }
 
@@ -763,11 +848,11 @@ mod tests {
             splat::content::definitions::source_file(path).unwrap(),
         )
         .unwrap();
-        // With a version of the content (Lookup's index, a run's), the second frame looks
-        // nothing up; a new version resolves again.
-        let kept = Counting {
+        // Links with a cache resolve an entry once: the second frame looks nothing up.
+        let mut kept = Counting {
             index: &index,
-            generation: Some(u64::MAX - 41),
+            cache: Some(SpellCache::default()),
+            index_cache: false,
             lookups: std::cell::Cell::new(0),
         };
         let first = resolve(&druid, &kept);
@@ -780,20 +865,66 @@ mod tests {
             "the second frame looks nothing up"
         );
         assert_eq!(first.rolls, second.rolls);
-        let changed = Counting {
-            generation: Some(u64::MAX - 42),
-            ..kept
+        // A changed text (a draft) resolves again, as does anything after a clear.
+        let mut draft = druid.clone();
+        draft.body.push_str("\n\nA line the DM added.");
+        resolve(&draft, &kept);
+        assert_eq!(
+            kept.lookups.get(),
+            2 * once,
+            "a changed text resolves again"
+        );
+        // So does a change to the fields alone, such as the save DC, with the new numbers.
+        let mut harder = druid.clone();
+        let dc = harder
+            .fields
+            .get_mut("splat_rule")
+            .and_then(|v| v.get_mut("parameters"))
+            .and_then(|v| v.get_mut("features"))
+            .and_then(|v| v.get_mut("spellcasting"))
+            .and_then(|v| v.get_mut("save_dc"))
+            .unwrap();
+        *dc = 19.into();
+        let resolved = resolve(&harder, &kept);
+        assert_eq!(kept.lookups.get(), 3 * once, "changed fields resolve again");
+        assert!(
+            resolved
+                .rolls
+                .iter()
+                .any(|chip| chip.label == "Entangle DC 19")
+        );
+        kept.cache.as_mut().unwrap().clear();
+        resolve(&druid, &kept);
+        assert_eq!(
+            kept.lookups.get(),
+            4 * once,
+            "a cleared cache resolves again"
+        );
+        // The content index of Lookup and a run keeps what it resolved.
+        let through_index = Counting {
+            index: &index,
+            cache: None,
+            index_cache: true,
+            lookups: std::cell::Cell::new(0),
         };
-        resolve(&druid, &changed);
-        assert!(changed.lookups.get() > once, "new content resolves again");
-        // With none (the Library), each frame resolves once: the reader keeps it for the frame.
+        resolve(&druid, &through_index);
+        let first = through_index.lookups.get();
+        resolve(&druid, &through_index);
+        assert_eq!(
+            through_index.lookups.get(),
+            first,
+            "the content index keeps it"
+        );
+        // Links with no cache resolve on each call.
         let fresh = Counting {
             index: &index,
-            generation: None,
+            cache: None,
+            index_cache: false,
             lookups: std::cell::Cell::new(0),
         };
         resolve(&druid, &fresh);
-        assert_eq!(fresh.lookups.get(), once);
+        resolve(&druid, &fresh);
+        assert_eq!(fresh.lookups.get(), 2 * once);
     }
 
     #[test]
