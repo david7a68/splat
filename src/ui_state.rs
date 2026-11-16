@@ -63,6 +63,9 @@ pub struct UiState {
     /// The DM showed or hid the party bar on the Session page.
     #[serde(default)]
     pub party_bar: Option<bool>,
+    /// The DM hid the session list on the Session page.
+    #[serde(default)]
+    pub session_list_hidden: bool,
 }
 
 #[derive(Default)]
@@ -158,6 +161,7 @@ mod tests {
             column_widths: BTreeMap::from([("navigation".to_owned(), 240.0)]),
             touchpad_speed: crate::touchpad::TouchpadSpeed::Twelve,
             party_bar: Some(false),
+            session_list_hidden: true,
         };
         store.save(&state);
         assert_eq!(Store::at(path.clone()).load(), state);

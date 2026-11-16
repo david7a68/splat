@@ -1088,11 +1088,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/encounters.rs", "run_settings", &[Ban::Results]),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
-        (
-            "src/library.rs",
-            "add_reader_result",
-            &[Ban::Results, Ban::Footer],
-        ),
+        ("src/library.rs", "add_reader_result", &[Ban::Footer]),
         // Layout PR 2b: the Library page's error, a legacy footer line (a closure).
         ("src/library.rs", "page_error", &[Ban::Footer]),
         // Layout PR 2b: the test of the legacy `Footer::legacy_kept`.
@@ -1144,23 +1140,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "editor_pane",
-            &[Ban::Results, Ban::Extras(1), Ban::Footer],
+            &[Ban::Extras(1), Ban::Footer],
         ),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
-        ("src/library.rs", "give_new_identity", &[Ban::Results]),
-        (
-            "src/library.rs",
-            "iter14_e_changed_files_end_every_undo_result",
-            &[Ban::Results],
-        ),
-        ("src/library.rs", "open_entry", &[Ban::Results]),
-        (
-            "src/library.rs",
-            "reader_messages",
-            &[Ban::Results, Ban::Footer],
-        ),
-        ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
-        ("src/library.rs", "unregister_dialog", &[Ban::Results]),
+        ("src/library.rs", "reader_messages", &[Ban::Footer]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
         // R24: a value block's save row shows its own messages (the Session folder's).
         ("src/sessions/page.rs", "folder_block", &[Ban::Body]),
@@ -1247,7 +1230,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(4), Ban::Pane(1)],
+            &[Ban::Layout(1), Ban::Extras(3), Ban::Pane(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -1401,11 +1384,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers/view.rs", "messages", &[Ban::Words]),
         ("src/sessions/page.rs", "notice_sentence", &[Ban::Words]),
         (
-            "src/encounter_run/loot.rs",
-            "loot_section",
-            &[Ban::Extras(1)],
-        ),
-        (
             "src/encounter_run/notice.rs",
             "live_header",
             &[Ban::Extras(2)],
@@ -1502,6 +1480,11 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
     &[
         ("src/design/column.rs", "finish_handle", &[Ban::Layout(1)]),
         (
+            "src/design/reader.rs",
+            "the_scroll_bar_does_not_choose_the_prose_type",
+            &[Ban::Layout(1)],
+        ),
+        (
             "src/design/components.rs",
             "iter28_p_the_pane_places_its_footer_for_every_body",
             &[Ban::Layout(1), Ban::Footer],
@@ -1569,11 +1552,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "split_action",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/design/components.rs",
-            "stepper_with_density",
-            &[Ban::Layout(1)],
-        ),
+        ("src/design/components.rs", "stepper_as", &[Ban::Layout(1)]),
         (
             "src/design/components.rs",
             "text_field_label",
@@ -1653,6 +1632,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(2)],
         ),
         // Package K2: the popup parts.
+        ("src/design/outcome.rs", "measuring", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
         ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),
@@ -1738,7 +1718,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/components.rs", 16),
             ("src/dndbeyond.rs", 1),
             ("src/encounters/groups.rs", 1),
-            ("src/library.rs", 14),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 1),
             ("src/sessions/plan.rs", 4),

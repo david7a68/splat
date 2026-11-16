@@ -161,11 +161,13 @@ names it, the action's width), the room the lines take (`bare`), the room their 
   builds and fits no Undo label (`Body::undo_form` takes the plan's) and lays out no reservation (an empty
   widget-like rect takes each reservation's kept room); `FooterWork` counts plans, sorted lines, named bytes,
   reason probes, verb comparisons, Undo labels fitted and reservation layouts. The pane knows an
-  **unchanged** footer's demand before it draws (`Footer::planned`). A **changed** footer's first frame still
-  paints at its last height and measures, as before; its placement in that same frame comes with PR 456 (L1c).
-- **Reasons' room (R29), per footer.** A fresh plan decides `give_up` from its own numbers and the room where
-  the footer stands; a pass that makes a plan measures with the footer's own last decision, kept with its
-  plan. It keeps each reservation's room also when it gives that room up, so after the pane grows (the plan
+  **unchanged** footer's demand before it draws (`Footer::planned`). A **changed** footer's plan is made before
+  the pane places it (L1c): `TypedFooter::measure` draws its lines in a context of their own, with this
+  context's fonts, style and scale, so the pane knows every footer's demand before it draws and draws the lines
+  once, in their place, from the plan.
+- **Reasons' room (R29), per footer.** Each pass decides `give_up` from its plan's numbers and the room where
+  the footer stands; the plan measures every open lock's reason (L1c: made before the footer is placed). It
+  keeps each reservation's room also when it gives that room up, so after the pane grows (the plan
   holds: height is not in its key) a quiet frame takes the room and lays out no reason. No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay
   for the legacy footer only (`Reasons::Legacy`).
 - **Lifetime.** The plans of one context live in one store (`FooterPlans`). A footer that no frame drew since
