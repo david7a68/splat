@@ -1219,6 +1219,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "cause", &[Ban::Words]),
         ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
         ("src/encounters.rs", "outcome_words", &[Ban::Words]),
+        // M0126 (M-R0.9): a group row's member faults are typed messages in the row they are
+        // about, with their repairs (`BodyMessage`); their words are the loader's, with the
+        // DM's names in them (`Sentence::outside`).
+        ("src/encounters/groups.rs", "cause", &[Ban::Words]),
+        ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",

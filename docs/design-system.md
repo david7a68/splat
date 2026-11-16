@@ -1981,8 +1981,11 @@ list is a warning `message`, in the same form as the member faults above it.
 In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
 (`message_with_actions`): a bordered secondary button whose frame starts at the warning text. Arrivals and the
 Encounters list draw a member fault with its repair (`Campaign → Packages` or `Edit group`) through
-`groups::member_fault_row` (`message_with_action`): a bordered secondary button beside the fault after an `L` gap, or
-below it at the words when there is no room. A message action without an icon is never a link.
+`groups::member_fault_row`: the fault's typed message (`FaultMessage` in a `BodyMessage`), its repair a bordered
+choice on the line under the words, from their first letter, at every width. When every fault of an Arrivals group
+points to packages, its last fault also offers `Edit group`, after `Campaign → Packages` on that line, so the group
+editor stays one click away. The Encounters list does not add it: its row's `Edit` is one click away. A message action without
+an icon is never a link.
 
 Join status parts sit on one line with dot separators before the first member, in every group: never beside the group name, so no heading gives a fact of its `Fight after` line to a status and every heading gives way in one order. Use a separate line only when the member slot has no room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
 with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error, and so is a member row or a creature file that cannot be read (R41); a member that is missing (not in this campaign's packages) or that cannot join (a D&D Beyond link, no maximum HP) is a warning. Every view draws each member fault in its own tone. The group adds its own reason (`No members can join.`) as a warning message only when no member fault shows; with faults, `0 of N can join` and the faults already say it. Live initiative notices name who joins and the total. Before the current turn,

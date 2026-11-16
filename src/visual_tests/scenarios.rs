@@ -22260,9 +22260,9 @@ pub mod encounter_owned_groups {
             .place_of(&add_group(NEW_NAME))
             .expect("the list shows the group that joined");
         d.scroll_until(list.center(), "Edit group", 5);
-        // iter-25-R FB5: a member fault's repair is a bordered secondary button. Below its
-        // fault, its border starts at the warning text; in a wide panel, it stays beside the
-        // fault on its line, after an `L` gap.
+        // iter-25-R FB5: a member fault's repair is a bordered secondary button. M0126 (M-R0.9):
+        // it is a choice of the fault's typed message, so at every size it stands on the line
+        // under the fault, its border starting at the warning text.
         for size in [SMALL, DEFAULT, LARGE] {
             let (placed, detail) = d.at_size(size, |d| {
                 let mut placed = true;
@@ -22289,11 +22289,6 @@ pub mod encounter_owned_groups {
                             .is_some_and(|frame| frame.stroke.width > 0.0)
                     };
                     placed &= match (text, buttons.as_slice()) {
-                        (Some(text), [button]) if size == LARGE => {
-                            bordered(button)
-                                && button.center().y < text.bottom()
-                                && button.left() >= text.right() + crate::design::L - 0.5
-                        }
                         (Some(text), [button]) => {
                             bordered(button)
                                 && button.top() >= text.bottom() - 0.5

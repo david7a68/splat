@@ -205,7 +205,9 @@ mod history;
 mod results_key;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
-pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
+pub(crate) use groups::{
+    ENCOUNTER_DELETED, MemberRepair, NO_MAX_HP_CAUSE, member_fault, member_fault_row,
+};
 #[cfg(test)]
 pub(crate) use groups::{change_copies, group_checks, member_comparisons};
 pub(crate) use history::{Template, template_of};

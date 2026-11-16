@@ -1373,13 +1373,16 @@ fn list_row(
     if !group.warnings.is_empty() {
         ui.label(Type::Small.rich(ui, "Cannot join").color(colors().muted));
     }
+    // The row's own `Edit` keeps the group editor one click away, so no fault adds it.
     for warning in &group.warnings {
-        if member_fault_row(ui, warning) {
-            if warning.kind == FaultKind::NotInPackages {
+        match member_fault_row(ui, warning, false) {
+            Some(MemberRepair::Packages) => {
                 ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
-            } else {
+            }
+            Some(MemberRepair::EditGroup) => {
                 *action = Some(super::ListAction::OpenGroup(group.path.clone()));
             }
+            None => {}
         }
     }
     // A group with no member that can join says so after its member faults, as a message in
@@ -4134,21 +4137,67 @@ fn packages_repair(ui: &mut egui::Ui) -> bool {
         .clicked()
 }
 
-/// One member's fault with its repair (FB5): the fault in its own tone, then a bordered
-/// secondary button, `Campaign → Packages` for a missing creature and `Edit group` for any other.
-/// The button sits beside the words after `L` when it fits, else below them at the words. The
-/// Encounters list draws member faults with this, and Arrivals calls it too.
-pub(crate) fn member_fault_row(ui: &mut egui::Ui, fault: &MemberFault) -> bool {
-    design::message_with_action(
-        ui,
-        fault.tone(),
-        fault,
-        if fault.kind == FaultKind::NotInPackages {
-            PACKAGES_LINK
+/// A member's fault is a typed fault: its tone from its kind (an invalid value and unreadable
+/// data are errors, R41; a missing member or one that cannot join is a warning), its words as
+/// the loader wrote them (`Unknown creature · line 13: Not in this campaign’s packages.`).
+impl design::outcome::Fault for MemberFault {
+    fn severity(&self) -> design::outcome::Severity {
+        match self.tone() {
+            Tone::Error => design::outcome::Severity::CannotRead,
+            _ => design::outcome::Severity::NeedsFixing,
+        }
+    }
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a member fault’s words are the loader’s, with the DM’s names in them"
+    )]
+    fn cause(&self) -> design::outcome::Sentence {
+        design::outcome::Sentence::outside(self.text.as_str())
+            .unwrap_or(crate::sentence!("This member cannot join."))
+    }
+}
+
+/// The repair a member fault's choice asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MemberRepair {
+    /// `Campaign → Packages`: the missing creature's package is chosen there.
+    Packages,
+    /// `Edit group`: the group editor.
+    EditGroup,
+}
+
+/// One member's fault with its repair (FB5, M0126): the typed fault message in its own tone,
+/// then its bordered choice on the line under the words, from their first letter:
+/// `Campaign → Packages` for a missing creature and `Edit group` for any other. With
+/// `edit_too`, a missing creature's fault offers `Edit group` as well, after Packages, so the
+/// group editor stays one click away when every fault points to packages (Arrivals gives it to
+/// its last fault). The Encounters list draws member faults with this, and Arrivals does too.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a group row’s member faults stand in the row they are about, with their repairs"
+)]
+pub(crate) fn member_fault_row(
+    ui: &mut egui::Ui,
+    fault: &MemberFault,
+    edit_too: bool,
+) -> Option<MemberRepair> {
+    use design::outcome::{BodyMessage, Choice, FaultMessage, MessageChoice};
+    let edit = || Choice::new(MessageChoice::Choice(EDIT_GROUP), MemberRepair::EditGroup);
+    let message = FaultMessage::new(fault);
+    let message = if fault.kind == FaultKind::NotInPackages {
+        let message = message.choice(Choice::new(
+            MessageChoice::Choice(PACKAGES_LINK),
+            MemberRepair::Packages,
+        ));
+        if edit_too {
+            message.choice(edit())
         } else {
-            EDIT_GROUP
-        },
-    )
+            message
+        }
+    } else {
+        message.choice(edit())
+    };
+    BodyMessage::from(message).show(ui)
 }
 
 /// The repair a member fault other than a missing creature offers.
