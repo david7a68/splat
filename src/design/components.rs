@@ -3099,28 +3099,6 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     dirty && Action::quiet("Discard").blocked(blocked).show(ui).clicked()
 }
 
-/// Names the discarded draft in an Undo message. Its one Undo follows the footer's rule for a
-/// lone Undo (ruling M9, `UndoStep::alone`): `Undo discard of <name>` wherever it fits, else
-/// `Undo discard`; its accessible name always names the draft. Returns true when undo is
-/// pressed.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-// M-L0.4b: the Library's footers are typed; only the gallery and this file's tests draw it.
-#[cfg(test)]
-pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
-    let step = super::outcome::UndoStep::of(super::outcome::Verb::Discard, name);
-    let whole = step.label();
-    let shown = step.alone(ui, super::outcome::undo_room(ui, Tone::Info, &whole));
-    undo_message_capped(
-        ui,
-        Tone::Info,
-        &format!("{name} draft discarded."),
-        &shown,
-        Some(&whole),
-    )
-}
-
 /// A message with one action beside it, capped at `LIST_MEASURE` like every notice. Returns true
 /// when the action is used.
 #[deprecated(
@@ -3300,7 +3278,7 @@ type SpaceMessage<'a, R> = (&'a str, Box<dyn FnOnce(&mut Ui) -> R + 'a>);
 /// ```ignore
 /// let pressed = design::MessageSpace::new("library_message", width)
 ///     .reason(problem, |ui| { design::message(ui, Tone::Error, problem); })
-///     .result(&words, true, |ui| design::draft_discarded(ui, name))
+///     .result(&words, true, |ui| design::message(ui, Tone::Info, &words))
 ///     .show(ui);
 /// ```
 // Library, World repair and Campaign repair adopt it this round (iter-25 packages L, D and C).
@@ -3611,21 +3589,26 @@ type FooterMessage<'a> = (
 /// footer. The caller gets no y. `show_by_hand` is the old way, staged out (Clippy's
 /// `disallowed-methods` and the lint rule `footer-by-hand`).
 ///
+/// Every app footer is typed: its lines are data (`outcome::Messages`), which builds the footer
+/// and gives it to the pane.
+///
 /// ```ignore
-/// let mut undo = false;
-/// let mut footer = design::Footer::new(("library_footer", path), width);
-/// // `discarded_order` was issued with `ResultOrder::issue()` when the draft was discarded.
-/// footer.result(discarded_order, &words, true, |ui| undo = design::draft_discarded(ui, name));
-/// footer.reason(problem, |ui| { design::message(ui, Tone::Error, problem); });
-/// footer.pane(ui, design::Body::Content, |ui| {
+/// let frame = design::outcome::PaneFrame::new(ui);
+/// let mut messages = design::outcome::Messages::new(&frame, ("library_footer", path), width);
+/// if let Some(shown) = results.get(&owner) {
+///     messages.kept(shown.outcome(&frame, |kept| kept.outcome()));
+/// }
+/// messages.outcome(design::outcome::FaultMessage::new(&fault));
+/// let paned = messages.pane(ui, design::Body::Content, |ui| {
 ///     // ...the body...
 /// });
 /// ```
 pub struct Footer<'a> {
     id: Id,
     width: f32,
-    /// The legacy lines: each lowered to a closure (`result`, `legacy_reason`, `legacy_notice`,
-    /// `legacy_kept`, `legacy_kept_line`). Banned and counted (`clippy.toml`, `Ban::Footer`).
+    /// Lines lowered to a closure (`result`, `legacy_reason`, `legacy_notice`): only the design
+    /// system's own pane tests make them (the entries are `#[cfg(test)]`); every app footer is
+    /// typed. Empty outside tests.
     messages: Vec<FooterMessage<'a>>,
     /// A typed footer's lines (`outcome::Messages`): data, drawn in the order of the footer's
     /// retained plan (layout PR 2b).
@@ -3690,6 +3673,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
+    #[cfg(test)]
     pub fn result(
         &mut self,
         order: ResultOrder,
@@ -3711,6 +3695,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
+    #[cfg(test)]
     pub fn legacy_reason(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
@@ -3725,6 +3710,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
+    #[cfg(test)]
     pub fn legacy_notice(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
@@ -3732,18 +3718,6 @@ impl<'a> Footer<'a> {
     ) -> &mut Self {
         self.messages
             .push((FooterRank::Notice, None, words.into(), Box::new(draw)));
-        self
-    }
-
-    /// One message at its place in the footer's order: the typed form is `Footer::outcome`.
-    pub(super) fn push(
-        &mut self,
-        rank: FooterRank,
-        order: Option<ResultOrder>,
-        words: std::borrow::Cow<'a, str>,
-        draw: impl FnOnce(&mut Ui) + 'a,
-    ) -> &mut Self {
-        self.messages.push((rank, order, words, Box::new(draw)));
         self
     }
 
@@ -3954,46 +3928,16 @@ impl<'a> Footer<'a> {
             .collect::<Vec<_>>()
             .join(" ");
         let messages = std::mem::take(&mut self.messages);
-        // Ruling R29: the room an open lock keeps for its reason is a reservation. It stays while
-        // the footer has room for it where it stands (`most`), so a lock moves nothing; else it
-        // is not drawn, so it never makes the footer scroll. The footer keeps its height (up to
-        // `most`) either way: a message that comes later takes that room, and no pressed choice
-        // moves. The room the reservations want is measured in this pass, at this width, for
-        // these messages.
-        use super::outcome::{DRAWN, GIVE_UP, RESERVED};
-        let give_up_key = self.id.with("give_up");
-        let give_up = ui
-            .ctx()
-            .data(|data| data.get_temp::<bool>(give_up_key).unwrap_or(false));
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(Id::new(GIVE_UP), give_up);
-            data.insert_temp(Id::new(RESERVED), 0.0_f32);
-            data.insert_temp(Id::new(DRAWN), 0.0_f32);
-        });
         let (_, content, part) = scroll_part(ui, rect, self.id, &name, fit, |ui| {
             for (_, _, _, draw) in messages {
                 draw(ui);
             }
         });
-        let (room, drawn) = ui.ctx().data_mut(|data| {
-            data.remove::<bool>(Id::new(GIVE_UP));
-            (
-                data.remove_temp::<f32>(Id::new(RESERVED)).unwrap_or(0.0),
-                data.remove_temp::<f32>(Id::new(DRAWN)).unwrap_or(0.0),
-            )
-        });
-        let bare = content - drawn;
-        let fits = (bare + room + 2.0 * PART_INSET).ceil() <= most;
-        let next = room > 0.0 && !fits;
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(give_up_key, next));
-        if next != give_up {
-            ui.ctx()
-                .request_discard("the message footer's reservations changed");
-        }
         // The demand, whole: a pinned footer and a following one take it up to their own `most`
-        // (ruling Q-c), so neither is measured at the other's cap.
-        let wanted = (bare + room + 2.0 * PART_INSET).ceil();
+        // (ruling Q-c), so neither is measured at the other's cap. (Closure lines keep no
+        // reservations: an open lock's reason room is a typed footer's, ruling R29.)
+        let _ = most;
+        let wanted = (content + 2.0 * PART_INSET).ceil();
         if (wanted - stored).abs() >= HAIRLINE_WIDTH {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(self.id.with("height"), wanted));
@@ -5978,26 +5922,6 @@ mod tests {
                     "SD1-beside at {width}: message {message:?}, Undo {action:?}, icon {icon:?}"
                 );
             }
-        }
-        // Ruling M9: the legacy discard message's one Undo measures its whole form first, as a
-        // lone Undo in a footer does (`UndoStep::alone`): wide, it names the draft; narrow,
-        // where that does not fit, `Undo discard`. Its accessible name always names the draft.
-        const WHOLE: &str = "Undo discard of Bridge Ambush";
-        for (width, shown) in [(900.0, WHOLE), (200.0, "Undo discard")] {
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(vec2(width, 200.0))
-                .build_ui(|ui| {
-                    let _ = draft_discarded(ui, "Bridge Ambush");
-                });
-            super::super::theme::install(&harness.ctx);
-            harness.run_steps(2);
-            let undos: Vec<String> = painted_texts(&harness)
-                .into_iter()
-                .map(|(text, _)| text)
-                .filter(|text| text.starts_with("Undo"))
-                .collect();
-            assert_eq!(undos, [shown], "M9 discard at {width}");
-            let _ = egui_kittest::kittest::Queryable::get_by_label(&harness, WHOLE);
         }
         // P3a, ruling R19 (proof 3): a hanging Undo keeps keyboard focus, Enter, Space and an
         // AccessKit click with the pointer anywhere; one input frame per step, counted in it.
