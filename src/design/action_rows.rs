@@ -226,8 +226,6 @@ pub fn action_row<R>(
     );
     let pressed = action.show(&mut action_ui);
     let drawn = action_ui.min_rect();
-    // The row is one block: its facts and its action, also wrapped under them (N12).
-    super::register_row(ui, rect);
     let _ = (facts_width, drawn, owner);
     #[cfg(test)]
     keep(

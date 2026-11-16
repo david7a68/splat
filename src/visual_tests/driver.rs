@@ -2219,16 +2219,7 @@ impl<'a> Driver<'a> {
     /// Click a control on the same row as some text, such as a saved run's Resume.
     pub fn click_beside(&mut self, text: &str, name: &str) {
         let text_row = self.row_of(text);
-        // A registered row that holds the text is the whole row: a fact/action row's action can
-        // wrap under its facts (layout PR 4).
-        let row = self
-            .harness
-            .ctx
-            .data(|data| {
-                data.get_temp::<(u64, Vec<egui::Rect>)>(egui::Id::new(crate::design::ROW_RECTS))
-            })
-            .and_then(|(_, rows)| rows.into_iter().find(|row| row.contains(text_row.center())))
-            .unwrap_or(text_row);
+        let row = self.action_row_of(text_row);
         let rect = self.aim(&format!("{name:?} beside {text:?}"), |node| {
             node.name == name
                 && Self::is_control(node)
@@ -2236,6 +2227,15 @@ impl<'a> Driver<'a> {
                 && node.rect.center().y <= row.max.y + 12.0
         });
         self.click_rect(rect, &format!("Click: {name} beside {text}"));
+    }
+
+    /// The whole row of a fact/action row (layout PR 4) whose facts hold `text`: its facts and
+    /// its action, which may wrap under them; else `text` itself.
+    fn action_row_of(&self, text: egui::Rect) -> egui::Rect {
+        crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .find(|record| record.facts.contains(text.center()))
+            .map_or(text, |record| record.facts.union(record.action))
     }
 
     /// Like `click_beside`, for a row whose text is exactly this, among longer texts.
@@ -2247,7 +2247,7 @@ impl<'a> Driver<'a> {
             .nodes()
             .into_iter()
             .filter(|node| is_row(node))
-            .map(|node| node.rect)
+            .map(|node| self.action_row_of(node.rect))
             .collect();
         let rect = self.aim(&format!("{name:?} beside {text:?}"), |node| {
             node.name == name

@@ -340,6 +340,16 @@
     ["N4/quiet-action-line-start","08-encounters-returned","960x640","Button \"Filter creatures\"",1]
   ],
   "npc-in-encounter": [
+    ["G1b/pressed-control-moved","03-npc-in-setup","960x640","Button \"Save encounter\"",1],
+    ["N4/quiet-action-line-start","01-npc-result","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-npc-result","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","01-npc-result","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-npc-in-roster","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-npc-in-roster","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","02-npc-in-roster","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-edit-encounter-from-prep","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-edit-encounter-from-prep","1920x1080","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","04-edit-encounter-from-prep","960x640","Button \"Filter creatures\"",1]
   ],
   "npc-in-lookup": [
     ["G3/far-action","07-npc-start-fight-in-lookup","1920x1080","Button \"Start fight\"",2],
