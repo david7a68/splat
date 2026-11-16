@@ -3659,7 +3659,7 @@ impl Run {
     /// message; the Move choice shows that a choice is open, and gives up the whole parenthesis
     /// before anything else when its line is short (`move_choice`, FA6).
     /// `arrival_result_shown` says when it shows.
-    fn arrival_said(&self) -> Option<design::outcome::Said<ArrivalPress>> {
+    fn arrival_said(&mut self) -> Option<design::outcome::Said<ArrivalPress>> {
         use design::outcome::{Choice, Said};
         if let Some(previous) = self.history.last().filter(|_| {
             self.state.log.last().is_some_and(|line| {
@@ -3718,12 +3718,23 @@ impl Run {
             );
             // The name the `joined at` message uses, so one arrival has one name.
             let arrival = Self::arrival_name(&self.state, first, &name);
+            // Its forms are made once for these two names (review of PR 490): an unchanged
+            // frame clones the kept words (their forms are shared) and builds none.
+            let words = match &self.tie_choice {
+                Some((kept_arrival, kept_name, words))
+                    if *kept_arrival == arrival && *kept_name == name =>
+                {
+                    words.clone()
+                }
+                _ => {
+                    let words = move_choice(&arrival, &name);
+                    self.tie_choice = Some((arrival, name, words.clone()));
+                    words
+                }
+            };
             // A finished change, tie or not: the Move choice shows the open choice.
-            return outside_words(line).map(|words| {
-                Said::new(words).choice(Choice::named(
-                    move_choice(&arrival, &name),
-                    ArrivalPress::Move(first, before),
-                ))
+            return outside_words(line).map(|line| {
+                Said::new(line).choice(Choice::named(words, ArrivalPress::Move(first, before)))
             });
         }
         self.state
@@ -7069,9 +7080,20 @@ fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
         .and_then(|rest| rest.rsplit_once(" ("))
         .map_or(arrival, |(group, _)| group);
     // With no parenthesis, the first pair is the whole words again.
-    let forms = shortened_names(group, before).skip(usize::from(group == arrival));
+    let forms = shortened_names(group, before)
+        .skip(usize::from(group == arrival))
+        .inspect(|_| {
+            #[cfg(test)]
+            MOVE_FORMS.with(|forms| forms.set(forms.get() + 1));
+        });
     whole
         .or_shorter(forms.map(|(group, before)| crate::choice!("Move {} before {}", group, before)))
+}
+
+// Move forms built on this thread, for a test that an unchanged frame builds none.
+#[cfg(test)]
+thread_local! {
+    static MOVE_FORMS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Two names with their last words given up in turn, the other name's last: each pair from
@@ -11021,6 +11043,7 @@ mod tests {
             ))
             .unwrap();
         }
+        let built = MOVE_FORMS.with(std::cell::Cell::get);
         harness.run_steps(3);
         let move_label = |harness: &egui_kittest::Harness<'_>| {
             use egui_kittest::kittest::NodeT;
@@ -11032,9 +11055,19 @@ mod tests {
                 .find_map(|node| node.accesskit_node().label())
         };
         let label = move_label(&harness).expect("the tie's Move choice is in the footer");
+        let forms = || MOVE_FORMS.with(std::cell::Cell::get);
+        assert!(forms() > built, "the tie made its Move forms");
         let quiet = design::outcome::footer_work();
+        let quiet_forms = forms();
         harness.run_steps(4);
         let after = design::outcome::footer_work();
+        // Review of PR 490: the Move forms are kept for the two names; an unchanged frame
+        // builds none.
+        assert_eq!(
+            forms(),
+            quiet_forms,
+            "an unchanged frame builds no Move form"
+        );
         assert!(
             after.compared > quiet.compared,
             "the frames drew the footer"

@@ -848,14 +848,26 @@ pub const fn check_choice(template: &str, values: usize) -> CheckedChoice {
 /// let label = String::from("Repair Bridge Ambush");
 /// let _ = splat::choice!("A{}", label);
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct ChoiceWords {
     /// The fixed words: one more than the objects.
     fixed: Vec<&'static str>,
     objects: Vec<String>,
-    /// Shorter forms of the same choice, longest first (`or_shorter`).
-    shorter: Vec<ChoiceWords>,
+    /// Shorter forms of the same choice, longest first (`or_shorter`), shared: a choice kept
+    /// by its owner clones and compares them by pointer, not form by form.
+    shorter: std::sync::Arc<[ChoiceWords]>,
 }
+
+impl PartialEq for ChoiceWords {
+    fn eq(&self, other: &Self) -> bool {
+        self.fixed == other.fixed
+            && self.objects == other.objects
+            && (std::sync::Arc::ptr_eq(&self.shorter, &other.shorter)
+                || self.shorter == other.shorter)
+    }
+}
+
+impl Eq for ChoiceWords {}
 
 /// How many letters a cut object keeps at least.
 const OBJECT_KEEPS: usize = 3;
@@ -865,7 +877,7 @@ impl From<&'static str> for ChoiceWords {
         Self {
             fixed: vec![fixed],
             objects: Vec::new(),
-            shorter: Vec::new(),
+            shorter: std::sync::Arc::from([]),
         }
     }
 }
@@ -882,7 +894,7 @@ impl ChoiceWords {
         Self {
             fixed: template.split("{}").collect(),
             objects,
-            shorter: Vec::new(),
+            shorter: std::sync::Arc::from([]),
         }
     }
 
@@ -893,7 +905,7 @@ impl ChoiceWords {
     /// Brannoch Vale`). The first form that fits shows whole; when none fits, the last one's
     /// objects are cut as always. The action's name and tip keep these whole words.
     pub fn or_shorter(mut self, forms: impl IntoIterator<Item = ChoiceWords>) -> Self {
-        self.shorter.extend(forms);
+        self.shorter = self.shorter.iter().cloned().chain(forms).collect();
         self
     }
 
@@ -932,7 +944,7 @@ impl ChoiceWords {
         if fits(&whole) {
             return Fitted::Whole(whole);
         }
-        for form in &self.shorter {
+        for form in self.shorter.iter() {
             let words = form.label();
             if fits(&words) {
                 return Fitted::Cut(words, whole);

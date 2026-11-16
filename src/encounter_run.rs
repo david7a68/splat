@@ -911,6 +911,10 @@ pub(crate) struct Run {
     /// The Arrivals reasons of each Add that waits for the DM (FI5, R35: a typed total that
     /// cannot be read, a roll with no bonus), for one `ReasonsKey`. Never saved.
     arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
+    /// The tie's Move words (`move_choice`) for the arrival's and the passed row's names, made
+    /// once for them: an unchanged frame builds no form. Replaced when another tie shows.
+    /// Never saved.
+    tie_choice: Option<(String, String, crate::design::outcome::ChoiceWords)>,
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -1438,6 +1442,7 @@ impl Run {
             scale_seen: None,
             scale_revision: 0,
             arrival_reasons: None,
+            tie_choice: None,
             carried: None,
             rest_order: 0,
             armed: None,
@@ -4818,6 +4823,7 @@ impl Run {
             scale_seen: None,
             scale_revision: 0,
             arrival_reasons: None,
+            tie_choice: None,
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
