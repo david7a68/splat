@@ -4989,7 +4989,7 @@ pub mod encounter_build {
         let wolves = wolves_listed(d, egui::Rect::EVERYTHING, |name, wolf| name == wolf);
         // Layout 3b/4: a row the results' edge cuts has no node, so a short window lists the
         // order's first rows, whole; a taller one all six.
-        let first_rows = size.y < 700.0 && wolves.len() >= 3 && WOLF_ORDER.starts_with(&wolves);
+        let first_rows = size.1 < 700.0 && wolves.len() >= 3 && WOLF_ORDER.starts_with(&wolves);
         d.observe(
             "M3-creature-search-order",
             wolves == WOLF_ORDER || first_rows,
