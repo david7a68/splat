@@ -853,17 +853,18 @@ pub struct ChoiceWords {
     /// The fixed words: one more than the objects.
     fixed: Vec<&'static str>,
     objects: Vec<String>,
-    /// Shorter forms of the same choice, longest first (`or_shorter`), shared: a choice kept
-    /// by its owner clones and compares them by pointer, not form by form.
+    /// Shorter forms of the same choice, longest first (`or_shorter`), shared, with the
+    /// revision `or_shorter` gave them: a choice kept by its owner clones them and compares
+    /// that revision, not form by form (a clone is the same version).
     shorter: std::sync::Arc<[ChoiceWords]>,
+    shorter_revision: Option<super::memo::Revision>,
 }
 
 impl PartialEq for ChoiceWords {
     fn eq(&self, other: &Self) -> bool {
         self.fixed == other.fixed
             && self.objects == other.objects
-            && (std::sync::Arc::ptr_eq(&self.shorter, &other.shorter)
-                || self.shorter == other.shorter)
+            && self.shorter_revision == other.shorter_revision
     }
 }
 
@@ -878,6 +879,7 @@ impl From<&'static str> for ChoiceWords {
             fixed: vec![fixed],
             objects: Vec::new(),
             shorter: std::sync::Arc::from([]),
+            shorter_revision: None,
         }
     }
 }
@@ -895,6 +897,7 @@ impl ChoiceWords {
             fixed: template.split("{}").collect(),
             objects,
             shorter: std::sync::Arc::from([]),
+            shorter_revision: None,
         }
     }
 
@@ -906,6 +909,7 @@ impl ChoiceWords {
     /// objects are cut as always. The action's name and tip keep these whole words.
     pub fn or_shorter(mut self, forms: impl IntoIterator<Item = ChoiceWords>) -> Self {
         self.shorter = self.shorter.iter().cloned().chain(forms).collect();
+        self.shorter_revision = Some(super::memo::Revision::next());
         self
     }
 
