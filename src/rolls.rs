@@ -1642,7 +1642,11 @@ fn tile(
 fn open_tile(ui: &mut egui::Ui, open: &OpenTile, size: egui::Vec2) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    let label = format!("{} · {}. Opens its description.", open.name, open.facts);
+    let label = if open.facts.is_empty() {
+        format!("{}. Opens its description.", open.name)
+    } else {
+        format!("{} · {}. Opens its description.", open.name, open.facts)
+    };
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
     if ui.is_rect_visible(rect) {
         let text = TileText::open(ui, &open.name, &open.facts, rect.width());
