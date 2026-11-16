@@ -1398,8 +1398,10 @@ Creature stats use CR, HP, AC in search, rosters and groups; party rows use HP, 
 HP, AC columns, then `NPC · as Guard`. NPC roster rows put `as Guard` last. The main source has no suffix;
 other sources and campaign-owned entries show source or Campaign, including roster rows. A different draft
 starts with empty search. Names use text colour and underline on hover; a creature name opens its stat block,
-with Add as the one result button. Named NPCs say In roster after Add. Party members already present say In
-roster; search is empty when all are present.
+with Add as the one result button. Named NPCs say In roster after Add, in the same checked status as Party in
+roster (its check, word and colour). Party members already present say In roster; search is empty when all are
+present. The search keeps its ranking for its view until its words, its filter, the roster or the campaign's read
+changes, so a repaint ranks no creature.
 
 Encounter and group searches include NPCs and add their usable stat block with the existing display-name
 override, without changing the saved encounter format. A missing NPC stat block stays visible with its name,
