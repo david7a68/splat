@@ -35,16 +35,36 @@ pub(crate) struct SpellLine {
     pub missing: Vec<String>,
 }
 
-/// A line of a list of spells: a short label, a colon, then the spells (`At Will: Light`,
-/// `1/Day Each: Fear`, `Cantrips (at will): fire bolt`). A line ends with `\` when another follows.
+/// A line of a list of spells: how often, a colon, then the spells (`At Will: Light`,
+/// `1/Day Each: Fear`, `2/Day Each (Elder Only): Fly`, `Cantrips (at will): fire bolt`,
+/// `1st level (4 slots): shield`). A line ends with `\` when another follows. A book may print
+/// the label in bold: `**At Will:** Light`. Other labels, such as `Environments: Forest`,
+/// are not lists of spells.
 pub(crate) fn list_line(line: &str) -> bool {
     let line = line.trim().trim_end_matches('\\').trim_end();
     line.split_once(':').is_some_and(|(label, spells)| {
-        label.len() <= 40
-            && !label.contains('.')
-            && label.starts_with(|c: char| c.is_uppercase() || c.is_ascii_digit())
-            && !spells.trim().is_empty()
+        how_often(plain_label(label)) && !spells.trim_matches(['*', '_', ' ']).is_empty()
     })
+}
+
+/// Whether a label says how often its spells are cast: `At Will`, `3/Day`, `Cantrips`, or a
+/// spell slot level, `1st level`.
+fn how_often(label: &str) -> bool {
+    let lower = label.to_lowercase();
+    let digits = lower.len() - lower.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    let after = &lower[digits..];
+    lower.starts_with("at will")
+        || lower.starts_with("cantrip")
+        || (digits > 0 && after.starts_with("/day"))
+        || (digits > 0
+            && ["st level", "nd level", "rd level", "th level"]
+                .iter()
+                .any(|ordinal| after.starts_with(ordinal)))
+}
+
+/// A list label without its emphasis: `**At Will` is `At Will`.
+fn plain_label(label: &str) -> &str {
+    label.trim().trim_matches(['*', '_']).trim()
 }
 
 /// The spells of a list, split at the commas outside brackets: `Shapechange (Beast or
@@ -262,14 +282,20 @@ pub(crate) fn line(
             .flatten()
             .find(|(_, spell)| spell.eq_ignore_ascii_case(name))
             .cloned()
-            .or_else(|| links.spell_named(name));
+            .or_else(|| links.spell_named(name))
+            // The SRD drops the name of a spell's maker: `Vellora’s Hideous Laughter` is
+            // `Hideous Laughter` there.
+            .or_else(|| {
+                let (_, rest) = name.split_once("’s ").or_else(|| name.split_once("'s "))?;
+                links.spell_named(rest)
+            });
         match found.and_then(|(open, _)| Some((open, links.entry(open)?))) {
             Some((open, spell)) => tiles.push(tile(name, open, spell, cast, caster)),
             None => missing.push(name.to_owned()),
         }
     }
     Some(SpellLine {
-        label: label.trim().to_owned(),
+        label: plain_label(label).to_owned(),
         tiles,
         missing,
     })
@@ -284,6 +310,12 @@ pub(crate) fn references(entry: &Entry, links: &dyn Links) -> Vec<Option<(usize,
 }
 
 /// Each Spellcasting paragraph of `body` with the list paragraphs after it.
+/// A paragraph that is only a comment, such as `<!-- SRD page 325 -->` where a printed page
+/// ends: it parts no Spellcasting paragraph from its lists.
+pub(crate) fn aside(paragraph: &str) -> bool {
+    paragraph.starts_with("<!--") && paragraph.ends_with("-->") && !paragraph[4..].contains("<!--")
+}
+
 pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
     let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
     let mut open = false;
@@ -291,6 +323,7 @@ pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
         if paragraph.starts_with("Spellcasting.") {
             groups.push((paragraph, Vec::new()));
             open = true;
+        } else if open && aside(paragraph) {
         } else if open && paragraph.lines().all(list_line) {
             if let Some((_, lists)) = groups.last_mut() {
                 lists.push(paragraph);
@@ -325,6 +358,126 @@ pub(crate) fn rolls(entry: &Entry, links: &dyn Links) -> Vec<Chip> {
 mod tests {
     use super::*;
 
+    /// Writes what Splat makes of every creature, one JSON file each, for
+    /// `scripts/check-creatures.sh`, which asks a model to check each one against its text.
+    /// `SPLAT_CREATURE_PACKAGES`: package folders, separated by `:`, to load beside the
+    /// built-in content. `SPLAT_CREATURE_DUMP`: the folder to write into. Reads only.
+    #[test]
+    #[ignore = "needs SPLAT_CREATURE_PACKAGES and SPLAT_CREATURE_DUMP"]
+    fn dump_creatures() {
+        use crate::rolls::tile_words;
+        use serde_json::json;
+        let out = std::path::PathBuf::from(std::env::var("SPLAT_CREATURE_DUMP").unwrap());
+        std::fs::create_dir_all(&out).unwrap();
+        let modules: Vec<crate::persistence::Module> = std::env::var("SPLAT_CREATURE_PACKAGES")
+            .unwrap_or_default()
+            .split(':')
+            .filter(|path| !path.is_empty())
+            .map(|path| {
+                let path = std::path::PathBuf::from(path);
+                let package = std::fs::read_to_string(path.join("Package.md")).unwrap();
+                let field = |key: &str| {
+                    package
+                        .lines()
+                        .find_map(|line| line.strip_prefix(key))
+                        .unwrap()
+                        .trim()
+                        .trim_matches('"')
+                        .to_owned()
+                };
+                crate::persistence::Module {
+                    id: field("splat_id:").parse().unwrap(),
+                    name: field("splat_name:"),
+                    path,
+                }
+            })
+            .collect();
+        let index = crate::lookup::ContentIndex::load(&modules, None).unwrap();
+        let tile = |chip: &Chip| {
+            let (numbers, facts) = tile_words(chip);
+            json!({ "label": chip.label, "numbers": numbers, "facts": facts })
+        };
+        let mut written = 0;
+        for item in index
+            .items
+            .iter()
+            .filter(|item| item.entry.kind == "creature")
+        {
+            let entry = &item.entry;
+            let references = references(entry, &index);
+            let groups: Vec<_> = groups(&entry.body)
+                .into_iter()
+                .map(|(spellcasting, lists)| {
+                    let caster = caster(entry, spellcasting);
+                    let lines: Vec<_> = lists
+                        .iter()
+                        .flat_map(|list| list.lines())
+                        .filter_map(|text| {
+                            let line = line(text, caster, &references, &index)?;
+                            Some(json!({
+                                "printed": text,
+                                "label": line.label,
+                                "missing": line.missing,
+                                "spells": line.tiles.iter().map(|spell| json!({
+                                    "name": spell.name,
+                                    "opens": index.entry(spell.open).map(|e| e.key.clone().unwrap_or_else(|| e.name.clone())),
+                                    "facts": spell.facts,
+                                    "rolls": spell.chip.as_ref().map(&tile),
+                                    "spell_text": spell.text,
+                                    "spell_record": index
+                                        .entry(spell.open)
+                                        .and_then(|e| e.fields.get("splat_spell"))
+                                        .and_then(|v| serde_json::to_value(v).ok()),
+                                })).collect::<Vec<_>>(),
+                            }))
+                        })
+                        .collect();
+                    json!({
+                        "spellcasting": spellcasting,
+                        "save_dc": caster.dc,
+                        "spell_attack": caster.attack,
+                        "lines": lines,
+                    })
+                })
+                .collect();
+            let record = json!({
+                "name": entry.name,
+                "key": entry.key,
+                "path": entry.path,
+                "owner": item.owner,
+                "actions": crate::rolls::chips(&entry.body).iter().map(&tile).collect::<Vec<_>>(),
+                "spellcasting": groups,
+                "run_order": crate::rolls::chips(&entry.body)
+                    .into_iter()
+                    .chain(rolls(entry, &index))
+                    .map(|chip| chip.label)
+                    .collect::<Vec<_>>(),
+                "references": references
+                    .iter()
+                    .map(|found| found.as_ref().map(|(_, name)| name.clone()))
+                    .collect::<Vec<_>>(),
+                "body": entry.body,
+            });
+            let slug: String = format!("{} {}", entry.name, &entry.id.to_string()[..8])
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            std::fs::write(
+                out.join(format!("{slug}.json")),
+                serde_json::to_string_pretty(&record).unwrap(),
+            )
+            .unwrap();
+            written += 1;
+        }
+        eprintln!("wrote {written} creatures to {}", out.display());
+    }
+
     #[test]
     fn a_list_item_gives_its_name_and_the_level_cast() {
         assert_eq!(
@@ -336,6 +489,39 @@ mod tests {
             ("Shapechange", None)
         );
         assert_eq!(item_name("*fire bolt*"), ("fire bolt", None));
+        // A book prints its labels in bold; the spells after them are the same.
+        assert!(list_line("**At Will:** Light, Mage Hand"));
+        assert_eq!(item_name("** Light"), ("Light", None));
+        assert_eq!(plain_label("**1/Day Each"), "1/Day Each");
+        assert!(!list_line(
+            "Spellcasting. The mage casts one of the following spells:"
+        ));
+        // A page comment between a Spellcasting paragraph and its lists parts nothing.
+        let body =
+            "Spellcasting. It casts:\n\n<!-- SRD page 325 -->\n\nAt Will: Light\n\nBite. Hit.";
+        assert_eq!(
+            groups(body),
+            vec![("Spellcasting. It casts:", vec!["At Will: Light"])]
+        );
+        // The SRD drops the name of a spell's maker.
+        let index = crate::lookup::ContentIndex::load(&[], None).unwrap();
+        let laughter = line(
+            "1/Day: Vellora’s Hideous Laughter",
+            Caster::default(),
+            &[],
+            &index,
+        )
+        .unwrap();
+        assert!(laughter.missing.is_empty());
+        assert_eq!(laughter.tiles[0].name, "Vellora’s Hideous Laughter");
+        // Only a label that says how often is a list of spells.
+        assert!(list_line("1/Day Each (Elder Only): Fly"));
+        assert!(list_line("Cantrips (at will): fire bolt, light"));
+        assert!(list_line("3rd level (2 slots): fireball"));
+        assert!(!list_line("**Environments:** Forest, Hill"));
+        assert!(!list_line(
+            "Original layout: [[../../srd-5.2.1/pages/280|page 280]]."
+        ));
         assert_eq!(
             list_items(" Guiding Bolt (level 2 version), Shapechange (Beast, no HP), Light"),
             vec![

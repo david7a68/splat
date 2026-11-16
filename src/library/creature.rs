@@ -335,6 +335,10 @@ fn prose(
     {
         // A Spellcasting paragraph's lists follow it, each spell a link.
         if let Some(mut group) = spellcasting.take() {
+            if super::spells::aside(paragraph) {
+                spellcasting = Some(group);
+                continue;
+            }
             if paragraph.lines().all(super::spells::list_line) {
                 let words = group.split("\n\n").next().unwrap_or_default();
                 spells.list(ui, words, paragraph);

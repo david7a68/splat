@@ -1333,6 +1333,12 @@ fn with_changes(link: &RollLink, (attack, damage): (i64, i64)) -> RollLink {
     link
 }
 
+/// A tile's two lines of words, its numbers and its facts, for a check outside the app.
+#[cfg(test)]
+pub(crate) fn tile_words(chip: &Chip) -> (String, Option<String>) {
+    (tile_detail(&chip.link), tile_facts(chip))
+}
+
 /// A tile's numbers: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
 fn tile_detail(link: &RollLink) -> String {
     match link {
