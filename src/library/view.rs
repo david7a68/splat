@@ -1,7 +1,7 @@
 //! The one entry reader. The Library, Lookup, the run's side panel, and campaign
 //! entries all call `show`, so an entry looks the same everywhere (T6.4).
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
-use super::{class, creature, presentation, reader};
+use super::{class, creature, presentation, reader, spells};
 use crate::design::{self, Type, colors, reader as style};
 use eframe::egui::{self, Align, Layout, vec2};
 use splat::content::{Entry, Reading, Reference};
@@ -54,6 +54,10 @@ pub(crate) trait Links {
     fn find_spell(&self, reference: &Reference) -> Option<(usize, String)>;
     /// Spells named in the words of a stat block paragraph.
     fn spells_named_in(&self, text: &str) -> Vec<(usize, String)>;
+    /// The one spell with this name, in any case.
+    fn spell_named(&self, name: &str) -> Option<(usize, String)>;
+    /// The entry at a place that `find`, `find_spell` or `spell_named` gave.
+    fn entry(&self, index: usize) -> Option<&Entry>;
 }
 
 /// For an entry shown with nothing to link to.
@@ -67,6 +71,12 @@ impl Links for NoLinks {
     }
     fn spells_named_in(&self, _: &str) -> Vec<(usize, String)> {
         Vec::new()
+    }
+    fn spell_named(&self, _: &str) -> Option<(usize, String)> {
+        None
+    }
+    fn entry(&self, _: usize) -> Option<&Entry> {
+        None
     }
 }
 
@@ -95,29 +105,62 @@ fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Opti
     selected
 }
 
-/// A stat block's spells: each spell its lists name is a link in place, and a line after
-/// them has the spells the entry gives or its words name that no list linked.
+/// A stat block's spells: each spell its lists name is a tile under the list's label, and a
+/// line after the lists has the spells the entry gives or its words name that no list showed.
 struct SpellLinks<'a> {
+    entry: &'a Entry,
     /// The entry's spells, each with the entry it opens, or `None` when it is missing.
     references: Vec<Option<(usize, String)>>,
     links: &'a dyn Links,
-    linked: Vec<usize>,
+    /// The spells that roll, in printed order, which a tile's Ctrl number counts in.
+    rolls: Option<Vec<crate::rolls::Chip>>,
+    shown: Vec<usize>,
     opened: Option<usize>,
 }
 
 impl creature::Spells for SpellLinks<'_> {
-    fn list(&mut self, ui: &mut egui::Ui, paragraph: &str) {
-        let named = self.links.spells_named_in(paragraph);
-        let (markdown, linked) = creature::linked_list(paragraph, |name| {
-            self.references
+    fn list(&mut self, ui: &mut egui::Ui, spellcasting: &str, paragraph: &str) {
+        let caster = spells::caster(self.entry, spellcasting);
+        let rolls = self
+            .rolls
+            .get_or_insert_with(|| spells::rolls(self.entry, self.links));
+        // A spell's number follows the stat block's own actions.
+        let actions = crate::rolls::actions(&self.entry.body).len();
+        for text in paragraph.lines() {
+            let Some(line) = spells::line(text, caster, &self.references, self.links) else {
+                continue;
+            };
+            design::help(ui, &line.label);
+            let tiles: Vec<crate::rolls::Tile> = line
+                .tiles
                 .iter()
-                .flatten()
-                .chain(&named)
-                .find(|(_, spell)| spell.eq_ignore_ascii_case(name))
-                .map(|(place, _)| *place)
-        });
-        self.linked.extend(linked);
-        self.opened = self.opened.or(style::entry_markdown(ui, &markdown));
+                .map(|spell| match &spell.chip {
+                    Some(chip) => crate::rolls::Tile::Roll {
+                        place: rolls
+                            .iter()
+                            .position(|known| known.label == chip.label && known.link == chip.link)
+                            .map(|place| actions + place),
+                        chip: chip.clone(),
+                        read: Some(spell.name.clone()),
+                    },
+                    None => crate::rolls::Tile::Open(crate::rolls::OpenTile {
+                        name: spell.name.clone(),
+                        facts: spell.facts.clone(),
+                        text: spell.text.clone(),
+                    }),
+                })
+                .collect();
+            if let Some(at) = crate::rolls::tile_row(ui, &self.entry.name, &tiles) {
+                self.opened = self.opened.or(Some(line.tiles[at].open));
+            }
+            self.shown.extend(line.tiles.iter().map(|spell| spell.open));
+            if !line.missing.is_empty() {
+                design::help(
+                    ui,
+                    &format!("Not found in this content: {}", line.missing.join(", ")),
+                );
+            }
+        }
     }
 
     fn rest(&mut self, ui: &mut egui::Ui, text: &str) {
@@ -130,7 +173,7 @@ impl creature::Spells for SpellLinks<'_> {
         targets.retain(|target| {
             target
                 .as_ref()
-                .is_none_or(|(place, _)| !self.linked.contains(place))
+                .is_none_or(|(place, _)| !self.shown.contains(place))
         });
         self.opened = self.opened.or(spell_links(ui, targets));
     }
@@ -346,12 +389,11 @@ fn content(
     }
     if let Some(entry) = styled {
         let mut spells = SpellLinks {
-            references: creature::spell_references(entry)
-                .iter()
-                .map(|reference| links.find_spell(reference))
-                .collect(),
+            entry,
+            references: spells::references(entry, links),
             links,
-            linked: Vec::new(),
+            rolls: None,
+            shown: Vec::new(),
             opened: None,
         };
         creature::show(ui, entry, sections, values, &mut spells);

@@ -5,6 +5,7 @@ mod class;
 mod creature;
 pub(crate) mod presentation;
 mod reader;
+pub(crate) mod spells;
 pub(crate) mod view;
 use crate::{
     campaigns::Campaigns,
@@ -2006,6 +2007,18 @@ impl view::Links for Loaded {
             })
             .map(|(index, note)| (index, note.name().to_owned()))
             .collect()
+    }
+    fn spell_named(&self, name: &str) -> Option<(usize, String)> {
+        self.notes
+            .iter()
+            .position(|note| {
+                note.entry.as_ref().is_some_and(|e| e.kind == "spell")
+                    && note.name().eq_ignore_ascii_case(name)
+            })
+            .map(|index| (index, self.notes[index].name().to_owned()))
+    }
+    fn entry(&self, index: usize) -> Option<&Entry> {
+        self.notes.get(index)?.entry.as_ref()
     }
 }
 
@@ -11375,21 +11388,6 @@ mod tests {
             Some("dnd2024:spells/moonbeam")
         );
         assert_eq!(keys.len(), 7);
-        // A list links each spell's name only; a comma in its brackets does not split it.
-        let (markdown, linked) = creature::linked_list(
-            "At Will: Guiding Bolt (level 2 version), Shapechange (Beast form only, no HP), Light\\",
-            |name| {
-                ["Guiding Bolt", "Shapechange"]
-                    .iter()
-                    .position(|n| *n == name)
-            },
-        );
-        assert_eq!(
-            markdown,
-            "At Will: [Guiding Bolt](splat-entry:0) (level 2 version), \
-             [Shapechange](splat-entry:1) (Beast form only, no HP), Light\\"
-        );
-        assert_eq!(linked, vec![0, 1]);
         let by_id = content::Reference::Id(loaded.notes[2].entry.as_ref().unwrap().id);
         assert_eq!(loaded.resolve_spell(&by_id), Some(2));
         assert_eq!(
@@ -11441,59 +11439,103 @@ mod tests {
                         _ => None,
                     })
                     .collect();
-                // The list names its spells in place, each a link; no line repeats them.
-                let link = texts
-                    .iter()
-                    .find(|t| {
-                        t.galley
-                            .job
-                            .text
-                            .starts_with("At Will: Detect Magic, Guiding Bolt")
-                    })
-                    .unwrap();
+                // Each spell is a tile under its list's label; no line repeats them.
+                let find = |words: &str| {
+                    texts
+                        .iter()
+                        .find(|t| t.galley.job.text == words)
+                        .unwrap_or_else(|| panic!("{words} is drawn"))
+                };
+                let (detect, bolt) = (find("Detect Magic"), find("Guiding Bolt"));
+                assert!(find("At Will").pos.y < detect.pos.y);
                 assert!(
                     !texts
                         .iter()
                         .any(|t| t.galley.job.text.contains("Spell descriptions"))
                 );
+                // Guiding Bolt is cast at level 2: one more die, and the dragon's bonus to hit.
+                assert!(
+                    texts.iter().any(|t| t.galley.job.text.starts_with("+10 ·")
+                        && t.galley.job.text.contains("5d6"))
+                );
+                assert!(
+                    texts
+                        .iter()
+                        .any(|t| t.galley.job.text.starts_with("Level 2 ·"))
+                );
+                // A spell's facts come from its entry; a range of Self from its printed text.
+                assert!(
+                    texts
+                        .iter()
+                        .any(|t| t.galley.job.text == "Level 1 · Action or Ritual · Self"),
+                    "Speak with Animals keeps its range"
+                );
                 let spellcasting = texts
                     .iter()
                     .find(|t| t.galley.job.text.starts_with("Spellcasting."))
                     .unwrap();
-                let legendary = texts
-                    .iter()
-                    .find(|t| t.galley.job.text == "Legendary Actions")
-                    .unwrap();
-                assert!(link.pos.y > spellcasting.pos.y && link.pos.y < legendary.pos.y);
+                let legendary = find("Legendary Actions");
+                assert!(bolt.pos.y > spellcasting.pos.y && bolt.pos.y < legendary.pos.y);
                 assert!(!texts.iter().any(|t| t.galley.job.text.contains("^splat-")));
-                let words = &link.galley.job.text;
-                let start = words[..words.find("Guiding Bolt").unwrap()].chars().count();
-                let at = |chars| {
-                    link.galley
-                        .pos_from_cursor(egui::text::CCursor::new(start + chars))
-                        .center()
+                let centre = |t: &egui::epaint::TextShape| t.pos + t.galley.rect.center().to_vec2();
+                // Detect Magic rolls nothing, so a click opens it. Guiding Bolt rolls, so its
+                // menu reads it.
+                let read_by_menu = width > 400.0 && !dirty;
+                let position = centre(if read_by_menu { bolt } else { detect });
+                let button = if read_by_menu {
+                    egui::PointerButton::Secondary
+                } else {
+                    egui::PointerButton::Primary
                 };
-                let position = link.pos + ((at(0).to_vec2() + at(12).to_vec2()) / 2.0);
                 frame(vec![egui::Event::PointerMoved(position)]);
                 for pressed in [true, false] {
                     frame(vec![egui::Event::PointerButton {
                         pos: position,
-                        button: egui::PointerButton::Primary,
+                        button,
                         pressed,
                         modifiers: egui::Modifiers::NONE,
                     }]);
+                }
+                if read_by_menu {
+                    let output = frame(vec![]);
+                    let read = output
+                        .shapes
+                        .iter()
+                        .find_map(|shape| match &shape.shape {
+                            egui::Shape::Text(text)
+                                if text.galley.job.text == "Read Guiding Bolt" =>
+                            {
+                                Some(text.pos + text.galley.rect.center().to_vec2())
+                            }
+                            _ => None,
+                        })
+                        .expect("the menu reads Guiding Bolt");
+                    frame(vec![egui::Event::PointerMoved(read)]);
+                    for pressed in [true, false] {
+                        frame(vec![egui::Event::PointerButton {
+                            pos: read,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        }]);
+                    }
                 }
                 if dirty {
                     assert_eq!(library.selected, Some(0));
                     assert!(library.draft.ends_with("Unsaved note.\n"));
                     library.draft = library.loaded.as_ref().unwrap().notes[0].text.clone();
                 } else {
-                    assert_eq!(library.selected, Some(2));
+                    let (place, title) = if read_by_menu {
+                        (2, "# Guiding Bolt")
+                    } else {
+                        (1, "# Detect Magic")
+                    };
+                    assert_eq!(library.selected, Some(place));
                     assert_eq!(library.section, Section::Spells);
                     assert!(library.search.is_empty());
                     assert!(library.matches.is_none());
                     assert!(!library.source);
-                    assert!(library.draft.contains("# Guiding Bolt"));
+                    assert!(library.draft.contains(title));
                 }
             }
         }

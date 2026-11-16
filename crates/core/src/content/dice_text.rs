@@ -198,7 +198,7 @@ fn signed_number(text: &str) -> Option<(i64, usize)> {
 }
 
 /// A dice term at `at`, such as `2d6` or `d20`, with ` + 2` or ` − 1` after it. Returns its end.
-fn dice_at(text: &str, at: usize) -> Option<usize> {
+pub(crate) fn dice_at(text: &str, at: usize) -> Option<usize> {
     let bytes = text.as_bytes();
     let mut end = at;
     while end < bytes.len() && bytes[end].is_ascii_digit() {
@@ -247,7 +247,7 @@ pub fn ability(word: &str) -> Option<&'static str> {
 }
 
 /// The damage type and the word `damage` after a group, as in `) Fire damage`.
-fn damage_kind(after: &str) -> Option<Option<String>> {
+pub(crate) fn damage_kind(after: &str) -> Option<Option<String>> {
     let rest = after.trim_start();
     if rest.starts_with("damage") {
         return Some(None);
