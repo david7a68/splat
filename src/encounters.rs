@@ -12150,16 +12150,25 @@ mod tests {
         editor.save_draft(&ctx, &campaign, &[]);
         assert!(!editor.dirty(), "saved and clean");
         let path = campaign.path.join(&editor.draft.as_ref().unwrap().path);
-        // The app's page: a modal (the close confirmation) disables it (`lib.rs`).
+        // An image that Lookup's reader can open full size (`art::thumbnail`), as a DM opens one.
+        let image = campaign.path.join("Map.png");
+        image::DynamicImage::new_rgb8(40, 20).save(&image).unwrap();
+        // The app's frame: the close confirmation (`close`) disables the page (`lib.rs`), the
+        // reader's image opens the full-window viewer, and the page's Ctrl+S asks the app's one
+        // modal test (`crate::modal_open`).
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
             .build_state(
-                move |ctx, (editor, modal): &mut (Encounters, bool)| {
+                move |ctx, (editor, close): &mut (Encounters, bool)| {
+                    egui::SidePanel::right("lookup").show(ctx, |ui| {
+                        crate::art::thumbnail(ui, &image, "Map");
+                    });
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        if *modal {
+                        if *close {
                             ui.disable();
                         }
-                        editor.save_shortcut(ui, &campaigns);
+                        let modal = crate::modal_open(ui.ctx(), *close);
+                        editor.save_shortcut(ui.ctx(), modal, &campaigns);
                         editor.show(
                             ui,
                             &campaigns,
@@ -12170,10 +12179,12 @@ mod tests {
                             },
                         );
                     });
+                    crate::art::show_viewer(ctx);
                 },
                 (editor, false),
             );
         design::theme::install(&harness.ctx);
+        crate::art::install(&harness.ctx);
         harness.run_steps(3);
         {
             use egui_kittest::kittest::Queryable;
@@ -12240,7 +12251,7 @@ mod tests {
         );
         harness.state_mut().1 = false;
         harness.run_steps(2);
-        harness.input_mut().events.push(ctrl_s);
+        harness.input_mut().events.push(ctrl_s.clone());
         harness.run_steps(2);
         assert!(
             fs::read_to_string(&path)
@@ -12248,6 +12259,41 @@ mod tests {
                 .contains("Hero fight again")
                 && !harness.state().0.dirty(),
             "with the modal gone, Ctrl+S saves"
+        );
+        // Review of PR 525 (P1): the full-window image is a modal too. A changed encounter, the
+        // image open from the reader, Ctrl+S: no write beneath it; closed, a fresh Ctrl+S saves.
+        let saved = fs::read_to_string(&path).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight at dusk".into();
+        harness.run_steps(2);
+        {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label("Map").click();
+        }
+        harness.run_steps(3);
+        assert!(
+            crate::art::viewer_open(&harness.ctx),
+            "the image fills the window"
+        );
+        harness.input_mut().events.push(ctrl_s.clone());
+        harness.run_steps(2);
+        assert!(
+            fs::read_to_string(&path).unwrap() == saved && harness.state().0.dirty(),
+            "Ctrl+S under the image saves nothing"
+        );
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(3);
+        assert!(
+            !crate::art::viewer_open(&harness.ctx),
+            "Escape closes the image"
+        );
+        harness.input_mut().events.push(ctrl_s);
+        harness.run_steps(2);
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("Hero fight at dusk")
+                && !harness.state().0.dirty(),
+            "with the image closed, a fresh Ctrl+S saves"
         );
     }
     #[test]
