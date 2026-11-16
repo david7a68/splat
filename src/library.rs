@@ -1,6 +1,5 @@
 //! One catalogue: built-in, package and campaign-owned entries, with their authoring.
 //! Browsing it never changes the active campaign.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 mod class;
 mod creature;
 mod kept;
@@ -14,8 +13,9 @@ use crate::{
     design::{
         self, Action, Density, Status, Tone, Type, colors, icons,
         outcome::{
-            Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice, Messages, Notice, Offer,
-            PaneFrame, Press, Said, Sentence, UndoStep, Verb,
+            Banner, BodyFault, Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice,
+            Messages, Notice, Offer, PagePlaceholder, PaneFrame, Press, Repair, Said, Sentence,
+            UndoStep, Verb,
         },
         reader as reader_style,
         results::{ByTicket, Ticket},
@@ -68,31 +68,17 @@ fn fault_here(fault: &FileFault) -> String {
     }
 }
 
-/// The recovery steps of a read fault. They are prose: they keep the reader measure inside the
-/// message's list measure, as World's do (round 25 FB3, SB1).
-fn recovery_paragraph(ui: &mut egui::Ui, fault: &FileFault) {
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-        ui.add(
-            egui::Label::new(
-                Type::Body
-                    .rich(ui, fault.recovery_with_try_again())
-                    .color(colors().text),
-            )
-            .wrap(),
-        );
-    });
-}
-
+/// A file the reader cannot read: what is wrong and how to recover, with `Try again`, then its
+/// Technical details (M20: a typed body fault).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a read fault in the reader’s body, with its repair (ruling M20)"
+)]
 fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
-    let again = design::message_with_actions(ui, Tone::Error, &fault_here(fault), |ui| {
-        recovery_paragraph(ui, fault);
-        // A message action without an icon is a bordered secondary button (round 25).
-        Action::secondary("Try again")
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-    });
+    let again = BodyFault::new(&LibraryFault::Unread(fault, false))
+        .repair(Repair::new("Try again", ()))
+        .show(ui)
+        .is_some();
     design::gap(ui, design::Gap::S);
     design::quiet_section(ui, "Technical details", |ui| {
         ui.add(egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted)).wrap());
@@ -135,76 +121,41 @@ fn draft_repair_problem(
     }
 }
 
-/// Keep the error with its repair and consequence in both reader and source views.
+/// Keep the error with its repair and consequence in both reader and source views (M20: a typed
+/// body fault). The repair is the manifest's recovery, or `Fix in Edit Markdown` in Read; in
+/// Edit Markdown with no recovery, the fault alone. Locked while `lock` holds.
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    reason = "a repair draft’s fault in the reader’s body, with its repair (ruling M20)"
 )]
 fn repair_notice(
     ui: &mut egui::Ui,
     problem: &str,
     recovery: Option<&(Module, String, bool)>,
-    blocked: Option<&str>,
+    lock: Option<Sentence>,
     source: bool,
 ) -> bool {
-    let inset = design::S
-        + design::HAIRLINE_WIDTH
-        + design::number_width(ui, icons::ERROR, &Type::Body.font(ui))
-        + ui.spacing().item_spacing.x * 2.0
-        - design::XS;
-    if let Some((_, path, exists)) = recovery {
-        let label = if *exists {
-            format!("Replace with a basic {path}")
+    let locked = |repair: Repair<()>| match &lock {
+        Some(reason) => repair.blocked(reason.clone()),
+        None => repair,
+    };
+    let fault = match recovery {
+        Some((_, path, exists)) => BodyFault::new(&LibraryFault::Repair(
+            problem,
+            crate::content_workspace::manifest_fault_tone(*exists),
+        ))
+        .repair(locked(if *exists {
+            // What replacing keeps and replaces, in its help line (M8).
+            Repair::new(crate::choice!("Replace with a basic {}", path), ())
+                .help(manifest_replace_help(path))
         } else {
-            "Write the manifest again".into()
-        };
-        let tone = crate::content_workspace::manifest_fault_tone(*exists);
-        let pressed = ui
-            .scope(|ui| {
-                // Keep the action below the error at the text edge, even in a wide pane.
-                let width = (design::number_width(ui, problem, &Type::Body.font(ui)) + inset).max(
-                    Action::secondary(&label)
-                        .density(Density::Read)
-                        .natural_width(ui)
-                        + inset,
-                );
-                ui.set_max_width(ui.available_width().min(width).min(EDITOR_MAX_WIDTH));
-                design::locked(ui, blocked, |ui| {
-                    design::message_with_action(ui, tone, problem, &label)
-                })
-            })
-            .inner;
-        if *exists {
-            // The consequence wraps at the pane's notice measure, not at the action's width.
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
-                ui.horizontal(|ui| {
-                    ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
-                    design::help(
-                        ui,
-                        &crate::content_workspace::manifest_replace_consequence(path),
-                    );
-                });
-            });
-        }
-        pressed
-    } else if source {
-        design::message(ui, Tone::Error, problem);
-        false
-    } else {
-        ui.scope(|ui| {
-            let label = "Fix in Edit Markdown";
-            let width = (design::number_width(ui, problem, &Type::Body.font(ui)) + inset).max(
-                Action::secondary(label)
-                    .density(Density::Read)
-                    .natural_width(ui)
-                    + inset,
-            );
-            ui.set_max_width(ui.available_width().min(width));
-            design::message_with_action(ui, Tone::Error, problem, label)
-        })
-        .inner
-    }
+            Repair::new("Write the manifest again", ())
+        })),
+        None if source => BodyFault::new(&LibraryFault::Repair(problem, Tone::Error)),
+        None => BodyFault::new(&LibraryFault::Repair(problem, Tone::Error))
+            .repair(Repair::new("Fix in Edit Markdown", ())),
+    };
+    fault.show(ui).is_some()
 }
 
 /// Whose file a note is: its owner's kind and id. Settings check package and campaign UUIDs
@@ -448,6 +399,17 @@ enum LibraryPress {
     CopyDependency(Uuid),
 }
 
+/// A disk conflict's choice in the editor pane (its placeholder's ids).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DiskChoice {
+    /// Read the file again (`Try again`).
+    Again,
+    /// Keep the draft (`Overwrite with my draft`, `Save my draft again`, `Save my draft to …`).
+    Overwrite,
+    /// Let the draft go (`Reload and lose my draft`, `Remove entry and lose draft`).
+    Reload,
+}
+
 /// The heading fix's result: its Undo.
 const HEADING_CHANGE_UNDO: UndoStep = UndoStep::words("Undo heading change");
 /// The stat fix's result: its Undo.
@@ -664,7 +626,8 @@ impl PageError {
         }
     }
 
-    /// Its words, for the legacy footer lines and the tests.
+    /// Its words, for the tests.
+    #[cfg(test)]
     fn words(&self) -> &str {
         match self {
             Self::Own(words) => words.as_str(),
@@ -711,6 +674,11 @@ enum LibraryFault<'a> {
     /// The link Campaign sent the DM here to fix: its line and the content layer's words for it,
     /// in the form of the broken-link lines beside it (`Line 21: …`).
     Link { line: usize, words: &'a str },
+    /// The app's own warning, checked (a file changed on disk, a copied package folder).
+    Warning(&'a Sentence),
+    /// A file that cannot be read: what is wrong and its recovery (World's `FileFault` words),
+    /// and whether a draft of it waits (`Your draft is safe here until you choose.`).
+    Unread(&'a FileFault, bool),
 }
 
 impl<'a> From<&'a PageError> for LibraryFault<'a> {
@@ -727,8 +695,10 @@ impl design::outcome::Fault for LibraryFault<'_> {
     fn severity(&self) -> design::outcome::Severity {
         use design::outcome::Severity;
         match self {
-            Self::Repair(_, Tone::Warning) | Self::Link { .. } => Severity::NeedsFixing,
-            Self::Repair(..) => Severity::CannotRead,
+            Self::Repair(_, Tone::Warning) | Self::Link { .. } | Self::Warning(_) => {
+                Severity::NeedsFixing
+            }
+            Self::Repair(..) | Self::Unread(..) => Severity::CannotRead,
             // An act's write or read did not work: the error tone, as the legacy line had.
             Self::Own(_) | Self::Error(_) | Self::Because(..) | Self::NotSaved(_) => {
                 Severity::NotSaved
@@ -742,7 +712,18 @@ impl design::outcome::Fault for LibraryFault<'_> {
     )]
     fn cause(&self) -> Sentence {
         match self {
-            Self::Own(words) => (*words).clone(),
+            Self::Own(words) | Self::Warning(words) => (*words).clone(),
+            // World's words for a read fault and its recovery, which the Library shows too.
+            Self::Unread(fault, draft) => Sentence::outside(if *draft {
+                format!(
+                    "{} Your draft is safe here until you choose. {}",
+                    fault_here(fault),
+                    fault.recovery_with_try_again()
+                )
+            } else {
+                format!("{} {}", fault_here(fault), fault.recovery_with_try_again())
+            })
+            .unwrap_or(crate::sentence!("Splat cannot read this file.")),
             Self::Because(own, cause) => match Sentence::outside(*cause) {
                 Some(cause) => (*own).clone().then(cause),
                 None => (*own).clone(),
@@ -2756,18 +2737,24 @@ pub(crate) static LINKS_NOT_CHANGED: Sentence = crate::sentence!(
 
 /// The warning for a draft whose file changed on disk (R10): the entry by its name, or `This
 /// entry` when it has none.
-pub(crate) fn changed_on_disk(name: &str) -> String {
+pub(crate) fn changed_on_disk(name: &str) -> Sentence {
     let thing = if name.trim().is_empty() {
         "This entry"
     } else {
         name.trim()
     };
-    format!("{thing} changed on disk. Your draft is safe until you choose.")
+    crate::sentence!(
+        "{} changed on disk. Your draft is safe until you choose.",
+        thing
+    )
 }
 
 /// The warning for a draft whose file moved on disk. Its two choices name what each one does.
-pub(crate) const MOVED_ON_DISK: &str =
-    "This entry moved on disk. Your draft is safe until you choose.";
+pub(crate) const MOVED_ON_DISK: Sentence =
+    crate::sentence!("This entry moved on disk. Your draft is safe until you choose.");
+/// The warning for a draft whose file was deleted on disk.
+const DELETED_ON_DISK: Sentence =
+    crate::sentence!("This entry’s file was deleted on disk. Your draft is safe until you choose.");
 
 const ENTRY_ROW_HEIGHT: f32 = design::ENTRY_ROW_HEIGHT;
 const SEARCH_NAME: &str = "Search the Library";
@@ -4123,6 +4110,14 @@ impl Library {
             | KeptKind::Vital
             | KeptKind::Copy => return None,
         })
+    }
+
+    /// Why the page's own acts wait: the open draft, or the load (`Wait for the Library to load.`).
+    fn page_lock(&self) -> Option<Sentence> {
+        self.draft_lock().or(self
+            .pending
+            .is_some()
+            .then(|| crate::sentence!("Wait for the Library to load.")))
     }
 
     /// Why an act waits for the open draft, as a typed lock (`draft_reason`'s words).
@@ -5588,9 +5583,14 @@ impl Library {
         }
 
         let Some(loaded) = &self.loaded else {
-            // Nothing loaded: there is no pane, so a failed load says so here.
+            // Nothing loaded: there is no pane, so a failed load says so here (M20: a typed body
+            // fault).
             if let Some(error) = &self.error {
-                design::message_with_code(ui, Tone::Error, &format!("Error: {}", error.words()));
+                #[allow(
+                    clippy::disallowed_methods,
+                    reason = "a failed load where the page has no pane (ruling M20)"
+                )]
+                let _ = design::outcome::banner(ui, Banner::Fault(&LibraryFault::from(error)));
             }
             return;
         };
@@ -6722,6 +6722,10 @@ impl Library {
     }
 
     /// Registering a package is a form in the page, not a window over it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a copied package folder’s warning in the form, with its repair (ruling M20)"
+    )]
     fn package_form(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         let c = colors();
         let locked = self.draft_reason().or(self
@@ -6839,12 +6843,9 @@ impl Library {
                             .iter()
                             .find(|m| m.id == copy.id)
                             .map_or(copy.name.as_str(), |m| m.name.as_str());
-                        let warning = format!("This folder is a copy of {name}.");
-                        let reason = locked
-                            .or((self.copy_name_open && self.copy_name.trim().is_empty())
-                                .then_some("Type a name first."));
+                        let warning = crate::sentence!("This folder is a copy of {}.", name);
                         let register = if self.copy_name_open {
-                            design::message(ui, Tone::Warning, &warning);
+                            let _ = BodyFault::<()>::new(&LibraryFault::Warning(&warning)).show(ui);
                             design::heading(
                                 ui,
                                 design::Heading::Group {
@@ -6901,14 +6902,14 @@ impl Library {
                             }
                             form.create
                         } else {
-                            design::locked(ui, reason, |ui| {
-                                design::message_with_action(
-                                    ui,
-                                    Tone::Warning,
-                                    &warning,
-                                    "Register as a new package",
-                                )
-                            })
+                            let repair = Repair::new("Register as a new package", ());
+                            BodyFault::new(&LibraryFault::Warning(&warning))
+                                .repair(match self.page_lock() {
+                                    Some(reason) => repair.blocked(reason),
+                                    None => repair,
+                                })
+                                .show(ui)
+                                .is_some()
                         };
                         if register {
                             if self.copy_name_open {
@@ -7732,8 +7733,11 @@ impl Library {
     /// `pane_right` is the pane's right edge, where the reader's body may end.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw egui calls that a design part replaces, and the disk-change warnings above the comparison (design::results::STAGED_ALLOWS, ruling M20)"
     )]
+    // The reader toolbar's Back keeps the old back arrow until the TitleLine part lands (the
+    // file's only old API left: M-L0.6 moved the allow here from the whole file).
+    #[allow(deprecated)]
     fn editor_pane(
         &mut self,
         ui: &mut egui::Ui,
@@ -7870,7 +7874,7 @@ impl Library {
             }
             self.loaded.as_mut().unwrap().invalidate();
         }
-        let draft_reason = self.draft_reason();
+        let draft_lock = self.draft_lock();
         let parsed_draft = self.parsed_draft(i);
         let parsed: &Result<Entry, String> = &parsed_draft;
         let note = &self.loaded.as_ref().unwrap().notes[i];
@@ -8704,31 +8708,18 @@ impl Library {
             .and_then(|change| change.fault.clone())
         {
             // The file is there but cannot be read. Saving the draft over it would replace bytes
-            // Splat never read, so the choices are to read it again or to let the draft go.
-            let (again, reload) = design::message_with_actions(
-                ui,
-                Tone::Error,
-                &format!(
-                    "{} Your draft is safe here until you choose.",
-                    fault_here(&fault)
-                ),
-                |ui| {
-                    recovery_paragraph(ui, &fault);
-                    ui.horizontal_wrapped(|ui| {
-                        let again = Action::secondary("Try again")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked();
-                        design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
-                        let reload = Action::destructive("Reload and lose my draft")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked();
-                        (again, reload)
-                    })
-                    .inner
-                },
-            );
+            // Splat never read, so the choices are to read it again or to let the draft go
+            // (M20: a typed placeholder; its red choice `L` after the safe one).
+            let choice = PagePlaceholder::new(&LibraryFault::Unread(&fault, true))
+                .choice(Choice::new(
+                    MessageChoice::Choice("Try again"),
+                    DiskChoice::Again,
+                ))
+                .choice(Choice::new(
+                    MessageChoice::Lose("Reload and lose my draft"),
+                    DiskChoice::Reload,
+                ))
+                .show(ui);
             design::gap(ui, design::Gap::S);
             design::quiet_section(ui, "Technical details", |ui| {
                 ui.add(
@@ -8736,63 +8727,60 @@ impl Library {
                         .wrap(),
                 );
             });
-            read_disk_again = again;
-            reload_from_disk = reload;
+            read_disk_again = choice == Some(DiskChoice::Again);
+            reload_from_disk = choice == Some(DiskChoice::Reload);
         } else if let Some(change) = &mut self.disk_change {
             // R10 (G16, G164, G165): a changed entry is named, as Encounters and World name
             // theirs; `This entry` only for an entry with no name.
-            let changed;
             let text = if change.moved_to.is_some() {
                 MOVED_ON_DISK
             } else if change.text.is_some() {
-                changed = changed_on_disk(note.entry.as_ref().map_or("", |entry| &entry.name));
-                changed.as_str()
+                changed_on_disk(note.entry.as_ref().map_or("", |entry| &entry.name))
             } else {
-                "This entry’s file was deleted on disk. Your draft is safe until you choose."
+                DELETED_ON_DISK
             };
             let names = if change.text.is_none() {
                 self.loaded.as_ref().unwrap().dependents(note)
             } else {
                 DependentNames::default()
             };
-            // The note and the choices start at the message text, as in World and the run.
-            let (overwrite, reload) = design::message_with_actions(ui, Tone::Warning, text, |ui| {
-                if !names.is_empty() {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("{} needs this entry.", name_list(&names)))
-                            .color(colors().muted),
-                    );
-                }
-                ui.horizontal_wrapped(|ui| {
-                    let save_word = change.moved_to.as_ref().map_or_else(
-                        || {
-                            if change.text.is_none() {
-                                "Save my draft again".to_owned()
-                            } else {
-                                "Overwrite with my draft".to_owned()
-                            }
-                        },
-                        |path| format!("Save my draft to {path}"),
-                    );
-                    let overwrite = Action::secondary(&save_word)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked();
-                    // With the line's item gap (`S`), `L` before the destructive choice.
-                    design::gap(ui, design::Gap::S);
-                    let reload = Action::destructive(if change.text.is_none() {
-                        "Remove entry and lose draft"
-                    } else {
-                        "Reload and lose my draft"
-                    })
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked();
-                    (overwrite, reload)
-                })
-                .inner
-            });
+            // The choices start at the message text, as in World and the run; the entries that
+            // need a deleted one are the red choice's help line (M8).
+            let save = match (&change.moved_to, &change.text) {
+                (Some(path), _) => Choice::named(
+                    crate::choice!("Save my draft to {}", path),
+                    DiskChoice::Overwrite,
+                ),
+                (None, None) => Choice::new(
+                    MessageChoice::Choice("Save my draft again"),
+                    DiskChoice::Overwrite,
+                ),
+                (None, Some(_)) => Choice::new(
+                    MessageChoice::Choice("Overwrite with my draft"),
+                    DiskChoice::Overwrite,
+                ),
+            };
+            let lose = Choice::new(
+                MessageChoice::Lose(if change.text.is_none() {
+                    "Remove entry and lose draft"
+                } else {
+                    "Reload and lose my draft"
+                }),
+                DiskChoice::Reload,
+            );
+            let lose = if names.is_empty() {
+                lose
+            } else {
+                lose.help(crate::sentence!("{} needs this entry.", name_list(&names)))
+            };
+            let choice = PagePlaceholder::new(&LibraryFault::Warning(&text))
+                .choice(save)
+                .choice(lose)
+                .show(ui);
+            let (overwrite, reload) = (
+                choice == Some(DiskChoice::Overwrite),
+                choice == Some(DiskChoice::Reload),
+            );
             self.overwrite_disk |= overwrite;
             reload_from_disk = reload;
         }
@@ -8954,8 +8942,13 @@ impl Library {
                         }
                         // A read fault has no repair problem: there is no text to repair.
                         if let Some(problem) = &repair_problem {
-                            repair_pressed =
-                                repair_notice(ui, problem, recovery.as_ref(), draft_reason, false);
+                            repair_pressed = repair_notice(
+                                ui,
+                                problem,
+                                recovery.as_ref(),
+                                draft_lock.clone(),
+                                false,
+                            );
                         }
                     });
                     open_link = view::show_with_related(
@@ -10172,9 +10165,9 @@ mod tests {
                     // notice, the dependencies, the recovery choice) and the old waiting
                     // controls left in the page's body. A typed lock is not debt, but this count
                     // reads text.
-                    (".blocked(", 12),
+                    (".blocked(", 14),
                     ("blocked_if(", 0),
-                    ("design::locked(", 4),
+                    ("design::locked(", 2),
                     ("undo_message(", 0),
                 ],
             ),

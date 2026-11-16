@@ -1013,7 +1013,18 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_result_shows_only_in_its_own_scope statement",
             &[Ban::ByOwner(1)],
         ),
-        ("src/library.rs", "editor_pane", &[Ban::Extras(1)]),
+        // M20 (M-L0.6): the disk-change warnings above the comparison, typed placeholders.
+        (
+            "src/library.rs",
+            "editor_pane",
+            &[Ban::Extras(1), Ban::Body],
+        ),
+        // M20 (M-L0.6): a read fault in the reader's body, with `Try again`.
+        ("src/library.rs", "fault_notice", &[Ban::Body]),
+        // M20 (M-L0.6): a copied package folder's warnings in the form, with its repair.
+        ("src/library.rs", "package_form", &[Ban::Body]),
+        // M20 (M-L0.6): a failed load where the page has no pane.
+        ("src/library.rs", "show statement", &[Ban::Body]),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
         ("src/library.rs", "cause", &[Ban::Words]),
@@ -1296,7 +1307,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "history_summary",
             &[Ban::Extras(2)],
         ),
-        ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
+        // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
+        ("src/library.rs", "repair_notice", &[Ban::Body]),
         ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),

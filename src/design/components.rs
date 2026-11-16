@@ -3102,37 +3102,6 @@ pub(super) fn small_tone_message(ui: &mut Ui, tone: Tone, text: &str) -> Respons
     .inner
 }
 
-/// A message whose marked fragments use the code font.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-pub fn message_with_code(ui: &mut Ui, tone: Tone, text: &str) -> Response {
-    let (icon, color) = tone.parts();
-    let mut job = LayoutJob::default();
-    for (i, part) in text.split('`').enumerate() {
-        job.append(
-            part,
-            0.0,
-            egui::TextFormat {
-                font_id: if i % 2 == 0 { Type::Body } else { Type::Mono }.font(ui),
-                color: colors().text,
-                ..Default::default()
-            },
-        );
-    }
-    ui.horizontal_top(|ui| {
-        let start = ui.cursor().min;
-        space(ui, S + 1.0);
-        ui.label(Type::Body.rich(ui, icon).color(color));
-        space(ui, -XS);
-        let response = ui.add(egui::Label::new(job).wrap());
-        let bar = Rect::from_min_max(start, pos2(start.x + 3.0, response.rect.bottom()));
-        ui.painter().rect_filled(bar, 0.0, color);
-        response
-    })
-    .inner
-}
-
 /// Work in progress. Test builds draw a still mark: the moving one is drawn from the clock,
 /// so two captures of the same state would differ.
 pub fn spinner(ui: &mut Ui) {
