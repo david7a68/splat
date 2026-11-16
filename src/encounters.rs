@@ -3435,6 +3435,8 @@ enum EncounterFault {
     /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
+    /// The Encounters page waits for the previous campaign's open encounter (`show_page`).
+    PreviousCampaignDraft,
     /// Start fight was refused (ruling M7): no fight started, why, and the next step, in the
     /// tone of its cause.
     StartRefused(design::results::Refusal),
@@ -3462,7 +3464,8 @@ impl design::outcome::Fault for EncounterFault {
             | Self::FileWarning(_)
             | Self::RunsLeft(_)
             | Self::FileFlag(..)
-            | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
+            | Self::Invalid(_)
+            | Self::PreviousCampaignDraft => design::outcome::Severity::NeedsFixing,
             Self::StartRefused(refusal) => match refusal.tone() {
                 Tone::Error => design::outcome::Severity::CannotRead,
                 _ => design::outcome::Severity::NeedsFixing,
@@ -3490,6 +3493,9 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The encounter’s file has a problem.")),
             Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("Save cannot write this draft yet.")),
+            Self::PreviousCampaignDraft => {
+                crate::sentence!("Save or discard the previous campaign’s encounter first.")
+            }
             Self::StartRefused(refusal) => refusal.words(),
         }
     }
@@ -5682,6 +5688,10 @@ impl Encounters {
         self.show_page(ui, campaigns, party, story);
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "ruling M20: the page’s placeholder while another campaign’s encounter is open (`Ban::Body`)"
+    )]
     fn show_page(
         &mut self,
         ui: &mut egui::Ui,
@@ -5699,11 +5709,11 @@ impl Encounters {
             .as_ref()
             .is_none_or(|c| c.id != active.id || c.path != active.path)
         {
-            design::message(
-                ui,
-                Tone::Warning,
-                "Save or discard the previous campaign’s encounter first.",
-            );
+            // M0192 (ruling M20): the page cannot show while another campaign's encounter is
+            // open, so its fault stands in place of its body, in the fault's tone.
+            let _: Option<FooterPress> =
+                design::outcome::PagePlaceholder::new(&EncounterFault::PreviousCampaignDraft)
+                    .show(ui);
             self.save_key = false;
             return;
         }
@@ -12317,6 +12327,38 @@ mod tests {
                 && !harness.state().0.dirty(),
             "with the image closed, a fresh Ctrl+S saves"
         );
+        // M0192 (ruling M20): while the page holds another campaign's encounter, its fault is the
+        // page's typed placeholder, in place of the editor.
+        let mut other = campaign.clone();
+        other.id = Uuid::new_v4();
+        harness.state_mut().0.active = Some(other);
+        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight elsewhere".into();
+        harness.step();
+        {
+            use egui_kittest::kittest::Queryable;
+            let placeholder = harness
+                .query_all_by_role_and_label(
+                    egui::accesskit::Role::Label,
+                    "Save or discard the previous campaign’s encounter first.",
+                )
+                .count()
+                + harness
+                    .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                        node.value().is_some_and(|words| {
+                            words.contains(
+                                "Save or discard the previous campaign’s encounter first.",
+                            )
+                        })
+                    }))
+                    .count();
+            let placed = crate::design::outcome::message_rects(&harness.ctx)
+                .into_iter()
+                .any(|(_, place, _)| place == crate::design::outcome::MessagePlace::Page);
+            assert!(
+                placeholder > 0 && placed,
+                "the page's placeholder says why ({placeholder} nodes, typed place {placed})"
+            );
+        }
     }
     #[test]
     fn dm_run_requires_saved_current_template_and_protects_its_memory_state() {

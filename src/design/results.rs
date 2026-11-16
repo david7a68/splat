@@ -1219,6 +1219,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "cause", &[Ban::Words]),
         ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
         ("src/encounters.rs", "outcome_words", &[Ban::Words]),
+        // Ruling M20 (M0192): the page's placeholder while another campaign's encounter is open;
+        // it replaces an untyped `design::message`.
+        ("src/encounters.rs", "show_page", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
