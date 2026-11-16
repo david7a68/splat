@@ -23769,7 +23769,7 @@ pub mod run_add_creature {
         d.click_starting("Roll NPC initiative: ");
         d.click("In one group per side");
         d.click("Save run settings");
-        d.expect("No changes");
+        d.expect("Saved");
         go_encounters(d);
         run_saved_encounter(d, "Shrine of Cinders");
         d.click("Roll NPC initiative");
