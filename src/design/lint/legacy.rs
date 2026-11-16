@@ -39,9 +39,10 @@ const LEDGER_PATH: &str = "src/design/c3_ledger.tsv";
 /// free function's call; `.name/n` a method called with at least `n` arguments.
 const CAPABILITIES: [(&str, &str); 11] = [
     // A body drawn by a closure into a pane. `Self::pane` counts in `Footer` and `Messages` only.
+    // `pane_then` (migration-32 L1c) is a pane whose messages come after the body.
     (
         "pane-host",
-        ".pane/3 Footer::pane Messages::pane Self::pane pane_content pane_editor",
+        ".pane/3 Footer::pane Messages::pane Self::pane pane_content pane_editor pane_then",
     ),
     // A footer placed by hand.
     ("hand-footer", "show_by_hand"),

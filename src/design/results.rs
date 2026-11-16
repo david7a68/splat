@@ -1239,7 +1239,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(4), Ban::Pane(1)],
+            &[Ban::Layout(1), Ban::Extras(3), Ban::Pane(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -1392,11 +1392,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
         ("src/trackers/view.rs", "messages", &[Ban::Words]),
         ("src/sessions/page.rs", "notice_sentence", &[Ban::Words]),
-        (
-            "src/encounter_run/loot.rs",
-            "loot_section",
-            &[Ban::Extras(1)],
-        ),
         (
             "src/encounter_run/notice.rs",
             "live_header",
@@ -1566,11 +1561,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "split_action",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/design/components.rs",
-            "stepper_with_density",
-            &[Ban::Layout(1)],
-        ),
+        ("src/design/components.rs", "stepper_as", &[Ban::Layout(1)]),
         (
             "src/design/components.rs",
             "text_field_label",
@@ -1650,6 +1641,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(2)],
         ),
         // Package K2: the popup parts.
+        ("src/design/outcome.rs", "measuring", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
         ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),

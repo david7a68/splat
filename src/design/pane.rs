@@ -1380,6 +1380,171 @@ pub fn note_bottom_banner(ctx: &egui::Context) {
     ctx.data_mut(|data| data.insert_temp(banner_id(), pass));
 }
 
+/// A footer that empties forgets its measured height and the words it was measured with.
+fn forget(ui: &Ui, id: Id) {
+    ui.ctx().data_mut(|data| {
+        data.remove::<f32>(id.with("height"));
+        data.remove::<u64>(id.with("words"));
+    });
+}
+
+/// Where the next pass, measured, places a footer of `demand` (`place`).
+struct Next {
+    placement: Placement,
+    rect: Rect,
+    /// The most it may take where it stands (Q-c): the room to the pane's end, or a third.
+    most: f32,
+    /// The body's room, and a `Content` body's scroll output in it.
+    body_room: Rect,
+    view: Option<Scroll>,
+}
+
+/// The body's room ends `S` above the footer's height, a third of the pane at most; the footer
+/// follows the content when the content fits that room, else it is pinned at the pane's bottom.
+/// The content is laid out the same in that room: `scroll` is this pass's output.
+fn next_place(room: Rect, width: f32, demand: f32, third: f32, scroll: Option<Scroll>) -> Next {
+    let height = demand.min(third);
+    let limit = if height > 0.0 {
+        room.bottom() - height - S
+    } else {
+        room.bottom()
+    };
+    let body_room = Rect::from_min_max(room.min, pos2(room.right(), limit.max(room.top())));
+    let view = scroll.map(|scroll| Scroll {
+        viewport: Rect::from_min_max(
+            scroll.viewport.min,
+            pos2(
+                scroll.viewport.right(),
+                body_room.bottom().max(scroll.viewport.top()),
+            ),
+        ),
+        ..scroll
+    });
+    let (placement, top, most) = match view {
+        Some(view) if view.fits() => {
+            let top = (view.viewport.top() + view.height + S).min(room.bottom() - height);
+            (Placement::Follows, top, room.bottom() - top)
+        }
+        _ => (Placement::Pinned, room.bottom() - height, third),
+    };
+    Next {
+        placement,
+        rect: Rect::from_min_size(pos2(room.left(), top), vec2(width, demand.min(most))),
+        most,
+        body_room,
+        view,
+    }
+}
+
+/// A typed footer whose lines came after the body (`pane_then`), drawn where the next pass places
+/// it (`next_place`) after the body was laid out for another demand.
+struct Stop {
+    id: Id,
+    layer: LayerId,
+    room: Rect,
+    width: f32,
+    next: Next,
+    /// The body's paint, and its widgets on the pane's layer (their places in egui's list).
+    body: (usize, usize),
+    widgets: (usize, usize),
+    /// The row cut's hairline that the pass drew for the body's room, if any.
+    cut_line: Option<usize>,
+    rows_before: usize,
+}
+
+/// The body stops where the next pass's body room ends (`Stop`): at that room's end, or at its
+/// last whole registered row there (N12) with that row cut's hairline, which the next pass keeps,
+/// so it is drawn the same; a line cut's hairline at the footer's top. Nothing moves: the footer
+/// was drawn once, in its place. The edge holds for presses and for a screen reader as for the
+/// paint (review of PR 456, P2): each body widget that reaches below it takes presses only above
+/// it from now on (re-registered with its rect cut at the edge, for hover only: egui keeps the
+/// last rect, so its press area ends there, and its focus order, accessible node and id stay), and one wholly below it is hidden from a
+/// screen reader. The focused control keeps both: the next pass, in the new room, brings it whole
+/// into view (`reveal_focus`: the room changed under it). Returns whether content goes on below
+/// the body's room.
+fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
+    use egui::layers::ShapeIdx;
+    let Stop {
+        id,
+        layer,
+        room,
+        width,
+        next,
+        body,
+        widgets,
+        cut_line,
+        rows_before,
+    } = stop;
+    let cut = next.view.is_some_and(Scroll::cut);
+    let row_cut = next.view.filter(|_| cut).and_then(|view| {
+        let rows = super::components::rows_this_pass(ui.ctx());
+        whole_row_cut(rows.get(rows_before..).unwrap_or_default(), view.viewport)
+    });
+    let limit = row_cut.unwrap_or(next.body_room.bottom());
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    let below: Vec<egui::WidgetRect> = ui.ctx().viewport(|viewport| {
+        viewport
+            .this_pass
+            .widgets
+            .get_layer(layer)
+            .skip(widgets.0)
+            .take(widgets.1.saturating_sub(widgets.0))
+            .filter(|widget| widget.interact_rect.bottom() > limit && Some(widget.id) != focused)
+            .copied()
+            .collect()
+    });
+    if !below.is_empty() {
+        // Its rect cut at the edge: egui keeps the last rect given for an id, and its press area
+        // is that rect inside the clip (empty for a widget wholly below the edge).
+        let edge = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(id.with("stop_body"))
+                .disabled(),
+        );
+        let above = Rect::everything_above(limit);
+        for widget in &below {
+            let _ = edge.interact(widget.rect.intersect(above), widget.id, Sense::hover());
+            if widget.rect.top() >= limit {
+                ui.ctx()
+                    .accesskit_node_builder(widget.id, |node| node.set_hidden());
+            }
+        }
+    }
+    ui.ctx().graphics_mut(|graphics| {
+        let list = graphics.entry(layer);
+        for at in body.0..body.1 {
+            list.mutate_shape(ShapeIdx(at), |shape| {
+                shape.clip_rect.max.y = shape.clip_rect.max.y.min(limit);
+            });
+        }
+        // The row cut's hairline of the body's room as this pass had it goes.
+        if let Some(at) = cut_line {
+            list.reset_shape(ShapeIdx(at));
+        }
+    });
+    let hairline = |y: f32| {
+        ui.painter().hline(
+            room.left()..=room.left() + width,
+            y,
+            egui::Stroke::new(
+                super::tokens::HAIRLINE_WIDTH,
+                super::tokens::colors().hairline,
+            ),
+        );
+    };
+    if let Some(cut) = row_cut {
+        hairline(cut - super::tokens::HAIRLINE_WIDTH / 2.0);
+    } else if cut {
+        hairline(next.rect.top() + super::tokens::HAIRLINE_WIDTH / 2.0);
+    }
+    // Keep this cut for the next pass's body room.
+    ui.ctx().data_mut(|data| match row_cut {
+        Some(cut) => data.insert_temp(id.with("row_cut"), (next.body_room, cut)),
+        None => data.remove::<(Rect, f32)>(id.with("row_cut")),
+    });
+    cut
+}
+
 fn banner_below(ctx: &egui::Context) -> bool {
     let pass = ctx.cumulative_pass_nr();
     ctx.data(|data| data.get_temp::<u64>(banner_id())) == Some(pass)
@@ -1393,7 +1558,37 @@ impl Footer<'_> {
     /// height (and `S`) while the footer holds a message. The pane takes the rest of `ui`. `ui`
     /// lays out top down. Returns what `add` returns.
     pub fn pane<R>(self, ui: &mut Ui, body: Body, add: impl FnOnce(&mut Ui) -> R) -> R {
-        self.place(ui, body, ContentScroll::default(), |ui, _| add(ui))
+        self.place(
+            ui,
+            body,
+            ContentScroll::default(),
+            false,
+            |ui, _| add(ui),
+            |inner, _| inner,
+        )
+    }
+
+    /// `pane` for a body whose acts start or end its footer's messages (a form whose fields,
+    /// Save and Discard change what the footer says). `add` draws the body; then `then` gets what
+    /// `add` returned and this footer, after the body and before the footer paints, and adds the
+    /// messages from the state the body's acts left. So the frame of an act shows the message
+    /// the act brought and never one it ended, also when egui draws that frame in one pass (no
+    /// discarded pass hides it). Messages added before stay. Returns what `then` returns.
+    pub fn pane_then<R, T>(
+        self,
+        ui: &mut Ui,
+        body: Body,
+        add: impl FnOnce(&mut Ui) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
+        self.place(
+            ui,
+            body,
+            ContentScroll::default(),
+            true,
+            |ui, _| add(ui),
+            then,
+        )
     }
 
     /// `pane` with `Body::Content`, whose scroll column behaves as `scroll` says.
@@ -1403,7 +1598,14 @@ impl Footer<'_> {
         scroll: ContentScroll,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> R {
-        self.place(ui, Body::Content, scroll, |ui, _| add(ui))
+        self.place(
+            ui,
+            Body::Content,
+            scroll,
+            false,
+            |ui, _| add(ui),
+            |inner, _| inner,
+        )
     }
 
     /// A `Body::Content` pane whose body holds one editor that grows with its text: the body
@@ -1422,16 +1624,26 @@ impl Footer<'_> {
         ui: &mut Ui,
         add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
     ) -> R {
-        self.place(ui, Body::Content, ContentScroll::default(), add)
+        self.place(
+            ui,
+            Body::Content,
+            ContentScroll::default(),
+            false,
+            add,
+            |inner, _| inner,
+        )
     }
 
-    fn place<R>(
+    /// The pane. `late`: messages also come after the body, from `then` (`pane_then`).
+    fn place<R, T>(
         mut self,
         ui: &mut Ui,
         body: Body,
         options: ContentScroll,
+        late: bool,
         add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
-    ) -> R {
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
         debug_assert!(
             ui.layout().main_dir() == egui::Direction::TopDown,
             "a pane's message footer ends a top-down Ui"
@@ -1444,8 +1656,10 @@ impl Footer<'_> {
         claim(ui, id);
         let key = id.with("height");
         // A typed footer whose retained plan holds knows its demand now (layout PR 2b); else the
-        // last pass's demand, which this pass measures again.
-        let stored = match self.planned(ui, width) {
+        // last pass's demand, which this pass measures again. A footer whose messages come after
+        // the body (`pane_then`) is planned after it.
+        let planned = if late { None } else { self.planned(ui, width) };
+        let stored = match planned {
             Some(demand) => {
                 ui.ctx().data_mut(|data| data.insert_temp(key, demand));
                 demand
@@ -1455,9 +1669,12 @@ impl Footer<'_> {
                 .data(|data| data.get_temp::<f32>(key))
                 .unwrap_or(0.0),
         };
-        let shown = !self.is_empty();
-        if !shown && stored != 0.0 {
-            ui.ctx().data_mut(|data| data.remove::<f32>(key));
+        // Whether the footer holds a message while the body draws. Messages that come after the
+        // body (`pane_then`) are known only then: until then the footer keeps the room it had in
+        // the last pass, as it does when its messages stay (it showed when it has a height).
+        let held = !self.is_empty() || (late && stored != 0.0);
+        if !held && stored != 0.0 {
+            forget(ui, id);
             ui.ctx().request_discard("the message footer emptied");
         }
         // Ruling Q-c: a pinned footer takes at most a third of the pane; a footer that follows a
@@ -1465,7 +1682,7 @@ impl Footer<'_> {
         let most = (room.height() / 3.0).floor().max(0.0);
         // Last pass's demand, whole (what the messages want, uncapped); a change is measured
         // below, and the pass is drawn again.
-        let demand = if shown { stored } else { 0.0 };
+        let demand = if held { stored } else { 0.0 };
         // The pinned footer's height.
         let height = demand.min(most);
         let pinned = room.bottom() - height;
@@ -1495,8 +1712,15 @@ impl Footer<'_> {
         );
         body_ui.set_clip_rect(visible);
         let rows_before = super::components::rows_this_pass(ui.ctx()).len();
+        let layer = ui.layer_id();
+        let paint_at = |ui: &Ui| {
+            ui.ctx()
+                .graphics(|graphics| graphics.get(layer).map_or(0, |list| list.next_idx().0))
+        };
+        let body_from = paint_at(ui);
+        let widgets_from = widget_count(ui);
         // An edge (the footer, the session banner) ends the body: no registered row is cut.
-        let edge = shown || banner_below(ui.ctx());
+        let edge = held || banner_below(ui.ctx());
         // What a layer opened from the body may use: the body's room, inside the clip.
         let usable = visible.intersect(body_room);
         let mut hold_facts = None;
@@ -1639,6 +1863,26 @@ impl Footer<'_> {
             }
         };
         drop(body_ui);
+        let body_to = paint_at(ui);
+        let widgets_to = widget_count(ui);
+        // `pane_then`: the messages from the state the body's acts left, before the footer
+        // paints.
+        let out = then(inner, &mut self);
+        let shown = !self.is_empty();
+        if !shown && held && stored != 0.0 {
+            forget(ui, id);
+            ui.ctx().request_discard("the message footer emptied");
+        }
+        // Typed lines that came after the body: their retained plan, now (it holds when they are
+        // the last pass's lines at this width).
+        let planned = if late && shown {
+            self.planned(ui, width)
+        } else {
+            planned
+        };
+        if late && let Some(demand) = planned {
+            ui.ctx().data_mut(|data| data.insert_temp(key, demand));
+        }
         // N12: an edge (the footer, the session banner) never cuts through a registered row.
         let new_cut = match scroll {
             Some(scroll) if edge && scroll.cut() => {
@@ -1654,6 +1898,7 @@ impl Footer<'_> {
             });
             ui.ctx().request_discard("the body's whole-row cut moved");
         }
+        let cut_line = paint_at(ui);
         if let Some(cut) = new_cut {
             // The hairline marks where the rows stop.
             ui.painter().hline(
@@ -1666,14 +1911,15 @@ impl Footer<'_> {
             );
         }
 
-        let placement = match scroll {
+        let mut placement = match scroll {
             Some(scroll) if scroll.fits() => Placement::Follows,
             _ => Placement::Pinned,
         };
         // Content goes on below the room: the footer cuts it, and draws its hairline.
-        let cut = shown && scroll.is_some_and(Scroll::cut);
+        let mut cut = shown && scroll.is_some_and(Scroll::cut);
         let mut footer = None;
         if shown {
+            let third = most;
             // Where the footer starts, and the most it may take there: below a short body, `S`
             // after the content and the room down to the pane's end (Q-c); pinned, a third of
             // the pane. It is as tall as its demand up to that, and scrolls inside beyond it.
@@ -1684,7 +1930,50 @@ impl Footer<'_> {
                 }
                 _ => (pinned, most),
             };
-            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, demand.min(most)));
+            // A typed footer is always measured: its plan is made before it is placed (`planned`,
+            // L1c). A legacy footer is measured when it was measured with these words. One that
+            // was not (an act brought its messages in this pass, or it comes) below a short body
+            // is laid out in its whole room there and fitted to what it shows, in this pass, so
+            // its messages show whole at once, even in a frame of one pass; the pass is drawn
+            // again, measured. Pinned, it keeps its measured room until that pass (the legacy
+            // footer's limit: its words are closures, measured only by drawing them).
+            let measured = if self.is_typed() {
+                planned.is_some()
+            } else {
+                let words = self.words_key();
+                let words_id = id.with("words");
+                let measured = demand > 0.0
+                    && ui.ctx().data(|data| data.get_temp::<u64>(words_id)) == Some(words);
+                if !measured {
+                    ui.ctx().data_mut(|data| data.insert_temp(words_id, words));
+                }
+                measured
+            };
+            let fit = placement == Placement::Follows && !measured;
+            // Lines that come after the body (`pane_then`) are planned after it. When their demand
+            // is not the one the body's room was made for, the footer is placed by it as the next
+            // pass places it and drawn there once; the body's paint stops at its edge
+            // (`stop_body`), and the pass is drawn again with the body in its new room.
+            let after = planned
+                .filter(|_| late)
+                .filter(|now| (now - demand).abs() >= super::tokens::HAIRLINE_WIDTH)
+                .map(|now| next_place(room, width, now, third, scroll));
+            let (top, most) = match &after {
+                Some(next) => (next.rect.top(), next.most),
+                None => (top, most),
+            };
+            let tall = if let Some(next) = &after {
+                ui.ctx()
+                    .request_discard("the body's room changed with its footer");
+                next.rect.height()
+            } else if fit {
+                ui.ctx()
+                    .request_discard("the message footer measures its new messages");
+                most
+            } else {
+                demand.min(most)
+            };
+            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, tall));
             // Nothing in the body under the footer takes a press there, nor in the `S` above it
             // (egui gives a press to a widget a few points away): the footer comes after the body,
             // so this blank target is above the body's, and the footer's own controls above it.
@@ -1697,7 +1986,36 @@ impl Footer<'_> {
             // The kept lines take their control ids from this pane's footer and their ticket.
             ui.ctx()
                 .data_mut(|data| data.insert_temp(Id::new("design_footer_drawing"), id));
-            self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored);
+            // Laid out in its room; when fitted, as tall as what it shows, in this same pass. It
+            // draws the hairline of a line cut at its top; placed after the body was laid out for
+            // another demand, `stop_body` draws the hairlines.
+            let rect = self
+                .draw_messages(
+                    ui,
+                    rect,
+                    after.is_none() && cut && new_cut.is_none(),
+                    most,
+                    stored,
+                    fit,
+                )
+                .0;
+            if let Some(next) = after {
+                placement = next.placement;
+                cut = stop_body(
+                    ui,
+                    Stop {
+                        id,
+                        layer,
+                        room,
+                        width,
+                        next,
+                        body: (body_from, body_to),
+                        widgets: (widgets_from, widgets_to),
+                        cut_line: new_cut.map(|_| cut_line),
+                        rows_before,
+                    },
+                );
+            }
             if rect.height() > 0.0 {
                 footer = Some(rect);
                 #[cfg(test)]
@@ -1735,8 +2053,8 @@ impl Footer<'_> {
             },
         );
         #[cfg(not(test))]
-        let _ = (footer, placement, local);
-        inner
+        let _ = (footer, placement, cut, local);
+        out
     }
 }
 
