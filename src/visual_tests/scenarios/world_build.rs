@@ -6592,7 +6592,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let linking = fs::read(&path).unwrap();
     d.click("Update 1 link");
     d.settle();
-    let refused = d.has_containing(crate::library::LINKS_NOT_CHANGED)
+    let refused = d.has_containing(crate::library::LINKS_NOT_CHANGED.as_str())
         && fs::read(&path).unwrap() == linking
         && !d.has("Undo link update");
     d.observe(
@@ -6687,7 +6687,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let last_moment_kept = pressed
         && hooked.get()
         && fs::read(&wraith).unwrap() == linking
-        && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED.as_str());
     // Back to a fresh offer: B named LAMP on disk, reloaded, then renamed in Splat again.
     rename_outside(LAMP);
     d.click("Packages");
@@ -6719,7 +6719,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.settle();
     let twin_refused = twin_pressed
         && fs::read(&wraith).unwrap() == linking_before
-        && d.has_containing(crate::library::LINKS_NOT_CHANGED)
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED.as_str())
         && !d.has("Undo link update");
     d.observe(
         "iter-26-L-offer-identity",
@@ -6759,7 +6759,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.settle();
     let no_reload_kept = pressed
         && fs::read(&wraith).unwrap() == linking
-        && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED.as_str());
     let with_error = save_and_editor(d);
     let error_below = d
         .input_frame("Markdown editor")
@@ -7091,7 +7091,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         let read = d.place_of("Read").expect("Read tab is visible");
         let title = reader_title(d, MODULE).expect("The About title is visible");
         let result = d
-            .painted_rect_in(crate::library::PACKAGE_USE_RESULT, egui::Rect::EVERYTHING)
+            .painted_rect_in(crate::library::PACKAGE_USE_RESULT.as_str(), egui::Rect::EVERYTHING)
             .expect("Package use result is visible");
         d.observe(
             "iter-23-L-FD4-use",
@@ -11468,7 +11468,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     undo_follows_message(
         d,
         "iter-19-E-AD3-source",
-        crate::library::USE_COPY_RESULT,
+        crate::library::USE_COPY_RESULT.as_str(),
         "Undo source change",
     );
     // R11 (row 127, G147): the use changed after the registration, so the registration's
@@ -11492,7 +11492,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             .into_iter()
             .find(|node| node.name == "Undo package registration")
             .map(|node| (node.rect, node.fully_in_view()));
-        let source = d.painted_rect_in(crate::library::USE_COPY_RESULT, egui::Rect::EVERYTHING);
+        let source = d.painted_rect_in(crate::library::USE_COPY_RESULT.as_str(), egui::Rect::EVERYTHING);
         d.observe(
             "iter-29-L-G147-image",
             words.is_some_and(|rect| viewport.contains_rect(rect))
@@ -11513,13 +11513,13 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             .nodes()
             .into_iter()
             .find(|node| {
-                node.name.contains(crate::library::USE_COPY_RESULT)
+                node.name.contains(crate::library::USE_COPY_RESULT.as_str())
                     && node.name.contains("Ashen Reaches is registered")
             })
             .map(|node| node.name)
             .unwrap_or_default();
         let newest_first = order
-            .find(crate::library::USE_COPY_RESULT)
+            .find(crate::library::USE_COPY_RESULT.as_str())
             .zip(order.find("Ashen Reaches is registered"))
             .is_some_and(|(source, registration)| source < registration);
         let first_in_view = d.in_view("Undo source change");
@@ -11566,9 +11566,9 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         reload_library(d);
         let blocked = d.is_disabled("Undo source change");
         let reason = d.tooltip_contains("Undo source change", crate::content_workspace::UNDO_ENDED);
-        let kept = d.has(crate::library::USE_COPY_RESULT);
+        let kept = d.has(crate::library::USE_COPY_RESULT.as_str());
         // Round 23 FD6: the same rule for the source change's result.
-        let (color, said) = blocked_reason_shown(d, crate::library::USE_COPY_RESULT);
+        let (color, said) = blocked_reason_shown(d, crate::library::USE_COPY_RESULT.as_str());
         d.observe(
             "iter-23-L-FD6-source",
             color == Some(design::colors().text) && said,
@@ -11600,8 +11600,10 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     let newest_first = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let editor = d.input_frame("Markdown editor")?.0;
-            let newer =
-                d.painted_rect_in(crate::library::USE_COPY_RESULT, egui::Rect::EVERYTHING)?;
+            let newer = d.painted_rect_in(
+                crate::library::USE_COPY_RESULT.as_str(),
+                egui::Rect::EVERYTHING,
+            )?;
             let older = d.painted_rect_in(REGISTERED, egui::Rect::EVERYTHING)?;
             Some((newer.top() >= editor.bottom(), newer.top() < older.top()))
         })

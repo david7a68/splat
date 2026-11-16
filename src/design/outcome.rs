@@ -848,12 +848,27 @@ pub const fn check_choice(template: &str, values: usize) -> CheckedChoice {
 /// let label = String::from("Repair Bridge Ambush");
 /// let _ = splat::choice!("A{}", label);
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct ChoiceWords {
     /// The fixed words: one more than the objects.
     fixed: Vec<&'static str>,
     objects: Vec<String>,
+    /// Shorter forms of the same choice, longest first (`or_shorter`), shared, with the
+    /// revision `or_shorter` gave them: a choice kept by its owner clones them and compares
+    /// that revision, not form by form (a clone is the same version).
+    shorter: std::sync::Arc<[ChoiceWords]>,
+    shorter_revision: Option<super::memo::Revision>,
 }
+
+impl PartialEq for ChoiceWords {
+    fn eq(&self, other: &Self) -> bool {
+        self.fixed == other.fixed
+            && self.objects == other.objects
+            && self.shorter_revision == other.shorter_revision
+    }
+}
+
+impl Eq for ChoiceWords {}
 
 /// How many letters a cut object keeps at least.
 const OBJECT_KEEPS: usize = 3;
@@ -863,6 +878,8 @@ impl From<&'static str> for ChoiceWords {
         Self {
             fixed: vec![fixed],
             objects: Vec::new(),
+            shorter: std::sync::Arc::from([]),
+            shorter_revision: None,
         }
     }
 }
@@ -879,7 +896,21 @@ impl ChoiceWords {
         Self {
             fixed: template.split("{}").collect(),
             objects,
+            shorter: std::sync::Arc::from([]),
+            shorter_revision: None,
         }
+    }
+
+    /// These words, with shorter forms of the same choice for a line too short for them,
+    /// longest first, each made by `choice!` too: a form that gives up a whole part, never a
+    /// piece of one (Arrivals' Move: `Move Shrine Reserve (Goblin Warrior 3) before Brannoch
+    /// Vale`, then `Move Shrine Reserve before Brannoch Vale`, then `Move Shrine… before
+    /// Brannoch Vale`). The first form that fits shows whole; when none fits, the last one's
+    /// objects are cut as always. The action's name and tip keep these whole words.
+    pub fn or_shorter(mut self, forms: impl IntoIterator<Item = ChoiceWords>) -> Self {
+        self.shorter = self.shorter.iter().cloned().chain(forms).collect();
+        self.shorter_revision = Some(super::memo::Revision::next());
+        self
     }
 
     /// The whole words: the action's accessible name.
@@ -906,36 +937,52 @@ impl ChoiceWords {
         words
     }
 
-    /// The visible words: the whole words when `fits` them, else the longest cut that does
-    /// (every object cut to the same number of letters, at least `OBJECT_KEEPS`). When even the
-    /// shortest cut does not fit, the whole words wrap: a fixed word is never cut. The search is
-    /// a bisection over the letters kept: at most `log2` of the longest object's length
-    /// measurements per draw.
+    /// The visible words: the whole words when `fits` them, else the first shorter form that
+    /// does (`or_shorter`), else the longest cut of the last form that does (every object cut to
+    /// the same number of letters, at least `OBJECT_KEEPS`). When even the shortest cut does not
+    /// fit, the whole words wrap: a fixed word is never cut. The search is a bisection over the
+    /// letters kept: at most `log2` of the longest object's length measurements per draw, after
+    /// one for each shorter form.
     fn fit(&self, fits: impl Fn(&str) -> bool) -> Fitted {
         let whole = self.label();
         if fits(&whole) {
             return Fitted::Whole(whole);
         }
-        let longest = self
+        for form in self.shorter.iter() {
+            let words = form.label();
+            if fits(&words) {
+                return Fitted::Cut(words, whole);
+            }
+        }
+        let last = self.shorter.last().unwrap_or(self);
+        let longest = last
             .objects
             .iter()
             .map(|object| object.chars().count())
             .max()
             .unwrap_or(0);
-        if longest <= OBJECT_KEEPS || !fits(&self.shown(OBJECT_KEEPS)) {
+        if longest <= OBJECT_KEEPS || !fits(&last.shown(OBJECT_KEEPS)) {
             return Fitted::Wraps(whole);
         }
         // The widest cut that fits: the width grows with the letters kept.
         let (mut low, mut high) = (OBJECT_KEEPS, longest - 1);
         while low < high {
             let mid = (low + high).div_ceil(2);
-            if fits(&self.shown(mid)) {
+            if fits(&last.shown(mid)) {
                 low = mid;
             } else {
                 high = mid - 1;
             }
         }
-        Fitted::Cut(self.shown(low), whole)
+        Fitted::Cut(last.shown(low), whole)
+    }
+
+    /// The visible words where `fits` says which words fit, for a caller's test of its forms.
+    #[cfg(test)]
+    pub(crate) fn shown_where(&self, fits: impl Fn(&str) -> bool) -> String {
+        match self.fit(fits) {
+            Fitted::Whole(words) | Fitted::Wraps(words) | Fitted::Cut(words, _) => words,
+        }
     }
 
     /// `fit` for a choice of `kind` in `room`.
@@ -5433,6 +5480,33 @@ mod tests {
         );
         let h = harness_sized(one(), 960.0);
         assert_eq!(visible(&h, MOVE).1, [MOVE], "wide: the whole words");
+        // Migration-32 L2c: a choice with a shorter form (Arrivals' Move) shows that form whole
+        // where the whole words do not fit, before any object is cut; its name keeps the whole
+        // words. Narrower than the form, the form's objects are cut.
+        const WHOLE: &str = "Move Shrine Reserve (Goblin Warrior 3) before Brannoch Vale";
+        const SHORT: &str = "Move Shrine Reserve before Brannoch Vale";
+        let short = |width: f32| {
+            let mut app = one();
+            app.moves = Some(["Shrine Reserve (Goblin Warrior 3)", "Brannoch Vale"]);
+            app.move_short = Some("Shrine Reserve");
+            app.narrow = Some(width);
+            harness_sized(app, 960.0)
+        };
+        assert_eq!(
+            visible(&short(900.0), WHOLE).1,
+            [WHOLE],
+            "room: the whole words"
+        );
+        assert_eq!(
+            visible(&short(380.0), WHOLE).1,
+            [SHORT],
+            "short of the whole words: the shorter form, whole"
+        );
+        let cut = visible(&short(240.0), WHOLE).1;
+        assert!(
+            cut.len() == 1 && cut[0].starts_with("Move Shr") && !cut[0].contains('('),
+            "short of the form: the form's objects are cut, never the parenthesis: {cut:?}"
+        );
 
         // Review of PR 332, 3: two objects with one prefix are told apart by the tip, on hover
         // and on keyboard focus, whenever the visible words are cut.
@@ -6055,6 +6129,8 @@ mod tests {
             pub same_verb: bool,
             /// The older line has a choice whose words hold two objects from data (M3).
             pub moves: Option<[&'static str; 2]>,
+            /// The Move choice has a shorter form: its first object given as this.
+            pub move_short: Option<&'static str>,
             /// It also has a red choice with data, given before `Move` (the part puts it after).
             pub deletes: bool,
             /// Its `Move` and `Delete` say what they do, in help lines (ruling M8).
@@ -6127,6 +6203,7 @@ mod tests {
                 if let Some(shown) = app.dndbeyond.results.get(&Campaign(owner)) {
                     let two_choices = app.two_choices;
                     let moves = app.moves;
+                    let move_short = app.move_short;
                     let deletes = app.deletes;
                     let helps = app.helps;
                     let line = shown.outcome(&frame, |saved| {
@@ -6202,10 +6279,16 @@ mod tests {
                                     }
                                     said = said.choice(delete);
                                 }
-                                let mut moving = Choice::named(
-                                    crate::choice!("Move {} before {}", a, b),
-                                    Act::Rename,
-                                );
+                                let words = crate::choice!("Move {} before {}", a, b);
+                                let words = match move_short {
+                                    Some(short) => words.or_shorter([crate::choice!(
+                                        "Move {} before {}",
+                                        short,
+                                        b
+                                    )]),
+                                    None => words,
+                                };
+                                let mut moving = Choice::named(words, Act::Rename);
                                 if helps {
                                     // Long enough to wrap in a 320 px pane.
                                     moving = moving.help(crate::sentence!(

@@ -35,6 +35,7 @@ pane-host	src/design/outcome.rs	Messages::pane_editor	1	design
 pane-host	src/design/outcome.rs	Messages::pane_then	1	design	the typed footer's lines after the body (L1c; raised)
 pane-host	src/design/outcome.rs	Messages::pane_content_then	1	design	the typed footer's lines after a Content body with its scroll options (L2c; raised)
 pane-host	src/encounter_run/view.rs	Run::ended_view	1	Run
+pane-host	src/encounter_run/view.rs	Run::groups_tab	1	Run	Arrivals' typed footer (migration-32 L2c), was a hand footer over a raw scroll area
 pane-host	src/encounter_run/view.rs	Run::live_view	1	Run
 pane-host	src/encounter_run/view.rs	Run::reference_tab	2	Run
 pane-host	src/encounter_run/view.rs	Run::setup_body	1	Run
@@ -60,9 +61,9 @@ pane-host	src/trackers/view.rs	show	2	Trackers
 pane-host	src/world/page.rs	WorldPage::creation_form	1	World
 pane-host	src/world/page.rs	WorldPage::show	3	World
 pane-host	src/world/repair.rs	Repair::show	1	World
-hand-footer	src/encounter_run/view.rs	Run::groups_tab	1	Run
 fills	src/campaign_content.rs	CampaignContent::show	1	Campaign
 fills	src/encounter_run/view.rs	Run::ended_view	1	Run
+fills	src/encounter_run/view.rs	Run::groups_tab	1	Run	Arrivals' list with its own scroll under its typed footer (migration-32 L2c)
 fills	src/encounter_run/view.rs	Run::live_view	1	Run
 fills	src/encounter_run/view.rs	Run::setup_body	1	Run
 fills	src/encounters.rs	Encounters::creature_pane	1	Encounters	the creature's Markdown editor as tall as its room (migration-32 L2c), was under a hand footer

@@ -20452,6 +20452,26 @@ pub mod encounter_groups {
                 ),
             );
         }
+        // Migration-32 L2c (M-R0.1, P3): the footer's lines are read after the body's acts
+        // (`Messages::pane_then`). In the first frame of typing a valid total over the bad one,
+        // drawn in one pass, and in the next, the old reason is gone and Add is enabled.
+        const RIVALS_REASON: &str = "Rival Team: Enter a whole number, or clear the field to roll.";
+        d.click_field(TOTAL_FOR_RIVALS);
+        d.press_ctrl(Key::A);
+        let typed = d.first_frame_one_pass([egui::Event::Text("14".into())], |d| {
+            (
+                d.painted_rect_in(RIVALS_REASON, egui::Rect::EVERYTHING)
+                    .is_some(),
+                d.is_disabled(&add_group(GROUP_RIVALS)),
+            )
+        });
+        d.observe(
+            "m32-L2c-valid-total-first-frame",
+            typed == ((false, false), (false, false)),
+            format!(
+                "The first frame of a valid total and the next (one pass each): (old reason painted, Add disabled) = {typed:?}"
+            ),
+        );
         d.clear_text_in(TOTAL_FOR_RIVALS);
         let before = roster_places(d).len();
         d.click(&add_group(GROUP_LOST));
@@ -27684,7 +27704,10 @@ pub mod remove_package_in_use {
             d.root.join("modules/ashen-marches/Module.md").is_file(),
             "Unregistering keeps the package files",
         );
-        d.expect("Undo unregister");
+        // M-L0.4b (ruling M9): the Undo names its package; its accessible name is the whole
+        // label at every width.
+        let undo = format!("Undo unregister {MODULE}");
+        d.expect(&undo);
         let with_result = places(d);
         // Round 25 FG2: a finished change is a success message.
         let words = d.painted_rect_in("Ashen Marches is unregistered.", egui::Rect::EVERYTHING);
@@ -27695,7 +27718,7 @@ pub mod remove_package_in_use {
             format!("The unregister result has the success bar: {words:?}"),
         );
         d.state("package-unregistered-with-undo", Sizes::All);
-        d.click("Undo unregister");
+        d.click(&undo);
         d.expect(&format!("More actions for {MODULE}"));
         let registered = d
             .app_mut()
@@ -27719,7 +27742,7 @@ pub mod remove_package_in_use {
         d.click(&format!("More actions for {MODULE}"));
         d.click(&format!("Unregister {MODULE}"));
         d.click("Unregister");
-        d.expect("Undo unregister");
+        d.expect(&undo);
         go_campaign(d);
         d.click("Reload from disk");
         d.expect("Ashen Marches is not registered.");
