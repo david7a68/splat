@@ -15,9 +15,10 @@
 //!   the lead's answer on `TooTall`).
 //! - **The native range (I2).** The scroll area's content is the plan's whole extent, never the
 //!   mask: at its largest offset the last block is whole.
-//! - **Tab edges (L10).** While the focused control is in the first or last whole block and a
-//!   block lies beyond it, Tab (Shift+Tab) is the region's: it shows that block whole and gives
-//!   focus to its first control once it is drawn. Tab never skips a block outside the view.
+//! - **A list box (L10, the lead's ruling B).** The list is one Tab stop, an accessible list box:
+//!   Tab enters at the selected row (else the first whole row) and the next Tab leaves the list.
+//!   Up and Down (Home, End) move between rows, each a jump that shows the row whole, focus
+//!   following it; so every row is reached, also one outside the view.
 //! - **Small room (L3).** Below the tallest block, the list is laid out at that height in an
 //!   outer scroll of the room it has; each entry into that state is counted.
 
@@ -81,8 +82,17 @@ pub struct RegionState {
     offset: f32,
     rect: Option<Rect>,
     view: f32,
-    /// The block that held keyboard focus at the end of its last pass.
+    /// The block that held keyboard focus at the end of its last pass, and that control.
     focused: Option<usize>,
+    focused_id: Option<Id>,
+    /// The first and the last control in the region in its last pass (its scroll surface or a
+    /// row), and whether focus was in the region.
+    edges: (Option<Id>, Option<Id>),
+    inside: bool,
+    /// The frame of the last Tab press: egui moves focus back (Shift+Tab) a frame later.
+    tab_frame: Option<u64>,
+    /// The list box's stop: the selected row, which Tab enters at.
+    selected: Option<usize>,
     /// A Tab out of an edge: the block whose first control takes focus once it is drawn.
     focus_next: Option<usize>,
     small: bool,
@@ -98,6 +108,11 @@ impl RegionState {
             rect: None,
             view: 0.0,
             focused: None,
+            focused_id: None,
+            edges: (None, None),
+            inside: false,
+            tab_frame: None,
+            selected: None,
             focus_next: None,
             small: false,
             small_rooms: 0,
@@ -131,6 +146,7 @@ pub struct BlockRegion<'s> {
     id: Id,
     state: &'s mut RegionState,
     content: &'s Revised<Vec<Block>>,
+    name: &'s str,
 }
 
 impl<'s> BlockRegion<'s> {
@@ -143,7 +159,20 @@ impl<'s> BlockRegion<'s> {
             id: Id::new(id_salt),
             state,
             content,
+            name: "List",
         }
+    }
+
+    /// The list box's accessible name.
+    pub fn name(mut self, name: &'s str) -> Self {
+        self.name = name;
+        self
+    }
+
+    /// The selected row: where Tab enters the list.
+    pub fn selected(self, row: Option<usize>) -> Self {
+        self.state.selected = row;
+        self
     }
 
     /// Draw the list in the room left in `ui`: `block` draws block `at` in its own `Ui`, whole.
@@ -179,7 +208,12 @@ impl<'s> BlockRegion<'s> {
         view: f32,
         mut block: impl FnMut(&mut Ui, usize),
     ) -> Range<usize> {
-        let Self { id, state, content } = self;
+        let Self {
+            id,
+            state,
+            content,
+            name,
+        } = self;
         let ctx = ui.ctx().clone();
         // The pass's input first: a user scroll over the region cancels every pending request
         // (R44); a press held in it makes them wait.
@@ -196,6 +230,40 @@ impl<'s> BlockRegion<'s> {
         });
         if scrolled {
             state.pending = Pending::default();
+        }
+        // The list box: Tab leaves from the region's last control (Shift+Tab from its first), so
+        // egui's own Tab goes on past the list; while a row holds focus, Up and Down (Home, End)
+        // are jumps that focus follows.
+        if ctx.input(|input| input.key_pressed(Key::Tab)) {
+            state.tab_frame = Some(ctx.cumulative_frame_nr());
+        }
+        if state.inside {
+            let (tab, back) =
+                ctx.input(|input| (input.key_pressed(Key::Tab), input.modifiers.shift));
+            if tab && let Some(edge) = if back { state.edges.0 } else { state.edges.1 } {
+                ctx.memory_mut(|memory| memory.request_focus(edge));
+            }
+        }
+        if let Some(at) = state.focused
+            && ctx.memory(|memory| memory.focused()) == state.focused_id
+        {
+            let rows = content.len();
+            let key = |key| ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, key));
+            let to = if key(Key::ArrowDown) {
+                (at + 1 < rows).then_some(at + 1)
+            } else if key(Key::ArrowUp) {
+                at.checked_sub(1)
+            } else if key(Key::Home) {
+                (rows > 0).then_some(0)
+            } else if key(Key::End) {
+                rows.checked_sub(1)
+            } else {
+                None
+            };
+            if let Some(to) = to {
+                state.pending.navigation = Some(Navigation::Jump { block: to });
+                state.focus_next = Some(to);
+            }
         }
         let plan = state.plan.plan(content, env);
         let current = plan.clamp(state.offset, view);
@@ -219,6 +287,7 @@ impl<'s> BlockRegion<'s> {
         }
         let layer = ui.layer_id();
         let mut drawn: Vec<(usize, Range<usize>)> = Vec::new();
+        let region_from = widget_count(&ctx, layer);
         let output = column.show_viewport(ui, |ui, viewport| {
             let mask = state
                 .plan
@@ -228,13 +297,20 @@ impl<'s> BlockRegion<'s> {
             ui.set_min_height(extent);
             let origin = ui.max_rect().min;
             let width = ui.available_width();
+            // The rows are the options of one accessible list box.
+            let mut list =
+                ui.new_child(UiBuilder::new().id_salt("list_box").max_rect(ui.max_rect()));
+            ctx.accesskit_node_builder(list.unique_id(), |node| {
+                node.set_role(egui::accesskit::Role::ListBox);
+                node.set_label(name);
+            });
             let tall = mask.too_tall.iter().map(|tall| tall.block);
             for at in mask.whole.clone().chain(tall) {
                 let (top, end) = plan.span(at);
                 let rect = Rect::from_min_size(origin + vec2(0.0, top), vec2(width, end - top));
                 let from = widget_count(&ctx, layer);
                 let mut child =
-                    ui.new_child(UiBuilder::new().id_salt(("block", at)).max_rect(rect));
+                    list.new_child(UiBuilder::new().id_salt(("block", at)).max_rect(rect));
                 block(&mut child, at);
                 drawn.push((at, from..widget_count(&ctx, layer)));
             }
@@ -256,56 +332,82 @@ impl<'s> BlockRegion<'s> {
             }
             mask.whole
         });
+        let region_widgets = region_from..widget_count(&ctx, layer);
         state.offset = output.state.offset.y;
         state.rect = Some(output.inner_rect);
         let whole = output.inner;
-        // Focus: which block holds it; a Tab out of an edge block is the region's (L10).
+        // Focus: which block holds it, the edge rows' controls, and the list box's stop.
         let focused = ctx.memory(|memory| memory.focused());
-        let block_of = |id: Id| {
-            drawn.iter().find_map(|(at, range)| {
-                ctx.viewport(|viewport| {
-                    viewport
-                        .this_pass
-                        .widgets
-                        .get_layer(layer)
-                        .skip(range.start)
-                        .take(range.len())
-                        .any(|widget| widget.id == id)
-                })
-                .then_some(*at)
+        let widgets = |range: &Range<usize>| -> Vec<egui::WidgetRect> {
+            ctx.viewport(|viewport| {
+                viewport
+                    .this_pass
+                    .widgets
+                    .get_layer(layer)
+                    .skip(range.start)
+                    .take(range.len())
+                    .copied()
+                    .collect()
             })
         };
-        state.focused = focused.and_then(block_of);
-        let plan = state.plan.plan(content, env);
-        if let (Some(id), Some(at)) = (focused, state.focused) {
-            let beyond = if at + 1 == whole.end && at + 1 < plan.len() {
-                Some((at + 1, false))
-            } else if at == whole.start && at > 0 {
-                Some((at - 1, true))
-            } else {
-                None
-            };
-            if let Some((next, back)) = beyond {
-                // The control keeps Tab: egui does not move focus past the region's edge.
-                ctx.memory_mut(|memory| {
-                    memory.set_focus_lock_filter(
-                        id,
-                        egui::EventFilter {
-                            tab: true,
-                            ..Default::default()
-                        },
-                    );
-                });
-                let tab =
-                    ctx.input(|input| input.key_pressed(Key::Tab) && input.modifiers.shift == back);
-                if tab {
-                    state.pending.navigation = Some(Navigation::Jump { block: next });
-                    state.focus_next = Some(next);
-                    ctx.request_discard("the region shows the block that Tab reaches");
+        let first_control = |range: &Range<usize>| {
+            widgets(range)
+                .into_iter()
+                .find(|widget| widget.enabled && widget.sense.is_focusable())
+                .map(|widget| widget.id)
+        };
+        let was_in = state.inside;
+        let controls: Vec<Id> = widgets(&region_widgets)
+            .into_iter()
+            .filter(|widget| widget.enabled && widget.sense.is_focusable())
+            .map(|widget| widget.id)
+            .collect();
+        state.inside = focused.is_some_and(|id| controls.contains(&id));
+        state.edges = (controls.first().copied(), controls.last().copied());
+        state.focused = focused.and_then(|id| {
+            drawn
+                .iter()
+                .find(|(_, range)| widgets(range).iter().any(|widget| widget.id == id))
+                .map(|(at, _)| *at)
+        });
+        state.focused_id = focused.filter(|_| state.focused.is_some());
+        if let (Some(id), Some(_)) = (focused, state.focused) {
+            // The focused row keeps the vertical arrows: they move between rows (above).
+            ctx.memory_mut(|memory| {
+                memory.set_focus_lock_filter(
+                    id,
+                    egui::EventFilter {
+                        vertical_arrows: true,
+                        ..Default::default()
+                    },
+                );
+            });
+        }
+        // A Tab into the region (its scroll surface or a row) lands on the list box's stop: the
+        // selected row, else the first whole row.
+        let by_tab = state
+            .tab_frame
+            .is_some_and(|frame| ctx.cumulative_frame_nr() <= frame + 1);
+        if state.inside && !was_in && by_tab {
+            let stop = state
+                .selected
+                .filter(|row| *row < content.len())
+                .unwrap_or(whole.start);
+            if state.focused != Some(stop) {
+                match drawn.iter().find(|(row, _)| *row == stop) {
+                    Some((_, range)) => {
+                        if let Some(first) = first_control(range) {
+                            ctx.memory_mut(|memory| memory.request_focus(first));
+                        }
+                    }
+                    None => {
+                        state.pending.navigation = Some(Navigation::Jump { block: stop });
+                        state.focus_next = Some(stop);
+                    }
                 }
             }
         }
-        // The block Tab reached takes focus on its first control once it is drawn.
+        // A row an arrow (or the stop) reached takes focus on its first control once drawn.
         if let Some(next) = state.focus_next
             && let Some((_, range)) = drawn.iter().find(|(at, _)| *at == next)
         {

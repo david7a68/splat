@@ -2929,27 +2929,34 @@ mod row_cut_tests {
             state: RegionState,
             rows: crate::design::memo::Revised<Vec<Block>>,
             room: f32,
+            selected: Option<usize>,
         }
         let mut list = egui_kittest::Harness::builder()
             .with_size(egui::vec2(400.0, 420.0))
             .build_ui_state(
                 |ui, list: &mut List| {
-                    let room = list.room;
+                    let (room, selected) = (list.room, list.selected);
                     let List { state, rows, .. } = list;
+                    let _ = ui.button("Before");
                     ui.allocate_ui(egui::vec2(ui.available_width(), room), |ui| {
                         ui.set_max_height(room);
-                        BlockRegion::new("region_test", state, rows).show(ui, |ui, at| {
-                            let _ = ui.add_sized(
-                                ui.available_size(),
-                                egui::Button::new(format!("Row {at}")),
-                            );
-                        });
+                        BlockRegion::new("region_test", state, rows)
+                            .name("Rows")
+                            .selected(selected)
+                            .show(ui, |ui, at| {
+                                let _ = ui.add_sized(
+                                    ui.available_size(),
+                                    egui::Button::new(format!("Row {at}")),
+                                );
+                            });
                     });
+                    let _ = ui.button("After");
                 },
                 List {
                     state: RegionState::new("region_test"),
                     rows: crate::design::memo::Revised::new(vec![Block::Row(Row::Entry); 60]),
                     room: 300.0,
+                    selected: None,
                 },
             );
         crate::design::theme::install(&list.ctx);
@@ -3099,36 +3106,81 @@ mod row_cut_tests {
             whole(&list, "released").contains(&30),
             "region: the jump lands after the release"
         );
-        // L10: Tab from the last whole row reaches the next row, which comes whole into view.
+        // L10, a list box (the lead's ruling B): Down from the last whole row shows the next row
+        // whole and focuses it; End and Home reach the last and the first row; Tab enters at the
+        // selected row and the next Tab leaves the list.
+        let focus_on = |h: &egui_kittest::Harness<'_, List>, label: &str| {
+            use egui_kittest::kittest::{NodeT, Queryable};
+            let node = h
+                .query_by_label(label)
+                .map(|node| node.accesskit_node().id());
+            node.is_some()
+                && h.ctx
+                    .memory(|memory| memory.focused())
+                    .map(|id| egui::accesskit::NodeId(id.value()))
+                    == node
+        };
+        let key = |h: &mut egui_kittest::Harness<'_, List>, key: egui::Key, shift: bool| {
+            h.input_mut().events.push(egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: if shift {
+                    egui::Modifiers::SHIFT
+                } else {
+                    egui::Modifiers::NONE
+                },
+            });
+            h.run_steps(3);
+        };
         list.state_mut().state.navigate(Navigation::Reset);
         list.run_steps(2);
-        let last = *whole(&list, "tab").last().expect("rows");
+        let last = *whole(&list, "arrows").last().expect("rows");
         {
             use egui_kittest::kittest::Queryable;
             list.get_by_label(&format!("Row {last}")).focus();
         }
         list.run_steps(2);
-        list.input_mut().events.push(egui::Event::Key {
-            key: egui::Key::Tab,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::NONE,
-        });
-        list.run_steps(3);
-        let focused = list.ctx.memory(|memory| memory.focused());
-        let next = {
-            use egui_kittest::kittest::{NodeT, Queryable};
-            list.query_by_label(&format!("Row {}", last + 1))
-                .map(|node| node.accesskit_node().id())
-        };
+        key(&mut list, egui::Key::ArrowDown, false);
         assert!(
-            whole(&list, "tabbed").contains(&(last + 1))
-                && next.is_some()
-                && focused.map(|id| egui::accesskit::NodeId(id.value())) == next,
-            "region: Tab from row {last} focuses row {} whole: {focused:?}",
+            whole(&list, "down").contains(&(last + 1))
+                && focus_on(&list, &format!("Row {}", last + 1)),
+            "region: Down from row {last} shows row {} whole and focuses it",
             last + 1
         );
+        key(&mut list, egui::Key::End, false);
+        assert!(
+            whole(&list, "end").contains(&59) && focus_on(&list, "Row 59"),
+            "region: End reaches the last row"
+        );
+        key(&mut list, egui::Key::Home, false);
+        assert!(
+            whole(&list, "home").contains(&0) && focus_on(&list, "Row 0"),
+            "region: Home reaches the first row"
+        );
+        list.state_mut().selected = Some(3);
+        {
+            use egui_kittest::kittest::Queryable;
+            list.get_by_label("Before").focus();
+        }
+        list.run_steps(2);
+        key(&mut list, egui::Key::Tab, false);
+        assert!(
+            focus_on(&list, "Row 3"),
+            "region: Tab enters the list at the selected row"
+        );
+        key(&mut list, egui::Key::Tab, false);
+        assert!(
+            focus_on(&list, "After"),
+            "region: the next Tab leaves the list"
+        );
+        key(&mut list, egui::Key::Tab, true);
+        assert!(
+            focus_on(&list, "Row 3"),
+            "region: Shift+Tab enters at the selected row"
+        );
+        list.state_mut().selected = None;
         // L3: below the tallest row, the list is laid out at that height in an outer scroll,
         // counted.
         list.state_mut().room = 30.0;

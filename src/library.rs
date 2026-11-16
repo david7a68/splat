@@ -6719,17 +6719,21 @@ impl Library {
                 let region = self
                     .entry_region
                     .get_or_insert_with(|| design::RegionState::new("library_entries"));
+                let selected_row =
+                    selected.and_then(|selected| matches.iter().position(|i| *i == selected));
                 if std::mem::take(&mut self.reveal_row)
-                    && let Some(row) =
-                        selected.and_then(|selected| matches.iter().position(|i| *i == selected))
+                    && let Some(row) = selected_row
                 {
                     region.navigate(design::Navigation::Jump { block: row });
                 }
+                // One Tab stop, a list box: Tab enters at the selected entry; Up and Down move.
                 design::BlockRegion::new(
                     ("entry_list", self.section.label(), &query, scope),
                     region,
                     rows,
                 )
+                .name("Library entries")
+                .selected(selected_row)
                 .show(ui, |ui, row| {
                         {
                             let i = matches[row];
