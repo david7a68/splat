@@ -469,15 +469,23 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
 /// `src/design/fact.rs`, read by `syn` per function (a method too), following each value to
 /// where it is used, it counts a local copy of the part:
 /// - a fact format: a format string with `{…}: {…}` whose value is joined by the middle dot,
-///   given as an argument (`values.join(" · ")`) or read through a name a `let` bound to such a
-///   join (`{values}`), whatever the helper is called;
+///   given as an argument (`values.join(" · ")`) or read through a name bound to such a join
+///   (`{values}`), whatever the helper is called;
 /// - a tile label with no colon: a format string of placeholders and spaces only (`{}{} {}`,
 ///   raw or not) given as the label of a stat tile (`stat_tile`, `roll_tile`, `metric`,
-///   `roll_metric`), directly or through a name a `let` bound to it; the part's form is
+///   `roll_metric`), directly or through a name bound to it; the part's form is
 ///   `fact::tile_label`;
 /// - a rolling tile: `rolls::link(…, Type::NumeralLarge, …)`; the part is `fact::roll_tile`.
 ///
-/// The named legacy exceptions are counts in the allowlist.
+/// A name is bound to a value by a `let` of it or of another such name, also through a chain
+/// (`let b = a.clone(); let c = &b;`: `clone`, `to_owned`, `to_string`, `as_str`, `into`, a
+/// reference); a new binding of the name ends it. The named legacy exceptions are counts in
+/// the allowlist.
+///
+/// Named limits (ruling of the PR 470 review): the rule reads one function at a time. It does
+/// not find a join made in another function and returned (`fn joined() -> String`), nor a
+/// label made in a closure and passed through another function (`label()`) into `stat_tile`.
+/// Review finds those; `docs/design-system.md` (Party) names them too.
 fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     use syn::spanned::Spanned;
     use syn::visit::Visit;
@@ -486,11 +494,15 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     /// What one function does that a fact's part owns.
     #[derive(Default, Clone)]
     struct Fact {
-        /// The names a `let` binds to values joined by the middle dot.
+        /// The names bound to values joined by the middle dot.
         dot_names: std::collections::BTreeSet<String>,
-        /// The names a `let` binds to a format of placeholders and spaces only, and whether
-        /// that format was counted already (one count per format site, however often used).
-        bare_names: std::collections::BTreeMap<String, bool>,
+        /// The names bound to a format of placeholders and spaces only, each with its format
+        /// site: a name bound to another name has that name's site.
+        bare_names: std::collections::BTreeMap<String, usize>,
+        /// The format sites of `bare_names` so far, and those already counted (one count per
+        /// format site, however often and under however many names it is used).
+        sites: usize,
+        counted: std::collections::BTreeSet<usize>,
         /// The local copies found.
         copies: usize,
     }
@@ -539,6 +551,21 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
         match expr {
             syn::Expr::Reference(reference) => unref(&reference.expr),
             other => other,
+        }
+    }
+    /// The name whose value `expr` is (`a`, `&a`, `a.clone()`, `(a).to_string()`), if any.
+    fn alias(expr: &syn::Expr) -> Option<String> {
+        match unref(expr) {
+            syn::Expr::Paren(inner) => alias(&inner.expr),
+            syn::Expr::MethodCall(call)
+                if call.args.is_empty()
+                    && ["clone", "to_owned", "to_string", "as_str", "into"]
+                        .iter()
+                        .any(|method| call.method == method) =>
+            {
+                alias(&call.receiver)
+            }
+            other => ident(other),
         }
     }
     /// The one name `expr` is (`label`), if it is a plain name.
@@ -620,18 +647,32 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     }
     impl<'ast> Visit<'ast> for Formats<'_> {
         fn visit_local(&mut self, local: &'ast syn::Local) {
+            // What the value is, read before the binding ends what its names held: a join, a
+            // bare format, or another name's value (`let b = a.clone();`).
+            let init = local.init.as_ref().map(|init| &*init.expr);
+            let source = init.and_then(alias);
+            let dots = init.is_some_and(dot_join)
+                || source
+                    .as_ref()
+                    .is_some_and(|source| self.fact.dot_names.contains(source));
+            let site = if init.and_then(template).is_some_and(|words| bare(&words)) {
+                self.fact.sites += 1;
+                Some(self.fact.sites)
+            } else {
+                source.and_then(|source| self.fact.bare_names.get(&source).copied())
+            };
             // A new binding ends what the name held before.
             for name in bound(&local.pat) {
                 self.fact.dot_names.remove(&name);
                 self.fact.bare_names.remove(&name);
             }
-            if let (syn::Pat::Ident(name), Some(init)) = (&local.pat, &local.init) {
+            if let syn::Pat::Ident(name) = &local.pat {
                 let name = name.ident.to_string();
-                if dot_join(&init.expr) {
+                if dots {
                     self.fact.dot_names.insert(name.clone());
                 }
-                if template(&init.expr).is_some_and(|words| bare(&words)) {
-                    self.fact.bare_names.insert(name, false);
+                if let Some(site) = site {
+                    self.fact.bare_names.insert(name, site);
                 }
             }
             syn::visit::visit_local(self, local);
@@ -670,11 +711,10 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                 {
                     if template(unref(label)).is_some_and(|words| bare(&words)) {
                         self.fact.copies += 1;
-                    } else if let Some(counted) =
-                        ident(label).and_then(|name| self.fact.bare_names.get_mut(&name))
-                        && !*counted
+                    } else if let Some(site) =
+                        alias(label).and_then(|name| self.fact.bare_names.get(&name).copied())
+                        && self.fact.counted.insert(site)
                     {
-                        *counted = true;
                         self.fact.copies += 1;
                     }
                 }
@@ -710,7 +750,7 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                         .any(|name| names.contains(name));
                     let given = args.iter().skip(1).any(|argument| {
                         dot_join(argument)
-                            || ident(argument).is_some_and(|name| names.contains(&name))
+                            || alias(argument).is_some_and(|name| names.contains(&name))
                     });
                     if inline || given {
                         self.fact.copies += 1;
@@ -722,9 +762,8 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                     last_line: self.last_line,
                     found: Vec::new(),
                     fact: Fact {
-                        dot_names: self.fact.dot_names.clone(),
-                        bare_names: self.fact.bare_names.clone(),
                         copies: 0,
+                        ..self.fact.clone()
                     },
                 };
                 for argument in &args {
@@ -732,6 +771,8 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                 }
                 self.found.extend(nested.found);
                 self.fact.copies += nested.fact.copies;
+                self.fact.counted = nested.fact.counted;
+                self.fact.sites = nested.fact.sites;
             }
         }
         fn visit_path(&mut self, path: &'ast syn::Path) {
@@ -1352,6 +1393,24 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
         ["fact-owner"],
         "the join given as the value"
     );
+    // A chain of `let` bindings carries the join, given or read inline, also when a name is
+    // bound again to its own copy (review of PR 470).
+    for code in [
+        r#"fn senses() {
+            let joined = senses.join(" · ");
+            let shown = joined.clone();
+            let text = &shown;
+            ui.label(format!("{}: {}", "Senses", text));
+        }"#,
+        r#"fn senses() {
+            let joined = senses.join(" · ");
+            let joined = joined.to_owned();
+            let words = (joined).to_string();
+            ui.label(format!("{label}: {words}"));
+        }"#,
+    ] {
+        assert_eq!(rules("src/a.rs", code), ["fact-owner"], "{code}");
+    }
     // A tile label with no colon, raw or not, counted once at its format site; a rolling tile
     // by hand.
     assert_eq!(
@@ -1377,13 +1436,33 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
     assert_eq!(
         rules(
             "src/a.rs",
+            r#"fn tiles() {
+                let label = format!("{} {}", a, b);
+                let shown = label.clone();
+                let text = shown.as_str();
+                stat_tile(ui, text, "15");
+                metric(ui, &label, "15");
+            }"#
+        ),
+        ["fact-owner"],
+        "a chain to a tile's label, one format site"
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
             r#"fn dex() { crate::rolls::link(ui, value, Type::NumeralLarge, &link); }"#
         ),
         ["fact-owner"]
     );
-    // Not a fact: a join with no colon form, a status word beside a tile, a rebound name.
+    // Not a fact: a join with no colon form, a name bound again to another value (its count),
+    // a status word beside a tile, a name a loop binds again, the part itself.
     for code in [
         r#"fn row() { let s = parts.join(" · "); ui.label(format!("{} rows", s)); }"#,
+        r#"fn row() {
+            let s = parts.join(" · ");
+            let s = s.len().to_string();
+            ui.label(format!("{label}: {s}"));
+        }"#,
         r#"fn reference() { stat_tile(ui, "AC", &ac); let icon = format!("{} {word}", a); }"#,
         r#"fn passive() {
             let label = format!("{} {}", a, b);
