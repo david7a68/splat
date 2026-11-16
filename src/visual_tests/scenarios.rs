@@ -9791,8 +9791,9 @@ pub mod run_folder_defect {
         // iter-26-B AC2, FN3, SN1 (help): the initiative help wraps at the reader measure, at
         // every size; the menu above it ends at the form's edge, where Run folder ends (FA10).
         for size in [SMALL, DEFAULT, LARGE] {
-            let (widths, menu, folder) = d.at_size(size, |d| {
+            let (widths, menu, folder, gap) = d.at_size(size, |d| {
                 let mut widths = Vec::new();
+                let mut help_bottom = None;
                 d.each_painted_text(|text, _| {
                     if text
                         .galley
@@ -9801,8 +9802,14 @@ pub mod run_folder_defect {
                         .starts_with("Run setup starts with this choice")
                     {
                         widths.push(text.galley.size().x);
+                        help_bottom = Some(text.pos.y + text.galley.size().y);
                     }
                 });
+                // M0206: the help is its field's, and the field's own `L` follows it, so the
+                // next control starts `L` below the help's last line.
+                let gap = help_bottom
+                    .zip(d.place_of("Break initiative ties in roster order"))
+                    .map(|(bottom, tick)| tick.top() - bottom);
                 // The menu, not its label: the node of that name that reaches furthest.
                 let menu = d
                     .nodes()
@@ -9818,7 +9825,7 @@ pub mod run_folder_defect {
                             && node.role == egui::accesskit::Role::TextInput
                     })
                     .map(|node| node.rect.right());
-                (widths, menu, folder)
+                (widths, menu, folder, gap)
             });
             d.observe(
                 "iter-26-B-help",
@@ -9828,9 +9835,10 @@ pub mod run_folder_defect {
                         .all(|width| *width <= crate::design::READER_MEASURE + 0.5)
                     && menu
                         .zip(folder)
-                        .is_some_and(|(menu, folder)| (menu - folder).abs() <= 1.0),
+                        .is_some_and(|(menu, folder)| (menu - folder).abs() <= 1.0)
+                    && gap.is_some_and(|gap| (gap - crate::design::L).abs() <= 1.0),
                 format!(
-                    "At {size:?}: help widths {widths:?}; menu ends {menu:?}, Run folder {folder:?}"
+                    "At {size:?}: help widths {widths:?}; menu ends {menu:?}, Run folder {folder:?}; help to the next control {gap:?}, want L"
                 ),
             );
         }
