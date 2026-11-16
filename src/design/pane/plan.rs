@@ -197,12 +197,14 @@ struct Unit {
     to: f32,
 }
 
-/// A unit at the view's top or after it, its height, and the offset nearest the DM's that shows
-/// it whole (`None` when it is taller than the view).
+/// A unit at the view's top or after it, its top in the content and its height, and the offset
+/// nearest the DM's that shows it whole by the mask's own edge rule (`None` when no offset in
+/// the native range does: it is taller than the view).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(in crate::design) struct Route {
     pub block: usize,
     pub part: Part,
+    pub top: f32,
     pub height: f32,
     pub offset: Option<f32>,
 }
@@ -255,7 +257,8 @@ pub(in crate::design) struct Mask {
     /// or shows to a screen reader. `None`: no unit is whole.
     pub eligible: Option<(f32, f32)>,
     pub no_whole: Option<NoWholeBlock>,
-    pub too_tall: Option<TooTall>,
+    /// Every unit taller than the view that meets it (two at most: one at each edge).
+    pub too_tall: Vec<TooTall>,
     /// The index entries this mask read: every one (its searches, the eligible span, the cut
     /// blocks' spans and boundaries, and the routes).
     pub read: usize,
@@ -364,9 +367,48 @@ impl BlockPlan {
         self.grid(y) <= self.grid(edge)
     }
 
-    /// A span this tall fits a view this tall, on the pixel grid.
-    fn fits(&self, height: f32, view: f32) -> bool {
-        self.grid(height) <= self.grid(view)
+    /// Whether `from..to` is whole in a view `view` tall at `offset`: eligibility's edge rule.
+    fn whole_at(&self, from: f32, to: f32, offset: f32, view: f32) -> bool {
+        self.at_or_after(from, offset) && self.at_or_before(to, offset + view)
+    }
+
+    /// The offset nearest `near` within `range` at which `from..to` is whole in a view this tall,
+    /// by eligibility's own edge rule (`whole_at`), or `None`. Its edges' pixels bound a window
+    /// of offsets (the view's last pixel at or after its end's, its first at or before its
+    /// top's). The pixel offset nearest `near` in it, when it shows the span; else the nearest of
+    /// `near` held inside it, its ends and its middle; each checked by that rule.
+    fn whole_offset(
+        &self,
+        from: f32,
+        to: f32,
+        view: f32,
+        near: f32,
+        range: (f32, f32),
+    ) -> Option<f32> {
+        let scale = self.scale;
+        let low = ((self.grid(to) - 0.5) / scale - view).max(range.0);
+        let high = ((self.grid(from) + 0.5) / scale).min(range.1);
+        if low > high {
+            return None;
+        }
+        let shows =
+            |at: &f32| *at >= range.0 && *at <= range.1 && self.whole_at(from, to, *at, view);
+        // An offset on the pixel grid when one shows it; else (the native range ends between two
+        // pixels) the nearest of the window's own points.
+        let (first, last) = ((low * scale).ceil(), (high * scale).floor());
+        let pixel = (first <= last).then(|| (near * scale).round().clamp(first, last) / scale);
+        pixel.filter(shows).or_else(|| {
+            [near.clamp(low, high), low, high, (low + high) / 2.0]
+                .into_iter()
+                .filter(shows)
+                .min_by(|a, b| (a - near).abs().total_cmp(&(b - near).abs()))
+        })
+    }
+
+    /// A span fits a view this tall: some offset shows it whole (`whole_offset`).
+    fn fits(&self, from: f32, to: f32, view: f32) -> bool {
+        self.whole_offset(from, to, view, from, (f32::MIN, f32::MAX))
+            .is_some()
     }
 
     /// Block `at`'s units in a view this tall: the block while it fits; else a section's
@@ -381,7 +423,7 @@ impl BlockPlan {
                 to,
             })
         };
-        if self.fits(to - from, view) {
+        if self.fits(from, to, view) {
             return [unit(Part::Block, from, to), None];
         }
         match read.head(at) {
@@ -393,14 +435,11 @@ impl BlockPlan {
         }
     }
 
-    /// The offset nearest `from` that shows `unit` whole in a view this tall.
+    /// The offset nearest `from` in the native range that shows `unit` whole in a view this
+    /// tall, by the mask's own edge rule.
     fn showing(&self, read: &Reader<'_>, unit: Unit, view: f32, from: f32) -> Option<f32> {
-        self.fits(unit.to - unit.from, view).then(|| {
-            // Any offset from the one that puts its end at the view's bottom to its top shows it.
-            let low = (unit.to - view).max(0.0).min(unit.from);
-            from.clamp(low, unit.from)
-                .min((read.extent() - view).max(0.0))
-        })
+        let most = (read.extent() - view).max(0.0);
+        self.whole_offset(unit.from, unit.to, view, from, (0.0, most))
     }
 
     /// Which units are whole in a view `view` tall at native `offset` (I1, rulings L6 and L7,
@@ -417,7 +456,7 @@ impl BlockPlan {
             whole: start..end.max(start),
             eligible: (start < end).then(|| (read.top(start), read.top(end))),
             no_whole: None,
-            too_tall: None,
+            too_tall: Vec::new(),
             read: 0,
         };
         // The blocks cut by the view's top and bottom edges. Each of their units is checked
@@ -429,7 +468,7 @@ impl BlockPlan {
         let cut_below = (end < n && !self.at_or_after(read.top(end), bottom)).then_some(end);
         for at in [cut_above, cut_below].into_iter().flatten() {
             for unit in self.units(&read, at, view).into_iter().flatten() {
-                if self.fits(unit.to - unit.from, view) {
+                if self.fits(unit.from, unit.to, view) {
                     if self.at_or_after(unit.from, top) && self.at_or_before(unit.to, bottom) {
                         mask.eligible = Some(match mask.eligible {
                             Some((low, high)) => (low.min(unit.from), high.max(unit.to)),
@@ -437,7 +476,7 @@ impl BlockPlan {
                         });
                     }
                 } else if !self.at_or_before(unit.to, top) && !self.at_or_after(unit.from, bottom) {
-                    mask.too_tall.get_or_insert(TooTall {
+                    mask.too_tall.push(TooTall {
                         owner,
                         block: at,
                         part: unit.part,
@@ -468,6 +507,7 @@ impl BlockPlan {
             let route = |unit: Unit| Route {
                 block: unit.block,
                 part: unit.part,
+                top: unit.from,
                 height: unit.to - unit.from,
                 offset: self.showing(&read, unit, view, offset),
             };
@@ -541,7 +581,7 @@ impl PlanState {
         let mask = self.plan(content, env).mask(owner, offset, view);
         self.work.entries_read += mask.read;
         self.work.no_whole += usize::from(mask.no_whole.is_some());
-        self.work.too_tall += usize::from(mask.too_tall.is_some());
+        self.work.too_tall += mask.too_tall.len();
         mask
     }
 

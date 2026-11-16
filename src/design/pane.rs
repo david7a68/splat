@@ -2238,6 +2238,41 @@ mod row_cut_tests {
                 !any_whole || !mask.whole.is_empty(),
                 "plan-i1 {case}: a whole block at offset {offset} in {view} is eligible: {mask:?}"
             );
+            // Review of PR 461 (re-check, 1): each route the mask returns shows its unit whole
+            // there, by the mask's own rule; so does `offset_showing` for each block in the view
+            // that is not whole.
+            let routes = mask
+                .no_whole
+                .iter()
+                .flat_map(|gap| [Some(gap.above), gap.below])
+                .flatten();
+            for route in routes {
+                if let Some(at) = route.offset {
+                    let shown = plan.mask("plan_test", at, view);
+                    assert!(
+                        shown.eligible.is_some_and(|(from, to)| {
+                            grid(plan, route.top) >= grid(plan, from)
+                                && grid(plan, route.top + route.height) <= grid(plan, to)
+                        }),
+                        "plan-l7 {case}: at offset {offset} in {view} the route {at} shows {route:?} whole: {shown:?}"
+                    );
+                }
+            }
+            for at in 0..plan.len() {
+                let (top, end) = plan.span(at);
+                let meets = grid(plan, end) > grid(plan, offset)
+                    && grid(plan, top) < grid(plan, offset + view);
+                if meets
+                    && !inside(plan, at, offset, view)
+                    && let Some(route) = plan.offset_showing(at, view, offset)
+                {
+                    let shown = plan.mask("plan_test", route, view);
+                    assert!(
+                        shown.whole.contains(&at),
+                        "plan-route {case}: offset_showing({at}) from {offset} in {view} is {route}, where block {at} is whole: {shown:?}"
+                    );
+                }
+            }
             mask
         };
         let blocks = || {
@@ -2314,7 +2349,7 @@ mod row_cut_tests {
                 && split
                     .eligible
                     .is_some_and(|(from, to)| from == 0.0 && to < section)
-                && split.too_tall.is_none(),
+                && split.too_tall.is_empty(),
             "plan-l6: a section of {section} in a view of {} shows its heading whole: {split:?}",
             section - 10.0
         );
@@ -2323,7 +2358,9 @@ mod row_cut_tests {
             tall.eligible.is_none()
                 && tall
                     .too_tall
-                    .is_some_and(|tall| tall.block == 1 && tall.part == Part::Block),
+                    .iter()
+                    .map(|tall| (tall.block, tall.part))
+                    .eq([(1, Part::Block)]),
             "plan-l6: a row of {} in a view of 30 is too tall: {tall:?} (ends {row_end})",
             row_end - section
         );
@@ -2334,9 +2371,11 @@ mod row_cut_tests {
         let heading_whole = i1(&two_line, 0.0, 35.0, "heading over a tall row");
         assert!(
             heading_whole.eligible == Some((0.0, 34.0))
-                && heading_whole.too_tall.is_some_and(
-                    |tall| (tall.block, tall.part, tall.height) == (0, Part::Row, 40.0)
-                ),
+                && heading_whole
+                    .too_tall
+                    .iter()
+                    .map(|tall| (tall.block, tall.part, tall.height))
+                    .eq([(0, Part::Row, 40.0)]),
             "plan-l6: the heading is whole and the row is too tall: {heading_whole:?}"
         );
 
@@ -2347,9 +2386,10 @@ mod row_cut_tests {
         let gap = mask
             .no_whole
             .expect("plan-l7: the 90/100/40 case reports no whole block");
-        let route = |block, part, height, offset| Route {
+        let route = |block, part, top, height, offset| Route {
             block,
             part,
+            top,
             height,
             offset: Some(offset),
         };
@@ -2358,8 +2398,8 @@ mod row_cut_tests {
             (
                 40.0,
                 100.0,
-                route(0, Part::Block, 90.0, 0.0),
-                Some(route(1, Part::Block, 90.0, 80.0))
+                route(0, Part::Block, 0.0, 90.0, 0.0),
+                Some(route(1, Part::Block, 90.0, 90.0, 80.0))
             ),
             "plan-l7: the diagnostic names the offset, the view and both blocks with their routes"
         );
@@ -2381,15 +2421,15 @@ mod row_cut_tests {
         assert_eq!(
             (
                 parts.eligible,
-                parts.too_tall,
+                parts.too_tall.clone(),
                 parts.no_whole.map(|gap| (gap.above, gap.below))
             ),
             (
                 None,
-                None,
+                Vec::new(),
                 Some((
-                    route(0, Part::Heading, 34.0, 0.0),
-                    Some(route(0, Part::Row, 20.0, 19.0))
+                    route(0, Part::Heading, 0.0, 34.0, 0.0),
+                    Some(route(0, Part::Row, 34.0, 20.0, 19.0))
                 ))
             ),
             "plan-l7: a split section's routes are its parts: {parts:?}"
@@ -2401,6 +2441,45 @@ mod row_cut_tests {
                 "plan-l7: the route {route} shows the part {part:?} whole"
             );
         }
+
+        // Review of PR 461 (re-check, 1): at scale 1.25 a 32 pt row after a 74 pt section in a
+        // 31.9 pt view: at offset 74 the row is not whole (its end's pixel is below the view's),
+        // and the route that `offset_showing` gives shows it whole, by the mask's rule.
+        let after_section = BlockPlan::of_heights(&[(74.0, Some(34.0)), (32.0, None)], 1.25);
+        let hidden = i1(&after_section, 74.0, 31.9, "scale 1.25");
+        let shown = after_section
+            .offset_showing(1, 31.9, 74.0)
+            .map(|at| i1(&after_section, at, 31.9, "scale 1.25 route").whole);
+        assert!(
+            !hidden.whole.contains(&1) && shown == Some(1..2),
+            "plan-route: the row's route at scale 1.25 shows it whole: {hidden:?}, {shown:?}"
+        );
+        // Review of PR 461 (re-check, 2): every unit too tall for the view that meets it is
+        // reported and counted. Rows of 40, 20 and 40 pt in a 35 pt view at offset 30: the middle
+        // row is whole, and both outer rows are too tall.
+        let three = crate::design::memo::Revised::new(vec![
+            Block::Row(Row::TwoLine),
+            Block::Row(Row::Empty),
+            Block::Row(Row::TwoLine),
+        ]);
+        let mut counted = PlanState::new("plan_test");
+        let both = counted.mask(&three, env, 30.0, 35.0);
+        assert_eq!(
+            (
+                both.eligible,
+                both.too_tall
+                    .iter()
+                    .map(|tall| (tall.block, tall.part, tall.height))
+                    .collect::<Vec<_>>(),
+                counted.work().too_tall
+            ),
+            (
+                Some((40.0, 60.0)),
+                vec![(0, Part::Block, 40.0), (2, Part::Block, 40.0)],
+                2
+            ),
+            "plan-l6: both outer rows are too tall, each counted: {both:?}"
+        );
 
         // I12 and M6: a quiet frame (same content, same environment) measures nothing, and a
         // mask reads `O(log n)` index entries, every one counted: three searches of
