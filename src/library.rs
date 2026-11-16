@@ -6548,34 +6548,41 @@ impl Library {
         } else {
             166.0 + design::lane_width()
         });
-        // The closed control keeps whole words of a long package name (`Ashen…`); the list,
-        // the hover and the accessible name keep the whole name.
+        // The control is one line: its words keep whole words of a long name (`Ashen…`,
+        // `Campaign…` in a narrow column); the list, the hover and the accessible name keep the
+        // whole name.
         let budget = width - design::XXL - design::L;
+        let fitted = |words: &str| scope_label(ui, words, budget);
         let first = if active.is_some() {
             Scope::Uses
         } else {
             Scope::All
         };
         let mut dropdown = design::Dropdown::new(LIBRARY_SCOPE, "What the Library shows")
-            .choice(first, label(first));
+            .choice_with_short_label(first, label(first), fitted(&label(first)));
         if active.is_some() {
-            dropdown = dropdown.choice(Scope::All, label(Scope::All));
+            dropdown = dropdown.choice_with_short_label(
+                Scope::All,
+                label(Scope::All),
+                fitted(&label(Scope::All)),
+            );
         }
         dropdown = dropdown.group().choice_with_short_label(
             Scope::Builtin,
             label(Scope::Builtin),
-            "D&D 2024",
+            fitted("D&D 2024"),
         );
         for module in campaigns.modules() {
             let package = Scope::Package(module.id);
-            dropdown = dropdown.choice_with_short_label(
-                package,
-                label(package),
-                scope_label(ui, &module.name, budget),
-            );
+            dropdown =
+                dropdown.choice_with_short_label(package, label(package), fitted(&module.name));
         }
         if active.is_some() {
-            dropdown = dropdown.choice(Scope::Campaign, label(Scope::Campaign));
+            dropdown = dropdown.choice_with_short_label(
+                Scope::Campaign,
+                label(Scope::Campaign),
+                fitted(&label(Scope::Campaign)),
+            );
         }
         let _ = dropdown.width(width).show(ui, &mut scope);
         *current = scope;

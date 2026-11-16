@@ -3155,7 +3155,9 @@ pub mod campaign_content {
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
-        assert!(d.visible_text("Campaign entries"));
+        // M0341: the scope control is one line; in this narrow column its words are cut at a
+        // whole word (`Campaign…`), and its name keeps the whole scope.
+        assert!(d.has("What the Library shows: Campaign entries") && d.visible_text("Campaign"));
         d.state("own-entries-in-library", Sizes::All);
         d.begin_task();
         let in_list = |d: &Driver<'_>, name: &str| {
