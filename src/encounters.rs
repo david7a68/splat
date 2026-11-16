@@ -2329,7 +2329,15 @@ fn creature_facts_width(ui: &egui::Ui, c: &Creature) -> f32 {
             .into_iter()
             .map(|(widest, gap)| design::number_width(ui, widest, &small) + gap)
             .sum();
+            // An NPC's `NPC · as …` follows the columns (`detail_columns`).
+            let parts: Vec<&str> = c.detail.split(" · ").collect();
+            let npc = if c.detail.starts_with("NPC · as ") && parts.len() >= 2 {
+                design::XS + design::number_width(ui, &parts[..2].join(" · "), &small)
+            } else {
+                0.0
+            };
             columns
+                + npc
                 + c.source.as_deref().map_or(0.0, |source| {
                     design::XS + design::number_width(ui, source, &small)
                 })
