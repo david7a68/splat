@@ -251,6 +251,280 @@ pub(super) struct ReadyLine<'a> {
     pub kept: &'a mut crate::difficulty::Kept<Uuid>,
 }
 
+/// Layout PR 5a (I6, §4.1): one list's place in the ledger's columns. The facts column is
+/// measured across In progress, Ready, Groups and History (`ledger`), so each list's actions
+/// start `L` after the widest facts of the whole ledger, and the list's widest action recipe
+/// (with its alternates) sets where its actions end. Spare width lies after the actions. Where
+/// the facts, `L` and the actions do not fit, the actions keep the far edge and the facts give
+/// way, as before.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct Column {
+    pub facts: f32,
+    pub actions: f32,
+    /// The list, as the gate's record of its rows names it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub owner: &'static str,
+}
+
+/// The room a row's second line keeps for its icons: the run icon, and a leading warning's
+/// icon after it.
+fn icon_room(status: bool, detail: &str) -> f32 {
+    if status {
+        design::L
+            + if detail.starts_with("Changed on disk") {
+                design::L
+            } else {
+                0.0
+            }
+    } else {
+        0.0
+    }
+}
+
+/// A row's facts at their whole width: its name, or its second line with the line's icons.
+/// `line` is a Ready row's whole difficulty line, kept with its roster (`Kept::widest`).
+fn facts_width(ui: &egui::Ui, name: &str, detail: &str, status: bool, line: Option<f32>) -> f32 {
+    let second = line.unwrap_or_else(|| design::number_width(ui, detail, &Type::Small.font(ui)));
+    design::number_width(ui, name, &Type::Strong.font(ui)).max(icon_room(status, detail) + second)
+}
+
+/// A Ready row's whole line, kept with its roster: the facts column measures it.
+#[cfg(test)]
+fn ready_line_width(ui: &egui::Ui, line: &mut ReadyLine<'_>) -> Option<f32> {
+    let (difficulty, roster) = (line.difficulty, line.roster);
+    line.kept
+        .widest(ui, &line.id, roster.key, &Type::Small.font(ui), || {
+            crate::difficulty::Line::roster(difficulty, &roster.parts)
+        })
+}
+
+/// The width of actions side by side, with the layout's item spacing between them.
+fn spaced(ui: &egui::Ui, widths: impl IntoIterator<Item = f32>) -> f32 {
+    let (sum, count) = widths
+        .into_iter()
+        .fold((0.0, 0_usize), |(sum, count), width| {
+            (sum + width, count + 1)
+        });
+    sum + ui.spacing().item_spacing.x * count.saturating_sub(1) as f32
+}
+
+fn quiet_width(ui: &egui::Ui, words: &str) -> f32 {
+    Action::quiet(words)
+        .density(Density::Read)
+        .natural_width(ui)
+}
+
+/// An action with the run icon: primary on the first row, secondary after it. The wider.
+fn run_action_width(ui: &egui::Ui, words: &str) -> f32 {
+    let width = |action: Action<'_>| {
+        action
+            .icon(icons::RUN)
+            .density(Density::Read)
+            .natural_width(ui)
+    };
+    width(Action::primary(words)).max(width(Action::secondary(words)))
+}
+
+/// The In progress row's Edit slot: as wide where the row has no Edit, so Resume keeps its place.
+fn edit_slot_width(ui: &egui::Ui) -> f32 {
+    design::number_width(ui, "Edit", &Type::Strong.font(ui)) + design::L
+}
+
+/// An In progress row's actions: its menu, the Edit slot, and Resume, or the open run's state.
+fn in_progress_actions(ui: &egui::Ui, open_state: Option<&str>) -> f32 {
+    let last = open_state.map_or_else(
+        || run_action_width(ui, "Resume"),
+        |word| design::number_width(ui, &format!("{} {word}", icons::RUN), &Type::Small.font(ui)),
+    );
+    spaced(
+        ui,
+        [
+            quiet_width(ui, icons::EXPAND),
+            edit_slot_width(ui).max(quiet_width(ui, "Edit")),
+            last,
+        ],
+    )
+}
+
+/// A Ready row's actions: its menu, Edit, Start fight, and the short reason Start is blocked,
+/// with the link to an open run.
+fn ready_actions(ui: &egui::Ui, reason: Option<&str>, open: bool) -> f32 {
+    let small = Type::Small.font(ui);
+    let link = (open && reason.is_some())
+        .then(|| design::number_width(ui, GO_TO_RUN, &small).max(design::XL));
+    let reason = reason.map(|reason| design::number_width(ui, reason, &small));
+    let fixed = [
+        quiet_width(ui, icons::EXPAND),
+        quiet_width(ui, "Edit"),
+        run_action_width(ui, START_FIGHT),
+    ];
+    spaced(ui, fixed.into_iter().chain(link).chain(reason))
+}
+
+/// A History row's actions: its menu, and Open or Close (the wider, so opening keeps the column).
+fn history_actions(ui: &egui::Ui) -> f32 {
+    let open = quiet_width(ui, "Open").max(quiet_width(ui, "Close"));
+    spaced(ui, [quiet_width(ui, icons::EXPAND), open])
+}
+
+/// A group row's actions: its menu and Edit.
+pub(super) fn group_actions(ui: &egui::Ui) -> f32 {
+    spaced(
+        ui,
+        [quiet_width(ui, icons::EXPAND), quiet_width(ui, "Edit")],
+    )
+}
+
+/// The ledger's columns, measured before its first list is drawn: one facts column across all
+/// its lists (also a closed section's, so opening it moves no action), and each list's widest
+/// action recipe.
+pub(super) struct Ledger {
+    pub in_progress: Column,
+    pub ready: Column,
+    pub groups: Column,
+    pub history: Column,
+}
+
+pub(super) fn ledger(
+    ui: &egui::Ui,
+    page: &history::Arranged<'_>,
+    snapshot: &Snapshot,
+    live: Option<&SavedRunInfo>,
+    story: &Story<'_>,
+    kept: &mut crate::difficulty::Kept<Uuid>,
+) -> Ledger {
+    let mut facts = 0.0_f32;
+    let mut in_progress = 0.0_f32;
+    for run in &page.in_progress {
+        let open = live.is_some_and(|live| live.id == run.id);
+        let detail = paused_run_detail(run, &page.in_progress, open, story);
+        facts = facts.max(facts_width(ui, &run.encounter, &detail, !open, None));
+        let state = open.then(|| run_state_word(run, false));
+        in_progress = in_progress.max(in_progress_actions(ui, state.as_deref()));
+    }
+    let mut ready = 0.0_f32;
+    let small = Type::Small.font(ui);
+    for row in &page.ready {
+        let template = row.template;
+        let (open, reason) = ready_reason(page, row, live);
+        let line = template
+            .summary
+            .as_ref()
+            .filter(|_| !row.unfinished_run)
+            .and_then(|roster| {
+                kept.widest(ui, &template.id, roster.key, &small, || {
+                    crate::difficulty::Line::roster(&template.difficulty, &roster.parts)
+                })
+            });
+        facts = facts.max(facts_width(
+            ui,
+            &template.name,
+            ready_detail(template),
+            false,
+            line,
+        ));
+        ready = ready.max(ready_actions(ui, reason, open));
+    }
+    let mut group = 0.0_f32;
+    for each in snapshot.groups.iter() {
+        facts = facts.max(facts_width(
+            ui,
+            &each.name,
+            &groups::row_detail(each),
+            false,
+            None,
+        ));
+        group = group_actions(ui);
+    }
+    let mut ended = 0.0_f32;
+    for past in page.history.iter().flat_map(|session| &session.runs) {
+        facts = facts.max(facts_width(
+            ui,
+            &past.run.encounter,
+            &history_detail(past),
+            false,
+            None,
+        ));
+        ended = history_actions(ui);
+    }
+    let column = |actions: f32, owner: &'static str| Column {
+        facts,
+        actions,
+        owner,
+    };
+    Ledger {
+        in_progress: column(in_progress, "ledger-in-progress"),
+        ready: column(ready, "ledger-ready"),
+        groups: column(group, "ledger-groups"),
+        history: column(ended, "ledger-history"),
+    }
+}
+
+/// A Ready row's second line: its roster's words.
+fn ready_detail(template: &Template) -> &str {
+    template
+        .summary
+        .as_ref()
+        .map(|roster| roster.words.as_str())
+        .filter(|words| !words.is_empty())
+        .unwrap_or("No participants yet")
+}
+
+/// FJ7: whether a Ready row's run is open, and the short reason its Start is blocked; the long
+/// form is on Start's hover. An open run also gets its link, at the reason.
+fn ready_reason(
+    page: &history::Arranged<'_>,
+    row: &history::ReadyRow<'_>,
+    live: Option<&SavedRunInfo>,
+) -> (bool, Option<&'static str>) {
+    let template = row.template;
+    let unfinished = page.in_progress.iter().find(|run| {
+        run.source == Some(template.id) || (run.source.is_none() && run.encounter == template.name)
+    });
+    let open = unfinished.is_some_and(|run| live.is_some_and(|live| live.id == run.id));
+    let reason = if open {
+        Some(FIGHT_OPEN)
+    } else if row.unfinished_run {
+        Some("This fight is unfinished.")
+    } else if template
+        .summary
+        .as_ref()
+        .is_none_or(|roster| roster.words.is_empty())
+    {
+        Some("Add participants first.")
+    } else {
+        None
+    };
+    (open, reason)
+}
+
+/// A History row's second line: the outcome, the state, the date, and a deleted encounter.
+fn history_detail(past: &history::PastRun<'_>) -> String {
+    let run = past.run;
+    let date = run
+        .saved_at
+        .map(|at| crate::encounter_run::saved_time(at, crate::hermetic::now()))
+        .unwrap_or_else(|| "Date unknown".to_owned());
+    let outcome = run
+        .label
+        .split(" · Ended")
+        .next()
+        .filter(|_| !run.label.starts_with("Ended"));
+    format!(
+        "{}{} · {date}{}",
+        outcome.map_or_else(String::new, |outcome| format!("{outcome} · ")),
+        run_state_word(run, false),
+        if past.template.is_none() {
+            " · Encounter deleted"
+        } else {
+            ""
+        }
+    )
+}
+
+/// A row of the ledger: its facts in the ledger's facts column, and its actions (`own` wide,
+/// drawn from right to left in the existing order) in its list's action column.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn list_row(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
@@ -258,145 +532,65 @@ pub(super) fn list_row(
     detail: &str,
     status: bool,
     line: Option<ReadyLine<'_>>,
+    column: Column,
+    own: f32,
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
+        let height = Density::Scan.row() + design::S;
+        // The gate's record names the row's own facts width (its gap is measured from them).
+        #[cfg(test)]
+        let (whole, line) = {
+            let mut line = line;
+            let line_width = line.as_mut().and_then(|line| ready_line_width(ui, line));
+            (facts_width(ui, name, detail, status, line_width), line)
+        };
         let row = ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), Density::Scan.row() + design::S),
-            egui::Layout::right_to_left(egui::Align::Center),
+            egui::vec2(ui.available_width(), height),
+            egui::Layout::left_to_right(egui::Align::Center),
             |ui| {
-                ui.set_min_height(Density::Scan.row() + design::S);
-                ui.scope(actions);
-                design::gap(ui, design::Gap::L);
-                let room = ui.available_width().max(0.0);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(room, Type::Strong.line() + Type::Small.line()),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        ui.set_width(room);
-                        ui.add(
-                            egui::Label::new(Type::Strong.rich(ui, name).color(colors().text))
-                                .truncate(),
-                        )
-                        .on_hover_text(name);
-                        // The run icon, and a leading warning's icon after it.
-                        let room = ui.available_width()
-                            - if status { design::L } else { 0.0 }
-                            - if status && detail.starts_with("Changed on disk") {
-                                design::L
-                            } else {
-                                0.0
-                            };
-                        // F1, FB2, FB6: the difficulty ends the line in its one form. N7, FG1:
-                        // `difficulty::Line` decides what gives way: the word's limit first,
-                        // then the detail from its end by whole facts and members, then the XP
-                        // number. Hover and the accessible name keep the whole line (V7).
-                        let font = Type::Small.font(ui);
-                        let difficulty = line.as_ref().map(|line| line.difficulty);
-                        // G118: the Ready row's whole line is kept with its roster; other rows
-                        // say their detail and form.
-                        let kept_hover = line.as_ref().map(|line| line.roster.hover.as_str());
-                        let ready = line.is_some();
-                        let fitted = line.and_then(|line| {
-                            let ReadyLine {
-                                id,
-                                difficulty,
-                                roster,
-                                kept,
-                            } = line;
-                            // Where the fight has no form, the kept answer is the words alone,
-                            // so no frame fits the summary again.
-                            kept.answer(ui, &id, roster.key, room, &font, || {
-                                crate::difficulty::Line::roster(difficulty, &roster.parts)
-                                    .fit(|text| design::number_width(ui, text, &font) <= room)
-                                    .or_else(|| {
-                                        Some(crate::difficulty::Fitted {
-                                            lead: fit_detail(ui, detail, &font, room),
-                                            form: Vec::new(),
-                                            cut: false,
-                                            wrap: false,
-                                        })
-                                    })
-                            })
-                        });
-                        let (visible_detail, parts) = match fitted {
-                            Some(fitted) if ready && fitted.form.is_empty() => (fitted.lead, None),
-                            Some(fitted) => (fitted.lead, Some(fitted.form)),
-                            None => (fit_detail(ui, detail, &font, room), None),
-                        };
-                        let whole = row_whole(kept_hover, detail, difficulty);
-                        let warning = visible_detail.split(" · ").position(|part| {
-                            matches!(part, "Changed on disk" | "Offered in no fight")
-                        });
-                        let mut job = egui::text::LayoutJob::default();
-                        for (index, part) in visible_detail.split(" · ").enumerate() {
-                            if index > 0 {
-                                job.append(
-                                    " · ",
-                                    0.0,
-                                    egui::TextFormat {
-                                        font_id: Type::Small.font(ui),
-                                        color: colors().muted,
-                                        ..Default::default()
-                                    },
-                                );
-                            }
-                            // FJ6: a run row's line two always starts with the run icon,
-                            // also when its first part is a warning.
-                            if index == 0 && status && warning == Some(0) {
-                                job.append(
-                                    &format!("{} ", icons::RUN),
-                                    0.0,
-                                    egui::TextFormat {
-                                        font_id: Type::Small.font(ui),
-                                        color: colors().muted,
-                                        ..Default::default()
-                                    },
-                                );
-                            }
-                            let words = if warning == Some(index) {
-                                format!("{} {part}", icons::WARN)
-                            } else if index == 0 && status {
-                                format!("{} {part}", icons::RUN)
-                            } else {
-                                part.to_owned()
-                            };
-                            job.append(
-                                &words,
-                                0.0,
-                                egui::TextFormat {
-                                    font_id: Type::Small.font(ui),
-                                    color: if warning == Some(index) {
-                                        colors().result.warning
-                                    } else {
-                                        colors().muted
-                                    },
-                                    ..Default::default()
-                                },
-                            );
-                        }
-                        let Some(parts) = parts else {
-                            let response = ui
-                                .add(egui::Label::new(job).extend())
-                                .on_hover_text(&*whole);
-                            design::row_detail(ui, &response);
-                            design::named(ui, &response, &format!("{name} · {whole}"));
-                            return;
-                        };
-                        crate::difficulty::append(&mut job, ui, Type::Small, " · ", colors().muted);
-                        crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
-                        let response = ui.add(egui::Label::new(job).extend());
-                        design::row_detail(ui, &response);
-                        design::named(ui, &response, &format!("{name} · {whole}"));
-                        let response = if visible_detail == detail {
-                            response
-                        } else {
-                            response.on_hover_text(&*whole)
-                        };
-                        if let Some(rating) = difficulty.and_then(|d| d.rating.as_ref()) {
-                            crate::difficulty::describe(ui, response, rating);
-                        }
+                let rect = ui.max_rect();
+                ui.set_min_size(rect.size());
+                let room = rect.width().max(0.0);
+                let columns = design::Columns::measure(room, [column.facts], [column.actions]);
+                let right = rect.left() + columns.width(room);
+                let facts = (right - rect.left() - design::L - own).clamp(0.0, column.facts);
+                let start = rect.left() + facts + design::L;
+                let mut actions_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .id_salt("actions")
+                        .max_rect(egui::Rect::from_min_max(
+                            egui::pos2(start, rect.top()),
+                            egui::pos2(right.max(start), rect.bottom()),
+                        ))
+                        .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                );
+                actions(&mut actions_ui);
+                let text = Type::Strong.line() + Type::Small.line();
+                let facts_rect = egui::Rect::from_min_size(
+                    egui::pos2(rect.left(), rect.center().y - text / 2.0),
+                    egui::vec2(facts, text),
+                );
+                let mut facts_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .id_salt("facts")
+                        .max_rect(facts_rect)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                );
+                row_facts(&mut facts_ui, name, detail, status, line, facts);
+                #[cfg(test)]
+                design::action_rows::keep(
+                    ui,
+                    design::action_rows::RowRecord {
+                        owner: column.owner,
+                        row: 0,
+                        facts: egui::Rect::from_min_size(
+                            facts_rect.min,
+                            egui::vec2(whole.min(facts), text),
+                        ),
+                        action: actions_ui.min_rect(),
+                        column: start,
+                        wrapped: columns.wrapped,
                     },
                 );
             },
@@ -404,6 +598,132 @@ pub(super) fn list_row(
         // The row registers its rect, so its second line is known as a row detail, not help.
         design::register_row(ui, row.response.rect);
     });
+}
+
+/// A row's name and its second line in `room`.
+fn row_facts(
+    ui: &mut egui::Ui,
+    name: &str,
+    detail: &str,
+    status: bool,
+    line: Option<ReadyLine<'_>>,
+    room: f32,
+) {
+    ui.spacing_mut().item_spacing.y = 0.0;
+    ui.set_width(room);
+    ui.add(egui::Label::new(Type::Strong.rich(ui, name).color(colors().text)).truncate())
+        .on_hover_text(name);
+    // The run icon, and a leading warning's icon after it.
+    let room = room - icon_room(status, detail);
+    // F1, FB2, FB6: the difficulty ends the line in its one form. N7, FG1:
+    // `difficulty::Line` decides what gives way: the word's limit first,
+    // then the detail from its end by whole facts and members, then the XP
+    // number. Hover and the accessible name keep the whole line (V7).
+    let font = Type::Small.font(ui);
+    let difficulty = line.as_ref().map(|line| line.difficulty);
+    // G118: the Ready row's whole line is kept with its roster; other rows
+    // say their detail and form.
+    let kept_hover = line.as_ref().map(|line| line.roster.hover.as_str());
+    let ready = line.is_some();
+    let fitted = line.and_then(|line| {
+        let ReadyLine {
+            id,
+            difficulty,
+            roster,
+            kept,
+        } = line;
+        // Where the fight has no form, the kept answer is the words alone,
+        // so no frame fits the summary again.
+        kept.answer(ui, &id, roster.key, room, &font, || {
+            crate::difficulty::Line::roster(difficulty, &roster.parts)
+                .fit(|text| design::number_width(ui, text, &font) <= room)
+                .or_else(|| {
+                    Some(crate::difficulty::Fitted {
+                        lead: fit_detail(ui, detail, &font, room),
+                        form: Vec::new(),
+                        cut: false,
+                        wrap: false,
+                    })
+                })
+        })
+    });
+    let (visible_detail, parts) = match fitted {
+        Some(fitted) if ready && fitted.form.is_empty() => (fitted.lead, None),
+        Some(fitted) => (fitted.lead, Some(fitted.form)),
+        None => (fit_detail(ui, detail, &font, room), None),
+    };
+    let whole = row_whole(kept_hover, detail, difficulty);
+    let warning = visible_detail
+        .split(" · ")
+        .position(|part| matches!(part, "Changed on disk" | "Offered in no fight"));
+    let mut job = egui::text::LayoutJob::default();
+    for (index, part) in visible_detail.split(" · ").enumerate() {
+        if index > 0 {
+            job.append(
+                " · ",
+                0.0,
+                egui::TextFormat {
+                    font_id: Type::Small.font(ui),
+                    color: colors().muted,
+                    ..Default::default()
+                },
+            );
+        }
+        // FJ6: a run row's line two always starts with the run icon,
+        // also when its first part is a warning.
+        if index == 0 && status && warning == Some(0) {
+            job.append(
+                &format!("{} ", icons::RUN),
+                0.0,
+                egui::TextFormat {
+                    font_id: Type::Small.font(ui),
+                    color: colors().muted,
+                    ..Default::default()
+                },
+            );
+        }
+        let words = if warning == Some(index) {
+            format!("{} {part}", icons::WARN)
+        } else if index == 0 && status {
+            format!("{} {part}", icons::RUN)
+        } else {
+            part.to_owned()
+        };
+        job.append(
+            &words,
+            0.0,
+            egui::TextFormat {
+                font_id: Type::Small.font(ui),
+                color: if warning == Some(index) {
+                    colors().result.warning
+                } else {
+                    colors().muted
+                },
+                ..Default::default()
+            },
+        );
+    }
+    let Some(parts) = parts else {
+        let response = ui
+            .add(egui::Label::new(job).extend())
+            .on_hover_text(&*whole);
+        design::row_detail(ui, &response);
+        design::named(ui, &response, &format!("{name} · {whole}"));
+        return;
+    };
+    crate::difficulty::append(&mut job, ui, Type::Small, " · ", colors().muted);
+    crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
+    let response = ui.add(egui::Label::new(job).extend());
+    design::row_detail(ui, &response);
+    design::named(ui, &response, &format!("{name} · {whole}"));
+    let response = if visible_detail == detail {
+        response
+    } else {
+        response.on_hover_text(&*whole)
+    };
+    if let Some(rating) = difficulty.and_then(|d| d.rating.as_ref()) {
+        crate::difficulty::describe(ui, response, rating);
+    }
 }
 
 /// A row's whole second line, for its hover and its accessible name: a Ready row's kept hover,
@@ -569,6 +889,7 @@ fn paused_run_detail(
     parts.join(" · ")
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn in_progress_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -576,6 +897,7 @@ pub(super) fn in_progress_list(
     live: Option<&SavedRunInfo>,
     availability: (Option<&'static str>, bool),
     story: &Story<'_>,
+    column: Column,
     action: &mut Option<ListAction>,
 ) {
     let (blocked, loading) = availability;
@@ -594,55 +916,66 @@ pub(super) fn in_progress_list(
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
         let detail = paused_run_detail(run, &page.in_progress, open, story);
-        list_row(ui, &run.path, &run.encounter, &detail, !open, None, |ui| {
-            row_menu_for_run(ui, run, template, open, blocked, loading, action);
-            let edit_width = design::number_width(ui, "Edit", &Type::Strong.font(ui)) + design::L;
-            ui.allocate_ui_with_layout(
-                egui::vec2(edit_width, Density::Read.control()),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    ui.set_min_width(edit_width);
-                    if let Some(template) = template
-                        && Action::quiet("Edit")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    {
-                        *action = Some(ListAction::Edit(template.path.clone()));
-                    }
-                },
-            );
-            if open {
-                let word = run_state_word(run, false);
-                if design::status_link(
-                    ui,
-                    Status {
-                        icon: icons::RUN,
-                        word: &word,
-                        color: colors().muted,
+        let word = run_state_word(run, false);
+        let own = in_progress_actions(ui, open.then_some(word.as_str()));
+        list_row(
+            ui,
+            &run.path,
+            &run.encounter,
+            &detail,
+            !open,
+            None,
+            column,
+            own,
+            |ui| {
+                row_menu_for_run(ui, run, template, open, blocked, loading, action);
+                let edit_width = edit_slot_width(ui);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(edit_width, Density::Read.control()),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        ui.set_min_width(edit_width);
+                        if let Some(template) = template
+                            && Action::quiet("Edit")
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                        {
+                            *action = Some(ListAction::Edit(template.path.clone()));
+                        }
                     },
-                )
-                .clicked()
-                {
-                    *action = Some(ListAction::BackToRun);
-                }
-            } else {
-                let button = if index == 0 && live.is_none() {
-                    Action::primary("Resume")
-                } else {
-                    Action::secondary("Resume")
-                };
-                if button
-                    .icon(icons::RUN)
-                    .density(Density::Read)
-                    .blocked(blocked)
-                    .show(ui)
+                );
+                if open {
+                    if design::status_link(
+                        ui,
+                        Status {
+                            icon: icons::RUN,
+                            word: &word,
+                            color: colors().muted,
+                        },
+                    )
                     .clicked()
-                {
-                    *action = Some(ListAction::Resume(run.path.clone()));
+                    {
+                        *action = Some(ListAction::BackToRun);
+                    }
+                } else {
+                    let button = if index == 0 && live.is_none() {
+                        Action::primary("Resume")
+                    } else {
+                        Action::secondary("Resume")
+                    };
+                    if button
+                        .icon(icons::RUN)
+                        .density(Density::Read)
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked()
+                    {
+                        *action = Some(ListAction::Resume(run.path.clone()));
+                    }
                 }
-            }
-        });
+            },
+        );
     }
     design::gap(ui, design::Gap::L);
 }
@@ -671,6 +1004,7 @@ pub(super) fn ready_list(
     live: Option<&SavedRunInfo>,
     blocked: Option<&'static str>,
     kept: &mut crate::difficulty::Kept<Uuid>,
+    column: Column,
     action: &mut Option<ListAction>,
 ) {
     heading(ui, "READY TO RUN", page.ready.len());
@@ -680,26 +1014,7 @@ pub(super) fn ready_list(
     }
     for (index, row) in page.ready.iter().enumerate() {
         let template = row.template;
-        let unfinished = page.in_progress.iter().find(|run| {
-            run.source == Some(template.id)
-                || (run.source.is_none() && run.encounter == template.name)
-        });
-        let open = unfinished.is_some_and(|run| live.is_some_and(|live| live.id == run.id));
-        // FJ7: the short reason says why Start is blocked; the long form is on Start's hover.
-        // An open run also gets its link, at the reason.
-        let short_reason = if open {
-            Some(FIGHT_OPEN.to_owned())
-        } else if row.unfinished_run {
-            Some("This fight is unfinished.".to_owned())
-        } else if template
-            .summary
-            .as_ref()
-            .is_none_or(|roster| roster.words.is_empty())
-        {
-            Some("Add participants first.".to_owned())
-        } else {
-            None
-        };
+        let (open, short_reason) = ready_reason(page, row, live);
         let start_blocked = if row.unfinished_run {
             Some(if open {
                 "This encounter has an open run. Go back to the run."
@@ -715,16 +1030,12 @@ pub(super) fn ready_list(
         } else {
             blocked
         };
+        let own = ready_actions(ui, short_reason, open);
         list_row(
             ui,
             &template.path,
             &template.name,
-            template
-                .summary
-                .as_ref()
-                .map(|roster| roster.words.as_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or("No participants yet"),
+            ready_detail(template),
             false,
             // A fight with an unfinished run is not ready, so it has no word (F1).
             template
@@ -737,6 +1048,8 @@ pub(super) fn ready_list(
                     roster,
                     kept: &mut *kept,
                 }),
+            column,
+            own,
             |ui| {
                 row_menu(ui, &template.name, |ui| {
                     let remove = !has_saved_run(page, row);
@@ -771,7 +1084,7 @@ pub(super) fn ready_list(
                 {
                     *action = Some(ListAction::Run(template.path.clone()));
                 }
-                if let Some(reason) = &short_reason {
+                if let Some(reason) = short_reason {
                     if open && design::small_link(ui, GO_TO_RUN).clicked() {
                         *action = Some(ListAction::BackToRun);
                     }
@@ -779,7 +1092,6 @@ pub(super) fn ready_list(
                         egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
                             .extend(),
                     );
-                    design::gap(ui, design::Gap::L);
                 }
             },
         );
@@ -790,6 +1102,7 @@ pub(super) fn group_list(
     ui: &mut egui::Ui,
     snapshot: &Snapshot,
     blocked: Option<&'static str>,
+    column: Column,
     action: &mut Option<ListAction>,
 ) {
     if snapshot.groups.is_empty() {
@@ -803,7 +1116,7 @@ pub(super) fn group_list(
             snapshot.groups.len(),
             None,
             |ui| {
-                groups::list(ui, snapshot, blocked, action);
+                groups::list(ui, snapshot, blocked, column, action);
             },
         );
     }
@@ -825,6 +1138,7 @@ pub(super) fn history_list(
     blocked: Option<&'static str>,
     live: Option<&SavedRunInfo>,
     read: Option<Reading<'_>>,
+    column: Column,
     action: &mut Option<ListAction>,
 ) -> Option<egui::Rangef> {
     design::gap(ui, design::Gap::L);
@@ -857,66 +1171,58 @@ pub(super) fn history_list(
                 );
                 for past in &session.runs {
                     let run = past.run;
-                    let date = run
-                        .saved_at
-                        .map(|at| crate::encounter_run::saved_time(at, crate::hermetic::now()))
-                        .unwrap_or_else(|| "Date unknown".to_owned());
-                    let state = run_state_word(run, false);
-                    let outcome = run
-                        .label
-                        .split(" · Ended")
-                        .next()
-                        .filter(|_| !run.label.starts_with("Ended"));
-                    let detail = format!(
-                        "{}{} · {date}{}",
-                        outcome.map_or_else(String::new, |outcome| format!("{outcome} · ")),
-                        state,
-                        if past.template.is_none() {
-                            " · Encounter deleted"
-                        } else {
-                            ""
-                        }
-                    );
+                    let detail = history_detail(past);
                     let top = ui.cursor().top();
-                    list_row(ui, &run.path, &run.encounter, &detail, false, None, |ui| {
-                        row_menu(ui, &run.encounter, |ui| {
-                            if menu_action(
-                                ui,
-                                "Delete the saved run",
-                                live.filter(|live| live.id == run.id)
-                                    .map(|_| "Close this run before deleting its save."),
-                            ) {
-                                *action = Some(ListAction::Delete(run.path.clone()));
-                            }
-                            if let Some(template) = past.template {
-                                let start_blocked = blocked.or(template
-                                    .summary
-                                    .as_ref()
-                                    .is_none_or(|roster| roster.words.is_empty())
-                                    .then_some("Add participants first."));
-                                if menu_action(ui, START_FIGHT, start_blocked) {
-                                    *action = Some(ListAction::Run(template.path.clone()));
+                    let own = history_actions(ui);
+                    list_row(
+                        ui,
+                        &run.path,
+                        &run.encounter,
+                        &detail,
+                        false,
+                        None,
+                        column,
+                        own,
+                        |ui| {
+                            row_menu(ui, &run.encounter, |ui| {
+                                if menu_action(
+                                    ui,
+                                    "Delete the saved run",
+                                    live.filter(|live| live.id == run.id)
+                                        .map(|_| "Close this run before deleting its save."),
+                                ) {
+                                    *action = Some(ListAction::Delete(run.path.clone()));
                                 }
-                                if menu_action(ui, "Edit", None) {
-                                    *action = Some(ListAction::Edit(template.path.clone()));
+                                if let Some(template) = past.template {
+                                    let start_blocked = blocked.or(template
+                                        .summary
+                                        .as_ref()
+                                        .is_none_or(|roster| roster.words.is_empty())
+                                        .then_some("Add participants first."));
+                                    if menu_action(ui, START_FIGHT, start_blocked) {
+                                        *action = Some(ListAction::Run(template.path.clone()));
+                                    }
+                                    if menu_action(ui, "Edit", None) {
+                                        *action = Some(ListAction::Edit(template.path.clone()));
+                                    }
                                 }
+                            });
+                            let opened = read.as_ref().is_some_and(|read| read.path == run.path);
+                            if Action::quiet(if opened { "Close" } else { "Open" })
+                                .density(Density::Read)
+                                .name(&format!(
+                                    "{} the run of {}, {}",
+                                    if opened { "Close" } else { "Open" },
+                                    run.encounter,
+                                    run.label
+                                ))
+                                .show(ui)
+                                .clicked()
+                            {
+                                *action = Some(ListAction::ReadHistory(run.path.clone()));
                             }
-                        });
-                        let opened = read.as_ref().is_some_and(|read| read.path == run.path);
-                        if Action::quiet(if opened { "Close" } else { "Open" })
-                            .density(Density::Read)
-                            .name(&format!(
-                                "{} the run of {}, {}",
-                                if opened { "Close" } else { "Open" },
-                                run.encounter,
-                                run.label
-                            ))
-                            .show(ui)
-                            .clicked()
-                        {
-                            *action = Some(ListAction::ReadHistory(run.path.clone()));
-                        }
-                    });
+                        },
+                    );
                     if let Some(read) = &read
                         && read.path == run.path
                     {
@@ -1205,7 +1511,22 @@ mod iter_2_c_tests {
                                 roster: &roster,
                                 kept: &mut kept,
                             };
-                            list_row(ui, "row", "Mill Road", &detail, false, Some(line), |_| {});
+                            let column = Column {
+                                facts: f32::INFINITY,
+                                actions: 0.0,
+                                owner: "test",
+                            };
+                            list_row(
+                                ui,
+                                "row",
+                                "Mill Road",
+                                &detail,
+                                false,
+                                Some(line),
+                                column,
+                                0.0,
+                                |_| {},
+                            );
                         });
                     });
                 });

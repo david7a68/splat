@@ -389,7 +389,11 @@ pub fn run(d: &mut Driver<'_>) {
     // FB2: every member fault says its cause, as a roster row does.
     d.expect(SCOUT_FAULT);
     scout_fault_alone(d, "iter-24-F-FB2-list", "The groups list");
-    d.state("flagged-group-in-groups-list", Sizes::All);
+    // Layout PR 5a (I6): the group rows' Edit starts `L` after the ledger's widest facts.
+    d.state_prepared("flagged-group-in-groups-list", Sizes::All, |d| {
+        let (columns, detail) = d.ledger_columns();
+        d.observe("pr5a-ledger-columns", columns, detail);
+    });
     d.click(NAV_SESSIONS);
     new_session(d, "Bridge watch");
     show_plan(d);
