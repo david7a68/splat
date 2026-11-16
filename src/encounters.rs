@@ -45,9 +45,55 @@ struct Invalid {
     /// that cannot stand. Set where the fault is found (`Invalid::missing`), never read back from
     /// the words; with the draft's origin it gives the save row's word.
     missing: bool,
+    /// Roster rows whose creature is gone or cannot be read, as the roster names them: the
+    /// typed cause of a refused Start (`Invalid::start_refusal`). Set where `validate` finds
+    /// them, never read back from the words.
+    rows: Option<RowCause>,
+}
+
+/// Why roster rows have no creature, by the rows the roster names (`Draft::deleted_rows`,
+/// `Draft::unreadable_rows`).
+#[derive(Clone, Debug, PartialEq)]
+enum RowCause {
+    Deleted(Vec<String>),
+    Unreadable(Vec<String>),
 }
 
 impl Invalid {
+    /// Round 31 SE3, AE4 (start-fight-result-first, ruling M7): the answer to a refused Start
+    /// fight from `encounter`, when its cause is a row's creature: no fight started, why, and the
+    /// one next step. `None` for any other cause, which keeps its own words, and for creatures of
+    /// several unreadable files, which the part's cause names one at a time.
+    fn start_refusal(&self, encounter: &str) -> Option<design::results::Refusal> {
+        use design::results::{Cause, FailedAct, Name, Recovery, Refusal, Rows, Step};
+        let act = FailedAct::NotStarted {
+            encounter: Name::new(encounter)?,
+        };
+        match self.rows.as_ref()? {
+            RowCause::Deleted(names) => {
+                let rows = Rows::new(names.iter().filter_map(|name| Name::new(name.as_str())))?;
+                Some(Refusal::new(
+                    act,
+                    Cause::CreatureDeleted(rows.clone()),
+                    Recovery::First(Step::ReplaceRows(rows)),
+                ))
+            }
+            RowCause::Unreadable(names) => {
+                let mut creatures: Vec<&String> = names.iter().collect();
+                creatures.sort();
+                creatures.dedup();
+                let [creature] = creatures[..] else {
+                    return None;
+                };
+                Some(Refusal::new(
+                    act,
+                    Cause::CreatureUnreadable(Name::new(creature.as_str())?),
+                    Recovery::First(Step::FixInLibrary(Name::new(creature.as_str())?)),
+                ))
+            }
+        }
+    }
+
     /// A required part is missing.
     fn missing(text: &str) -> Self {
         Self {
@@ -80,6 +126,7 @@ impl From<&groups::Refusal> for Invalid {
             text: refusal.text().to_owned(),
             tone: refusal.tone(),
             missing: refusal.diagnosis().only_incomplete(),
+            rows: None,
         }
     }
 }
@@ -96,6 +143,7 @@ impl From<String> for Invalid {
             text,
             tone: Tone::Error,
             missing: false,
+            rows: None,
         }
     }
 }
@@ -1202,6 +1250,11 @@ impl Draft {
                         let unreadable = snapshot.catalogue.unreadable_ref(reference);
                         Invalid {
                             missing: false,
+                            rows: Some(if unreadable.is_some() {
+                                RowCause::Unreadable(self.unreadable_rows(snapshot))
+                            } else {
+                                RowCause::Deleted(self.deleted_rows(snapshot))
+                            }),
                             tone: missing_creature_tone(unreadable),
                             // G125: each row says its deleted entry (`MISSING_CREATURE`), so the
                             // message says only the next act, for every such row.
@@ -3376,6 +3429,9 @@ enum EncounterFault {
     /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
+    /// Start fight was refused (ruling M7): no fight started, why, and the next step, in the
+    /// tone of its cause.
+    StartRefused(design::results::Refusal),
 }
 
 impl EncounterFault {
@@ -3401,6 +3457,10 @@ impl design::outcome::Fault for EncounterFault {
             | Self::RunsLeft(_)
             | Self::FileFlag(..)
             | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
+            Self::StartRefused(refusal) => match refusal.tone() {
+                Tone::Error => design::outcome::Severity::CannotRead,
+                _ => design::outcome::Severity::NeedsFixing,
+            },
         }
     }
     #[allow(
@@ -3424,6 +3484,7 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The encounter’s file has a problem.")),
             Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("Save cannot write this draft yet.")),
+            Self::StartRefused(refusal) => refusal.words(),
         }
     }
 }
@@ -3549,6 +3610,13 @@ pub struct Encounters {
     /// The last failed check of the open draft, with its tone. It sets the message's tone only
     /// while `error` shows its words.
     validation_error: Option<Invalid>,
+    /// The typed answer to the last refused Start fight (`Invalid::start_refusal`): the draft
+    /// Start checked, the words of that check, and the answer. Owner: that draft's last Start.
+    /// It shows only while the draft is the one Start checked (the same draft, unchanged: Start
+    /// runs only on a clean draft) and `error` still holds the check's words. So an edit hides it
+    /// and an Undo back to that draft shows it again; a new check's record (a Save, another
+    /// Start: `refused`) drops it, and a reload or another campaign (`error` cleared) ends it.
+    start_refused: Option<(Uuid, String, design::results::Refusal)>,
     validation_path: Option<String>,
     /// A Save or a start was refused for the draft at `validation_path`, so its check runs again
     /// when that draft or the campaign changes. It ends with another draft.
@@ -3901,6 +3969,20 @@ impl Encounters {
     fn refused(&mut self, invalid: Option<Invalid>) {
         self.refusal_watch |= invalid.is_some();
         self.validation_error = invalid;
+        self.start_refused = None;
+    }
+    /// A refused Start's record: the check's, then its typed answer when its cause has one.
+    fn start_refused(&mut self, invalid: Option<Invalid>) {
+        let answer = invalid.as_ref().and_then(|invalid| {
+            let draft = self.draft.as_ref()?;
+            Some((
+                draft.id,
+                invalid.text.clone(),
+                invalid.start_refusal(&draft.name)?,
+            ))
+        });
+        self.refused(invalid);
+        self.start_refused = answer;
     }
     /// N1: Save's checks of the open encounter's changed groups as one ranked diagnosis: the
     /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
@@ -6044,8 +6126,19 @@ impl Encounters {
         if let Some(error) = self.error.clone()
             && groups_cause.as_deref() != Some(error.as_str())
         {
-            // A deleted entry and an unreadable file are stated in the rows' tone too.
-            let fault = if self.error_tone() == Tone::Warning {
+            // A deleted entry and an unreadable file are stated in the rows' tone too. A refused
+            // Start says first that no fight started (SE3, AE4), while the check it answers holds.
+            let start = self.start_refused.as_ref().filter(|(draft, answers, _)| {
+                *answers == error
+                    && self.shows_validation_error()
+                    && self
+                        .draft
+                        .as_ref()
+                        .is_some_and(|open| open.id == *draft && !open.dirty())
+            });
+            let fault = if let Some((_, _, refusal)) = start {
+                EncounterFault::StartRefused(refusal.clone())
+            } else if self.error_tone() == Tone::Warning {
                 EncounterFault::Invalid(error)
             } else {
                 EncounterFault::Failed(error)
@@ -6794,7 +6887,7 @@ impl Encounters {
             .and_then(|(snapshot, draft)| draft.validate(snapshot).err())
         {
             self.error = Some(error.text.clone());
-            self.refused(Some(error));
+            self.start_refused(Some(error));
             return;
         }
         match self.start_run(active, modules) {
@@ -6810,7 +6903,7 @@ impl Encounters {
                     .zip(self.draft.as_ref())
                     .and_then(|(snapshot, draft)| draft.validate(snapshot).err())
                     .filter(|validation| validation.text == error);
-                self.refused(invalid);
+                self.start_refused(invalid);
                 self.error = Some(error);
             }
         }

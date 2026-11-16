@@ -1093,27 +1093,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
         ("src/encounters.rs", "run_settings", &[Ban::Results]),
-        ("src/library.rs", "add_reader_result", &[Ban::Footer]),
-        // Layout PR 2b: the Library page's error, a legacy footer line (a closure).
-        ("src/library.rs", "page_error", &[Ban::Footer]),
         // Layout PR 2b: the test of the legacy `Footer::legacy_kept`.
         (
             "src/design/results.rs",
             "the_footer_takes_each_kept_result_with_its_own_order",
             &[Ban::Footer],
-        ),
-        // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
-        // Round 29 L: the source change's Undo, and the registration's (`undo_package_registration`),
-        // moved into stores; by owner until the reader footer moves to `Messages`.
-        (
-            "src/library.rs",
-            "apply_page_press",
-            &[Ban::Results, Ban::ByOwner(3)],
-        ),
-        (
-            "src/library.rs",
-            "undo_package_registration",
-            &[Ban::ByOwner(1)],
         ),
         (
             "src/design/results.rs",
@@ -1142,17 +1126,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_result_shows_only_in_its_own_scope statement",
             &[Ban::ByOwner(1)],
         ),
-        (
-            "src/library.rs",
-            "editor_pane",
-            &[Ban::Extras(1), Ban::Footer],
-        ),
+        ("src/library.rs", "editor_pane", &[Ban::Extras(1)]),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
         ("src/library.rs", "cause", &[Ban::Words]),
         // M17 (M-L0.4b): a manifest write's words, which start with the file's path from disk.
         ("src/library.rs", "outcome_of", &[Ban::Words]),
-        ("src/library.rs", "reader_messages", &[Ban::Footer]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
         // R24: a value block's save row shows its own messages (the Session folder's).
         ("src/sessions/page.rs", "folder_block", &[Ban::Body]),
@@ -1441,8 +1420,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "history_summary",
             &[Ban::Extras(2)],
         ),
-        ("src/library.rs", "duplicate_choices", &[Ban::Extras(2)]),
-        ("src/library.rs", "recovery_action", &[Ban::Extras(2)]),
         ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
         ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
@@ -1694,7 +1671,6 @@ pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, u
 pub(crate) const LEGACY_FOOTER_LINES: &[(&str, usize)] = &[
     ("src/design/components.rs", 11),
     ("src/design/results.rs", 1),
-    ("src/library.rs", 12),
 ];
 
 /// See [`Staged`]: the pattern, what to use instead, and the count of each file.

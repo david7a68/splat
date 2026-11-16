@@ -16,8 +16,8 @@ use super::{DependencyUndo, FileId, IdentityUndo, LetGo, OwnerKey, Scope, Select
 use crate::content_workspace::{ContentEdits, ManifestWrite};
 use crate::design::{
     self,
-    outcome::{KeptLine, KeptOutcome, PaneFrame},
-    results::{DiskChanged, Ends, FooterResult, Kept, Owner, OwnerChanged, Press, Ticket},
+    outcome::{KeptLine, KeptOutcome, PaneFrame, Sentence},
+    results::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Ticket},
 };
 use crate::persistence::Module;
 use std::path::PathBuf;
@@ -92,7 +92,7 @@ impl Kept for KeptMark {
 /// A heading fix: its file, the draft before and the draft the fix wrote.
 pub(super) type HeadingFix = (FileId, String, String);
 /// A stat fix: its file, the draft before, the draft the fix wrote and its result's words.
-pub(super) type StatFix = (FileId, String, String, String);
+pub(super) type StatFix = (FileId, String, String, Sentence);
 /// A discarded draft: its file (owner and path) and the words Discard dropped.
 pub(super) type DiscardedDraft = (OwnerKey, String, String);
 /// Why the scope widened: the entry it shows, by name, and the scope it widened to. The notice
@@ -107,7 +107,7 @@ pub(super) struct LibraryKept {
     unregistered: Option<Module>,
     package_use: Option<SelectionUndo>,
     manifest: Option<ManifestWrite>,
-    identities: Option<(ContentEdits, String)>,
+    identities: Option<(ContentEdits, Sentence)>,
     identity: Option<IdentityUndo>,
     discarded: Option<DiscardedDraft>,
     removed: Option<LetGo>,
@@ -145,7 +145,7 @@ impl LibraryKept {
         Unregistered: unregistered: Module => unregistered, set_unregistered, take_unregistered;
         PackageUse: package_use: SelectionUndo => package_use, set_package_use, take_package_use;
         Manifest: manifest: ManifestWrite => manifest, set_manifest, take_manifest;
-        Identities: identities: (ContentEdits, String) => identities, set_identities, take_identities;
+        Identities: identities: (ContentEdits, Sentence) => identities, set_identities, take_identities;
         Identity: identity: IdentityUndo => identity, set_identity, take_identity;
         Discarded: discarded: DiscardedDraft => discarded, set_discarded, take_discarded;
         Removed: removed: LetGo => removed, set_removed, take_removed;
@@ -206,18 +206,6 @@ impl LibraryKept {
         });
     }
 
-    /// The footer line of the one-result kind `kind` (its words, with the order its act
-    /// issued), or `None` when it has no mark. `words` runs only when it has one.
-    pub(super) fn line(
-        &self,
-        kind: KeptKind,
-        words: impl FnOnce() -> String,
-    ) -> Option<FooterResult> {
-        self.marks
-            .get(&KeptOwner::of(kind))
-            .map(|shown| shown.footer(|_| words()))
-    }
-
     /// The kind of the result `ticket` names, while that result stands: a press on its line acts
     /// on it, in the frame of the press. A result replaced (a newer act of its kind) or ended
     /// since its line was drawn has another order, or none: `None`, and nothing is done.
@@ -239,11 +227,23 @@ impl LibraryKept {
         Some(shown.outcome(frame, |_| outcome))
     }
 
-    /// The footer line of one copy.
-    pub(super) fn copy_line(&self, undo: &DependencyUndo) -> Option<FooterResult> {
-        self.marks
-            .get(&KeptOwner::copy(undo))
-            .map(|shown| shown.footer(|_| undo.result.clone()))
+    /// The typed footer line of one copy, made by `make`, or `None` when it has no mark.
+    pub(super) fn copy_outcome<'f, A>(
+        &self,
+        frame: &'f PaneFrame,
+        undo: &DependencyUndo,
+        make: impl FnOnce() -> KeptOutcome<A>,
+    ) -> Option<KeptLine<'f, A>> {
+        let shown = self.marks.get(&KeptOwner::copy(undo))?;
+        Some(shown.outcome(frame, |_| make()))
+    }
+
+    /// The place in `copies` of the copy `ticket` names, while it stands.
+    pub(super) fn copy_at(&self, ticket: &Ticket) -> Option<usize> {
+        let owner = self.marks.get_by(ticket)?.value().0.clone();
+        self.copies
+            .iter()
+            .position(|undo| KeptOwner::copy(undo) == owner)
     }
 
     /// The ticket of the result of `kind`, for the tests of a press by ticket.
@@ -251,6 +251,14 @@ impl LibraryKept {
     pub(super) fn ticket_of(&self, kind: KeptKind) -> Option<Ticket> {
         self.marks
             .get(&KeptOwner::of(kind))
+            .map(|shown| shown.ticket_for_caller_test())
+    }
+
+    /// The ticket of one copy's result, for the tests of a press by ticket.
+    #[cfg(test)]
+    pub(super) fn copy_ticket_for_test(&self, undo: &DependencyUndo) -> Option<Ticket> {
+        self.marks
+            .get(&KeptOwner::copy(undo))
             .map(|shown| shown.ticket_for_caller_test())
     }
 

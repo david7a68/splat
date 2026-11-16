@@ -2472,10 +2472,12 @@ pub mod library_navigation {
             "Copying the dependency also reconnects the package entry",
         );
         for size in [SMALL, DEFAULT, LARGE] {
+            // M-L0.4b (ruling M9): the copy's Undo names its entry; its accessible name is the
+            // whole label at every width.
             let quiet_undo = d.at_size(size, |d| {
-                d.expect("Undo copy");
-                let rect = d.place_of("Undo copy").unwrap();
-                d.control_frame("Undo copy")
+                d.expect("Undo copy Captain Varra");
+                let rect = d.place_of("Undo copy Captain Varra").unwrap();
+                d.control_frame("Undo copy Captain Varra")
                     .is_some_and(|frame| frame.stroke == egui::Stroke::NONE)
                     && d.painted_in(rect).contains(crate::design::icons::UNDO)
             });
@@ -2486,7 +2488,7 @@ pub mod library_navigation {
             );
         }
         d.state("dependency-copy-reconnected", Sizes::All);
-        d.click("Undo copy");
+        d.click("Undo copy Captain Varra");
         d.wait_for_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it.");
         // A link in a paragraph is named by its words and where it goes (iter-16 AD1).
         d.click("Wiki watch spell (opens Ashfall)");
@@ -2686,7 +2688,7 @@ pub mod library_navigation {
         let a_alone = d.has_containing("Captain Varra copied to Ashen Marches and linked.")
             && !d.has_containing("copied to Ember Reach");
         if a_alone {
-            d.click("Undo copy");
+            d.click("Undo copy Captain Varra");
             d.wait_for_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it.");
         }
         let a_back = std::fs::read_to_string(&path).unwrap() == a_text && copies_in(&a_folder) == 0;
@@ -2696,7 +2698,7 @@ pub mod library_navigation {
         open_in(d, "Ember Reach");
         d.wait_for_text("Ember Reach keeps its own rule.");
         let b_result_kept = d.has_containing("Captain Varra copied to Ember Reach and linked.")
-            && d.has("Undo copy");
+            && d.has("Undo copy Captain Varra");
         d.observe(
             "iter-26-L-copy-owner",
             a_hidden_in_b && b_alone && a_alone && a_back && b_kept && b_result_kept,

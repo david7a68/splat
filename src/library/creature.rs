@@ -70,7 +70,14 @@ fn body_vital(line: &str) -> Option<(&'static str, &'static str, i64)> {
 
 /// Each printed vital line that disagrees with the stat block: its stat key, the DM's word for it
 /// (`Hit Points`), the printed value and the warning.
-pub(super) fn vital_checks(entry: &Entry) -> Vec<(&'static str, &'static str, i64, String)> {
+pub(super) fn vital_checks(
+    entry: &Entry,
+) -> Vec<(
+    &'static str,
+    &'static str,
+    i64,
+    crate::design::outcome::Sentence,
+)> {
     if !has_stats(entry) {
         return Vec::new();
     }
@@ -86,8 +93,12 @@ pub(super) fn vital_checks(entry: &Entry) -> Vec<(&'static str, &'static str, i6
                     printed,
                     // The consequence stays: the fight uses the stat block's value. A longer
                     // warning wraps in Edit Markdown's message space and scrolls there.
-                    format!(
-                        "{label} line says {printed}; stat block says {value}. The fight uses {value}."
+                    crate::sentence!(
+                        "{} line says {}; stat block says {}. The fight uses {}.",
+                        label,
+                        printed,
+                        value,
+                        value
                     ),
                 )
             })
