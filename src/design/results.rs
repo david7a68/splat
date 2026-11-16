@@ -1127,7 +1127,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
-        ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
+        // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
+        // `line_row`'s lines are; the list has no typed owner yet.
+        (
+            "src/loot_editor.rs",
+            "add_row",
+            &[Ban::Extras(1), Ban::RowKey(1)],
+        ),
         (
             "src/loot_editor.rs",
             "line_row",
@@ -1349,11 +1355,6 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/design/components.rs",
             "iter28_p_the_pane_places_its_footer_for_every_body",
             &[Ban::Layout(1), Ban::Footer],
-        ),
-        (
-            "src/design/components.rs",
-            "add_field_keys",
-            &[Ban::Layout(1)],
         ),
         // The test of the staged keys-only add field itself (`AddFieldForm::keys_only`).
         (
