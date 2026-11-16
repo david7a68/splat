@@ -3321,57 +3321,70 @@ impl Run {
         // step: only a new step or Undo ends it. FJ2: typed search words do not, because the
         // footer takes no room from the search results and the DM often types the next arrival
         // while a tie's Move choice is still open.
-        // FI5: a typed total that cannot be read gives its reason here too, after the result,
-        // named by its group. The reason belongs to the typed words: it ends when they change.
-        let reasons = self.arrival_reasons();
+        // FI5: a typed total that cannot be read gives its reason here too, named by its group.
+        // The reason belongs to the typed words: it ends when they change.
         // The shared message footer, typed (migration-32 L2c): as tall as what it holds, at
         // most a third of the panel, and it scrolls inside beyond that (pointer and keyboard), so
         // ten bad totals at 960 neither clip nor push the list. The result belongs to the newest
         // step: its line is that step's kept result, and its Undo is the header's. The footer's
         // order puts the reasons before it (a kept result without a footer Undo follows them).
-        let said = self
-            .arrival_result_shown()
-            .then(|| self.arrival_said())
-            .flatten();
+        // L1c (`Messages::pane_then`): the lines are read after the body's acts (a typed total,
+        // Add), so the frame of an act shows the reason or result it brought and never one it
+        // ended (M-R0.1, P3: a valid total's frame painted the old reason while Add enabled).
         let frame = design::outcome::PaneFrame::new(ui);
-        let mut messages = design::outcome::Messages::<ArrivalPress>::new(
+        let messages = design::outcome::Messages::<ArrivalPress>::new(
             &frame,
             ("arrival_footer", self.id),
             ui.available_width(),
         );
-        if let Some(said) = said
-            && let Some(shown) = self.newest_step_result()
-        {
-            messages.kept(shown.outcome(&frame, |_| said.into()));
-        }
-        for reason in reasons.iter() {
-            // The group faults' words, named by their group, in the warning tone.
-            if let Some(words) = outside_words(reason.clone()) {
-                messages.outcome(design::outcome::FaultMessage::new(&RunFault::Total(words)));
-            }
-        }
+        let this = &mut *self;
         // FJ1: the pane's scroll column keeps the scroll bar's lane whether or not the bar
         // shows, as the Encounters list does, so a list that grows long moves no field and no Add.
-        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
-            ui.spacing_mut().item_spacing.y = design::XS;
-            if self
-                .groups
-                .as_ref()
-                .is_some_and(|groups| !groups.is_empty())
-            {
-                design::help(ui, "Drag a group name to the list, or use Add.");
-            }
-            // Measured once: the search field and the group list share the block.
-            let arrival = self.arrival_block(ui);
-            self.add_creature_form(ui, arrival.map(|(_, block)| block));
-            design::rule(ui);
-            self.group_list(ui, arrival)
-        });
+        let paned = messages.pane_then(
+            ui,
+            design::pane::Body::Content,
+            move |ui| {
+                ui.spacing_mut().item_spacing.y = design::XS;
+                if this
+                    .groups
+                    .as_ref()
+                    .is_some_and(|groups| !groups.is_empty())
+                {
+                    design::help(ui, "Drag a group name to the list, or use Add.");
+                }
+                // Measured once: the search field and the group list share the block.
+                let arrival = this.arrival_block(ui);
+                this.add_creature_form(ui, arrival.map(|(_, block)| block));
+                design::rule(ui);
+                let add = this.group_list(ui, arrival);
+                (this, add)
+            },
+            |(this, add), messages| {
+                // The body's act first, then the lines from the state it left.
+                if let Some(id) = add {
+                    this.add_group_from_panel(id);
+                }
+                let said = this
+                    .arrival_result_shown()
+                    .then(|| this.arrival_said())
+                    .flatten();
+                if let Some(said) = said
+                    && let Some(shown) = this.newest_step_result()
+                {
+                    messages.kept(shown.outcome(&frame, |_| said.into()));
+                }
+                for reason in this.arrival_reasons().iter() {
+                    // The group faults' words, named by their group, in the warning tone.
+                    if let Some(words) = outside_words(reason.clone()) {
+                        messages
+                            .outcome(design::outcome::FaultMessage::new(&RunFault::Total(words)));
+                    }
+                }
+                this
+            },
+        );
         if let Some(press) = paned.pressed {
-            self.arrival_press(press);
-        }
-        if let Some(id) = paned.body {
-            self.add_group_from_panel(id);
+            paned.body.arrival_press(press);
         }
     }
 
