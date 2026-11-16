@@ -4,7 +4,24 @@ use eframe::egui::{self, Ui, vec2};
 
 /// Prose in a side panel is one step smaller than prose at full width.
 pub fn prose_type(ui: &Ui) -> Type {
-    prose_type_at(ui.available_width())
+    prose_type_at(prose_width(ui))
+}
+
+/// The width that chooses the prose type. In a scroll area, egui's bar takes its lane from the
+/// content only while the content is too long, and the type changes how long it is. So the
+/// width is the one the content has with the bar, whether the bar shows or not. Else, at a
+/// width near the step, the type and the bar change each other on every frame: a note column
+/// 430 px wide was `Prose` and too long without the bar, and `ProseCompact` and short enough
+/// with it.
+fn prose_width(ui: &Ui) -> f32 {
+    let width = ui.available_width();
+    let room = ui
+        .stack()
+        .iter()
+        .find(|frame| frame.kind() == Some(egui::UiKind::ScrollArea))
+        .and_then(|scroll| scroll.parent.as_ref())
+        .map(|outside| outside.max_rect.width() - ui.spacing().scroll.allocated_width());
+    room.map_or(width, |room| width.min(room))
 }
 
 /// The Reader's prose type in a column this wide.
@@ -163,6 +180,12 @@ pub fn markdown(ui: &mut Ui, text: &str) {
     crate::markdown_view::show_reader(ui, text);
 }
 
+/// The same, where a link to `markdown_view::ENTRY_LINK` opens an entry. Returns the place
+/// of the entry the DM pressed.
+pub fn entry_markdown(ui: &mut Ui, text: &str) -> Option<usize> {
+    crate::markdown_view::show_reader_entries(ui, text)
+}
+
 /// The same, as compact field rows.
 pub fn compact_markdown(ui: &mut Ui, text: &str) {
     crate::markdown_view::show_compact(ui, text);
@@ -293,6 +316,53 @@ mod tests {
             found.0.expect("the label is painted"),
             found.1.expect("the first value word is painted"),
         )
+    }
+
+    /// A column near the step between the two prose types, in a scroll area: the content is
+    /// long (the bar shows) or short (no bar). Both give one type, so the type cannot hide or
+    /// show the bar that changes it.
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    fn the_scroll_bar_does_not_choose_the_prose_type() {
+        let context = egui::Context::default();
+        super::super::theme::install(&context);
+        // Wider than the step (`READER_MEASURE - 60`), and less than a bar's lane wider.
+        let column = READER_MEASURE - 60.0 + 2.0;
+        let mut found = Vec::new();
+        for long in [false, true] {
+            // Later passes draw with the bar that the first pass found.
+            for _ in 0..3 {
+                let mut seen = None;
+                let _ = context.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.allocate_ui(vec2(column, 300.0), |ui| {
+                            ui.set_width(column);
+                            egui::ScrollArea::vertical()
+                                .id_salt(long)
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    let compact = prose_type(ui) == Type::ProseCompact;
+                                    seen = Some((compact, ui.available_width()));
+                                    space(ui, if long { 900.0 } else { 10.0 });
+                                });
+                        });
+                    });
+                });
+                found.push((long, seen.expect("the content is drawn")));
+            }
+        }
+        let width = |long: bool| found.iter().rfind(|(l, _)| *l == long).unwrap().1.1;
+        assert!(
+            width(true) < width(false),
+            "the bar takes its lane: {found:?}"
+        );
+        assert!(
+            found.iter().all(|(_, (compact, _))| *compact),
+            "one type with and without the bar: {found:?}"
+        );
     }
 
     #[test]

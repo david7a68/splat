@@ -9757,9 +9757,34 @@ pub mod run_folder_defect {
                 "m32-L1b-run-folder-footer",
             );
         });
-        // Migration-32 L1b: the discard's result and its Undo are the pane's footer's, built
-        // from the settings as the frame starts. Discard puts the result `S` below the clean
-        // form; its Undo brings the draft back, with the folder move's warning and no result.
+        // Migration-32 L1b: the discard's result and its Undo are the pane's footer's. Discard
+        // puts the result `S` below the clean form; its Undo brings the draft back, with the
+        // folder move's warning and no result.
+        // L1c: the footer's facts are read after the form's acts, so the first frame of an act,
+        // drawn in one pass (reruns denied), already shows them: (a stale discard result
+        // painted or named, its Undo offered, the move choices, the folder warning whole).
+        let first = |d: &Driver<'_>| {
+            let warning = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.name.contains("From the new folder")
+                })
+                .map(|node| node.name);
+            let footer = footer_with(d, "From the new folder");
+            (
+                d.has_containing("Rules and runs draft discarded.")
+                    || d.painted_rect_in("Rules and runs draft discarded.", egui::Rect::EVERYTHING)
+                        .is_some(),
+                d.has("Undo discard of Rules and runs"),
+                d.has("Move runs and save"),
+                warning
+                    .zip(footer)
+                    .is_some_and(|(warning, footer)| d.painted_whole_in(&warning, footer)),
+            )
+        };
+        let fresh = (false, false, true, true);
         d.aside(|d| {
             d.click(DISCARD);
             d.expect("Rules and runs draft discarded.");
@@ -9783,8 +9808,158 @@ pub mod run_folder_defect {
                     "Discard offered {undo} ({offered}); the Undo brings the draft back with the folder move's warning and ends the result"
                 ),
             );
+            // Retyping after Discard: in the frame of the typing, the discard's result and its
+            // Undo are gone (the edit ended them), and the folder warning is there, whole.
+            d.click(DISCARD);
+            d.expect("Rules and runs draft discarded.");
+            d.click_field(RUN_FOLDER);
+            d.press_ctrl(Key::A);
+            let retyped = d.first_frame_one_pass([egui::Event::Text("Elsewhere".into())], first);
+            d.observe(
+                "m32-L1c-retype-after-discard",
+                retyped == (fresh, fresh),
+                format!(
+                    "The first frame of retyping after Discard and the next (one pass each): stale result, Undo offered, move choices, warning whole = {retyped:?}, want {fresh:?}"
+                ),
+            );
+            // The first folder edit of a clean form with no footer: the move choices come with
+            // their warning, whole, in that frame. (An edit ends the discard's result; the
+            // second click leaves the form clean.)
+            d.click(DISCARD);
+            d.click("Break initiative ties in roster order");
+            d.click("Break initiative ties in roster order");
+            let clean = !d.has_containing("Rules and runs draft discarded.")
+                && footer_with(d, "From the new folder").is_none()
+                && !d.has("Move runs and save");
+            d.click_field(RUN_FOLDER);
+            d.press_ctrl(Key::A);
+            let edited = d.first_frame_one_pass([egui::Event::Text("Elsewhere".into())], first);
+            d.observe(
+                "m32-L1c-first-folder-edit",
+                clean && edited == (fresh, fresh),
+                format!(
+                    "From a clean form with no footer ({clean}), the first frame of the folder edit and the next (one pass each): {edited:?}, want {fresh:?}"
+                ),
+            );
+            // Review of PR 456: the same in a form taller than its pane, whose footer is pinned at
+            // the pane's bottom. In the first frame of the folder edit the warning is whole in the
+            // footer at the pane's bottom (a third of the pane at most) with no form line under
+            // it, and the next frame (no input, one pass) moves nothing. At 960x320 the clean form
+            // already scrolls.
+            d.click(DISCARD);
+            d.click("Break initiative ties in roster order");
+            d.click("Break initiative ties in roster order");
+            let pinned = |d: &Driver<'_>| {
+                let record = d
+                    .pane_records()
+                    .into_iter()
+                    .max_by(|a, b| a.room().area().total_cmp(&b.room().area()))?;
+                // Pinned: the form is taller than the pane's room.
+                let (room, footer) = (record.room(), record.footer().filter(|_| !record.fits())?);
+                let warning = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.role == egui::accesskit::Role::Label
+                            && node.name.contains("From the new folder")
+                    })?
+                    .name;
+                let painted = d.painted_rect_in(&warning, footer)?;
+                // The form's painted words in the room: the body's clip starts at the room's top,
+                // the footer's own (its words and icon) at the footer's top.
+                let mut lowest_form_line = f32::MIN;
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size())
+                        .intersect(clip);
+                    if rect.is_positive()
+                        && rect.left() >= room.left()
+                        && rect.top() >= room.top()
+                        && clip.top() < footer.top() - 1.0
+                    {
+                        lowest_form_line = lowest_form_line.max(rect.bottom());
+                    }
+                });
+                Some((
+                    room,
+                    footer,
+                    painted,
+                    d.painted_whole_in(&warning, footer),
+                    lowest_form_line,
+                ))
+            };
+            let tall = d.act_at_size((960.0, 320.0), |d| {
+                let scrolls = d.pane_records().iter().any(|record| !record.fits());
+                d.click_field(RUN_FOLDER);
+                d.press_ctrl(Key::A);
+                let frames =
+                    d.first_frame_one_pass([egui::Event::Text("Elsewhere".into())], pinned);
+                (scrolls, frames)
+            });
+            let near = |a: egui::Rect, b: egui::Rect| {
+                (a.min - b.min).length() <= 0.5 && (a.max - b.max).length() <= 0.5
+            };
+            let held = match &tall.1 {
+                (Some(first), Some(next)) => {
+                    let (room, footer, painted, whole, lowest) = *first;
+                    (footer.bottom() - room.bottom()).abs() <= 1.0
+                        && footer.height() <= (room.height() / 3.0).floor() + 1.0
+                        && whole
+                        && lowest <= footer.top() - crate::design::S + 0.5
+                        && near(footer, next.1)
+                        && near(painted, next.2)
+                        && next.3
+                }
+                _ => false,
+            };
+            d.observe(
+                "m32-L1c-tall-form",
+                tall.0 && held,
+                format!(
+                    "A form taller than its pane ({}) at 960x320: the first frame of the folder edit and the next (one pass each), pinned: (room, footer, warning, warning whole, lowest form line) = {:?}",
+                    tall.0, tall.1
+                ),
+            );
         });
         d.goal("edit the run folder with no draft");
+        // L1c: a failed attempt says why in its own frame, drawn in one pass. A run file of the
+        // same name waits in the new folder, so Move runs and save fails and replaces nothing;
+        // the error is painted whole in the footer with the folder warning. The error stays
+        // until the move below succeeds (its reload ends it).
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let run_file = d.app().encounters.saved_runs()[0]
+            .path
+            .file_name()
+            .unwrap()
+            .to_owned();
+        let target = campaign.path.join("Elsewhere");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join(&run_file), "Another run of the same name").unwrap();
+        let press = d.click_event("Move runs and save");
+        let failed = d.first_frame_one_pass([press], |d| {
+            let error = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.name.starts_with("Could not move runs.")
+                })
+                .map(|node| node.name);
+            let footer = footer_with(d, "Could not move runs.");
+            (
+                error
+                    .zip(footer)
+                    .is_some_and(|(error, footer)| d.painted_whole_in(&error, footer)),
+                first(d).3,
+            )
+        });
+        std::fs::remove_file(target.join(&run_file)).unwrap();
+        d.observe(
+            "m32-L1c-failed-move",
+            failed == ((true, true), (true, true)) && d.has_containing("Could not move runs."),
+            format!(
+                "The first frame of a failed Move runs and save and the next (one pass each): error whole, warning whole = {failed:?}"
+            ),
+        );
         // A panic ends this app, so the video stops first and nothing follows.
         d.stop_filming();
         let click = std::panic::AssertUnwindSafe(|| {
@@ -10002,6 +10177,7 @@ pub mod gallery {
 pub mod column_resize {
     use super::*;
     use crate::design::{PANEL_MIN_WIDTH, RAIL_DRAG_MAX_WIDTH, RAIL_WIDTH, S};
+    use crate::sessions::page::{HIDE_LIST, SHOW_LIST};
 
     const CHECK: &str = "Column resize";
     const MEMBER: &str = "Brannoch Vale";
@@ -10075,7 +10251,7 @@ pub mod column_resize {
     fn the_session_fills_its_column(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, "Room to spare");
-        let page = right_of(d, "New session");
+        let page = right_of(d, HIDE_LIST);
         d.observe(
             CHECK,
             (right_of(d, "Record this session") - page).abs() <= S,
@@ -10087,10 +10263,107 @@ pub mod column_resize {
         d.state("session-fills-its-column", Sizes::All);
     }
 
+    /// The DM hides the session list, and the session takes its room. Last in the scenario, so
+    /// no earlier state changes its number.
+    fn the_session_list_hides(d: &mut Driver<'_>) {
+        d.set_base(DEFAULT);
+        d.click(NAV_SESSIONS);
+        d.expect(HIDE_LIST);
+        // The list's row and the pane's title both start with the session's name.
+        let named = |d: &Driver<'_>, role: egui::accesskit::Role| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == role && node.name.starts_with("Session 1: Room to spare ·")
+                })
+                .map(|node| node.rect)
+        };
+        let row = |d: &Driver<'_>| named(d, egui::accesskit::Role::Button);
+        let title = |d: &Driver<'_>| named(d, egui::accesskit::Role::Label).map(|rect| rect.left());
+        let (list_row, title_left, toggle) = (row(d), title(d), d.place_of(HIDE_LIST));
+        d.click(HIDE_LIST);
+        d.expect(SHOW_LIST);
+        d.observe(
+            CHECK,
+            row(d).is_none() && list_row.is_some(),
+            "A hidden list leaves the page; it stood beside the session before",
+        );
+        d.observe(
+            CHECK,
+            title(d)
+                .zip(title_left)
+                .is_some_and(|(now, before)| now < before - crate::design::XXL),
+            format!(
+                "The session takes the list's room: its title at {:?}, from {title_left:?}",
+                title(d)
+            ),
+        );
+        d.observe(
+            CHECK,
+            toggle.is_some() && d.place_of(SHOW_LIST) == toggle,
+            format!(
+                "The toggle keeps its place: {:?}, from {toggle:?}",
+                d.place_of(SHOW_LIST)
+            ),
+        );
+        d.state("session-list-hidden", Sizes::All);
+
+        // The note takes the room beside it when the DM drags its edge, and the tab row's end
+        // (Read) follows the frame's.
+        // Only a wide window has room beside the note.
+        const NOTE_EDGE: &str = "session_note_frame";
+        d.set_base(LARGE);
+        let frame = |d: &Driver<'_>| d.input_frame("Note text").map(|(frame, _)| frame);
+        let natural = frame(d).expect("the note frame is visible");
+        let edge = d.column_edge(NOTE_EDGE);
+        d.drag_column_edge(edge, edge + 300.0);
+        d.settle();
+        let wide = frame(d).expect("the note frame is visible");
+        d.observe(
+            CHECK,
+            near(wide.width(), natural.width() + 300.0) && near(wide.left(), natural.left()),
+            format!("The note widens into the gap: {wide:?}, from {natural:?}"),
+        );
+        d.observe(
+            CHECK,
+            near(right_of(d, "Read"), wide.right()),
+            format!(
+                "The tab row ends with the frame: Read at {}, the frame at {}",
+                right_of(d, "Read"),
+                wide.right()
+            ),
+        );
+        d.state_changed_at("session-note-widened", "session-list-hidden", Sizes::Large);
+        // Home on the handle gives the reader's measure back.
+        d.harness_focus_nothing();
+        assert!(d.tab_to("Resize note column"));
+        d.press(Key::Home);
+        d.observe(
+            CHECK,
+            frame(d).is_some_and(|now| near(now.width(), natural.width())),
+            format!(
+                "Home restores the note's width: {:?}, from {natural:?}",
+                frame(d)
+            ),
+        );
+        d.set_base(DEFAULT);
+        // Ctrl+\ shows it again, as wide as it was.
+        d.press_ctrl(Key::Backslash);
+        d.expect(HIDE_LIST);
+        d.observe(
+            CHECK,
+            row(d).is_some() && row(d) == list_row,
+            format!(
+                "The list comes back as it was: {:?}, from {list_row:?}",
+                row(d)
+            ),
+        );
+    }
+
     /// Write and Read share a prose measure; spare width stays outside the Write frame.
     fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
         d.set_base(LARGE);
-        let page = right_of(d, "New session");
+        let page = right_of(d, HIDE_LIST);
         d.type_into_editor(&"The party crossed the old bridge at dusk. ".repeat(30));
         let write = d.longest_visible_line();
         d.state_prepared("session-write-keeps-prose-measure", Sizes::All, |d| {
@@ -10428,6 +10701,7 @@ pub mod column_resize {
         });
         d.press(Key::Home);
         assert!(near(entries_edge(d), edge));
+        the_session_list_hides(d);
     }
 }
 
@@ -15721,10 +15995,14 @@ pub mod session_notes {
         // The card's link, right of the Sessions page, and the card's next line of words.
         let card_link = |d: &Driver<'_>| {
             let nodes = d.nodes();
+            // The page's last header action: the list's toggle where the page is wide.
             let page_right = nodes
                 .iter()
-                .find(|node| node.name == "New session")
-                .map(|node| node.rect.right())?;
+                .filter(|node| {
+                    ["New session", crate::sessions::page::HIDE_LIST].contains(&node.name.as_str())
+                })
+                .map(|node| node.rect.right())
+                .reduce(f32::max)?;
             let link = nodes
                 .iter()
                 .filter(|node| {

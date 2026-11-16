@@ -33,6 +33,16 @@ pub fn column_widths(ctx: &Context) -> BTreeMap<String, f32> {
     })
 }
 
+/// The width the DM dragged this column to, if they did.
+pub fn column_width(ctx: &Context, id: &str) -> Option<f32> {
+    ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<Widths>(widths_id())
+            .0
+            .get(id)
+            .copied()
+    })
+}
+
 /// Whether the DM has chosen this column's width. A page that holds its content to a
 /// comfortable width beside a natural column lets it reach a column the DM moved.
 pub fn column_dragged(ctx: &Context, id: &str) -> bool {
@@ -258,6 +268,7 @@ fn finish_handle(ctx: &Context, id: &'static str, shown: &egui::Response) {
         "campaign_modules" => "campaign packages",
         "party_members" => "party members",
         "session_notes" => "session notes",
+        "session_note_frame" => "note",
         "lookup" => "Lookup",
         "timeline_detail_panel" => "timeline details",
         "run_panel" | "run_setup_panel" | "run_ended_log" => "fight panel",

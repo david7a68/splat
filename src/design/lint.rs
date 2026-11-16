@@ -312,7 +312,7 @@ fn arrow_argument(argument: Option<&syn::Expr>) -> bool {
 /// Controls whose label is only an arrow, read by `syn`, on lines up to `last_line`: the first
 /// argument of `Action::quiet`, `secondary`, `primary` or `destructive`, of `Link::new` and
 /// `Button::new`, of a `.link(…)`, `.button(…)` or `.small_button(…)` call, and the icon of
-/// `icon_button(ui, icon, name)`, when it is a literal of arrows alone or names an arrow glyph
+/// `icon_button(ui, icon, name)` and `icon_button_with_hint(ui, icon, name, hint)`, when it is a literal of arrows alone or names an arrow glyph
 /// (the legacy back arrow, `egui_phosphor::regular::ARROW_LEFT`). Limit: an arrow behind another
 /// name (a local `const` or binding) passes; the legacy arrow's STAGED count is the second net.
 fn arrow_labels(text: &str, last_line: usize) -> usize {
@@ -343,7 +343,7 @@ fn arrow_labels(text: &str, last_line: usize) -> usize {
                     || ["Link", "Button"].contains(&owner) && last == "new"
                 {
                     call.args.first()
-                } else if last == "icon_button" {
+                } else if ["icon_button", "icon_button_with_hint"].contains(&last) {
                     call.args.iter().nth(1)
                 } else {
                     None
@@ -1095,6 +1095,7 @@ fn the_message_rules_find_what_they_should() {
         "fn f() { Action::quiet((\"←\")).show(ui); }".to_owned(),
         format!("fn f() {{ design::icon_button(ui, icons::{LEGACY}, \"Back\"); }}"),
         "fn f() { icon_button(ui, \"←\", \"Back\"); }".to_owned(),
+        "fn f() { icon_button_with_hint(ui, \"←\", \"Back\", \"Back (Alt+Left)\"); }".to_owned(),
         "fn f() { ui.link(\"←\"); }".to_owned(),
         "fn f() { ui.add(egui::Link::new(egui_phosphor::regular::CARET_LEFT)); }".to_owned(),
         "fn f() { ui.add(egui::Button::new(\"‹\")); }".to_owned(),

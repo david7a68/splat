@@ -42,9 +42,9 @@ pub mod ownership {
     pub use crate::design::components::{Footer, ResultOrder};
     pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
     pub use crate::design::results::{
-        Cause, Change, DiskChanged, Ends, FailedAct, Fallback, File, Folder, FooterResult, Gone,
-        Kept, Kind, Mismatch, Name, Owner, OwnerChanged, Part, Press, Projection, Recovery,
-        Refusal, Results, Retained, Rows, Shown, Step, Thing, Way,
+        AtLimit, Cause, Change, DiskChanged, Ends, FailedAct, Fallback, File, Folder, FooterResult,
+        Gone, Kept, Kind, Limit, Mismatch, Name, Owner, OwnerChanged, Part, Press, Projection,
+        Recovery, Refusal, Results, Retained, Rows, RunRule, Shown, Step, Thing, Way,
     };
     pub use crate::design::save_row::{
         Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,
@@ -334,6 +334,7 @@ impl Splat {
         self.touchpad_speed = saved.touchpad_speed;
         self.sessions.restored_session = saved.playing;
         self.sessions.party_bar = saved.party_bar;
+        self.sessions.list_hidden = saved.session_list_hidden;
         let active = self.campaigns.active_campaign();
         self.page =
             saved
@@ -363,6 +364,7 @@ impl Splat {
             column_widths: design::column_widths(ctx),
             touchpad_speed: self.touchpad_speed,
             party_bar: self.sessions.party_bar,
+            session_list_hidden: self.sessions.list_hidden,
             // With a run open, the page it began on: Close run goes back there after a restart.
             page: Some(
                 if self.page == Page::Run {
@@ -2919,6 +2921,13 @@ impl eframe::App for Splat {
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::T)) {
                 self.notes_give_way();
                 self.lookup.toggle_trackers();
+            }
+            // Only where the Session page's header offers the list's toggle.
+            if self.page == Page::Sessions
+                && self.sessions.list_toggle_key()
+                && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Backslash))
+            {
+                self.sessions.toggle_list();
             }
             // Not on Sessions, where the panel is away, and not over a footer's second step.
             if self.sessions.notes_open
