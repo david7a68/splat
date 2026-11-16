@@ -89,6 +89,9 @@ pub struct RegionState {
     /// row), and whether focus was in the region.
     edges: (Option<Id>, Option<Id>),
     inside: bool,
+    /// Where the focused control stands in its row: its first control, its last. Tab moves
+    /// within a row of several controls (egui's own order) and leaves the list from its last.
+    row_ends: (bool, bool),
     /// The frame of the last Tab press: egui moves focus back (Shift+Tab) a frame later.
     tab_frame: Option<u64>,
     /// The list box's stop: the selected row, which Tab enters at.
@@ -111,6 +114,7 @@ impl RegionState {
             focused_id: None,
             edges: (None, None),
             inside: false,
+            row_ends: (true, true),
             tab_frame: None,
             selected: None,
             focus_next: None,
@@ -179,6 +183,9 @@ impl<'s> BlockRegion<'s> {
     /// Returns the blocks drawn whole.
     pub fn show(self, ui: &mut Ui, block: impl FnMut(&mut Ui, usize)) -> Range<usize> {
         let room = ui.available_rect_before_wrap();
+        if super::in_content_pane(ui) {
+            return self.in_place(ui, room.width(), block);
+        }
         let env = MeasureEnv {
             width: room.width(),
             fonts: crate::design::theme::font_generation(ui.ctx()),
@@ -199,6 +206,40 @@ impl<'s> BlockRegion<'s> {
             .max_height(room.height())
             .show(ui, |ui| self.region(ui, env, tallest, block))
             .inner
+    }
+
+    /// In a `Body::Content` pane, which scrolls: the whole extent in place, the blocks in the
+    /// visible clip drawn, each registered as a row, so the pane's whole-row cut (N12) applies.
+    fn in_place(
+        self,
+        ui: &mut Ui,
+        width: f32,
+        mut block: impl FnMut(&mut Ui, usize),
+    ) -> Range<usize> {
+        let env = MeasureEnv {
+            width,
+            fonts: crate::design::theme::font_generation(ui.ctx()),
+            scale: ui.ctx().pixels_per_point(),
+        };
+        let plan = self.state.plan.plan(self.content, env);
+        let (rect, _) = ui.allocate_exact_size(vec2(width, plan.extent()), egui::Sense::hover());
+        let mut drawn = 0..0;
+        for at in 0..plan.len() {
+            let (top, end) = plan.span(at);
+            let block_rect = Rect::from_min_size(rect.min + vec2(0.0, top), vec2(width, end - top));
+            if !ui.is_rect_visible(block_rect) {
+                continue;
+            }
+            if drawn.is_empty() {
+                drawn = at..at;
+            }
+            drawn.end = at + 1;
+            let mut child =
+                ui.new_child(UiBuilder::new().id_salt(("block", at)).max_rect(block_rect));
+            block(&mut child, at);
+            super::super::components::register_row(ui, block_rect);
+        }
+        drawn
     }
 
     fn region(
@@ -240,7 +281,15 @@ impl<'s> BlockRegion<'s> {
         if state.inside {
             let (tab, back) =
                 ctx.input(|input| (input.key_pressed(Key::Tab), input.modifiers.shift));
-            if tab && let Some(edge) = if back { state.edges.0 } else { state.edges.1 } {
+            let leaves = if back {
+                state.row_ends.0
+            } else {
+                state.row_ends.1
+            };
+            if tab
+                && leaves
+                && let Some(edge) = if back { state.edges.0 } else { state.edges.1 }
+            {
                 ctx.memory_mut(|memory| memory.request_focus(edge));
             }
         }
@@ -371,6 +420,22 @@ impl<'s> BlockRegion<'s> {
                 .map(|(at, _)| *at)
         });
         state.focused_id = focused.filter(|_| state.focused.is_some());
+        state.row_ends = match (focused, state.focused) {
+            (Some(id), Some(at)) => drawn
+                .iter()
+                .find(|(row, _)| *row == at)
+                .map(|(_, range)| {
+                    let row: Vec<Id> = widgets(range)
+                        .into_iter()
+                        .filter(|widget| widget.enabled && widget.sense.is_focusable())
+                        .map(|widget| widget.id)
+                        .collect();
+                    (row.first() == Some(&id), row.last() == Some(&id))
+                })
+                .unwrap_or((true, true)),
+            // On the region's own scroll surface.
+            _ => (true, true),
+        };
         if let (Some(id), Some(_)) = (focused, state.focused) {
             // The focused row keeps the vertical arrows: they move between rows (above).
             ctx.memory_mut(|memory| {

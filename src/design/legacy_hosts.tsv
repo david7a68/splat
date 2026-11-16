@@ -84,7 +84,6 @@ virtual-rows	src/design/layout.rs	ScrollColumn::show	2	design	design implementat
 virtual-rows	src/design/layout.rs	ScrollColumn::show_in_region	1	design	design implementation boundary
 virtual-rows	src/design/layout.rs	ScrollColumn::show_rows	1	design	design implementation boundary
 virtual-rows	src/design/layout.rs	ScrollColumn::show_viewport	1	design	design implementation boundary
-virtual-rows	src/encounters.rs	Encounters::creature_search_with_summary	1	Encounters	creature search; step 4
 row-register	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign
 row-register	src/design/components.rs	row	1	design	design implementation boundary
 row-register	src/dndbeyond.rs	DndBeyond::show_import	1	Settings
@@ -131,7 +130,6 @@ scroll-area	src/encounter_run/view.rs	Run::groups_tab	1	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters.rs	Encounters::creature_pane	1	Encounters
-scroll-area	src/encounters.rs	Encounters::creature_search_with_summary	1	Encounters
 scroll-area	src/encounters.rs	Encounters::roster_pane	1	Encounters
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
 scroll-area	src/markdown_view.rs	reader_table	1	Reader
@@ -190,3 +188,4 @@ scroll-offset	src/sessions/page.rs	Sessions::note_editor	2	Sessions
 scroll-offset	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 virtual-rows	src/design/pane/region.rs	BlockRegion::region	1	design	the region of an owned list body (layout 3b; raised)
 scroll-offset	src/design/pane/region.rs	BlockRegion::region	1	design	the region's one offset writer (L10; raised)
+row-register	src/design/pane/region.rs	BlockRegion::in_place	1	design	a region inside a Content pane registers its rows for the pane's whole-row cut (layout 4; raised)

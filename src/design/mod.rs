@@ -1,5 +1,7 @@
 //! The design system. Read `docs/design-system.md`. Tokens are the only source of
 //! colour, type and size. Screens compose `components` and never style by hand.
+/// Measured fact/action rows (layout PR 4).
+pub mod action_rows;
 pub mod column;
 mod comparison;
 pub mod components;
@@ -37,6 +39,7 @@ pub use extras::{
     Gap, Heading, choice, choice_value, choice_wrapped, choice_wrapped_value, gap, heading,
 };
 // Wave 2 callers name the layout parts through `design`, as they name the components.
+pub use action_rows::{Columns, RowAction, action_row};
 #[allow(unused_imports)]
 pub use layout::{
     ACTION_GAP, BackEdge, BackLink, BackTo, CREATE_FIELD_MIN, Create, CreateChoice, CreateDropdown,
@@ -51,8 +54,8 @@ pub use layout::{
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
 pub use pane::{
-    Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills, FillsReason, Navigation,
-    Placement, RegionState, Row,
+    ACTION_ROW, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills, FillsReason,
+    Navigation, Placement, RegionState, Row,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]
