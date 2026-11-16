@@ -342,13 +342,14 @@ const WIDEST_ANSWERS: [&str; 6] = [
     "Fight after: Level not known",
 ];
 
-/// How one Arrivals heading shares its width (points 2 and 3 of the round 29 reviews).
+/// How one Arrivals heading shares its width (points 2 and 3 of the round 29 reviews). The
+/// heading holds the title and the difficulty line only: a group's join status (`Added in
+/// round 1`, `For …`, `Changed`) has ONE place in every group, its member line (FB12, AM8), so
+/// no heading gives a fact of its line to a status and every heading gives way in one order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct HeadingSplit {
     /// The title's room.
     title: f32,
-    /// The status words stay in the heading.
-    status: bool,
     /// The difficulty line's room.
     room: f32,
     /// The line has its own line under the heading.
@@ -356,46 +357,73 @@ struct HeadingSplit {
 }
 
 /// `whole` is the heading's width, `title` the whole title's, `floor` its first word with `…`
-/// (or the whole title when shorter), `status` the status words with their gap (0 for none),
-/// `current` the smallest complete `Fight after: …` now and `widest` the widest one the row can
-/// show. R1: beside the title or on its own line is decided by `widest` (fourth review), so a
-/// change of difficulty never moves the answer or Add; the status words stay beside the whole
-/// title where the current answer fits after them; else the title shortens to leave `widest`,
-/// never below `floor`. Where even `floor` and the answer do not fit together
-/// (the rule for the boundary), the answer takes its own line under the heading at the whole
-/// width, and the title keeps the heading.
-fn heading_split(
-    whole: f32,
-    title: f32,
-    floor: f32,
-    status: f32,
-    (current, widest): (f32, f32),
-) -> HeadingSplit {
+/// (or the whole title when shorter), and `widest` the widest smallest `Fight after: …` the row
+/// can show. R1: beside the title or on its own line is decided by `widest` (fourth review), so
+/// a change of difficulty never moves the answer or Add; the title shortens to leave `widest`,
+/// never below `floor`. Where even `floor` and the answer do not fit together (the rule for the
+/// boundary), the answer takes its own line under the heading at the whole width, and the title
+/// keeps the heading.
+fn heading_split(whole: f32, title: f32, floor: f32, widest: f32) -> HeadingSplit {
     if whole < floor + design::L + widest {
         return HeadingSplit {
             title: title.min(whole),
-            status: false,
             room: whole,
             below: true,
-        };
-    }
-    // The status words stay beside the whole title while the current answer fits after them
-    // (as before); the answer's place (beside, at the right) does not depend on it.
-    if status > 0.0 && title + status + design::L + current <= whole {
-        return HeadingSplit {
-            title,
-            status: true,
-            room: whole - title - status - design::L,
-            below: false,
         };
     }
     let title = title.min(whole - design::L - widest).max(floor);
     HeadingSplit {
         title,
-        status: false,
         room: whole - title - design::L,
         below: false,
     }
+}
+
+/// The words of a blocked Add whose group would roll with no bonus (R35: the same value gives
+/// the lock and the painted words).
+const NO_BONUS: &str = "The first member has no initiative bonus. Type a total.";
+
+/// Why a group's Add, its drop and its Enter do not run now (R35, ruling M1). This ONE value
+/// gives the lock, the hover and the accessible description, and the painted words: the
+/// member-fault rows under the group paint `Faults`; the footer below the list paints the
+/// others, named by the group (`AddWaits::footer`), so no group row moves when they come or go.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AddWaits<'a> {
+    /// The group's own faults (`RunGroup::problem`).
+    Faults(&'a str),
+    /// The typed total cannot be read (`arrival_total`).
+    Total(&'static str),
+    /// The total is blank, so the group rolls, and its first member has no bonus to roll with.
+    NoBonus,
+}
+
+impl<'a> AddWaits<'a> {
+    fn words(self) -> &'a str {
+        match self {
+            Self::Faults(words) => words,
+            Self::Total(words) => words,
+            Self::NoBonus => NO_BONUS,
+        }
+    }
+
+    /// The footer's line for it: `<group>: <reason>`. `None` for the faults, which the
+    /// group's own rows say.
+    fn footer(self, group: &str) -> Option<String> {
+        match self {
+            Self::Faults(_) => None,
+            Self::Total(_) | Self::NoBonus => Some(format!("{group}: {}", self.words())),
+        }
+    }
+}
+
+/// A group whose members' changes make another creature says `Changed`, with its muted pencil,
+/// after its members (FJ5). The no-break space keeps the two on one line.
+fn changed_mark(group: &super::RunGroup) -> Option<String> {
+    group
+        .members
+        .iter()
+        .any(|member| member.overrides.changes_creature())
+        .then(|| format!("{}\u{a0}Changed", icons::CHANGED))
 }
 
 fn arrival_add_word(group: &super::RunGroup) -> String {
@@ -2291,139 +2319,142 @@ impl Run {
         let p = &self.state.participants[index];
         let key = p.key.clone();
         let run_id = self.id;
-        egui::ScrollArea::vertical()
-            .id_salt("run_conditions")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // A form, not the pane: the grid, the effects and Add stay within its width.
-                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-                let found = |name: &str| {
-                    p.conditions.iter().position(|c| {
-                        c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion"))
-                    })
-                };
-                // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
-                // X11: a condition with a count shows it on its tick, `✓ Frightened 10`.
-                let label = |name: &str| {
-                    found(name).map(|at| {
-                        let c = &p.conditions[at];
-                        c.count().map_or_else(|| name.to_owned(), |_| c.words())
-                    })
-                };
-                let (pressed, counts) = conditions_grid_counted(ui, "official_conditions", &label);
-                if let Some(name) = pressed {
-                    command = Some(found(name).map_or_else(
-                        || Command::Condition(index, name.to_owned()),
-                        |i| Command::RemoveCondition(index, i),
-                    ));
-                }
-                // One level, not a pile of lines. Each step replaces the last.
-                let exhausted = p
-                    .conditions
-                    .iter()
-                    .position(|c| c.name().starts_with("Exhaustion"));
-                if let Some(at) = exhausted {
-                    let start = exhaustion_level(p.conditions[at].name());
-                    // A drag shows its level here and commits one step when it ends, from the
-                    // level it started at. A drag that the run no longer matches is dropped.
-                    let frame = ui.ctx().cumulative_frame_nr();
-                    let drag = self.exhaustion_drag.take().filter(|drag| {
-                        (drag.index, drag.at, drag.start) == (index, at, start)
-                            && drag.frame + 1 >= frame
+        design::ScrollColumn::new("run_conditions").show(ui, |ui| {
+            // A form, not the pane: the grid, the effects and Add stay within its width.
+            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+            ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
+            let found = |name: &str| {
+                p.conditions.iter().position(|c| {
+                    c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion"))
+                })
+            };
+            // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
+            // X11: a condition with a count shows it on its tick, `✓ Frightened 10`.
+            let label = |name: &str| {
+                found(name).map(|at| {
+                    let c = &p.conditions[at];
+                    c.count().map_or_else(|| name.to_owned(), |_| c.words())
+                })
+            };
+            let (pressed, counts) = conditions_grid_counted(ui, "official_conditions", &label);
+            if let Some(name) = pressed {
+                command = Some(found(name).map_or_else(
+                    || Command::Condition(index, name.to_owned()),
+                    |i| Command::RemoveCondition(index, i),
+                ));
+            }
+            // One level, not a pile of lines. Each step replaces the last.
+            let exhausted = p
+                .conditions
+                .iter()
+                .position(|c| c.name().starts_with("Exhaustion"));
+            if let Some(at) = exhausted {
+                let start = exhaustion_level(p.conditions[at].name());
+                // A drag shows its level here and commits one step when it ends, from the
+                // level it started at. A drag that the run no longer matches is dropped.
+                let frame = ui.ctx().cumulative_frame_nr();
+                let drag = self.exhaustion_drag.take().filter(|drag| {
+                    (drag.index, drag.at, drag.start) == (index, at, start)
+                        && drag.frame + 1 >= frame
+                });
+                let mut level = drag.map_or(i64::from(start), |drag| drag.level);
+                let stepper = ui.horizontal(|ui| {
+                    ui.label(Type::Body.rich(ui, "Exhaustion level").color(colors().text));
+                    design::stepper_with_density(
+                        ui,
+                        "Exhaustion level",
+                        &mut level,
+                        0..=EXHAUSTION_MAX,
+                        Density::Scan,
+                        Some(EXHAUSTION_AT_LOW),
+                        Some(EXHAUSTION_AT_HIGH),
+                    )
+                });
+                let dragging = ui.ctx().dragged_id().is_some()
+                    && ui
+                        .input(|i| i.pointer.press_origin())
+                        .is_some_and(|origin| stepper.response.rect.contains(origin));
+                // A level above the usual top (from a file or a sync) stays until the DM
+                // changes it.
+                let level = level.clamp(0, EXHAUSTION_MAX.max(i64::from(start)));
+                if dragging {
+                    self.exhaustion_drag = Some(ExhaustionDrag {
+                        index,
+                        at,
+                        start,
+                        level,
+                        frame,
                     });
-                    let mut level = drag.map_or(i64::from(start), |drag| drag.level);
-                    let stepper = ui.horizontal(|ui| {
-                        ui.label(Type::Body.rich(ui, "Exhaustion level").color(colors().text));
-                        design::stepper_with_density(
-                            ui,
-                            "Exhaustion level",
-                            &mut level,
-                            0..=EXHAUSTION_MAX,
-                            Density::Scan,
-                            Some(EXHAUSTION_AT_LOW),
-                            Some(EXHAUSTION_AT_HIGH),
-                        )
+                } else if (stepper.inner || drag.is_some()) && level != i64::from(start) {
+                    command = Some(if level == 0 {
+                        Command::RemoveCondition(index, at)
+                    } else {
+                        set_exhaustion(index, level as u8)
                     });
-                    let dragging = ui.ctx().dragged_id().is_some()
-                        && ui
-                            .input(|i| i.pointer.press_origin())
-                            .is_some_and(|origin| stepper.response.rect.contains(origin));
-                    // A level above the usual top (from a file or a sync) stays until the DM
-                    // changes it.
-                    let level = level.clamp(0, EXHAUSTION_MAX.max(i64::from(start)));
-                    if dragging {
-                        self.exhaustion_drag = Some(ExhaustionDrag {
-                            index,
-                            at,
-                            start,
-                            level,
-                            frame,
-                        });
-                    } else if (stepper.inner || drag.is_some()) && level != i64::from(start) {
-                        command = Some(if level == 0 {
-                            Command::RemoveCondition(index, at)
-                        } else {
-                            set_exhaustion(index, level as u8)
-                        });
-                    }
                 }
-                // Each other effect with its whole words. An official condition's count is on
-                // its tick; it is here only when the tick cannot show it.
-                let listed = |c: &super::Condition| {
-                    super::recognized_condition(c.name()).is_none()
-                        || (c.is_effect() && !(counts && c.count().is_some()))
-                };
-                let custom: Vec<_> = p
-                    .conditions
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, c)| listed(c))
-                    .map(|(at, c)| (at, c.words()))
-                    .collect();
-                // The list's heading adds its own space above it; an empty list has no heading.
-                if custom.is_empty() {
-                    design::gap(ui, design::Gap::S);
-                }
-                let width = (ui.available_width() - 80.0).max(100.0);
-                if let Some(at) =
-                    other_effects_list(ui, custom.iter().map(|(_, words)| words.as_str()), width)
-                {
-                    command = Some(Command::RemoveCondition(index, custom[at].0));
-                }
-                let focus = std::mem::take(&mut self.focus_other_effect);
-                // The participant's one draft: the dock's field shows the same words.
-                let draft = self.effect_fields.entry(p.key.clone()).or_default();
-                // X8: where the dock has no room for `Effect`, this field is the way, and its
-                // words say that a time counts.
-                let placeholder = if self.state.phase == Phase::Running && !self.effect_in_dock {
-                    OTHER_EFFECT_TIMED
-                } else {
-                    "Other effect…"
-                };
-                // The draft is this participant's, in this run: its field keeps its own cursor
-                // and Undo (two runs can reuse a roster slot's key).
-                let owner = design::TextKey::from_data(format!("{}:{}", run_id, p.key));
-                let (add, field) =
-                    other_effect_field(ui, owner, &mut draft.words, (width, placeholder), focus);
-                // Escape clears the participant's draft, as in the dock's field.
-                if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
-                    draft.words.clear();
-                }
-                if add {
-                    // Typed as a level, it is still the one Exhaustion a creature has.
-                    // Words with a time go through the one reader, which keeps the level.
-                    let typed = draft.words.trim().to_owned();
-                    let level = typed.starts_with("Exhaustion")
-                        && !super::Condition::read(&typed).is_effect();
-                    command = Some(match exhausted.filter(|_| level) {
-                        Some(_) => set_exhaustion(index, exhaustion_level(&typed)),
-                        None => Command::Condition(index, typed),
-                    });
-                    added = true;
-                }
-                design::help(ui, CONDITIONS_HELP);
-            });
+            }
+            // Each other effect with its whole words. An official condition's count is on
+            // its tick; it is here only when the tick cannot show it.
+            let listed = |c: &super::Condition| {
+                super::recognized_condition(c.name()).is_none()
+                    || (c.is_effect() && !(counts && c.count().is_some()))
+            };
+            let custom: Vec<_> = p
+                .conditions
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| listed(c))
+                .map(|(at, c)| (at, c.words()))
+                .collect();
+            // The list's heading adds its own space above it; an empty list has no heading.
+            if custom.is_empty() {
+                design::gap(ui, design::Gap::S);
+            }
+            // The field ends where its Add starts, and Add at the form's edge: measured, as the
+            // Encounters change form measures it (`groups::other_effect_width`), so the field's
+            // words keep the room the column gives (the column keeps its bar's lane).
+            let width = (ui.available_width()
+                - ui.spacing().item_spacing.x
+                - other_effect_add().natural_width(ui))
+            .max(100.0);
+            if let Some(at) =
+                other_effects_list(ui, custom.iter().map(|(_, words)| words.as_str()), width)
+            {
+                command = Some(Command::RemoveCondition(index, custom[at].0));
+            }
+            let focus = std::mem::take(&mut self.focus_other_effect);
+            // The participant's one draft: the dock's field shows the same words.
+            let draft = self.effect_fields.entry(p.key.clone()).or_default();
+            // X8: where the dock has no room for `Effect`, this field is the way, and its
+            // words say that a time counts.
+            let placeholder = if self.state.phase == Phase::Running && !self.effect_in_dock {
+                OTHER_EFFECT_TIMED
+            } else {
+                "Other effect…"
+            };
+            // The draft is this participant's, in this run: its field keeps its own cursor
+            // and Undo (two runs can reuse a roster slot's key).
+            let owner = design::TextKey::from_data(format!("{}:{}", run_id, p.key));
+            let (add, field) =
+                other_effect_field(ui, owner, &mut draft.words, (width, placeholder), focus);
+            // Escape clears the participant's draft, as in the dock's field.
+            if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
+                draft.words.clear();
+            }
+            if add {
+                // Typed as a level, it is still the one Exhaustion a creature has.
+                // Words with a time go through the one reader, which keeps the level.
+                let typed = draft.words.trim().to_owned();
+                let level =
+                    typed.starts_with("Exhaustion") && !super::Condition::read(&typed).is_effect();
+                command = Some(match exhausted.filter(|_| level) {
+                    Some(_) => set_exhaustion(index, exhaustion_level(&typed)),
+                    None => Command::Condition(index, typed),
+                });
+                added = true;
+            }
+            design::help(ui, CONDITIONS_HELP);
+        });
         if let Some(command) = command {
             self.run_command(command);
             // Added words leave the draft; words the run refused stay, with the reason. In a
@@ -3209,64 +3240,57 @@ impl Run {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn notes_tab(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
         let mut pressed = false;
-        egui::ScrollArea::vertical()
-            .id_salt("run_encounter_notes")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if prep.is_empty() {
-                    // Round 30 AP1: a sentence that names an act offers it. The run's own
-                    // record of its encounter decides, not Lookup's index, which can lag behind
-                    // a fight made a moment ago. With no saved encounter, it says why.
-                    match self.source {
-                        Some(id) => design::empty_state(
-                            ui,
-                            icons::SESSIONS,
-                            "No prep notes yet",
-                            "Add read-aloud text or notes when you edit the encounter.",
-                            |ui| {
-                                if Action::quiet("Edit encounter")
-                                    .line_start()
-                                    .show(ui)
-                                    .clicked()
-                                {
-                                    pressed = true;
-                                    ui.ctx().data_mut(|data| {
-                                        data.insert_temp(egui::Id::new("edit_run_encounter"), id);
-                                    });
-                                }
-                                // R35: why the press did not open it, under the action, until
-                                // the next press. The run owns it and ends with the run.
-                                if let Some(refusal) = &self.prep_refusal {
-                                    design::blocked_reason(ui, Some(refusal.reason()));
-                                }
-                            },
-                        ),
-                        None => design::empty_state(
-                            ui,
-                            icons::SESSIONS,
-                            "No prep notes",
-                            "This fight did not start from a saved encounter, so it has no prep notes.",
-                            |_| {},
-                        ),
-                    }
-                } else {
-                    design::heading(ui, design::Heading::Label(READ_ALOUD));
-                    style::markdown(ui, prep);
+        design::ScrollColumn::new("run_encounter_notes").show(ui, |ui| {
+            if prep.is_empty() {
+                // Round 30 AP1: a sentence that names an act offers it. The run's own
+                // record of its encounter decides, not Lookup's index, which can lag behind
+                // a fight made a moment ago. With no saved encounter, it says why.
+                match self.source {
+                    Some(id) => design::empty_state(
+                        ui,
+                        icons::SESSIONS,
+                        "No prep notes yet",
+                        "Add read-aloud text or notes when you edit the encounter.",
+                        |ui| {
+                            if Action::quiet("Edit encounter")
+                                .line_start()
+                                .show(ui)
+                                .clicked()
+                            {
+                                pressed = true;
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(egui::Id::new("edit_run_encounter"), id);
+                                });
+                            }
+                            // R35: why the press did not open it, under the action, until
+                            // the next press. The run owns it and ends with the run.
+                            if let Some(refusal) = &self.prep_refusal {
+                                design::blocked_reason(ui, Some(refusal.reason()));
+                            }
+                        },
+                    ),
+                    None => design::empty_state(
+                        ui,
+                        icons::SESSIONS,
+                        "No prep notes",
+                        "This fight did not start from a saved encounter, so it has no prep notes.",
+                        |_| {},
+                    ),
                 }
-                if let Some(technical) = technical {
-                    design::gap(ui, design::Gap::M);
-                    design::quiet_section(ui, "Technical details", |ui| {
-                        style::markdown(ui, technical);
-                    });
-                }
-            });
+            } else {
+                design::heading(ui, design::Heading::Label(READ_ALOUD));
+                style::markdown(ui, prep);
+            }
+            if let Some(technical) = technical {
+                design::gap(ui, design::Gap::M);
+                design::quiet_section(ui, "Technical details", |ui| {
+                    style::markdown(ui, technical);
+                });
+            }
+        });
         if pressed {
             self.prep_refusal = None;
         }
@@ -3371,15 +3395,23 @@ impl Run {
         self.scale_revision
     }
 
-    /// Each offered group whose typed total cannot be read: `<group>: <reason>`, in list order.
-    /// Worked out again only after an edit of the typed totals, a new read of the groups or
-    /// another encounter (`totals_revision`, the groups' address, `source`).
+    /// Each offered group whose Add waits for the DM: `<group>: <reason>`, in list order, from
+    /// the value that locks that Add (`add_waits`; R35, M1). Worked out again only after an edit
+    /// of the typed totals, a new read of the groups, another encounter, a step or its Undo
+    /// (which can give a side its initiative) or another grouping rule (`totals_revision`,
+    /// `groups_revision`, `source`, `revision`, `initiative.grouping`).
     fn arrival_reasons(&mut self) -> Arc<[String]> {
         let groups_revision = self.groups_revision();
         let Some(groups) = self.groups.as_ref() else {
             return Arc::from([]);
         };
-        let key = (self.totals_revision, groups_revision, self.source);
+        let key = (
+            self.totals_revision,
+            groups_revision,
+            self.source,
+            self.revision,
+            self.initiative.grouping,
+        );
         if let Some((_, reasons)) = self.arrival_reasons.as_ref().filter(|(at, _)| *at == key) {
             return reasons.clone();
         }
@@ -3394,14 +3426,29 @@ impl Run {
             .iter()
             .chain(&offered.any)
             .chain(&offered.other)
-            .filter_map(|group| {
-                let text = self.group_totals.get(&group.id)?;
-                let reason = arrival_total(text).err()?;
-                Some(format!("{}: {reason}", group.name))
-            })
+            .filter_map(|group| self.add_waits(group)?.footer(&group.name))
             .collect();
         self.arrival_reasons = Some((key, reasons.clone()));
         reasons
+    }
+
+    /// Why this group's Add waits now, or `None` when it runs: its faults, then its typed total,
+    /// then a roll with no bonus. The ONE value for the button, its drop, its Enter and the
+    /// painted words (`AddWaits`).
+    fn add_waits<'g>(&self, group: &'g super::RunGroup) -> Option<AddWaits<'g>> {
+        if let Some(faults) = group.problem.as_deref() {
+            return Some(AddWaits::Faults(faults));
+        }
+        let typed = self.group_totals.get(&group.id).map_or("", String::as_str);
+        match arrival_total(typed) {
+            Err(reason) => return Some(AddWaits::Total(reason)),
+            Ok(Some(_)) => return None,
+            Ok(None) => {}
+        }
+        // Blank: the group rolls, unless its side already has an initiative to join.
+        let leader = group.leader()?;
+        (!self.joins_side(&leader.side) && leader.initiative_bonus.is_none())
+            .then_some(AddWaits::NoBonus)
     }
 
     /// FI8: a group's member summary for its place, wrapped beside Initiative and Add, or on a
@@ -3711,11 +3758,12 @@ impl Run {
         let block = all
             .iter()
             .map(|group| {
-                // FI5 and the fourth review of PR 371: the block is as wide as the widest status
-                // each group can show, so joining (`Added in setup`) widens nothing and no Add
-                // moves under the DM's pointer.
+                // FI5 and the fourth review of PR 371: a heading's room is its title, then its
+                // facts with the widest status the group can show, so joining (`Added in setup`)
+                // widens nothing and no Add moves under the DM's pointer. The heading never holds
+                // the status (FB12): it gives that room to its `Fight after` line.
                 let status = self.group_status(group, self.group_joined(group));
-                let widest = self.widest_status(group);
+                let widest = self.widest_status();
                 let small = Type::Small.font(ui);
                 let status = if design::number_width(ui, &status, &small)
                     > design::number_width(ui, &widest, &small)
@@ -3723,6 +3771,11 @@ impl Run {
                     status
                 } else {
                     widest
+                };
+                // With its `Changed`, which the member line shows after the members.
+                let status = match changed_mark(group) {
+                    Some(mark) => format!("{status} · {mark}"),
+                    None => status,
                 };
                 let totals = group.facts(true);
                 let heading = design::number_width(
@@ -3777,21 +3830,9 @@ impl Run {
         self.arrival_lines.retain(|id| offered.contains(id));
     }
 
-    /// The widest join status a group can show (FI5): `Added in round NN`, with `Changed`.
-    fn widest_status(&self, group: &super::RunGroup) -> String {
-        let changed = group
-            .members
-            .iter()
-            .any(|member| member.overrides.changes_creature());
-        format!(
-            "Added in round {}{}",
-            self.state.round.max(10),
-            if changed {
-                format!(" · {} Changed", icons::CHANGED)
-            } else {
-                String::new()
-            }
-        )
+    /// The widest join status a group can show (FI5): `Added in round NN`.
+    fn widest_status(&self) -> String {
+        format!("Added in round {}", self.state.round.max(10))
     }
 
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
@@ -3934,13 +3975,10 @@ impl Run {
     }
 
     /// What a group's row says about it before its members: when it joined (`joined`, from
-    /// `group_joined`), whose encounter it is for, and `Changed`.
+    /// `group_joined`), or whose encounter it is for. `Changed` follows the members
+    /// (`changed_mark`).
     fn group_status(&self, group: &super::RunGroup, joined: Option<u64>) -> String {
-        let changed = group
-            .members
-            .iter()
-            .any(|member| member.overrides.changes_creature());
-        let mut status = if let Some(round) = joined {
+        if let Some(round) = joined {
             if round == 0 {
                 // Short enough for the member slot at 960, in the run's own phase word, so a
                 // first join in setup needs no line of its own (review 2).
@@ -3955,18 +3993,11 @@ impl Run {
         {
             format!("For {name}")
         } else if group.encounter.is_some() && group.encounter != self.source {
-            // FB10: the Groups list's words, short enough to sit beside the name.
+            // FB10: the Groups list's words, short enough for the member slot.
             crate::encounters::ENCOUNTER_DELETED.to_owned()
         } else {
             String::new()
-        };
-        if changed {
-            if !status.is_empty() {
-                status.push_str(" · ");
-            }
-            status.push_str(&format!("{} Changed", icons::CHANGED));
         }
-        status
     }
 
     /// Returns true when the DM chooses to add this group.
@@ -4004,11 +4035,6 @@ impl Run {
             &format!("{} {name}", icons::DRAG),
             &Type::Strong.font(ui),
         );
-        let status_room = if status.is_empty() {
-            0.0
-        } else {
-            design::number_width(ui, &status, &Type::Small.font(ui)) + design::L
-        };
         // R1 (FL3, FI1, FJ1, FB2): `Fight after` never gives way, and every group that can
         // join says it, also when the fight has no word (FK3: `XP not known` in the word's
         // place). The one difficulty line (`difficulty::Line`) decides the order of the words
@@ -4060,15 +4086,8 @@ impl Run {
             .iter()
             .map(|answer| design::number_width(ui, answer, &font))
             .fold(shortest, f32::max);
-        let split = heading_split(
-            grip.rect.width(),
-            heading_width,
-            floor,
-            if status.is_empty() { 0.0 } else { status_room },
-            (shortest, widest),
-        );
-        let (status_in_heading, title_width, room) = (split.status, split.title, split.room);
-        let status_room = if status_in_heading { status_room } else { 0.0 };
+        let split = heading_split(grip.rect.width(), heading_width, floor, widest);
+        let (title_width, room) = (split.title, split.room);
         let fitted = self
             .arrival_lines
             .fit(ui, &group.id, content, room, &font, line);
@@ -4133,18 +4152,6 @@ impl Run {
         if !split.below {
             ui.painter().galley(word_rect.min, galley, c.text);
         }
-        if status_in_heading {
-            ui.painter().text(
-                pos2(
-                    grip.rect.left() + heading_width + design::L,
-                    grip.rect.center().y,
-                ),
-                Align2::LEFT_CENTER,
-                &status,
-                Type::Small.font(ui),
-                c.muted,
-            );
-        }
         // A long name stops short of the line, and its row shows it whole on hover.
         let title = egui::WidgetText::from(
             Type::Strong
@@ -4160,7 +4167,7 @@ impl Run {
             if split.below {
                 title_width
             } else {
-                title_width.min(word_rect.left() - status_room - grip.rect.left() - design::S)
+                title_width.min(word_rect.left() - grip.rect.left() - design::S)
             },
             Type::Strong.font(ui),
         );
@@ -4186,9 +4193,8 @@ impl Run {
             self.initiative.grouping.arrival_rule(),
             shown.map_or_else(String::new, |rating| format!("\n{}", rating.budget_line()))
         ));
-        // A group that cannot join carries no payload; its ghost still follows the pointer.
-        let movable = group.problem.is_none()
-            && arrival_total(self.group_totals.get(&group.id).map_or("", String::as_str)).is_ok();
+        // A group whose Add waits carries no payload; its ghost still follows the pointer.
+        let movable = self.add_waits(group).is_none();
         design::drag_source(
             ui,
             &grip,
@@ -4224,35 +4230,28 @@ impl Run {
             above: summary_above,
         } = self.arrival_summary(ui, group, beside, full);
         let width = if summary_above { full } else { beside };
-        let members = members.to_string();
-        let status_shown = if status_in_heading {
-            ""
-        } else {
-            status.as_str()
+        // `Changed` follows the members, in the one order of a roster's summary
+        // (`difficulty::Summary`: members, then `Changed`), so the member line never starts
+        // with its pencil (N5). A break may come before its `·`, never after it.
+        let members = match changed_mark(group) {
+            Some(mark) => format!("{members} ·\u{a0}{mark}"),
+            None => members.to_string(),
         };
+        // FB12, AM8: the join status's one place in every group is here, before its members;
+        // the heading never holds it.
+        let status_shown = status.as_str();
         // A status that cannot fit the member slot whole takes a full-width line above the
         // members and controls, where it wraps at its spaces. FB1: a group that has joined
         // decides by its widest join status too, so a second join that changes the words never
         // changes the row's shape.
         // A group that joined can show `Added in round N` again; its row keeps that room.
-        let widest = self.widest_status(group);
-        // A heading with no form says only the group's facts; it may hold the status too.
-        let widest_in_heading = fitted.as_ref().is_some_and(|fitted| fitted.form.is_empty())
-            && heading_width
-                + design::L
-                + design::number_width(
-                    ui,
-                    &format!("{widest} · {totals_text}"),
-                    &Type::Small.font(ui),
-                )
-                <= grip.rect.width();
+        let widest = self.widest_status();
         // FI5: any group can join, so every row keeps the shape of the widest words it can show,
         // `Added in round NN` (or its own longer status). Joining then moves no row, and its
         // `Added in round N` sits on the members' line.
         let font = Type::Small.font(ui);
-        let shape = if widest_in_heading
-            || design::number_width(ui, status_shown, &font)
-                > design::number_width(ui, &widest, &font)
+        let shape = if design::number_width(ui, status_shown, &font)
+            > design::number_width(ui, &widest, &font)
         {
             status_shown
         } else {
@@ -4367,24 +4366,13 @@ impl Run {
             ui.ctx().accesskit_node_builder(response.id, |node| {
                 node.set_description("Blank rolls initiative")
             });
-            let parsed = arrival_total(text);
             if response.changed() {
                 self.totals_revision += 1;
             }
-            let total = parsed.as_ref().ok().copied().flatten();
             let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-            let leader = group.leader();
-            let may_roll = !leader
-                .as_ref()
-                .is_some_and(|leader| self.joins_side(&leader.side));
-            let blocked = group
-                .problem
-                .as_deref()
-                .or(parsed.as_ref().err().copied())
-                .or((total.is_none()
-                    && may_roll
-                    && leader.is_some_and(|leader| leader.initiative_bonus.is_none()))
-                .then_some("The first member has no initiative bonus. Type a total."));
+            // R35, M1: the one value that locks Add, its drop and Enter, and gives the words
+            // that the footer or the group's fault rows paint.
+            let blocked = self.add_waits(group).map(AddWaits::words);
             ui.add_space((right - add_width - ui.cursor().left()).max(0.0));
             add = ui
                 .allocate_ui_with_layout(
@@ -4475,11 +4463,23 @@ impl Run {
         }
     }
 
-    /// While a group is held, the initiative list says it can take it.
+    /// While a group is held, the initiative list says it can take it. A group whose Add came
+    /// to wait while it was held (a step or its Undo took away its side's initiative, a new
+    /// read of the groups) is let go: no outline promises a drop that would not join.
     fn group_drop_zone(&mut self, ui: &mut egui::Ui, rect: Rect) {
         let Some(held) = egui::DragAndDrop::payload::<GroupDrag>(ui.ctx()) else {
             return;
         };
+        let takes = self
+            .groups
+            .iter()
+            .flat_map(|groups| groups.iter())
+            .find(|group| group.id == held.0)
+            .is_some_and(|group| self.add_waits(group).is_none());
+        if !takes {
+            egui::DragAndDrop::clear_payload(ui.ctx());
+            return;
+        }
         ui.painter().rect_stroke(
             rect,
             design::RADIUS_CONTROL,
@@ -4859,10 +4859,7 @@ impl Run {
     )]
     fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
-        egui::ScrollArea::vertical()
-            .id_salt("run_record")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
+        design::ScrollColumn::new("run_record").show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = design::S;
                 let p = &self.state.participants[index];
                 let mut hp = p.hp;
@@ -5022,29 +5019,22 @@ impl Run {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn log_tab(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        egui::ScrollArea::vertical()
-            .id_salt("run_log")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if self.state.log.is_empty() {
-                    design::empty_state(
-                        ui,
-                        icons::SESSIONS,
-                        "No log entries yet",
-                        "Begin combat, or add a note on the Correct tab, to record what happens.",
-                        |_| {},
-                    );
-                }
-                for line in self.state.log.iter().rev() {
-                    ui.add(egui::Label::new(Type::Small.rich(ui, line).color(c.text)).wrap());
-                }
-            });
+        design::ScrollColumn::new("run_log").show(ui, |ui| {
+            if self.state.log.is_empty() {
+                design::empty_state(
+                    ui,
+                    icons::SESSIONS,
+                    "No log entries yet",
+                    "Begin combat, or add a note on the Correct tab, to record what happens.",
+                    |_| {},
+                );
+            }
+            for line in self.state.log.iter().rev() {
+                ui.add(egui::Label::new(Type::Small.rich(ui, line).color(c.text)).wrap());
+            }
+        });
     }
 
     // ---- Setup ------------------------------------------------------------------
@@ -10853,6 +10843,116 @@ mod tests {
             before + 3,
             "iter-26-R-reload-add: Add adds the current 3 members"
         );
+        // M-R0 (R35, ruling M1): a group whose first member has no initiative bonus would roll
+        // with none, so its Add (and Enter) waits, and the footer paints why, named by the group,
+        // from the same value (`add_waits`). A, the riders' reason, ends with a typed total and
+        // comes back when it is cleared; a step alone does not end it, nor does the by-side rule
+        // alone, but together they give the riders' side an initiative to join with no roll;
+        // Undo of that step brings it back. B, Vanguard's bad total, stays through all of them.
+        let mut run = super::super::tests::run();
+        let mut wisp = (*run.state.participants[0].definition).clone();
+        wisp.id = Uuid::new_v4();
+        wisp.fields.insert(
+            "splat_stats".into(),
+            serde_yaml_ng::from_str("{max_hp: {value: 9}, armor_class: {value: 12}}").unwrap(),
+        );
+        let group = |name: &str, entry: Arc<Entry>| {
+            Arc::new(super::super::RunGroup {
+                id: Uuid::new_v4(),
+                path: format!("{name}.md"),
+                name: name.into(),
+                side: "enemies".into(),
+                encounter: None,
+                encounter_name: None,
+                members: vec![super::super::GroupMember {
+                    entry,
+                    count: 2,
+                    overrides: Default::default(),
+                }],
+                notes: String::new(),
+                xp: 0,
+                xp_unknown: vec![],
+                unavailable: 0,
+                unavailable_members: vec![],
+                problem: None,
+                warnings: vec![],
+            })
+        };
+        let riders = group("Mist Riders", Arc::new(wisp));
+        let vanguard = group("Vanguard", run.state.participants[0].definition.clone());
+        run.groups = Some(Arc::new(vec![riders.clone(), vanguard.clone()]));
+        run.group_totals.insert(vanguard.id, "2-5".into());
+        let run = Rc::new(RefCell::new(run));
+        let drawn = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(760.0, 800.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| drawn.borrow_mut().groups_tab(ui));
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        const RIDERS: &str = "Mist Riders: The first member has no initiative bonus. Type a total.";
+        const VANGUARD: &str = "Vanguard: Enter a whole number, or clear the field to roll.";
+        let shown = |harness: &egui_kittest::Harness<'_>| {
+            use egui_kittest::kittest::NodeT;
+            let reasons: Vec<_> = texts(harness)
+                .into_iter()
+                .filter(|text| text == RIDERS || text == VANGUARD)
+                .collect();
+            let waits = harness
+                .get_by_label("Add Mist Riders to the initiative list")
+                .accesskit_node()
+                .is_disabled();
+            (reasons, waits)
+        };
+        let both = (vec![RIDERS.to_owned(), VANGUARD.to_owned()], true);
+        let only_b = (vec![VANGUARD.to_owned()], false);
+        assert_eq!(shown(&harness), both, "m-r0-R35-painted");
+        let rows = run.borrow().state.participants.len();
+        harness
+            .get_by_label("Initiative total for Mist Riders")
+            .click();
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
+        harness.run_steps(2);
+        // Nothing pressed: no refusal either (the run's own check refuses a roll with no bonus).
+        let pressed = (
+            run.borrow().state.participants.len(),
+            run.borrow().error.clone(),
+        );
+        assert_eq!(
+            pressed,
+            (rows, None),
+            "m-r0-R35-enter: Enter presses nothing while Add waits"
+        );
+        harness
+            .get_by_label("Initiative total for Mist Riders")
+            .click();
+        harness.run_steps(1);
+        harness
+            .get_by_label("Initiative total for Mist Riders")
+            .type_text("12");
+        harness.run_steps(2);
+        assert_eq!(shown(&harness), only_b, "m-r0-R35-typed");
+        for _ in 0..2 {
+            harness.key_press(Key::Backspace);
+            harness.run_steps(1);
+        }
+        harness.run_steps(1);
+        assert_eq!(shown(&harness), both, "m-r0-R35-cleared");
+        // A step gives the riders' side an initiative; one at a time, the riders still roll.
+        run.borrow_mut()
+            .apply(Command::Initiative(0, Some(15)))
+            .unwrap();
+        harness.run_steps(2);
+        assert_eq!(shown(&harness), both, "m-r0-R35-step-alone");
+        // By side, the riders join their side at 15 with no roll: nothing waits.
+        run.borrow_mut().initiative.grouping = crate::encounter_settings::Grouping::BySide;
+        harness.run_steps(2);
+        assert_eq!(shown(&harness), only_b, "m-r0-R35-by-side");
+        run.borrow_mut().undo();
+        harness.run_steps(2);
+        assert_eq!(shown(&harness), both, "m-r0-R35-undo");
     }
 
     #[test]
@@ -13696,6 +13796,21 @@ mod tests {
                 .get(&key)
                 .is_none_or(|f| f.words.is_empty())
         );
+        // M-R0.2 (G1c, `ScrollColumn`): the tab keeps its scroll bar's lane, so when it grows
+        // taller than its pane and the bar comes, no right edge in it moves.
+        let edges = |harness: &egui_kittest::Harness<'_>| {
+            ["Other effect", "Add"].map(|label| harness.get_by_label(label).rect().right())
+        };
+        let mut seen = Vec::new();
+        for height in [1000.0, 200.0] {
+            harness.set_size(vec2(560.0, height));
+            harness.run_steps(3);
+            seen.push(edges(&harness));
+        }
+        assert_eq!(
+            seen[0], seen[1],
+            "m-r0-2-G1c: the Conditions tab's right edges with no bar, then with one"
+        );
     }
 
     #[test]
@@ -14031,57 +14146,38 @@ mod tests {
     /// complete `Fight after: …` before its title; the title shortens, never below its first
     /// word; where even that and the answer do not fit, the answer takes its own line under the
     /// heading at the whole width. At no width is the answer's room less than that answer.
+    /// FB12 and AM8 (M-R0): the split has no status and no current answer among its inputs or
+    /// its result, so no heading can give its room to a status, and the current answer (fourth
+    /// review) cannot move the answer's place or the title: only the widest answer does.
     #[test]
     fn iter_29_r1_the_heading_reserves_fight_after_before_the_title() {
         let (title, floor, shortest) = (250.0, 60.0, 100.0);
         for whole in 1..=600 {
             let whole = whole as f32;
-            for status in [0.0, 80.0] {
-                let split = heading_split(whole, title, floor, status, (shortest, shortest));
+            let split = heading_split(whole, title, floor, shortest);
+            assert!(
+                split.room >= shortest - 0.01 || (split.below && split.room == whole),
+                "{whole}: {split:?}"
+            );
+            if split.below {
+                assert!(whole < floor + design::L + shortest, "{whole}: {split:?}");
+            } else {
+                assert!(split.title >= floor, "{whole}: {split:?}");
+                assert!(split.title <= title);
+                // The line has all the room the title leaves.
                 assert!(
-                    split.room >= shortest - 0.01 || (split.below && split.room == whole),
-                    "{whole} {status}: {split:?}"
+                    (split.title + design::L + split.room - whole).abs() < 0.01,
+                    "{whole}: {split:?}"
                 );
-                if split.below {
-                    assert!(whole < floor + design::L + shortest, "{whole}: {split:?}");
-                    assert!(!split.status);
-                } else {
-                    assert!(split.title >= floor, "{whole}: {split:?}");
-                    assert!(split.title <= title);
-                }
-                // The status words stay only beside the whole title.
-                if split.status {
-                    assert_eq!(split.title, title, "{whole}: {split:?}");
-                }
             }
         }
-        // Fourth review: with no status words, the current answer changes neither the place of
-        // the answer (beside or below) nor the title's width; only the widest answer does.
-        for whole in 1..=600 {
-            let whole = whole as f32;
-            let low = heading_split(whole, title, floor, 0.0, (60.0, shortest));
-            let high = heading_split(whole, title, floor, 0.0, (shortest, shortest));
-            assert_eq!((low.below, low.title), (high.below, high.title), "{whole}");
-        }
         // The boundary: exactly the first word, its gap and the answer.
-        let edge = heading_split(
-            floor + design::L + shortest,
-            title,
-            floor,
-            0.0,
-            (shortest, shortest),
-        );
+        let edge = heading_split(floor + design::L + shortest, title, floor, shortest);
         assert_eq!(
             (edge.below, edge.title, edge.room),
             (false, floor, shortest)
         );
-        let under = heading_split(
-            floor + design::L + shortest - 1.0,
-            title,
-            floor,
-            0.0,
-            (shortest, shortest),
-        );
+        let under = heading_split(floor + design::L + shortest - 1.0, title, floor, shortest);
         assert!(under.below);
     }
 
