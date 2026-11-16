@@ -202,6 +202,36 @@ impl TextKey {
     }
 }
 
+/// A run's participant, the owner of its setup fields (its initiative, its roll mode, the
+/// initiative-roll drop-down): the run's id and the participant's key, which stay the same
+/// while the run lasts (a rename keeps them). Made only from a run's id and its participant, so
+/// neither a place in the layout nor a `format!` can be one, and it needs no counted row. Two
+/// runs open at once never share a participant's field. Use it as a field's owner:
+/// `field_id!("initiative_mode").of(ParticipantKey::of(run, participant))`, also for a
+/// [`Dropdown`](super::popups::Dropdown), whose id is that `FieldId`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ParticipantKey {
+    run: uuid::Uuid,
+    participant: String,
+}
+
+impl ParticipantKey {
+    /// The key of `participant`'s fields in the run `run`.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "lane M-R0 keys the setup initiative fields and the initiative-roll Dropdown (M0150) with it"
+        )
+    )]
+    pub(crate) fn of(run: uuid::Uuid, participant: &crate::encounter_run::Participant) -> Self {
+        Self {
+            run,
+            participant: participant.key.clone(),
+        }
+    }
+}
+
 /// An object whose id is a text (a timeline event's `id`). Its text fields are keyed by that id
 /// with [`TextKey::of`]. Sealed: a type becomes an owner only by a line in
 /// `src/design/layout.rs` (`text_owners!`), so `String` and `str` never do, and the id is
@@ -230,7 +260,7 @@ macro_rules! row_keys {
         impl RowKey for $key {}
     )*};
 }
-row_keys!(uuid::Uuid, RowIndex, TextKey);
+row_keys!(uuid::Uuid, RowIndex, TextKey, ParticipantKey);
 impl<K: RowKey + ?Sized> sealed::Sealed for &K {}
 impl<K: RowKey + ?Sized> RowKey for &K {}
 impl<K: RowKey> sealed::Sealed for Option<K> {}

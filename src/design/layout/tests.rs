@@ -2189,7 +2189,9 @@ fn the_text_guard_keeps_a_bounded_record() {
 }
 
 /// Review 1, finding 1: the compiling twin of `TextKey::of`'s doc tests. A timeline event is an
-/// owner; its fields are keyed by its id, and two events have two keys.
+/// owner; its fields are keyed by its id, and two events have two keys. A run's participant
+/// keys its setup fields by the run and its own key (`ParticipantKey`): the same participant
+/// renamed keeps its field; another participant, or the same key in another run, has another.
 #[test]
 fn a_timeline_event_keys_its_fields() {
     let event = |id: &str| -> crate::timeline::Event {
@@ -2203,5 +2205,29 @@ fn a_timeline_event_keys_its_fields() {
     assert_ne!(
         NOTES.of(TextKey::of(&event("a"))).id(),
         NOTES.of(TextKey::of(&event("b"))).id()
+    );
+    let participant = |key: &str, name: &str| -> crate::encounter_run::Participant {
+        serde_json::from_value(serde_json::json!({
+            "key": key, "npc": false, "initiative_group": null, "initiative_mode": 0,
+            "name": name, "side": "enemies", "initial": {}, "temporary_hp": 0,
+            "present": true, "conditions": [], "concentration": false, "successes": 0,
+            "failures": 0, "notes": ""
+        }))
+        .expect("a participant")
+    };
+    const MODE: FieldName = crate::field_id!("test_initiative_mode");
+    let (run, other) = (uuid::Uuid::from_u128(1), uuid::Uuid::from_u128(2));
+    let field = |run, key, name| {
+        MODE.of(ParticipantKey::of(run, &participant(key, name)))
+            .id()
+    };
+    assert_eq!(
+        field(run, "slot-1", "Guard"),
+        field(run, "slot-1", "Guard Captain")
+    );
+    assert_ne!(field(run, "slot-1", "Guard"), field(run, "slot-2", "Guard"));
+    assert_ne!(
+        field(run, "slot-1", "Guard"),
+        field(other, "slot-1", "Guard")
     );
 }
