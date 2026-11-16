@@ -11972,7 +11972,7 @@ mod tests {
     }
     #[test]
     fn creature_spell_links_open_named_spells_and_protect_drafts() {
-        let notes = [
+        let mut notes: Vec<Note> = [
             "creatures/adult_bronze_dragon",
             "spells/detect_magic",
             "spells/guiding_bolt",
@@ -11981,6 +11981,7 @@ mod tests {
             "spells/thaumaturgy",
             "spells/detect_thoughts",
             "spells/water_breathing",
+            "creatures/druid",
         ]
         .map(|name| {
             let path = format!("definitions/{name}.md");
@@ -11997,6 +11998,14 @@ mod tests {
         })
         .into_iter()
         .collect();
+        // The Druid's list lines end with `\`, and here it also casts a spell no note has.
+        let druid = notes.last_mut().unwrap();
+        druid.text = druid.text.replacen(
+            "\n\nSpellcasting. The druid",
+            "\n\nDread Word. The druid casts Vellora's Storm, using the same spellcasting ability as Spellcasting.\n\nSpellcasting. The druid",
+            1,
+        );
+        druid.entry = Some(Entry::parse(&druid.path, &druid.text).unwrap());
         let loaded = Loaded {
             notes,
             ..Default::default()
@@ -12185,6 +12194,44 @@ mod tests {
                 }
             }
         }
+        // A stat block whose lists end their lines with `\` and that casts a spell no note has:
+        // an unchanged frame looks none up either.
+        library.open_entry(8);
+        let ctx = egui::Context::default();
+        let mut frame = || {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900.0, 6000.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        library.editor(ui, "Definition · creature", &Campaigns::default())
+                    });
+                },
+            )
+        };
+        frame();
+        let output = frame();
+        let drawn = |words: &str| {
+            output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.starts_with(words))
+            })
+        };
+        assert!(
+            drawn("Dread Word.") && drawn("At Will"),
+            "the Druid is drawn"
+        );
+        let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+        frame();
+        assert_eq!(
+            SPELL_LOOKUPS.with(std::cell::Cell::get),
+            looked,
+            "an unchanged frame of the Druid looks no spell up"
+        );
         // A change to the notes clears what was resolved through them, with their other caches.
         let loaded = library.loaded.as_mut().unwrap();
         let dragon = loaded.notes[0].entry.clone().unwrap();

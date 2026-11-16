@@ -484,48 +484,82 @@ pub(crate) struct Resolved {
     pub references: Vec<Option<(usize, String)>>,
     /// Each list line, trimmed, with its tiles.
     lines: Vec<(String, SpellLine)>,
-    /// Each paragraph that casts spells by name, trimmed, with its tiles.
-    casts: Vec<(String, SpellLine)>,
+    /// Each paragraph that casts spells by name, by its words, with its tiles, or `None` when
+    /// it names no spell that can be found.
+    casts: Vec<(String, Option<SpellLine>)>,
     /// Each Spellcasting paragraph with its lists, as the reader joins them, with the spells
     /// their words name, for the line of spells that no list shows.
     named: Vec<(String, Vec<(usize, String)>)>,
     pub rolls: Vec<Chip>,
 }
 
+/// Text as its words alone, so the reader's text and the body's compare equal: the reader
+/// joins and breaks lines differently and drops a line break's `\`.
+fn words(text: &str) -> String {
+    text.split(|c: char| c.is_whitespace() || c == '\\')
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 impl Resolved {
     /// The tiles of a list line, as its paragraph prints it.
     pub(crate) fn line(&self, text: &str) -> Option<&SpellLine> {
-        let text = text.trim().trim_end_matches('\\').trim_end();
+        let text = words(text);
         self.lines
             .iter()
-            .find(|(line, _)| line == text)
+            .find(|(line, _)| *line == text)
             .map(|(_, line)| line)
     }
 
     /// The spells that a Spellcasting paragraph and its lists name, by their joined words.
     pub(crate) fn named_in(&self, text: &str) -> Option<&[(usize, String)]> {
+        let text = words(text);
         self.named
             .iter()
-            .find(|(words, _)| words == text)
+            .find(|(named, _)| *named == text)
             .map(|(_, named)| named.as_slice())
     }
 
-    /// The tiles of a paragraph that casts spells by name.
-    pub(crate) fn cast(&self, paragraph: &str) -> Option<&SpellLine> {
-        let paragraph = paragraph.trim();
+    /// What a paragraph that casts spells by name resolved to: `Some(None)` when it names no
+    /// spell that can be found, `None` when the paragraph was not resolved.
+    pub(crate) fn cast(&self, paragraph: &str) -> Option<Option<&SpellLine>> {
+        let paragraph = words(paragraph);
         self.casts
             .iter()
-            .find(|(text, _)| text == paragraph)
-            .map(|(_, line)| line)
+            .find(|(text, _)| *text == paragraph)
+            .map(|(_, line)| line.as_ref())
     }
 }
 
 /// Resolved Spellcasting, kept by the content it was resolved from, with that content's other
 /// caches: the Library's notes clear theirs whenever a note changes (`Loaded::invalidate`),
 /// and a content index, which never changes, keeps its own until it is replaced. An entry
-/// is found again by its id and its text, so a changed draft resolves again.
+/// is found again by all that resolving it reads: its id, its text and its fields (the
+/// save DC and the spells its data gives), so a changed draft resolves again.
 #[derive(Default)]
-pub(crate) struct SpellCache(std::sync::Mutex<Vec<(uuid::Uuid, String, Arc<Resolved>)>>);
+pub(crate) struct SpellCache(std::sync::Mutex<Vec<(Kept, Arc<Resolved>)>>);
+
+/// What a resolved entry is known by.
+struct Kept {
+    id: uuid::Uuid,
+    body: String,
+    fields: splat::content::Fields,
+}
+
+impl Kept {
+    fn of(entry: &Entry) -> Self {
+        Self {
+            id: entry.id,
+            body: entry.body.clone(),
+            fields: entry.fields.clone(),
+        }
+    }
+
+    fn is(&self, entry: &Entry) -> bool {
+        self.id == entry.id && self.body == entry.body && *self.fields == *entry.fields
+    }
+}
 
 impl SpellCache {
     /// How many entries are kept: the oldest goes first.
@@ -545,8 +579,8 @@ impl SpellCache {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         kept.iter()
-            .find(|(id, body, _)| *id == entry.id && *body == entry.body)
-            .map(|(.., resolved)| Arc::clone(resolved))
+            .find(|(known, _)| known.is(entry))
+            .map(|(_, resolved)| Arc::clone(resolved))
     }
 
     fn keep(&self, entry: &Entry, resolved: &Arc<Resolved>) {
@@ -557,7 +591,7 @@ impl SpellCache {
         if kept.len() >= Self::KEEP {
             kept.remove(0);
         }
-        kept.push((entry.id, entry.body.clone(), Arc::clone(resolved)));
+        kept.push((Kept::of(entry), Arc::clone(resolved)));
     }
 }
 
@@ -587,7 +621,8 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
     let end_group = |group: &mut String, resolved: &mut Resolved| {
         if !group.is_empty() {
             let named = links.spells_named_in(group);
-            resolved.named.push((std::mem::take(group), named));
+            resolved.named.push((words(group), named));
+            group.clear();
         }
     };
     for paragraph in entry
@@ -612,8 +647,7 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
                         resolved
                             .rolls
                             .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
-                        let text = text.trim().trim_end_matches('\\').trim_end();
-                        resolved.lines.push((text.to_owned(), found));
+                        resolved.lines.push((words(text), found));
                     }
                 }
                 group.push_str("\n\n");
@@ -623,11 +657,16 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
             lists = None;
             end_group(&mut group, &mut resolved);
         }
-        if let Some(found) = cast_line(entry, paragraph, &resolved.references, links) {
-            resolved
-                .rolls
-                .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
-            resolved.casts.push((paragraph.to_owned(), found));
+        // A paragraph that casts by name is kept also when no spell it names is found, so
+        // the reader does not look again.
+        if cast_names(paragraph).is_some() {
+            let found = cast_line(entry, paragraph, &resolved.references, links);
+            if let Some(found) = &found {
+                resolved
+                    .rolls
+                    .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
+            }
+            resolved.casts.push((words(paragraph), found));
         }
     }
     end_group(&mut group, &mut resolved);
@@ -835,11 +874,30 @@ mod tests {
             2 * once,
             "a changed text resolves again"
         );
+        // So does a change to the fields alone, such as the save DC, with the new numbers.
+        let mut harder = druid.clone();
+        let dc = harder
+            .fields
+            .get_mut("splat_rule")
+            .and_then(|v| v.get_mut("parameters"))
+            .and_then(|v| v.get_mut("features"))
+            .and_then(|v| v.get_mut("spellcasting"))
+            .and_then(|v| v.get_mut("save_dc"))
+            .unwrap();
+        *dc = 19.into();
+        let resolved = resolve(&harder, &kept);
+        assert_eq!(kept.lookups.get(), 3 * once, "changed fields resolve again");
+        assert!(
+            resolved
+                .rolls
+                .iter()
+                .any(|chip| chip.label == "Entangle DC 19")
+        );
         kept.cache.as_mut().unwrap().clear();
         resolve(&druid, &kept);
         assert_eq!(
             kept.lookups.get(),
-            3 * once,
+            4 * once,
             "a cleared cache resolves again"
         );
         // The content index of Lookup and a run keeps what it resolved.

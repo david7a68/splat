@@ -186,8 +186,9 @@ impl creature::Spells for SpellLinks<'_> {
     fn casts(&mut self, ui: &mut egui::Ui, paragraph: &str) {
         let resolved = std::sync::Arc::clone(&self.resolved);
         let fresh;
+        // Resolved with the entry, unless the reader's words differ from its body's.
         let line = match resolved.cast(paragraph) {
-            Some(line) => Some(line),
+            Some(line) => line,
             None => {
                 fresh = spells::cast_line(self.entry, paragraph, &resolved.references, self.links);
                 fresh.as_ref()
