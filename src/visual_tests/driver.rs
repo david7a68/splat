@@ -2271,7 +2271,10 @@ impl<'a> Driver<'a> {
                 .map(|record| record.action.left())
                 .fold(f32::MAX, f32::min);
             let end = rows[0].action.right();
-            (start - (widest + L)).abs() <= 0.5
+            // A list's recipe holds its widest alternate (the first row's primary Start weighs
+            // a point more than a secondary one), so its widest drawn row may start a little in.
+            start >= widest + L - 0.5
+                && start <= widest + L + L / 4.0
                 && rows.iter().all(|record| {
                     (record.column - (widest + L)).abs() <= 0.5
                         && (record.action.right() - end).abs() <= 0.5

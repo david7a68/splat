@@ -72,7 +72,7 @@
   "encounter-difficulty": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
     ["G3/far-action","01-ready-to-run","1920x1080","Button \"Resume\"",1],
-    ["G3/far-action","01-ready-to-run","1920x1080","Button \"Start fight\"",4],
+    ["G3/far-action","01-ready-to-run","1920x1080","Button \"Start fight\"",3],
     ["G3/far-action","08-plan","1920x1080","Button \"Start fight: Court of Cinders\"",1],
     ["G3/far-action","08-plan","1920x1080","Button \"Start fight: Nameless Visitor\"",1],
     ["G3/far-action","09-plan-opened","1920x1080","Button \"Start fight: Court of Cinders\"",1],
@@ -282,7 +282,6 @@
     ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Bridge guards\"",1],
     ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Goblin Wave\"",1],
     ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Lost Patrol\"",1],
-    ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Rival Team\"",1],
     ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Edit group Watch Detail\"",1],
     ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Resume\"",2],
     ["G3/far-action","06-flagged-group-in-groups-list","1920x1080","Button \"Start fight\"",1],

@@ -259,6 +259,9 @@ pub(super) struct ReadyLine<'a> {
 /// way, as before.
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct Column {
+    /// Where the ledger's rows start (the screen x), and its facts column's width from there:
+    /// a list in a section starts one indent further in, and its facts are that much narrower.
+    pub left: f32,
     pub facts: f32,
     pub actions: f32,
     /// The list, as the gate's record of its rows names it.
@@ -347,12 +350,16 @@ fn in_progress_actions(ui: &egui::Ui, open_state: Option<&str>) -> f32 {
 }
 
 /// A Ready row's actions: its menu, Edit, Start fight, and the short reason Start is blocked,
-/// with the link to an open run.
+/// with the link to an open run. The reason keeps `L` before it, so it does not read as the
+/// facts' second line.
 fn ready_actions(ui: &egui::Ui, reason: Option<&str>, open: bool) -> f32 {
     let small = Type::Small.font(ui);
     let link = (open && reason.is_some())
         .then(|| design::number_width(ui, GO_TO_RUN, &small).max(design::XL));
-    let reason = reason.map(|reason| design::number_width(ui, reason, &small));
+    // The gap after the reason follows the layout's item spacing.
+    let reason = reason.map(|reason| {
+        design::number_width(ui, reason, &small) + ui.spacing().item_spacing.x + design::L
+    });
     let fixed = [
         quiet_width(ui, icons::EXPAND),
         quiet_width(ui, "Edit"),
@@ -393,6 +400,8 @@ pub(super) fn ledger(
     story: &Story<'_>,
     kept: &mut crate::difficulty::Kept<Uuid>,
 ) -> Ledger {
+    // Groups and History are sections: their rows start one indent further in.
+    let (left, indent) = (ui.cursor().left(), ui.spacing().indent);
     let mut facts = 0.0_f32;
     let mut in_progress = 0.0_f32;
     for run in &page.in_progress {
@@ -427,27 +436,18 @@ pub(super) fn ledger(
     }
     let mut group = 0.0_f32;
     for each in snapshot.groups.iter() {
-        facts = facts.max(facts_width(
-            ui,
-            &each.name,
-            &groups::row_detail(each),
-            false,
-            None,
-        ));
+        let width = facts_width(ui, &each.name, &groups::row_detail(each), false, None);
+        facts = facts.max(indent + width);
         group = group_actions(ui);
     }
     let mut ended = 0.0_f32;
     for past in page.history.iter().flat_map(|session| &session.runs) {
-        facts = facts.max(facts_width(
-            ui,
-            &past.run.encounter,
-            &history_detail(past),
-            false,
-            None,
-        ));
+        let width = facts_width(ui, &past.run.encounter, &history_detail(past), false, None);
+        facts = facts.max(indent + width);
         ended = history_actions(ui);
     }
     let column = |actions: f32, owner: &'static str| Column {
+        left,
         facts,
         actions,
         owner,
@@ -552,10 +552,18 @@ pub(super) fn list_row(
                 let rect = ui.max_rect();
                 ui.set_min_size(rect.size());
                 let room = rect.width().max(0.0);
-                let columns = design::Columns::measure(room, [column.facts], [column.actions]);
+                let widest = (column.left + column.facts - rect.left()).max(0.0);
+                let columns = design::Columns::measure(room, [widest], [column.actions]);
                 let right = rect.left() + columns.width(room);
-                let facts = (right - rect.left() - design::L - own).clamp(0.0, column.facts);
-                let start = rect.left() + facts + design::L;
+                // Where the list does not fit, the row keeps its old narrow geometry: the
+                // actions at the far edge, and `L` and the layout's item spacing before them.
+                let gap = if columns.wrapped {
+                    design::L + ui.spacing().item_spacing.x
+                } else {
+                    design::L
+                };
+                let facts = (right - rect.left() - gap - own).clamp(0.0, widest);
+                let start = rect.left() + facts + gap;
                 let mut actions_ui = ui.new_child(
                     egui::UiBuilder::new()
                         .id_salt("actions")
@@ -1092,6 +1100,7 @@ pub(super) fn ready_list(
                         egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
                             .extend(),
                     );
+                    design::gap(ui, design::Gap::L);
                 }
             },
         );
@@ -1512,6 +1521,7 @@ mod iter_2_c_tests {
                                 kept: &mut kept,
                             };
                             let column = Column {
+                                left: 0.0,
                                 facts: f32::INFINITY,
                                 actions: 0.0,
                                 owner: "test",
