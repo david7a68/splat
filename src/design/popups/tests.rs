@@ -1347,7 +1347,14 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
 fn a_menu_of_long_choices_stays_beside_its_splitter() {
     const COLUMN: f32 = 316.0;
     const LONG: &str = "Roll initiative for every creature that has not rolled yet, then sort";
-    for (right, label) in [(false, LONG), (true, LONG), (false, "All")] {
+    // The last case: the control's layout gives the menu a smaller room (`within`), as a
+    // header above two panes does; the menu keeps inside that room, clear of its edge.
+    for (right, label, within) in [
+        (false, LONG, None),
+        (true, LONG, None),
+        (false, "All", None),
+        (false, LONG, Some(200.0)),
+    ] {
         let ctx = context();
         let size = vec2(960.0, 640.0);
         let pane = Rect::from_min_size(Pos2::ZERO, vec2(COLUMN, 640.0));
@@ -1366,7 +1373,11 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
                         };
                         let opener = ui.with_layout(layout, |ui| ui.button("Roll")).inner;
                         rows.borrow_mut().clear();
-                        crate::design::menu_popup(ui, &opener).show(|ui| {
+                        let mut menu = crate::design::menu_popup(ui, &opener);
+                        if let Some(width) = within {
+                            menu = menu.within(Rect::from_min_size(Pos2::ZERO, vec2(width, 640.0)));
+                        }
+                        menu.show(|ui| {
                             rows.borrow_mut()
                                 .push(crate::design::choice(ui, true, label).rect);
                             rows.borrow_mut()
@@ -1387,10 +1398,11 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
         let menu = ctx
             .memory(|memory| memory.area_rect(id))
             .expect("the menu's rect");
+        let edge = within.map_or(pane.right(), |width| width);
         assert!(
-            menu.left() >= pane.left() - 0.5 && menu.right() <= pane.right() - lane_width() + 0.5,
-            "the menu {menu:?} is inside the column, clear of the splitter and the lane \
-             (right: {right})"
+            menu.left() >= pane.left() - 0.5 && menu.right() <= edge - lane_width() + 0.5,
+            "the menu {menu:?} is inside the column (or its room {within:?}), clear of the \
+             splitter and the lane (right: {right})"
         );
         let rows = rows.borrow();
         assert_eq!(rows.len(), 2, "both choices drawn");
