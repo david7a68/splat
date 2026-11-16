@@ -214,9 +214,11 @@ fn facts(spell: &Entry, cast: Option<u32>, chip: Option<&Chip>, text: &str) -> S
                 (!range.is_empty()).then(|| range.to_owned())
             })
         });
-        // The area its text gives, unless the range names it: `Self (15-foot Cube)`.
-        let area = crate::rolls::area(&text.to_lowercase())
-            .filter(|_| !range.as_deref().is_some_and(|range| range.contains('(')));
+        // The area of a spell that rolls, as its text gives it, unless the range names it:
+        // `Self (15-foot Cube)`. A spell with no roll may have several areas, one per effect.
+        let area = crate::rolls::area(&text.to_lowercase()).filter(|_| {
+            chip.is_some() && !range.as_deref().is_some_and(|range| range.contains('('))
+        });
         facts.extend(range);
         facts.extend(area);
         if fields
@@ -279,6 +281,11 @@ fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caste
     (*tile).clone()
 }
 
+/// A tile's facts without `Concentration`, which a list item may waive.
+fn without_concentration(facts: &str) -> String {
+    facts.replace(" · Concentration", "")
+}
+
 /// The spells of one list line, each found by the entry's own references first, then by
 /// name.
 pub(crate) fn line(
@@ -317,7 +324,17 @@ pub(crate) fn line(
                 named(rest)
             });
         match found.and_then(|(open, _)| Some((open, links.entry(open)?))) {
-            Some((open, spell)) => tiles.push(tile(name, open, spell, cast, caster)),
+            Some((open, spell)) => {
+                let mut spell = tile(name, open, spell, cast, caster);
+                // The list may waive it: `Shapechange (... no Concentration ... required)`.
+                if item.to_lowercase().contains("no concentration") {
+                    spell.facts = without_concentration(&spell.facts);
+                    if let Some(chip) = &mut spell.chip {
+                        chip.facts = chip.facts.as_deref().map(without_concentration);
+                    }
+                }
+                tiles.push(spell);
+            }
             None => missing.push(name.to_owned()),
         }
     }
@@ -585,6 +602,18 @@ mod tests {
         .unwrap();
         let numbers = caster(&druid, "Spellcasting. It casts (spell save DC 13):");
         assert_eq!((numbers.dc, numbers.attack), (Some(13), Some(5)));
+        // A list may waive Concentration; a spell with no roll shows no area, since it may
+        // have several, one for each effect.
+        let shapechange = line(
+            "At Will: Shapechange (Beast form only, no Concentration required)",
+            numbers,
+            &[],
+            &index,
+        )
+        .unwrap();
+        assert!(!shapechange.tiles[0].facts.contains("Concentration"));
+        let druidcraft = line("At Will: Druidcraft", numbers, &[], &index).unwrap();
+        assert_eq!(druidcraft.tiles[0].facts, "Cantrip · Action · 30 feet");
         // A tile's facts give the area of the spell's text.
         let fireball = line("1/Day: Fireball", numbers, &[], &index).unwrap();
         assert_eq!(

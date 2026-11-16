@@ -86,10 +86,11 @@ pub fn spell_roll(
             damage,
         }),
         Mark::Save(ability) => {
-            let paragraph = paragraph_around(&text, marker);
-            let half = paragraph.contains("half as much damage")
-                || paragraph.contains("half the initial damage")
-                || paragraph.contains("half that damage");
+            // What a success does may be a line or two after the save.
+            let after = &text[marker..];
+            let half = after.contains("half as much damage")
+                || after.contains("half the initial damage")
+                || after.contains("half that damage");
             Some(RollLink::SaveDc {
                 label: name.to_owned(),
                 ability: ability.to_owned(),
@@ -145,13 +146,6 @@ fn save_at(text: &str) -> Option<(usize, &'static str)> {
     })
 }
 
-/// The line of rules text that holds `at`.
-fn paragraph_around(text: &str, at: usize) -> &str {
-    let start = text[..at].rfind('\n').map_or(0, |n| n + 1);
-    let end = text[at..].find('\n').map_or(text.len(), |n| at + n);
-    &text[start..end]
-}
-
 /// The end of the sentence that holds `at`: after its full stop, or at the end of its line.
 fn sentence_end(text: &str, at: usize) -> usize {
     let line = text[at..].find('\n').map_or(text.len(), |n| at + n);
@@ -166,11 +160,16 @@ fn sentence_end(text: &str, at: usize) -> usize {
 /// part that comes later (`at the end of its next turn`) or on a condition (`if it acts`) is
 /// not part of this roll.
 fn damage_after(text: &str, marker: usize) -> Vec<DamagePart> {
+    // The next sentence may start the next line: `... makes a Wisdom saving throw.` then
+    // `On a failed save, the target takes 10d12 Psychic damage`.
     let first = sentence_end(text, marker);
-    let end = if text[first..].starts_with('\n') || first >= text.len() {
+    let next = text[first..]
+        .find(|c: char| !c.is_whitespace())
+        .map_or(text.len(), |n| first + n);
+    let end = if next >= text.len() {
         first
     } else {
-        sentence_end(text, (first + 1).min(text.len()))
+        sentence_end(text, next)
     };
     let scope = &text[marker..end];
     let mut parts = Vec::new();
@@ -250,7 +249,7 @@ fn grow(damage: &mut [DamagePart], upcast: &str, level: u32, cast: u32) {
     let head = upcast[..at].to_lowercase();
     let named: Vec<&str> = DAMAGE_TYPES
         .into_iter()
-        .filter(|kind| head.contains(&format!("{} damage", kind.to_lowercase())))
+        .filter(|kind| head.contains(&kind.to_lowercase()))
         .collect();
     for part in damage.iter_mut().filter(|part| {
         named.is_empty()
@@ -315,6 +314,28 @@ mod tests {
             panic!("Moonbeam saves");
         };
         assert_eq!(damage, vec![part("4d10", "Radiant")]);
+        // A failure and a success may each be on a line of their own.
+        let befuddle = "You blast the mind of a creature. The target makes an Intelligence saving throw.\nOn a failed save, the target takes 10d12 Psychic damage and can’t cast spells.\nOn a successful save, the target takes half as much damage only.";
+        assert_eq!(
+            spell_roll("Befuddlement", befuddle, 8, 8, &CASTER),
+            Some(RollLink::SaveDc {
+                label: "Befuddlement".into(),
+                ability: "Intelligence".into(),
+                dc: 13,
+                half: true,
+                damage: vec![part("10d12", "Psychic")],
+            })
+        );
+        // A growth that names two types grows both.
+        let burst = "Each creature makes a Dexterity saving throw, taking 2d10 Radiant damage and 2d10 Thunder damage on a failed save.\n\nUsing a Higher-Level Spell Slot. The Radiant and Thunder damage increase by 1d10 for each spell slot level above 5.";
+        let Some(RollLink::SaveDc { damage, .. }) = spell_roll("Storm Burst", burst, 5, 6, &CASTER)
+        else {
+            panic!("Storm Burst saves");
+        };
+        assert_eq!(
+            damage,
+            vec![part("3d10", "Radiant"), part("3d10", "Thunder")]
+        );
         // A caster with no save DC cannot cast it as a roll.
         assert_eq!(
             spell_roll("Moonbeam", moonbeam, 2, 2, &Caster::default()),

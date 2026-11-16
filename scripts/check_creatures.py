@@ -81,7 +81,8 @@ What Splat shows:
   range or area, and `half on a success`. A Spellcasting paragraph is not an action tile.
   An action that uses Spellcasting to cast a spell, with no numbers of its own, needs no tile.
 - `spellcasting`: each Spellcasting paragraph with the caster's `save_dc` and
-  `spell_attack` (`+n to hit with spell attacks`; null when the paragraph gives none), and
+  `spell_attack`: the `+n to hit with spell attacks` it prints, or else its save DC less 8,
+  which the 2024 rules always make the spell attack bonus (null with neither), and
   each list line (`printed`) with its `label` and its `spells`. Every spell the line names
   must be in `spells` or in `missing`. `missing` is right only for a spell that is not in the
   D&D 2024 SRD 5.2.1 or the 2024 Player's Handbook.
@@ -103,7 +104,7 @@ What Splat shows:
 
 Accepted limits, do not report: Ice Knife rolls only its hit; Spirit Guardians rolls only
 its first damage choice; a spell whose save is made by someone other than its targets
-(Sanctuary) still rolls a save. A spell that an action casts outside a Spellcasting list
+(Sanctuary) still rolls a save; a spell of several rays or bolts rolls one of them. A spell that an action casts outside a Spellcasting list
 (`Frightful Presence. The dragon casts Fear ...`) has no tile yet.
 
 Use `doubtful`, not `wrong`, when the rules leave room for Splat's reading. Before you
