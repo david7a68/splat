@@ -10131,7 +10131,8 @@ mod tests {
         for _ in 0..12 {
             draft.add(wolf, false);
         }
-        let last = draft.setup.roster.last().unwrap().key.clone();
+        // The first row: content stays below it, so closing its form clamps no offset.
+        let first_key = draft.setup.roster.first().unwrap().key.clone();
         let id = draft.id;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(960.0, 640.0))
@@ -10150,7 +10151,7 @@ mod tests {
                         );
                     });
                 },
-                (draft, Some(last)),
+                (draft, Some(first_key)),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -10163,7 +10164,7 @@ mod tests {
                 .query_all(egui_kittest::kittest::By::new().predicate(|node| {
                     node.value()
                         .or(node.label())
-                        .is_some_and(|words| words.starts_with("12. Wolf"))
+                        .is_some_and(|words| words.starts_with("1. Wolf"))
                 }))
                 .map(|node| node.rect())
                 .next()
@@ -10191,7 +10192,7 @@ mod tests {
         assert!(
             cut && harness.state().1.is_none()
                 && shown.is_some_and(|rect| rect.top() >= view_top - 0.5),
-            "Done closed the form ({:?}) and brought row 12 whole into view: cut before {cut}, row {shown:?}, view top {view_top}",
+            "Done closed the form ({:?}) and brought row 1 whole into view: cut before {cut}, row {shown:?}, view top {view_top}",
             harness.state().1
         );
     }
