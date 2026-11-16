@@ -5774,8 +5774,9 @@ impl Encounters {
     /// The encounter editor's footer, made before its body: the draft's own results (a removed
     /// group, a replacement), the kept results (a discard), the copies' separations and the
     /// groups' member results, each from its own store with its ticket; then why the last
-    /// separation, act or Save failed. A fixed warning with actions (the file's unread rows) is
-    /// not here: it is drawn above the panes.
+    /// separation, act or Save failed, then the file's unread rows. The page builds its footer
+    /// with `editor_lines` after the panes' acts (`pane_then`); this whole footer is for tests.
+    #[cfg(test)]
     fn editor_messages<'f>(
         &mut self,
         frame: &'f design::outcome::PaneFrame,
