@@ -9746,14 +9746,23 @@ pub mod run_folder_defect {
             "No control is accent-filled while Save run settings waits for the move choice",
             |d| super::session_recording::accent_filled(d).is_empty(),
         );
-        // Must stay true: the warning's choices stay quiet.
+        // Must stay true: neither of the warning's two choices stands out over the other. Before
+        // M4 the move was the row's primary and this checked that Save without moving stayed
+        // quiet beside it; now both are the footer's choices, with the one weight the footer's
+        // Choice gives them (and no accent, `iter-16-B-FT4-primary`).
         d.observe_both(
             "iter-16-B-FT4-quiet",
-            "Save without moving stays a quiet action",
+            "The folder warning's two choices have one weight",
             |d| {
-                d.in_view("Save without moving")
-                    && d.control_frame("Save without moving")
-                        .is_some_and(|frame| frame.stroke.width == 0.0)
+                let frame = |name: &str| {
+                    d.in_view(name)
+                        .then(|| d.control_frame(name))
+                        .flatten()
+                        .map(|frame| (frame.fill, frame.stroke))
+                };
+                frame("Save without moving")
+                    .zip(frame("Move runs and save"))
+                    .is_some_and(|(without, with)| without == with)
             },
         );
         // iter-26-B AC2, FN3, SN1 (help): the initiative help wraps at the reader measure, at
@@ -10009,11 +10018,16 @@ pub mod run_folder_defect {
             )
         });
         std::fs::remove_file(target.join(&run_file)).unwrap();
+        // M4: Move runs and save is the footer's choice now, and a footer press acts after the
+        // footer painted its frame (as every footer Undo does), so its answer comes in the next
+        // frame. The frame of the press keeps the warning whole; the next one shows the error
+        // whole with it. A body act's answer stays in its own frame (`m32-L1c-retype-after-
+        // discard`, `m32-L1c-first-folder-edit`).
         d.observe(
             "m32-L1c-failed-move",
-            failed == ((true, true), (true, true)) && d.has_containing("Could not move runs."),
+            failed.0.1 && failed.1 == (true, true) && d.has_containing("Could not move runs."),
             format!(
-                "The first frame of a failed Move runs and save and the next (one pass each): error whole, warning whole = {failed:?}"
+                "The frame of a failed Move runs and save and the next (one pass each): error whole, warning whole = {failed:?}"
             ),
         );
         // A panic ends this app, so the video stops first and nothing follows.

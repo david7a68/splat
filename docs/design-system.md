@@ -1006,7 +1006,8 @@ moves files. Refuse collisions and copy every owned file before changing the man
 change counts saved files left behind. Rules and runs keeps the same commit rule (ruling M4): `Save run settings`
 holds its place in every state; while the folder change leaves saved runs it waits, disabled with its reason
 (`Choose below to move the runs or not.`), and Move runs and save and Save without moving are the folder warning's
-quiet choices in the tab's footer, offered only while no run and no encounter draft locks the form. Move runs and
+two choices in the tab's footer, offered only while no run and no encounter draft locks the form. A choice's answer
+(a failed move) shows in the frame after its press, as every footer press's does. Move runs and
 save stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
 run-settings saves while a run is open. Folder changes name hidden unfinished runs and their states. A move
