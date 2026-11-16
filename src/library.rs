@@ -14664,7 +14664,10 @@ mod tests {
             let width = width as f32;
             harness.set_size(egui::vec2(width, 700.0));
             harness.run_steps(2);
-            let painted: Vec<(String, egui::Rect)> = harness
+            // Each text with its rect, the rect it is clipped to, and whether its layout cut it
+            // (`elided`: egui's `…` is in the galley, not in its words): a text past its clip or
+            // elided is cut.
+            let painted: Vec<(String, egui::Rect, egui::Rect, bool)> = harness
                 .output()
                 .shapes
                 .iter()
@@ -14672,6 +14675,8 @@ mod tests {
                     egui::Shape::Text(text) => Some((
                         text.galley.job.text.clone(),
                         text.galley.rect.translate(text.pos.to_vec2()),
+                        shape.clip_rect,
+                        text.galley.elided,
                     )),
                     _ => None,
                 })
@@ -14687,18 +14692,21 @@ mod tests {
                 assert_eq!(named, [whole], "9: the whole accessible name at {width}");
                 let shown: Vec<_> = painted
                     .iter()
-                    .filter(|(text, _)| text.starts_with(short))
+                    .filter(|(text, ..)| text.starts_with(short))
                     .collect();
                 assert!(
                     shown.len() == 1
                         && (shown[0].0 == whole || shown[0].0 == short)
-                        && shown[0].1.right() <= width,
+                        && shown[0].1.right() <= shown[0].2.right().min(width) + 0.5
+                        && !shown[0].3,
                     "8: whole where it fits, else short, never cut, at {width}: {shown:?}"
                 );
                 forms.insert((short, shown[0].0 == whole));
             }
             assert!(
-                !painted.iter().any(|(text, _)| text.contains('…')),
+                !painted
+                    .iter()
+                    .any(|(text, _, _, elided)| *elided || text.contains('…')),
                 "8: nothing cut at {width}"
             );
         }
