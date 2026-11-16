@@ -1425,6 +1425,32 @@ impl Campaigns {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
+    /// Whether the details form holds the saved name and folder of the campaign it edits.
+    fn details_unchanged(&self) -> bool {
+        self.editing
+            .and_then(|id| {
+                self.data
+                    .campaigns
+                    .iter()
+                    .find(|campaign| campaign.id == id)
+            })
+            .is_some_and(|campaign| {
+                campaign.name == self.name.trim()
+                    && campaign.path == std::path::Path::new(self.path.trim())
+            })
+    }
+
+    /// What the form's Save waits for, if anything.
+    fn form_reason(&self, unchanged: bool) -> Option<FormReason> {
+        match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
+            (true, true) => Some(FormReason::NameAndFolder),
+            (true, false) => Some(FormReason::Name),
+            (false, true) => Some(FormReason::Folder),
+            (false, false) if unchanged => Some(FormReason::Unchanged),
+            (false, false) => None,
+        }
+    }
+
     fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
         let editing = self.editing.is_some();
         // Keep the add form's open state when Settings changes between one and two columns.
@@ -1438,25 +1464,8 @@ impl Campaigns {
             let empty = self.data.campaigns.is_empty();
             let mut fields = |ui: &mut egui::Ui| {
                 design::gap(ui, design::Gap::XS);
-                let unchanged = self
-                    .editing
-                    .and_then(|id| {
-                        self.data
-                            .campaigns
-                            .iter()
-                            .find(|campaign| campaign.id == id)
-                    })
-                    .is_some_and(|campaign| {
-                        campaign.name == self.name.trim()
-                            && campaign.path == std::path::Path::new(self.path.trim())
-                    });
-                let reason = match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
-                    (true, true) => Some(FormReason::NameAndFolder),
-                    (true, false) => Some(FormReason::Name),
-                    (false, true) => Some(FormReason::Folder),
-                    (false, false) if unchanged => Some(FormReason::Unchanged),
-                    (false, false) => None,
-                };
+                let unchanged = self.details_unchanged();
+                let reason = self.form_reason(unchanged);
                 let missing = reason.is_some();
                 // One id per form: the add form and a campaign's details form never share a
                 // field, and neither loses focus when Settings changes between one and two
@@ -1555,6 +1564,11 @@ impl Campaigns {
                     } else {
                         Action::secondary("Save details")
                     };
+                    // The fields drew above: an edit in this frame counts now, so the frame of
+                    // the edit says Unsaved, offers Discard and ends the discard's result
+                    // (migration-32 L2c; the footer reads it after the form: `pane_then`).
+                    let unchanged = self.details_unchanged();
+                    let reason = self.form_reason(unchanged);
                     // A save row: state and Discard at the left, Save details at the right edge.
                     ui.horizontal(|ui| {
                         design::save_row_state(

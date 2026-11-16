@@ -1594,6 +1594,17 @@ impl Footer<'_> {
         )
     }
 
+    /// `pane_then` with `Body::Content`, whose scroll column behaves as `scroll` says.
+    pub fn pane_content_then<R, T>(
+        self,
+        ui: &mut Ui,
+        scroll: ContentScroll,
+        add: impl FnOnce(&mut Ui) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
+        self.place(ui, Body::Content, scroll, true, |ui, _| add(ui), then)
+    }
+
     /// `pane` with `Body::Content`, whose scroll column behaves as `scroll` says.
     pub fn pane_content<R>(
         self,

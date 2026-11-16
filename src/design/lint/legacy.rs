@@ -42,7 +42,8 @@ const CAPABILITIES: [(&str, &str); 11] = [
     // `pane_then` (migration-32 L1c) is a pane whose messages come after the body.
     (
         "pane-host",
-        ".pane/3 Footer::pane Messages::pane Self::pane pane_content pane_editor pane_then",
+        ".pane/3 Footer::pane Messages::pane Self::pane pane_content pane_editor pane_then \
+         pane_content_then",
     ),
     // A footer placed by hand.
     ("hand-footer", "show_by_hand"),

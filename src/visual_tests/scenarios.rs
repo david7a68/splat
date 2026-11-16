@@ -6496,6 +6496,26 @@ pub mod settings {
             format!("{UNLINKED_CAMPAIGN} row y after Undo discard: {undone:?}"),
         );
         d.click("Discard");
+        // Migration-32 L2c (L1c, `pane_content_then`): the footer's lines are read after the
+        // form's acts. In the first frame of an edit after Discard, drawn in one pass, and in the
+        // next, the discard's result and its Undo are gone (the edit ended them).
+        d.expect("Campaign details draft discarded.");
+        d.click_field(EDIT_FORM);
+        let edited = d.first_frame_one_pass([egui::Event::Text("x".into())], |d| {
+            (
+                d.painted_rect_in("Campaign details draft discarded.", egui::Rect::EVERYTHING)
+                    .is_some(),
+                d.has("Undo discard of Campaign details"),
+            )
+        });
+        d.observe(
+            "m32-L2c-details-edit-first-frame",
+            edited == ((false, false), (false, false)),
+            format!(
+                "The first frame of an edit after Discard and the next (one pass each): (result painted, Undo offered) = {edited:?}"
+            ),
+        );
+        d.click("Discard");
         d.click(CANCEL);
         d.begin_task();
         d.app_mut().settings.simulate(Account::Connected);
