@@ -258,14 +258,18 @@ fn block_anchor(text: &str) -> bool {
     })
 }
 
+/// The spells a creature's spellcasting lists. The built-in files keep the list under
+/// `spells` (the Priest, the Adult Bronze Dragon) or under `options` (the Druid, the Mage).
 pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
-    let mut value = entry.fields.get("splat_rule");
-    for key in ["parameters", "features", "spellcasting", "spells"] {
-        value = value.and_then(|v| v.get(key));
-    }
-    value
-        .and_then(|v| v.as_sequence())
+    let spellcasting = ["parameters", "features", "spellcasting"]
         .into_iter()
+        .fold(entry.fields.get("splat_rule"), |value, key| {
+            value.and_then(|v| v.get(key))
+        });
+    ["spells", "options"]
+        .into_iter()
+        .filter_map(|key| spellcasting.and_then(|v| v.get(key)))
+        .filter_map(|v| v.as_sequence())
         .flatten()
         .filter_map(|row| {
             let spell = row.get("spell")?;
@@ -281,6 +285,99 @@ pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
         .collect()
 }
 
+/// What a stat block's Spellcasting can open.
+pub(super) trait Spells {
+    /// Draw a list of spells (`At Will: Druidcraft, Light`), each spell it can open a link.
+    fn list(&mut self, ui: &mut egui::Ui, paragraph: &str);
+    /// After a Spellcasting paragraph and its lists, whose words are `text`: the spells they
+    /// name or the entry gives that no list linked.
+    fn rest(&mut self, ui: &mut egui::Ui, text: &str);
+}
+
+/// Rules text with nothing to link: a list of spells is prose.
+struct NoSpells;
+
+impl Spells for NoSpells {
+    fn list(&mut self, ui: &mut egui::Ui, paragraph: &str) {
+        reader_style::source_prose(ui, paragraph);
+    }
+    fn rest(&mut self, _: &mut egui::Ui, _: &str) {}
+}
+
+/// A line of a list of spells: a short label, a colon, then the spells (`At Will: Light`,
+/// `1/Day Each: Fear`, `Cantrips (at will): fire bolt`). A line ends with `\` when another follows.
+fn spell_list_line(line: &str) -> bool {
+    let line = line.trim().trim_end_matches('\\').trim_end();
+    line.split_once(':').is_some_and(|(label, spells)| {
+        label.len() <= 40
+            && !label.contains('.')
+            && label.starts_with(|c: char| c.is_uppercase() || c.is_ascii_digit())
+            && !spells.trim().is_empty()
+    })
+}
+
+/// The spells of a list, split at the commas outside brackets: `Shapechange (Beast or
+/// Humanoid form only, …)` is one spell.
+fn list_items(spells: &str) -> Vec<&str> {
+    let mut items = Vec::new();
+    let (mut depth, mut start) = (0_usize, 0);
+    for (at, c) in spells.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                items.push(&spells[start..at]);
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    items.push(&spells[start..]);
+    items
+}
+
+/// A list of spells as Markdown, each spell whose name `find` knows a link to its place
+/// (`[Druidcraft](splat-entry:3)`); its words in brackets (`(level 2 version)`) stay outside
+/// the link. Also the places it links.
+pub(super) fn linked_list(
+    paragraph: &str,
+    find: impl Fn(&str) -> Option<usize>,
+) -> (String, Vec<usize>) {
+    let mut linked = Vec::new();
+    let lines = paragraph.lines().map(|line| {
+        let Some((label, spells)) = line.split_once(':') else {
+            return line.to_owned();
+        };
+        let items = list_items(spells).into_iter().map(|item| {
+            let name = item
+                .trim()
+                .trim_matches(['*', '_'])
+                .split(" (")
+                .next()
+                .unwrap_or_default()
+                .trim_end_matches('\\')
+                .trim_end_matches(['*', '_'])
+                .trim();
+            match find(name).zip(item.find(name).filter(|_| !name.is_empty())) {
+                Some((place, start)) => {
+                    linked.push(place);
+                    let end = start + name.len();
+                    format!(
+                        "{}[{name}]({}{place}){}",
+                        &item[..start],
+                        crate::markdown_view::ENTRY_LINK,
+                        &item[end..]
+                    )
+                }
+                None => item.to_owned(),
+            }
+        });
+        format!("{label}:{}", items.collect::<Vec<_>>().join(","))
+    });
+    let markdown = lines.collect::<Vec<_>>().join("\n");
+    (markdown, linked)
+}
+
 /// `text` is one part of the entry's `body`. A tile's number is its action's place in the
 /// whole body's list, which is the list Ctrl+number arms from.
 fn prose(
@@ -289,11 +386,12 @@ fn prose(
     body: &str,
     text: &str,
     values: Option<&super::view::RunValues>,
-    spell_links: &mut impl FnMut(&mut egui::Ui, &str),
+    spells: &mut dyn Spells,
 ) {
     let all = crate::rolls::actions(body);
     let here = crate::rolls::actions(text);
     let mut tiles: Vec<(Option<usize>, crate::rolls::Chip)> = Vec::new();
+    let mut spellcasting: Option<String> = None;
     // Action tiles in a row. In a run, a tile shows the numbers Splat rolls, with a run's
     // attack and damage changes in them, so no line under the tiles repeats those changes.
     let flush = |ui: &mut egui::Ui, tiles: &mut Vec<(Option<usize>, crate::rolls::Chip)>| {
@@ -308,6 +406,17 @@ fn prose(
         .enumerate()
         .filter(|(_, s)| !s.is_empty())
     {
+        // A Spellcasting paragraph's lists follow it, each spell a link.
+        if let Some(mut group) = spellcasting.take() {
+            if paragraph.lines().all(spell_list_line) {
+                spells.list(ui, paragraph);
+                group.push_str("\n\n");
+                group.push_str(paragraph);
+                spellcasting = Some(group);
+                continue;
+            }
+            spells.rest(ui, &group);
+        }
         // A paragraph with an attack, a save or damage is an action tile; its text is in hover.
         if let Some((_, chip)) = here.iter().find(|(place, _)| *place == at) {
             tiles.push((crate::rolls::place_in(&all, chip), chip.clone()));
@@ -328,15 +437,18 @@ fn prose(
             reader_style::source_prose(ui, paragraph);
         }
         if paragraph.starts_with("Spellcasting.") {
-            spell_links(ui, paragraph);
+            spellcasting = Some(paragraph.to_owned());
         }
+    }
+    if let Some(group) = spellcasting {
+        spells.rest(ui, &group);
     }
     flush(ui, &mut tiles);
 }
 
 /// Rules text written by hand: its actions as tiles, the rest as prose.
 pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, body: &str, text: &str) {
-    prose(ui, name, body, text, None, &mut |_, _| {});
+    prose(ui, name, body, text, None, &mut NoSpells);
 }
 
 fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
@@ -769,7 +881,7 @@ pub(super) fn show(
     entry: &Entry,
     sections: &[presentation::ReadingSection<'_>],
     values: Option<&super::view::RunValues>,
-    mut spell_links: impl FnMut(&mut egui::Ui, &str),
+    spells: &mut dyn Spells,
 ) {
     stat_head(ui, entry, values);
     // A styled stat block's first heading is Markdown's (`L` above it) after this gap.
@@ -782,7 +894,7 @@ pub(super) fn show(
                 &entry.body,
                 &rules_prose(entry, section.body),
                 values,
-                &mut spell_links,
+                spells,
             );
         } else {
             let body = if section.body.contains("<!-- splat:") {
@@ -796,14 +908,7 @@ pub(super) fn show(
             if section.title != "Overview" {
                 design::heading(ui, design::Heading::Section(&section.title));
             }
-            prose(
-                ui,
-                &entry.name,
-                &entry.body,
-                &body,
-                values,
-                &mut spell_links,
-            );
+            prose(ui, &entry.name, &entry.body, &body, values, spells);
         }
     }
 }
