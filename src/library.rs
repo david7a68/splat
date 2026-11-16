@@ -14,7 +14,7 @@ use crate::{
     design::{
         self, Action, Density, Status, Tone, Type, colors, icons,
         outcome::{
-            Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice, Messages, Notice,
+            Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice, Messages, Notice, Offer,
             PaneFrame, Press, Said, Sentence, UndoStep, Verb,
         },
         reader as reader_style,
@@ -417,9 +417,8 @@ impl HeadingChoice {
 enum LibraryPress {
     /// The Undo of a result in the Library's own store (`LibraryKept`): the ticket gives its kind.
     Undo,
-    /// The link offer's `Update <n> links`. The offer is a notice with no ticket (no ticketed
-    /// line of the typed footer has the info tone without an Undo): its press acts on the open
-    /// entry's offer that this frame's footer showed.
+    /// The link offer's `Update <n> links`: a kept offer line (`KeptOutcome::Offer`), so its
+    /// press comes back with the offer's ticket.
     UpdateLinks,
     /// The link update's Undo.
     UndoLinks,
@@ -4138,7 +4137,7 @@ impl Library {
     /// own store, with its ticket, under the rules `show` gives the reader's legacy footer
     /// (`PageResults`); `results` says whether this pane shows the package choice and the
     /// manifest write, and the open draft's lock. The scope notice and the link offer have no
-    /// Undo: they are notices, in the info tone.
+    /// Undo: the scope notice is a notice, the link offer a kept offer, both in the info tone.
     fn page_messages<'f>(
         &self,
         frame: &'f PaneFrame,
@@ -4161,17 +4160,17 @@ impl Library {
             let count = self.link_rename_count(&offer.old, &offer.new);
             if count > 0 {
                 // The offer names both names, so the DM can check the words before the write.
-                messages.outcome(
-                    Notice::new(crate::sentence!(
-                        "Change links from “{}” to “{}”.",
-                        offer.old,
-                        offer.new
-                    ))
-                    .choice(Choice::named(
-                        crate::choice!("Update {}", design::count(count, "link", "links")),
-                        LibraryPress::UpdateLinks,
-                    )),
-                );
+                // A kept offer line: nothing was done yet, so the info tone, never a success.
+                messages.kept(shown.outcome(frame, |offer| {
+                    Offer::new(
+                        crate::sentence!("Change links from “{}” to “{}”.", offer.old, offer.new),
+                        Choice::named(
+                            crate::choice!("Update {}", design::count(count, "link", "links")),
+                            LibraryPress::UpdateLinks,
+                        ),
+                    )
+                    .into()
+                }));
             }
         }
         if let Some(shown) = open.as_ref().and_then(|owner| self.link_edits.get(owner)) {
@@ -6294,20 +6293,9 @@ impl Library {
             .map_or(0, |loaded| loaded.rename_link_count(old, new))
     }
 
-    /// The link offer's `Update <n> links`, by its entry (its owner), in the frame of the press:
-    /// the offer is a notice with no ticket until M-P0's ticketed offer line lands (ruling of
-    /// M-L0.4b-1), so this by-owner `use_press` stays, counted.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn apply_page_press(&mut self, campaigns: &mut Campaigns) {
-        let open = self.open_link_owner();
-        if let Some(loaded) = &self.loaded
-            && let Some(offer) = open
-                .as_ref()
-                .and_then(|owner| self.renamed_links.use_press(owner))
-        {
+    /// The link offer's write, after its press used the offer up (by its ticket).
+    fn update_links(&mut self, offer: LinkOffer, campaigns: &Campaigns) {
+        if let Some(loaded) = &self.loaded {
             // The offer is checked again before the write: its entry still has the new name, and
             // neither name names another entry. A stale offer goes and writes nothing.
             // The offer is checked against the loaded notes first, then, directly before the
@@ -6422,12 +6410,6 @@ impl Library {
         Press { id, ticket }: Press<LibraryPress>,
         campaigns: &mut Campaigns,
     ) {
-        if id == LibraryPress::UpdateLinks {
-            // The offer's notice has no ticket: the open entry's offer, which this frame's
-            // footer showed (`LibraryPress::UpdateLinks`).
-            self.apply_page_press(campaigns);
-            return;
-        }
         let Some(ticket) = ticket else {
             return;
         };
@@ -6441,6 +6423,13 @@ impl Library {
                 // footer shows yet.
                 _ => {}
             },
+            LibraryPress::UpdateLinks => {
+                if self.loaded.is_some()
+                    && let Some(offer) = self.renamed_links.use_press_by(ticket)
+                {
+                    self.update_links(offer, campaigns);
+                }
+            }
             LibraryPress::UndoLinks => {
                 match self
                     .link_edits
@@ -6473,9 +6462,8 @@ impl Library {
                     Err(ByTicket::Gone) => {}
                 }
             }
-            // The editor's own presses act in `editor_pane`; the offer's above.
-            LibraryPress::UpdateLinks
-            | LibraryPress::FixHeading
+            // The editor's own presses act in `editor_pane`.
+            LibraryPress::FixHeading
             | LibraryPress::UseVital(..)
             | LibraryPress::Repair
             | LibraryPress::SeparateEntry(_)

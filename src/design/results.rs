@@ -1099,15 +1099,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "the_footer_takes_each_kept_result_with_its_own_order",
             &[Ban::Footer],
         ),
-        // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
-        // Round 29 L: the source change's Undo, and the registration's (`undo_package_registration`),
-        // moved into stores; by owner until the reader footer moves to `Messages`.
-        // M-L0.4b: the link offer's press, by its entry, until M-P0's ticketed offer line.
-        (
-            "src/library.rs",
-            "apply_page_press",
-            &[Ban::Results, Ban::ByOwner(1)],
-        ),
         (
             "src/design/results.rs",
             "a_failed_undo_keeps_its_entry_and_its_order",
