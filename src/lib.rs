@@ -2151,7 +2151,9 @@ impl Splat {
             }
             Page::Encounters => {
                 if active.is_some() {
-                    self.encounters.save_shortcut(ui.ctx(), &self.campaigns);
+                    let modal = self.modal_open(ui.ctx());
+                    self.encounters
+                        .save_shortcut(ui.ctx(), modal, &self.campaigns);
                     let sessions = self.sessions.links();
                     self.encounters.show(
                         ui,
@@ -2230,7 +2232,8 @@ impl Splat {
                         }
                     }
                     CampaignTab::RunSettings => {
-                        self.encounters.run_settings(ui, &self.campaigns);
+                        let modal = self.modal_open(ui.ctx());
+                        self.encounters.run_settings(ui, &self.campaigns, modal);
                     }
                     CampaignTab::Link => {
                         // The same guard as Settings: a link or folder change would stop
@@ -2779,6 +2782,20 @@ impl Splat {
     }
 }
 
+/// Whether a modal is open over the app: one of its own dialogs (`app_dialog`: the copy dialog,
+/// the close confirmation), the full-window image, or any egui modal layer. The one test every
+/// global and page shortcut asks, so no key acts beneath a modal.
+pub(crate) fn modal_open(ctx: &egui::Context, app_dialog: bool) -> bool {
+    app_dialog || art::viewer_open(ctx) || ctx.memory(|memory| memory.top_modal_layer()).is_some()
+}
+
+impl Splat {
+    /// `modal_open` for this app's own dialogs.
+    fn modal_open(&self, ctx: &egui::Context) -> bool {
+        modal_open(ctx, self.copy_dialog.is_some() || self.confirm_close)
+    }
+}
+
 impl eframe::App for Splat {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         // eframe calls this before the first `update`, where `start` restores the rest.
@@ -2931,10 +2948,7 @@ impl eframe::App for Splat {
                 .find(|e| e.run == Some(fact.id))?;
             Some((fact.name.clone(), event.session?))
         });
-        let modal = self.copy_dialog.is_some()
-            || self.confirm_close
-            || art::viewer_open(ctx)
-            || ctx.memory(|memory| memory.top_modal_layer()).is_some();
+        let modal = self.modal_open(ctx);
         if !modal {
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
                 self.toggle_lookup();

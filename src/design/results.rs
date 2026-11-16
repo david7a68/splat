@@ -983,7 +983,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
+            &[Ban::Results, Ban::Pane(1), Ban::RowKey(1)],
         ),
         ("src/encounters.rs", "run_settings", &[Ban::Results]),
         (
@@ -1102,20 +1102,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "setup_body",
             &[Ban::Layout(1), Ban::Extras(3), Ban::Pane(1)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "setup_row",
-            &[Ban::Layout(1), Ban::Extras(7)],
-        ),
+        ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(7)]),
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         (
             "src/encounters.rs",
-            "roster",
-            &[Ban::Layout(1), Ban::RowKey(1)],
+            "creature_search_with_summary",
+            &[Ban::Layout(1)],
         ),
-        ("src/encounters.rs", "roster_pane", &[Ban::Layout(1)]),
+        ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
         (
             "src/encounters/groups.rs",
             "change_row",
@@ -1268,8 +1264,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
-        ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
         (
             "src/encounters/groups.rs",

@@ -1510,6 +1510,12 @@ impl CreatureEditor {
         Ok(())
     }
 }
+/// Where test builds keep the roster column's scroll id for a draft (`roster_pane`).
+#[cfg(test)]
+fn roster_scroll_key(draft: Uuid) -> egui::Id {
+    egui::Id::new(("encounter_roster_scroll", draft))
+}
+
 /// The page's Ctrl+S, taken from this frame's input (`Encounters::save_shortcut`).
 pub(super) fn take_save_key(ctx: &egui::Context) -> bool {
     ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
@@ -3861,6 +3867,8 @@ fn name_field(ui: &mut egui::Ui, draft: &mut Draft, width: f32) -> egui::Respons
 
 const ENCOUNTER_NAME: design::FieldName = crate::field_id!("encounter_name");
 const CREATURE_NAME: design::FieldName = crate::field_id!("encounter_creature_name");
+/// The creature pane's Markdown text, by the creature's file.
+const CREATURE_TEXT: design::FieldName = crate::field_id!("encounter_creature_text");
 const INITIATIVE_GROUP: design::FieldName = crate::field_id!("roster_initiative_group");
 const RUN_FOLDER: design::FieldName = crate::field_id!("run_folder");
 const RUN_INITIATIVE: design::FieldName = crate::field_id!("run_initiative");
@@ -5065,10 +5073,14 @@ impl Encounters {
     /// after the fields it writes have taken this frame's input (`save_key`): the creature's
     /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
     /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
-    pub fn save_shortcut(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    /// `modal`: the app's one test (`crate::modal_open`: its dialogs, the full-window image, any
+    /// egui modal). While a modal is open the key is left alone, so nothing saves beneath it
+    /// (reviews of PR 499 and PR 525).
+    pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool, campaigns: &Campaigns) {
         // Taken for the open editor whether or not it has changes yet: the first edit can come
         // in the same frame. Its owner saves only if it has changes after its fields ran.
-        if (self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some())
+        if !modal
+            && (self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some())
             && campaigns.active_campaign().is_some()
         {
             self.save_key |= take_save_key(ctx);
@@ -5383,13 +5395,15 @@ impl Encounters {
             ui,
             body,
             move |ui| {
+                // The creature's fields, keyed by its file.
+                let key = design::TextKey::from_data(editor.path.clone());
                 // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
                 // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
                 design::field(ui, "Name", None, None, |ui| {
                     let width = ui.available_width();
                     design::line_field(
                         ui,
-                        CREATURE_NAME.of(design::TextKey::from_data(editor.path.clone())),
+                        CREATURE_NAME.of(key.clone()),
                         "Name",
                         &mut editor.fields.name,
                         "Name",
@@ -5425,16 +5439,19 @@ impl Encounters {
                 // The file's source, closed until wanted: the common changes have fields above.
                 design::quiet_section(ui, "Its text, as Markdown", |ui| {
                     let room = ui.available_height();
-                    egui::ScrollArea::vertical()
-                        .id_salt("creature_text")
+                    design::ScrollColumn::new("creature_text")
                         .max_height(room)
-                        .auto_shrink([false, true])
+                        .fit_height()
                         .show(ui, |ui| {
-                            let output = egui::TextEdit::multiline(&mut editor.fields.body)
-                                .font(egui::TextStyle::Monospace)
-                                .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                                .margin(egui::vec2(design::S, design::S))
-                                .show(ui);
+                            let width = ui.available_width() - 2.0 * design::S - design::M;
+                            let output =
+                                CREATURE_TEXT
+                                    .of(key)
+                                    .editor(ui, &mut editor.fields.body, |edit| {
+                                        edit.font(egui::TextStyle::Monospace)
+                                            .desired_width(width)
+                                            .margin(egui::vec2(design::S, design::S))
+                                    });
                             if let Some(note) =
                                 crate::markdown_source::pressed_note_link(ui, &output, None)
                             {
@@ -7625,10 +7642,6 @@ impl Encounters {
         self.after_panes(creature_step, make_yours, active, campaigns.modules());
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn add_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -7640,7 +7653,13 @@ impl Encounters {
         compact: bool,
     ) {
         if !compact {
-            design::group_heading(ui, "Add participants", 0);
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "Add participants",
+                    count: 0,
+                },
+            );
         }
         // FB2: the party lines stay whatever the search adds to (the party always joins the
         // roster), and `Adding to …` has one place directly above the search, so a change of
@@ -7991,10 +8010,6 @@ impl Encounters {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn roster_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -8021,33 +8036,33 @@ impl Encounters {
             .id(("encounter_roster", draft.id))
             .max_rect(area.with_min_x(area.min.x - design::S));
         ui.scope_builder(scope, |ui| {
-            // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family).
-            let lane = scroll_lane(ui) - design::S;
-            egui::ScrollArea::vertical()
-                .id_salt("encounter_editor")
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin {
-                            left: design::S as i8,
-                            ..egui::Margin::ZERO
-                        })
-                        .show(ui, |ui| {
-                            ui.set_width(ui.available_width().min(design::LIST_MEASURE).min(lane));
-                            Self::roster_column(
-                                ui,
-                                draft,
-                                snapshot,
-                                focus_search,
-                                expanded,
-                                linked_party,
-                                make_yours,
-                                heading,
-                            )
-                        })
-                        .inner
-                })
-                .inner
+            // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family):
+            // the column keeps it.
+            let shown = design::ScrollColumn::new("encounter_editor").show(ui, |ui| {
+                egui::Frame::new()
+                    .inner_margin(egui::Margin {
+                        left: design::S as i8,
+                        ..egui::Margin::ZERO
+                    })
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                        Self::roster_column(
+                            ui,
+                            draft,
+                            snapshot,
+                            focus_search,
+                            expanded,
+                            linked_party,
+                            make_yours,
+                            heading,
+                        )
+                    })
+                    .inner
+            });
+            // Test builds keep the column's scroll id by its draft, for the scroll's tests.
+            #[cfg(test)]
+            ui.data_mut(|data| data.insert_temp(roster_scroll_key(draft.id), shown.id));
+            shown.inner
         })
         .inner
     }
@@ -8097,7 +8112,6 @@ impl Encounters {
         ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
         // FI7: what the option changes, in the form the sync option's help uses.
         design::help(ui, REPEATABLE_HELP);
-        design::gap(ui, design::Gap::M);
         Self::loot_field(ui, draft);
         design::gap(ui, design::Gap::M);
         design::field(ui, NOTES_LABEL, None, None, |ui| {
@@ -8120,12 +8134,15 @@ impl Encounters {
 
     /// What the party finds when this fight is over, one line each. The note keeps it as its
     /// `## Loot` list, which Obsidian shows too.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn loot_field(ui: &mut egui::Ui, draft: &mut Draft) {
-        design::group_heading(ui, LOOT_FIELD, draft.loot.len());
+        // The heading keeps its own space above (`Heading::above`).
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: LOOT_FIELD,
+                count: draft.loot.len(),
+            },
+        );
         if !draft.loot_owned {
             blocked_reason(
                 ui,
@@ -8588,13 +8605,13 @@ impl Encounters {
                                 }
                             }
                             if enabled {
-                                let mut value =
-                                    slot.initial.get(field).and_then(Value::as_u64).unwrap_or(0);
-                                let response = ui.add(
-                                    egui::DragValue::new(&mut value).range(0..=i64::MAX as u64),
-                                );
-                                design::named(ui, &response, label);
-                                if response.changed() {
+                                let mut value = slot
+                                    .initial
+                                    .get(field)
+                                    .and_then(Value::as_u64)
+                                    .and_then(|value| i64::try_from(value).ok())
+                                    .unwrap_or(0);
+                                if design::stepper(ui, label, &mut value, 0..=i64::MAX) {
                                     slot.initial.insert(field.into(), value.into());
                                 }
                             }
@@ -8685,7 +8702,8 @@ impl Encounters {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
-    pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
+    /// `modal`: the app's one test of an open modal (`crate::modal_open`); Ctrl+S waits for it.
+    pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, modal: bool) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
             return;
@@ -8857,7 +8875,10 @@ impl Encounters {
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
                 // other change too.
+                // Not under a modal (the app's one test) nor the form's lock (review of PR 525).
                 let save_key = blocked.is_none()
+                    && !modal
+                    && ui.is_enabled()
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
                 // AF1: the state starts the row and Save ends it, as on every save row; without
                 // room, the state's words and the reasons wrap before Save. One row in every
@@ -10278,8 +10299,10 @@ mod tests {
         let text = draft.borrow().body.clone();
         assert!(text.contains("Unsent tactics."));
         // Outer scroll moves down to the caret; keep that same scroll state when the parent changes.
-        let scroll_id = egui::Id::new(("encounter_roster", draft.borrow().id))
-            .with(egui::Id::new("encounter_editor"));
+        let scroll_id = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(draft.borrow().id)))
+            .expect("the roster column's scroll id");
         let offset = egui::scroll_area::State::load(&harness.ctx, scroll_id)
             .unwrap()
             .offset
@@ -10307,10 +10330,14 @@ mod tests {
         // keyed by the draft, not shared with the encounter before it.
         let mut second = Draft::new();
         second.body = (1..=600).map(|n| format!("Second line {n}.\n")).collect();
-        let second_scroll =
-            egui::Id::new(("encounter_roster", second.id)).with(egui::Id::new("encounter_editor"));
+        let second_id = second.id;
         *draft.borrow_mut() = second;
         harness.run_steps(2);
+        let second_scroll = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(second_id)))
+            .expect("the second roster's scroll id");
+        assert_ne!(second_scroll, scroll_id, "each draft has its own scroll");
         let top =
             egui::scroll_area::State::load(&harness.ctx, second_scroll).map(|state| state.offset.y);
         assert!(
@@ -12306,12 +12333,25 @@ mod tests {
         editor.save_draft(&ctx, &campaign, &[]);
         assert!(!editor.dirty(), "saved and clean");
         let path = campaign.path.join(&editor.draft.as_ref().unwrap().path);
+        // An image that Lookup's reader can open full size (`art::thumbnail`), as a DM opens one.
+        let image = campaign.path.join("Map.png");
+        image::DynamicImage::new_rgb8(40, 20).save(&image).unwrap();
+        // The app's frame: the close confirmation (`close`) disables the page (`lib.rs`), the
+        // reader's image opens the full-window viewer, and the page's Ctrl+S asks the app's one
+        // modal test (`crate::modal_open`).
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
             .build_state(
-                move |ctx, editor: &mut Encounters| {
-                    editor.save_shortcut(ctx, &campaigns);
+                move |ctx, (editor, close): &mut (Encounters, bool)| {
+                    egui::SidePanel::right("lookup").show(ctx, |ui| {
+                        crate::art::thumbnail(ui, &image, "Map");
+                    });
                     egui::CentralPanel::default().show(ctx, |ui| {
+                        if *close {
+                            ui.disable();
+                        }
+                        let modal = crate::modal_open(ui.ctx(), *close);
+                        editor.save_shortcut(ui.ctx(), modal, &campaigns);
                         editor.show(
                             ui,
                             &campaigns,
@@ -12322,10 +12362,12 @@ mod tests {
                             },
                         );
                     });
+                    crate::art::show_viewer(ctx);
                 },
-                editor,
+                (editor, false),
             );
         design::theme::install(&harness.ctx);
+        crate::art::install(&harness.ctx);
         harness.run_steps(3);
         {
             use egui_kittest::kittest::Queryable;
@@ -12363,11 +12405,78 @@ mod tests {
             "one input frame"
         );
         let saved = fs::read_to_string(&path).unwrap();
-        let name = harness.state().draft.as_ref().unwrap().name.clone();
+        let name = harness.state().0.draft.as_ref().unwrap().name.clone();
         assert!(
-            name.contains('X') && saved.contains(&name) && !harness.state().dirty(),
+            name.contains('X') && saved.contains(&name) && !harness.state().0.dirty(),
             "the first edit and Ctrl+S in one frame: the name {name:?} saved ({}) and clean",
             saved.contains(&name)
+        );
+        // Review of PR 499: under the close confirmation the page is disabled, and Ctrl+S saves
+        // nothing beneath it; once the modal goes, the same key saves.
+        let ctrl_s = egui::Event::Key {
+            key: egui::Key::S,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        };
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(2).unwrap());
+        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight again".into();
+        harness.state_mut().1 = true;
+        harness.run_steps(2);
+        harness.input_mut().events.push(ctrl_s.clone());
+        harness.run_steps(2);
+        assert!(
+            fs::read_to_string(&path).unwrap() == saved && harness.state().0.dirty(),
+            "Ctrl+S under the modal saves nothing"
+        );
+        harness.state_mut().1 = false;
+        harness.run_steps(2);
+        harness.input_mut().events.push(ctrl_s.clone());
+        harness.run_steps(2);
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("Hero fight again")
+                && !harness.state().0.dirty(),
+            "with the modal gone, Ctrl+S saves"
+        );
+        // Review of PR 525 (P1): the full-window image is a modal too. A changed encounter, the
+        // image open from the reader, Ctrl+S: no write beneath it; closed, a fresh Ctrl+S saves.
+        let saved = fs::read_to_string(&path).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight at dusk".into();
+        harness.run_steps(2);
+        {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label("Map").click();
+        }
+        harness.run_steps(3);
+        assert!(
+            crate::art::viewer_open(&harness.ctx),
+            "the image fills the window"
+        );
+        harness.input_mut().events.push(ctrl_s.clone());
+        harness.run_steps(2);
+        assert!(
+            fs::read_to_string(&path).unwrap() == saved && harness.state().0.dirty(),
+            "Ctrl+S under the image saves nothing"
+        );
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(3);
+        assert!(
+            !crate::art::viewer_open(&harness.ctx),
+            "Escape closes the image"
+        );
+        harness.input_mut().events.push(ctrl_s);
+        harness.run_steps(2);
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("Hero fight at dusk")
+                && !harness.state().0.dirty(),
+            "with the image closed, a fresh Ctrl+S saves"
         );
     }
     #[test]
