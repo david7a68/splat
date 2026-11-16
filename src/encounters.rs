@@ -4931,13 +4931,16 @@ impl Encounters {
     /// after the fields it writes have taken this frame's input (`save_key`): the creature's
     /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
     /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
-    pub fn save_shortcut(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+    /// `ui` is the page's: while a modal (the close confirmation, the copy dialog) disables the
+    /// page, the key is left alone, so nothing saves under it (review of PR 499).
+    pub fn save_shortcut(&mut self, ui: &egui::Ui, campaigns: &Campaigns) {
         // Taken for the open editor whether or not it has changes yet: the first edit can come
         // in the same frame. Its owner saves only if it has changes after its fields ran.
-        if (self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some())
+        if ui.is_enabled()
+            && (self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some())
             && campaigns.active_campaign().is_some()
         {
-            self.save_key |= take_save_key(ctx);
+            self.save_key |= take_save_key(ui.ctx());
         }
     }
     /// The page's Ctrl+S that no pane took after its fields (the creature's pane was not drawn
@@ -8666,7 +8669,9 @@ impl Encounters {
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
                 // other change too.
+                // Not under a modal or a lock, which disable the form (review of PR 499).
                 let save_key = blocked.is_none()
+                    && ui.is_enabled()
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
                 // AF1: the state starts the row and Save ends it, as on every save row; without
                 // room, the state's words and the reasons wrap before Save. One row in every
@@ -12049,12 +12054,16 @@ mod tests {
         editor.save_draft(&ctx, &campaign, &[]);
         assert!(!editor.dirty(), "saved and clean");
         let path = campaign.path.join(&editor.draft.as_ref().unwrap().path);
+        // The app's page: a modal (the close confirmation) disables it (`lib.rs`).
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
             .build_state(
-                move |ctx, editor: &mut Encounters| {
-                    editor.save_shortcut(ctx, &campaigns);
+                move |ctx, (editor, modal): &mut (Encounters, bool)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
+                        if *modal {
+                            ui.disable();
+                        }
+                        editor.save_shortcut(ui, &campaigns);
                         editor.show(
                             ui,
                             &campaigns,
@@ -12066,7 +12075,7 @@ mod tests {
                         );
                     });
                 },
-                editor,
+                (editor, false),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(3);
@@ -12106,11 +12115,43 @@ mod tests {
             "one input frame"
         );
         let saved = fs::read_to_string(&path).unwrap();
-        let name = harness.state().draft.as_ref().unwrap().name.clone();
+        let name = harness.state().0.draft.as_ref().unwrap().name.clone();
         assert!(
-            name.contains('X') && saved.contains(&name) && !harness.state().dirty(),
+            name.contains('X') && saved.contains(&name) && !harness.state().0.dirty(),
             "the first edit and Ctrl+S in one frame: the name {name:?} saved ({}) and clean",
             saved.contains(&name)
+        );
+        // Review of PR 499: under the close confirmation the page is disabled, and Ctrl+S saves
+        // nothing beneath it; once the modal goes, the same key saves.
+        let ctrl_s = egui::Event::Key {
+            key: egui::Key::S,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        };
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(2).unwrap());
+        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight again".into();
+        harness.state_mut().1 = true;
+        harness.run_steps(2);
+        harness.input_mut().events.push(ctrl_s.clone());
+        harness.run_steps(2);
+        assert!(
+            fs::read_to_string(&path).unwrap() == saved && harness.state().0.dirty(),
+            "Ctrl+S under the modal saves nothing"
+        );
+        harness.state_mut().1 = false;
+        harness.run_steps(2);
+        harness.input_mut().events.push(ctrl_s);
+        harness.run_steps(2);
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("Hero fight again")
+                && !harness.state().0.dirty(),
+            "with the modal gone, Ctrl+S saves"
         );
     }
     #[test]

@@ -2151,7 +2151,7 @@ impl Splat {
             }
             Page::Encounters => {
                 if active.is_some() {
-                    self.encounters.save_shortcut(ui.ctx(), &self.campaigns);
+                    self.encounters.save_shortcut(ui, &self.campaigns);
                     let sessions = self.sessions.links();
                     self.encounters.show(
                         ui,
