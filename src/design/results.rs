@@ -1502,6 +1502,11 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
     &[
         ("src/design/column.rs", "finish_handle", &[Ban::Layout(1)]),
         (
+            "src/design/reader.rs",
+            "the_scroll_bar_does_not_choose_the_prose_type",
+            &[Ban::Layout(1)],
+        ),
+        (
             "src/design/components.rs",
             "iter28_p_the_pane_places_its_footer_for_every_body",
             &[Ban::Layout(1), Ban::Footer],

@@ -1293,6 +1293,11 @@ pub fn split_action(
 
 /// A square button with one icon. The word is the accessible name and the tooltip.
 pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
+    icon_button_with_hint(ui, icon, name, name)
+}
+
+/// An `icon_button` whose tooltip says more than its name, such as its keyboard command.
+pub fn icon_button_with_hint(ui: &mut Ui, icon: &str, name: &str, hint: &str) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::splat(Density::Read.control()), Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
@@ -1314,7 +1319,7 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
             focus_ring(ui, rect);
         }
     }
-    response.on_hover_text(name)
+    response.on_hover_text(hint)
 }
 
 /// A whole number that the DM can change. The value is in a well with a field border,

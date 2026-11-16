@@ -51,6 +51,13 @@ const LIST_WIDTH: f32 = 216.0;
 const LIST_WIDTHS: std::ops::RangeInclusive<f32> = 170.0..=420.0;
 const STATUS_WIDTH: f32 = 128.0;
 const TWO_COLUMNS_FROM: f32 = 640.0;
+/// The note's column beside the plan: the DM drags its edge into the room beside it.
+const NOTE_COLUMN: &str = "session_note_frame";
+/// The note frame's padding and hairline, on both sides.
+const NOTE_FRAME_EDGES: f32 = 2.0 * (design::S + design::HAIRLINE_WIDTH);
+/// The header's toggle of the session list, by what a press does.
+pub const HIDE_LIST: &str = "Hide the session list";
+pub const SHOW_LIST: &str = "Show the session list";
 /// The plan and the note stand side by side from here.
 const PLAN_BESIDE_NOTE_FROM: f32 = 720.0;
 const PLAN_WIDTH: f32 = 330.0;
@@ -629,6 +636,10 @@ pub struct Sessions {
     pub party_bar: Option<bool>,
     /// The party has members, and the bar does not show, so the header offers it.
     pub party_hidden: bool,
+    /// The DM hid the session list. It is the DM's choice for the app, saved with the window's
+    /// state, and only the header's toggle (or `Ctrl+\`) changes it. The list still shows where
+    /// it is the only thing to show (`list_hides`).
+    pub list_hidden: bool,
     pub run_open: bool,
     campaign: Option<Campaign>,
     folder: Option<PathBuf>,
@@ -1099,6 +1110,23 @@ fn note_title(ui: &mut egui::Ui, title: &str, date: &str) {
 }
 
 /// One column of the wide page, the full height of the page.
+/// The note's column, whose edge the DM drags. Until then it has the reader's measure and its
+/// frame, and the room beside it stays empty.
+fn note_column() -> design::Column {
+    design::Column::left(
+        NOTE_COLUMN,
+        design::READER_MEASURE + NOTE_FRAME_EDGES,
+        design::PANEL_MIN_WIDTH..=f32::INFINITY,
+    )
+    .page_keeps(0.0)
+}
+
+/// The note frame's width, as the note's column has it: dragged, or the reader's measure. Write
+/// and Read share it, in both layouts, so a switch moves no line end.
+fn note_frame_width(ctx: &egui::Context) -> f32 {
+    design::column_width(ctx, NOTE_COLUMN).unwrap_or(design::READER_MEASURE + NOTE_FRAME_EDGES)
+}
+
 fn page_column(ui: &mut egui::Ui, width: f32, height: f32, add: impl FnOnce(&mut egui::Ui)) {
     ui.allocate_ui_with_layout(
         egui::vec2(width, height),
@@ -2736,6 +2764,37 @@ impl Sessions {
             return chosen;
         }
         self.played_session() != Played::No
+    }
+
+    /// A session is open in the pane: the selected note is in the folder's list.
+    fn session_open(&self) -> bool {
+        self.selected
+            .is_some_and(|id| self.notes.iter().any(|note| note.id == id))
+    }
+
+    /// The wide page leaves the list out: the DM hid it, and a session stands in its place.
+    /// With no session open, the list is the only thing to show, so it shows; the DM's
+    /// choice stays.
+    fn list_hides(&self) -> bool {
+        self.list_hidden && self.session_open()
+    }
+
+    /// The header offers the list's toggle: the notes view of a wide page, with a session open
+    /// and the folder there. `wide` is the page's width test (`TWO_COLUMNS_FROM`).
+    fn offers_list_toggle(&self, wide: bool) -> bool {
+        wide && self.view == View::Notes
+            && self.session_open()
+            && self.folder.as_ref().is_some_and(|folder| folder.is_dir())
+    }
+
+    /// `Ctrl+\`: hide or show the session list, where the header offers its toggle. The width
+    /// test is the last drawn page's. Returns whether the key does something here.
+    pub fn list_toggle_key(&self) -> bool {
+        self.offers_list_toggle(self.list_beside)
+    }
+
+    pub fn toggle_list(&mut self) {
+        self.list_hidden = !self.list_hidden;
     }
 
     /// The words if new events go to a session that looks like an old one.
@@ -4706,10 +4765,13 @@ impl Sessions {
         ui.scope_builder(
             egui::UiBuilder::new().id(("session_editor_scope", self.selected, in_panel)),
             |ui| {
-                ui.set_max_width(
-                    ui.available_width()
-                        .min(design::READER_MEASURE + frame.total_margin().sum().x),
-                );
+                // On the page, the note's column sets its width (`note_frame_width`).
+                let width = if in_panel {
+                    design::READER_MEASURE + frame.total_margin().sum().x
+                } else {
+                    note_frame_width(ui.ctx())
+                };
+                ui.set_max_width(ui.available_width().min(width));
                 frame.show(ui, |ui| {
                     let visible_height = ui.available_height().max(design::XL);
                     let mut scroll = egui::ScrollArea::vertical().id_salt((
@@ -4748,7 +4810,11 @@ impl Sessions {
                                 .font(design::reader::prose_type(ui).font(ui))
                                 .layouter(&mut layouter)
                                 .margin(egui::Vec2::ZERO)
-                                .desired_width(ui.available_width().min(design::READER_MEASURE))
+                                .desired_width(if in_panel {
+                                    ui.available_width().min(design::READER_MEASURE)
+                                } else {
+                                    ui.available_width()
+                                })
                                 .min_size(egui::vec2(0.0, visible_height + heading_offset))
                                 .show(ui);
                             crate::markdown_source::paint_section_rules(ui, &output);
@@ -5088,7 +5154,8 @@ impl Sessions {
     /// The words Read shows, as `read_tab` prepared them.
     fn read_body(&mut self, ui: &mut egui::Ui, prepared: &carry::Prepared) {
         ui.scope(|ui| {
-            ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+            let measure = note_frame_width(ui.ctx()) - NOTE_FRAME_EDGES;
+            ui.set_max_width(ui.available_width().min(measure));
             if !prepared.written {
                 ui.horizontal(|ui| {
                     ui.label(
@@ -6998,9 +7065,18 @@ impl Sessions {
             (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH)
         };
         let note_start = if beside { plan_width + design::L } else { 0.0 };
-        let toolbar_width = ui
-            .available_width()
-            .min(note_start + design::READER_MEASURE + 2.0 * (design::S + design::HAIRLINE_WIDTH));
+        // The tab row ends where the note frame ends. Beside the plan, the note's column says
+        // where, before it draws, this pass's drag included.
+        let frame_width = if beside {
+            let room = egui::Rect::from_min_size(
+                egui::pos2(ui.max_rect().left() + note_start, ui.max_rect().top()),
+                egui::vec2(ui.available_width() - note_start, 1.0),
+            );
+            note_column().width_within(ui.ctx(), room)
+        } else {
+            note_frame_width(ui.ctx())
+        };
+        let toolbar_width = ui.available_width().min(note_start + frame_width);
         ui.horizontal(|ui| {
             if shown != Tab::Recordings {
                 ui.set_max_width(toolbar_width);
@@ -7099,9 +7175,12 @@ impl Sessions {
                         });
                     });
                     page_column(ui, note_width, height, |ui| {
-                        fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
-                            self.note_pane(ui, book, plan, beside)
-                        })
+                        // The DM drags the note's edge into the room beside it.
+                        note_column().show_inside(ui, |ui| {
+                            fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
+                                self.note_pane(ui, book, plan, beside)
+                            })
+                        });
                     });
                 });
             }
@@ -7200,15 +7279,20 @@ impl Sessions {
             }
             return;
         }
-        design::Column::left("session_list_panel", LIST_WIDTH, LIST_WIDTHS)
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                right: design::S as i8,
-                ..Default::default()
-            }))
-            .show_inside(ui, |ui| self.list_pane(ui));
+        // A hidden list keeps its dragged width for when it shows again: the width is the
+        // column's, not the list's choice.
+        let list_hides = self.list_hides();
+        if !list_hides {
+            design::Column::left("session_list_panel", LIST_WIDTH, LIST_WIDTHS)
+                .frame(egui::Frame::new().inner_margin(egui::Margin {
+                    right: design::S as i8,
+                    ..Default::default()
+                }))
+                .show_inside(ui, |ui| self.list_pane(ui));
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::S as i8,
+                left: if list_hides { 0 } else { design::S as i8 },
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
@@ -8017,7 +8101,20 @@ impl Sessions {
         let empty = self.notes.is_empty();
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut stop = false;
+        // The same width test as the page below the header (`notes_view`).
+        let offers_list_toggle = self.offers_list_toggle(ui.available_width() >= TWO_COLUMNS_FROM);
         design::page_header(ui, page_title, Some(&context), |ui| {
+            // First, so it keeps the header's right end whatever comes and goes beside it.
+            if offers_list_toggle {
+                let (name, hint) = if self.list_hidden {
+                    (SHOW_LIST, "Show the session list (Ctrl+\\)")
+                } else {
+                    (HIDE_LIST, "Hide the session list (Ctrl+\\)")
+                };
+                if design::icon_button_with_hint(ui, icons::SESSION_LIST, name, hint).clicked() {
+                    self.toggle_list();
+                }
+            }
             let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
             if self.view == View::Notes && !in_form && !empty && !folder_missing {
                 new_session = Action::secondary("New session")
@@ -9538,6 +9635,67 @@ mod tests {
             );
             assert_eq!(sessions.played_session(), expected, "{case}");
         }
+    }
+
+    /// The DM's hidden list leaves the wide page only while a session stands in its place, and
+    /// the header offers the toggle only where it does something. The choice outlives both.
+    #[test]
+    fn a_hidden_list_stays_out_only_while_a_session_is_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = Note {
+            id: Uuid::new_v4(),
+            number: 1,
+            title: String::new(),
+            date: "2026-05-10".to_owned(),
+            path: dir.path().join("Session 1.md"),
+            also: Vec::new(),
+        };
+        let mut sessions = Sessions {
+            folder: Some(dir.path().to_path_buf()),
+            notes: vec![note.clone()],
+            selected: Some(note.id),
+            ..Sessions::default()
+        };
+        assert!(
+            !sessions.list_hides(),
+            "the list shows until the DM hides it"
+        );
+        assert!(sessions.offers_list_toggle(true));
+        assert!(
+            !sessions.offers_list_toggle(false),
+            "a narrow page has its own back link"
+        );
+        sessions.toggle_list();
+        assert!(sessions.list_hides());
+        // No session open: the list is all there is to show, and the choice stays.
+        for (case, selected) in [
+            ("none chosen", None),
+            ("its file went", Some(Uuid::new_v4())),
+        ] {
+            sessions.selected = selected;
+            assert!(!sessions.list_hides(), "{case}");
+            assert!(!sessions.offers_list_toggle(true), "{case}");
+            assert!(sessions.list_hidden, "{case}");
+        }
+        sessions.selected = Some(note.id);
+        assert!(
+            sessions.list_hides(),
+            "the session open again: the list stays hidden"
+        );
+        sessions.view = View::Templates;
+        assert!(
+            !sessions.offers_list_toggle(true),
+            "Templates has its own list"
+        );
+        sessions.view = View::Notes;
+        sessions.folder = Some(dir.path().join("gone"));
+        assert!(
+            !sessions.offers_list_toggle(true),
+            "a missing folder shows its fault alone"
+        );
+        sessions.folder = Some(dir.path().to_path_buf());
+        sessions.toggle_list();
+        assert!(!sessions.list_hides());
     }
 
     /// The Session folder form's messages, as another page's typed pane shows them
