@@ -20434,6 +20434,26 @@ pub mod encounter_groups {
                 ),
             );
         }
+        // Migration-32 L2c (M-R0.1, P3): the footer's lines are read after the body's acts
+        // (`Messages::pane_then`). In the first frame of typing a valid total over the bad one,
+        // drawn in one pass, and in the next, the old reason is gone and Add is enabled.
+        const RIVALS_REASON: &str = "Rival Team: Enter a whole number, or clear the field to roll.";
+        d.click_field(TOTAL_FOR_RIVALS);
+        d.press_ctrl(Key::A);
+        let typed = d.first_frame_one_pass([egui::Event::Text("14".into())], |d| {
+            (
+                d.painted_rect_in(RIVALS_REASON, egui::Rect::EVERYTHING)
+                    .is_some(),
+                d.is_disabled(&add_group(GROUP_RIVALS)),
+            )
+        });
+        d.observe(
+            "m32-L2c-valid-total-first-frame",
+            typed == ((false, false), (false, false)),
+            format!(
+                "The first frame of a valid total and the next (one pass each): (old reason painted, Add disabled) = {typed:?}"
+            ),
+        );
         d.clear_text_in(TOTAL_FOR_RIVALS);
         let before = roster_places(d).len();
         d.click(&add_group(GROUP_LOST));
