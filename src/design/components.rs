@@ -171,7 +171,6 @@ pub struct ToolbarShown<A> {
 /// One action of the toolbar: its words, its icon, the caller's id, and its availability.
 struct GroupAction<'a, A> {
     label: &'a str,
-    icon: Option<&'a str>,
     id: A,
     availability: Availability,
 }
@@ -182,13 +181,9 @@ impl<A> GroupAction<'_, A> {
             Availability::Waits(reason) => Some(reason.as_str()),
             Availability::Draft => draft,
         };
-        let action = Action::quiet(self.label)
+        Action::quiet(self.label)
             .density(Density::Read)
-            .blocked(reason);
-        match self.icon {
-            Some(icon) => action.icon(icon),
-            None => action,
-        }
+            .blocked(reason)
     }
 }
 
@@ -241,17 +236,23 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
         self
     }
 
-    /// An extra, quiet at `Density::Read`, that gives `id` back when pressed.
-    pub fn action(
-        mut self,
-        label: &'a str,
-        icon: Option<&'a str>,
-        id: A,
-        availability: Availability,
-    ) -> Self {
+    /// An extra, quiet at `Density::Read`, in its words only, that gives `id` back when pressed
+    /// (round 31 reader-toolbar-icon-form, M0355: every toolbar action has one form; `Back` is
+    /// navigation and keeps its arrow). It takes no icon.
+    ///
+    /// ```
+    /// use splat::layout::doc_parts::{Availability, ModeLock, ReaderToolbar};
+    /// let _ = ReaderToolbar::new(false, "Markdown", "Markdown", ModeLock::Open)
+    ///     .action("Copy to…", 1, Availability::Draft);
+    /// ```
+    /// ```compile_fail,E0061
+    /// use splat::layout::doc_parts::{Availability, ModeLock, ReaderToolbar};
+    /// let _ = ReaderToolbar::new(false, "Markdown", "Markdown", ModeLock::Open)
+    ///     .action("Copy to…", Some("c"), 1, Availability::Draft);
+    /// ```
+    pub fn action(mut self, label: &'a str, id: A, availability: Availability) -> Self {
         self.actions.push(GroupAction {
             label,
-            icon,
             id,
             availability,
         });
@@ -5557,7 +5558,7 @@ mod tests {
                             "Markdown source",
                             ModeLock::Open,
                         )
-                        .action("Copy to…", None, 1, Availability::Draft);
+                        .action("Copy to…", 1, Availability::Draft);
                         let _ =
                             toolbar.show(ui, state, DraftBlocks::EntryInPackage, |_| row, |_| {});
                     });
