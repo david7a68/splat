@@ -1498,6 +1498,12 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "add_field_keys",
             &[Ban::Layout(1)],
         ),
+        // The test of the staged keys-only add field itself (`AddFieldForm::keys_only`).
+        (
+            "src/design/components.rs",
+            "iter29_p1_an_opened_add_field_shows_add_and_cancel",
+            &[Ban::Extras(1)],
+        ),
         (
             "src/design/components.rs",
             "suggestion_rows",
