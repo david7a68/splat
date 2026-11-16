@@ -1361,6 +1361,13 @@ pub fn stepper_with_density(
 /// A stepper whose value is a modifier: it shows `+2` and `−1`, with a true minus sign
 /// (`signed`), and reads back what the DM types in either form (`−3`, `-3`, `+2`, `2`). The
 /// same − and + and limits as [`stepper`] (the Run's Correct tab: an initiative bonus).
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "lane M-R0 moves the Correct tab's initiative bonus to it (M0169); the expectation fails once it does, so this goes"
+    )
+)]
 pub fn signed_stepper(
     ui: &mut Ui,
     name: &str,
