@@ -9815,9 +9815,10 @@ pub mod run_folder_defect {
         // its last control, with no hairline, at every size (the footer placed by hand stood at
         // the tab's bottom).
         d.state_prepared("run-folder-edited", Sizes::All, |d| {
+            // The form's last line is now Save's wait reason, under the save row (M4).
             footer_follows(
                 d,
-                "Save run settings",
+                "Choose below to move the runs or not.",
                 "From the new folder",
                 "m32-L1b-run-folder-footer",
             );

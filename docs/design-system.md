@@ -1305,8 +1305,10 @@ an editor as tall as its room). The group editor's footer holds the discard's re
 newest member result, then Save's reason, then the file's warnings. Rules and runs gives its form to its pane
 (`Footer::pane_then`): the footer starts `S` below the form while the form fits, and is pinned at the tab's bottom only
 when the form scrolls. Its messages are read from their owners after the form's acts, so the frame of an edit, a
-Discard or a failed Save already shows what that act left. It holds the discard's result, the reasons (an error, the unread choice's warning with its file
-line), then the folder move's warning with its two choices. Faults that belong to one row, member or field stay there.
+Discard or a failed Save already shows what that act left. It holds the discard's result, then the reasons: the unread
+choice's warning with its file line, the folder move's warning with its two choices (it is why Save run settings waits),
+and last an act's error, so a failed save or move never moves the choice the DM pressed. Faults that belong to one
+row, member or field stay there.
 
 Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, READY TO RUN, GROUPS and
 HISTORY in that order. The counts are in those headings (`IN PROGRESS 2`), so the page header's context stays

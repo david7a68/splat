@@ -3196,6 +3196,10 @@ enum EncounterFault {
     SeparationFailed(String),
     /// A warning of a group's file that no member row states.
     FileWarning(String),
+    /// Rules and runs (ruling M4): the saved runs a folder change leaves, which is why `Save run
+    /// settings` waits; it carries the two move choices. A reason, so an act's answer below it
+    /// never moves the choice the DM pressed.
+    RunsLeft(String),
     /// A flag of the encounter's file (`unread_notes`) in its tone: an unread roster row is an
     /// error (R41, `unread_row_tone`), any other flag a warning.
     FileFlag(String, Tone),
@@ -3224,6 +3228,7 @@ impl design::outcome::Fault for EncounterFault {
             Self::RunDeletedUnsent(_)
             | Self::SeparationFailed(_)
             | Self::FileWarning(_)
+            | Self::RunsLeft(_)
             | Self::FileFlag(..)
             | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
         }
@@ -3244,6 +3249,7 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The note was not changed.")),
             Self::FileWarning(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The group’s file has a problem.")),
+            Self::RunsLeft(words) => outcome_words(words),
             Self::FileFlag(words, _) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The encounter’s file has a problem.")),
             Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
@@ -8397,13 +8403,10 @@ impl Encounters {
                         egui::vec2(ui.available_width(), Density::Scan.control()),
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            // A blocked Save is secondary (the save row rule).
-                            let pressed = if blocked.is_none() {
-                                Action::primary(SAVE_RUN_SETTINGS)
-                            } else {
-                                Action::secondary(SAVE_RUN_SETTINGS)
-                            }
-                            .key("Ctrl+S")
+                            // Disabled, the primary loses its fill and keeps its width, so a
+                            // wait moves nothing.
+                            let pressed = Action::primary(SAVE_RUN_SETTINGS)
+                                .key("Ctrl+S")
                             .blocked(blocked)
                             .show(ui)
                             .clicked();
@@ -8444,7 +8447,6 @@ impl Encounters {
                                                 draft_switch_reason()
                                             }),
                                         );
-                                        design::blocked_reason(ui, blocked);
                                     }
                                 },
                             );
@@ -8452,6 +8454,11 @@ impl Encounters {
                         },
                     )
                     .inner;
+                // Why Save waits, on its own line under the row (as `save_row`'s narrow slot),
+                // while the form has changes: a wrapped label inside the row would cover Discard.
+                if snapshot.options != snapshot.saved_options {
+                    design::blocked_reason(ui, blocked);
+                }
                 if (pressed || save_key) && blocked.is_none() {
                     commit = Some(commit_options(snapshot, active, OptionsCommit::Save));
                 }
@@ -8484,11 +8491,6 @@ impl Encounters {
                     && let Some(shown) = this.kept.get(&discarded)
                 {
                     messages.kept(shown.outcome(&frame, |_| options_discarded()));
-                }
-                if let Some(e) = &this.error {
-                    messages.outcome(design::outcome::FaultMessage::new(
-                        &EncounterFault::Failed(e.clone()),
-                    ));
                 }
                 // Each unread choice's warning names its line; the file's path and links follow
                 // the last one.
@@ -8555,7 +8557,8 @@ impl Encounters {
                     // M4: the warning's two choices are the folder's commit while it leaves
                     // runs; none while a run or the open encounter locks the form (the save row
                     // says why).
-                    let mut warning = design::outcome::Notice::warning(outcome_words(&words));
+                    let mut warning =
+                        design::outcome::FaultMessage::new(&EncounterFault::RunsLeft(words));
                     if !run_open && !draft_open {
                         for (words, press) in [
                             ("Move runs and save", FooterPress::MoveRuns),
@@ -8568,6 +8571,13 @@ impl Encounters {
                         }
                     }
                     messages.outcome(warning);
+                }
+                // An act's answer (a failed save or move) after the standing reasons, so it never
+                // moves the choice the DM pressed.
+                if let Some(e) = &this.error {
+                    messages.outcome(design::outcome::FaultMessage::new(
+                        &EncounterFault::Failed(e.clone()),
+                    ));
                 }
                 if this.draft_dirty() {
                     messages.outcome(design::outcome::Notice::new(crate::sentence!(
