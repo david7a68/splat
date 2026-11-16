@@ -8033,13 +8033,8 @@ impl Library {
                         .ok()
                         .and_then(|entry| repair_row(entry, &link.target))
                 }))?;
-                let words = &link.words;
-                Some((
-                    line,
-                    format!(
-                        "Line {line}: {words} Replace the link on this line with another creature, or remove its row."
-                    ),
-                ))
+                // The content layer's words; the fault adds the entry, the line and the fix.
+                Some((line, link.words.clone()))
             });
         let repair_line = repair_line.or(missing_link.as_ref().map(|(line, _)| *line));
         // A Save that failed on the disk, while this is still the draft it tried to write.
