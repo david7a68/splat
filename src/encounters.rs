@@ -10055,15 +10055,24 @@ mod tests {
             .expect("the hit points field")
             .focus();
         harness.run_steps(2);
-        harness.event(egui::Event::Text("3".into()));
-        harness.event(egui::Event::Key {
-            key: egui::Key::S,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::COMMAND,
-        });
+        // Both events in ONE frame's raw input (`harness.event` gives each its own frame).
+        let frame = harness.ctx.cumulative_frame_nr();
+        harness.input_mut().events.extend([
+            egui::Event::Text("3".into()),
+            egui::Event::Key {
+                key: egui::Key::S,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            },
+        ]);
         harness.step();
+        assert_eq!(
+            harness.ctx.cumulative_frame_nr() - frame,
+            1,
+            "one input frame"
+        );
         let typed = harness.state().0.fields.hp.clone();
         let error = harness.state().0.error.clone();
         let painted = harness.output().shapes.iter().any(|shape| {
@@ -11744,15 +11753,24 @@ mod tests {
         harness
             .ctx
             .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
-        harness.event(egui::Event::Text("X".into()));
-        harness.event(egui::Event::Key {
-            key: egui::Key::S,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::COMMAND,
-        });
+        // Both events in ONE frame's raw input (`harness.event` gives each its own frame).
+        let frame = harness.ctx.cumulative_frame_nr();
+        harness.input_mut().events.extend([
+            egui::Event::Text("X".into()),
+            egui::Event::Key {
+                key: egui::Key::S,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            },
+        ]);
         harness.step();
+        assert_eq!(
+            harness.ctx.cumulative_frame_nr() - frame,
+            1,
+            "one input frame"
+        );
         let saved = fs::read_to_string(&path).unwrap();
         let name = harness.state().draft.as_ref().unwrap().name.clone();
         assert!(
