@@ -3299,12 +3299,7 @@ impl Run {
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
     /// with its button, by the rule the campaign chose for initiative.
     /// Whatever joins a fight after it starts: one creature, or a prepared group.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
-    )]
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
-        let mut add = None;
         // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned
         // to the panel's bottom, below the scrolling list. The list keeps its top, so a result
         // that comes, grows with a tie, or goes moves no group row. Its owner is the newest
@@ -3314,55 +3309,72 @@ impl Run {
         // FI5: a typed total that cannot be read gives its reason here too, after the result,
         // named by its group. The reason belongs to the typed words: it ends when they change.
         let reasons = self.arrival_reasons();
-        let result = self.arrival_result_shown();
-        // The shared message footer: as tall as what it holds, at most a third of the panel,
-        // and it scrolls inside beyond that (pointer and keyboard), so ten bad totals at 960
-        // neither clip nor push the list. The result's Undo is live in the header while its
-        // step is the newest, so it leads; the reasons follow.
-        // The message names itself; the footer's own name never takes the Log's words.
-        // The result belongs to the newest step: its line is that step's kept result.
-        let line = result
-            .then(|| {
-                self.newest_step_result()
-                    .map(|shown| shown.footer(|_| String::new()))
-            })
+        // The shared message footer, typed (migration-32 L2c): as tall as what it holds, at
+        // most a third of the panel, and it scrolls inside beyond that (pointer and keyboard), so
+        // ten bad totals at 960 neither clip nor push the list. The result belongs to the newest
+        // step: its line is that step's kept result, and its Undo is the header's. The footer's
+        // order puts the reasons before it (a kept result without a footer Undo follows them).
+        let said = self
+            .arrival_result_shown()
+            .then(|| self.arrival_said())
             .flatten();
-        let mut footer = design::Footer::new(("arrival_footer", self.id), ui.available_width());
-        if let Some(line) = &line {
-            footer.legacy_kept_line(line, true, |_, ui| self.arrival_result(ui));
+        let frame = design::outcome::PaneFrame::new(ui);
+        let mut messages = design::outcome::Messages::<ArrivalPress>::new(
+            &frame,
+            ("arrival_footer", self.id),
+            ui.available_width(),
+        );
+        if let Some(said) = said
+            && let Some(shown) = self.newest_step_result()
+        {
+            messages.kept(shown.outcome(&frame, |_| said.into()));
         }
         for reason in reasons.iter() {
-            footer.legacy_reason(reason.as_str(), move |ui| {
-                // The group faults' form: a mark, and words in text colour.
-                design::small_message(ui, Tone::Warning, reason);
-            });
+            // The group faults' words, named by their group, in the warning tone.
+            if let Some(words) = outside_words(reason.clone()) {
+                messages.outcome(design::outcome::FaultMessage::new(&RunFault::Total(words)));
+            }
         }
-        let body_bottom = footer.show_by_hand(ui);
-        // FJ1: the list keeps the scroll bar's lane whether or not the bar shows, as the
-        // Encounters list does, so a list that grows long moves no field and no Add.
-        let lane = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
-        egui::ScrollArea::vertical()
-            .id_salt("run_groups")
-            .auto_shrink([false, false])
-            .max_height((body_bottom - ui.cursor().top()).max(0.0))
-            .show(ui, |ui| {
-                ui.set_max_width(lane);
-                ui.spacing_mut().item_spacing.y = design::XS;
-                if self
-                    .groups
-                    .as_ref()
-                    .is_some_and(|groups| !groups.is_empty())
-                {
-                    design::help(ui, "Drag a group name to the list, or use Add.");
-                }
-                // Measured once: the search field and the group list share the block.
-                let arrival = self.arrival_block(ui);
-                self.add_creature_form(ui, arrival.map(|(_, block)| block));
-                design::rule(ui);
-                add = self.group_list(ui, arrival);
-            });
-        if let Some(id) = add {
+        // FJ1: the pane's scroll column keeps the scroll bar's lane whether or not the bar
+        // shows, as the Encounters list does, so a list that grows long moves no field and no Add.
+        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+            ui.spacing_mut().item_spacing.y = design::XS;
+            if self
+                .groups
+                .as_ref()
+                .is_some_and(|groups| !groups.is_empty())
+            {
+                design::help(ui, "Drag a group name to the list, or use Add.");
+            }
+            // Measured once: the search field and the group list share the block.
+            let arrival = self.arrival_block(ui);
+            self.add_creature_form(ui, arrival.map(|(_, block)| block));
+            design::rule(ui);
+            self.group_list(ui, arrival)
+        });
+        if let Some(press) = paned.pressed {
+            self.arrival_press(press);
+        }
+        if let Some(id) = paned.body {
             self.add_group_from_panel(id);
+        }
+    }
+
+    /// A press in the Arrivals footer. The tie's Move acts only while its line is the newest
+    /// step's result: a step made in the same frame (the body added another arrival) ends it,
+    /// and the press does nothing.
+    fn arrival_press(&mut self, press: design::outcome::Press<ArrivalPress>) {
+        let newest = self.history_steps.last().copied();
+        let live = press.ticket.as_ref().is_some_and(|ticket| {
+            self.step_results
+                .get_by(ticket)
+                .is_some_and(|shown| Some(shown.value().owner.step) == newest)
+        });
+        match press.id {
+            ArrivalPress::Move(first, before) if live => {
+                self.run_command(Command::MoveArrivalBefore(first, before));
+            }
+            ArrivalPress::Move(..) => {}
         }
     }
 
@@ -3597,9 +3609,13 @@ impl Run {
             || last.is_some_and(|line| line.contains(" moved before "))
     }
 
-    /// The newest arrival's result: who joined and at what total, with `Move … before …` when
-    /// it tied, or the move that settled a tie. `arrival_result_shown` says when it draws.
-    fn arrival_result(&mut self, ui: &mut egui::Ui) {
+    /// The newest arrival's result, as data: who joined and at what total, with
+    /// `Move … before …` when it tied, or the move that settled a tie. Every result is a success
+    /// message; the Move choice shows that a choice is open, and gives up the whole parenthesis
+    /// before anything else when its line is short (`move_choice`, FA6).
+    /// `arrival_result_shown` says when it shows.
+    fn arrival_said(&self) -> Option<design::outcome::Said<ArrivalPress>> {
+        use design::outcome::{Choice, Said};
         if let Some(previous) = self.history.last().filter(|_| {
             self.state.log.last().is_some_and(|line| {
                 line.starts_with(super::GROUP_ADDED) || line.starts_with(super::ONE_ADDED)
@@ -3630,68 +3646,47 @@ impl Run {
             let line = group_line
                 .as_deref()
                 .unwrap_or_else(|| self.state.log.last().map_or("", String::as_str));
-            if let Some((first, before)) = tied {
-                let name = Self::roll_block_name(&self.state, &self.state.participants[before]);
-                let waits = self.state.phase == Phase::Running
-                    && self
-                        .state
-                        .order
-                        .iter()
-                        .position(|i| *i == before)
-                        .is_some_and(|at| at <= self.state.cursor);
-                let total = self.state.participants[first].initiative.unwrap();
-                let tie = if group_line.is_some() {
-                    format!(" Tied with {name} at\u{a0}{total}, placed after.")
-                } else {
-                    String::new()
-                };
-                let line = format!(
-                    "{line}{tie}{}",
-                    if waits {
-                        " ·\u{a0}acts next round if moved before"
-                    } else {
-                        ""
-                    }
-                );
-                // The name the `joined at` message uses, so one arrival has one name.
-                let arrival = Self::arrival_name(&self.state, first, &name);
-                let full = format!("Move {arrival} before {name}");
-                let font = Type::Strong.font(ui);
-                // A finished change, tie or not: the Move button shows the open choice.
-                design::message(ui, Tone::Success, &line);
-                design::message_choice_row(ui, Tone::Success, |ui| {
-                    let room = ui.available_width() - design::M * 2.0;
-                    let shown = move_words(ui, &arrival, &name, &font, room).unwrap_or_else(|| {
-                        undo_words(
-                            ui,
-                            (&full, None),
-                            false,
-                            &self.state.participants,
-                            &font,
-                            room,
-                        )
-                    });
-                    if Action::secondary(&shown)
-                        .name(&full)
-                        .hint(&full)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.run_command(Command::MoveArrivalBefore(first, before));
-                    }
-                });
+            let Some((first, before)) = tied else {
+                return outside_words(line.to_owned()).map(Said::new);
+            };
+            let name = Self::roll_block_name(&self.state, &self.state.participants[before]);
+            let waits = self.state.phase == Phase::Running
+                && self
+                    .state
+                    .order
+                    .iter()
+                    .position(|i| *i == before)
+                    .is_some_and(|at| at <= self.state.cursor);
+            let total = self.state.participants[first].initiative?;
+            let tie = if group_line.is_some() {
+                format!(" Tied with {name} at\u{a0}{total}, placed after.")
             } else {
-                design::message(ui, Tone::Success, line);
-            }
-        } else if let Some(line) = self
-            .state
+                String::new()
+            };
+            let line = format!(
+                "{line}{tie}{}",
+                if waits {
+                    " ·\u{a0}acts next round if moved before"
+                } else {
+                    ""
+                }
+            );
+            // The name the `joined at` message uses, so one arrival has one name.
+            let arrival = Self::arrival_name(&self.state, first, &name);
+            // A finished change, tie or not: the Move choice shows the open choice.
+            return outside_words(line).map(|words| {
+                Said::new(words).choice(Choice::named(
+                    move_choice(&arrival, &name),
+                    ArrivalPress::Move(first, before),
+                ))
+            });
+        }
+        self.state
             .log
             .last()
             .filter(|line| line.contains(" moved before "))
-        {
-            design::message(ui, Tone::Success, line);
-        }
+            .and_then(|line| outside_words(line.clone()))
+            .map(Said::new)
     }
 
     /// The roster shows members; this notice keeps just the group and its totals.
@@ -6597,6 +6592,13 @@ fn outside_words(words: String) -> Option<design::outcome::Sentence> {
     design::outcome::Sentence::outside(words)
 }
 
+/// What the Arrivals footer can press: the tie's Move, by the arrival's first row and the row it
+/// moves before.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ArrivalPress {
+    Move(usize, usize),
+}
+
 /// What the run's message footer can press.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RunPress {
@@ -6621,6 +6623,8 @@ enum RunFault {
     UndoUnread,
     /// Party HP that a carry-over could not bring.
     Carry(design::outcome::Sentence),
+    /// FI5: a typed initiative total that cannot be read, named by its group.
+    Total(design::outcome::Sentence),
 }
 
 impl design::outcome::Fault for RunFault {
@@ -6629,7 +6633,7 @@ impl design::outcome::Fault for RunFault {
         match self {
             Self::DiskConflict => Severity::NotSaved,
             Self::Error(_) => Severity::CannotRead,
-            Self::UndoUnread | Self::Carry(_) => Severity::NeedsFixing,
+            Self::UndoUnread | Self::Carry(_) | Self::Total(_) => Severity::NeedsFixing,
         }
     }
     fn cause(&self) -> design::outcome::Sentence {
@@ -6637,7 +6641,7 @@ impl design::outcome::Fault for RunFault {
             Self::DiskConflict => crate::sentence!(
                 "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe until you choose. Saving has stopped."
             ),
-            Self::Error(words) | Self::Carry(words) => words.clone(),
+            Self::Error(words) | Self::Carry(words) | Self::Total(words) => words.clone(),
             Self::UndoUnread => crate::sentence!(
                 "Splat could not read this run’s saved Undo steps, so Undo starts again from here. No turn, HP or condition was lost."
             ),
@@ -7010,34 +7014,26 @@ fn close_saved_words(sync: bool) -> String {
     .to_owned()
 }
 
-/// The tie button's words, `Move <arrival> before <name>`, when they fit `width`. FA6: the
-/// button sits under the message that names its arrival whole, and it only ever moves that
-/// arrival, so when the whole words do not fit, an arrival named by its first member,
-/// `Shrine Reserve (Goblin Warrior 3)`, gives up the parenthesis, never just the member's name:
-/// `Move Shrine Reserve before Brannoch Vale`. A bare `(… 3)` tells the DM nothing. Hover and
-/// the accessible name keep the whole words. None when no form fits.
-fn move_words(
-    ui: &egui::Ui,
-    arrival: &str,
-    before: &str,
-    font: &egui::FontId,
-    width: f32,
-) -> Option<String> {
-    let full = format!("Move {arrival} before {before}");
-    if design::number_width(ui, &full, font) <= width {
-        return Some(full);
-    }
+/// The tie choice's words, `Move <arrival> before <name>`. FA6: the choice sits under the
+/// message that names its arrival whole, and it only ever moves that arrival, so when the whole
+/// words do not fit, an arrival named by its first member, `Shrine Reserve (Goblin Warrior 3)`,
+/// gives up the parenthesis, never just the member's name: `Move Shrine Reserve before Brannoch
+/// Vale`, then the two names' last words in turn (`shortened_names`). A bare `(… 3)` tells the
+/// DM nothing. The typed choice shows the first form that fits (`ChoiceWords::or_shorter`);
+/// hover and the accessible name keep the whole words.
+fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
+    let whole = crate::choice!("Move {} before {}", arrival, before);
     let group = arrival
         .strip_suffix(')')
         .and_then(|rest| rest.rsplit_once(" ("))
         .map_or(arrival, |(group, _)| group);
     if group == arrival {
-        return None;
+        return whole;
     }
-    shortened_names(group, before).find_map(|(group, before)| {
-        let short = format!("Move {group} before {before}");
-        (design::number_width(ui, &short, font) <= width).then_some(short)
-    })
+    whole.or_shorter(
+        shortened_names(group, before)
+            .map(|(group, before)| crate::choice!("Move {} before {}", group, before)),
+    )
 }
 
 /// Two names with their last words given up in turn, the other name's last: each pair from
@@ -10618,14 +10614,22 @@ mod tests {
                 run.group_totals.insert(group.id, "2-5".into());
             }
             run.groups = Some(Arc::new(groups));
-            let focus = egui::Id::new(("arrival_footer", run.id)).with("focus");
+            let local = egui::Id::new(("arrival_footer", run.id));
+            // Migration-32 L2c: the typed footer's id is scoped to the pane's parent `Ui`
+            // (`Footer::rescope`), here the panel's.
+            let parent = std::rc::Rc::new(std::cell::Cell::new(egui::Id::NULL));
+            let seen = parent.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(440.0, 640.0))
                 .build(move |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| run.groups_tab(ui));
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        seen.set(ui.id());
+                        run.groups_tab(ui)
+                    });
                 });
             design::theme::install(&harness.ctx);
             harness.run_steps(3);
+            let focus = parent.get().with(local).with("focus");
             (harness, focus)
         };
         const LAST: &str = "Group 10: Enter a whole number, or clear the field to roll.";
@@ -10953,6 +10957,97 @@ mod tests {
         run.borrow_mut().undo();
         harness.run_steps(2);
         assert_eq!(shown(&harness), both, "m-r0-R35-undo");
+        // Migration-32 L2c: the footer is typed. A tied arrival's result is the newest step's
+        // kept result with its Move choice (its Undo is the header's). An unchanged frame does
+        // no footer work; Move acts by the result's ticket; a press kept from before a newer
+        // step does nothing, because that step ended the result.
+        {
+            let mut run = run.borrow_mut();
+            for (index, total) in [20, 15, 10].into_iter().enumerate() {
+                run.apply(Command::Initiative(index, Some(total))).unwrap();
+            }
+            run.apply(Command::Begin).unwrap();
+            run.apply(Command::AddGroup(
+                super::super::tests::guard_group("Tied", 2),
+                Some(15),
+            ))
+            .unwrap();
+        }
+        harness.run_steps(3);
+        let move_label = |harness: &egui_kittest::Harness<'_>| {
+            use egui_kittest::kittest::NodeT;
+            harness
+                .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                    node.label()
+                        .is_some_and(|label| label.starts_with("Move Tied before "))
+                }))
+                .find_map(|node| node.accesskit_node().label())
+        };
+        let label = move_label(&harness).expect("the tie's Move choice is in the footer");
+        let quiet = design::outcome::footer_work();
+        harness.run_steps(4);
+        let after = design::outcome::footer_work();
+        assert!(
+            after.compared > quiet.compared,
+            "the frames drew the footer"
+        );
+        assert_eq!(
+            (
+                after.plans - quiet.plans,
+                after.sorted - quiet.sorted,
+                after.named - quiet.named,
+                after.undo_fits - quiet.undo_fits,
+                after.laid - quiet.laid,
+            ),
+            (0, 0, 0, 0, 0),
+            "an unchanged frame of the Arrivals footer"
+        );
+        // A: the tie's result (its press kept); B: an unrelated newer step (Next). The kept
+        // press does nothing while B stands; Undo of B brings A's result back, and Move acts.
+        let ticket = run
+            .borrow()
+            .newest_step_result()
+            .map(|shown| shown.ticket_for_caller_test())
+            .expect("the tie is the newest step's result");
+        run.borrow_mut().apply(Command::Next).unwrap();
+        harness.run_steps(2);
+        assert!(
+            move_label(&harness).is_none(),
+            "a newer step ends the tie's result"
+        );
+        let order = run.borrow().state.order.clone();
+        run.borrow_mut().arrival_press(design::outcome::Press {
+            id: ArrivalPress::Move(3, 1),
+            ticket: Some(ticket),
+        });
+        assert_eq!(
+            run.borrow().state.order,
+            order,
+            "the tie's kept press does nothing while a newer step stands"
+        );
+        run.borrow_mut().undo();
+        harness.run_steps(3);
+        assert_eq!(
+            move_label(&harness).as_deref(),
+            Some(label.as_str()),
+            "Undo of B: A's result is back"
+        );
+        harness.get_by_label(&label).click();
+        harness.run_steps(2);
+        assert!(
+            run.borrow()
+                .state
+                .log
+                .last()
+                .is_some_and(|line| line.starts_with("Tied moved before ")),
+            "Move acts: {:?}",
+            run.borrow().state.log.last()
+        );
+        assert_ne!(
+            run.borrow().state.order,
+            order,
+            "the move changed the order"
+        );
     }
 
     #[test]
@@ -12478,33 +12573,34 @@ mod tests {
                 // Room for all of it: nothing changes.
                 let wide = design::number_width(ui, &full, &font);
                 assert_eq!(words(&full, wide), full);
-                // iter-26-R FA6: the tie button, under the message that names its arrival
+                // iter-26-R FA6: the tie choice, under the message that names its arrival
                 // whole, gives up the whole parenthesis, never only the member's name: a bare
-                // `(… 3)` tells the DM nothing. One pixel short of each form gives the next.
+                // `(… 3)` tells the DM nothing. One pixel short of each form gives the next
+                // (migration-32 L2c: the typed choice's forms, `ChoiceWords::or_shorter`).
                 let arrival = "Shrine Reserve (Goblin Warrior 3)";
                 let whole = "Move Shrine Reserve (Goblin Warrior 3) before Brannoch Vale";
                 let short = "Move Shrine Reserve before Brannoch Vale";
-                let at = |width: f32| move_words(ui, arrival, "Brannoch Vale", &font, width);
+                let shown_in = |choice: design::outcome::ChoiceWords, width: f32| {
+                    choice.shown_where(|words| design::number_width(ui, words, &font) <= width)
+                };
+                let at = |width: f32| shown_in(move_choice(arrival, "Brannoch Vale"), width);
                 let whole_width = design::number_width(ui, whole, &font);
                 let short_width = design::number_width(ui, short, &font);
-                assert_eq!(at(whole_width).as_deref(), Some(whole));
-                assert_eq!(at(whole_width - 1.0).as_deref(), Some(short));
+                assert_eq!(at(whole_width), whole);
+                assert_eq!(at(whole_width - 1.0), short);
                 // Narrower, the group's last word goes, then the other name's.
                 let shorter = "Move Shrine… before Brannoch Vale";
-                assert_eq!(at(short_width - 1.0).as_deref(), Some(shorter));
+                assert_eq!(at(short_width - 1.0), shorter);
                 let shortest = "Move Shrine… before Brannoch…";
                 let shortest_width = design::number_width(ui, shortest, &font);
-                assert_eq!(at(shortest_width).as_deref(), Some(shortest));
-                assert_eq!(
-                    at(shortest_width - 1.0),
-                    None,
-                    "then the caller cuts the target"
+                assert_eq!(at(shortest_width), shortest);
+                let cut = at(shortest_width - 1.0);
+                assert!(
+                    cut != shortest && cut.starts_with("Move Shr") && !cut.contains('('),
+                    "then the shortest form's names are cut: {cut}"
                 );
                 for width in [whole_width - 1.0, short_width - 1.0, shortest_width] {
-                    assert!(
-                        !at(width).unwrap().contains("(…"),
-                        "iter-26-R-FA6 at {width}"
-                    );
+                    assert!(!at(width).contains("(…"), "iter-26-R-FA6 at {width}");
                 }
                 // iter-26-R SJ1, iter-27-R FI8: Undo is not under that message, so it keeps the
                 // copy number that tells two same-name groups apart. The moved arrival is what
@@ -12557,9 +12653,13 @@ mod tests {
                 let plain = "Move Shrine Reserve before Brannoch Vale";
                 let plain_width = design::number_width(ui, plain, &font);
                 let alone =
-                    |width: f32| move_words(ui, "Shrine Reserve", "Brannoch Vale", &font, width);
-                assert_eq!(alone(plain_width).as_deref(), Some(plain));
-                assert_eq!(alone(plain_width - 1.0), None);
+                    |width: f32| shown_in(move_choice("Shrine Reserve", "Brannoch Vale"), width);
+                assert_eq!(alone(plain_width), plain);
+                let cut = alone(plain_width - 1.0);
+                assert!(
+                    cut.starts_with("Move Shr") && cut.contains("… before "),
+                    "no shorter form: its names are cut: {cut}"
+                );
                 // SP3 (iter-29 G177, `docs/design-system.md:1538`): the source goes first, and
                 // the name stays whole; only then does the name shorten. Never `D&D Beyond HP
                 // for Brannoch…`.

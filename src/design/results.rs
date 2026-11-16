@@ -1067,11 +1067,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
         ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         (
-            "src/encounter_run/view.rs",
-            "groups_tab",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
-        ),
-        (
             "src/encounters/groups.rs",
             "discard_group_draft",
             &[Ban::Results],
@@ -1715,7 +1710,6 @@ pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, u
 pub(crate) const LEGACY_FOOTER_LINES: &[(&str, usize)] = &[
     ("src/design/components.rs", 11),
     ("src/design/results.rs", 1),
-    ("src/encounter_run/view.rs", 2),
     ("src/library.rs", 12),
 ];
 
