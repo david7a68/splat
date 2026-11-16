@@ -5013,16 +5013,17 @@ impl Encounters {
     /// after the fields it writes have taken this frame's input (`save_key`): the creature's
     /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
     /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
-    /// `ui` is the page's: while a modal (the close confirmation, the copy dialog) disables the
-    /// page, the key is left alone, so nothing saves under it (review of PR 499).
-    pub fn save_shortcut(&mut self, ui: &egui::Ui, campaigns: &Campaigns) {
+    /// `modal`: the app's one test (`crate::modal_open`: its dialogs, the full-window image, any
+    /// egui modal). While a modal is open the key is left alone, so nothing saves beneath it
+    /// (reviews of PR 499 and PR 525).
+    pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool, campaigns: &Campaigns) {
         // Taken for the open editor whether or not it has changes yet: the first edit can come
         // in the same frame. Its owner saves only if it has changes after its fields ran.
-        if ui.is_enabled()
+        if !modal
             && (self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some())
             && campaigns.active_campaign().is_some()
         {
-            self.save_key |= take_save_key(ui.ctx());
+            self.save_key |= take_save_key(ctx);
         }
     }
     /// The page's Ctrl+S that no pane took after its fields (the creature's pane was not drawn
@@ -8590,7 +8591,8 @@ impl Encounters {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
-    pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
+    /// `modal`: the app's one test of an open modal (`crate::modal_open`); Ctrl+S waits for it.
+    pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, modal: bool) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
             return;
@@ -8762,8 +8764,9 @@ impl Encounters {
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
                 // other change too.
-                // Not under a modal or a lock, which disable the form (review of PR 499).
+                // Not under a modal (the app's one test) nor the form's lock (review of PR 525).
                 let save_key = blocked.is_none()
+                    && !modal
                     && ui.is_enabled()
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
                 // AF1: the state starts the row and Save ends it, as on every save row; without
