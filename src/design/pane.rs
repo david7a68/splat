@@ -124,7 +124,11 @@ use super::{layout::ScrollColumn, tokens::S};
 
 /// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
 mod plan;
+/// The scroll region of an owned list body over its plan (layout step 3b).
+mod region;
 use eframe::egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
+pub use plan::{Block, ENTRY_ROW_HEIGHT, Row};
+pub use region::{BlockRegion, Navigation, RegionState};
 
 /// What a pane's body is, for the footer's place.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1472,7 +1476,11 @@ struct Stop {
 /// last rect, so its press area ends there, and its focus order, accessible node and id stay), and one wholly below it is hidden from a
 /// screen reader. The focused control keeps both: the next pass, in the new room, brings it whole
 /// into view (`reveal_focus`: the room changed under it). Returns whether content goes on below
-/// the body's room.
+/// the body's room. The tooltip of a control it hides goes in that pass too (PR 456's P3).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
     use egui::layers::ShapeIdx;
     let Stop {
@@ -1518,6 +1526,21 @@ fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
             if widget.rect.top() >= limit {
                 ui.ctx()
                     .accesskit_node_builder(widget.id, |node| node.set_hidden());
+                // Its tooltip, drawn in this pass from the last pass's hover, goes too.
+                ui.ctx().graphics_mut(|graphics| {
+                    for count in 0..2 {
+                        let tip = LayerId::new(
+                            egui::Order::Tooltip,
+                            egui::Tooltip::tooltip_id(widget.id, count),
+                        );
+                        if graphics.get(tip).is_some() {
+                            let list = graphics.entry(tip);
+                            for at in 0..list.next_idx().0 {
+                                list.reset_shape(egui::layers::ShapeIdx(at));
+                            }
+                        }
+                    }
+                });
             }
         }
     }
@@ -2896,6 +2919,223 @@ mod row_cut_tests {
             state.work().builds,
             3,
             "plan-m6: a new content revision measures again"
+        );
+
+        // Layout step 3b: the region of an owned list draws only whole blocks, keeps the plan's
+        // whole extent as its native range, is its offset's one writer (its requests in their
+        // order) and owns Tab at its edges. Every frame is drawn in one pass (reruns denied).
+        use super::region::{BlockRegion, Navigation, RegionState};
+        struct List {
+            state: RegionState,
+            rows: crate::design::memo::Revised<Vec<Block>>,
+            room: f32,
+        }
+        let mut list = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(400.0, 420.0))
+            .build_ui_state(
+                |ui, list: &mut List| {
+                    let room = list.room;
+                    let List { state, rows, .. } = list;
+                    ui.allocate_ui(egui::vec2(ui.available_width(), room), |ui| {
+                        ui.set_max_height(room);
+                        BlockRegion::new("region_test", state, rows).show(ui, |ui, at| {
+                            let _ = ui.add_sized(
+                                ui.available_size(),
+                                egui::Button::new(format!("Row {at}")),
+                            );
+                        });
+                    });
+                },
+                List {
+                    state: RegionState::new("region_test"),
+                    rows: crate::design::memo::Revised::new(vec![Block::Row(Row::Entry); 60]),
+                    room: 300.0,
+                },
+            );
+        crate::design::theme::install(&list.ctx);
+        list.ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        list.run_steps(3);
+        // The rows with an accessible node, and each one's rect; and the rows painted.
+        let shown = |h: &egui_kittest::Harness<'_, List>| -> Vec<(usize, Rect)> {
+            use egui_kittest::kittest::Queryable;
+            (0..60)
+                .filter_map(|at| {
+                    h.query_by_label(&format!("Row {at}"))
+                        .map(|node| (at, node.rect()))
+                })
+                .collect()
+        };
+        let painted = |h: &egui_kittest::Harness<'_, List>| -> Vec<String> {
+            fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+                match shape {
+                    egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+                    egui::Shape::Text(text) => out.push(text.galley.text().to_owned()),
+                    _ => {}
+                }
+            }
+            let mut out = Vec::new();
+            for shape in &h.output().shapes {
+                walk(&shape.shape, &mut out);
+            }
+            out
+        };
+        // I1: each row drawn lies whole in the room; a row the room's edge cuts has no node and no
+        // paint.
+        let whole = |h: &egui_kittest::Harness<'_, List>, case: &str| -> Vec<usize> {
+            let rows = shown(h);
+            let top = rows
+                .iter()
+                .map(|(_, rect)| rect.top())
+                .fold(f32::MAX, f32::min);
+            let room = h.state().room.max(ENTRY_ROW_HEIGHT);
+            assert!(
+                !rows.is_empty()
+                    && rows
+                        .iter()
+                        .all(|(_, rect)| rect.bottom() <= top + room + 0.5)
+                    && rows.windows(2).all(|pair| pair[1].0 == pair[0].0 + 1),
+                "region {case}: the rows drawn are whole and in order: {rows:?}"
+            );
+            let first = rows[0].0;
+            let last = rows[rows.len() - 1].0;
+            let texts = painted(h);
+            for cut in [first.wrapping_sub(1), last + 1] {
+                assert!(
+                    !texts.contains(&format!("Row {cut}")),
+                    "region {case}: the cut row {cut} is not painted"
+                );
+            }
+            rows.iter().map(|(at, _)| *at).collect()
+        };
+        assert_eq!(whole(&list, "first frame"), (0..6).collect::<Vec<_>>());
+        // A jump shows its row whole, in the frame that asks (M18).
+        list.state_mut()
+            .state
+            .navigate(Navigation::Jump { block: 40 });
+        list.step();
+        assert!(
+            whole(&list, "jump").contains(&40),
+            "region: the jump shows row 40"
+        );
+        // I2: the native range is the whole extent: at the largest offset the last row is whole.
+        list.state_mut()
+            .state
+            .navigate(Navigation::Restore(f32::MAX));
+        list.step();
+        assert!(
+            whole(&list, "restore").contains(&59),
+            "region: the last row is reached"
+        );
+        // A new revision of the rows plans again.
+        let builds = list.state().state.work().builds;
+        list.state_mut().rows.revise(|rows| {
+            rows.truncate(10);
+            crate::design::memo::Changed::Yes
+        });
+        list.step();
+        list.step();
+        assert!(
+            list.state().state.work().builds > builds && whole(&list, "shrunk").ends_with(&[9]),
+            "region: ten rows, planned again, the last one whole"
+        );
+        list.state_mut().rows.revise(|rows| {
+            *rows = vec![Block::Row(Row::Entry); 60];
+            crate::design::memo::Changed::Yes
+        });
+        list.state_mut().state.navigate(Navigation::Reset);
+        list.run_steps(2);
+        assert_eq!(whole(&list, "reset").first(), Some(&0));
+        // L10: a user scroll over the region cancels a jump asked in the same frame.
+        let centre = shown(&list)[2].1.center();
+        list.state_mut()
+            .state
+            .navigate(Navigation::Jump { block: 50 });
+        list.input_mut()
+            .events
+            .push(egui::Event::PointerMoved(centre));
+        list.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        list.step();
+        list.step();
+        assert!(
+            !whole(&list, "wheel").contains(&50),
+            "region: the wheel cancels the jump"
+        );
+        list.state_mut().state.navigate(Navigation::Reset);
+        list.run_steps(2);
+        // A press held in the region makes a jump wait; it lands after the release.
+        let centre = shown(&list)[1].1.center();
+        list.input_mut()
+            .events
+            .push(egui::Event::PointerMoved(centre));
+        list.input_mut().events.push(egui::Event::PointerButton {
+            pos: centre,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        list.step();
+        list.state_mut()
+            .state
+            .navigate(Navigation::Jump { block: 30 });
+        list.step();
+        assert!(
+            !whole(&list, "held").contains(&30),
+            "region: the jump waits while the press is held"
+        );
+        list.input_mut().events.push(egui::Event::PointerButton {
+            pos: centre,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        list.step();
+        list.step();
+        assert!(
+            whole(&list, "released").contains(&30),
+            "region: the jump lands after the release"
+        );
+        // L10: Tab from the last whole row reaches the next row, which comes whole into view.
+        list.state_mut().state.navigate(Navigation::Reset);
+        list.run_steps(2);
+        let last = *whole(&list, "tab").last().expect("rows");
+        {
+            use egui_kittest::kittest::Queryable;
+            list.get_by_label(&format!("Row {last}")).focus();
+        }
+        list.run_steps(2);
+        list.input_mut().events.push(egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        list.run_steps(3);
+        let focused = list.ctx.memory(|memory| memory.focused());
+        let next = {
+            use egui_kittest::kittest::{NodeT, Queryable};
+            list.query_by_label(&format!("Row {}", last + 1))
+                .map(|node| node.accesskit_node().id())
+        };
+        assert!(
+            whole(&list, "tabbed").contains(&(last + 1))
+                && next.is_some()
+                && focused.map(|id| egui::accesskit::NodeId(id.value())) == next,
+            "region: Tab from row {last} focuses row {} whole: {focused:?}",
+            last + 1
+        );
+        // L3: below the tallest row, the list is laid out at that height in an outer scroll,
+        // counted.
+        list.state_mut().room = 30.0;
+        list.run_steps(2);
+        assert!(
+            list.state().state.small_rooms() == 1 && !shown(&list).is_empty(),
+            "region: the small room is counted and the rows still draw"
         );
     }
 
