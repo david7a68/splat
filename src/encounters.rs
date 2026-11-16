@@ -3366,8 +3366,6 @@ enum EncounterFault {
     /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
-    /// The Encounters page waits for the previous campaign's open encounter.
-    PreviousCampaignDraft,
 }
 
 impl EncounterFault {
@@ -3391,8 +3389,7 @@ impl design::outcome::Fault for EncounterFault {
             | Self::SeparationFailed(_)
             | Self::FileWarning(_)
             | Self::FileFlag(..)
-            | Self::Invalid(_)
-            | Self::PreviousCampaignDraft => design::outcome::Severity::NeedsFixing,
+            | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
         }
     }
     #[allow(
@@ -3415,9 +3412,6 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The encounter’s file has a problem.")),
             Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("Save cannot write this draft yet.")),
-            Self::PreviousCampaignDraft => {
-                crate::sentence!("Save or discard the previous campaign’s encounter first.")
-            }
         }
     }
 }
@@ -5539,11 +5533,11 @@ impl Encounters {
             .as_ref()
             .is_none_or(|c| c.id != active.id || c.path != active.path)
         {
-            // The page cannot show while another campaign's encounter is open: a placeholder in
-            // place of its body, in the warning tone of its fault.
-            let _: Option<FooterPress> =
-                design::outcome::PagePlaceholder::new(&EncounterFault::PreviousCampaignDraft)
-                    .show(ui);
+            design::message(
+                ui,
+                Tone::Warning,
+                "Save or discard the previous campaign’s encounter first.",
+            );
             return;
         }
         if self.draft_dirty() {
