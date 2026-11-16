@@ -11356,6 +11356,40 @@ mod tests {
         for (reference, index) in references.iter().zip(1..8) {
             assert_eq!(loaded.resolve_spell(reference), Some(index));
         }
+        // The Druid keeps its list under `options`, not `spells`.
+        let path = "definitions/creatures/druid.md";
+        let druid = Entry::parse(path, content::definitions::source_file(path).unwrap()).unwrap();
+        let keys: Vec<_> = creature::spell_references(&druid)
+            .into_iter()
+            .map(|reference| match reference {
+                content::Reference::Key(key) => key,
+                content::Reference::Id(id) => id.to_string(),
+            })
+            .collect();
+        assert_eq!(
+            keys.first().map(String::as_str),
+            Some("dnd2024:spells/druidcraft")
+        );
+        assert_eq!(
+            keys.last().map(String::as_str),
+            Some("dnd2024:spells/moonbeam")
+        );
+        assert_eq!(keys.len(), 7);
+        // A list links each spell's name only; a comma in its brackets does not split it.
+        let (markdown, linked) = creature::linked_list(
+            "At Will: Guiding Bolt (level 2 version), Shapechange (Beast form only, no HP), Light\\",
+            |name| {
+                ["Guiding Bolt", "Shapechange"]
+                    .iter()
+                    .position(|n| *n == name)
+            },
+        );
+        assert_eq!(
+            markdown,
+            "At Will: [Guiding Bolt](splat-entry:0) (level 2 version), \
+             [Shapechange](splat-entry:1) (Beast form only, no HP), Light\\"
+        );
+        assert_eq!(linked, vec![0, 1]);
         let by_id = content::Reference::Id(loaded.notes[2].entry.as_ref().unwrap().id);
         assert_eq!(loaded.resolve_spell(&by_id), Some(2));
         assert_eq!(
@@ -11407,10 +11441,21 @@ mod tests {
                         _ => None,
                     })
                     .collect();
+                // The list names its spells in place, each a link; no line repeats them.
                 let link = texts
                     .iter()
-                    .find(|t| t.galley.job.text == "Guiding Bolt")
+                    .find(|t| {
+                        t.galley
+                            .job
+                            .text
+                            .starts_with("At Will: Detect Magic, Guiding Bolt")
+                    })
                     .unwrap();
+                assert!(
+                    !texts
+                        .iter()
+                        .any(|t| t.galley.job.text.contains("Spell descriptions"))
+                );
                 let spellcasting = texts
                     .iter()
                     .find(|t| t.galley.job.text.starts_with("Spellcasting."))
@@ -11421,11 +11466,14 @@ mod tests {
                     .unwrap();
                 assert!(link.pos.y > spellcasting.pos.y && link.pos.y < legendary.pos.y);
                 assert!(!texts.iter().any(|t| t.galley.job.text.contains("^splat-")));
-                let position = link.pos
-                    + link.galley.rows[0]
-                        .rect_without_leading_space()
+                let words = &link.galley.job.text;
+                let start = words[..words.find("Guiding Bolt").unwrap()].chars().count();
+                let at = |chars| {
+                    link.galley
+                        .pos_from_cursor(egui::text::CCursor::new(start + chars))
                         .center()
-                        .to_vec2();
+                };
+                let position = link.pos + ((at(0).to_vec2() + at(12).to_vec2()) / 2.0);
                 frame(vec![egui::Event::PointerMoved(position)]);
                 for pressed in [true, false] {
                     frame(vec![egui::Event::PointerButton {

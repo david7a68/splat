@@ -1823,7 +1823,10 @@ keeps them), then its numbers in muted Small, then, when the text says, where it
 (`Reach 5 ft`, `Range 80/320 ft`, `10-ft emanation · half on a success`). Numbers and that line wrap; they are never
 cut. The rules paragraph shows on hover and on keyboard focus, and it is the tile's accessible description. Hover
 draws the frame in the focus colour. In a run a tile shows the numbers Splat rolls, with the run's attack and damage
-changes in them; its hover adds the printed numbers. Spellcasting stays prose. A character's Actions page shows its
+changes in them; its hover adds the printed numbers. Spellcasting stays prose, and each spell its lists name
+(`At Will: Druidcraft, Light`) is a link in place that opens the spell; words in brackets after a name
+(`(level 2 version)`) stay outside the link. A spell that the entry gives or its words name, but that no list links,
+goes on a muted `Spell descriptions:` line after the lists. A character's Actions page shows its
 attacks as tiles, with the reach or range its sheet gives (`Reach 5 ft`, `Range 120 ft`).
 
 In a run a tile arms its action: its frame turns accent on the selected fill and its icon becomes a crosshair, and
