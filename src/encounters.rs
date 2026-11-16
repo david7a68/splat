@@ -11737,7 +11737,7 @@ mod tests {
         design::theme::install(&harness.ctx);
         harness.run_steps(3);
         {
-            use egui_kittest::kittest::{NodeT, Queryable};
+            use egui_kittest::kittest::Queryable;
             harness
                 .query_all(egui_kittest::kittest::By::new().predicate(|node| {
                     node.role() == egui::accesskit::Role::TextInput
