@@ -7935,10 +7935,6 @@ impl Encounters {
 
     /// What the party finds when this fight is over, one line each. The note keeps it as its
     /// `## Loot` list, which Obsidian shows too.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn loot_field(ui: &mut egui::Ui, draft: &mut Draft) {
         // The heading keeps its own space above (`Heading::above`).
         design::heading(
