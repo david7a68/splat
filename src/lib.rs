@@ -28,6 +28,9 @@ mod design;
 pub use design::extras;
 pub use design::layout;
 // The pane is public only so that its `compile_fail` doc tests can name it.
+/// The shared fact part (ruling M5), public only so that its doc tests can name it.
+#[doc(hidden)]
+pub use design::fact;
 #[doc(hidden)]
 pub use design::pane;
 pub use design::value_block;

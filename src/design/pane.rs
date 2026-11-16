@@ -720,12 +720,13 @@ fn widget_count(ui: &Ui) -> usize {
         .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
 }
 
-/// A body control that gained keyboard focus in this pass comes whole into the pane's view,
-/// above the footer: Tab never reaches a control hidden under it. So does the focused control
-/// when the visible room changes under it (the footer came or grew, the session banner came, the
-/// whole-row cut came with it; review of PR 306): a key press then never reaches a hidden control. Only
-/// a control that the body added (`widgets`, on the pane's layer) is scrolled to; a change of
-/// focus with a pointer press, hold or release is not, as `scroll_part` does for the footer.
+/// A body control that gained keyboard focus in this pass comes whole into the pane's view, with
+/// the words that belong to it (`components::reveal_with`), above the footer: Tab never reaches
+/// a control hidden under it. So does the focused control when the visible room changes under it
+/// (the footer came or grew, the session banner came, the whole-row cut came with it; review of
+/// PR 306): a key press then never reaches a hidden control. Only a control that the body added
+/// (`widgets`, on the pane's layer) is scrolled to; a change of focus with a pointer press, hold
+/// or release is not, as `scroll_part` does for the footer.
 fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
     let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
@@ -747,13 +748,16 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     });
     let layer = ui.layer_id();
     let rect = focused.filter(|_| !pointer).and_then(|focused| {
-        ui.ctx().viewport(|viewport| {
-            let widgets_now = &viewport.this_pass.widgets;
-            let (at_layer, at) = widgets_now.order(focused)?;
-            (at_layer == layer && widgets.contains(&at))
-                .then(|| widgets_now.get(focused).map(|widget| widget.rect))
-                .flatten()
-        })
+        ui.ctx()
+            .viewport(|viewport| {
+                let widgets_now = &viewport.this_pass.widgets;
+                let (at_layer, at) = widgets_now.order(focused)?;
+                (at_layer == layer && widgets.contains(&at))
+                    .then(|| widgets_now.get(focused).map(|widget| widget.rect))
+                    .flatten()
+            })
+            // With the words that belong to it (a repair's help line), as `scroll_part` does.
+            .map(|rect| super::components::reveal_rect(ui.ctx(), focused, rect))
     });
     // A reveal that runs in this column owns its scroll (`design::reveal`).
     if let Some(rect) = rect

@@ -8283,13 +8283,11 @@ pub mod prep_to_table {
                 format!("At {size:?}: CORRECT HP {hp:?}, CORRECT INITIATIVE {heading:?}, bonus {bonus:?}"),
             );
         }
-        // Labels share one column: each value, and its Mark unknown, starts at one x.
+        // Labels share one column: each value, and its Clear, starts at one x.
         for size in [SMALL, DEFAULT, LARGE] {
             let lefts = d.at_size(size, |d| {
-                ["Current HP", "Maximum HP", "Initiative bonus"].map(|label| {
-                    d.place_of(&format!("Mark {label} unknown"))
-                        .map(|r| r.left())
-                })
+                ["Current HP", "Maximum HP", "Initiative bonus"]
+                    .map(|label| d.place_of(&format!("Clear {label}")).map(|r| r.left()))
             });
             d.observe(
                 "iter-23-R-FI5",

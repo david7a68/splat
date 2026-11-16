@@ -35,6 +35,8 @@ egui_extras = { version = "0.33", default-features = false, features = ["file", 
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 # `file:` URLs by the platform's rules (`design::outcome::file_url`).
 url = "2.5"
+# Graphemes: a fact line breaks a long word only between whole characters (design::fact).
+unicode-segmentation = "1.13"
 
 [dev-dependencies]
 rayon = "1.11"
