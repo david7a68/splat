@@ -10687,15 +10687,18 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             else {
                 return false;
             };
-            // Neighbour: each consequence stays close below its own action.
+            // Neighbour: each consequence stays close below its own action. M0178: the repairs
+            // are the shared typed form (`BodyFault`, M8's help line under each repair, as Library
+            // shows them), which owns the space between them; the second starts below the first
+            // one's help. An `M` gap still ends them.
             first.top() - action.bottom() < design::S
-                && second_action.top() - first.bottom() >= design::L - 0.5
+                && second_action.top() >= first.bottom()
                 && field.top() - second.bottom() >= design::M - 0.5
         });
         d.observe(
             "iter-10-D-FD5",
             gaps,
-            format!("An L gap separates the two choices and an M gap ends them at {size:?}"),
+            format!("Each repair's help is under it, the second repair below the first one's help, and an M gap ends them at {size:?}"),
         );
     }
     for size in [SMALL, DEFAULT, LARGE] {
