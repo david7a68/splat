@@ -14253,7 +14253,6 @@ mod tests {
         // M-L0.4b: the notice stands through the list's next frames, where the footer draws it
         // (main's list ended it in the first frame, as the scope it had listed was not the
         // notice's: no footer ever drew it). The DM's own search, or scope, ends it.
-        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let painted = |library: &mut Library, campaigns: &mut Campaigns| {
@@ -14358,35 +14357,6 @@ mod tests {
             // The draft it let go is a discard too: both, Remove's the newest.
             assert!(library.kept.discarded().is_some() && library.kept.removed().is_some());
         }
-        // M-L0.4b: a press acts by its line's ticket. Unregister twice (the newer result
-        // replaces the first): the first line's ticket reaches nothing, and the newer one's Undo
-        // works.
-        let other = create_module(&temp.path().join("other"), "Other", "other").unwrap();
-        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
-        library.kept.set_unregistered(m.clone());
-        let stale = library.kept.ticket_of(KeptKind::Unregistered).unwrap();
-        library.kept.set_unregistered(other.clone());
-        let undo = |ticket| Press {
-            id: LibraryPress::Undo,
-            ticket: Some(ticket),
-        };
-        library.apply_footer_press(undo(stale), &mut campaigns);
-        assert!(
-            library.kept.unregistered() == Some(&other) && campaigns.modules().is_empty(),
-            "a replaced result's ticket reaches nothing"
-        );
-        let newer = library.kept.ticket_of(KeptKind::Unregistered).unwrap();
-        library.apply_footer_press(undo(newer), &mut campaigns);
-        assert!(
-            library.kept.unregistered().is_none()
-                && campaigns
-                    .modules()
-                    .iter()
-                    .map(|module| module.id)
-                    .eq([other.id]),
-            "the newer line's Undo registers Other again: {:?}",
-            library.error
-        );
         // Heading and Vital, by their real fixes.
         let text = format!(
             "{}\n**Hit Points** 45\n",
@@ -14425,11 +14395,40 @@ mod tests {
             replaced(&library, KeptKind::Vital, before);
         }
         // Unregistered, by `unregister` (from its dialog).
+        let mut tickets = Vec::new();
         for module in &unregistered {
             let before = library.kept.order_of(KeptKind::Unregistered);
             library.unregister(module.clone(), &mut campaigns);
             replaced(&library, KeptKind::Unregistered, before);
+            tickets.push(library.kept.ticket_of(KeptKind::Unregistered).unwrap());
         }
+        // M-L0.4b: a press acts by its line's ticket. The second unregister replaced the first:
+        // the first line's ticket reaches nothing, and the newer one's Undo works.
+        let registered = |campaigns: &Campaigns, module: &Module| {
+            campaigns
+                .modules()
+                .iter()
+                .any(|known| known.id == module.id)
+        };
+        let undo = |ticket| Press {
+            id: LibraryPress::Undo,
+            ticket: Some(ticket),
+        };
+        let mut tickets = tickets.into_iter();
+        let (stale, newer) = (tickets.next().unwrap(), tickets.next().unwrap());
+        library.apply_footer_press(undo(stale), &mut campaigns);
+        assert!(
+            library.kept.unregistered() == Some(&unregistered[1])
+                && !registered(&campaigns, &unregistered[0])
+                && !registered(&campaigns, &unregistered[1]),
+            "a replaced result's ticket reaches nothing"
+        );
+        library.apply_footer_press(undo(newer), &mut campaigns);
+        assert!(
+            library.kept.unregistered().is_none() && registered(&campaigns, &unregistered[1]),
+            "the newer line's Undo registers U2 again: {:?}",
+            library.error
+        );
         // Manifest, by the repair's `write_manifest` of a deleted manifest (twice).
         for _ in 0..2 {
             let before = library.kept.order_of(KeptKind::Manifest);
