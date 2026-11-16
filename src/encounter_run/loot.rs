@@ -508,10 +508,6 @@ impl Run {
 
     /// The ended view's loot: the encounter's and each downed creature's, with what is left to
     /// roll, Roll all and Copy loot. Loot on creatures still standing waits behind one line.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn loot_section(&mut self, ui: &mut egui::Ui) {
         let holders = self.holders();
         if holders.is_empty() {
@@ -525,7 +521,7 @@ impl Run {
         // The copy owns its result: Undo and any new step end it, whatever the Log's length.
         let copied = self.loot_copied == Some(self.revision);
         ui.horizontal(|ui| {
-            design::group_label(ui, "Loot");
+            design::heading(ui, design::Heading::Label("Loot"));
             if left > 0 {
                 ui.label(
                     Type::Small
