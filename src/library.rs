@@ -702,13 +702,9 @@ enum LibraryFault<'a> {
     Repair(&'a str, Tone),
     /// The disk's failure of the last Save of this draft (the system's words).
     NotSaved(&'a str),
-    /// The link Campaign sent the DM here to fix: the entry, the line and the content layer's
-    /// words for it.
-    Link {
-        name: &'a str,
-        line: usize,
-        words: &'a str,
-    },
+    /// The link Campaign sent the DM here to fix: its line and the content layer's words for it,
+    /// in the form of the broken-link lines beside it (`Line 21: …`).
+    Link { line: usize, words: &'a str },
 }
 
 impl<'a> From<&'a PageError> for LibraryFault<'a> {
@@ -734,16 +730,6 @@ impl design::outcome::Fault for LibraryFault<'_> {
         }
     }
 
-    fn place(&self) -> Option<design::outcome::FaultPlace<'_>> {
-        match self {
-            Self::Link { name, line, .. } => Some(design::outcome::FaultPlace {
-                name: (*name).into(),
-                line: u32::try_from(*line).ok(),
-            }),
-            _ => None,
-        }
-    }
-
     #[allow(
         clippy::disallowed_methods,
         reason = "the page’s error carries the system’s or the workspace’s words (ruling M17)"
@@ -764,11 +750,11 @@ impl design::outcome::Fault for LibraryFault<'_> {
             Self::NotSaved(words) => {
                 Sentence::outside(*words).unwrap_or(crate::sentence!("The draft was not saved."))
             }
-            Self::Link { words, .. } => {
+            Self::Link { line, words } => {
                 let fix = crate::sentence!(
                     "Replace the link on this line with another creature, or remove its row."
                 );
-                match Sentence::outside(*words) {
+                match Sentence::outside(format!("Line {line}: {words}")) {
                     Some(words) => words.then(fix),
                     None => fix,
                 }
@@ -8630,7 +8616,6 @@ impl Library {
             // The repair this note was opened for.
             if let Some((line, words)) = &missing_link {
                 messages.outcome(FaultMessage::new(&LibraryFault::Link {
-                    name: note.name(),
                     line: *line,
                     words,
                 }));
