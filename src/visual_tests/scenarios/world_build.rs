@@ -8673,7 +8673,21 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         })
     };
     let before_result = roster_tops(d);
-    d.click("Use Guard");
+    // Migration-32 L2c (L1c, `pane_then`): the editor's footer reads its results after the
+    // panes' acts. In the frame of Use, drawn in one pass, and in the next, the replacement's
+    // result and its Undo show.
+    let use_guard = d.click_event("Use Guard");
+    let used = d.first_frame_one_pass([use_guard], |d| {
+        (
+            d.has_containing("rows replaced with Guard"),
+            d.has_containing("Undo replace"),
+        )
+    });
+    d.observe(
+        "m32-L2c-replacement-first-frame",
+        used == ((true, true), (true, true)),
+        format!("The frame of Use and the next (one pass each): (result, its Undo) = {used:?}"),
+    );
     d.expect("as\u{a0}Guard");
     d.expect("Undo replace");
     let with_result = roster_tops(d);

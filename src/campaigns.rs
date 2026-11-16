@@ -1421,10 +1421,6 @@ impl Campaigns {
         self.editing.is_some() || self.form_open
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     /// Whether the details form holds the saved name and folder of the campaign it edits.
     fn details_unchanged(&self) -> bool {
         self.editing
@@ -1451,6 +1447,10 @@ impl Campaigns {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
         let editing = self.editing.is_some();
         // Keep the add form's open state when Settings changes between one and two columns.

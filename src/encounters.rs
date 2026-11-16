@@ -5784,12 +5784,26 @@ impl Encounters {
         groups_reason: Option<(EncounterFault, String)>,
         unread: Option<UnreadRows>,
     ) -> design::outcome::Messages<'f, FooterPress> {
-        use design::outcome::FaultMessage;
-        self.record_member_results();
-        self.record_editor_results();
         let draft_id = self.draft.as_ref().map(|draft| draft.id);
         let mut messages =
             design::outcome::Messages::new(frame, ("encounter_editor_footer", draft_id), width);
+        self.editor_lines(&mut messages, frame, root, groups_reason, unread);
+        messages
+    }
+
+    /// The editor footer's lines, from the state as it is now (`editor_view` reads them after
+    /// the panes' acts): the results it records now, then the reasons, then the file's flags.
+    fn editor_lines<'f>(
+        &mut self,
+        messages: &mut design::outcome::Messages<'f, FooterPress>,
+        frame: &'f design::outcome::PaneFrame,
+        root: &std::path::Path,
+        groups_reason: Option<(EncounterFault, String)>,
+        unread: Option<UnreadRows>,
+    ) {
+        use design::outcome::FaultMessage;
+        self.record_member_results();
+        self.record_editor_results();
         for line in self.editor_result_lines(frame) {
             messages.kept(line);
         }
@@ -5845,7 +5859,6 @@ impl Encounters {
                 messages.outcome(fault.file_in(root));
             }
         }
-        messages
     }
 
     /// A press in the encounter editor's footer: each Undo reaches only the entry its line came
@@ -6593,9 +6606,34 @@ impl Encounters {
         }
     }
 
+    /// The encounter file's flags and unread roster rows, from its source and the campaign's
+    /// creature names. FC3: the roster shows each row that blocks Start fight in its place: the
+    /// faults move there (kept for this draft in `ctx`); nothing is copied.
+    fn unread_rows(&self, ctx: &egui::Context) -> Option<UnreadRows> {
+        let no_names = BTreeMap::new();
+        let names = self
+            .snapshot
+            .as_ref()
+            .map(|snapshot| &snapshot.known_creature_names)
+            .unwrap_or(&no_names);
+        let draft = self.draft.as_ref()?;
+        let faults = Entry::parse(&draft.path, &draft.source)
+            .map(|entry| roster_faults(&entry, names))
+            .unwrap_or_default();
+        let notes = unread_notes(&draft.path, &draft.flags, &faults);
+        let count = faults.len();
+        let rows: Arc<Vec<RosterFault>> = Arc::new(faults);
+        ctx.data_mut(|data| data.insert_temp(roster_fault_rows_id(draft.id), rows));
+        (!notes.is_empty()).then(|| UnreadRows {
+            notes,
+            faults: count,
+            path: draft.path.clone(),
+        })
+    }
+
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the editor’s two columns fill the page, each with its own scroll (`Fills::because`), and the unread rows’ footer keeps main’s form (`show_by_hand`) (design::results::STAGED_ALLOWS)"
+        reason = "staged: the editor’s two columns fill the page, each with its own scroll (`Fills::because`) (design::results::STAGED_ALLOWS)"
     )]
     fn editor_view(
         &mut self,
@@ -6613,23 +6651,11 @@ impl Encounters {
             .as_ref()
             .map(|snapshot| &snapshot.known_creature_names)
             .unwrap_or(&no_names);
-        // In the footer, so a fault does not move the name field or its actions.
-        let unread_rows = self.draft.as_ref().and_then(|draft| {
-            let faults = Entry::parse(&draft.path, &draft.source)
-                .map(|entry| roster_faults(&entry, names))
-                .unwrap_or_default();
-            let notes = unread_notes(&draft.path, &draft.flags, &faults);
-            let count = faults.len();
-            // FC3: the roster shows each row that blocks Start fight in its place. The faults
-            // move there; nothing is copied.
-            let rows: Arc<Vec<RosterFault>> = Arc::new(faults);
-            ui.data_mut(|data| data.insert_temp(roster_fault_rows_id(draft.id), rows));
-            (!notes.is_empty()).then(|| UnreadRows {
-                notes,
-                faults: count,
-                path: draft.path.clone(),
-            })
-        });
+        // In the footer, so a fault does not move the name field or its actions. Read before the
+        // header and the panes, for the roster's marks; the footer reads them again after the
+        // panes when the panes' acts read the campaign's creatures again (`pane_then`).
+        let read = self.snapshot.as_ref().map(|snapshot| snapshot.revision);
+        let unread_rows = self.unread_rows(ui.ctx());
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
         let mut save = false;
@@ -7021,23 +7047,44 @@ impl Encounters {
         // Undo come first, then reasons. The roster and Add participants are columns, each with
         // its own scroll (in the narrow layout, one of them under its tab): the body fills its
         // room above the footer.
+        // L1c (`pane_then`): the footer's lines are read after the panes' acts (a replacement,
+        // a removed group, a member's change), so the frame of an act shows the result it
+        // brought and never one it ended.
         let frame = design::outcome::PaneFrame::new(ui);
-        let messages = self.editor_messages(
+        let draft_id = self.draft.as_ref().map(|draft| draft.id);
+        let messages = design::outcome::Messages::new(
             &frame,
+            ("encounter_editor_footer", draft_id),
             ui.available_width(),
-            &active.path,
-            groups_footer.filter(|_| dirty),
-            unread_rows,
         );
-        let paned = messages.pane(
+        let ctx = ui.ctx().clone();
+        let groups_reason = groups_footer.filter(|_| dirty);
+        let this = &mut *self;
+        let paned = messages.pane_then(
             ui,
             design::pane::Body::Fills(design::pane::Fills::because(
                 design::pane::FillsReason::Columns,
             )),
-            |ui| self.editor_panes(ui, active, campaigns, party, compact, difficulty),
+            move |ui| {
+                this.editor_panes(ui, active, campaigns, party, compact, difficulty);
+                this
+            },
+            |this, messages| {
+                // A creature saved or made yours in the panes reads the campaign's creatures
+                // again: then the unread rows are read again, with their names.
+                let unread = if this.snapshot.as_ref().map(|snapshot| snapshot.revision) == read {
+                    unread_rows
+                } else {
+                    this.unread_rows(&ctx)
+                };
+                this.editor_lines(messages, &frame, &active.path, groups_reason, unread);
+                this
+            },
         );
         if let Some(press) = paned.pressed {
-            self.editor_press(ui.ctx(), press, active, campaigns.modules());
+            paned
+                .body
+                .editor_press(&ctx, press, active, campaigns.modules());
         }
     }
 
