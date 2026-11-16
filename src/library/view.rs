@@ -95,21 +95,48 @@ fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Opti
     selected
 }
 
-fn spell_links(
-    ui: &mut egui::Ui,
-    references: &[Reference],
-    paragraph: &str,
-    links: &dyn Links,
-) -> Option<usize> {
-    let mut targets: Vec<Option<(usize, String)>> = references
-        .iter()
-        .map(|reference| links.find_spell(reference))
-        .collect();
-    for named in links.spells_named_in(paragraph) {
-        if !targets.contains(&Some(named.clone())) {
-            targets.push(Some(named));
-        }
+/// A stat block's spells: each spell its lists name is a link in place, and a line after
+/// them has the spells the entry gives or its words name that no list linked.
+struct SpellLinks<'a> {
+    /// The entry's spells, each with the entry it opens, or `None` when it is missing.
+    references: Vec<Option<(usize, String)>>,
+    links: &'a dyn Links,
+    linked: Vec<usize>,
+    opened: Option<usize>,
+}
+
+impl creature::Spells for SpellLinks<'_> {
+    fn list(&mut self, ui: &mut egui::Ui, paragraph: &str) {
+        let named = self.links.spells_named_in(paragraph);
+        let (markdown, linked) = creature::linked_list(paragraph, |name| {
+            self.references
+                .iter()
+                .flatten()
+                .chain(&named)
+                .find(|(_, spell)| spell.eq_ignore_ascii_case(name))
+                .map(|(place, _)| *place)
+        });
+        self.linked.extend(linked);
+        self.opened = self.opened.or(style::entry_markdown(ui, &markdown));
     }
+
+    fn rest(&mut self, ui: &mut egui::Ui, text: &str) {
+        let mut targets = self.references.clone();
+        for named in self.links.spells_named_in(text) {
+            if !targets.contains(&Some(named.clone())) {
+                targets.push(Some(named));
+            }
+        }
+        targets.retain(|target| {
+            target
+                .as_ref()
+                .is_none_or(|(place, _)| !self.linked.contains(place))
+        });
+        self.opened = self.opened.or(spell_links(ui, targets));
+    }
+}
+
+fn spell_links(ui: &mut egui::Ui, targets: Vec<Option<(usize, String)>>) -> Option<usize> {
     if targets.is_empty() {
         return None;
     }
@@ -318,10 +345,17 @@ fn content(
         style::markdown(ui, &reading.summary);
     }
     if let Some(entry) = styled {
-        let references = creature::spell_references(entry);
-        creature::show(ui, entry, sections, values, |ui, paragraph| {
-            open_link = open_link.or(spell_links(ui, &references, paragraph, links));
-        });
+        let mut spells = SpellLinks {
+            references: creature::spell_references(entry)
+                .iter()
+                .map(|reference| links.find_spell(reference))
+                .collect(),
+            links,
+            linked: Vec::new(),
+            opened: None,
+        };
+        creature::show(ui, entry, sections, values, &mut spells);
+        open_link = open_link.or(spells.opened);
     } else {
         // A creature the DM wrote has no source text to style. Its numbers still lead.
         // The reader adds no lead gap after the stat head: prose gets the stat head's `S`, and
