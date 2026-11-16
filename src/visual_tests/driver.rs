@@ -2218,7 +2218,17 @@ impl<'a> Driver<'a> {
 
     /// Click a control on the same row as some text, such as a saved run's Resume.
     pub fn click_beside(&mut self, text: &str, name: &str) {
-        let row = self.row_of(text);
+        let text_row = self.row_of(text);
+        // A registered row that holds the text is the whole row: a fact/action row's action can
+        // wrap under its facts (layout PR 4).
+        let row = self
+            .harness
+            .ctx
+            .data(|data| {
+                data.get_temp::<(u64, Vec<egui::Rect>)>(egui::Id::new(crate::design::ROW_RECTS))
+            })
+            .and_then(|(_, rows)| rows.into_iter().find(|row| row.contains(text_row.center())))
+            .unwrap_or(text_row);
         let rect = self.aim(&format!("{name:?} beside {text:?}"), |node| {
             node.name == name
                 && Self::is_control(node)
