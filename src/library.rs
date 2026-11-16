@@ -3,6 +3,7 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 mod class;
 mod creature;
+mod kept;
 pub(crate) mod presentation;
 mod reader;
 pub(crate) mod view;
@@ -20,6 +21,7 @@ use crate::{
     world::file_fault::FileFault,
 };
 use eframe::egui;
+use kept::{KeptKind, LibraryKept};
 use presentation::Section;
 use splat::content::{
     self, Entry,
@@ -250,6 +252,31 @@ fn repair_notice(
     }
 }
 
+/// Whose file a note is: its owner's kind and id. Settings check package and campaign UUIDs
+/// apart (`persistence.rs`), so a campaign and a package may share one: the kind is part of a
+/// file's identity (M-L0.4a). Every file key in the Library is a [`FileId`].
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
+enum OwnerKey {
+    #[default]
+    Builtin,
+    Package(Uuid),
+    Campaign(Uuid),
+}
+
+/// What a draft writer changes (the stat fix, the editor's Discard): the kept results, the
+/// draft, its revision and the page's error.
+type DraftParts<'a> = (
+    &'a mut LibraryKept,
+    &'a mut String,
+    &'a mut u64,
+    &'a mut Option<String>,
+);
+
+/// One file in the Library: its owner (kind and id) and its path in the owner's folder. Two
+/// packages can each have `Rules/Watch.md`, and so can a campaign and a package with one UUID:
+/// they are different files.
+type FileId = (OwnerKey, String);
+
 /// Who owns an entry, and so whether and where it can be saved.
 #[derive(Clone, Default, PartialEq, Debug)]
 enum Owner {
@@ -272,6 +299,14 @@ impl Owner {
             Self::Builtin => None,
             Self::Package(module) => Some(module.id),
             Self::Campaign(campaign) => Some(campaign.id),
+        }
+    }
+    /// The owner's kind and id: the owner part of a [`FileId`].
+    fn key(&self) -> OwnerKey {
+        match self {
+            Self::Builtin => OwnerKey::Builtin,
+            Self::Package(module) => OwnerKey::Package(module.id),
+            Self::Campaign(campaign) => OwnerKey::Campaign(campaign.id),
         }
     }
     fn root(&self) -> Option<&Path> {
@@ -359,20 +394,25 @@ pub(crate) fn encounter_uses_entry(encounter: &Entry, entry: &Entry) -> bool {
 struct HeadingChoice {
     fix: Option<(String, String, String)>,
     undo: Option<String>,
+    /// The Undo's footer line (its words with the order its fix issued), for Read's footer.
+    undo_line: Option<design::results::FooterResult>,
 }
 
 impl HeadingChoice {
     /// `entry` is `None` when the file cannot take the fix (read only, unparsed or in a conflict).
+    /// The fix's Undo shows only for its own file (owner kind, owner id and path: `FileId`)
+    /// while the draft is the text the fix wrote (M-L0.4a).
     fn new(
         entry: Option<&Entry>,
         draft: &str,
-        undo: Option<&(String, String, String)>,
-        path: &str,
+        undo: Option<&kept::HeadingFix>,
+        file: &FileId,
     ) -> Self {
         let Some(entry) = entry else {
             return Self {
                 fix: None,
                 undo: None,
+                undo_line: None,
             };
         };
         Self {
@@ -387,8 +427,9 @@ impl HeadingChoice {
                 )
             }),
             undo: undo
-                .is_some_and(|(at, _, after)| at == path && after == draft)
+                .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && after == draft)
                 .then(|| format!("The first heading now says {}.", entry.name)),
+            undo_line: None,
         }
     }
 
@@ -397,17 +438,17 @@ impl HeadingChoice {
     fn apply(
         &self,
         (fix, undo): (bool, bool),
-        path: &str,
+        file: &FileId,
         draft: &mut String,
-        heading_undo: &mut Option<(String, String, String)>,
+        kept: &mut LibraryKept,
     ) -> bool {
         let mut changed = false;
         if fix && let Some((_, _, after)) = &self.fix {
-            *heading_undo = Some((path.to_owned(), draft.clone(), after.clone()));
+            kept.set_heading((file.clone(), draft.clone(), after.clone()));
             draft.clone_from(after);
             changed = true;
         }
-        if undo && let Some((_, before, _)) = heading_undo.take() {
+        if undo && let Some((_, before, _)) = kept.take_heading() {
             *draft = before;
             changed = true;
         }
@@ -433,21 +474,21 @@ fn page_error<'a>(footer: &mut design::Footer<'a>, error: Option<&'a str>) {
 }
 
 /// Each kept result as its own message in the pane's message footer; the footer lists them
-/// newest first by when each action was done (`orders`), as Edit Markdown lists its results.
-/// `out` gathers what was pressed.
+/// newest first by the order each act issued (its line, from its store), as Edit Markdown lists
+/// its results. `out` gathers what was pressed.
 fn add_results<'a>(
     footer: &mut design::Footer<'a>,
     results: &'a ReaderResults,
-    orders: &ResultOrders,
     out: &'a std::cell::Cell<ResultPress>,
 ) {
-    for item in results.items() {
-        let kind = item.0;
-        add_reader_result(footer, results, orders, item, move |ui| {
-            let mut pressed = out.get();
-            show_result(ui, results, kind, &mut pressed);
-            out.set(pressed);
-        });
+    for (kind, _, undo) in results.items() {
+        if let Some(line) = results.line(kind) {
+            add_reader_result(footer, line, undo, move |ui| {
+                let mut pressed = out.get();
+                show_result(ui, results, kind, &mut pressed);
+                out.set(pressed);
+            });
+        }
     }
 }
 
@@ -457,12 +498,11 @@ fn add_results<'a>(
 fn form_footer<'a>(
     width: f32,
     results: &'a ReaderResults,
-    orders: &'a ResultOrders,
     (form_error, error): (Option<&'a str>, Option<&'a str>),
     pressed: &'a std::cell::Cell<ResultPress>,
 ) -> design::Footer<'a> {
     let mut footer = design::Footer::new("library_form_footer", width.min(design::READER_MEASURE));
-    add_results(&mut footer, results, orders, pressed);
+    add_results(&mut footer, results, pressed);
     page_error(&mut footer, form_error);
     page_error(&mut footer, error);
     footer
@@ -478,7 +518,7 @@ struct ReaderPress {
     new_identities: Option<(PathBuf, Vec<String>)>,
     /// The campaign entry to copy into the package.
     copy_dependency: Option<Uuid>,
-    /// The copy result whose Undo was pressed: its place in `dependency_undos`.
+    /// The copy result whose Undo was pressed: its place in the kept copies.
     undo_dependency: std::cell::Cell<Option<usize>>,
 }
 
@@ -490,7 +530,7 @@ struct ReaderPress {
 #[allow(clippy::too_many_arguments)]
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    reason = "staged: a legacy footer line, a closure (`Ban::Footer`, design::results::STAGED_ALLOWS)"
 )]
 fn reader_messages<'a>(
     footer: &mut design::Footer<'a>,
@@ -499,8 +539,7 @@ fn reader_messages<'a>(
     duplicates: Option<(&'a Loaded, &'a Note, &'a [usize])>,
     draft_reason: Option<&'static str>,
     dependencies: &'a [(Uuid, String, String)],
-    dependency_results: &'a [(usize, String, design::ResultOrder)],
-    orders: &ResultOrders,
+    dependency_results: &'a [(usize, design::results::FooterResult)],
     out: &'a mut ReaderPress,
 ) {
     let ReaderPress {
@@ -512,18 +551,19 @@ fn reader_messages<'a>(
         undo_dependency,
     } = out;
     let (heading_fix, heading_undo) = (&mut heading_out.0, &mut heading_out.1);
-    add_results(footer, results, orders, results_out);
-    if let Some(result) = heading.and_then(|heading| heading.undo.as_deref()) {
+    add_results(footer, results, results_out);
+    if let Some(line) = heading.and_then(|heading| heading.undo_line.as_ref()) {
         // The fix's result is a message, so its Undo keeps its icon on the message line.
-        footer.result(order_of(orders, OrderKey::Heading), result, true, |ui| {
-            *heading_undo = design::undo_message(ui, Tone::Success, result, "Undo heading change");
+        add_reader_result(footer, line, true, |ui| {
+            *heading_undo =
+                design::undo_message(ui, Tone::Success, line.words(), "Undo heading change");
         });
     }
     // Round 25 FF8: each result names the entry and the package, in the button's words.
-    for (at, result, order) in dependency_results {
+    for (at, line) in dependency_results {
         let undo = &*undo_dependency;
-        footer.result(*order, result.as_str(), true, move |ui| {
-            if design::undo_message(ui, Tone::Success, result, "Undo copy") {
+        add_reader_result(footer, line, true, move |ui| {
+            if design::undo_message(ui, Tone::Success, line.words(), "Undo copy") {
                 undo.set(Some(*at));
             }
         });
@@ -642,14 +682,16 @@ fn duplicate_choices(
         let mut shown = std::collections::HashSet::new();
         for (position, &at) in duplicate_indices.iter().enumerate() {
             let owner = &loaded.notes[at].owner;
-            if shown.insert(owner.id())
+            if shown.insert(owner.key())
                 && let Some(paths) = loaded.duplicate_folder_paths(owner)
             {
                 ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
                 // Encounters outside the batch whose source changes; worked out once per load.
                 let slot = egui::Id::new((
                     "duplicate_folder_users",
-                    owner.id(),
+                    // The whole owner key: a campaign and a package with one UUID each have
+                    // their own encounters outside their batch (Astra, PR 477).
+                    owner.key(),
                     std::ptr::from_ref(loaded) as usize,
                     loaded.notes.len(),
                     // A reload in place changes some text; this cheap sum notices it.
@@ -667,14 +709,14 @@ fn duplicate_choices(
                             .notes
                             .iter()
                             .filter(|target| {
-                                target.owner.id() == owner.id() && batch.contains(&target.path)
+                                target.owner.key() == owner.key() && batch.contains(&target.path)
                             })
                             .filter_map(|target| target.entry.as_ref())
                             .collect();
                         let mut users: Vec<String> = Vec::new();
                         for other in &loaded.notes {
                             // An encounter inside the batch gets the new identities with it.
-                            if other.owner.id() == owner.id() && batch.contains(&other.path) {
+                            if other.owner.key() == owner.key() && batch.contains(&other.path) {
                                 continue;
                             }
                             let Some(encounter) = other.entry.as_ref() else {
@@ -708,7 +750,7 @@ fn duplicate_choices(
                     let remaining = duplicate_indices
                         .iter()
                         .map(|&other| &loaded.notes[other].owner)
-                        .find(|other| other.id() != owner.id())
+                        .find(|other| other.key() != owner.key())
                         .expect("a folder repair has another owner");
                     duplicate_repair_consequence(
                         ui,
@@ -1001,7 +1043,7 @@ fn place(
 ) -> Option<Place> {
     let current = loaded.notes.get(selected?)?;
     Some(Place {
-        owner: current.owner.id(),
+        owner: current.owner.key(),
         path: current.path.clone(),
         scope,
         section,
@@ -1118,14 +1160,20 @@ impl Note {
             .map_or(Section::Unreadable, Section::for_entry)
     }
     /// The key of this note's text fields (its Markdown, the read-only copy of the DM's draft),
-    /// with its owner's id. A file has no identity but its path, so the path is the key: a counted
+    /// with its owner's id. A file has no identity but its owner and path, so the owner's kind and
+    /// the path are the key (a campaign and a package may share a UUID: `OwnerKey`): a counted
     /// escape (`Ban::RowKey`), the one place that builds it.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: a text key from data (design::results::STAGED_ALLOWS)"
     )]
     fn field_key(&self) -> design::TextKey {
-        design::TextKey::from_data(self.path.clone())
+        let kind = match self.owner.key() {
+            OwnerKey::Builtin => "builtin",
+            OwnerKey::Package(_) => "package",
+            OwnerKey::Campaign(_) => "campaign",
+        };
+        design::TextKey::from_data(format!("{kind}\u{0}{}", self.path))
     }
     /// This note's Markdown editor.
     fn markdown_field(&self) -> design::FieldId {
@@ -1184,14 +1232,9 @@ type BrokenLinks = (
     Vec<(usize, usize)>,
 );
 
-/// A file's identity in the Library: its owner and its path in the owner's folder. Two packages
-/// can each have `Rules/Watch.md`; they are two files. A load error has its package or campaign
-/// id and an empty path.
-type FileKey = (Option<Uuid>, String);
-
 /// A problem the Library header counts, and the file it belongs to.
 pub(crate) struct Diagnostic {
-    file: FileKey,
+    file: FileId,
     /// The menu line: the file (with its owner when another owner has the same path) and the problem.
     text: String,
 }
@@ -1205,14 +1248,14 @@ pub(crate) struct Loaded {
     owners: Vec<Owner>,
     /// Problems that kept content from loading. The notes cannot show these again.
     /// Each keyed by its package or campaign id, so two packages with one name count twice.
-    load_errors: Vec<(FileKey, String)>,
+    load_errors: Vec<(FileId, String)>,
     diagnostics: Vec<Diagnostic>,
     /// Files the header counts that have no message of their own: each file of a duplicate
     /// identity or key, whose row says `Same entry in two files`. The check names one side only.
-    duplicate_files: Vec<FileKey>,
+    duplicate_files: Vec<FileId>,
     /// Files whose every counted problem is a link to an entry that cannot be found. Their row
     /// says `N broken links` once, with no second `Needs fixing` mark.
-    link_faults_only: std::collections::HashSet<FileKey>,
+    link_faults_only: std::collections::HashSet<FileId>,
     /// A counted file cannot be read, so the header count has the error tone.
     unreadable_counted: bool,
     /// Paths that more than one note has, such as `Rules/Watch.md` in two packages, with the
@@ -1572,7 +1615,7 @@ impl Loaded {
             diagnostics.push(match note {
                 Some(note) => self.note_problem(note, &check.message),
                 None => Diagnostic {
-                    file: (None, check.path.clone()),
+                    file: (OwnerKey::Builtin, check.path.clone()),
                     text: format!("{}: {}", check.path, check.message),
                 },
             });
@@ -1698,8 +1741,8 @@ impl Loaded {
         }
     }
 
-    fn file_key(note: &Note) -> FileKey {
-        (note.owner.id(), note.path.clone())
+    fn file_key(note: &Note) -> FileId {
+        (note.owner.key(), note.path.clone())
     }
 
     fn note_problem(&self, note: &Note, message: &str) -> Diagnostic {
@@ -1718,20 +1761,20 @@ impl Loaded {
     fn has_problem(&self, note: &Note) -> bool {
         self.diagnostics
             .iter()
-            .any(|d| d.file.0 == note.owner.id() && d.file.1 == note.path)
+            .any(|d| d.file.0 == note.owner.key() && d.file.1 == note.path)
     }
 
     /// How many files the header counts: each file once, by owner and path, for a problem, a
     /// broken link, a duplicate identity or more than one.
     /// `extra` is a file the loaded notes do not know is faulty yet: an open draft's file that
     /// stopped reading.
-    fn files_to_fix(&self, broken: &[(usize, usize)], extra: Option<&FileKey>) -> usize {
+    fn files_to_fix(&self, broken: &[(usize, usize)], extra: Option<&FileId>) -> usize {
         self.diagnostics
             .iter()
             .map(|d| (d.file.0, d.file.1.as_str()))
             .chain(broken.iter().map(|&(at, _)| {
                 let note = &self.notes[at];
-                (note.owner.id(), note.path.as_str())
+                (note.owner.key(), note.path.as_str())
             }))
             .chain(
                 self.duplicate_files
@@ -2354,7 +2397,7 @@ impl design::results::Reconcile for RostersUse {
 /// state slot says `Not saved` with Save's reason until the draft changes, another entry opens,
 /// or a Save succeeds. Nothing reads the disk to show it.
 struct SaveFailure {
-    owner: Option<Uuid>,
+    owner: OwnerKey,
     path: String,
     revision: u64,
     reason: String,
@@ -2369,7 +2412,7 @@ impl SaveFailure {
     /// each read in tests; it needs none of them, so no frame compares or hashes the draft.
     fn owns(&self, note: &Note, revision: u64, draft: DraftView<'_>) -> bool {
         let _ = draft;
-        self.owner == note.owner.id() && self.path == note.path && self.revision == revision
+        self.owner == note.owner.key() && self.path == note.path && self.revision == revision
     }
 }
 
@@ -2638,6 +2681,10 @@ struct ReaderResults {
     /// Read with no draft, it comes only with a change of mode, which lays the pane out again,
     /// so the Undo keeps no room for it.
     lock_can_come: bool,
+    /// The footer line of each kept result above that the Library's store marks (its words
+    /// with the order its act issued, `Library::kept_lines`); the page's store-made lines are in
+    /// `page`.
+    lines: Vec<(ResultKind, design::results::FooterResult)>,
 }
 
 /// Which result's Undo was pressed this frame.
@@ -2652,6 +2699,23 @@ struct ResultPress {
 }
 
 impl ReaderResults {
+    /// The footer line of the kept result `kind`: a page result's from its own store, every
+    /// other one's from the Library's (`lines`).
+    fn line(&self, kind: ResultKind) -> Option<&design::results::FooterResult> {
+        let page = &self.page;
+        match kind {
+            ResultKind::LinkOffer => page.link_offer.as_ref().map(|(line, _)| line),
+            ResultKind::Links => page.links.as_ref(),
+            ResultKind::Registration => page.registration.as_ref().map(|(line, ..)| line),
+            ResultKind::Rosters => page.rosters.as_ref().map(|(line, _)| line),
+            _ => self
+                .lines
+                .iter()
+                .find(|(at, _)| *at == kind)
+                .map(|(_, line)| line),
+        }
+    }
+
     /// The Undo step of the kept result `kind`, when the staged adapter draws it: the one
     /// place that makes it, for its drawing and for its footer's count.
     fn undo_step(&self, kind: ResultKind) -> Option<UndoStep> {
@@ -3744,7 +3808,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
         } else {
             module.name.clone()
         };
-        let key = (Some(module.id), String::new());
+        let key = (OwnerKey::Package(module.id), String::new());
         if let Err(error) = splat::content::art::ArtIndex::default().add_package(&module.path) {
             all.load_errors
                 .push((key.clone(), format!("{name}: {error}")));
@@ -3789,7 +3853,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                 }
             }
             Err(error) => all.load_errors.push((
-                (Some(campaign.id), String::new()),
+                (OwnerKey::Campaign(campaign.id), String::new()),
                 format!("{}: {error}", campaign.name),
             )),
         }
@@ -3810,7 +3874,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                 );
             }
             Err(error) => all.load_errors.push((
-                (Some(campaign.id), String::new()),
+                (OwnerKey::Campaign(campaign.id), String::new()),
                 format!("{}: {error}", campaign.name),
             )),
         }
@@ -3822,8 +3886,8 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
 
 /// Undo discard offers words only to the note they came from. Two owners can each have a
 /// note at the same path.
-fn discard_is_for(discarded: Option<&(Option<Uuid>, String, String)>, note: &Note) -> bool {
-    discarded.is_some_and(|(owner, path, _)| *owner == note.owner.id() && *path == note.path)
+fn discard_is_for(discarded: Option<&(OwnerKey, String, String)>, note: &Note) -> bool {
+    discarded.is_some_and(|(owner, path, _)| *owner == note.owner.key() && *path == note.path)
 }
 
 /// The catalogue needs reloading when either of these changes.
@@ -3876,10 +3940,11 @@ struct DependencyUndo {
     after: String,
     copied_path: String,
     copied_text: String,
-    /// The result's words: `<entry> copied to <package> and linked.`
+    /// The result's words: `<entry> copied to <package> and linked.` Each copy is one of the
+    /// Library's kept results (`LibraryKept::push_copy`), owned by the file it linked and the
+    /// path it copied (a file at the same path in another package never shows it); it ends on
+    /// its own Undo, or on a reload that finds one of its files changed (round 26 review).
     result: String,
-    /// When the copy was made, for the footer's order.
-    order: design::ResultOrder,
 }
 
 struct IdentityUndo {
@@ -3992,10 +4057,9 @@ pub struct Library {
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
     list_hidden: bool,
-    /// The draft `Discard changes` last dropped, with its note's path, for one step of undo.
-    /// The note's owner and path, and the discarded words.
-    discarded: Option<(Option<Uuid>, String, String)>,
-    discarded_note: Option<LetGo>,
+    /// The Library's kept results (Undos and notices that stay), with their footer order: data
+    /// and mark change together behind one boundary (`kept`, M-L0.4a).
+    kept: LibraryKept,
     /// A Save that failed on the disk, for the draft it tried to write.
     save_failure: Option<SaveFailure>,
     /// Raised by every event that changes the open draft (an edit, Discard and its Undo, a
@@ -4006,13 +4070,9 @@ pub struct Library {
     /// (counted by `DraftView` itself).
     #[cfg(test)]
     failure_checks: std::cell::Cell<(usize, usize)>,
-    identity_undo: Option<IdentityUndo>,
-    identities_undo: Option<(crate::content_workspace::ContentEdits, String)>,
-    manifest_write: Option<crate::content_workspace::ManifestWrite>,
     /// Each copied package's registration result, with all its Undo needs, by copy and campaign.
     registrations: design::Results<RegistrationOwner, Registration>,
     copy_not_used: bool,
-    unregistered: Option<Module>,
     /// Each registration's `Use the copy in encounters` result, by the same owner.
     rosters: design::Results<RegistrationOwner, RostersUse>,
     /// Offers to change links after a rename, each owned by the renamed entry.
@@ -4071,7 +4131,6 @@ pub struct Library {
     repair_link: Option<RepairLink>,
     /// The open draft's broken-link lines, for Edit Markdown's warnings (round 25 FH6).
     broken_lines: Option<BrokenLines>,
-    scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
     focus_hp: bool,
@@ -4090,81 +4149,32 @@ pub struct Library {
     package_folder_changed: bool,
     pub use_entry: Option<(Uuid, Uuid)>,
     source: bool,
-    reselect: Option<(Option<Uuid>, String)>,
+    reselect: Option<FileId>,
     pub copy: Option<crate::content_workspace::CopySource>,
     pub copy_to_package: Option<Uuid>,
     /// An entry to read beside the open draft, in Lookup.
     pub peek: Option<Uuid>,
     trail: Trail<Place>,
-    /// Each `Copy <entry> to <package>` result with its Undo, newest last. A result belongs to
-    /// the file it linked (its package root and path), so a file at the same path in another
-    /// package never shows it. Each ends on its own Undo, or on a reload that finds one of its
-    /// files changed; other copies keep theirs (round 26 review).
-    dependency_undos: Vec<DependencyUndo>,
-    selection_undo: Option<SelectionUndo>,
     link_choices: Vec<Uuid>,
-    /// The file, the draft before and after a stat fix, and its result message.
-    vital_undo: Option<(String, String, String, String)>,
-    heading_undo: Option<(String, String, String)>,
-    /// When each kept result's action was done (`stamp_result`), so the message footer lists
-    /// results newest first. The next action of the same kind replaces its entry.
-    result_orders: ResultOrders,
     /// Test only: how often the registration results were checked (`reconcile_registrations`).
     #[cfg(test)]
     reconciles: usize,
 }
 
-/// A kept result of the Library's panes, for its footer order. A copy result has its own order
-/// in its `DependencyUndo`.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-enum OrderKey {
-    Reader(ResultKind),
-    Heading,
-    Vital,
-    /// An entry removed on disk, whose draft was let go.
-    Removed,
-}
-
-type ResultOrders = std::collections::HashMap<OrderKey, design::ResultOrder>;
-
-/// One of the reader's results in a footer, in Read and in Edit Markdown alike. A link offer and
-/// a link result each belong to one renamed entry: they go through `Footer::legacy_kept`, with the order
-/// their store issued bound to their words. The other kinds hold one result at a time, so their
-/// kind's slot is that result's.
+/// One kept result's line in a legacy footer, in Read and in Edit Markdown alike: its words
+/// with the order its store issued at its act (`FooterResult`). Every kept result of the
+/// Library reaches its footer here, through this one legacy line (`Ban::Footer`, counted).
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    reason = "staged: a legacy footer line, a closure (`Ban::Footer`, design::results::STAGED_ALLOWS)"
 )]
 fn add_reader_result<'a>(
     footer: &mut design::Footer<'a>,
-    results: &'a ReaderResults,
-    orders: &ResultOrders,
-    (kind, words, undo): (ResultKind, String, bool),
+    line: &'a design::results::FooterResult,
+    undo: bool,
     draw: impl FnOnce(&mut egui::Ui) + 'a,
 ) {
-    let page = &results.page;
-    let line = match kind {
-        ResultKind::LinkOffer => page.link_offer.as_ref().map(|(line, _)| line),
-        ResultKind::Links => page.links.as_ref(),
-        ResultKind::Registration => page.registration.as_ref().map(|(line, ..)| line),
-        ResultKind::Rosters => page.rosters.as_ref().map(|(line, _)| line),
-        _ => None,
-    };
-    match line {
-        Some(line) => {
-            footer.legacy_kept_line(line, undo, move |_, ui| draw(ui));
-        }
-        None => {
-            footer.result(order_of(orders, OrderKey::Reader(kind)), words, undo, draw);
-        }
-    }
-}
-
-/// The order of the result `key`, issued when its action was done.
-fn order_of(orders: &ResultOrders, key: OrderKey) -> design::ResultOrder {
-    // Every action that makes a kept result stamps it (`Library::stamp_result`). A result made
-    // elsewhere without one is older than every stamped one: a draw never issues an order.
-    orders.get(&key).copied().unwrap_or_default()
+    footer.legacy_kept_line(line, undo, move |_, ui| draw(ui));
 }
 /// Sort so that "Level 2" comes before "Level 18".
 fn natural_key(name: &str) -> Vec<(String, u64)> {
@@ -4261,7 +4271,7 @@ fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String
 }
 /// An entry Back or Forward returns to, with the list as it was there.
 struct Place {
-    owner: Option<Uuid>,
+    owner: OwnerKey,
     path: String,
     scope: Scope,
     section: Section,
@@ -4269,12 +4279,99 @@ struct Place {
 }
 impl Place {
     fn find(&self, notes: &[Note]) -> Option<usize> {
-        notes
-            .iter()
-            .position(|n| n.owner.id() == self.owner && n.path == self.path)
+        file_at(notes, (self.owner, &self.path))
     }
 }
+
+/// The note that is this file: its owner's kind and id, and its path. The one key that Back and
+/// Forward (`Place::find`), the reselection after a reload and the new entry's selection use,
+/// so a campaign file never stands for a package file with the same UUID and path (M-L0.4a).
+fn file_at(notes: &[Note], (owner, path): (OwnerKey, &str)) -> Option<usize> {
+    notes
+        .iter()
+        .position(|note| note.owner.key() == owner && note.path == path)
+}
 impl Library {
+    /// The footer line of each kept result in `results` that the Library's store marks: its
+    /// words with the order its act issued. The page's store-made lines (link offer, links,
+    /// registration, rosters) are already in `results.page`.
+    fn kept_lines(
+        &self,
+        results: &ReaderResults,
+    ) -> Vec<(ResultKind, design::results::FooterResult)> {
+        results
+            .items()
+            .into_iter()
+            .filter_map(|(kind, words, _)| {
+                let mark = match kind {
+                    ResultKind::ScopeNotice => KeptKind::ScopeNotice,
+                    ResultKind::Unregistered => KeptKind::Unregistered,
+                    ResultKind::PackageUse => KeptKind::PackageUse,
+                    ResultKind::Manifest => KeptKind::Manifest,
+                    ResultKind::Identities => KeptKind::Identities,
+                    ResultKind::Identity => KeptKind::Identity,
+                    ResultKind::Discarded => KeptKind::Discarded,
+                    ResultKind::LinkOffer
+                    | ResultKind::Links
+                    | ResultKind::Registration
+                    | ResultKind::Rosters => return None,
+                };
+                Some((kind, self.kept.line(mark, || words)?))
+            })
+            .collect()
+    }
+
+    /// The stat fix (`Use <value>`) of `file`: the draft gets the value, and the fix's Undo is
+    /// the newest kept result (its file whole: owner kind, owner id and path). It takes the
+    /// parts it changes, so the editor can call it while it reads the open note.
+    fn fix_stat(
+        (kept, draft, revision, error): DraftParts<'_>,
+        file: FileId,
+        entry: &Entry,
+        (key, label, value): (&'static str, &str, i64),
+    ) {
+        match creature::use_vital(draft, entry, key, value) {
+            Ok(after) => {
+                kept.set_vital((
+                    file,
+                    draft.clone(),
+                    after.clone(),
+                    format!("The stat block now says {label} {value}."),
+                ));
+                *draft = after;
+                // The draft changed: a failed Save of the old words no longer owns it.
+                *revision += 1;
+            }
+            Err(failure) => *error = Some(failure),
+        }
+    }
+
+    /// The stat fix's result words while its Undo shows: the open file is the fix's own file
+    /// (owner kind, owner id, path) and the draft is the text the fix wrote.
+    fn stat_result_for(&self, file: &FileId) -> Option<String> {
+        self.kept
+            .vital()
+            .filter(|(at, _, after, _)| at.0 == file.0 && at.1 == file.1 && *after == self.draft)
+            .map(|(_, _, _, result)| result.clone())
+    }
+
+    /// Whether a press of `Undo stat change` acts now, in the frame of the press: the open file
+    /// is the fix's own file and the draft is still the text the fix wrote (typed text is never
+    /// replaced).
+    fn stat_undo_applies(&self, file: &FileId) -> bool {
+        self.kept.vital().is_some_and(|(at, _, after, _)| {
+            at.0 == file.0 && at.1 == file.1 && *after == self.draft
+        })
+    }
+
+    /// Whether a press of `Undo heading change` acts now: as `stat_undo_applies`, for the
+    /// heading fix.
+    fn heading_undo_applies(&self, file: &FileId) -> bool {
+        self.kept
+            .heading()
+            .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && *after == self.draft)
+    }
+
     /// The footer order of the open entry's link result: the order its own update issued
     /// (review of PR 298), for the check that proves it.
     #[cfg(test)]
@@ -4417,13 +4514,13 @@ impl Library {
         // entries, whose data the Undo also reversed.
         self.rosters.owner_changed(owner);
         let package = registered.copy.module.id;
-        if self.selection_undo.as_ref().is_some_and(|undo| {
+        if self.kept.package_use().is_some_and(|undo| {
             registered.campaign.as_ref().map(|c| c.id) == Some(undo.campaign.id)
                 && undo.after.iter().any(|selection| {
                     chosen_package(&selection.package, &manifests) == Some(package)
                 })
         }) {
-            self.selection_undo = None;
+            let _ = self.kept.take_package_use();
         }
         self.content_changed = Some(registered.copy.module.path.clone());
         self.stale = true;
@@ -4477,41 +4574,159 @@ impl Library {
     /// with another action stays and blocks its Undo instead. Call this once per reload, not every
     /// frame: it reads the files.
     fn forget_changed_undos(&mut self) {
-        use crate::content_workspace::{CampaignDocument, ManifestWrite, holds};
-        ManifestWrite::forget_if_changed(&mut self.manifest_write);
+        use crate::content_workspace::{CampaignDocument, holds};
+        self.kept.forget_manifest_if_changed();
         if self
-            .identities_undo
-            .as_ref()
+            .kept
+            .identities()
             .is_some_and(|(edits, _)| !edits.on_disk())
         {
-            self.identities_undo = None;
+            let _ = self.kept.take_identities();
         }
         if self
-            .identity_undo
-            .as_ref()
+            .kept
+            .identity()
             .is_some_and(|undo| !holds(&undo.root, &undo.path, &undo.after))
         {
-            self.identity_undo = None;
+            let _ = self.kept.take_identity();
         }
-        self.dependency_undos.retain(|undo| {
+        self.kept.retain_copies(|undo| {
             holds(&undo.root, &undo.path, &undo.after)
                 && holds(&undo.root, &undo.copied_path, &undo.copied_text)
         });
         // Its Undo checks the package choices only, so other campaign edits keep it.
-        if self.selection_undo.as_ref().is_some_and(|undo| {
+        if self.kept.package_use().is_some_and(|undo| {
             !CampaignDocument::load(&undo.campaign)
                 .is_ok_and(|document| document.selections == undo.after)
         }) {
-            self.selection_undo = None;
+            let _ = self.kept.take_package_use();
         }
         self.link_edits
             .disk_changed(|result| result.edits.on_disk());
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
+    /// The manifest repair: `Package.md` written again for `module`. Its result, with Undo, is
+    /// the newest kept result.
+    fn write_manifest(&mut self, module: Module, path: &str, exists: bool) {
+        match crate::content_workspace::ManifestWrite::write_as(&module, path, exists) {
+            Ok(write) => {
+                self.kept.set_manifest(write);
+                self.stale = true;
+                self.content_changed = Some(module.path);
+            }
+            Err(error) => self.error = Some(error),
+        }
+    }
+
+    /// `Choose all` on a package About page: every entry of `module` is chosen for the open
+    /// campaign. Its result, with Undo, is the newest kept result.
+    fn choose_all(&mut self, module: &Module, campaigns: &Campaigns) {
+        let Some(campaign) = campaigns.active_campaign() else {
+            return;
+        };
+        let result = CampaignDocument::load(&campaign).and_then(|before| {
+            crate::content_workspace::use_in_campaign(&campaign, module.id, &module.name, None)?;
+            let after = CampaignDocument::load(&campaign)?;
+            Ok(SelectionUndo {
+                campaign: campaign.clone(),
+                before: before.selections,
+                after: after.selections,
+            })
+        });
+        match result {
+            Ok(undo) => {
+                self.kept.set_package_use(undo);
+                self.stale = true;
+                self.reconcile_registrations(campaigns);
+                self.content_changed = Some(campaign.path);
+            }
+            Err(error) => self.error = Some(error),
+        }
+    }
+
+    /// A folder's batch repair: each of `paths` in `root` gets a new identity. Its result, with
+    /// Undo, is the newest kept result.
+    fn separate_entries(&mut self, root: PathBuf, paths: &[String]) -> Result<(), String> {
+        let edits = crate::content_workspace::ContentEdits::new_identities(&root, paths)?;
+        let folder = root.file_name().unwrap_or_default().to_string_lossy();
+        self.kept.set_identities((
+            edits,
+            format!(
+                "{} in {folder}/ are now separate entries.",
+                design::count(paths.len(), "file", "files")
+            ),
+        ));
+        self.stale = true;
+        self.content_changed = Some(root);
+        Ok(())
+    }
+
+    /// The editor's Discard of `note`'s draft: the draft goes back to the file's words, and the
+    /// words it dropped are the newest kept result, with Undo. It takes the parts it changes, so
+    /// the editor can call it while it reads the open note.
+    fn discard_draft((kept, draft, revision, error): DraftParts<'_>, note: &Note) {
+        kept.set_discarded((note.owner.key(), note.path.clone(), draft.clone()));
+        draft.clone_from(&note.text);
+        // The draft changed: a failed Save of the old words no longer owns it.
+        *revision += 1;
+        *error = None;
+    }
+
+    /// The copy of a campaign entry that the package entry `note` links to (`source`) into the
+    /// package, and the link moved to the copy: one result per copy, with Undo, the newest kept
+    /// result. The package's folder, which changed; `None` when `note` is not a package's.
+    fn copy_dependency(
+        kept: &mut LibraryKept,
+        note: &Note,
+        source: &Note,
+        campaigns: &Campaigns,
+    ) -> Result<Option<PathBuf>, String> {
+        let Owner::Package(package) = &note.owner else {
+            return Ok(None);
+        };
+        let source = crate::content_workspace::CopySource {
+            entry: source
+                .entry
+                .clone()
+                .ok_or("The linked entry cannot be read.")?,
+            text: source.text.clone(),
+            root: source.owner.root().map(Path::to_path_buf),
+            campaign: None,
+        };
+        let catalogue = crate::content_workspace::Catalogue::load(
+            campaigns.modules(),
+            campaigns.active_campaign().as_ref(),
+        )?;
+        let plan = crate::content_workspace::CopyPlan::prepare(
+            &source,
+            &package.path,
+            None,
+            &source.entry.name,
+            "",
+            &catalogue,
+        )?;
+        let copied = plan.save()?;
+        let after =
+            crate::content_workspace::redirect_reference(&note.text, &source.entry, copied.id)?;
+        if let Err(error) = write_note(&package.path, &note.path, Some(&note.text), &after) {
+            let _ = fs::remove_file(package.path.join(&plan.relative));
+            return Err(error);
+        }
+        kept.push_copy(DependencyUndo {
+            root: package.path.clone(),
+            path: note.path.clone(),
+            before: note.text.clone(),
+            after,
+            copied_path: plan.relative.clone(),
+            copied_text: plan.text.clone(),
+            result: format!(
+                "{} copied to {} and linked.",
+                source.entry.name, package.name
+            ),
+        });
+        Ok(Some(package.path.clone()))
+    }
+
     fn give_new_identity(&mut self) -> Result<(), String> {
         let index = self.selected.ok_or("Open the copy first.")?;
         let note = &self.loaded.as_ref().unwrap().notes[index];
@@ -4525,11 +4740,7 @@ impl Library {
         let id = crate::hermetic::new_uuid();
         let after = crate::content_workspace::new_note_identity(&before, &note.path, id)?;
         let updated = write_note(&root, &note.path, Some(&before), &after)?;
-        self.result_orders.insert(
-            OrderKey::Reader(ResultKind::Identity),
-            design::ResultOrder::issue(),
-        );
-        self.identity_undo = Some(IdentityUndo {
+        self.kept.set_identity(IdentityUndo {
             root: root.clone(),
             path: note.path.clone(),
             before,
@@ -4549,7 +4760,7 @@ impl Library {
     }
 
     fn undo_new_identity(&mut self) -> Result<(), String> {
-        let undo = self.identity_undo.as_ref().ok_or("Nothing to undo.")?;
+        let undo = self.kept.identity().ok_or("Nothing to undo.")?;
         write_note(&undo.root, &undo.path, Some(&undo.after), &undo.before)?;
         self.stale = true;
         self.content_changed = Some(undo.root.clone());
@@ -4563,7 +4774,7 @@ impl Library {
                 self.draft_revision += 1;
             }
         }
-        self.identity_undo = None;
+        let _ = self.kept.take_identity();
         self.loaded.as_mut().unwrap().invalidate();
         self.loaded.as_mut().unwrap().refresh_diagnostics();
         Ok(())
@@ -4598,10 +4809,6 @@ impl Library {
     }
 
     /// The DM chose the file over the draft. The draft stays one step of undo away.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn reload_note_from_disk(&mut self, index: usize) {
         let Some(change) = self.disk_change.take() else {
             return;
@@ -4628,11 +4835,8 @@ impl Library {
         }
         let draft = std::mem::take(&mut self.draft);
         self.draft_revision += 1;
-        self.result_orders.insert(
-            OrderKey::Reader(ResultKind::Discarded),
-            design::ResultOrder::issue(),
-        );
-        self.discarded = Some((note.owner.id(), note.path.clone(), draft));
+        self.kept
+            .set_discarded((note.owner.key(), note.path.clone(), draft));
         if let Some(fault) = change.fault {
             // The note becomes the file as it is: unreadable, with its fault and no text.
             note.entry = None;
@@ -4664,9 +4868,7 @@ impl Library {
                 self.draft = text;
             }
             None => {
-                self.result_orders
-                    .insert(OrderKey::Removed, design::ResultOrder::issue());
-                self.discarded_note = Some(LetGo {
+                self.kept.set_removed(LetGo {
                     note: Note {
                         path: note.path.clone(),
                         text: note.text.clone(),
@@ -4692,15 +4894,11 @@ impl Library {
         self.scope_counts = None;
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn open_entry(&mut self, index: usize) {
         if self.dirty() {
             return;
         }
-        self.discarded_note = None;
+        let _ = self.kept.take_removed();
         let Some(note) = self.loaded.as_ref().and_then(|l| l.notes.get(index)) else {
             return;
         };
@@ -4709,11 +4907,8 @@ impl Library {
         }
         if !note.is_manifest() && !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
-            self.result_orders.insert(
-                OrderKey::Reader(ResultKind::ScopeNotice),
-                design::ResultOrder::issue(),
-            );
-            self.scope_notice = Some(format!("Scope is now Everything, to show {}.", note.name()));
+            self.kept
+                .set_scope_notice(format!("Scope is now Everything, to show {}.", note.name()));
         }
         self.selected = Some(index);
         self.draft = note.text.clone();
@@ -4768,22 +4963,16 @@ impl Library {
     /// the Undo ends at the switch itself, even while the Library is hidden: a switch there and
     /// back never brings it back.
     pub fn note_campaign(&mut self, campaign: Option<Uuid>) {
-        let Some(gone) = &mut self.discarded_note else {
-            return;
-        };
-        if *gone.campaign.get_or_insert(campaign) != campaign {
-            self.discarded_note = None;
-            self.discarded = None;
-        }
+        self.kept.note_removed_campaign(campaign);
     }
 
     /// Remove's Undo also ends when any entry is selected, however the selection was made: the
     /// list, the About row, `reveal` (Lookup and other pages), Back or Forward, or `open_entry`.
     /// Its own Undo selects the entry it gives back after taking it.
     fn end_remove_on_selection(&mut self) {
-        if self.discarded_note.is_some() && self.selected.is_some() {
-            self.discarded_note = None;
-            self.discarded = None;
+        if self.kept.removed().is_some() && self.selected.is_some() {
+            let _ = self.kept.take_removed();
+            let _ = self.kept.take_discarded();
         }
     }
 
@@ -4955,20 +5144,20 @@ impl Library {
                 && read_disk(root, path).map_or(true, |text| text.as_deref() != expected)
         };
         let gone_changed = self
-            .discarded_note
-            .as_ref()
+            .kept
+            .removed()
             .is_some_and(|LetGo { note, .. }| changed_here(&note.owner, &note.path, None));
         if gone_changed {
-            self.discarded_note = None;
+            let _ = self.kept.take_removed();
         }
-        let discard_changed = self.discarded.as_ref().is_some_and(|(owner, path, _)| {
+        let discard_changed = self.kept.discarded().is_some_and(|(owner, path, _)| {
             let loaded = self.loaded.as_ref().and_then(|loaded| {
                 loaded
                     .notes
                     .iter()
-                    .find(|note| note.owner.id() == *owner && &note.path == path)
+                    .find(|note| note.owner.key() == *owner && &note.path == path)
             });
-            match (loaded, &self.discarded_note) {
+            match (loaded, self.kept.removed()) {
                 (Some(note), _) => changed_here(&note.owner, path, Some(&note.text)),
                 (None, Some(LetGo { note, .. })) if &note.path == path => false,
                 // Its file is neither loaded nor removed by this Library: nothing owns it.
@@ -4976,20 +5165,23 @@ impl Library {
             }
         });
         if discard_changed || gone_changed {
-            self.discarded = None;
+            let _ = self.kept.take_discarded();
         }
         self.stale = true;
+    }
+    /// The open entry's file, whole (owner kind, owner id, path): what a reload selects again.
+    fn open_file_id(&self) -> Option<FileId> {
+        self.loaded
+            .as_ref()
+            .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
+            .map(|n| (n.owner.key(), n.path.clone()))
     }
     fn invalidate(&mut self) {
         self.matches = None;
         self.scope_counts = None;
     }
     fn start_load(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
-        self.reselect = self
-            .loaded
-            .as_ref()
-            .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .map(|n| (n.owner.id(), n.path.clone()));
+        self.reselect = self.open_file_id();
         self.load_key = Some(load_key(campaigns));
         let modules = campaigns.modules().to_vec();
         let campaign = campaigns.active_campaign();
@@ -5106,11 +5298,10 @@ impl Library {
                                     let _ = campaigns.rename_module(module.id, name);
                                 }
                             }
-                            self.selected = self.reselect.as_ref().and_then(|(owner, path)| {
-                                l.notes
-                                    .iter()
-                                    .position(|n| n.owner.id() == *owner && &n.path == path)
-                            });
+                            self.selected = self
+                                .reselect
+                                .as_ref()
+                                .and_then(|(owner, path)| file_at(&l.notes, (*owner, path)));
                             if let Some(i) = self.selected {
                                 self.draft = l.notes[i].text.clone();
                                 // The draft changed: a failed Save of the old words no longer owns it.
@@ -5463,8 +5654,8 @@ impl Library {
                 }),
             // Round 25 FG4: the unregister result sits in the pane's message footer, so the scope,
             // the search and the list never move when it comes or goes.
-            scope_notice: self.scope_notice.clone(),
-            unregistered: self.unregistered.as_ref().map(|module| {
+            scope_notice: self.kept.scope_notice().cloned(),
+            unregistered: self.kept.unregistered().map(|module| {
                 format!(
                     "{} is unregistered. Its files stay in {}.",
                     module.name,
@@ -5544,18 +5735,17 @@ impl Library {
             });
             // Round 26 review: the page's results and error sit in this pane's footer too, below
             // the form or the empty state.
-            let results = ReaderResults {
+            let mut results = ReaderResults {
                 page: std::mem::take(&mut self.page_results),
                 ..Default::default()
             };
+            results.lines = self.kept_lines(&results);
             let pressed = std::cell::Cell::new(ResultPress::default());
             let (new_error, error) = (self.new_error.clone(), self.error.clone());
-            // The footer reads a copy: the body below changes the Library.
-            let orders = self.result_orders.clone();
+            // The footer holds its own lines: the body below changes the Library.
             let footer = form_footer(
                 ui.available_width(),
                 &results,
-                &orders,
                 (
                     self.new_form.then_some(new_error.as_deref()).flatten(),
                     error.as_deref(),
@@ -5771,7 +5961,7 @@ impl Library {
                 .as_ref()
                 .is_some_and(|(_, prior, _)| *prior != query)
         {
-            self.scope_notice = None;
+            let _ = self.kept.take_scope_notice();
         }
         if self.matches_scope != Some(scope)
             || self
@@ -6144,18 +6334,17 @@ impl Library {
                 if self.form || self.new_form {
                     // A form has no reader: the page's results sit in the pane's message footer,
                     // `S` below a short form, pinned under a long one (round 26; round 28 pane).
-                    let results = ReaderResults {
+                    let mut results = ReaderResults {
                         page: std::mem::take(&mut self.page_results),
                         ..Default::default()
                     };
+                    results.lines = self.kept_lines(&results);
                     let pressed = std::cell::Cell::new(ResultPress::default());
                     let (new_error, error) = (self.new_error.clone(), self.error.clone());
-                    // The footer reads a copy: the form below changes the Library.
-                    let orders = self.result_orders.clone();
+                    // The footer holds its own lines: the form below changes the Library.
                     let footer = form_footer(
                         ui.available_width(),
                         &results,
-                        &orders,
                         (
                             self.new_form.then_some(new_error.as_deref()).flatten(),
                             error.as_deref(),
@@ -6200,7 +6389,7 @@ impl Library {
     )]
     fn apply_page_press(&mut self, pressed: PagePress, campaigns: &mut Campaigns) {
         if pressed.unregistered
-            && let Some(module) = self.unregistered.clone()
+            && let Some(module) = self.kept.unregistered().cloned()
         {
             let result = local_module(&module.path).and_then(|found| {
                 if found.id != module.id {
@@ -6210,7 +6399,7 @@ impl Library {
             });
             match result {
                 Ok(()) => {
-                    self.unregistered = None;
+                    let _ = self.kept.take_unregistered();
                     self.stale = true;
                 }
                 Err(error) => self.error = Some(error),
@@ -6457,10 +6646,6 @@ impl Library {
         self.section = Section::All;
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn unregister_dialog(&mut self, ctx: &egui::Context, campaigns: &mut Campaigns) {
         let Some(module) = self.confirm_unregister.clone() else {
             return;
@@ -6541,18 +6726,20 @@ impl Library {
         }
         if remove {
             self.confirm_unregister = None;
-            match campaigns.unregister_module(module.id) {
-                Ok(()) => {
-                    self.result_orders.insert(
-                        OrderKey::Reader(ResultKind::Unregistered),
-                        design::ResultOrder::issue(),
-                    );
-                    self.unregistered = Some(module);
-                    self.scope = Scope::default();
-                    self.stale = true;
-                }
-                Err(e) => self.error = Some(e),
+            self.unregister(module, campaigns);
+        }
+    }
+
+    /// Unregister `module` from Settings: its files stay. Its result, with Undo, is the newest
+    /// kept result.
+    fn unregister(&mut self, module: Module, campaigns: &mut Campaigns) {
+        match campaigns.unregister_module(module.id) {
+            Ok(()) => {
+                self.kept.set_unregistered(module);
+                self.scope = Scope::default();
+                self.stale = true;
             }
+            Err(e) => self.error = Some(e),
         }
     }
 
@@ -7189,7 +7376,7 @@ impl Library {
                                     chosen.insert(entry.id);
                                 }
                                 let created_path = path.clone();
-                                let created_owner = owner.id();
+                                let created_owner = owner.key();
                                 l.notes.push(Note {
                                     path,
                                     text: text.clone(),
@@ -7203,9 +7390,7 @@ impl Library {
                                 l.invalidate();
                                 self.matches = None;
                                 self.scope_counts = None;
-                                self.selected = l.notes.iter().position(|n| {
-                                    n.path == created_path && n.owner.id() == created_owner
-                                });
+                                self.selected = file_at(&l.notes, (created_owner, &created_path));
                                 if self.selected.is_some() {
                                     self.trail.leave(left);
                                 }
@@ -7267,7 +7452,7 @@ impl Library {
         self.reveal_row = true;
         self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
         self.disk_change = None;
-        self.scope_notice = None;
+        let _ = self.kept.take_scope_notice();
         self.scope = target.scope;
         self.section = target.section;
         self.search = target.search;
@@ -7517,7 +7702,7 @@ impl Library {
                 // The disk refused the write: the draft's state slot says so with Save's reason.
                 Ok(_) if refused.is_none() => {
                     self.save_failure = Some(SaveFailure {
-                        owner: note.owner.id(),
+                        owner: note.owner.key(),
                         path: note.path.clone(),
                         revision: self.draft_revision,
                         reason: e,
@@ -7539,7 +7724,7 @@ impl Library {
     fn apply_package_results(&mut self, pressed: &ResultPress) {
         self.page_pressed = pressed.page;
         if pressed.package_use
-            && let Some(undo) = self.selection_undo.take()
+            && let Some(undo) = self.kept.take_package_use()
         {
             let result = crate::content_workspace::CampaignDocument::load(&undo.campaign).and_then(|mut document| {
                 if document.selections != undo.after { return Err("Campaign choices changed. Keep them and edit the package choices in Campaign.".into()); }
@@ -7555,12 +7740,12 @@ impl Library {
             }
         }
         if pressed.manifest
-            && let Some(write) = &self.manifest_write
+            && let Some(write) = self.kept.manifest()
         {
             match write.undo() {
                 Ok(root) => {
                     self.content_changed = Some(root);
-                    self.manifest_write = None;
+                    let _ = self.kept.take_manifest();
                     self.stale = true;
                 }
                 Err(error) => self.error = Some(error),
@@ -7571,7 +7756,7 @@ impl Library {
     /// `pane_right` is the pane's right edge, where the reader's body may end.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+        reason = "staged: legacy footer lines and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn editor_pane(
         &mut self,
@@ -7583,14 +7768,14 @@ impl Library {
         // The pane's kept results. They sit in the pane's message footer, so a result never moves
         // the tabs, the file line, the title or the body.
         let mut results = ReaderResults {
-            package_use: self.selection_undo.as_ref().is_some_and(|undo| {
+            package_use: self.kept.package_use().is_some_and(|undo| {
                 campaigns
                     .active_campaign()
                     .is_some_and(|c| c.id == undo.campaign.id)
             }),
             manifest: self
-                .manifest_write
-                .as_ref()
+                .kept
+                .manifest()
                 .map(|write| (write.message(), write.path().to_string())),
             locked: if self.disk_change.is_some() {
                 Some(&CHANGED_FILE_FIRST)
@@ -7605,7 +7790,7 @@ impl Library {
         };
         // With no entry open, the results and Remove's notice sit in the pane's message footer,
         // below the empty reader (round 26). Its id is the reader's, so one pane has one footer.
-        let gone_notice = self.discarded_note.as_ref().map(|LetGo { note, .. }| {
+        let gone_notice = self.kept.removed().map(|LetGo { note, .. }| {
             let names = self
                 .loaded
                 .as_ref()
@@ -7624,18 +7809,21 @@ impl Library {
         let mut undo_remove = false;
         if self.selected.is_none() {
             let pressed = std::cell::Cell::new(ResultPress::default());
+            results.lines = self.kept_lines(&results);
+            let gone_line = gone_notice
+                .filter(|_| !self.dirty())
+                .and_then(|words| self.kept.line(KeptKind::Removed, || words));
             let mut footer = design::Footer::new(
                 "library_footer",
                 ui.available_width().min(design::READER_MEASURE),
             );
-            if let Some(words) = gone_notice.as_deref().filter(|_| !self.dirty()) {
+            if let Some(line) = &gone_line {
                 let undo = &mut undo_remove;
-                let order = order_of(&self.result_orders, OrderKey::Removed);
-                footer.result(order, words, true, move |ui| {
-                    *undo = design::undo_message(ui, Tone::Info, words, "Undo remove");
+                add_reader_result(&mut footer, line, true, move |ui| {
+                    *undo = design::undo_message(ui, Tone::Info, line.words(), "Undo remove");
                 });
             }
-            add_results(&mut footer, &results, &self.result_orders, &pressed);
+            add_results(&mut footer, &results, &pressed);
             page_error(&mut footer, self.error.as_deref());
             // The empty reader is the pane's body; the footer follows it (round 28 pane).
             footer.pane(ui, design::Body::Content, |ui| {
@@ -7668,10 +7856,10 @@ impl Library {
                 _ => None,
             });
         if undo_remove
-            && let Some((_, _, draft)) = self.discarded.take()
+            && let Some((_, _, draft)) = self.kept.take_discarded()
             && let Some(LetGo {
                 note, used, chosen, ..
-            }) = self.discarded_note.take()
+            }) = self.kept.take_removed()
             && let Some(loaded) = self.loaded.as_mut()
         {
             // The reload after Remove entry and lose draft left the entry out of what this campaign uses and
@@ -8213,7 +8401,7 @@ impl Library {
         let toolbar_press = shown.press;
         self.source = shown.source;
         if self.source != was_source {
-            self.scope_notice = None;
+            let _ = self.kept.take_scope_notice();
             self.focus_repair = self.source && note.error.is_some();
         }
         // The mode's flags, after the toggle above: the pass that opens Edit Markdown draws the
@@ -8237,11 +8425,8 @@ impl Library {
                 &mut new_identities,
             );
         }
-        results.identities = self
-            .identities_undo
-            .as_ref()
-            .map(|(_, words)| words.clone());
-        results.identity = self.identity_undo.as_ref().map(|undo| {
+        results.identities = self.kept.identities().map(|(_, words)| words.clone());
+        results.identity = self.kept.identity().map(|undo| {
             crate::world::separate_entry_result(
                 &Path::new(&undo.path)
                     .file_name()
@@ -8265,14 +8450,18 @@ impl Library {
         // The heading warning and its Undo. Read and Edit Markdown both draw them in the pane's
         // message footer, with the duplicate warning, so one file's warnings share one place and
         // the body never moves.
-        let heading = HeadingChoice::new(
+        let mut heading = HeadingChoice::new(
             (editable && !conflict)
                 .then(|| parsed.as_ref().ok())
                 .flatten(),
             &self.draft,
-            self.heading_undo.as_ref(),
-            &note.path,
+            self.kept.heading(),
+            &(note.owner.key(), note.path.clone()),
         );
+        heading.undo_line = heading
+            .undo
+            .clone()
+            .and_then(|words| self.kept.line(KeptKind::Heading, || words));
         let mut heading_pressed = (false, false);
         // Read's messages for the pane's message footer: a package entry's links to entries in
         // this campaign only, each with its copy action, and the copy's result.
@@ -8307,9 +8496,10 @@ impl Library {
             _ => Vec::new(),
         };
         // The copies this file made, by package root and path, newest first, with their place in
-        // `dependency_undos` for their Undo.
-        let dependency_results: Vec<(usize, String, design::ResultOrder)> = self
-            .dependency_undos
+        // the kept copies for their Undo and their line (the order each copy issued).
+        let dependency_results: Vec<(usize, design::results::FooterResult)> = self
+            .kept
+            .copies()
             .iter()
             .enumerate()
             .rev()
@@ -8318,7 +8508,7 @@ impl Library {
                     && change.path == note.path
                     && note.owner.root() == Some(change.root.as_path())
             })
-            .map(|(at, change)| (at, change.result.clone(), change.order))
+            .filter_map(|(at, change)| Some((at, self.kept.copy_line(change)?)))
             .collect();
         let mut reader_press = ReaderPress::default();
         let no_results = ReaderResults::default();
@@ -8334,7 +8524,7 @@ impl Library {
         // it before the body and drawn by the pane after the body (`Footer::pane_editor`, round
         // 28 P2); its presses are applied after the pane returns.
         struct EditData {
-            kept: Vec<(Kept, String, bool, design::ResultOrder)>,
+            kept: Vec<(Kept, design::results::FooterResult, bool)>,
             vital_result: Option<String>,
             vitals: Vec<(&'static str, &'static str, i64, String)>,
             broken_cache: (Vec<String>, String),
@@ -8348,15 +8538,15 @@ impl Library {
             let row = shown.save.unwrap_or_default();
             save |= row.save;
             if row.discard {
-                self.result_orders.insert(
-                    OrderKey::Reader(ResultKind::Discarded),
-                    design::ResultOrder::issue(),
+                Self::discard_draft(
+                    (
+                        &mut self.kept,
+                        &mut self.draft,
+                        &mut self.draft_revision,
+                        &mut self.error,
+                    ),
+                    note,
                 );
-                self.discarded = Some((note.owner.id(), note.path.clone(), self.draft.clone()));
-                self.draft = note.text.clone();
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
-                self.error = None;
             }
             // The pane's message footer, below the editor: `S` under a short draft, pinned under
             // a long one, whose editor region scrolls (round 28 P2).
@@ -8368,12 +8558,8 @@ impl Library {
             // sent here, the other broken links, the first-heading and stat warnings. Why other
             // actions wait is painted by `design::ReaderToolbar`, never by the footer.
             let discard_shown =
-                discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
-            let vital_result = self
-                .vital_undo
-                .as_ref()
-                .filter(|(path, _, after, _)| path == &note.path && after == &self.draft)
-                .map(|(_, _, _, result)| result.clone());
+                discard_is_for(self.kept.discarded(), note) && self.draft == note.text;
+            let vital_result = self.stat_result_for(&(note.owner.key(), note.path.clone()));
             let vitals = match (editable, &parsed) {
                 (true, Ok(entry)) => creature::vital_checks(entry),
                 _ => Vec::new(),
@@ -8420,31 +8606,27 @@ impl Library {
                 .map_or(Tone::Error, |(_, _, exists)| {
                     crate::content_workspace::manifest_fault_tone(*exists)
                 });
-            let orders = &self.result_orders;
-            let mut kept: Vec<(Kept, String, bool, design::ResultOrder)> = Vec::new();
-            if discard_shown {
-                kept.push((
-                    Kept::Discard,
-                    format!("{} draft discarded.", note.name()),
-                    true,
-                    order_of(orders, OrderKey::Reader(ResultKind::Discarded)),
-                ));
+            // Each one's line: its words with the order its act issued (`LibraryKept`).
+            let mut kept: Vec<(Kept, design::results::FooterResult, bool)> = Vec::new();
+            if discard_shown
+                && let Some(line) = self.kept.line(KeptKind::Discarded, || {
+                    format!("{} draft discarded.", note.name())
+                })
+            {
+                kept.push((Kept::Discard, line, true));
             }
-            if let Some(result) = heading.undo.as_deref() {
-                kept.push((
-                    Kept::Heading,
-                    result.to_owned(),
-                    true,
-                    order_of(orders, OrderKey::Heading),
-                ));
+            if let Some(line) = heading
+                .undo
+                .clone()
+                .and_then(|result| self.kept.line(KeptKind::Heading, || result))
+            {
+                kept.push((Kept::Heading, line, true));
             }
-            if let Some(result) = &vital_result {
-                kept.push((
-                    Kept::Vital,
-                    result.clone(),
-                    true,
-                    order_of(orders, OrderKey::Vital),
-                ));
+            if let Some(line) = vital_result
+                .clone()
+                .and_then(|result| self.kept.line(KeptKind::Vital, || result))
+            {
+                kept.push((Kept::Vital, line, true));
             }
             edit_data = Some(EditData {
                 kept,
@@ -8498,14 +8680,14 @@ impl Library {
         }
         // Live, because Discard in this same frame changed the draft.
         if self.draft != note.text {
-            self.discarded = None;
+            let _ = self.kept.take_discarded();
         }
         // In Read, the discard result sits with the reader's other results, in the footer.
-        if !save_row && discard_is_for(self.discarded.as_ref(), note) {
+        if !save_row && discard_is_for(self.kept.discarded(), note) {
             if choices_in_reader {
                 results.discarded = Some(note.name().to_owned());
             } else if design::draft_discarded(ui, note.name())
-                && let Some((_, _, text)) = self.discarded.take()
+                && let Some((_, _, text)) = self.kept.take_discarded()
             {
                 self.draft = text;
                 // The draft changed: a failed Save of the old words no longer owns it.
@@ -8523,6 +8705,8 @@ impl Library {
         );
         let shown = std::cell::RefCell::new(None::<ResultPress>);
         let (mut heading_fix, mut vital_use, mut footer_repair) = (false, None, false);
+        // Every result is in: each gets its line (its words with the order its act issued).
+        results.lines = self.kept_lines(&results);
         let mut pane_footer = None;
         if let Some(data) = &edit_data {
             let EditData {
@@ -8538,7 +8722,6 @@ impl Library {
                 (vital_result.as_deref(), &broken_cache.0, *reason_tone);
             let link_words = missing_link.as_ref().map(|(_, words)| words.as_str());
             let repair = recovery.as_ref().filter(|_| note.error.is_some());
-            let orders = &self.result_orders;
             let mut footer = design::Footer::new(
                 (
                     if self.source {
@@ -8546,18 +8729,18 @@ impl Library {
                     } else {
                         "library_footer"
                     },
-                    note.owner.id(),
+                    note.owner.key(),
                     &note.path,
                 ),
                 editor_width,
             );
-            for (which, words, undo, order) in kept {
+            for (which, line, undo) in kept {
                 let which = *which;
                 let (discard_undo, heading_undo, vital_undo) =
                     (&discard_undo, &heading_undo, &vital_undo);
                 let heading_result = heading.undo.as_deref();
                 // The fixes' results are messages, so each Undo keeps its icon on the line.
-                footer.result(*order, words.as_str(), *undo, move |ui| match which {
+                add_reader_result(&mut footer, line, *undo, move |ui| match which {
                     Kept::Discard => discard_undo.set(design::draft_discarded(ui, note.name())),
                     Kept::Heading => heading_undo.set(heading_result.is_some_and(|result| {
                         design::undo_message(ui, Tone::Success, result, "Undo heading change")
@@ -8570,9 +8753,12 @@ impl Library {
             // The reader's results, each with its own order (a link offer's and a link result's
             // from their stores).
             if *results_shown {
-                for item in results.items() {
-                    let (kind, results, shown) = (item.0, &results, &shown);
-                    add_reader_result(&mut footer, results, orders, item, move |ui| {
+                for (kind, _, undo) in results.items() {
+                    let (results, shown) = (&results, &shown);
+                    let Some(line) = results.line(kind) else {
+                        continue;
+                    };
+                    add_reader_result(&mut footer, line, undo, move |ui| {
                         let mut shown = shown.borrow_mut();
                         show_result(
                             ui,
@@ -8652,14 +8838,13 @@ impl Library {
                 draft_reason,
                 &dependencies,
                 &dependency_results,
-                &self.result_orders,
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
             pane_footer = Some(footer);
         } else if choices_in_reader {
             let mut footer = design::Footer::new(
-                ("library_footer", note.owner.id(), &note.path),
+                ("library_footer", note.owner.key(), &note.path),
                 editor_width.min(design::READER_MEASURE),
             );
             reader_messages(
@@ -8670,7 +8855,6 @@ impl Library {
                 draft_reason,
                 &dependencies,
                 &dependency_results,
-                &self.result_orders,
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
@@ -8785,7 +8969,7 @@ impl Library {
             // footer is empty, and the pane is still the editor's.
             let footer = pane_footer.take().unwrap_or_else(|| {
                 design::Footer::new(
-                    ("library_source", note.owner.id(), &note.path),
+                    ("library_source", note.owner.key(), &note.path),
                     editor_width,
                 )
             });
@@ -8964,7 +9148,7 @@ impl Library {
             // scrolls (round 28 rows 17, 50, 53, 54; G6; P2 for the draft's footer).
             let footer = pane_footer.take().unwrap_or_else(|| {
                 design::Footer::new(
-                    ("library_footer", note.owner.id(), &note.path),
+                    ("library_footer", note.owner.key(), &note.path),
                     editor_width.min(design::READER_MEASURE),
                 )
             });
@@ -8999,7 +9183,7 @@ impl Library {
             // (its line comes back with its own draft). Typed text is never replaced.
             if discard_undo.get()
                 && self.draft == note.text
-                && let Some((_, _, text)) = self.discarded.take()
+                && let Some((_, _, text)) = self.kept.take_discarded()
             {
                 self.draft = text;
                 // The draft changed: a failed Save of the old words no longer owns it.
@@ -9009,34 +9193,18 @@ impl Library {
                 .then(|| Entry::parse(&note.path, &self.draft).ok())
                 .flatten()
                 .filter(|_| editable && !conflict);
-            let heading_now = HeadingChoice::new(
-                current.as_ref(),
-                &self.draft,
-                self.heading_undo.as_ref(),
-                &note.path,
-            );
+            // The open file, whole (owner kind, owner id, path): a fix's Undo acts only on it.
+            let file: FileId = (note.owner.key(), note.path.clone());
+            let heading_now =
+                HeadingChoice::new(current.as_ref(), &self.draft, self.kept.heading(), &file);
             let pressed_heading = (
                 heading_fix && heading_now.fix.is_some(),
-                heading_undo.get()
-                    && self
-                        .heading_undo
-                        .as_ref()
-                        .is_some_and(|(at, _, after)| *at == note.path && *after == self.draft),
+                heading_undo.get() && self.heading_undo_applies(&file),
             );
             if pressed_heading.0 || pressed_heading.1 {
                 self.draft_revision += 1;
             }
-            let fixed = pressed_heading.0;
-            save |= heading_now.apply(
-                pressed_heading,
-                &note.path,
-                &mut self.draft,
-                &mut self.heading_undo,
-            );
-            if fixed && self.heading_undo.is_some() {
-                self.result_orders
-                    .insert(OrderKey::Heading, design::ResultOrder::issue());
-            }
+            save |= heading_now.apply(pressed_heading, &file, &mut self.draft, &mut self.kept);
             // The stat fix again from the current text: its check must still say this value.
             let current = vital_use.and_then(|(key, label, value)| {
                 let entry = Entry::parse(&note.path, &self.draft)
@@ -9048,29 +9216,21 @@ impl Library {
                     .then_some((key, label, value, entry))
             });
             if let Some((key, label, value, entry)) = current {
-                match creature::use_vital(&self.draft, &entry, key, value) {
-                    Ok(after) => {
-                        self.result_orders
-                            .insert(OrderKey::Vital, design::ResultOrder::issue());
-                        self.vital_undo = Some((
-                            note.path.clone(),
-                            self.draft.clone(),
-                            after.clone(),
-                            format!("The stat block now says {label} {value}."),
-                        ));
-                        self.draft = after;
-                        // The draft changed: a failed Save of the old words no longer owns it.
-                        self.draft_revision += 1;
-                    }
-                    Err(error) => self.error = Some(error),
-                }
+                Self::fix_stat(
+                    (
+                        &mut self.kept,
+                        &mut self.draft,
+                        &mut self.draft_revision,
+                        &mut self.error,
+                    ),
+                    file.clone(),
+                    &entry,
+                    (key, label, value),
+                );
             }
             if vital_undo.get()
-                && self
-                    .vital_undo
-                    .as_ref()
-                    .is_some_and(|(path, _, after, _)| *path == note.path && *after == self.draft)
-                && let Some((_, before, _, _)) = self.vital_undo.take()
+                && self.stat_undo_applies(&file)
+                && let Some((_, before, _, _)) = self.kept.take_vital()
             {
                 self.draft = before;
                 // The draft changed: a failed Save of the old words no longer owns it.
@@ -9078,7 +9238,7 @@ impl Library {
             }
             // Live, as above: a press that changed the draft ends Discard's Undo.
             if self.draft != note.text {
-                self.discarded = None;
+                let _ = self.kept.take_discarded();
             }
             if self.draft_revision != draft_before {
                 ui.ctx().request_repaint();
@@ -9098,21 +9258,16 @@ impl Library {
         if heading_pressed.0 || heading_pressed.1 {
             self.draft_revision += 1;
         }
-        let fixed = heading_pressed.0;
         save |= heading.apply(
             heading_pressed,
-            &note.path,
+            &(note.owner.key(), note.path.clone()),
             &mut self.draft,
-            &mut self.heading_undo,
+            &mut self.kept,
         );
-        if fixed && self.heading_undo.is_some() {
-            self.result_orders
-                .insert(OrderKey::Heading, design::ResultOrder::issue());
-        }
         let undo_identities = pressed.identities;
         let undo_identity = pressed.identity;
         if pressed.discarded
-            && let Some((_, _, text)) = self.discarded.take()
+            && let Some((_, _, text)) = self.kept.take_discarded()
         {
             self.draft = text;
             // The draft changed: a failed Save of the old words no longer owns it.
@@ -9120,18 +9275,7 @@ impl Library {
         }
         if repair_pressed {
             if let Some((module, path, exists)) = recovery {
-                match crate::content_workspace::ManifestWrite::write_as(&module, &path, exists) {
-                    Ok(write) => {
-                        self.result_orders.insert(
-                            OrderKey::Reader(ResultKind::Manifest),
-                            design::ResultOrder::issue(),
-                        );
-                        self.manifest_write = Some(write);
-                        self.stale = true;
-                        self.content_changed = Some(module.path);
-                    }
-                    Err(error) => self.error = Some(error),
-                }
+                self.write_manifest(module, &path, exists);
             } else {
                 self.source = true;
                 self.focus_repair = true;
@@ -9148,7 +9292,7 @@ impl Library {
                     copied_path,
                     copied_text,
                     ..
-                }) = self.dependency_undos.get(at)
+                }) = self.kept.copies().get(at)
             {
                 let copied = note_path(root, copied_path)?;
                 if fs::read_to_string(&copied)
@@ -9166,11 +9310,10 @@ impl Library {
                     return Err(error.to_string());
                 }
                 self.content_changed = Some(root.clone());
-                self.dependency_undos.remove(at);
+                self.kept.remove_copy(at);
                 self.stale = true;
             }
             if let Some(id) = copy_dependency
-                && let Owner::Package(package) = &note.owner
                 && let Some(source) = self
                     .loaded
                     .as_ref()
@@ -9178,50 +9321,9 @@ impl Library {
                     .notes
                     .iter()
                     .find(|n| n.entry.as_ref().is_some_and(|e| e.id == id))
+                && let Some(root) = Self::copy_dependency(&mut self.kept, note, source, campaigns)?
             {
-                let source = crate::content_workspace::CopySource {
-                    entry: source.entry.clone().unwrap(),
-                    text: source.text.clone(),
-                    root: source.owner.root().map(Path::to_path_buf),
-                    campaign: None,
-                };
-                let catalogue = crate::content_workspace::Catalogue::load(
-                    campaigns.modules(),
-                    campaigns.active_campaign().as_ref(),
-                )?;
-                let plan = crate::content_workspace::CopyPlan::prepare(
-                    &source,
-                    &package.path,
-                    None,
-                    &source.entry.name,
-                    "",
-                    &catalogue,
-                )?;
-                let copied = plan.save()?;
-                let after = crate::content_workspace::redirect_reference(
-                    &note.text,
-                    &source.entry,
-                    copied.id,
-                )?;
-                if let Err(error) = write_note(&package.path, &note.path, Some(&note.text), &after)
-                {
-                    let _ = fs::remove_file(package.path.join(&plan.relative));
-                    return Err(error);
-                }
-                self.dependency_undos.push(DependencyUndo {
-                    root: package.path.clone(),
-                    path: note.path.clone(),
-                    before: note.text.clone(),
-                    after,
-                    copied_path: plan.relative.clone(),
-                    copied_text: plan.text.clone(),
-                    result: format!(
-                        "{} copied to {} and linked.",
-                        source.entry.name, package.name
-                    ),
-                    order: design::ResultOrder::issue(),
-                });
-                self.content_changed = Some(package.path.clone());
+                self.content_changed = Some(root);
                 self.stale = true;
             }
             Ok(())
@@ -9298,62 +9400,18 @@ impl Library {
                 self.link_choices.clear();
             }
         }
-        if let Some(module) = use_every
-            && let Some(campaign) = campaigns.active_campaign()
-        {
-            let result =
-                crate::content_workspace::CampaignDocument::load(&campaign).and_then(|before| {
-                    crate::content_workspace::use_in_campaign(
-                        &campaign,
-                        module.id,
-                        &module.name,
-                        None,
-                    )?;
-                    let after = crate::content_workspace::CampaignDocument::load(&campaign)?;
-                    Ok(SelectionUndo {
-                        campaign: campaign.clone(),
-                        before: before.selections,
-                        after: after.selections,
-                    })
-                });
-            match result {
-                Ok(undo) => {
-                    self.result_orders.insert(
-                        OrderKey::Reader(ResultKind::PackageUse),
-                        design::ResultOrder::issue(),
-                    );
-                    self.selection_undo = Some(undo);
-                    self.stale = true;
-                    self.reconcile_registrations(campaigns);
-                    self.content_changed = Some(campaign.path);
-                }
-                Err(error) => self.error = Some(error),
-            }
+        if let Some(module) = use_every {
+            self.choose_all(&module, campaigns);
         }
 
         if save {
             self.save_selected(file_gone);
         }
         let identity_result = if let Some((root, paths)) = new_identities {
-            crate::content_workspace::ContentEdits::new_identities(&root, &paths).map(|edits| {
-                let folder = root.file_name().unwrap_or_default().to_string_lossy();
-                self.result_orders.insert(
-                    OrderKey::Reader(ResultKind::Identities),
-                    design::ResultOrder::issue(),
-                );
-                self.identities_undo = Some((
-                    edits,
-                    format!(
-                        "{} in {folder}/ are now separate entries.",
-                        design::count(paths.len(), "file", "files")
-                    ),
-                ));
-                self.stale = true;
-                self.content_changed = Some(root);
-            })
+            self.separate_entries(root, &paths)
         } else if undo_identities {
-            self.identities_undo.as_ref().unwrap().0.undo().map(|()| {
-                self.identities_undo = None;
+            self.kept.identities().unwrap().0.undo().map(|()| {
+                let _ = self.kept.take_identities();
                 self.stale = true;
                 self.content_changed = campaigns.active_campaign().map(|campaign| campaign.path);
             })
@@ -9729,7 +9787,7 @@ mod tests {
         assert_eq!(unresolved.len(), 1, "{:?}", loaded.diagnostic_texts());
         assert_eq!(
             unresolved[0].file,
-            (Some(ember.id), "Rules/Watch.md".to_owned())
+            (OwnerKey::Package(ember.id), "Rules/Watch.md".to_owned())
         );
         assert!(
             unresolved[0]
@@ -10553,7 +10611,7 @@ mod tests {
         assert_eq!(wolves.len(), 2);
         // Round 24 AC1: both files of the duplicate count in the header, as both rows are
         // marked, though the check names one side.
-        let wolf_files: Vec<FileKey> = wolves.iter().map(|(_, n)| Loaded::file_key(n)).collect();
+        let wolf_files: Vec<FileId> = wolves.iter().map(|(_, n)| Loaded::file_key(n)).collect();
         let named = loaded
             .diagnostics
             .iter()
@@ -10562,7 +10620,7 @@ mod tests {
             .collect::<std::collections::HashSet<_>>()
             .len();
         assert!(named < 2, "fixture: the check names one Wolf file only");
-        let counted: std::collections::HashSet<&FileKey> = loaded
+        let counted: std::collections::HashSet<&FileId> = loaded
             .diagnostics
             .iter()
             .map(|d| &d.file)
@@ -12441,10 +12499,6 @@ mod tests {
     /// AD1: on reload, every Undo result checks that its files still hold what its action wrote.
     /// Each caller is given one outside change; the check never writes a file.
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn iter14_e_changed_files_end_every_undo_result() {
         use crate::content_workspace::ContentEdits;
         let temp = tempfile::tempdir().unwrap();
@@ -12498,23 +12552,25 @@ mod tests {
         };
 
         // `Undo separate entries`: the batch.
-        let mut library = Library {
-            identities_undo: Some((edit("batch"), "2 files are now separate entries.".into())),
-            ..Default::default()
-        };
+        let mut library = Library::default();
+        library
+            .kept
+            .set_identities((edit("batch"), "2 files are now separate entries.".into()));
         library.forget_changed_undos();
         assert!(
-            library.identities_undo.is_some(),
-            "unchanged files keep Undo"
+            library.kept.identities().is_some() && library.kept.marks() == 1,
+            "unchanged files keep Undo, and its mark"
         );
         change_outside(&mut library);
-        assert!(library.identities_undo.is_none());
+        // M-L0.4a: the mark (the footer order) ends with its data.
+        assert!(library.kept.identities().is_none() && library.kept.marks() == 0);
         // A deleted file of the batch also ends the result.
-        library.identities_undo =
-            Some((edit("deleted"), "2 files are now separate entries.".into()));
+        library
+            .kept
+            .set_identities((edit("deleted"), "2 files are now separate entries.".into()));
         library.forget_changed_undos();
         assert!(
-            library.identities_undo.is_some(),
+            library.kept.identities().is_some(),
             "fixture: Undo before the delete"
         );
         let target = root.join(&paths[1]);
@@ -12522,26 +12578,26 @@ mod tests {
         let first = fs::read(root.join(&paths[0])).unwrap();
         fs::remove_file(&target).unwrap();
         library.forget_changed_undos();
-        assert!(library.identities_undo.is_none());
+        assert!(library.kept.identities().is_none() && library.kept.marks() == 0);
         assert!(!target.exists(), "the reload wrote nothing");
         assert_eq!(fs::read(root.join(&paths[0])).unwrap(), first);
         fs::write(&target, kept).unwrap();
 
         // `Undo separate entry`: one file.
         let text = fs::read_to_string(root.join(&paths[1])).unwrap();
-        library.identity_undo = Some(IdentityUndo {
+        library.kept.set_identity(IdentityUndo {
             root: root.clone(),
             path: paths[1].clone(),
             before: "before".into(),
             after: text,
         });
         library.forget_changed_undos();
-        assert!(library.identity_undo.is_some());
+        assert!(library.kept.identity().is_some() && library.kept.marks() == 1);
         change_outside(&mut library);
-        assert!(library.identity_undo.is_none());
+        assert!(library.kept.identity().is_none() && library.kept.marks() == 0);
 
         // `Undo copy`: the changed file is the copy.
-        library.dependency_undos = vec![DependencyUndo {
+        library.kept.push_copy(DependencyUndo {
             root: root.clone(),
             path: paths[0].clone(),
             before: "before".into(),
@@ -12549,12 +12605,11 @@ mod tests {
             copied_path: paths[1].clone(),
             copied_text: fs::read_to_string(root.join(&paths[1])).unwrap(),
             result: String::new(),
-            order: design::ResultOrder::issue(),
-        }];
+        });
         library.forget_changed_undos();
-        assert!(!library.dependency_undos.is_empty());
+        assert!(!library.kept.copies().is_empty() && library.kept.marks() == 1);
         change_outside(&mut library);
-        assert!(library.dependency_undos.is_empty());
+        assert!(library.kept.copies().is_empty() && library.kept.marks() == 0);
 
         // `Undo link update`.
         library.link_edits.record(LinkResult {
@@ -12575,7 +12630,7 @@ mod tests {
 
         // `Undo package choice`: only the package choices count.
         let mut document = CampaignDocument::load(&campaign).unwrap();
-        library.selection_undo = Some(SelectionUndo {
+        library.kept.set_package_use(SelectionUndo {
             campaign: campaign.clone(),
             before: Vec::new(),
             after: document.selections.clone(),
@@ -12585,7 +12640,7 @@ mod tests {
         fs::write(&campaign_file, &edited).unwrap();
         library.forget_changed_undos();
         assert!(
-            library.selection_undo.is_some(),
+            library.kept.package_use().is_some() && library.kept.marks() == 1,
             "other campaign edits keep Undo"
         );
         let saved = fs::read(&campaign_file).unwrap();
@@ -12594,7 +12649,7 @@ mod tests {
         document.save().unwrap();
         let cleared = fs::read(&campaign_file).unwrap();
         library.forget_changed_undos();
-        assert!(library.selection_undo.is_none());
+        assert!(library.kept.package_use().is_none() && library.kept.marks() == 0);
         assert_eq!(fs::read(&campaign_file).unwrap(), cleared);
         fs::write(&campaign_file, saved).unwrap();
 
@@ -13109,7 +13164,7 @@ mod tests {
                 // Undo of the registration takes the later choice out with it, in whatever
                 // form it names the copy; the other packages' choices stay, and the choice's
                 // own result ends with its data.
-                library.selection_undo = Some(SelectionUndo {
+                library.kept.set_package_use(SelectionUndo {
                     campaign: campaign.clone(),
                     before: choices_before.clone(),
                     after: CampaignDocument::load(&campaign).unwrap().selections,
@@ -13172,7 +13227,10 @@ mod tests {
                     && !text.contains(&format!("] {}\n", module.name)),
                 "point-3-text-{path}: the file still names the copy\n{text}"
             );
-            assert!(library.selection_undo.is_none(), "point-3-result-{path}");
+            assert!(
+                library.kept.package_use().is_none() && library.kept.marks() == 0,
+                "point-3-result-{path}"
+            );
             library.loaded = None;
             library.selected = None;
             library.draft.clear();
@@ -13440,10 +13498,650 @@ mod tests {
             manifest_gone: false,
             owner: Owner::Package(module.clone()),
         };
-        let discarded = (Some(first.id), "a.md".to_string(), "words".to_string());
+        let discarded = (
+            OwnerKey::Package(first.id),
+            "a.md".to_string(),
+            "words".to_string(),
+        );
         assert!(discard_is_for(Some(&discarded), &note(&first, "a.md")));
         assert!(!discard_is_for(Some(&discarded), &note(&first, "b.md")));
         assert!(!discard_is_for(Some(&discarded), &note(&second, "a.md")));
+        // M-L0.4a: a campaign with the package's UUID (settings check the two apart) holds a
+        // different file at the same path: the package's Undo is not offered there.
+        let campaign = Note {
+            owner: Owner::Campaign(Campaign {
+                id: first.id,
+                name: "Campaign".into(),
+                path: temp.path().join("campaign"),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            }),
+            ..note(&first, "a.md")
+        };
+        assert!(!discard_is_for(Some(&discarded), &campaign));
+    }
+
+    /// M-L0.4a, proof 4: three files that differ only by their owner. A is a package's
+    /// `Rules/X.md`; B1 a campaign's with A's UUID (settings check package and campaign UUIDs
+    /// apart); B2 another package's. Each holds `text`.
+    fn same_path_notes(text: &str, shared: Uuid, root: &Path) -> Vec<Note> {
+        let module = |id: Uuid, name: &str| Module {
+            id,
+            name: name.into(),
+            path: root.join(name),
+        };
+        let note = |owner: Owner| Note {
+            path: "Rules/X.md".into(),
+            entry: Entry::parse("Rules/X.md", text).ok(),
+            text: text.to_owned(),
+            error: None,
+            fault: None,
+            manifest_gone: false,
+            owner,
+        };
+        vec![
+            note(Owner::Package(module(shared, "a"))),
+            note(Owner::Campaign(Campaign {
+                id: shared,
+                name: "B1".into(),
+                path: root.join("b1"),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            })),
+            note(Owner::Package(module(Uuid::new_v4(), "b2"))),
+        ]
+    }
+
+    /// M-L0.4a, proof 4: a creature whose first heading is not its name, and whose Hit Points
+    /// line is not its stat block's, for the two real fixes; and its file A.
+    fn fix_fixture() -> (String, Entry, FileId, Uuid) {
+        let text = format!(
+            "{}\n**Hit Points** 45\n",
+            note_text("Guard", "creature", None)
+                .replace("| Hit Points |  |", "| Hit Points | 1 |")
+                .replacen("# Guard", "# Old Guard", 1)
+        );
+        let entry = Entry::parse("Rules/X.md", &text).unwrap();
+        let shared = Uuid::new_v4();
+        (
+            text,
+            entry,
+            (OwnerKey::Package(shared), "Rules/X.md".into()),
+            shared,
+        )
+    }
+
+    /// The entry at `at` opens; its file, whole.
+    fn open_file(library: &mut Library, at: usize) -> FileId {
+        library.open_entry(at);
+        assert_eq!(library.selected, Some(at), "fixture: entry {at} opens");
+        let note = &library.loaded.as_ref().unwrap().notes[at];
+        (note.owner.key(), note.path.clone())
+    }
+
+    /// The three same-path files of `same_path_notes`, each holding `text`, with `kept`.
+    fn same_path_library(text: &str, shared: Uuid, root: &Path, kept: LibraryKept) -> Library {
+        Library {
+            loaded: Some(Loaded {
+                notes: same_path_notes(text, shared, root),
+                ..Default::default()
+            }),
+            kept,
+            ..Default::default()
+        }
+    }
+
+    /// The B files of proof 4: B1 differs from A by its owner's kind only, B2 by its owner's id.
+    const OTHER_FILES: [(usize, &str); 2] =
+        [(1, "same UUID, other kind"), (2, "same path, other owner")];
+
+    #[test]
+    fn a_heading_fix_undo_belongs_to_its_whole_file() {
+        // M-L0.4a, proof 4: the heading fix's Undo shows and acts only on its own file (owner
+        // kind, owner id, path). B gets A's exact fixed text, so one owner check stands between B
+        // and A's Undo: B1 the kind, B2 the owner id. Main's lifecycle stays: a selection does not
+        // end it, and it comes back on A.
+        let temp = tempfile::tempdir().unwrap();
+        let (text, entry, a, shared) = fix_fixture();
+        let mut kept = LibraryKept::default();
+        let mut after = text.clone();
+        assert!(HeadingChoice::new(Some(&entry), &text, None, &a).apply(
+            (true, false),
+            &a,
+            &mut after,
+            &mut kept
+        ));
+        let mut library = same_path_library(&after, shared, temp.path(), kept);
+        let after_entry = Entry::parse("Rules/X.md", &after).unwrap();
+        let shows = |library: &Library, file: &FileId| {
+            HeadingChoice::new(
+                Some(&after_entry),
+                &library.draft,
+                library.kept.heading(),
+                file,
+            )
+            .undo
+            .is_some()
+        };
+        let file = open_file(&mut library, 0);
+        assert!(
+            shows(&library, &file) && library.heading_undo_applies(&file),
+            "A's heading Undo shows and acts on A"
+        );
+        for (at, case) in OTHER_FILES {
+            let file = open_file(&mut library, at);
+            assert!(!shows(&library, &file), "heading show: {case}");
+        }
+        for (at, case) in OTHER_FILES {
+            let file = open_file(&mut library, at);
+            assert!(
+                !library.heading_undo_applies(&file),
+                "heading press: {case}"
+            );
+        }
+        let file = open_file(&mut library, 0);
+        assert!(
+            shows(&library, &file) && library.heading_undo_applies(&file),
+            "heading A → B → A: the Undo is back on A"
+        );
+    }
+
+    #[test]
+    fn a_stat_fix_undo_belongs_to_its_whole_file() {
+        // M-L0.4a, proof 4: as for the heading fix, for the stat fix (its own slot).
+        let temp = tempfile::tempdir().unwrap();
+        let (text, entry, a, shared) = fix_fixture();
+        let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
+        let mut fixed = Library {
+            draft: text,
+            ..Default::default()
+        };
+        Library::fix_stat(
+            (
+                &mut fixed.kept,
+                &mut fixed.draft,
+                &mut fixed.draft_revision,
+                &mut fixed.error,
+            ),
+            a,
+            &entry,
+            (key, label, value),
+        );
+        let kept = std::mem::take(&mut fixed.kept);
+        let mut library = same_path_library(&fixed.draft, shared, temp.path(), kept);
+        let file = open_file(&mut library, 0);
+        assert!(
+            library.stat_result_for(&file).is_some() && library.stat_undo_applies(&file),
+            "A's stat Undo shows and acts on A"
+        );
+        for (at, case) in OTHER_FILES {
+            let file = open_file(&mut library, at);
+            assert!(
+                library.stat_result_for(&file).is_none(),
+                "stat show: {case}"
+            );
+        }
+        for (at, case) in OTHER_FILES {
+            let file = open_file(&mut library, at);
+            assert!(!library.stat_undo_applies(&file), "stat press: {case}");
+        }
+        let file = open_file(&mut library, 0);
+        assert!(
+            library.stat_result_for(&file).is_some() && library.stat_undo_applies(&file),
+            "stat A → B → A: the Undo is back on A"
+        );
+    }
+
+    #[test]
+    fn a_heading_fix_and_a_stat_fix_keep_their_own_slots() {
+        // M-L0.4a, proof 4: a stat fix, then a heading fix. With the draft back at each fix's
+        // text, that fix's Undo applies: one kind's fix never ends the other's.
+        let (text, entry, a, _) = fix_fixture();
+        let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
+        let mut library = Library {
+            draft: text,
+            ..Default::default()
+        };
+        Library::fix_stat(
+            (
+                &mut library.kept,
+                &mut library.draft,
+                &mut library.draft_revision,
+                &mut library.error,
+            ),
+            a.clone(),
+            &entry,
+            (key, label, value),
+        );
+        let stat_after = library.draft.clone();
+        let stat_entry = Entry::parse("Rules/X.md", &stat_after).unwrap();
+        let mut heading_after = stat_after.clone();
+        HeadingChoice::new(Some(&stat_entry), &stat_after, None, &a).apply(
+            (true, false),
+            &a,
+            &mut heading_after,
+            &mut library.kept,
+        );
+        assert_ne!(
+            stat_after, heading_after,
+            "fixture: the heading fix changed it"
+        );
+        library.draft = stat_after;
+        assert!(
+            library.stat_undo_applies(&a),
+            "a heading fix keeps the stat Undo"
+        );
+        library.draft = heading_after;
+        assert!(
+            library.heading_undo_applies(&a),
+            "the heading Undo stands beside the stat Undo"
+        );
+    }
+
+    #[test]
+    fn every_kept_result_comes_with_its_mark_from_its_real_writer() {
+        // M-L0.4a, proof 2: each REAL writer (the method the UI calls) stores its result's data
+        // and its mark in one call (`LibraryKept::set_*`, `push_copy`): empty → present, the
+        // newest first; a second act of the kind replaces the first (a newer order, still one
+        // mark of the kind). A copy is one result per copy: the second is the newest and the
+        // first stays.
+        let temp = tempfile::tempdir().unwrap();
+        let m = create_module(&temp.path().join("module"), "Module", "test").unwrap();
+        for name in ["Ash", "Brand", "Cinder", "Dusk"] {
+            fs::write(
+                m.path.join(format!("{name}.md")),
+                note_text(name, "rule", None),
+            )
+            .unwrap();
+        }
+        // The copies' fixture: two encounters of the package, each linking to a creature of
+        // another package.
+        let source = create_module(&temp.path().join("source"), "Source", "source").unwrap();
+        for (creature, encounter) in [("Wolf", "Ambush"), ("Boar", "Raid")] {
+            let text = note_text(creature, "creature", None);
+            let id = Entry::parse("x.md", &text).unwrap().id;
+            fs::write(source.path.join(format!("{creature}.md")), text).unwrap();
+            let path = format!("{encounter}.md");
+            let fields = format!(
+                "splat_id: {}\nsplat_kind: encounter\nsplat_name: {encounter}\nsplat_encounter:\n  roster:\n  - key: foe\n    creature: {{id: {id}}}\n    side: enemies\n    controller: {{kind: manual, role: gm}}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n",
+                Uuid::new_v4()
+            );
+            let text =
+                content::formats::fixture(&path, &fields, &format!("\n# {encounter}\n")).unwrap();
+            fs::write(m.path.join(path), text).unwrap();
+        }
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        let unregistered: Vec<Module> = ["U1", "U2"]
+            .into_iter()
+            .map(|name| create_module(&temp.path().join(name), name, &name.to_lowercase()).unwrap())
+            .collect();
+        for module in [&m, &source].into_iter().chain(&unregistered) {
+            campaigns.register_module(module.clone()).unwrap();
+        }
+        let campaign = sd1_campaign(temp.path());
+        campaigns.open_for_test(&campaign);
+        let mut library = Library {
+            loaded: Some(load_all(&[m.clone(), source.clone()], None).unwrap()),
+            ..Default::default()
+        };
+        let at = |library: &Library, name: &str| {
+            let path = format!("{name}.md");
+            let notes = &library.loaded.as_ref().unwrap().notes;
+            notes.iter().position(|note| note.path == path).unwrap()
+        };
+        let newest = |library: &Library| library.kept.kinds_newest_first().first().copied();
+        // Both acts of one kind: the second replaces the first, with a newer order.
+        let replaced = |library: &Library, kind: KeptKind, before: Option<design::ResultOrder>| {
+            let marks = library.kept.kinds_newest_first();
+            assert_eq!(marks.first(), Some(&kind), "{kind:?}: the newest");
+            assert_eq!(
+                marks.iter().filter(|at| **at == kind).count(),
+                1,
+                "{kind:?}: one"
+            );
+            assert!(
+                library.kept.order_of(kind) > before,
+                "{kind:?}: a newer order"
+            );
+        };
+
+        // ScopeNotice, by `open_entry` of an entry outside the scope.
+        for name in ["Ash", "Brand"] {
+            let before = library.kept.order_of(KeptKind::ScopeNotice);
+            library.scope = Scope::Package(Uuid::new_v4());
+            library.open_entry(at(&library, name));
+            replaced(&library, KeptKind::ScopeNotice, before);
+        }
+        // Identity, by `give_new_identity` of the open entry.
+        for name in ["Ash", "Brand"] {
+            let before = library.kept.order_of(KeptKind::Identity);
+            library.selected = Some(at(&library, name));
+            library.give_new_identity().unwrap();
+            replaced(&library, KeptKind::Identity, before);
+        }
+        // Discarded, by `reload_note_from_disk` of a changed file under a draft (twice), then by
+        // the editor's Discard (twice); Removed, by the reload of a file that has gone under a
+        // draft (Ash, then Brand).
+        let reload = |library: &mut Library, name: &str, text: Option<&str>| {
+            let index = at(library, name);
+            library.selected = Some(index);
+            library.draft = "An unsaved draft.".into();
+            library.disk_change = Some(DiskChange {
+                text: text.map(str::to_owned),
+                moved_to: None,
+                fault: None,
+            });
+            library.reload_note_from_disk(index);
+        };
+        for words in ["A changed file.", "Changed again."] {
+            let before = library.kept.order_of(KeptKind::Discarded);
+            reload(&mut library, "Ash", Some(words));
+            replaced(&library, KeptKind::Discarded, before);
+        }
+        for name in ["Cinder", "Dusk"] {
+            let before = library.kept.order_of(KeptKind::Discarded);
+            let index = at(&library, name);
+            library.selected = Some(index);
+            library.draft = format!("A draft of {name}.");
+            let note = &library.loaded.as_ref().unwrap().notes[index];
+            Library::discard_draft(
+                (
+                    &mut library.kept,
+                    &mut library.draft,
+                    &mut library.draft_revision,
+                    &mut library.error,
+                ),
+                note,
+            );
+            replaced(&library, KeptKind::Discarded, before);
+            assert_eq!(library.draft, note.text, "Discard: the file's words");
+        }
+        for name in ["Ash", "Brand"] {
+            let before = library.kept.order_of(KeptKind::Removed);
+            reload(&mut library, name, None);
+            replaced(&library, KeptKind::Removed, before);
+            // The draft it let go is a discard too: both, Remove's the newest.
+            assert!(library.kept.discarded().is_some() && library.kept.removed().is_some());
+        }
+        // Heading and Vital, by their real fixes.
+        let text = format!(
+            "{}\n**Hit Points** 45\n",
+            note_text("Guard", "creature", None)
+                .replace("| Hit Points |  |", "| Hit Points | 1 |")
+                .replacen("# Guard", "# Old Guard", 1)
+        );
+        let entry = Entry::parse("Rules/X.md", &text).unwrap();
+        let file: FileId = (OwnerKey::Package(m.id), "Rules/X.md".into());
+        for _ in 0..2 {
+            let before = library.kept.order_of(KeptKind::Heading);
+            let mut draft = text.clone();
+            HeadingChoice::new(Some(&entry), &text, None, &file).apply(
+                (true, false),
+                &file,
+                &mut draft,
+                &mut library.kept,
+            );
+            replaced(&library, KeptKind::Heading, before);
+        }
+        let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
+        for _ in 0..2 {
+            let before = library.kept.order_of(KeptKind::Vital);
+            library.draft = text.clone();
+            Library::fix_stat(
+                (
+                    &mut library.kept,
+                    &mut library.draft,
+                    &mut library.draft_revision,
+                    &mut library.error,
+                ),
+                file.clone(),
+                &entry,
+                (key, label, value),
+            );
+            replaced(&library, KeptKind::Vital, before);
+        }
+        // Unregistered, by `unregister` (from its dialog).
+        for module in &unregistered {
+            let before = library.kept.order_of(KeptKind::Unregistered);
+            library.unregister(module.clone(), &mut campaigns);
+            replaced(&library, KeptKind::Unregistered, before);
+        }
+        // Manifest, by the repair's `write_manifest` of a deleted manifest (twice).
+        for _ in 0..2 {
+            let before = library.kept.order_of(KeptKind::Manifest);
+            fs::remove_file(m.path.join("Package.md")).unwrap();
+            library.write_manifest(m.clone(), "Package.md", false);
+            assert_eq!(library.error, None, "fixture: the manifest was written");
+            replaced(&library, KeptKind::Manifest, before);
+        }
+        // Identities, by a folder's `separate_entries`.
+        for name in ["Cinder", "Dusk"] {
+            let before = library.kept.order_of(KeptKind::Identities);
+            library
+                .separate_entries(m.path.clone(), &[format!("{name}.md")])
+                .unwrap();
+            replaced(&library, KeptKind::Identities, before);
+        }
+        // PackageUse, by `Choose all` (`choose_all`) for the open campaign.
+        for _ in 0..2 {
+            let before = library.kept.order_of(KeptKind::PackageUse);
+            library.choose_all(&m, &campaigns);
+            replaced(&library, KeptKind::PackageUse, before);
+        }
+        // Copy, by `copy_dependency`: one result per copy, the newest first, the first kept.
+        let copies = |library: &Library| {
+            library
+                .kept
+                .kinds_newest_first()
+                .into_iter()
+                .filter(|kind| *kind == KeptKind::Copy)
+                .count()
+        };
+        for (encounter, creature) in [("Ambush", "Wolf"), ("Raid", "Boar")] {
+            let shown = copies(&library);
+            let loaded = library.loaded.as_ref().unwrap();
+            let find = |name: &str| {
+                loaded
+                    .notes
+                    .iter()
+                    .find(|note| note.path == format!("{name}.md"))
+                    .unwrap()
+            };
+            let root = Library::copy_dependency(
+                &mut library.kept,
+                find(encounter),
+                find(creature),
+                &campaigns,
+            )
+            .unwrap();
+            assert_eq!(root.as_deref(), Some(m.path.as_path()), "fixture: copied");
+            assert_eq!(newest(&library), Some(KeptKind::Copy), "Copy: the newest");
+            assert_eq!(
+                (copies(&library), library.kept.copies().len()),
+                (shown + 1, shown + 1),
+                "Copy: one mark per copy, the first kept"
+            );
+        }
+        // The boundary's static rung (Astra, PR 477): no method of `LibraryKept` hands out a
+        // mutable payload, so no caller can swap one result's data under another's mark.
+        let leaks: Vec<&str> = include_str!("library/kept.rs")
+            .lines()
+            .filter(|line| {
+                line.split_once("-> ")
+                    .is_some_and(|(_, returns)| returns.contains("&mut"))
+            })
+            .collect();
+        assert!(
+            leaks.is_empty(),
+            "kept.rs returns a mutable payload: {leaks:?}"
+        );
+    }
+
+    #[test]
+    fn each_folder_repair_names_the_encounters_of_its_own_owner() {
+        // Astra's case on PR 477: a package and a campaign with one UUID both hold the
+        // duplicate creature and the duplicate encounter, the encounter under another name in
+        // each. Each folder's batch choice names the encounter outside its own batch: the other
+        // owner's. Its cache is keyed by the whole owner key, so the second choice never reuses
+        // the first one's names.
+        let root = tempfile::tempdir().unwrap();
+        let shared = Uuid::new_v4();
+        let creature = note_text("Cinder Wolf", "creature", None);
+        let wolf = Entry::parse("Creatures/Cinder Wolf.md", &creature)
+            .unwrap()
+            .id;
+        let fight = Uuid::new_v4();
+        let encounter = |name: &str| {
+            content::formats::fixture(
+                "Encounters/Bridge.md",
+                &format!(
+                    "splat_id: {fight}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster:\n  - key: wolf\n    creature: {{id: {wolf}}}\n    side: enemies\n    controller: {{kind: manual, role: gm}}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n"
+                ),
+                &format!("\n# {name}\n"),
+            )
+            .unwrap()
+        };
+        let package = Owner::Package(Module {
+            id: shared,
+            name: "Ashen Marches".into(),
+            path: root.path().join("ashen-marches"),
+        });
+        let campaign = Owner::Campaign(Campaign {
+            id: shared,
+            name: "Ember".into(),
+            path: root.path().join("ember"),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        });
+        let note = |path: &str, text: String, owner: &Owner| Note {
+            path: path.into(),
+            entry: Entry::parse(path, &text).ok(),
+            text,
+            error: None,
+            fault: None,
+            manifest_gone: false,
+            owner: owner.clone(),
+        };
+        let loaded = Loaded {
+            notes: vec![
+                note("Creatures/Cinder Wolf.md", creature.clone(), &package),
+                note("Encounters/Bridge.md", encounter("Bridge Ambush"), &package),
+                note("Creatures/Cinder Wolf.md", creature, &campaign),
+                note("Encounters/Bridge.md", encounter("Bridge Fight"), &campaign),
+            ],
+            ..Default::default()
+        };
+        assert!(
+            loaded.notes.iter().all(|note| note.entry.is_some())
+                && loaded.duplicates(0) == [2]
+                && loaded.duplicates(1) == [3],
+            "fixture: the creature and the encounter are each in both owners"
+        );
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let mut painted = Vec::new();
+        for _ in 0..2 {
+            let output = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    duplicate_choices(
+                        ui,
+                        &loaded,
+                        &loaded.notes[0],
+                        &[0, 2],
+                        None,
+                        &mut None,
+                        &mut None,
+                    );
+                });
+            });
+            painted = output
+                .shapes
+                .into_iter()
+                .filter_map(|shape| match shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+        }
+        for words in [
+            // The package's batch leaves the campaign's encounter on the campaign's files.
+            "Bridge Fight keeps the files in ember/.",
+            // The campaign's batch moves the package's encounter onto the package's files.
+            "Bridge Ambush will then use the files in ashen-marches/.",
+        ] {
+            assert!(
+                painted.iter().any(|text| text == words),
+                "each batch names its own owner's outside encounter: {words}\n{painted:#?}"
+            );
+        }
+    }
+
+    #[test]
+    fn back_keeps_a_campaign_file_apart_from_a_package_file() {
+        // M-L0.4a, proof 4: a package file and a campaign file with one UUID and one path (the
+        // package's loads first), and another file. Back finds the campaign's file, never the
+        // package's.
+        let temp = tempfile::tempdir().unwrap();
+        let shared = Uuid::new_v4();
+        let text = note_text("Watch", "rule", None);
+        let notes = || {
+            let mut notes = same_path_notes(&text, shared, temp.path());
+            notes[2].path = "Other.md".into();
+            notes
+        };
+        let mut library = Library {
+            loaded: Some(Loaded {
+                notes: notes(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        library.open_entry(1);
+        library.open_entry(2);
+        library.go(Step::Back);
+        assert_eq!(library.selected, Some(1), "Back opens the campaign's file");
+    }
+
+    #[test]
+    fn a_reload_reselects_the_campaign_file_not_the_package_file() {
+        // M-L0.4a, proof 4: as above, through the real reload: `start_load` keeps the open
+        // file's identity, and `show` takes the new notes in.
+        let temp = tempfile::tempdir().unwrap();
+        let shared = Uuid::new_v4();
+        let text = note_text("Watch", "rule", None);
+        let notes = || {
+            let mut notes = same_path_notes(&text, shared, temp.path());
+            notes[2].path = "Other.md".into();
+            notes
+        };
+        let mut library = Library {
+            loaded: Some(Loaded {
+                notes: notes(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        library.open_entry(1);
+        library.reselect = library.open_file_id();
+        library.loaded = None;
+        library.selected = None;
+        let (send, receive) = mpsc::channel();
+        send.send(Ok(Loaded {
+            notes: notes(),
+            ..Default::default()
+        }))
+        .unwrap();
+        library.pending = Some(receive);
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
+        });
+        assert_eq!(
+            library.selected,
+            Some(1),
+            "the reload reselects the campaign's file"
+        );
     }
 
     #[test]
@@ -14557,7 +15255,7 @@ mod tests {
         );
         assert!(note.text.is_empty() && note.entry.is_none());
         assert_eq!(
-            library.discarded.as_ref().map(|(_, _, text)| text.as_str()),
+            library.kept.discarded().map(|(_, _, text)| text.as_str()),
             Some(draft.as_str()),
             "SD1-reload-undo"
         );
