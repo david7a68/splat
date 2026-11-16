@@ -3240,12 +3240,13 @@ fn add_pane(
     };
     let chosen = Encounters::creature_search_with_summary(
         ui,
-        snapshot.creatures.iter().filter(|c| !c.linked),
+        snapshot.search_list(true),
         search,
         focus_search,
         peek,
         super::SearchRoster {
             already: &|_| false,
+            on_roster: &[],
             separated,
         },
         &summary,

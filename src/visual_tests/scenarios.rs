@@ -27247,6 +27247,17 @@ pub mod npc_in_encounter {
             "A named NPC already on the roster cannot be added again from search",
             |d| d.visible_text("In roster") && !d.has("Add"),
         );
+        // Round 31 SD10, AD11 (in-roster-check-role): the NPC's `In roster` is the same checked
+        // status as `Party in roster` above it: the check before the word.
+        d.observe_both(
+            "r31-SD10-in-roster-check",
+            "In roster has the check that Party in roster has",
+            |d| {
+                let checked =
+                    |word: &str| d.visible_text(&format!("{} {word}", crate::design::icons::OK));
+                checked("Party in roster") && checked("In roster")
+            },
+        );
         d.click(SAVE_ENCOUNTER);
         d.wait_for_text("Saved");
         d.click(RUN_ENCOUNTER);

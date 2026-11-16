@@ -454,11 +454,40 @@ fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
     });
 }
 
+/// A roster row's fault at its place: the row's name and the file's line. Its words are the
+/// shared located form (`outcome::fault_words`: `<name> · line <n>: <cause>`), as every typed
+/// place gives a fault of the DM's files.
+struct RowFault<'a> {
+    name: &'a str,
+    line: usize,
+    problem: &'a str,
+}
+
+impl design::outcome::Fault for RowFault<'_> {
+    /// An unread row (R41, `unread_row_tone`).
+    fn severity(&self) -> design::outcome::Severity {
+        design::outcome::Severity::CannotRead
+    }
+    fn place(&self) -> Option<design::outcome::FaultPlace<'_>> {
+        Some(design::outcome::FaultPlace {
+            name: self.name.into(),
+            line: u32::try_from(self.line).ok(),
+        })
+    }
+    /// The parser's words, as the reader gives them (`cause_words`).
+    fn cause(&self) -> design::outcome::Sentence {
+        outcome_words(&splat::content::layout::cause_words(self.problem))
+    }
+}
+
 fn row_fault_words(name: &str, line: usize, problem: &str) -> String {
-    format!(
-        "{name} · line {line}: {}",
-        splat::content::layout::cause_words(problem)
-    )
+    design::outcome::fault_words(&RowFault {
+        name,
+        line,
+        problem,
+    })
+    .as_str()
+    .to_owned()
 }
 
 /// Read rejected rows from a fresh parse, before catalogue reference resolution.
@@ -677,7 +706,10 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
             faults
                 .iter()
                 .map(|fault| {
-                    row_fault_words(&fault.name, fault.line, fault.problem.trim_end_matches('.'))
+                    // The rows join into one sentence: each without its end mark.
+                    row_fault_words(&fault.name, fault.line, &fault.problem)
+                        .trim_end_matches('.')
+                        .to_owned()
                 })
                 .collect::<Vec<_>>()
                 .join("; "),
@@ -2233,7 +2265,16 @@ fn creature_result_row(
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if already {
-                ui.label(Type::Small.rich(ui, "In roster").color(colors().muted));
+                // Round 31 SD10, AD11 (in-roster-check-role): the same checked status as `Party in
+                // roster` above the results: its check, its word and its colour.
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::OK,
+                        word: "In roster",
+                        color: colors().muted,
+                    },
+                );
             } else {
                 let name = if action == "Add" {
                     action.into()
@@ -2689,8 +2730,112 @@ fn replace_roster(
 
 struct SearchRoster<'a> {
     already: &'a dyn Fn(&Creature) -> bool,
+    /// The creatures the roster's rows name: what `already` reads, so a change of the roster
+    /// ranks again (with no words, a party member on the roster is left out). Empty for a group.
+    on_roster: &'a [Uuid],
     /// Where a press of a copied note's repair says what it did (FF8), for the page's store.
     separated: &'a std::cell::Cell<Option<Separated>>,
+}
+
+/// The creatures a search offers: the campaign's read (`Snapshot::creatures`, by its revision),
+/// all of them or only those no NPC links (a group's members).
+#[derive(Clone, Copy)]
+struct SearchList<'a> {
+    creatures: &'a [Creature],
+    unlinked: bool,
+    revision: Uuid,
+}
+
+impl<'a> SearchList<'a> {
+    fn creatures(self) -> impl Iterator<Item = &'a Creature> {
+        self.creatures
+            .iter()
+            .filter(move |c| !self.unlinked || !c.linked)
+    }
+}
+
+/// Everything a search's ranking reads. The same key ranks the same.
+#[derive(Clone, PartialEq)]
+struct SearchKey {
+    list: Uuid,
+    unlinked: bool,
+    query: String,
+    filter: Filter,
+    on_roster: Vec<Uuid>,
+}
+
+/// A search's ranking, kept for its view (the field's id) until its key changes: the creatures
+/// found, in the one order, by their place in the list; how many match as typed (no typo); and
+/// whether one of them cannot be added (its rows are taller).
+#[derive(Clone)]
+struct SearchRanked {
+    key: SearchKey,
+    found: Arc<Vec<usize>>,
+    as_typed: usize,
+    unavailable: bool,
+}
+
+impl SearchRanked {
+    fn rank(
+        key: SearchKey,
+        list: SearchList<'_>,
+        filter: &Filter,
+        already: &dyn Fn(&Creature) -> bool,
+    ) -> Self {
+        let parsed = Query::parse(&key.query);
+        let typed = crate::matching::Typed::new(&parsed.words);
+        let query = &key.query;
+        let mut ranked: Vec<(crate::matching::Rank, usize)> = list
+            .creatures
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| !list.unlinked || !c.linked)
+            .filter(|(_, c)| {
+                #[cfg(test)]
+                SEARCH_RANKED.with(|ranked| ranked.set(ranked.get() + 1));
+                let facets = c.facets.as_ref();
+                (!parsed.names_facts() || facets.is_some_and(|f| parsed.matches_facts(f)))
+                    && (filter.is_empty() || facets.is_some_and(|f| filter.matches(f)))
+                    && (!query.is_empty() || !c.party || !already(c))
+            })
+            .filter_map(|(at, c)| {
+                if parsed.words.is_empty() {
+                    return Some((crate::matching::Rank::typed(0), at));
+                }
+                let facts = c
+                    .facets
+                    .as_ref()
+                    .is_some_and(|f| parsed.words_in(&c.name, f));
+                // FI5, M3: the one creature order, as Lookup and Arrivals rank its names.
+                let name = typed.creature(&c.lower, crate::matching::words(&c.lower));
+                Some((crate::matching::with_other(name, facts)?, at))
+            })
+            .collect();
+        // The plain name first, so "wolf" finds Wolf before Dire Wolf. A fact match comes
+        // after every name match as typed, and a typo in the name comes last. The sort is
+        // stable, so the list's order stays inside each rank.
+        if !parsed.words.is_empty() {
+            ranked.sort_by_key(|&(rank, at)| (rank, list.creatures[at].origin));
+        }
+        let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
+        let found: Vec<usize> = ranked.into_iter().map(|(_, at)| at).collect();
+        let unavailable = found
+            .iter()
+            .any(|&at| list.creatures[at].unavailable.is_some());
+        Self {
+            key,
+            found: Arc::new(found),
+            as_typed,
+            unavailable,
+        }
+    }
+}
+
+// Creatures the encounter search's ranking visited on this thread, for a test that a repaint
+// visits none.
+#[cfg(test)]
+thread_local! {
+    static SEARCH_RANKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 struct Snapshot {
@@ -2751,6 +2896,14 @@ impl Snapshot {
             .iter()
             .any(|c| c.id == stat)
             .then(|| (stat, npc.name.clone()))
+    }
+    /// The creatures a search offers from this read: all, or only those no NPC links.
+    fn search_list(&self, unlinked: bool) -> SearchList<'_> {
+        SearchList {
+            creatures: &self.creatures,
+            unlinked,
+            revision: self.revision,
+        }
     }
     fn already_on_roster(&self, draft: &Draft, creature: &Creature) -> bool {
         creature.party
@@ -3213,6 +3366,8 @@ enum EncounterFault {
     /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
+    /// The Encounters page waits for the previous campaign's open encounter.
+    PreviousCampaignDraft,
 }
 
 impl EncounterFault {
@@ -3236,7 +3391,8 @@ impl design::outcome::Fault for EncounterFault {
             | Self::SeparationFailed(_)
             | Self::FileWarning(_)
             | Self::FileFlag(..)
-            | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
+            | Self::Invalid(_)
+            | Self::PreviousCampaignDraft => design::outcome::Severity::NeedsFixing,
         }
     }
     #[allow(
@@ -3259,6 +3415,9 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The encounter’s file has a problem.")),
             Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("Save cannot write this draft yet.")),
+            Self::PreviousCampaignDraft => {
+                crate::sentence!("Save or discard the previous campaign’s encounter first.")
+            }
         }
     }
 }
@@ -4767,10 +4926,6 @@ impl Encounters {
             }
         }
     }
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn save_draft(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
         let Some(draft) = self.draft.as_mut() else {
             return;
@@ -5384,11 +5539,11 @@ impl Encounters {
             .as_ref()
             .is_none_or(|c| c.id != active.id || c.path != active.path)
         {
-            design::message(
-                ui,
-                Tone::Warning,
-                "Save or discard the previous campaign’s encounter first.",
-            );
+            // The page cannot show while another campaign's encounter is open: a placeholder in
+            // place of its body, in the warning tone of its fault.
+            let _: Option<FooterPress> =
+                design::outcome::PagePlaceholder::new(&EncounterFault::PreviousCampaignDraft)
+                    .show(ui);
             return;
         }
         if self.draft_dirty() {
@@ -7274,12 +7429,13 @@ impl Encounters {
         if draft.target_group().is_some() {
             let chosen = Self::creature_search(
                 ui,
-                snapshot.creatures.iter().filter(|c| !c.linked),
+                snapshot.search_list(true),
                 search,
                 focus_search,
                 peek,
                 SearchRoster {
                     already: &|_| false,
+                    on_roster: &[],
                     separated,
                 },
             );
@@ -7288,14 +7444,23 @@ impl Encounters {
             }
             return;
         }
+        // What `already` reads of the roster, for the kept ranking's key: the creatures its
+        // rows name (as many as the roster's rows, which this frame draws anyway).
+        let on_roster: Vec<Uuid> = draft
+            .setup
+            .roster
+            .iter()
+            .filter_map(|slot| slot.creature.as_ref().and_then(|reference| reference.id))
+            .collect();
         let chosen = Self::creature_search(
             ui,
-            snapshot.creatures.iter(),
+            snapshot.search_list(false),
             search,
             focus_search,
             peek,
             SearchRoster {
                 already: &|c: &Creature| snapshot.already_on_roster(draft, c),
+                on_roster: &on_roster,
                 separated,
             },
         );
@@ -7305,24 +7470,24 @@ impl Encounters {
     }
 
     /// The search and its results, for a roster and for a group. Returns what the DM added.
-    fn creature_search<'a>(
+    fn creature_search(
         ui: &mut egui::Ui,
-        creatures: impl Iterator<Item = &'a Creature>,
+        list: SearchList<'_>,
         search: &mut String,
         focus_search: &mut bool,
         peek: &mut Option<Uuid>,
         roster: SearchRoster<'_>,
     ) -> Option<(Uuid, bool)> {
-        Self::creature_search_with_summary(ui, creatures, search, focus_search, peek, roster, "")
+        Self::creature_search_with_summary(ui, list, search, focus_search, peek, roster, "")
     }
 
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn creature_search_with_summary<'a>(
+    fn creature_search_with_summary(
         ui: &mut egui::Ui,
-        creatures: impl Iterator<Item = &'a Creature>,
+        list: SearchList<'_>,
         search: &mut String,
         focus_search: &mut bool,
         peek: &mut Option<Uuid>,
@@ -7346,12 +7511,11 @@ impl Encounters {
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
         }
-        let creatures: Vec<&Creature> = creatures.collect();
         // The roster and a group share one filter, as the DM looks for the same creatures.
         let filter_id = egui::Id::new("creature_search_filter");
         let mut filter: Filter = ui.data(|data| data.get_temp(filter_id)).unwrap_or_default();
         if crate::creature_filter::filter_bar(ui, &mut filter, || {
-            creatures.iter().filter_map(|c| c.facets.as_ref()).collect()
+            list.creatures().filter_map(|c| c.facets.as_ref()).collect()
         }) {
             ui.data_mut(|data| data.insert_temp(filter_id, filter.clone()));
         }
@@ -7361,44 +7525,38 @@ impl Encounters {
                 .on_hover_text(summary);
         }
         let query = search.to_lowercase();
+        // M-E0 (review of M-Q0.2): the ranking is kept for this search's view and worked out
+        // again only when one of its inputs changes (`SearchKey`): a repaint ranks nothing.
+        let key = SearchKey {
+            list: list.revision,
+            unlinked: list.unlinked,
+            query: query.clone(),
+            filter: filter.clone(),
+            on_roster: roster.on_roster.to_vec(),
+        };
+        let kept_id = response.id.with("creature_search_ranked");
+        let ranked = match ui
+            .data(|data| data.get_temp::<SearchRanked>(kept_id))
+            .filter(|kept| kept.key == key)
+        {
+            Some(kept) => kept,
+            None => {
+                let ranked = SearchRanked::rank(key, list, &filter, roster.already);
+                ui.data_mut(|data| data.insert_temp(kept_id, ranked.clone()));
+                ranked
+            }
+        };
         let parsed = Query::parse(&query);
-        let typed = crate::matching::Typed::new(&parsed.words);
-        let mut ranked: Vec<(crate::matching::Rank, &Creature)> = creatures
-            .into_iter()
-            .filter(|c| {
-                let facets = c.facets.as_ref();
-                (!parsed.names_facts() || facets.is_some_and(|f| parsed.matches_facts(f)))
-                    && (filter.is_empty() || facets.is_some_and(|f| filter.matches(f)))
-                    && (!query.is_empty() || !c.party || !(roster.already)(c))
-            })
-            .filter_map(|c| {
-                if parsed.words.is_empty() {
-                    return Some((crate::matching::Rank::typed(0), c));
-                }
-                let facts = c
-                    .facets
-                    .as_ref()
-                    .is_some_and(|f| parsed.words_in(&c.name, f));
-                // FI5, M3: the one creature order, as Lookup and Arrivals rank its names.
-                let name = typed.creature(&c.lower, crate::matching::words(&c.lower));
-                Some((crate::matching::with_other(name, facts)?, c))
-            })
-            .collect();
-        // The plain name first, so "wolf" finds Wolf before Dire Wolf. A fact match comes
-        // after every name match as typed, and a typo in the name comes last. The sort is
-        // stable, so the list's order stays inside each rank.
-        if !parsed.words.is_empty() {
-            ranked.sort_by_key(|&(rank, c)| (rank, c.origin));
-        }
-        let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
-        let matches: Vec<&Creature> = ranked.into_iter().map(|(_, c)| c).collect();
+        let creatures = list.creatures;
+        let as_typed = ranked.as_typed;
+        let matches = &ranked.found[..];
         // Enter adds the best match, with focus kept for the next name. A name found only with
         // a typo is a guess, so Enter does not add it.
         if response.lost_focus()
             && ui.input(|i| i.key_pressed(egui::Key::Enter))
             && !query.is_empty()
             && as_typed > 0
-            && let Some(first) = matches.first()
+            && let Some(first) = matches.first().map(|&at| &creatures[at])
             && !(roster.already)(first)
             && first.unavailable.is_none()
         {
@@ -7487,7 +7645,7 @@ impl Encounters {
         }
         ui.spacing_mut().item_spacing.y = 0.0;
         let row_height = RESULT_ROW
-            + if matches.iter().any(|c| c.unavailable.is_some()) {
+            + if ranked.unavailable {
                 Type::Small.line()
             } else {
                 0.0
@@ -7500,7 +7658,7 @@ impl Encounters {
             .auto_shrink([false, false])
             .show_rows(ui, row_height, matches.len(), |ui, range| {
                 ui.set_max_width(lane);
-                for c in &matches[range] {
+                for c in matches[range].iter().map(|&at| &creatures[at]) {
                     ui.push_id(c.id, |ui| {
                         let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
                         if read {
@@ -8818,6 +8976,78 @@ mod tests {
             visits > 0 && visits as u64 <= frames * kept as u64,
             "the sweep runs once per frame: {visits} visits in {frames} frames"
         );
+        // M-E0 (review of M-Q0.2): the encounter search keeps its ranking for its view too. A
+        // repaint with the same inputs visits no creature; new words, a filter, a change of the
+        // roster and another read of the campaign each rank again.
+        let ranked = || SEARCH_RANKED.with(std::cell::Cell::get);
+        type Search = (Snapshot, String, Vec<Uuid>);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 600.0))
+            .build_ui_state(
+                |ui, (snapshot, query, roster): &mut Search| {
+                    let mut search = query.clone();
+                    let _ = Encounters::creature_search(
+                        ui,
+                        snapshot.search_list(false),
+                        &mut search,
+                        &mut false,
+                        &mut None,
+                        SearchRoster {
+                            already: &|c: &Creature| roster.contains(&c.id),
+                            on_roster: roster,
+                            separated: &std::cell::Cell::new(None),
+                        },
+                    );
+                },
+                (
+                    Snapshot::load(&active, &[]).unwrap(),
+                    "fenstalker".to_owned(),
+                    Vec::new(),
+                ),
+            );
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Fenstalker").is_some()
+                && harness.query_by_label("Dread Fenstalker").is_some(),
+            "the kept ranking draws its creatures"
+        );
+        let seen = ranked();
+        assert!(seen > 0, "the words ranked");
+        harness.run_steps(5);
+        assert_eq!(ranked(), seen, "an unchanged repaint visits no creature");
+        harness.state_mut().1 = "dread".to_owned();
+        harness.run_steps(2);
+        assert!(ranked() > seen, "new words rank again");
+        assert!(
+            harness.query_by_label("Dread Fenstalker").is_some()
+                && harness.query_by_label("Bog Fenstalker").is_none(),
+            "the new words' ranking draws"
+        );
+        let seen = ranked();
+        harness.ctx.data_mut(|data| {
+            data.insert_temp(
+                egui::Id::new("creature_search_filter"),
+                Filter {
+                    challenge: (Some(30.0), None),
+                    ..Filter::default()
+                },
+            )
+        });
+        harness.run_steps(2);
+        assert!(ranked() > seen, "a filter ranks again");
+        harness.ctx.data_mut(|data| {
+            data.insert_temp(egui::Id::new("creature_search_filter"), Filter::default())
+        });
+        harness.run_steps(2);
+        let seen = ranked();
+        harness.state_mut().2 = vec![Uuid::new_v4()];
+        harness.run_steps(2);
+        assert!(ranked() > seen, "a change of the roster ranks again");
+        let seen = ranked();
+        harness.state_mut().0 = Snapshot::load(&active, &[]).unwrap();
+        harness.run_steps(2);
+        assert!(ranked() > seen, "another read of the campaign ranks again");
     }
 
     #[test]
@@ -8841,12 +9071,13 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let chosen = Encounters::creature_search(
                     ui,
-                    snapshot.creatures.iter(),
+                    snapshot.search_list(false),
                     &mut "Watchkeeper".to_owned(),
                     &mut false,
                     &mut None,
                     SearchRoster {
                         already: &|_| false,
+                        on_roster: &[],
                         separated: &std::cell::Cell::new(None),
                     },
                 );
@@ -9225,12 +9456,17 @@ mod tests {
                         }
                         Encounters::creature_search(
                             ui,
-                            std::iter::empty(),
+                            SearchList {
+                                creatures: &[],
+                                unlinked: false,
+                                revision: Uuid::nil(),
+                            },
                             &mut "Rook".to_owned(),
                             &mut false,
                             &mut None,
                             SearchRoster {
                                 already: &|_| false,
+                                on_roster: &[],
                                 separated: &separated,
                             },
                         );
@@ -9435,12 +9671,17 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 Encounters::creature_search(
                     ui,
-                    std::iter::empty(),
+                    SearchList {
+                        creatures: &[],
+                        unlinked: false,
+                        revision: Uuid::nil(),
+                    },
                     &mut "Rook".to_owned(),
                     &mut false,
                     &mut None,
                     SearchRoster {
                         already: &|_| false,
+                        on_roster: &[],
                         separated: &std::cell::Cell::new(None),
                     },
                 );
