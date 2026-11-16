@@ -10002,6 +10002,7 @@ pub mod gallery {
 pub mod column_resize {
     use super::*;
     use crate::design::{PANEL_MIN_WIDTH, RAIL_DRAG_MAX_WIDTH, RAIL_WIDTH, S};
+    use crate::sessions::page::{HIDE_LIST, SHOW_LIST};
 
     const CHECK: &str = "Column resize";
     const MEMBER: &str = "Brannoch Vale";
@@ -10075,7 +10076,7 @@ pub mod column_resize {
     fn the_session_fills_its_column(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, "Room to spare");
-        let page = right_of(d, "New session");
+        let page = right_of(d, HIDE_LIST);
         d.observe(
             CHECK,
             (right_of(d, "Record this session") - page).abs() <= S,
@@ -10087,10 +10088,107 @@ pub mod column_resize {
         d.state("session-fills-its-column", Sizes::All);
     }
 
+    /// The DM hides the session list, and the session takes its room. Last in the scenario, so
+    /// no earlier state changes its number.
+    fn the_session_list_hides(d: &mut Driver<'_>) {
+        d.set_base(DEFAULT);
+        d.click(NAV_SESSIONS);
+        d.expect(HIDE_LIST);
+        // The list's row and the pane's title both start with the session's name.
+        let named = |d: &Driver<'_>, role: egui::accesskit::Role| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == role && node.name.starts_with("Session 1: Room to spare ·")
+                })
+                .map(|node| node.rect)
+        };
+        let row = |d: &Driver<'_>| named(d, egui::accesskit::Role::Button);
+        let title = |d: &Driver<'_>| named(d, egui::accesskit::Role::Label).map(|rect| rect.left());
+        let (list_row, title_left, toggle) = (row(d), title(d), d.place_of(HIDE_LIST));
+        d.click(HIDE_LIST);
+        d.expect(SHOW_LIST);
+        d.observe(
+            CHECK,
+            row(d).is_none() && list_row.is_some(),
+            "A hidden list leaves the page; it stood beside the session before",
+        );
+        d.observe(
+            CHECK,
+            title(d)
+                .zip(title_left)
+                .is_some_and(|(now, before)| now < before - crate::design::XXL),
+            format!(
+                "The session takes the list's room: its title at {:?}, from {title_left:?}",
+                title(d)
+            ),
+        );
+        d.observe(
+            CHECK,
+            toggle.is_some() && d.place_of(SHOW_LIST) == toggle,
+            format!(
+                "The toggle keeps its place: {:?}, from {toggle:?}",
+                d.place_of(SHOW_LIST)
+            ),
+        );
+        d.state("session-list-hidden", Sizes::All);
+
+        // The note takes the room beside it when the DM drags its edge, and the tab row's end
+        // (Read) follows the frame's.
+        // Only a wide window has room beside the note.
+        const NOTE_EDGE: &str = "session_note_frame";
+        d.set_base(LARGE);
+        let frame = |d: &Driver<'_>| d.input_frame("Note text").map(|(frame, _)| frame);
+        let natural = frame(d).expect("the note frame is visible");
+        let edge = d.column_edge(NOTE_EDGE);
+        d.drag_column_edge(edge, edge + 300.0);
+        d.settle();
+        let wide = frame(d).expect("the note frame is visible");
+        d.observe(
+            CHECK,
+            near(wide.width(), natural.width() + 300.0) && near(wide.left(), natural.left()),
+            format!("The note widens into the gap: {wide:?}, from {natural:?}"),
+        );
+        d.observe(
+            CHECK,
+            near(right_of(d, "Read"), wide.right()),
+            format!(
+                "The tab row ends with the frame: Read at {}, the frame at {}",
+                right_of(d, "Read"),
+                wide.right()
+            ),
+        );
+        d.state_changed_at("session-note-widened", "session-list-hidden", Sizes::Large);
+        // Home on the handle gives the reader's measure back.
+        d.harness_focus_nothing();
+        assert!(d.tab_to("Resize note column"));
+        d.press(Key::Home);
+        d.observe(
+            CHECK,
+            frame(d).is_some_and(|now| near(now.width(), natural.width())),
+            format!(
+                "Home restores the note's width: {:?}, from {natural:?}",
+                frame(d)
+            ),
+        );
+        d.set_base(DEFAULT);
+        // Ctrl+\ shows it again, as wide as it was.
+        d.press_ctrl(Key::Backslash);
+        d.expect(HIDE_LIST);
+        d.observe(
+            CHECK,
+            row(d).is_some() && row(d) == list_row,
+            format!(
+                "The list comes back as it was: {:?}, from {list_row:?}",
+                row(d)
+            ),
+        );
+    }
+
     /// Write and Read share a prose measure; spare width stays outside the Write frame.
     fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
         d.set_base(LARGE);
-        let page = right_of(d, "New session");
+        let page = right_of(d, HIDE_LIST);
         d.type_into_editor(&"The party crossed the old bridge at dusk. ".repeat(30));
         let write = d.longest_visible_line();
         d.state_prepared("session-write-keeps-prose-measure", Sizes::All, |d| {
@@ -10428,6 +10526,7 @@ pub mod column_resize {
         });
         d.press(Key::Home);
         assert!(near(entries_edge(d), edge));
+        the_session_list_hides(d);
     }
 }
 
@@ -15721,10 +15820,14 @@ pub mod session_notes {
         // The card's link, right of the Sessions page, and the card's next line of words.
         let card_link = |d: &Driver<'_>| {
             let nodes = d.nodes();
+            // The page's last header action: the list's toggle where the page is wide.
             let page_right = nodes
                 .iter()
-                .find(|node| node.name == "New session")
-                .map(|node| node.rect.right())?;
+                .filter(|node| {
+                    ["New session", crate::sessions::page::HIDE_LIST].contains(&node.name.as_str())
+                })
+                .map(|node| node.rect.right())
+                .reduce(f32::max)?;
             let link = nodes
                 .iter()
                 .filter(|node| {
@@ -21944,7 +22047,22 @@ pub mod encounter_owned_groups {
                 format!("At {size:?} the tie button says: {words:?}"),
             );
         }
-        d.state("own-group-dragged-in-combat", Sizes::All);
+        // FB12, AB6, SB6 (M-R0): the two groups that joined say `Added in round 1` in ONE place,
+        // their member line, at every size; neither heading holds it, so both headings give way
+        // in the one order of their `Fight after` line.
+        d.state_prepared("own-group-dragged-in-combat", Sizes::All, |d| {
+            let places =
+                [NEW_NAME, GROUP_SHRINE].map(|group| status_places(d, group, "Added in round 1"));
+            d.observe(
+                "m-r0-FB12-status-place",
+                places == [Some((0, 1)), Some((0, 1))],
+                format!(
+                    "At {:?}, `Added in round 1` (in heading, on member line) for {NEW_NAME} and \
+                     {GROUP_SHRINE}: {places:?}",
+                    d.window_size()
+                ),
+            );
+        });
         close_run(d);
 
         // A save from before this cannot say which encounter it is, so it hides nothing.
@@ -22961,7 +23079,24 @@ pub mod run_add_creature {
             !d.has_containing("Added by hand: Ghost") && !d.has_containing("entered by the DM"),
             "A made-up creature's notice says it joined, as a group's does, and keeps the Log's words in the Log",
         );
-        d.state("arrivals-made-up-added", Sizes::All);
+        // SM4, FK2 (M-R0): no heading gives its room to a status: Rival Team's `Changed` is on its
+        // member line, so at 1200 and 1920 its heading keeps its side and the whole name of the
+        // creature whose XP is not known (R31), as Goblin Wave's does.
+        d.state_prepared("arrivals-made-up-added", Sizes::All, |d| {
+            let size = d.window_size();
+            let rivals = arrival_heading(d, GROUP_RIVALS);
+            let wide = size.0 >= DEFAULT.0;
+            d.observe(
+                "m-r0-SM4-heading",
+                rivals.as_deref().is_some_and(|words| {
+                    !words.contains("Changed")
+                        && (!wide
+                            || words.contains("Rivals · ")
+                                && words.contains("Fight after: XP not known: Ghost of the Mill"))
+                }),
+                format!("At {size:?}, Rival Team's heading: {rivals:?}"),
+            );
+        });
         d.goal("add a creature made up at the table to a running fight");
         d.click_row("Ghost of the Mill");
         d.click("Stat block");
@@ -23123,7 +23258,29 @@ pub mod run_add_creature {
             d.has("Add Wolf to the initiative list"),
             "With every match listed, the button still adds the whole name typed",
         );
-        d.state("arrivals-found-all", Sizes::All);
+        // AM8 (M-R0): at 1920 every heading has room for its member count, Rival Team's too: its
+        // `Changed` takes no room from its heading.
+        d.state_prepared("arrivals-found-all", Sizes::All, |d| {
+            if d.window_size() != LARGE {
+                return;
+            }
+            let headings = [
+                (GROUP_GOBLINS, "3 members"),
+                (GROUP_LOST, "1 of 3 can join"),
+                (GROUP_RIVALS, "3 members"),
+                (GROUP_WATCH, "1 member"),
+            ]
+            .map(|(group, count)| (group, count, arrival_heading(d, group)));
+            d.observe(
+                "m-r0-AM8-counts",
+                headings.iter().all(|(_, count, words)| {
+                    words
+                        .as_deref()
+                        .is_some_and(|words| words.contains(&format!(" · {count} · ")))
+                }),
+                format!("At 1920, each heading and its count: {headings:?}"),
+            );
+        });
         // The sixth match can be chosen and added, with its own values.
         let listed = d.in_view("Choose Winter Wolf");
         if listed {
@@ -23311,6 +23468,117 @@ pub mod run_add_creature {
             }
         });
         d.press(Key::Escape);
+
+        // M-R0 (R35, ruling M1): a group whose first member has no initiative bonus would roll
+        // with none, so its Add waits for a typed total. The footer below the list says why,
+        // named by the group, from the value that locks Add; a typed total ends it.
+        const RIDERS: &str = "Mist Riders";
+        const NO_BONUS: &str =
+            "Mist Riders: The first member has no initiative bonus. Type a total.";
+        d.clear_text_in(FIELD);
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let rider = splat::character::stable_id("visual:note:mist-rider");
+        for (relative, fields) in [
+            (
+                "Notes/Mist Rider.md".to_owned(),
+                format!(
+                    "splat_id: {rider}\nsplat_kind: creature\nsplat_name: Mist Rider\nsplat_creature: {{size: medium, type: undead}}\nsplat_stats:\n  max_hp: {{value: 9}}\n  armor_class: {{value: 12}}\n"
+                ),
+            ),
+            (
+                format!("Encounter Groups/{RIDERS}.md"),
+                format!(
+                    "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {RIDERS}\nsplat_encounter_group:\n  side: rivals\n  members:\n  - creature: {{id: {rider}}}\n    count: 2\n",
+                    splat::character::stable_id("visual:group:mist-riders")
+                ),
+            ),
+        ] {
+            let text = splat::content::formats::fixture(&relative, &fields, "").unwrap();
+            crate::library::write_note(&campaign.path, &relative, None, &text).unwrap();
+        }
+        go_encounters(d);
+        d.click("Reload from disk");
+        d.click_starting("Run · ");
+        if !d.has("This fight · Arrivals") {
+            open_arrivals(d);
+        }
+        d.expect(&add_group(RIDERS));
+        d.state_prepared("arrivals-add-waits-for-a-total", Sizes::All, |d| {
+            let (painted, waits) = (d.visible_text(NO_BONUS), d.is_disabled(&add_group(RIDERS)));
+            d.observe(
+                "m-r0-R35-painted",
+                painted && waits,
+                format!(
+                    "At {:?}, Add waits ({waits}) and the footer says {NO_BONUS:?} ({painted})",
+                    d.window_size()
+                ),
+            );
+        });
+        d.type_into(&format!("Initiative total for {RIDERS}"), "11");
+        d.observe(
+            "m-r0-R35-typed",
+            !d.visible_text(NO_BONUS) && !d.is_disabled(&add_group(RIDERS)),
+            "A typed total ends the reason, and Add runs",
+        );
+
+        // Astra's review of PR 472 (P2): a drop takes the lock too, also when the Add came to
+        // wait while the group was held. By side, in combat, Mist Riders joins the rivals'
+        // initiative with no roll once Rival Team has one; held over the roster, Ctrl+Z takes
+        // Rival Team back, so Mist Riders would roll with no bonus: the release adds nothing and
+        // refuses nothing.
+        d.clear_text_in(&format!("Initiative total for {RIDERS}"));
+        close_run(d);
+        go_campaign(d);
+        d.click(TAB_RUN_SETTINGS);
+        d.click_starting("Roll NPC initiative: ");
+        d.click("In one group per side");
+        d.click("Save run settings");
+        d.expect("No changes");
+        go_encounters(d);
+        run_saved_encounter(d, "Shrine of Cinders");
+        d.click("Roll NPC initiative");
+        let unset: Vec<String> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Initiative for "))
+            .map(|node| node.name)
+            .filter(|name| d.field_text(name).is_none_or(|text| text.trim().is_empty()))
+            .collect();
+        for (at, name) in unset.iter().enumerate() {
+            d.type_into(name, &(18 - at).to_string());
+        }
+        d.click("Begin combat");
+        d.expect(NEXT_TURN);
+        open_arrivals(d);
+        d.type_into(&format!("Initiative total for {GROUP_RIVALS}"), "14");
+        d.click(&add_group(GROUP_RIVALS));
+        d.expect("Undo: add Rival Team");
+        let joins = !d.is_disabled(&add_group(RIDERS)) && !d.visible_text(NO_BONUS);
+        let rows = roster_places(d);
+        let list = rows.first().map(|(_, rect)| *rect).expect("run rows");
+        d.drag_hold(&format!("Drag {RIDERS} to the initiative list"), list);
+        d.press_ctrl(Key::Z);
+        let undone = !d.has_containing("Undo: add Rival Team");
+        let before = roster_places(d).len();
+        d.drag_release(list);
+        let after = roster_places(d).len();
+        let refused = d.has_containing("has no initiative bonus. Type a total instead.")
+            || d.visible_text("has no initiative bonus. Type a total instead.");
+        d.observe(
+            "m-r0-P2-held-drop",
+            joins
+                && undone
+                && after == before
+                && after + 3 == rows.len()
+                && !refused
+                && d.visible_text(NO_BONUS),
+            format!(
+                "Mist Riders joined by side ({joins}); Ctrl+Z while held took Rival Team back \
+                 ({undone}); rows {} with Rival Team, {before} held, {after} after the drop; \
+                 a refusal shows: {refused}",
+                rows.len()
+            ),
+        );
     }
 }
 

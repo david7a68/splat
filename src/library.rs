@@ -267,8 +267,9 @@ enum OwnerKey {
     Campaign(Uuid),
 }
 
-/// What a stat fix changes: the kept results, the draft, its revision and the page's error.
-type StatFixParts<'a> = (
+/// What a draft writer changes (the stat fix, the editor's Discard): the kept results, the
+/// draft, its revision and the page's error.
+type DraftParts<'a> = (
     &'a mut LibraryKept,
     &'a mut String,
     &'a mut u64,
@@ -729,7 +730,9 @@ fn duplicate_choices(
                 // Encounters outside the batch whose source changes; worked out once per load.
                 let slot = egui::Id::new((
                     "duplicate_folder_users",
-                    owner.id(),
+                    // The whole owner key: a campaign and a package with one UUID each have
+                    // their own encounters outside their batch (Astra, PR 477).
+                    owner.key(),
                     std::ptr::from_ref(loaded) as usize,
                     loaded.notes.len(),
                     // A reload in place changes some text; this cheap sum notices it.
@@ -4574,7 +4577,7 @@ impl Library {
     /// the newest kept result (its file whole: owner kind, owner id and path). It takes the
     /// parts it changes, so the editor can call it while it reads the open note.
     fn fix_stat(
-        (kept, draft, revision, error): StatFixParts<'_>,
+        (kept, draft, revision, error): DraftParts<'_>,
         file: FileId,
         entry: &Entry,
         (key, label, value): (&'static str, &str, i64),
@@ -4912,6 +4915,128 @@ impl Library {
             .disk_changed(|result| result.edits.on_disk());
     }
 
+    /// The manifest repair: `Package.md` written again for `module`. Its result, with Undo, is
+    /// the newest kept result.
+    fn write_manifest(&mut self, module: Module, path: &str, exists: bool) {
+        match crate::content_workspace::ManifestWrite::write_as(&module, path, exists) {
+            Ok(write) => {
+                self.kept.set_manifest(write);
+                self.stale = true;
+                self.content_changed = Some(module.path);
+            }
+            Err(error) => self.error = Some(error),
+        }
+    }
+
+    /// `Choose all` on a package About page: every entry of `module` is chosen for the open
+    /// campaign. Its result, with Undo, is the newest kept result.
+    fn choose_all(&mut self, module: &Module, campaigns: &Campaigns) {
+        let Some(campaign) = campaigns.active_campaign() else {
+            return;
+        };
+        let result = CampaignDocument::load(&campaign).and_then(|before| {
+            crate::content_workspace::use_in_campaign(&campaign, module.id, &module.name, None)?;
+            let after = CampaignDocument::load(&campaign)?;
+            Ok(SelectionUndo {
+                campaign: campaign.clone(),
+                before: before.selections,
+                after: after.selections,
+            })
+        });
+        match result {
+            Ok(undo) => {
+                self.kept.set_package_use(undo);
+                self.stale = true;
+                self.reconcile_registrations(campaigns);
+                self.content_changed = Some(campaign.path);
+            }
+            Err(error) => self.error = Some(error),
+        }
+    }
+
+    /// A folder's batch repair: each of `paths` in `root` gets a new identity. Its result, with
+    /// Undo, is the newest kept result.
+    fn separate_entries(&mut self, root: PathBuf, paths: &[String]) -> Result<(), String> {
+        let edits = crate::content_workspace::ContentEdits::new_identities(&root, paths)?;
+        let folder = root.file_name().unwrap_or_default().to_string_lossy();
+        self.kept.set_identities((
+            edits,
+            format!(
+                "{} in {folder}/ are now separate entries.",
+                design::count(paths.len(), "file", "files")
+            ),
+        ));
+        self.stale = true;
+        self.content_changed = Some(root);
+        Ok(())
+    }
+
+    /// The editor's Discard of `note`'s draft: the draft goes back to the file's words, and the
+    /// words it dropped are the newest kept result, with Undo. It takes the parts it changes, so
+    /// the editor can call it while it reads the open note.
+    fn discard_draft((kept, draft, revision, error): DraftParts<'_>, note: &Note) {
+        kept.set_discarded((note.owner.key(), note.path.clone(), draft.clone()));
+        draft.clone_from(&note.text);
+        // The draft changed: a failed Save of the old words no longer owns it.
+        *revision += 1;
+        *error = None;
+    }
+
+    /// The copy of a campaign entry that the package entry `note` links to (`source`) into the
+    /// package, and the link moved to the copy: one result per copy, with Undo, the newest kept
+    /// result. The package's folder, which changed; `None` when `note` is not a package's.
+    fn copy_dependency(
+        kept: &mut LibraryKept,
+        note: &Note,
+        source: &Note,
+        campaigns: &Campaigns,
+    ) -> Result<Option<PathBuf>, String> {
+        let Owner::Package(package) = &note.owner else {
+            return Ok(None);
+        };
+        let source = crate::content_workspace::CopySource {
+            entry: source
+                .entry
+                .clone()
+                .ok_or("The linked entry cannot be read.")?,
+            text: source.text.clone(),
+            root: source.owner.root().map(Path::to_path_buf),
+            campaign: None,
+        };
+        let catalogue = crate::content_workspace::Catalogue::load(
+            campaigns.modules(),
+            campaigns.active_campaign().as_ref(),
+        )?;
+        let plan = crate::content_workspace::CopyPlan::prepare(
+            &source,
+            &package.path,
+            None,
+            &source.entry.name,
+            "",
+            &catalogue,
+        )?;
+        let copied = plan.save()?;
+        let after =
+            crate::content_workspace::redirect_reference(&note.text, &source.entry, copied.id)?;
+        if let Err(error) = write_note(&package.path, &note.path, Some(&note.text), &after) {
+            let _ = fs::remove_file(package.path.join(&plan.relative));
+            return Err(error);
+        }
+        kept.push_copy(DependencyUndo {
+            root: package.path.clone(),
+            path: note.path.clone(),
+            before: note.text.clone(),
+            after,
+            copied_path: plan.relative.clone(),
+            copied_text: plan.text.clone(),
+            result: format!(
+                "{} copied to {} and linked.",
+                source.entry.name, package.name
+            ),
+        });
+        Ok(Some(package.path.clone()))
+    }
+
     fn give_new_identity(&mut self) -> Result<(), String> {
         let index = self.selected.ok_or("Open the copy first.")?;
         let note = &self.loaded.as_ref().unwrap().notes[index];
@@ -5148,13 +5273,7 @@ impl Library {
     /// the Undo ends at the switch itself, even while the Library is hidden: a switch there and
     /// back never brings it back.
     pub fn note_campaign(&mut self, campaign: Option<Uuid>) {
-        let Some(gone) = self.kept.removed_mut() else {
-            return;
-        };
-        if *gone.campaign.get_or_insert(campaign) != campaign {
-            let _ = self.kept.take_removed();
-            let _ = self.kept.take_discarded();
-        }
+        self.kept.note_removed_campaign(campaign);
     }
 
     /// Remove's Undo also ends when any entry is selected, however the selection was made: the
@@ -7012,14 +7131,20 @@ impl Library {
         }
         if remove {
             self.confirm_unregister = None;
-            match campaigns.unregister_module(module.id) {
-                Ok(()) => {
-                    self.kept.set_unregistered(module);
-                    self.scope = Scope::default();
-                    self.stale = true;
-                }
-                Err(e) => self.error = Some(e),
+            self.unregister(module, campaigns);
+        }
+    }
+
+    /// Unregister `module` from Settings: its files stay. Its result, with Undo, is the newest
+    /// kept result.
+    fn unregister(&mut self, module: Module, campaigns: &mut Campaigns) {
+        match campaigns.unregister_module(module.id) {
+            Ok(()) => {
+                self.kept.set_unregistered(module);
+                self.scope = Scope::default();
+                self.stale = true;
             }
+            Err(e) => self.error = Some(e),
         }
     }
 
@@ -8844,12 +8969,15 @@ impl Library {
             let row = shown.save.unwrap_or_default();
             save |= row.save;
             if row.discard {
-                self.kept
-                    .set_discarded((note.owner.key(), note.path.clone(), self.draft.clone()));
-                self.draft = note.text.clone();
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
-                self.error = None;
+                Self::discard_draft(
+                    (
+                        &mut self.kept,
+                        &mut self.draft,
+                        &mut self.draft_revision,
+                        &mut self.error,
+                    ),
+                    note,
+                );
             }
             // The pane's message footer, below the editor: `S` under a short draft, pinned under
             // a long one, whose editor region scrolls (round 28 P2).
@@ -9578,14 +9706,7 @@ impl Library {
         }
         if repair_pressed {
             if let Some((module, path, exists)) = recovery {
-                match crate::content_workspace::ManifestWrite::write_as(&module, &path, exists) {
-                    Ok(write) => {
-                        self.kept.set_manifest(write);
-                        self.stale = true;
-                        self.content_changed = Some(module.path);
-                    }
-                    Err(error) => self.error = Some(error),
-                }
+                self.write_manifest(module, &path, exists);
             } else {
                 self.source = true;
                 self.focus_repair = true;
@@ -9624,7 +9745,6 @@ impl Library {
                 self.stale = true;
             }
             if let Some(id) = copy_dependency
-                && let Owner::Package(package) = &note.owner
                 && let Some(source) = self
                     .loaded
                     .as_ref()
@@ -9632,49 +9752,9 @@ impl Library {
                     .notes
                     .iter()
                     .find(|n| n.entry.as_ref().is_some_and(|e| e.id == id))
+                && let Some(root) = Self::copy_dependency(&mut self.kept, note, source, campaigns)?
             {
-                let source = crate::content_workspace::CopySource {
-                    entry: source.entry.clone().unwrap(),
-                    text: source.text.clone(),
-                    root: source.owner.root().map(Path::to_path_buf),
-                    campaign: None,
-                };
-                let catalogue = crate::content_workspace::Catalogue::load(
-                    campaigns.modules(),
-                    campaigns.active_campaign().as_ref(),
-                )?;
-                let plan = crate::content_workspace::CopyPlan::prepare(
-                    &source,
-                    &package.path,
-                    None,
-                    &source.entry.name,
-                    "",
-                    &catalogue,
-                )?;
-                let copied = plan.save()?;
-                let after = crate::content_workspace::redirect_reference(
-                    &note.text,
-                    &source.entry,
-                    copied.id,
-                )?;
-                if let Err(error) = write_note(&package.path, &note.path, Some(&note.text), &after)
-                {
-                    let _ = fs::remove_file(package.path.join(&plan.relative));
-                    return Err(error);
-                }
-                self.kept.push_copy(DependencyUndo {
-                    root: package.path.clone(),
-                    path: note.path.clone(),
-                    before: note.text.clone(),
-                    after,
-                    copied_path: plan.relative.clone(),
-                    copied_text: plan.text.clone(),
-                    result: format!(
-                        "{} copied to {} and linked.",
-                        source.entry.name, package.name
-                    ),
-                });
-                self.content_changed = Some(package.path.clone());
+                self.content_changed = Some(root);
                 self.stale = true;
             }
             Ok(())
@@ -9751,51 +9831,15 @@ impl Library {
                 self.link_choices.clear();
             }
         }
-        if let Some(module) = use_every
-            && let Some(campaign) = campaigns.active_campaign()
-        {
-            let result =
-                crate::content_workspace::CampaignDocument::load(&campaign).and_then(|before| {
-                    crate::content_workspace::use_in_campaign(
-                        &campaign,
-                        module.id,
-                        &module.name,
-                        None,
-                    )?;
-                    let after = crate::content_workspace::CampaignDocument::load(&campaign)?;
-                    Ok(SelectionUndo {
-                        campaign: campaign.clone(),
-                        before: before.selections,
-                        after: after.selections,
-                    })
-                });
-            match result {
-                Ok(undo) => {
-                    self.kept.set_package_use(undo);
-                    self.stale = true;
-                    self.reconcile_registrations(campaigns);
-                    self.content_changed = Some(campaign.path);
-                }
-                Err(error) => self.error = Some(error),
-            }
+        if let Some(module) = use_every {
+            self.choose_all(&module, campaigns);
         }
 
         if save {
             self.save_selected(file_gone);
         }
         let identity_result = if let Some((root, paths)) = new_identities {
-            crate::content_workspace::ContentEdits::new_identities(&root, &paths).map(|edits| {
-                let folder = root.file_name().unwrap_or_default().to_string_lossy();
-                self.kept.set_identities((
-                    edits,
-                    format!(
-                        "{} in {folder}/ are now separate entries.",
-                        design::count(paths.len(), "file", "files")
-                    ),
-                ));
-                self.stale = true;
-                self.content_changed = Some(root);
-            })
+            self.separate_entries(root, &paths)
         } else if undo_identities {
             self.kept.identities().unwrap().0.undo().map(|()| {
                 let _ = self.kept.take_identities();
@@ -14134,20 +14178,48 @@ mod tests {
 
     #[test]
     fn every_kept_result_comes_with_its_mark_from_its_real_writer() {
-        // M-L0.4a, proof 2: each writer stores its result's data and its mark in one call
-        // (`LibraryKept::set_*`): empty → present, the newest first; a second act of the kind
-        // replaces the first (a newer order, still one mark of the kind).
+        // M-L0.4a, proof 2: each REAL writer (the method the UI calls) stores its result's data
+        // and its mark in one call (`LibraryKept::set_*`, `push_copy`): empty → present, the
+        // newest first; a second act of the kind replaces the first (a newer order, still one
+        // mark of the kind). A copy is one result per copy: the second is the newest and the
+        // first stays.
         let temp = tempfile::tempdir().unwrap();
         let m = create_module(&temp.path().join("module"), "Module", "test").unwrap();
-        for name in ["Ash", "Brand"] {
+        for name in ["Ash", "Brand", "Cinder", "Dusk"] {
             fs::write(
                 m.path.join(format!("{name}.md")),
                 note_text(name, "rule", None),
             )
             .unwrap();
         }
+        // The copies' fixture: two encounters of the package, each linking to a creature of
+        // another package.
+        let source = create_module(&temp.path().join("source"), "Source", "source").unwrap();
+        for (creature, encounter) in [("Wolf", "Ambush"), ("Boar", "Raid")] {
+            let text = note_text(creature, "creature", None);
+            let id = Entry::parse("x.md", &text).unwrap().id;
+            fs::write(source.path.join(format!("{creature}.md")), text).unwrap();
+            let path = format!("{encounter}.md");
+            let fields = format!(
+                "splat_id: {}\nsplat_kind: encounter\nsplat_name: {encounter}\nsplat_encounter:\n  roster:\n  - key: foe\n    creature: {{id: {id}}}\n    side: enemies\n    controller: {{kind: manual, role: gm}}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n",
+                Uuid::new_v4()
+            );
+            let text =
+                content::formats::fixture(&path, &fields, &format!("\n# {encounter}\n")).unwrap();
+            fs::write(m.path.join(path), text).unwrap();
+        }
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        let unregistered: Vec<Module> = ["U1", "U2"]
+            .into_iter()
+            .map(|name| create_module(&temp.path().join(name), name, &name.to_lowercase()).unwrap())
+            .collect();
+        for module in [&m, &source].into_iter().chain(&unregistered) {
+            campaigns.register_module(module.clone()).unwrap();
+        }
+        let campaign = sd1_campaign(temp.path());
+        campaigns.open_for_test(&campaign);
         let mut library = Library {
-            loaded: Some(load(Some(&m)).unwrap()),
+            loaded: Some(load_all(&[m.clone(), source.clone()], None).unwrap()),
             ..Default::default()
         };
         let at = |library: &Library, name: &str| {
@@ -14242,27 +14314,49 @@ mod tests {
             library.give_new_identity().unwrap();
             replaced(&library, KeptKind::Identity, before);
         }
-        // Discarded, by `reload_note_from_disk` of a changed file under a draft; Removed with it
-        // when the file has gone.
-        for (text, kind) in [
-            (Some("A changed file.".to_owned()), KeptKind::Discarded),
-            (None, KeptKind::Removed),
-        ] {
-            let before = library.kept.order_of(kind);
-            let index = at(&library, "Ash");
+        // Discarded, by `reload_note_from_disk` of a changed file under a draft (twice), then by
+        // the editor's Discard (twice); Removed, by the reload of a file that has gone under a
+        // draft (Ash, then Brand).
+        let reload = |library: &mut Library, name: &str, text: Option<&str>| {
+            let index = at(library, name);
             library.selected = Some(index);
             library.draft = "An unsaved draft.".into();
             library.disk_change = Some(DiskChange {
-                text,
+                text: text.map(str::to_owned),
                 moved_to: None,
                 fault: None,
             });
             library.reload_note_from_disk(index);
-            replaced(&library, kind, before);
-            if kind == KeptKind::Removed {
-                // The draft it let go is a discard too: both, Remove's the newest.
-                assert!(library.kept.discarded().is_some() && library.kept.removed().is_some());
-            }
+        };
+        for words in ["A changed file.", "Changed again."] {
+            let before = library.kept.order_of(KeptKind::Discarded);
+            reload(&mut library, "Ash", Some(words));
+            replaced(&library, KeptKind::Discarded, before);
+        }
+        for name in ["Cinder", "Dusk"] {
+            let before = library.kept.order_of(KeptKind::Discarded);
+            let index = at(&library, name);
+            library.selected = Some(index);
+            library.draft = format!("A draft of {name}.");
+            let note = &library.loaded.as_ref().unwrap().notes[index];
+            Library::discard_draft(
+                (
+                    &mut library.kept,
+                    &mut library.draft,
+                    &mut library.draft_revision,
+                    &mut library.error,
+                ),
+                note,
+            );
+            replaced(&library, KeptKind::Discarded, before);
+            assert_eq!(library.draft, note.text, "Discard: the file's words");
+        }
+        for name in ["Ash", "Brand"] {
+            let before = library.kept.order_of(KeptKind::Removed);
+            reload(&mut library, name, None);
+            replaced(&library, KeptKind::Removed, before);
+            // The draft it let go is a discard too: both, Remove's the newest.
+            assert!(library.kept.discarded().is_some() && library.kept.removed().is_some());
         }
         // M-L0.4b: a press acts by its line's ticket. Unregister twice (the newer result
         // replaces the first): the first line's ticket reaches nothing, and the newer one's Undo
@@ -14330,7 +14424,180 @@ mod tests {
             );
             replaced(&library, KeptKind::Vital, before);
         }
-        assert_eq!(newest(&library), Some(KeptKind::Vital));
+        // Unregistered, by `unregister` (from its dialog).
+        for module in &unregistered {
+            let before = library.kept.order_of(KeptKind::Unregistered);
+            library.unregister(module.clone(), &mut campaigns);
+            replaced(&library, KeptKind::Unregistered, before);
+        }
+        // Manifest, by the repair's `write_manifest` of a deleted manifest (twice).
+        for _ in 0..2 {
+            let before = library.kept.order_of(KeptKind::Manifest);
+            fs::remove_file(m.path.join("Package.md")).unwrap();
+            library.write_manifest(m.clone(), "Package.md", false);
+            assert_eq!(library.error, None, "fixture: the manifest was written");
+            replaced(&library, KeptKind::Manifest, before);
+        }
+        // Identities, by a folder's `separate_entries`.
+        for name in ["Cinder", "Dusk"] {
+            let before = library.kept.order_of(KeptKind::Identities);
+            library
+                .separate_entries(m.path.clone(), &[format!("{name}.md")])
+                .unwrap();
+            replaced(&library, KeptKind::Identities, before);
+        }
+        // PackageUse, by `Choose all` (`choose_all`) for the open campaign.
+        for _ in 0..2 {
+            let before = library.kept.order_of(KeptKind::PackageUse);
+            library.choose_all(&m, &campaigns);
+            replaced(&library, KeptKind::PackageUse, before);
+        }
+        // Copy, by `copy_dependency`: one result per copy, the newest first, the first kept.
+        let copies = |library: &Library| {
+            library
+                .kept
+                .kinds_newest_first()
+                .into_iter()
+                .filter(|kind| *kind == KeptKind::Copy)
+                .count()
+        };
+        for (encounter, creature) in [("Ambush", "Wolf"), ("Raid", "Boar")] {
+            let shown = copies(&library);
+            let loaded = library.loaded.as_ref().unwrap();
+            let find = |name: &str| {
+                loaded
+                    .notes
+                    .iter()
+                    .find(|note| note.path == format!("{name}.md"))
+                    .unwrap()
+            };
+            let root = Library::copy_dependency(
+                &mut library.kept,
+                find(encounter),
+                find(creature),
+                &campaigns,
+            )
+            .unwrap();
+            assert_eq!(root.as_deref(), Some(m.path.as_path()), "fixture: copied");
+            assert_eq!(newest(&library), Some(KeptKind::Copy), "Copy: the newest");
+            assert_eq!(
+                (copies(&library), library.kept.copies().len()),
+                (shown + 1, shown + 1),
+                "Copy: one mark per copy, the first kept"
+            );
+        }
+        // The boundary's static rung (Astra, PR 477): no method of `LibraryKept` hands out a
+        // mutable payload, so no caller can swap one result's data under another's mark.
+        let leaks: Vec<&str> = include_str!("library/kept.rs")
+            .lines()
+            .filter(|line| {
+                line.split_once("-> ")
+                    .is_some_and(|(_, returns)| returns.contains("&mut"))
+            })
+            .collect();
+        assert!(
+            leaks.is_empty(),
+            "kept.rs returns a mutable payload: {leaks:?}"
+        );
+    }
+
+    #[test]
+    fn each_folder_repair_names_the_encounters_of_its_own_owner() {
+        // Astra's case on PR 477: a package and a campaign with one UUID both hold the
+        // duplicate creature and the duplicate encounter, the encounter under another name in
+        // each. Each folder's batch choice names the encounter outside its own batch: the other
+        // owner's. Its cache is keyed by the whole owner key, so the second choice never reuses
+        // the first one's names.
+        let root = tempfile::tempdir().unwrap();
+        let shared = Uuid::new_v4();
+        let creature = note_text("Cinder Wolf", "creature", None);
+        let wolf = Entry::parse("Creatures/Cinder Wolf.md", &creature)
+            .unwrap()
+            .id;
+        let fight = Uuid::new_v4();
+        let encounter = |name: &str| {
+            content::formats::fixture(
+                "Encounters/Bridge.md",
+                &format!(
+                    "splat_id: {fight}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster:\n  - key: wolf\n    creature: {{id: {wolf}}}\n    side: enemies\n    controller: {{kind: manual, role: gm}}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n"
+                ),
+                &format!("\n# {name}\n"),
+            )
+            .unwrap()
+        };
+        let package = Owner::Package(Module {
+            id: shared,
+            name: "Ashen Marches".into(),
+            path: root.path().join("ashen-marches"),
+        });
+        let campaign = Owner::Campaign(Campaign {
+            id: shared,
+            name: "Ember".into(),
+            path: root.path().join("ember"),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        });
+        let note = |path: &str, text: String, owner: &Owner| Note {
+            path: path.into(),
+            entry: Entry::parse(path, &text).ok(),
+            text,
+            error: None,
+            fault: None,
+            manifest_gone: false,
+            owner: owner.clone(),
+        };
+        let loaded = Loaded {
+            notes: vec![
+                note("Creatures/Cinder Wolf.md", creature.clone(), &package),
+                note("Encounters/Bridge.md", encounter("Bridge Ambush"), &package),
+                note("Creatures/Cinder Wolf.md", creature, &campaign),
+                note("Encounters/Bridge.md", encounter("Bridge Fight"), &campaign),
+            ],
+            ..Default::default()
+        };
+        assert!(
+            loaded.notes.iter().all(|note| note.entry.is_some())
+                && loaded.duplicates(0) == [2]
+                && loaded.duplicates(1) == [3],
+            "fixture: the creature and the encounter are each in both owners"
+        );
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let mut painted = Vec::new();
+        for _ in 0..2 {
+            let output = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    duplicate_choices(
+                        ui,
+                        &loaded,
+                        &loaded.notes[0],
+                        &[0, 2],
+                        None,
+                        &mut None,
+                        &mut None,
+                    );
+                });
+            });
+            painted = output
+                .shapes
+                .into_iter()
+                .filter_map(|shape| match shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+        }
+        for words in [
+            // The package's batch leaves the campaign's encounter on the campaign's files.
+            "Bridge Fight keeps the files in ember/.",
+            // The campaign's batch moves the package's encounter onto the package's files.
+            "Bridge Ambush will then use the files in ashen-marches/.",
+        ] {
+            assert!(
+                painted.iter().any(|text| text == words),
+                "each batch names its own owner's outside encounter: {words}\n{painted:#?}"
+            );
+        }
     }
 
     #[test]

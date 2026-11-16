@@ -21,6 +21,7 @@ use crate::design::{
 };
 use crate::persistence::Module;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 /// Which kept result a mark is.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -152,10 +153,18 @@ impl LibraryKept {
         Vital: vital: StatFix => vital, set_vital, take_vital;
     }
 
-    /// The removed entry's record, to note the campaign it belongs to. Its existence (and so its
-    /// mark) does not change here.
-    pub(super) fn removed_mut(&mut self) -> Option<&mut LetGo> {
-        self.removed.as_mut()
+    /// The open campaign, as the app gives it each frame: Remove's record keeps the first one it
+    /// sees (its `used` flag and catalogue are that campaign's). At a switch to another, Remove's
+    /// Undo ends with the draft it keeps. The one change of a kept payload in place: no caller
+    /// gets a mutable payload, so none can swap one result's data under another's mark.
+    pub(super) fn note_removed_campaign(&mut self, campaign: Option<Uuid>) {
+        let Some(gone) = self.removed.as_mut() else {
+            return;
+        };
+        if *gone.campaign.get_or_insert(campaign) != campaign {
+            let _ = self.take_removed();
+            let _ = self.take_discarded();
+        }
     }
 
     /// A reload's check of the manifest write: it goes, with its mark, when its file changed.

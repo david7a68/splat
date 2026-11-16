@@ -234,6 +234,54 @@ pub fn add_group(name: &str) -> String {
     format!("Add {name} to the initiative list")
 }
 
+/// An Arrivals group's drag handle: its heading row. Its name may go on (`. Changed.`).
+fn arrival_handle(d: &Driver<'_>, group: &str) -> Option<eframe::egui::Rect> {
+    let name = format!("Drag {group} to the initiative list");
+    d.nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with(&name))
+        .map(|node| node.rect)
+}
+
+/// The texts painted in an Arrivals group's heading (its drag handle's row: the title and the
+/// `Fight after` line beside it), joined by ` | `, no-break spaces read as spaces. `None` when
+/// the panel shows no such group.
+pub fn arrival_heading(d: &Driver<'_>, group: &str) -> Option<String> {
+    let heading = arrival_handle(d, group)?;
+    let mut words = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let rect = eframe::egui::Rect::from_min_size(text.pos, text.galley.size());
+        if heading.contains(rect.center()) && clip.intersects(rect) {
+            words.push(text.galley.job.text.replace('\u{a0}', " "));
+        }
+    });
+    Some(words.join(" | "))
+}
+
+/// FB12 (M-R0): how many painted texts hold `status` in `group`'s Arrivals heading, and how many
+/// on its member line (below the heading, left of its Add, down to the Add's bottom). `None`
+/// when the panel shows no such group.
+pub fn status_places(d: &Driver<'_>, group: &str, status: &str) -> Option<(usize, usize)> {
+    let heading = arrival_handle(d, group)?;
+    let add = d.place_of(&add_group(group))?;
+    let (mut in_heading, mut on_members) = (0, 0);
+    d.each_painted_text(|text, clip| {
+        let rect = eframe::egui::Rect::from_min_size(text.pos, text.galley.size());
+        if !clip.intersects(rect) || !text.galley.job.text.replace('\u{a0}', " ").contains(status) {
+            return;
+        }
+        if heading.contains(rect.center()) {
+            in_heading += 1;
+        } else if rect.top() >= heading.bottom() - 0.5
+            && rect.center().y <= add.bottom()
+            && rect.right() <= add.left()
+        {
+            on_members += 1;
+        }
+    });
+    Some((in_heading, on_members))
+}
+
 /// Saved-run deletion is kept behind the row menu.
 pub fn delete_saved_run(d: &mut Driver<'_>, name: &str) {
     d.click_first(&format!("More actions for {name}"));
