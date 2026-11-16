@@ -10,11 +10,10 @@
 //!   owner's scope and the owner together, so one campaign never reads, replaces, undoes or
 //!   clears another campaign's result, whatever the owner's `PartialEq` compares.
 //! - **Its order.** [`Results::record`] issues the [`ResultOrder`] when the action is done. The
-//!   order lives in the entry, and it leaves the store only inside the [`Shown`] view, which
-//!   [`Footer::legacy_kept`] takes, or a [`FooterResult`] bound to that result's own words, which
-//!   [`Footer::legacy_kept_line`] takes. A caller never holds a bare order, so it
-//!   cannot keep orders by kind and show one result with another's order. A draw, which has
-//!   `&Results`, cannot issue or renew an order.
+//!   order lives in the entry, and it leaves the store only inside the [`Shown`] view, as the
+//!   ticket of the typed footer line it makes ([`Shown::outcome`], `outcome::Messages::kept`). A
+//!   caller never holds a bare order, so it cannot keep orders by kind and show one result with
+//!   another's order. A draw, which has `&Results`, cannot issue or renew an order.
 //! - **Its end events.** [`Kept::ENDS`] says, for every end event, what it does to this kind.
 //!   An Undo leaves the store only when it works: [`Results::undo`] keeps the entry on `Err`.
 //!
@@ -52,30 +51,13 @@
 //! let a = Entry { id: 1, root: "campaign".into() };
 //! let mut results: Results<Entry, Done> = Results::new();
 //! results.record(Done { entry: a.clone(), words: "Links now say “Ash Wolf”.".into() });
-//! // The twin of each case below: a draw reads, and the footer line binds words and order.
-//! fn draw(results: &Results<Entry, Done>, a: &Entry) -> Option<splat::ownership::FooterResult> {
-//!     results.get(a).map(|shown| shown.footer(|done| done.words.clone()))
+//! // The twin of each case below: a draw reads.
+//! fn draw(results: &Results<Entry, Done>, a: &Entry) -> Option<String> {
+//!     results.get(a).map(|shown| shown.value().words.clone())
 //! }
 //! assert!(draw(&results, &a).is_some());
 //! let undone = results.undo(&a, |_| Ok::<(), String>(()));
 //! assert!(matches!(undone, Some(Ok(_))));
-//! ```
-//!
-//! The footer takes the view, and maps the stored value to its words and its drawing:
-//!
-//! ```no_run
-//! # use splat::ownership::{DiskChanged, Ends, Footer, Kept, Owner, OwnerChanged, Press, Results};
-//! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
-//! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
-//! # struct Done { entry: Entry, words: String }
-//! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
-//! fn add<'a>(footer: &mut Footer<'a>, results: &'a Results<Entry, Done>, a: &Entry) {
-//!     if let Some(shown) = results.get(a) {
-//!         footer.legacy_kept(shown, true, |done| done.words.as_str().into(), |done, ui| {
-//!             ui.label(done.words.as_str());
-//!         });
-//!     }
-//! }
 //! ```
 //!
 //! A draw gets `&Results`, so it cannot record a result or issue its order:
@@ -124,13 +106,6 @@
 //!
 //! ```compile_fail
 //! let order = splat::ownership::ResultOrder(7); // <- an order from a number
-//! ```
-//!
-//! A footer line's words and order come from one stored result:
-//!
-//! ```compile_fail
-//! # use splat::ownership::{FooterResult, ResultOrder};
-//! let line = FooterResult { order: ResultOrder::default(), words: String::from("B.") }; // <-
 //! ```
 //!
 //! There is no way to take an entry out except its end events and its press, so a failed Undo
@@ -182,10 +157,10 @@
 //!     // <- `press` left out
 //! };
 //! ```
-use super::components::{Footer, ResultOrder};
+use super::components::ResultOrder;
 use super::memo::Revision;
 use super::outcome::Sentence;
-use eframe::egui::{self, Ui};
+use eframe::egui;
 use std::time::Duration;
 
 mod projection;
@@ -286,7 +261,8 @@ pub enum Press {
 }
 
 /// A kept result as the store holds it: its value and the order its action issued. Only the
-/// store makes one, and its order leaves it only inside a [`FooterResult`], with its own words.
+/// store makes one, and its order leaves it only as the ticket of its typed footer line
+/// ([`Shown::outcome`]).
 pub struct Shown<'a, T> {
     order: ResultOrder,
     value: &'a T,
@@ -295,8 +271,8 @@ pub struct Shown<'a, T> {
 }
 
 impl<'a, T> Shown<'a, T> {
-    /// The order its action issued, for tests only. A caller gives the footer a [`FooterResult`],
-    /// so it cannot keep an order apart from its result.
+    /// The order its action issued, for tests only. A caller gives the footer a `KeptLine`
+    /// ([`Shown::outcome`]), so it cannot keep an order apart from its result.
     #[cfg(test)]
     pub(crate) fn order(&self) -> ResultOrder {
         self.order
@@ -350,14 +326,6 @@ impl<'a, T> Shown<'a, T> {
             refused,
         )
     }
-
-    /// This result's footer line: its words, made from its own value, with its own order.
-    pub fn footer(&self, words: impl FnOnce(&T) -> String) -> FooterResult {
-        FooterResult {
-            order: self.order,
-            words: words(self.value),
-        }
-    }
 }
 
 /// Names one kept entry of a store: the order its action issued, which no other entry of any
@@ -408,83 +376,6 @@ pub enum ByTicket<E> {
 /// changed.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Gone;
-
-/// One kept result's words and its order, bound together. It is not `Clone`, and its order is
-/// private: [`Footer::legacy_kept_line`] is the only way to give it to the footer.
-pub struct FooterResult {
-    order: ResultOrder,
-    words: String,
-}
-
-impl FooterResult {
-    pub fn words(&self) -> &str {
-        &self.words
-    }
-}
-
-/// The footer's entries for kept results. Each takes a view that only a [`Results`] store makes
-/// and maps the stored value to what is drawn; none hands the order to the caller.
-///
-/// - [`Footer::legacy_kept`] takes the [`Shown`] view while the store is borrowed: `words` and `draw`
-///   get the value.
-/// - [`Footer::legacy_kept_line`] takes an owned [`FooterResult`] (made by [`Shown::footer`]), for a
-///   caller that draws after the store's borrow ends.
-///
-/// A typed outcome (package M) adds its entry beside these in `design`, as
-/// `footer.kept_outcome(shown, |value| -> Outcome)`, through [`Footer::add_kept`].
-impl<'a> Footer<'a> {
-    /// A kept result from a [`Results`] store, with the order its action issued. `words` gives
-    /// its words (the footer's order and accessible name), and `draw` draws it; both get the
-    /// stored value. `has_undo` is true while its Undo is live.
-    #[deprecated(
-        note = "A footer holds only owned, typed data: make a `KeptLine` with `Shown::outcome` and give it to `Messages::kept` (src/design/outcome.rs)."
-    )]
-    pub fn legacy_kept<T>(
-        &mut self,
-        shown: Shown<'a, T>,
-        has_undo: bool,
-        words: impl FnOnce(&'a T) -> std::borrow::Cow<'a, str>,
-        draw: impl FnOnce(&'a T, &mut Ui) + 'a,
-    ) -> &mut Self {
-        let value = shown.value;
-        self.add_kept(shown.order, words(value), has_undo, move |ui| {
-            draw(value, ui)
-        })
-    }
-
-    /// A kept result's owned footer line ([`Shown::footer`]): its words, with the order its
-    /// action issued. `draw` gets the line's own words.
-    #[deprecated(
-        note = "A footer holds only owned, typed data: make a `KeptLine` with `Shown::outcome` and give it to `Messages::kept` (src/design/outcome.rs)."
-    )]
-    pub fn legacy_kept_line(
-        &mut self,
-        line: &'a FooterResult,
-        has_undo: bool,
-        draw: impl FnOnce(&'a str, &mut Ui) + 'a,
-    ) -> &mut Self {
-        self.add_kept(line.order, line.words.as_str(), has_undo, move |ui| {
-            draw(&line.words, ui)
-        })
-    }
-
-    /// The one way from a stored order to the footer, for the kept entries in `design` (these,
-    /// and a typed outcome's).
-    pub(in crate::design) fn add_kept(
-        &mut self,
-        order: ResultOrder,
-        words: impl Into<std::borrow::Cow<'a, str>>,
-        has_undo: bool,
-        draw: impl FnOnce(&mut Ui) + 'a,
-    ) -> &mut Self {
-        let rank = if has_undo {
-            super::components::FooterRank::Undo
-        } else {
-            super::components::FooterRank::Notice
-        };
-        self.push(rank, Some(order), words.into(), draw)
-    }
-}
 
 struct Entry<O, T> {
     owner: O,
@@ -1040,6 +931,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/campaigns.rs", "save_form", &[Ban::Results]),
+        // The design system's pane tests with closure lines (the `#[cfg(test)]` `Footer::result`,
+        // `legacy_reason`) and a footer placed by hand (migration-32 L2c: no app code can).
         (
             "src/design/components.rs",
             "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
@@ -1093,29 +986,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
         ("src/encounters.rs", "run_settings", &[Ban::Results]),
-        ("src/encounters.rs", "save_draft", &[Ban::Results]),
-        ("src/library.rs", "add_reader_result", &[Ban::Footer]),
-        // Layout PR 2b: the Library page's error, a legacy footer line (a closure).
-        ("src/library.rs", "page_error", &[Ban::Footer]),
-        // Layout PR 2b: the test of the legacy `Footer::legacy_kept`.
-        (
-            "src/design/results.rs",
-            "the_footer_takes_each_kept_result_with_its_own_order",
-            &[Ban::Footer],
-        ),
-        // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
-        // Round 29 L: the source change's Undo, and the registration's (`undo_package_registration`),
-        // moved into stores; by owner until the reader footer moves to `Messages`.
-        (
-            "src/library.rs",
-            "apply_page_press",
-            &[Ban::Results, Ban::ByOwner(3)],
-        ),
-        (
-            "src/library.rs",
-            "undo_package_registration",
-            &[Ban::ByOwner(1)],
-        ),
         (
             "src/design/results.rs",
             "a_failed_undo_keeps_its_entry_and_its_order",
@@ -1143,17 +1013,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_result_shows_only_in_its_own_scope statement",
             &[Ban::ByOwner(1)],
         ),
-        (
-            "src/library.rs",
-            "editor_pane",
-            &[Ban::Extras(1), Ban::Footer],
-        ),
+        ("src/library.rs", "editor_pane", &[Ban::Extras(1)]),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
         ("src/library.rs", "cause", &[Ban::Words]),
         // M17 (M-L0.4b): a manifest write's words, which start with the file's path from disk.
         ("src/library.rs", "outcome_of", &[Ban::Words]),
-        ("src/library.rs", "reader_messages", &[Ban::Footer]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
         // R24: a value block's save row shows its own messages (the Session folder's).
         ("src/sessions/page.rs", "folder_block", &[Ban::Body]),
@@ -1442,8 +1307,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "history_summary",
             &[Ban::Extras(2)],
         ),
-        ("src/library.rs", "duplicate_choices", &[Ban::Extras(2)]),
-        ("src/library.rs", "recovery_action", &[Ban::Extras(2)]),
         ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
         ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
@@ -1489,6 +1352,10 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "the_scroll_bar_does_not_choose_the_prose_type",
             &[Ban::Layout(1)],
         ),
+        // Migration-32 L2c: the design system's own pane tests draw closure lines (the
+        // `#[cfg(test)]` `legacy_reason`, `legacy_notice`) to place a footer of a known height;
+        // every app footer is typed. Its other three such tests, which also call
+        // `Footer::result` and `show_by_hand`, stay in `STAGED_ALLOWS`.
         (
             "src/design/components.rs",
             "iter28_p_the_pane_places_its_footer_for_every_body",
@@ -1498,6 +1365,12 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/design/components.rs",
             "add_field_keys",
             &[Ban::Layout(1)],
+        ),
+        // The test of the staged keys-only add field itself (`AddFieldForm::keys_only`).
+        (
+            "src/design/components.rs",
+            "iter29_p1_an_opened_add_field_shows_add_and_cancel",
+            &[Ban::Extras(1)],
         ),
         (
             "src/design/components.rs",
@@ -1693,11 +1566,7 @@ pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, u
 /// `Ban::Footer`, and these counts can only shrink: give the footer typed data instead
 /// (`outcome::Messages`).
 #[cfg(test)]
-pub(crate) const LEGACY_FOOTER_LINES: &[(&str, usize)] = &[
-    ("src/design/components.rs", 11),
-    ("src/design/results.rs", 1),
-    ("src/library.rs", 12),
-];
+pub(crate) const LEGACY_FOOTER_LINES: &[(&str, usize)] = &[("src/design/components.rs", 11)];
 
 /// See [`Staged`]: the pattern, what to use instead, and the count of each file.
 #[cfg(test)]
@@ -1721,7 +1590,7 @@ pub(crate) const STAGED: &[Staged] = &[
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[
             ("src/campaigns.rs", 9),
-            ("src/design/components.rs", 16),
+            ("src/design/components.rs", 15),
             ("src/dndbeyond.rs", 1),
             ("src/encounters/groups.rs", 1),
             ("src/sessions/carry.rs", 1),
@@ -1739,7 +1608,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaigns.rs", 1),
             ("src/design/components.rs", 1),
             ("src/design/gallery.rs", 2),
-            ("src/encounters.rs", 3),
+            ("src/encounters.rs", 2),
             ("src/world/edit.rs", 1),
         ],
     ),
@@ -2284,53 +2153,6 @@ mod tests {
         let undone = links.undo(&b, |_| Ok::<(), ()>(()));
         assert!(matches!(undone, Some(Ok(_))));
         assert_eq!(links.get(&a).unwrap().value().1, "A.", "B's Undo takes A");
-    }
-
-    /// The footer takes each kept result with the order its own action issued: added oldest
-    /// first, the newer one still leads; then the older one again, and it leads. `words` and
-    /// `draw` get the stored value.
-    #[allow(
-        deprecated,
-        clippy::disallowed_methods,
-        reason = "the test of `Footer::legacy_kept`, deprecated until Wave 3 removes it, and banned (`Ban::Footer`)"
-    )]
-    #[test]
-    fn the_footer_takes_each_kept_result_with_its_own_order() {
-        use egui_kittest::kittest::Queryable;
-        let mut results = Results::new();
-        results.record(done(A, "Links now say “Ash Wolf”."));
-        results.record(done(B, "Links now say “Veilglass Lantern”."));
-        let tops = |results: &Results<Note, Done>| {
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(eframe::egui::vec2(600.0, 300.0))
-                .build_ui(|ui| {
-                    let mut footer = Footer::new("kept_test", 500.0);
-                    for owner in [&A, &B] {
-                        let shown = results.get(owner).unwrap();
-                        footer.legacy_kept(
-                            shown,
-                            true,
-                            |done| done.words.into(),
-                            |done, ui| {
-                                ui.label(done.words);
-                            },
-                        );
-                    }
-                    footer.pane(ui, crate::design::Body::Content, |_| ());
-                });
-            crate::design::theme::install(&harness.ctx);
-            harness.run();
-            let top = |words: &str| harness.get_by_label(words).rect().top();
-            (
-                top("Links now say “Ash Wolf”."),
-                top("Links now say “Veilglass Lantern”."),
-            )
-        };
-        let (a, b) = tops(&results);
-        assert!(b < a, "B is newer, so it leads: A {a}, B {b}");
-        results.record(done(A, "Links now say “Ash Wolf”."));
-        let (a, b) = tops(&results);
-        assert!(a < b, "A again is newest: A {a}, B {b}");
     }
 
     /// A ticket names one entry: after its owner's later action replaced it, or an end event

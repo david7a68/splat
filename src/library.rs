@@ -14,7 +14,7 @@ use crate::{
     design::{
         self, Action, Density, Status, Tone, Type, colors, icons,
         outcome::{
-            Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice, Messages, Notice,
+            Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice, Messages, Notice, Offer,
             PaneFrame, Press, Said, Sentence, UndoStep, Verb,
         },
         reader as reader_style,
@@ -133,56 +133,6 @@ fn draft_repair_problem(
         None if parse_fault() => (None, line),
         None => (Some(error.clone()), line),
     }
-}
-
-/// A manifest's recovery in Edit Markdown: the bordered action at the message text edge, then
-/// its consequence. It follows the error in the pane's message footer: the action depends on the
-/// saved file only, so it stays while the DM edits and moves nothing.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn recovery_action(
-    ui: &mut egui::Ui,
-    (_, path, exists): &(Module, String, bool),
-    blocked: Option<&str>,
-) -> bool {
-    let inset = design::S
-        + design::HAIRLINE_WIDTH
-        + design::number_width(ui, icons::ERROR, &Type::Body.font(ui))
-        + ui.spacing().item_spacing.x * 2.0
-        - design::XS;
-    let label = if *exists {
-        format!("Replace with a basic {path}")
-    } else {
-        "Write the manifest again".into()
-    };
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
-        let pressed = ui
-            .horizontal(|ui| {
-                ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
-                design::locked(ui, blocked, |ui| {
-                    Action::secondary(&label)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                })
-            })
-            .inner;
-        if *exists {
-            ui.horizontal(|ui| {
-                ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
-                // Help keeps the reader measure (round 26).
-                design::help(
-                    ui,
-                    &crate::content_workspace::manifest_replace_consequence(path),
-                );
-            });
-        }
-        pressed
-    })
-    .inner
 }
 
 /// Keep the error with its repair and consequence in both reader and source views.
@@ -306,6 +256,12 @@ impl Owner {
             Self::Campaign(campaign) => Some(campaign.id),
         }
     }
+    /// Whether this is the package `id`. A campaign may have the same UUID as a package
+    /// (settings check package and campaign UUIDs apart), so the kind is part of the check: a
+    /// UUID alone never stands for a package (issue #505, M-L0.5).
+    fn is_package(&self, id: Uuid) -> bool {
+        matches!(self, Self::Package(module) if module.id == id)
+    }
     /// The owner's kind and id: the owner part of a [`FileId`].
     fn key(&self) -> OwnerKey {
         match self {
@@ -397,10 +353,10 @@ pub(crate) fn encounter_uses_entry(encounter: &Entry, entry: &Entry) -> bool {
 /// The warning for a first heading that differs from the entry's name (its words, its action
 /// and the fixed text), and the result message whose `Undo heading change` shows for this draft.
 struct HeadingChoice {
-    fix: Option<(String, String, String)>,
-    undo: Option<String>,
-    /// The Undo's footer line (its words with the order its fix issued), for Read's footer.
-    undo_line: Option<design::results::FooterResult>,
+    /// The warning, the entry's name (the fix's `Use <name>`) and the draft the fix writes.
+    fix: Option<(Sentence, String, String)>,
+    /// The fix's result, while its Undo shows.
+    undo: Option<Sentence>,
 }
 
 impl HeadingChoice {
@@ -417,24 +373,23 @@ impl HeadingChoice {
             return Self {
                 fix: None,
                 undo: None,
-                undo_line: None,
             };
         };
         Self {
             fix: presentation::heading_fix(draft, entry).map(|(old, after)| {
                 (
-                    format!(
-                        "The first heading says {old}, but the name is {}.",
+                    crate::sentence!(
+                        "The first heading says {}, but the name is {}.",
+                        old,
                         entry.name
                     ),
-                    format!("Use {}", entry.name),
+                    entry.name.clone(),
                     after,
                 )
             }),
             undo: undo
                 .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && after == draft)
-                .then(|| format!("The first heading now says {}.", entry.name)),
-            undo_line: None,
+                .then(|| crate::sentence!("The first heading now says {}.", entry.name)),
         }
     }
 
@@ -461,42 +416,6 @@ impl HeadingChoice {
     }
 }
 
-/// The duplicate-identity warning and its repair choices. The reader draws them inside its
-/// scroll area, so the title and body scroll into view; source mode draws them above the editor.
-/// The page's last error, as a reason in the pane's message footer. Its words can hold code in
-/// backticks.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: a legacy footer line, a closure (`Ban::Footer`, design::results::STAGED_ALLOWS)"
-)]
-fn page_error<'a>(footer: &mut design::Footer<'a>, error: Option<&'a str>) {
-    if let Some(error) = error {
-        let words = format!("Error: {error}");
-        footer.legacy_reason(words.clone(), move |ui| {
-            design::message_with_code(ui, Tone::Error, &words);
-        });
-    }
-}
-
-/// Each kept result as its own message in the pane's message footer; the footer lists them
-/// newest first by the order each act issued (its line, from its store), as Edit Markdown lists
-/// its results. `out` gathers what was pressed.
-fn add_results<'a>(
-    footer: &mut design::Footer<'a>,
-    results: &'a ReaderResults,
-    out: &'a std::cell::Cell<ResultPress>,
-) {
-    for (kind, _, undo) in results.items() {
-        if let Some(line) = results.line(kind) {
-            add_reader_result(footer, line, undo, move |ui| {
-                let mut pressed = out.get();
-                show_result(ui, results, kind, &mut pressed);
-                out.set(pressed);
-            });
-        }
-    }
-}
-
 /// What a press in a Library typed footer asks for (M-L0.4b). A kept result's press comes back
 /// with its ticket, which names the entry its line showed: the act runs only while that entry
 /// stands, so a press never reaches a newer result of the same kind or owner.
@@ -504,9 +423,8 @@ fn add_results<'a>(
 enum LibraryPress {
     /// The Undo of a result in the Library's own store (`LibraryKept`): the ticket gives its kind.
     Undo,
-    /// The link offer's `Update <n> links`. The offer is a notice with no ticket (no ticketed
-    /// line of the typed footer has the info tone without an Undo): its press acts on the open
-    /// entry's offer that this frame's footer showed.
+    /// The link offer's `Update <n> links`: a kept offer line (`KeptOutcome::Offer`), so its
+    /// press comes back with the offer's ticket.
     UpdateLinks,
     /// The link update's Undo.
     UndoLinks,
@@ -516,6 +434,203 @@ enum LibraryPress {
     UseCopy,
     /// The source change's Undo.
     UndoRosters,
+    /// The first heading's fix, `Use <name>`.
+    FixHeading,
+    /// A stat line's fix, `Use <value>`: its stat's key and label, and the value it writes.
+    UseVital(&'static str, &'static str, i64),
+    /// A broken manifest's recovery (`Write the manifest again`, `Replace with a basic …`).
+    Repair,
+    /// `Make <file> a separate entry`: that file's note.
+    SeparateEntry(usize),
+    /// `Make all N files in <folder>/ separate entries`: a note of that folder's owner.
+    SeparateEntries(usize),
+    /// `Copy <entry> to <package>`: the campaign entry the open package entry links to.
+    CopyDependency(Uuid),
+}
+
+/// The heading fix's result: its Undo.
+const HEADING_CHANGE_UNDO: UndoStep = UndoStep::words("Undo heading change");
+/// The stat fix's result: its Undo.
+const STAT_CHANGE_UNDO: UndoStep = UndoStep::words("Undo stat change");
+/// The duplicate warning's words (World's `DUPLICATE_ENTRY`, checked).
+static DUPLICATE_ENTRY: Sentence = crate::sentence!("These two files claim to be the same entry.");
+
+/// A broken manifest's recovery choice, locked while the draft holds it. Replacing a manifest
+/// that is there says what it keeps and replaces, in its help line (M8).
+fn recovery_choice(path: &str, exists: bool, lock: Option<Sentence>) -> Choice<LibraryPress> {
+    let choice = if exists {
+        Choice::named(
+            crate::choice!("Replace with a basic {}", path),
+            LibraryPress::Repair,
+        )
+        .help(manifest_replace_help(path))
+    } else {
+        Choice::new(
+            MessageChoice::Choice("Write the manifest again"),
+            LibraryPress::Repair,
+        )
+    };
+    match lock {
+        Some(reason) => choice.blocked(reason),
+        None => choice,
+    }
+}
+
+/// What replacing a manifest keeps and replaces (`content_workspace`'s words, checked).
+fn manifest_replace_help(path: &str) -> Sentence {
+    crate::sentence!(
+        "This keeps the package name and its links. It replaces the other contents of {}, including its description. The entries stay unchanged.",
+        path
+    )
+}
+
+/// What a duplicate repair choice leaves each encounter that uses the entry with, as its help
+/// line (M8): the first file's choice keeps them on the other file, the others move them.
+fn duplicate_consequence(users: &[String], remaining: &str, keeps: bool) -> Sentence {
+    let names = name_list(users);
+    match (keeps, users.len()) {
+        (true, 1) => crate::sentence!("{} keeps {}.", names, remaining),
+        (true, _) => crate::sentence!("{} keep {}.", names, remaining),
+        (false, _) => crate::sentence!("{} will then use {}.", names, remaining),
+    }
+}
+
+/// The duplicate warning and its repair choices: one per file, and one per folder whose files
+/// all repeat another folder's, each with its consequence in its help line (M8), locked while
+/// the draft holds them. The encounters a folder's batch leaves on the other folder are found
+/// once per load (an egui cache keyed by the whole owner key and the notes).
+fn duplicate_notice(
+    ui: &egui::Ui,
+    loaded: &Loaded,
+    note: &Note,
+    duplicate_indices: &[usize],
+    lock: Option<Sentence>,
+) -> Notice<LibraryPress> {
+    let locked = |choice: Choice<LibraryPress>| match &lock {
+        Some(reason) => choice.blocked(reason.clone()),
+        None => choice,
+    };
+    let mut notice = Notice::warning(DUPLICATE_ENTRY.clone());
+    let users: Vec<_> = loaded
+        .notes
+        .iter()
+        .filter_map(|other| {
+            let entry = other.entry.as_ref()?;
+            (entry.kind == "encounter" && encounter_uses_entry(entry, note.entry.as_ref()?))
+                .then(|| entry.name.clone())
+        })
+        .collect();
+    let in_folder = |at: usize| {
+        let target = &loaded.notes[at];
+        let filename = Path::new(&target.path)
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let same_filename = duplicate_indices.iter().any(|&other| {
+            other != at
+                && Path::new(&loaded.notes[other].path).file_name()
+                    == Path::new(&target.path).file_name()
+        });
+        if same_filename {
+            format!("{filename} in {}/", target.owner.folder())
+        } else {
+            filename.into_owned()
+        }
+    };
+    for (position, &at) in duplicate_indices.iter().enumerate() {
+        let choice = locked(Choice::named(
+            crate::choice!("Make {} a separate entry", in_folder(at)),
+            LibraryPress::SeparateEntry(at),
+        ));
+        let remaining = duplicate_indices.iter().copied().find(|&other| other != at);
+        notice = notice.choice(match remaining.filter(|_| !users.is_empty()) {
+            Some(remaining) => choice.help(duplicate_consequence(
+                &users,
+                &in_folder(remaining),
+                position == 0,
+            )),
+            None => choice,
+        });
+    }
+    let mut shown = std::collections::HashSet::new();
+    for (position, &at) in duplicate_indices.iter().enumerate() {
+        let owner = &loaded.notes[at].owner;
+        if !shown.insert(owner.key()) {
+            continue;
+        }
+        let Some(paths) = loaded.duplicate_folder_paths(owner) else {
+            continue;
+        };
+        // Encounters outside the batch whose source changes; worked out once per load.
+        let slot = egui::Id::new((
+            "duplicate_folder_users",
+            // The whole owner key: a campaign and a package with one UUID each have their own
+            // encounters outside their batch (Astra, PR 477).
+            owner.key(),
+            std::ptr::from_ref(loaded) as usize,
+            loaded.notes.len(),
+            // A reload in place changes some text; this cheap sum notices it.
+            loaded
+                .notes
+                .iter()
+                .map(|note| note.text.len())
+                .sum::<usize>(),
+        ));
+        let users = ui
+            .data(|data| data.get_temp::<Vec<String>>(slot))
+            .unwrap_or_else(|| {
+                let batch: std::collections::HashSet<&String> = paths.iter().collect();
+                let targets: Vec<&Entry> = loaded
+                    .notes
+                    .iter()
+                    .filter(|target| {
+                        target.owner.key() == owner.key() && batch.contains(&target.path)
+                    })
+                    .filter_map(|target| target.entry.as_ref())
+                    .collect();
+                let mut users: Vec<String> = Vec::new();
+                for other in &loaded.notes {
+                    // An encounter inside the batch gets the new identities with it.
+                    if other.owner.key() == owner.key() && batch.contains(&other.path) {
+                        continue;
+                    }
+                    let Some(encounter) = other.entry.as_ref() else {
+                        continue;
+                    };
+                    if encounter.kind == "encounter"
+                        && !users.contains(&encounter.name)
+                        && targets
+                            .iter()
+                            .any(|entry| encounter_uses_entry(encounter, entry))
+                    {
+                        users.push(encounter.name.clone());
+                    }
+                }
+                ui.data_mut(|data| data.insert_temp(slot, users.clone()));
+                users
+            });
+        let choice = locked(Choice::named(
+            crate::choice!(
+                "Make all {} files in {}/ separate entries",
+                paths.len(),
+                owner.folder()
+            ),
+            LibraryPress::SeparateEntries(at),
+        ));
+        let remaining = duplicate_indices
+            .iter()
+            .map(|&other| &loaded.notes[other].owner)
+            .find(|other| other.key() != owner.key());
+        notice = notice.choice(match remaining.filter(|_| !users.is_empty()) {
+            Some(remaining) => choice.help(duplicate_consequence(
+                &users,
+                &format!("the files in {}/", remaining.folder()),
+                position == 0,
+            )),
+            None => choice,
+        });
+    }
+    notice
 }
 
 /// The page's last error (`Library::error`, the New entry form's `new_error`): the app's own
@@ -588,6 +703,14 @@ enum LibraryFault<'a> {
     Error(&'a str),
     /// The app's own words, then the outside words that say why.
     Because(&'a Sentence, &'a str),
+    /// A repair draft's fault (the content layer's words, a YAML fault), or Save's refusal
+    /// before the write, in the tone its diagnosis gives (a deleted manifest is a warning).
+    Repair(&'a str, Tone),
+    /// The disk's failure of the last Save of this draft (the system's words).
+    NotSaved(&'a str),
+    /// The link Campaign sent the DM here to fix: its line and the content layer's words for it,
+    /// in the form of the broken-link lines beside it (`Line 21: …`).
+    Link { line: usize, words: &'a str },
 }
 
 impl<'a> From<&'a PageError> for LibraryFault<'a> {
@@ -602,8 +725,15 @@ impl<'a> From<&'a PageError> for LibraryFault<'a> {
 
 impl design::outcome::Fault for LibraryFault<'_> {
     fn severity(&self) -> design::outcome::Severity {
-        // An act's write or read did not work: the error tone, as the legacy line had.
-        design::outcome::Severity::NotSaved
+        use design::outcome::Severity;
+        match self {
+            Self::Repair(_, Tone::Warning) | Self::Link { .. } => Severity::NeedsFixing,
+            Self::Repair(..) => Severity::CannotRead,
+            // An act's write or read did not work: the error tone, as the legacy line had.
+            Self::Own(_) | Self::Error(_) | Self::Because(..) | Self::NotSaved(_) => {
+                Severity::NotSaved
+            }
+        }
     }
 
     #[allow(
@@ -620,6 +750,21 @@ impl design::outcome::Fault for LibraryFault<'_> {
             // `Error:` leads, as before; the words after it keep their spelling (a path).
             Self::Error(words) => Sentence::outside_after(crate::lead!("Error:"), *words)
                 .unwrap_or(crate::sentence!("Something went wrong.")),
+            Self::Repair(words, _) => {
+                Sentence::outside(*words).unwrap_or(crate::sentence!("This file needs fixing."))
+            }
+            Self::NotSaved(words) => {
+                Sentence::outside(*words).unwrap_or(crate::sentence!("The draft was not saved."))
+            }
+            Self::Link { line, words } => {
+                let fix = crate::sentence!(
+                    "Replace the link on this line with another creature, or remove its row."
+                );
+                match Sentence::outside(format!("Line {line}: {words}")) {
+                    Some(words) => words.then(fix),
+                    None => fix,
+                }
+            }
         }
     }
 }
@@ -629,262 +774,6 @@ fn page_faults(messages: &mut Messages<'_, LibraryPress>, errors: &[Option<&Page
     for error in errors.iter().flatten() {
         messages.outcome(FaultMessage::new(&LibraryFault::from(*error)));
     }
-}
-
-/// What the DM pressed in the reader's messages in the pane's message footer.
-#[derive(Default)]
-struct ReaderPress {
-    /// The heading fix, then its Undo.
-    heading: (bool, bool),
-    results: std::cell::Cell<ResultPress>,
-    new_identity: Option<usize>,
-    new_identities: Option<(PathBuf, Vec<String>)>,
-    /// The campaign entry to copy into the package.
-    copy_dependency: Option<Uuid>,
-    /// The copy result whose Undo was pressed: its place in the kept copies.
-    undo_dependency: std::cell::Cell<Option<usize>>,
-}
-
-/// The reader's messages that come and go, in the pane's message footer below the body, so the
-/// body never moves (round 26 FD2, FC4): the page's results, the heading warning and its result,
-/// the duplicate warning with its choices, and a package entry's campaign links with their copy
-/// result. Results with a live Undo lead, then the warnings. `heading` is `None` when Edit
-/// Markdown's messages already hold it.
-#[allow(clippy::too_many_arguments)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: a legacy footer line, a closure (`Ban::Footer`, design::results::STAGED_ALLOWS)"
-)]
-fn reader_messages<'a>(
-    footer: &mut design::Footer<'a>,
-    heading: Option<&'a HeadingChoice>,
-    results: &'a ReaderResults,
-    duplicates: Option<(&'a Loaded, &'a Note, &'a [usize])>,
-    draft_reason: Option<&'static str>,
-    dependencies: &'a [(Uuid, String, String)],
-    dependency_results: &'a [(usize, design::results::FooterResult)],
-    out: &'a mut ReaderPress,
-) {
-    let ReaderPress {
-        heading: heading_out,
-        results: results_out,
-        new_identity,
-        new_identities,
-        copy_dependency,
-        undo_dependency,
-    } = out;
-    let (heading_fix, heading_undo) = (&mut heading_out.0, &mut heading_out.1);
-    add_results(footer, results, results_out);
-    if let Some(line) = heading.and_then(|heading| heading.undo_line.as_ref()) {
-        // The fix's result is a message, so its Undo keeps its icon on the message line.
-        add_reader_result(footer, line, true, |ui| {
-            *heading_undo =
-                design::undo_message(ui, Tone::Success, line.words(), "Undo heading change");
-        });
-    }
-    // Round 25 FF8: each result names the entry and the package, in the button's words.
-    for (at, line) in dependency_results {
-        let undo = &*undo_dependency;
-        add_reader_result(footer, line, true, move |ui| {
-            if design::undo_message(ui, Tone::Success, line.words(), "Undo copy") {
-                undo.set(Some(*at));
-            }
-        });
-    }
-    if let Some((words, action, _)) = heading.and_then(|heading| heading.fix.as_ref()) {
-        footer.legacy_notice(words.as_str(), |ui| {
-            *heading_fix = design::message_with_action(ui, Tone::Warning, words, action);
-        });
-    }
-    if let Some((loaded, note, indices)) = duplicates.filter(|(_, _, at)| !at.is_empty()) {
-        footer.legacy_notice(crate::world::DUPLICATE_ENTRY, move |ui| {
-            duplicate_choices(
-                ui,
-                loaded,
-                note,
-                indices,
-                draft_reason,
-                new_identity,
-                new_identities,
-            );
-        });
-    }
-    if !dependencies.is_empty() {
-        let words = dependencies
-            .iter()
-            .map(|(_, words, _)| words.as_str())
-            .collect::<Vec<_>>()
-            .join(" ");
-        footer.legacy_notice(words, move |ui| {
-            for (id, words, action) in dependencies {
-                if design::locked(ui, draft_reason, |ui| {
-                    design::message_with_action(ui, Tone::Warning, words, action)
-                }) {
-                    *copy_dependency = Some(*id);
-                }
-            }
-        });
-    }
-}
-
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn duplicate_choices(
-    ui: &mut egui::Ui,
-    loaded: &Loaded,
-    note: &Note,
-    duplicate_indices: &[usize],
-    draft_reason: Option<&'static str>,
-    new_identity: &mut Option<usize>,
-    new_identities: &mut Option<(PathBuf, Vec<String>)>,
-) {
-    // The repair choices start at the message text edge, as in World and Lookup.
-    design::message_with_actions(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY, |ui| {
-        let users: Vec<_> = loaded
-            .notes
-            .iter()
-            .filter_map(|other| {
-                let entry = other.entry.as_ref()?;
-                (entry.kind == "encounter"
-                    && encounter_uses_entry(entry, note.entry.as_ref().unwrap()))
-                .then(|| entry.name.clone())
-            })
-            .collect();
-        for (position, &at) in duplicate_indices.iter().enumerate() {
-            let target = &loaded.notes[at];
-            let filename = Path::new(&target.path)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy();
-            let same_filename = duplicate_indices.iter().any(|&other| {
-                other != at
-                    && Path::new(&loaded.notes[other].path).file_name()
-                        == Path::new(&target.path).file_name()
-            });
-            let filename = if same_filename {
-                format!("{filename} in {}/", target.owner.folder())
-            } else {
-                filename.into_owned()
-            };
-            if position > 0 {
-                ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
-            }
-            ui.scope(|ui| {
-                ui.spacing_mut().item_spacing.y = design::XS;
-                let action = crate::world::separate_entry_action(&filename);
-                if Action::secondary(&action)
-                    .hint(&action)
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-                {
-                    *new_identity = Some(at);
-                }
-                if !users.is_empty() {
-                    let remaining = duplicate_indices
-                        .iter()
-                        .copied()
-                        .find(|&other| other != at)
-                        .unwrap();
-                    let note = &loaded.notes[remaining];
-                    let remaining = Path::new(&note.path)
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy();
-                    let remaining = if same_filename {
-                        format!("{remaining} in {}/", note.owner.folder())
-                    } else {
-                        remaining.into_owned()
-                    };
-                    duplicate_repair_consequence(ui, &users, &remaining, position == 0);
-                }
-            });
-        }
-        let mut shown = std::collections::HashSet::new();
-        for (position, &at) in duplicate_indices.iter().enumerate() {
-            let owner = &loaded.notes[at].owner;
-            if shown.insert(owner.key())
-                && let Some(paths) = loaded.duplicate_folder_paths(owner)
-            {
-                ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
-                // Encounters outside the batch whose source changes; worked out once per load.
-                let slot = egui::Id::new((
-                    "duplicate_folder_users",
-                    // The whole owner key: a campaign and a package with one UUID each have
-                    // their own encounters outside their batch (Astra, PR 477).
-                    owner.key(),
-                    std::ptr::from_ref(loaded) as usize,
-                    loaded.notes.len(),
-                    // A reload in place changes some text; this cheap sum notices it.
-                    loaded
-                        .notes
-                        .iter()
-                        .map(|note| note.text.len())
-                        .sum::<usize>(),
-                ));
-                let users = ui
-                    .data(|data| data.get_temp::<Vec<String>>(slot))
-                    .unwrap_or_else(|| {
-                        let batch: std::collections::HashSet<&String> = paths.iter().collect();
-                        let targets: Vec<&Entry> = loaded
-                            .notes
-                            .iter()
-                            .filter(|target| {
-                                target.owner.key() == owner.key() && batch.contains(&target.path)
-                            })
-                            .filter_map(|target| target.entry.as_ref())
-                            .collect();
-                        let mut users: Vec<String> = Vec::new();
-                        for other in &loaded.notes {
-                            // An encounter inside the batch gets the new identities with it.
-                            if other.owner.key() == owner.key() && batch.contains(&other.path) {
-                                continue;
-                            }
-                            let Some(encounter) = other.entry.as_ref() else {
-                                continue;
-                            };
-                            if encounter.kind == "encounter"
-                                && !users.contains(&encounter.name)
-                                && targets
-                                    .iter()
-                                    .any(|entry| encounter_uses_entry(encounter, entry))
-                            {
-                                users.push(encounter.name.clone());
-                            }
-                        }
-                        ui.data_mut(|data| data.insert_temp(slot, users.clone()));
-                        users
-                    });
-                ui.scope(|ui| {
-                    ui.spacing_mut().item_spacing.y = design::XS;
-                    if Action::secondary(&format!(
-                        "Make all {} files in {}/ separate entries",
-                        paths.len(),
-                        owner.folder()
-                    ))
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-                    {
-                        *new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
-                    }
-                    let remaining = duplicate_indices
-                        .iter()
-                        .map(|&other| &loaded.notes[other].owner)
-                        .find(|other| other.key() != owner.key())
-                        .expect("a folder repair has another owner");
-                    duplicate_repair_consequence(
-                        ui,
-                        &users,
-                        &format!("the files in {}/", remaining.folder()),
-                        position == 0,
-                    );
-                });
-            }
-        }
-    });
 }
 
 /// Shared consequence wording for the two identity-repair choices.
@@ -1201,7 +1090,7 @@ fn unregister_count(notes: &[Note], package: Uuid) -> usize {
     notes
         .iter()
         .filter(|n| {
-            n.owner.id() == Some(package)
+            n.owner.is_package(package)
                 && !n.is_manifest()
                 && n.entry.as_ref().is_none_or(|e| e.kind != "reference")
         })
@@ -1444,6 +1333,8 @@ pub(crate) struct Loaded {
     /// deleted draft's warning show them in every frame. A reload (a new `Loaded`) or an edited
     /// note (`invalidate`) finds them again.
     dependents: std::sync::Mutex<std::collections::HashMap<EntryRef, DependentNames>>,
+    /// Creatures' Spellcasting resolved through these notes, cleared with the other caches.
+    spells: spells::SpellCache,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -1992,9 +1883,7 @@ impl Loaded {
                 }
             },
             Scope::Builtin => note.owner == Owner::Builtin,
-            Scope::Package(id) => {
-                matches!(note.owner, Owner::Package(_)) && note.owner.id() == Some(id)
-            }
+            Scope::Package(id) => note.owner.is_package(id),
             Scope::Campaign => matches!(note.owner, Owner::Campaign(_)),
         }
     }
@@ -2059,6 +1948,7 @@ impl Loaded {
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
+        self.spells.clear();
         self.subtitles.take();
         self.counts.take();
         self.duplicate_ids.take();
@@ -2219,10 +2109,17 @@ impl view::Links for Loaded {
         Some((index, self.notes[index].name().to_owned()))
     }
     fn find_spell(&self, reference: &content::Reference) -> Option<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         let index = self.resolve_spell(reference)?;
         Some((index, self.notes[index].name().to_owned()))
     }
+    fn spell_cache(&self) -> Option<&spells::SpellCache> {
+        Some(&self.spells)
+    }
     fn spells_named_in(&self, text: &str) -> Vec<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         self.notes
             .iter()
             .enumerate()
@@ -2234,6 +2131,8 @@ impl view::Links for Loaded {
             .collect()
     }
     fn spell_named(&self, name: &str) -> Option<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         self.notes
             .iter()
             .position(|note| {
@@ -2803,74 +2702,19 @@ impl design::results::Kept for LinkResult {
     }
 }
 
-/// The page's results that are not about the open entry: the offer to change links after a rename
-/// and its result, and a copied package's registration. They sit in the pane's message footer, so
-/// a result never moves the columns, the tabs, the file line, the title or the body.
-#[derive(Default)]
-struct PageResults {
-    /// The offer's footer line (its words with its order from the store) and its action's words.
-    link_offer: Option<(design::results::FooterResult, String)>,
-    /// The link update's footer line, with its order from the store.
-    links: Option<design::results::FooterResult>,
-    /// The newest registration result of this campaign: its footer line (its words with its
-    /// order from the store), why its Undo waits, and its owner, which its presses name.
-    registration: Option<(
-        design::results::FooterResult,
-        Option<design::outcome::Sentence>,
-        RegistrationOwner,
-    )>,
-    /// `Use the copy in encounters` shows, with why it waits.
-    use_copy: Option<Option<&'static str>>,
-    /// That registration's source change: its footer line and why its Undo waits.
-    rosters: Option<(design::results::FooterResult, bool)>,
-    /// A package unregister's result.
-    unregistered: Option<String>,
-    /// Why the scope changed to show an entry.
-    scope_notice: Option<String>,
-}
-
-impl PageResults {
-    fn any(&self) -> bool {
-        self.link_offer.is_some()
-            || self.links.is_some()
-            || self.registration.is_some()
-            || self.rosters.is_some()
-            || self.unregistered.is_some()
-            || self.scope_notice.is_some()
-    }
-}
-
-/// Which page result's action was pressed.
-#[derive(Clone, Copy, Default)]
-struct PagePress {
-    link_offer: bool,
-    links: bool,
-    /// Each names the registration whose line was pressed (by owner: the reader footer has no
-    /// tickets until it moves to `Messages`).
-    registration: Option<RegistrationOwner>,
-    use_copy: Option<RegistrationOwner>,
-    rosters: Option<RegistrationOwner>,
-    unregistered: bool,
-}
-
-/// The kept results of the open entry's pane, in the order they show. They sit in the pane's
-/// message footer, below the reader's body or the editor, and below the empty reader or a form
-/// (round 26 FD2). Without a save row in Edit Markdown (a file changed on disk) they stay above
-/// the comparison.
+/// What the typed footers of a pane need to know besides the stores: whether this pane shows
+/// the package choice, the manifest write and the separate-entry results, and the open draft's
+/// lock on their Undo.
 #[derive(Default)]
 struct ReaderResults {
-    /// The page's results, first.
-    page: PageResults,
     /// Every entry in this package is now chosen for this campaign.
     package_use: bool,
-    /// A manifest write's result and the file its Undo writes back.
-    manifest: Option<(String, String)>,
+    /// A manifest write's result.
+    manifest: bool,
     /// A folder's separate-entries result.
-    identities: Option<String>,
+    identities: bool,
     /// One file's separate-entry result.
-    identity: Option<String>,
-    /// The name of the entry whose draft Read just discarded.
-    discarded: Option<String>,
+    identity: bool,
     /// Why Undo of a file change waits now: the open draft, or its changed file. The Undo
     /// paints it on its own line (ruling Q-u); while open, the line keeps its room.
     locked: Option<&'static design::outcome::Sentence>,
@@ -2878,68 +2722,12 @@ struct ReaderResults {
     /// Read with no draft, it comes only with a change of mode, which lays the pane out again,
     /// so the Undo keeps no room for it.
     lock_can_come: bool,
-    /// The footer line of each kept result above that the Library's store marks (its words
-    /// with the order its act issued, `Library::kept_lines`); the page's store-made lines are in
-    /// `page`.
-    lines: Vec<(ResultKind, design::results::FooterResult)>,
-}
-
-/// Which result's Undo was pressed this frame.
-#[derive(Clone, Copy, Default)]
-struct ResultPress {
-    page: PagePress,
-    package_use: bool,
-    manifest: bool,
-    identities: bool,
-    identity: bool,
-    discarded: bool,
 }
 
 impl ReaderResults {
-    /// The footer line of the kept result `kind`: a page result's from its own store, every
-    /// other one's from the Library's (`lines`).
-    fn line(&self, kind: ResultKind) -> Option<&design::results::FooterResult> {
-        let page = &self.page;
-        match kind {
-            ResultKind::LinkOffer => page.link_offer.as_ref().map(|(line, _)| line),
-            ResultKind::Links => page.links.as_ref(),
-            ResultKind::Registration => page.registration.as_ref().map(|(line, ..)| line),
-            ResultKind::Rosters => page.rosters.as_ref().map(|(line, _)| line),
-            _ => self
-                .lines
-                .iter()
-                .find(|(at, _)| *at == kind)
-                .map(|(_, line)| line),
-        }
-    }
-
-    /// The Undo step of the kept result `kind`, when the staged adapter draws it: the one
-    /// place that makes it, for its drawing and for its footer's count.
-    fn undo_step(&self, kind: ResultKind) -> Option<UndoStep> {
-        match kind {
-            ResultKind::Registration => self
-                .page
-                .registration
-                .as_ref()
-                .map(|_| PACKAGE_REGISTRATION_UNDO),
-            ResultKind::Rosters => self.page.rosters.as_ref().map(|_| SOURCE_CHANGE_UNDO),
-            ResultKind::Manifest => self
-                .manifest
-                .as_ref()
-                .map(|(_, path)| UndoStep::of(Verb::Write, path.as_str())),
-            ResultKind::Identities => self
-                .identities
-                .as_ref()
-                .map(|_| UndoStep::of(Verb::Separate, "entries")),
-            ResultKind::Identity => self.identity.as_ref().map(|_| SEPARATE_ENTRY_UNDO),
-            _ => None,
-        }
-    }
-
     /// `step`'s Undo, locked while the open entry's draft (or its changed file) holds it. Each
     /// Undo says the reason under its own words, its room kept while open (R29), so the lock
-    /// coming or going moves nothing below it. A reason shared by several Undos repeats: open
-    /// debt (packet 2, the cut of ruling 3).
+    /// coming or going moves nothing below it.
     fn draft_lock<A>(&self, step: UndoStep, id: A) -> design::outcome::Undo<A> {
         let undo = step.pressed_as(id);
         if !self.lock_can_come && self.locked.is_none() {
@@ -2949,238 +2737,6 @@ impl ReaderResults {
             self.locked.is_some(),
             self.locked.unwrap_or(&UNDO_WAITS_FOR_DRAFT).clone(),
         )
-    }
-
-    fn any(&self) -> bool {
-        self.page.any()
-            || self.package_use
-            || self.manifest.is_some()
-            || self.identities.is_some()
-            || self.identity.is_some()
-            || self.discarded.is_some()
-    }
-}
-
-/// One kept result of a pane, in the order `show_results` draws them in Read.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-enum ResultKind {
-    ScopeNotice,
-    LinkOffer,
-    Links,
-    Registration,
-    Rosters,
-    Unregistered,
-    PackageUse,
-    Manifest,
-    Identities,
-    Identity,
-    Discarded,
-}
-
-impl ReaderResults {
-    /// The results shown, in Read's order, each with its words and whether its Undo is live.
-    fn items(&self) -> Vec<(ResultKind, String, bool)> {
-        let page = &self.page;
-        let mut items = Vec::new();
-        let mut add = |kind, words: Option<String>, undo| {
-            if let Some(words) = words {
-                items.push((kind, words, undo));
-            }
-        };
-        add(ResultKind::ScopeNotice, page.scope_notice.clone(), false);
-        add(
-            ResultKind::LinkOffer,
-            page.link_offer
-                .as_ref()
-                .map(|(line, _)| line.words().to_owned()),
-            false,
-        );
-        add(
-            ResultKind::Links,
-            page.links.as_ref().map(|line| line.words().to_owned()),
-            true,
-        );
-        add(
-            ResultKind::Registration,
-            page.registration
-                .as_ref()
-                .map(|(line, ..)| line.words().to_owned()),
-            true,
-        );
-        add(
-            ResultKind::Rosters,
-            page.rosters
-                .as_ref()
-                .map(|(line, _)| line.words().to_owned()),
-            true,
-        );
-        add(ResultKind::Unregistered, page.unregistered.clone(), true);
-        add(
-            ResultKind::PackageUse,
-            self.package_use
-                .then(|| PACKAGE_USE_RESULT.as_str().to_owned()),
-            true,
-        );
-        add(
-            ResultKind::Manifest,
-            self.manifest.as_ref().map(|(words, _)| words.clone()),
-            true,
-        );
-        add(ResultKind::Identities, self.identities.clone(), true);
-        add(ResultKind::Identity, self.identity.clone(), true);
-        add(
-            ResultKind::Discarded,
-            self.discarded
-                .as_ref()
-                .map(|name| format!("{name} draft discarded.")),
-            true,
-        );
-        items
-    }
-}
-
-fn show_results(ui: &mut egui::Ui, results: &ReaderResults) -> ResultPress {
-    let mut pressed = ResultPress::default();
-    for (kind, ..) in results.items() {
-        show_result(ui, results, kind, &mut pressed);
-    }
-    pressed
-}
-
-/// Draw one kept result, and note its press in `pressed`.
-fn show_result(
-    ui: &mut egui::Ui,
-    results: &ReaderResults,
-    kind: ResultKind,
-    pressed: &mut ResultPress,
-) {
-    let page = &results.page;
-    // The footer's kept results, for its one short-Undo rule: the part counts their verbs.
-    let steps: Vec<UndoStep> = results
-        .items()
-        .into_iter()
-        .filter_map(|(kind, ..)| results.undo_step(kind))
-        .collect();
-    let group = design::outcome::KeptGroup::of(&steps);
-    let step = || {
-        results
-            .undo_step(kind)
-            .expect("a kept result with an Undo has its step")
-    };
-    match kind {
-        ResultKind::ScopeNotice => {
-            if let Some(words) = &page.scope_notice {
-                // It wrote nothing: the scope only widened to show the entry.
-                design::message(ui, Tone::Info, words);
-            }
-        }
-        ResultKind::LinkOffer => {
-            if let Some((line, action)) = &page.link_offer {
-                let words = line.words();
-                // The offer names both names, so the DM can check the words before the write.
-                pressed.page.link_offer =
-                    design::message_with_action(ui, Tone::Info, words, action);
-            }
-        }
-        ResultKind::Links => {
-            if let Some(line) = &page.links {
-                let words = line.words();
-                // The result is a message, so its Undo keeps its icon on the message line.
-                pressed.page.links =
-                    design::undo_message(ui, Tone::Success, words, "Undo link update");
-            }
-        }
-        ResultKind::Registration => {
-            if let Some((line, blocked, owner)) = &page.registration {
-                // The Undo sits on the message line, as every Undo after a message does. After
-                // an outside change it stays there, blocked, and the reason follows at the
-                // message words. The result still happened, so its words keep the text colour.
-                let undo = step().pressed_as(());
-                let undo = match blocked {
-                    // A lock that holds for as long as the result shows: an outside change, or
-                    // another campaign that chose the copy.
-                    Some(reason) => undo.blocked(reason.clone()),
-                    None => undo,
-                };
-                if design::outcome::kept_result(ui, &group, line.words(), undo, Vec::new())
-                    .is_some()
-                {
-                    pressed.page.registration = Some(*owner);
-                }
-                // The other choice starts below, at the message words. Only Undo is quiet.
-                if let Some(blocked) = page.use_copy
-                    && design::message_choice_row(ui, Tone::Success, |ui| {
-                        Action::secondary(USE_COPY)
-                            .density(Density::Read)
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked()
-                    })
-                {
-                    pressed.page.use_copy = Some(*owner);
-                }
-            }
-        }
-        ResultKind::Rosters => {
-            if let Some((line, blocked)) = &page.rosters
-                && let Some((.., owner)) = &page.registration
-            {
-                let undo = step().pressed_as(());
-                let undo = if *blocked {
-                    undo.blocked(crate::content_workspace::UNDO_ENDED_REASON)
-                } else {
-                    undo
-                };
-                if design::outcome::kept_result(ui, &group, line.words(), undo, Vec::new())
-                    .is_some()
-                {
-                    pressed.page.rosters = Some(*owner);
-                }
-            }
-        }
-        ResultKind::Unregistered => {
-            if let Some(words) = &page.unregistered {
-                // A finished change: the package left this campaign's lists.
-                pressed.page.unregistered =
-                    design::undo_message(ui, Tone::Success, words, "Undo unregister");
-            }
-        }
-        ResultKind::PackageUse => {
-            if results.package_use {
-                pressed.package_use = design::undo_message(
-                    ui,
-                    Tone::Success,
-                    PACKAGE_USE_RESULT.as_str(),
-                    "Undo package choice",
-                );
-            }
-        }
-        ResultKind::Manifest => {
-            if let Some((words, _)) = &results.manifest {
-                let undo = results.draft_lock(step(), ());
-                pressed.manifest =
-                    design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
-            }
-        }
-        ResultKind::Identities => {
-            if let Some(words) = &results.identities {
-                let undo = results.draft_lock(step(), ());
-                pressed.identities =
-                    design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
-            }
-        }
-        ResultKind::Identity => {
-            if let Some(words) = &results.identity {
-                let undo = results.draft_lock(step(), ());
-                pressed.identity =
-                    design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
-            }
-        }
-        ResultKind::Discarded => {
-            if let Some(name) = &results.discarded {
-                pressed.discarded = design::draft_discarded(ui, name);
-            }
-        }
     }
 }
 
@@ -4145,11 +3701,13 @@ struct DependencyUndo {
     after: String,
     copied_path: String,
     copied_text: String,
-    /// The result's words: `<entry> copied to <package> and linked.` Each copy is one of the
-    /// Library's kept results (`LibraryKept::push_copy`), owned by the file it linked and the
-    /// path it copied (a file at the same path in another package never shows it); it ends on
-    /// its own Undo, or on a reload that finds one of its files changed (round 26 review).
-    result: String,
+    /// The copied entry's name and the package's, for its result (`<entry> copied to <package>
+    /// and linked.`) and its `Undo copy <entry>`. Each copy is one of the Library's kept
+    /// results (`LibraryKept::push_copy`), owned by the file it linked and the path it copied
+    /// (a file at the same path in another package never shows it); it ends on its own Undo, or
+    /// on a reload that finds one of its files changed (round 26 review).
+    name: String,
+    package: String,
 }
 
 struct IdentityUndo {
@@ -4177,6 +3735,8 @@ struct RepairLink {
 #[cfg(test)]
 thread_local! {
     static REPAIR_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Each spell the Library's notes look up for a stat block.
+    static SPELL_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The row that links a repair's reference. Every repair lookup goes through here, and the
@@ -4190,15 +3750,6 @@ fn repair_row(entry: &Entry, target: &splat::content::Reference) -> Option<usize
 #[cfg(test)]
 thread_local! {
     static BROKEN_LINE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static BROKEN_WORD_COMPOSITIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// The message space's accessible text for the broken-link warnings. Every composition goes
-/// through here, and the test count is kept here.
-fn broken_words(warnings: &[String]) -> String {
-    #[cfg(test)]
-    BROKEN_WORD_COMPOSITIONS.with(|count| count.set(count.get() + 1));
-    warnings.join(" ")
 }
 
 /// Edit Markdown's warning for each link to no entry in a draft, as the row's `N broken links`
@@ -4210,7 +3761,7 @@ fn broken_link_warnings(
     entry: &Entry,
     index: &crate::lookup::ContentIndex,
     skip: Option<usize>,
-) -> (Vec<String>, String) {
+) -> Vec<Sentence> {
     #[cfg(test)]
     BROKEN_LINE_SCANS.with(|count| count.set(count.get() + 1));
     let mut lines = Vec::new();
@@ -4235,13 +3786,14 @@ fn broken_link_warnings(
         }
         for target in crate::world::links_in(line) {
             if index.link_is_missing(&target, entry.id) && skip != Some(at + 1) {
-                lines.push(format!("Line {}: This link names no entry.", at + 1));
+                lines.push(crate::sentence!(
+                    "Line {}: This link names no entry.",
+                    at + 1
+                ));
             }
         }
     }
-    // The message space's accessible text for these warnings, composed once with them.
-    let words = broken_words(&lines);
-    (lines, words)
+    lines
 }
 
 /// The broken-link warnings of one parsed draft against one link index, with the line Campaign's
@@ -4251,7 +3803,7 @@ type BrokenLines = (
     design::memo::Revision,
     std::sync::Arc<crate::lookup::ContentIndex>,
     Option<usize>,
-    (Vec<String>, String),
+    Vec<Sentence>,
 );
 
 #[derive(Default)]
@@ -4287,12 +3839,8 @@ pub struct Library {
     renamed_links: design::Results<LinkOwner, LinkOffer>,
     /// Link updates and the names their links now say, each owned by the renamed entry.
     link_edits: design::Results<LinkOwner, LinkResult>,
-    /// This frame's page results (link update, registration), drawn in the pane's message footer.
-    page_results: PageResults,
-    /// Which page result's action the reader pressed, applied after the reader is drawn.
-    page_pressed: PagePress,
-    /// The press in the empty reader's typed footer, applied after the pane is drawn, as the
-    /// reader's (`apply_footer_press`).
+    /// The press in the pane's typed footer that `show` applies after the pane is drawn
+    /// (`apply_footer_press`): the page's results and the package's.
     footer_press: Option<Press<LibraryPress>>,
     copied_package: Option<Module>,
     copy_name: String,
@@ -4372,21 +3920,6 @@ pub struct Library {
     reconciles: usize,
 }
 
-/// One kept result's line in a legacy footer, in Read and in Edit Markdown alike: its words
-/// with the order its store issued at its act (`FooterResult`). Every kept result of the
-/// Library reaches its footer here, through this one legacy line (`Ban::Footer`, counted).
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: a legacy footer line, a closure (`Ban::Footer`, design::results::STAGED_ALLOWS)"
-)]
-fn add_reader_result<'a>(
-    footer: &mut design::Footer<'a>,
-    line: &'a design::results::FooterResult,
-    undo: bool,
-    draw: impl FnOnce(&mut egui::Ui) + 'a,
-) {
-    footer.legacy_kept_line(line, undo, move |_, ui| draw(ui));
-}
 /// Sort so that "Level 2" comes before "Level 18".
 fn natural_key(name: &str) -> Vec<(String, u64)> {
     let lower = name.to_lowercase();
@@ -4561,9 +4094,30 @@ impl Library {
                     undo(UndoStep::of(Verb::Remove, note.name())),
                 )
             }
+            KeptKind::Identities => {
+                let (_, words) = self.kept.identities()?;
+                Said::new(words.clone())
+                    .undo(
+                        results.draft_lock(
+                            UndoStep::of(Verb::Separate, "entries"),
+                            LibraryPress::Undo,
+                        ),
+                    )
+                    .into()
+            }
+            KeptKind::Identity => {
+                let undo = self.kept.identity()?;
+                let file = Path::new(&undo.path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                Said::new(crate::sentence!("{} is now a separate entry.", file))
+                    .undo(results.draft_lock(SEPARATE_ENTRY_UNDO, LibraryPress::Undo))
+                    .into()
+            }
+            // Drawn where their show checks live: the editor pane's footer (Discarded, Heading,
+            // Vital, each copy) and as a notice (ScopeNotice).
             KeptKind::ScopeNotice
-            | KeptKind::Identities
-            | KeptKind::Identity
             | KeptKind::Discarded
             | KeptKind::Heading
             | KeptKind::Vital
@@ -4590,7 +4144,7 @@ impl Library {
     /// own store, with its ticket, under the rules `show` gives the reader's legacy footer
     /// (`PageResults`); `results` says whether this pane shows the package choice and the
     /// manifest write, and the open draft's lock. The scope notice and the link offer have no
-    /// Undo: they are notices, in the info tone.
+    /// Undo: the scope notice is a notice, the link offer a kept offer, both in the info tone.
     fn page_messages<'f>(
         &self,
         frame: &'f PaneFrame,
@@ -4613,17 +4167,17 @@ impl Library {
             let count = self.link_rename_count(&offer.old, &offer.new);
             if count > 0 {
                 // The offer names both names, so the DM can check the words before the write.
-                messages.outcome(
-                    Notice::new(crate::sentence!(
-                        "Change links from “{}” to “{}”.",
-                        offer.old,
-                        offer.new
-                    ))
-                    .choice(Choice::named(
-                        crate::choice!("Update {}", design::count(count, "link", "links")),
-                        LibraryPress::UpdateLinks,
-                    )),
-                );
+                // A kept offer line: nothing was done yet, so the info tone, never a success.
+                messages.kept(shown.outcome(frame, |offer| {
+                    Offer::new(
+                        crate::sentence!("Change links from “{}” to “{}”.", offer.old, offer.new),
+                        Choice::named(
+                            crate::choice!("Update {}", design::count(count, "link", "links")),
+                            LibraryPress::UpdateLinks,
+                        ),
+                    )
+                    .into()
+                }));
             }
         }
         if let Some(shown) = open.as_ref().and_then(|owner| self.link_edits.get(owner)) {
@@ -4679,7 +4233,9 @@ impl Library {
         for (kind, shows) in [
             (KeptKind::Unregistered, true),
             (KeptKind::PackageUse, results.package_use),
-            (KeptKind::Manifest, results.manifest.is_some()),
+            (KeptKind::Manifest, results.manifest),
+            (KeptKind::Identities, results.identities),
+            (KeptKind::Identity, results.identity),
         ] {
             if shows
                 && let Some(line) = self
@@ -4689,35 +4245,6 @@ impl Library {
                 messages.kept(line);
             }
         }
-    }
-
-    /// The footer line of each kept result in `results` that the Library's store marks: its
-    /// words with the order its act issued. The page's store-made lines (link offer, links,
-    /// registration, rosters) are already in `results.page`.
-    fn kept_lines(
-        &self,
-        results: &ReaderResults,
-    ) -> Vec<(ResultKind, design::results::FooterResult)> {
-        results
-            .items()
-            .into_iter()
-            .filter_map(|(kind, words, _)| {
-                let mark = match kind {
-                    ResultKind::ScopeNotice => KeptKind::ScopeNotice,
-                    ResultKind::Unregistered => KeptKind::Unregistered,
-                    ResultKind::PackageUse => KeptKind::PackageUse,
-                    ResultKind::Manifest => KeptKind::Manifest,
-                    ResultKind::Identities => KeptKind::Identities,
-                    ResultKind::Identity => KeptKind::Identity,
-                    ResultKind::Discarded => KeptKind::Discarded,
-                    ResultKind::LinkOffer
-                    | ResultKind::Links
-                    | ResultKind::Registration
-                    | ResultKind::Rosters => return None,
-                };
-                Some((kind, self.kept.line(mark, || words)?))
-            })
-            .collect()
     }
 
     /// The stat fix (`Use <value>`) of `file`: the draft gets the value, and the fix's Undo is
@@ -4735,7 +4262,7 @@ impl Library {
                     file,
                     draft.clone(),
                     after.clone(),
-                    format!("The stat block now says {label} {value}."),
+                    crate::sentence!("The stat block now says {} {}.", label, value),
                 ));
                 *draft = after;
                 // The draft changed: a failed Save of the old words no longer owns it.
@@ -4747,7 +4274,7 @@ impl Library {
 
     /// The stat fix's result words while its Undo shows: the open file is the fix's own file
     /// (owner kind, owner id, path) and the draft is the text the fix wrote.
-    fn stat_result_for(&self, file: &FileId) -> Option<String> {
+    fn stat_result_for(&self, file: &FileId) -> Option<Sentence> {
         self.kept
             .vital()
             .filter(|(at, _, after, _)| at.0 == file.0 && at.1 == file.1 && *after == self.draft)
@@ -4865,34 +4392,6 @@ impl Library {
         self.stale = true;
         self.scope = Scope::All;
         self.content_changed = Some(source.path.clone());
-        Ok(())
-    }
-
-    /// Undo the registration `owner` names, with all it owns: the copy's files, its choices in
-    /// the campaign (also those made after it, in Library, Lookup or Campaign; other packages'
-    /// choices stay), and its source change. One checked write; on a failure nothing changes
-    /// and the result keeps its Undo. Another registration's data is never touched.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: a by-owner Undo of the Library page lines (design::results::STAGED_ALLOWS)"
-    )]
-    fn undo_package_registration(
-        &mut self,
-        owner: &RegistrationOwner,
-        campaigns: &mut Campaigns,
-    ) -> Result<(), String> {
-        let manifests = package_manifests(campaigns);
-        if self.registrations.get(owner).is_some() {
-            Self::registration_in_use(owner, campaigns, &manifests)?;
-        }
-        let rosters = &self.rosters;
-        let (registered, ()) = self
-            .registrations
-            .undo(owner, |registered| {
-                Self::registration_undo(registered, rosters, owner, &manifests, campaigns)
-            })
-            .ok_or("No package registration to undo.")??;
-        self.registration_undone(owner, &registered, &manifests);
         Ok(())
     }
 
@@ -5127,9 +4626,10 @@ impl Library {
         let folder = root.file_name().unwrap_or_default().to_string_lossy();
         self.kept.set_identities((
             edits,
-            format!(
-                "{} in {folder}/ are now separate entries.",
-                design::count(paths.len(), "file", "files")
+            crate::sentence!(
+                "{} in {}/ are now separate entries.",
+                design::count(paths.len(), "file", "files"),
+                folder
             ),
         ));
         self.stale = true;
@@ -5195,10 +4695,8 @@ impl Library {
             after,
             copied_path: plan.relative.clone(),
             copied_text: plan.text.clone(),
-            result: format!(
-                "{} copied to {} and linked.",
-                source.entry.name, package.name
-            ),
+            name: source.entry.name.clone(),
+            package: package.name.clone(),
         });
         Ok(Some(package.path.clone()))
     }
@@ -5513,12 +5011,10 @@ impl Library {
         REPAIR_LOOKUPS.with(std::cell::Cell::get)
     }
 
-    /// The broken-link scans and the compositions of their words, together: an unchanged frame
-    /// does neither.
+    /// The broken-link scans: an unchanged frame does none.
     #[cfg(test)]
     pub(crate) fn broken_line_scans(&self) -> usize {
         BROKEN_LINE_SCANS.with(std::cell::Cell::get)
-            + BROKEN_WORD_COMPOSITIONS.with(std::cell::Cell::get)
     }
     pub fn repair_file_link(
         &mut self,
@@ -5760,9 +5256,7 @@ impl Library {
                                 if let Some(name) = l
                                     .notes
                                     .iter()
-                                    .filter(|n| {
-                                        n.owner.id() == Some(module.id) && n.error.is_none()
-                                    })
+                                    .filter(|n| n.owner.is_package(module.id) && n.error.is_none())
                                     .find_map(|n| {
                                         n.entry
                                             .as_ref()
@@ -6081,74 +5575,10 @@ impl Library {
         }
         design::gap(ui, design::Gap::XS);
         self.unregister_dialog(ui.ctx(), campaigns);
-        // Round 26: the page's error is a reason in the pane's message footer, so it never moves
-        // the list or the reader. It ends on the events that clear `error`.
-        // The page's results sit in the pane's message footer (below the reader, the editor, the
-        // empty reader or a form), so they never move the columns, the tabs, the file line, the
-        // title or the body. Their presses are applied after the reader is drawn.
-        // A link offer and a link result show only in their own entry's reader.
-        // Each comes with the order its store issued at its action; this draw issues none.
-        let open = self.open_link_owner();
-        let registration = self.shown_registration(campaigns);
-        self.page_results = PageResults {
-            link_offer: open
-                .as_ref()
-                .and_then(|owner| self.renamed_links.get(owner))
-                .and_then(|shown| {
-                    let offer = shown.value();
-                    let count = self.link_rename_count(&offer.old, &offer.new);
-                    (count > 0).then(|| {
-                        let (words, action) = crate::content_workspace::link_offer_words(
-                            &[&offer.old],
-                            &offer.new,
-                            count,
-                        );
-                        (shown.footer(|_| words), action)
-                    })
-                }),
-            links: open
-                .as_ref()
-                .and_then(|owner| self.link_edits.get(owner))
-                .map(|shown| shown.footer(|result| format!("Links now say “{}”.", result.new))),
-            // This campaign's newest registration result: its words and its order from its
-            // store entry. Another campaign's stays in the store and shows there.
-            registration: registration.and_then(|owner| {
-                let shown = self.registrations.get(&owner)?;
-                let lock = shown.value().lock();
-                Some((
-                    shown.footer(|registered| registered.words().as_str().to_owned()),
-                    lock,
-                    owner,
-                ))
-            }),
-            use_copy: registration
-                .filter(|owner| {
-                    campaigns.active_campaign().is_some() && self.rosters.get(owner).is_none()
-                })
-                .map(|_| self.draft_reason()),
-            rosters: registration
-                .and_then(|owner| self.rosters.get(&owner))
-                .map(|shown| {
-                    let blocked = shown.value().blocked;
-                    (
-                        shown.footer(|_| USE_COPY_RESULT.as_str().to_owned()),
-                        blocked,
-                    )
-                }),
-            // Round 25 FG4: the unregister result sits in the pane's message footer, so the scope,
-            // the search and the list never move when it comes or goes.
-            scope_notice: self
-                .kept
-                .scope_notice()
-                .map(|(name, _)| scope_notice_words(name).as_str().to_owned()),
-            unregistered: self.kept.unregistered().map(|module| {
-                format!(
-                    "{} is unregistered. Its files stay in {}.",
-                    module.name,
-                    module.path.display()
-                )
-            }),
-        };
+        // The page's error and results sit in the pane's typed footer (below the reader, the
+        // editor, the empty reader or a form), so they never move the columns, the tabs, the
+        // file line, the title or the body; each footer reads them from their stores
+        // (`page_messages`), and their presses are applied after the pane is drawn.
         if self.pending.is_some() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
@@ -6168,7 +5598,7 @@ impl Library {
         let scope = self.scope;
         let about_open = self.selected.is_some_and(|at| {
             loaded.notes[at].is_manifest()
-                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.id() == Some(id))
+                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.is_package(id))
         });
         if self
             .scope_counts
@@ -6303,7 +5733,7 @@ impl Library {
                             .notes
                             .iter()
                             .enumerate()
-                            .find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                            .find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
                         && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open)
                             .clicked()
                         && !dirty
@@ -6597,7 +6027,7 @@ impl Library {
                 );
                 if compact
                     && let Scope::Package(package) = scope
-                    && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                    && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
                     && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open).clicked() && !dirty
                 {
                     if self.selected != Some(index) {
@@ -6651,7 +6081,7 @@ impl Library {
                         design::gap(ui, design::Gap::S);
                     }
                     if let Scope::Package(id) = scope && !searching
-                        && !loaded.notes.iter().any(|note| note.owner.id() == Some(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
+                        && !loaded.notes.iter().any(|note| note.owner.is_package(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
                         let name = campaigns.modules().iter().find(|m| m.id == id).map_or("this package", |m| m.name.as_str());
                         let mut create = false;
                         if self.new_form {
@@ -6840,8 +6270,6 @@ impl Library {
                     self.editor(ui, &subtitle, campaigns);
                 }
             });
-        let pressed = std::mem::take(&mut self.page_pressed);
-        self.apply_page_press(pressed, campaigns);
         if let Some(press) = self.footer_press.take() {
             self.apply_footer_press(press, campaigns);
         }
@@ -6885,39 +6313,9 @@ impl Library {
             .map_or(0, |loaded| loaded.rename_link_count(old, new))
     }
 
-    /// The page results' presses from the reader: the link update and its Undo, and the
-    /// registration's Undo, its source change and that change's Undo.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn apply_page_press(&mut self, pressed: PagePress, campaigns: &mut Campaigns) {
-        if pressed.unregistered
-            && let Some(module) = self.kept.unregistered().cloned()
-        {
-            let result = local_module(&module.path)
-                .map_err(PageError::from)
-                .and_then(|found| {
-                    if found.id != module.id {
-                        return Err(PageError::Own(FOLDER_HOLDS_ANOTHER_PACKAGE.clone()));
-                    }
-                    campaigns.restore_module(module).map_err(PageError::from)
-                });
-            match result {
-                Ok(()) => {
-                    let _ = self.kept.take_unregistered();
-                    self.stale = true;
-                }
-                Err(error) => self.error = Some(error),
-            }
-        }
-        let open = self.open_link_owner();
-        if pressed.link_offer
-            && let Some(loaded) = &self.loaded
-            && let Some(offer) = open
-                .as_ref()
-                .and_then(|owner| self.renamed_links.use_press(owner))
-        {
+    /// The link offer's write, after its press used the offer up (by its ticket).
+    fn update_links(&mut self, offer: LinkOffer, campaigns: &Campaigns) {
+        if let Some(loaded) = &self.loaded {
             // The offer is checked again before the write: its entry still has the new name, and
             // neither name names another entry. A stale offer goes and writes nothing.
             // The offer is checked against the loaded notes first, then, directly before the
@@ -6975,27 +6373,36 @@ impl Library {
                 }
             }
         }
-        if pressed.links
-            && let Some(owner) = &open
-        {
-            // Undo restores only the files this update wrote, and only while they hold what it
-            // wrote, so another entry's link update stays. A failed Undo keeps the result and
-            // its Undo.
-            match self.link_edits.undo(owner, |result| result.edits.undo()) {
-                None => {}
-                Some(Ok((result, ()))) => self.links_undone(result, campaigns),
-                Some(Err(error)) => self.error = Some(error.into()),
+    }
+
+    /// Undo unregister: the package comes back to this campaign's lists while its folder still
+    /// holds it. A failure keeps the result and its Undo, with the error.
+    fn undo_unregister(&mut self, campaigns: &mut Campaigns) {
+        let Some(module) = self.kept.unregistered().cloned() else {
+            return;
+        };
+        let result = local_module(&module.path)
+            .map_err(PageError::from)
+            .and_then(|found| {
+                if found.id != module.id {
+                    return Err(PageError::Own(FOLDER_HOLDS_ANOTHER_PACKAGE.clone()));
+                }
+                campaigns.restore_module(module).map_err(PageError::from)
+            });
+        match result {
+            Ok(()) => {
+                let _ = self.kept.take_unregistered();
+                self.stale = true;
             }
+            Err(error) => self.error = Some(error),
         }
-        if let Some(owner) = pressed.registration
-            && let Err(error) = self.undo_package_registration(&owner, campaigns)
-        {
-            self.error = Some(error.into());
-        }
-        // The use changes here; the registration's clause ends at this write's event
-        // (`reconcile_registrations`), as for every other use change.
-        if let Some(owner) = pressed.use_copy
-            && let Some(registered) = self.registrations.get(&owner)
+    }
+
+    /// `Use the copy in encounters` for the registration of `owner`. The use changes here; the
+    /// registration's clause ends at this write's event (`reconcile_registrations`), as for
+    /// every other use change.
+    fn use_copy(&mut self, owner: RegistrationOwner, campaigns: &Campaigns) {
+        if let Some(registered) = self.registrations.get(&owner)
             && let Some(campaign) = campaigns.active_campaign()
             && self.rosters.get(&owner).is_none()
         {
@@ -7013,13 +6420,6 @@ impl Library {
                 Err(error) => self.error = Some(error.into()),
             }
         }
-        if let Some(owner) = pressed.rosters {
-            match self.rosters.undo(&owner, |source| source.edits.undo()) {
-                Some(Ok(_)) => self.rosters_undone(campaigns),
-                Some(Err(error)) => self.error = Some(error.into()),
-                None => {}
-            }
-        }
     }
 
     /// A press in a Library typed footer (M-L0.4b), in the frame of the press, after the pane is
@@ -7030,37 +6430,26 @@ impl Library {
         Press { id, ticket }: Press<LibraryPress>,
         campaigns: &mut Campaigns,
     ) {
-        if id == LibraryPress::UpdateLinks {
-            // The offer's notice has no ticket: the open entry's offer, which this frame's
-            // footer showed (`LibraryPress::UpdateLinks`).
-            self.apply_page_press(
-                PagePress {
-                    link_offer: true,
-                    ..Default::default()
-                },
-                campaigns,
-            );
-            return;
-        }
         let Some(ticket) = ticket else {
             return;
         };
         match id {
             LibraryPress::Undo => match self.kept.kind_by(&ticket) {
-                // The flag's path acts on the result the ticket names: its kind holds one.
-                Some(KeptKind::Unregistered) => self.apply_page_press(
-                    PagePress {
-                        unregistered: true,
-                        ..Default::default()
-                    },
-                    campaigns,
-                ),
+                // Its kind holds one result: the one the ticket names, in this frame.
+                Some(KeptKind::Unregistered) => self.undo_unregister(campaigns),
                 Some(KeptKind::PackageUse) => self.undo_package_use(),
                 Some(KeptKind::Manifest) => self.undo_manifest(),
                 // Gone (replaced or ended since its line was drawn), or a kind that no typed
                 // footer shows yet.
                 _ => {}
             },
+            LibraryPress::UpdateLinks => {
+                if self.loaded.is_some()
+                    && let Some(offer) = self.renamed_links.use_press_by(ticket)
+                {
+                    self.update_links(offer, campaigns);
+                }
+            }
             LibraryPress::UndoLinks => {
                 match self
                     .link_edits
@@ -7083,13 +6472,7 @@ impl Library {
                     .get_by(&ticket)
                     .map(|shown| design::results::Kept::owner(shown.value()))
                 {
-                    self.apply_page_press(
-                        PagePress {
-                            use_copy: Some(owner),
-                            ..Default::default()
-                        },
-                        campaigns,
-                    );
+                    self.use_copy(owner, campaigns);
                 }
             }
             LibraryPress::UndoRosters => {
@@ -7099,7 +6482,13 @@ impl Library {
                     Err(ByTicket::Gone) => {}
                 }
             }
-            LibraryPress::UpdateLinks => {}
+            // The editor's own presses act in `editor_pane`.
+            LibraryPress::FixHeading
+            | LibraryPress::UseVital(..)
+            | LibraryPress::Repair
+            | LibraryPress::SeparateEntry(_)
+            | LibraryPress::SeparateEntries(_)
+            | LibraryPress::CopyDependency(_) => {}
         }
     }
 
@@ -7771,7 +7160,7 @@ impl Library {
             return;
         }
         let in_scope = places.iter().position(|owner| match self.scope {
-            Scope::Package(id) => owner.id() == Some(id),
+            Scope::Package(id) => owner.is_package(id),
             Scope::Campaign => matches!(owner, Owner::Campaign(_)),
             _ => false,
         });
@@ -8286,18 +7675,6 @@ impl Library {
         }
     }
 
-    /// Undo package choice and Undo write: the results that this pane keeps for its package. The
-    /// page results' presses wait until the reader is drawn.
-    fn apply_package_results(&mut self, pressed: &ResultPress) {
-        self.page_pressed = pressed.page;
-        if pressed.package_use {
-            self.undo_package_use();
-        }
-        if pressed.manifest {
-            self.undo_manifest();
-        }
-    }
-
     /// Undo package choice (note §4, M-L0.4b): the campaign's choices go back to what they
     /// were, and the result leaves only when that write works. A file that cannot be read or
     /// written keeps the result and its Undo, with the error, so the DM can try again. Choices
@@ -8355,7 +7732,7 @@ impl Library {
     /// `pane_right` is the pane's right edge, where the reader's body may end.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: legacy footer lines and raw egui calls (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn editor_pane(
         &mut self,
@@ -8372,10 +7749,7 @@ impl Library {
                     .active_campaign()
                     .is_some_and(|c| c.id == undo.campaign.id)
             }),
-            manifest: self
-                .kept
-                .manifest()
-                .map(|write| (write.message(), write.path().to_string())),
+            manifest: self.kept.manifest().is_some(),
             locked: if self.disk_change.is_some() {
                 Some(&CHANGED_FILE_FIRST)
             } else if self.dirty() {
@@ -8384,7 +7758,6 @@ impl Library {
                 None
             },
             lock_can_come: self.source || self.dirty() || self.disk_change.is_some(),
-            page: std::mem::take(&mut self.page_results),
             ..Default::default()
         };
         let mut undo_remove = false;
@@ -8495,6 +7868,7 @@ impl Library {
                 Some(text) => self.loaded.as_mut().unwrap().notes[i].text = text,
                 None => file_gone = true,
             }
+            self.loaded.as_mut().unwrap().invalidate();
         }
         let draft_reason = self.draft_reason();
         let parsed_draft = self.parsed_draft(i);
@@ -8617,7 +7991,7 @@ impl Library {
                     .notes
                     .iter()
                     .filter(|n| {
-                        n.owner.id() == Some(module.id)
+                        n.owner.is_package(module.id)
                             && n.entry.as_ref().is_some_and(|e| {
                                 !["package", "reference"].contains(&e.kind.as_str())
                             })
@@ -8668,13 +8042,8 @@ impl Library {
                         .ok()
                         .and_then(|entry| repair_row(entry, &link.target))
                 }))?;
-                let words = &link.words;
-                Some((
-                    line,
-                    format!(
-                        "Line {line}: {words} Replace the link on this line with another creature, or remove its row."
-                    ),
-                ))
+                // The content layer's words; the fault adds the entry, the line and the fix.
+                Some((line, link.words.clone()))
             });
         let repair_line = repair_line.or(missing_link.as_ref().map(|(line, _)| *line));
         // A Save that failed on the disk, while this is still the draft it tried to write.
@@ -9001,46 +8370,14 @@ impl Library {
         let save_row = editable && (self.source || dirty);
         // Edit Markdown's save row, with the pane's message footer below the editor.
         let slot_row = save_row && !conflict;
-        // Round 26 FC4: with a save row, the duplicate warning and its choices sit in the pane's
-        // message footer, so Save keeps one place and the editor its top. Without one (a file
-        // changed on disk) they stay above, with the other warnings.
-        if !duplicate_indices.is_empty() && !choices_in_reader && !slot_row {
-            duplicate_choices(
-                ui,
-                self.loaded.as_ref().unwrap(),
-                note,
-                &duplicate_indices,
-                draft_reason,
-                &mut new_identity,
-                &mut new_identities,
-            );
-        }
-        results.identities = self.kept.identities().map(|(_, words)| words.clone());
-        results.identity = self.kept.identity().map(|undo| {
-            crate::world::separate_entry_result(
-                &Path::new(&undo.path)
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy(),
-            )
-        });
-        // Edit Markdown puts the results in the pane's message footer, below the editor, so a
-        // result never moves the editor. Without that row (a built-in's source, a file changed on disk)
-        // they stay above the editor, with the warnings.
-        let mut pressed = ResultPress::default();
-        if !choices_in_reader && !slot_row {
-            // A file changed on disk: the comparison owns the pane, and its messages stay above it.
-            if let Some(error) = &self.error {
-                design::message_with_code(ui, Tone::Error, &format!("Error: {}", error.words()));
-            }
-            pressed = show_results(ui, &results);
-        }
+        results.identities = self.kept.identities().is_some();
+        results.identity = self.kept.identity().is_some();
         let mut repair_pressed = false;
         let mut read_again = false;
         // The heading warning and its Undo. Read and Edit Markdown both draw them in the pane's
         // message footer, with the duplicate warning, so one file's warnings share one place and
         // the body never moves.
-        let mut heading = HeadingChoice::new(
+        let heading = HeadingChoice::new(
             (editable && !conflict)
                 .then(|| parsed.as_ref().ok())
                 .flatten(),
@@ -9048,14 +8385,10 @@ impl Library {
             self.kept.heading(),
             &(note.owner.key(), note.path.clone()),
         );
-        heading.undo_line = heading
-            .undo
-            .clone()
-            .and_then(|words| self.kept.line(KeptKind::Heading, || words));
-        let mut heading_pressed = (false, false);
         // Read's messages for the pane's message footer: a package entry's links to entries in
         // this campaign only, each with its copy action, and the copy's result.
-        let dependencies: Vec<(Uuid, String, String)> = match (&note.owner, &note.entry) {
+        let dependencies: Vec<(Uuid, Sentence, (String, String))> = match (&note.owner, &note.entry)
+        {
             (Owner::Package(package), Some(entry)) if choices_in_reader => ui
                 .ctx()
                 .data(|data| {
@@ -9072,12 +8405,13 @@ impl Library {
                             (
                                 dependency.id,
                                 // Row 145 (FC6): say what the link is and why it matters.
-                                format!(
-                                    "{} links to {}, which is in this campaign only. Another \
-                                     campaign that uses {} will not find it.",
-                                    entry.name, dependency.name, package.name
+                                crate::sentence!(
+                                    "{} links to {}, which is in this campaign only. Another campaign that uses {} will not find it.",
+                                    entry.name,
+                                    dependency.name,
+                                    package.name
                                 ),
-                                format!("Copy {} to {}", dependency.name, package.name),
+                                (dependency.name.clone(), package.name.clone()),
                             )
                         })
                         .collect()
@@ -9085,41 +8419,14 @@ impl Library {
                 .unwrap_or_default(),
             _ => Vec::new(),
         };
-        // The copies this file made, by package root and path, newest first, with their place in
-        // the kept copies for their Undo and their line (the order each copy issued).
-        let dependency_results: Vec<(usize, design::results::FooterResult)> = self
-            .kept
-            .copies()
-            .iter()
-            .enumerate()
-            .rev()
-            .filter(|(_, change)| {
-                choices_in_reader
-                    && change.path == note.path
-                    && note.owner.root() == Some(change.root.as_path())
-            })
-            .filter_map(|(at, change)| Some((at, self.kept.copy_line(change)?)))
-            .collect();
-        let mut reader_press = ReaderPress::default();
-        let no_results = ReaderResults::default();
-        // Each kept result of Edit Markdown's footer is its own footer message, with its own
-        // Undo: Discard's, the heading and stat fixes', and each of the reader's results.
-        #[derive(Clone, Copy)]
-        enum Kept {
-            Discard,
-            Heading,
-            Vital,
-        }
         // What Edit Markdown's footer shows, gathered with the save row. The footer is built from
-        // it before the body and drawn by the pane after the body (`Footer::pane_editor`, round
-        // 28 P2); its presses are applied after the pane returns.
+        // it before the body and drawn by the pane after the body (`Messages::pane_editor`, round
+        // 28 P2); its press is applied after the pane returns.
         struct EditData {
-            kept: Vec<(Kept, design::results::FooterResult, bool)>,
-            vital_result: Option<String>,
-            vitals: Vec<(&'static str, &'static str, i64, String)>,
-            broken_cache: (Vec<String>, String),
+            vital_result: Option<Sentence>,
+            vitals: Vec<(&'static str, &'static str, i64, Sentence)>,
+            broken_cache: Vec<Sentence>,
             broken_taken: bool,
-            results_shown: bool,
             reason_tone: Tone,
         }
         let mut edit_data = None;
@@ -9147,8 +8454,6 @@ impl Library {
             // disk's failure). Then the notices: results with no Undo, the missing link Campaign
             // sent here, the other broken links, the first-heading and stat warnings. Why other
             // actions wait is painted by `design::ReaderToolbar`, never by the footer.
-            let discard_shown =
-                discard_is_for(self.kept.discarded(), note) && self.draft == note.text;
             let vital_result = self.stat_result_for(&(note.owner.key(), note.path.clone()));
             let vitals = match (editable, &parsed) {
                 (true, Ok(entry)) => creature::vital_checks(entry),
@@ -9163,7 +8468,7 @@ impl Library {
             });
             // Borrowed out of the cache for this frame and put back after the footer is drawn.
             let mut broken_taken = false;
-            let broken_cache: (Vec<String>, String) = match (&index, parsed) {
+            let broken_cache: Vec<Sentence> = match (&index, parsed) {
                 (Some(index), Ok(entry)) if note.owner.editable() && !note.is_manifest() => {
                     let skip = missing_link.as_ref().map(|(at, _)| *at);
                     let fresh = self
@@ -9188,43 +8493,17 @@ impl Library {
                 }
                 _ => Default::default(),
             };
-            // In Read with a changed draft too: one list of kept results per footer.
-            let results_shown = results.any();
             let reason_tone = recovery
                 .as_ref()
                 .filter(|_| note.error.is_some())
                 .map_or(Tone::Error, |(_, _, exists)| {
                     crate::content_workspace::manifest_fault_tone(*exists)
                 });
-            // Each one's line: its words with the order its act issued (`LibraryKept`).
-            let mut kept: Vec<(Kept, design::results::FooterResult, bool)> = Vec::new();
-            if discard_shown
-                && let Some(line) = self.kept.line(KeptKind::Discarded, || {
-                    format!("{} draft discarded.", note.name())
-                })
-            {
-                kept.push((Kept::Discard, line, true));
-            }
-            if let Some(line) = heading
-                .undo
-                .clone()
-                .and_then(|result| self.kept.line(KeptKind::Heading, || result))
-            {
-                kept.push((Kept::Heading, line, true));
-            }
-            if let Some(line) = vital_result
-                .clone()
-                .and_then(|result| self.kept.line(KeptKind::Vital, || result))
-            {
-                kept.push((Kept::Vital, line, true));
-            }
             edit_data = Some(EditData {
-                kept,
                 vital_result,
                 vitals,
                 broken_cache,
                 broken_taken,
-                results_shown,
                 reason_tone,
             });
         }
@@ -9272,184 +8551,151 @@ impl Library {
         if self.draft != note.text {
             let _ = self.kept.take_discarded();
         }
-        // In Read, the discard result sits with the reader's other results, in the footer.
-        if !save_row && discard_is_for(self.kept.discarded(), note) {
-            if choices_in_reader {
-                results.discarded = Some(note.name().to_owned());
-            } else if design::draft_discarded(ui, note.name())
-                && let Some((_, _, text)) = self.kept.take_discarded()
-            {
-                self.draft = text;
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
+        // The pane's footer, typed (M-L0.4b): Edit Markdown's (with a save row), Read's, or a
+        // comparison's. Built before the body from the stores, each kept result with its ticket;
+        // the pane draws the body and then it (`Messages::pane`, `pane_editor`), so it follows a
+        // short body, and its one press is read after the pane (round 28, row G6 and P2). Keyed
+        // by the entry, as the old body scroll was: each entry keeps its own offset.
+        let frame = PaneFrame::new(ui);
+        let mut messages = Messages::new(
+            &frame,
+            (
+                if self.source {
+                    "library_source"
+                } else {
+                    "library_footer"
+                },
+                note.owner.key(),
+                note.path.clone(),
+            ),
+            if edit_data.is_some() || self.source {
+                editor_width
+            } else {
+                editor_width.min(design::READER_MEASURE)
+            },
+        );
+        let undo = |step: UndoStep| step.pressed_as(LibraryPress::Undo);
+        // Kept results with a live Undo: Discard's, the heading and stat fixes', each copy.
+        if discard_is_for(self.kept.discarded(), note)
+            && let Some(line) = self.kept.outcome(&frame, KeptKind::Discarded, || {
+                Some(KeptOutcome::Notice(
+                    Notice::new(crate::sentence!("{} draft discarded.", note.name())),
+                    undo(UndoStep::of(Verb::Discard, note.name())),
+                ))
+            })
+        {
+            messages.kept(line);
+        }
+        if let Some(words) = &heading.undo
+            && let Some(line) = self.kept.outcome(&frame, KeptKind::Heading, || {
+                Some(
+                    Said::new(words.clone())
+                        .undo(undo(HEADING_CHANGE_UNDO))
+                        .into(),
+                )
+            })
+        {
+            messages.kept(line);
+        }
+        if let Some(words) = edit_data
+            .as_ref()
+            .and_then(|data| data.vital_result.clone())
+            && let Some(line) = self.kept.outcome(&frame, KeptKind::Vital, || {
+                Some(Said::new(words).undo(undo(STAT_CHANGE_UNDO)).into())
+            })
+        {
+            messages.kept(line);
+        }
+        // Round 25 FF8: each copy's result names the entry and the package, in its Undo's words
+        // too (ruling M9).
+        for copy in self.kept.copies().iter().rev().filter(|copy| {
+            choices_in_reader
+                && copy.path == note.path
+                && note.owner.root() == Some(copy.root.as_path())
+        }) {
+            if let Some(line) = self.kept.copy_outcome(&frame, copy, || {
+                Said::new(crate::sentence!(
+                    "{} copied to {} and linked.",
+                    copy.name,
+                    copy.package
+                ))
+                .undo(undo(UndoStep::of(Verb::Copy, copy.name.as_str())))
+                .into()
+            }) {
+                messages.kept(line);
             }
         }
-        // The pane's footer: Edit Markdown's (with a save row) or Read's. The pane draws the body
-        // and then this footer (`Footer::pane`, `Footer::pane_editor`), so the footer follows a
-        // short body; its presses are read after the pane (round 28, row G6 and P2). Keyed by
-        // the entry, as the old body scroll was: each entry keeps its own offset.
-        let (discard_undo, heading_undo, vital_undo) = (
-            std::cell::Cell::new(false),
-            std::cell::Cell::new(false),
-            std::cell::Cell::new(false),
-        );
-        let shown = std::cell::RefCell::new(None::<ResultPress>);
-        let (mut heading_fix, mut vital_use, mut footer_repair) = (false, None, false);
-        // Every result is in: each gets its line (its words with the order its act issued).
-        results.lines = self.kept_lines(&results);
-        let mut pane_footer = None;
+        // The page's results and this pane's kept results.
+        self.page_messages(&frame, &mut messages, &results, campaigns);
         if let Some(data) = &edit_data {
-            let EditData {
-                kept,
-                vital_result,
-                vitals,
-                broken_cache,
-                results_shown,
-                reason_tone,
-                ..
-            } = data;
-            let (vital_result, broken, reason_tone) =
-                (vital_result.as_deref(), &broken_cache.0, *reason_tone);
-            let link_words = missing_link.as_ref().map(|(_, words)| words.as_str());
-            let repair = recovery.as_ref().filter(|_| note.error.is_some());
-            let mut footer = design::Footer::new(
-                (
-                    if self.source {
-                        "library_source"
-                    } else {
-                        "library_footer"
-                    },
-                    note.owner.key(),
-                    &note.path,
-                ),
-                editor_width,
-            );
-            for (which, line, undo) in kept {
-                let which = *which;
-                let (discard_undo, heading_undo, vital_undo) =
-                    (&discard_undo, &heading_undo, &vital_undo);
-                let heading_result = heading.undo.as_deref();
-                // The fixes' results are messages, so each Undo keeps its icon on the line.
-                add_reader_result(&mut footer, line, *undo, move |ui| match which {
-                    Kept::Discard => discard_undo.set(design::draft_discarded(ui, note.name())),
-                    Kept::Heading => heading_undo.set(heading_result.is_some_and(|result| {
-                        design::undo_message(ui, Tone::Success, result, "Undo heading change")
-                    })),
-                    Kept::Vital => vital_undo.set(vital_result.is_some_and(|result| {
-                        design::undo_message(ui, Tone::Success, result, "Undo stat change")
-                    })),
-                });
-            }
-            // The reader's results, each with its own order (a link offer's and a link result's
-            // from their stores).
-            if *results_shown {
-                for (kind, _, undo) in results.items() {
-                    let (results, shown) = (&results, &shown);
-                    let Some(line) = results.line(kind) else {
-                        continue;
-                    };
-                    add_reader_result(&mut footer, line, undo, move |ui| {
-                        let mut shown = shown.borrow_mut();
-                        show_result(
-                            ui,
-                            results,
-                            kind,
-                            shown.get_or_insert_with(Default::default),
-                        );
-                    });
-                }
-            }
             // A repair draft's fault in its tone (a deleted manifest is a warning), or Save's
-            // refusal before the write, a YAML fault in its own words.
-            if let Some(problem) = &repair_problem {
-                footer.legacy_reason(problem.as_str(), move |ui| {
-                    design::message(ui, reason_tone, problem);
+            // refusal before the write, a YAML fault in its own words. A broken manifest's
+            // recovery depends on the saved file only, so it stays while the DM edits.
+            let repair = recovery.as_ref().filter(|_| note.error.is_some());
+            let problem = repair_problem
+                .as_deref()
+                .or(repair.and(note.error.as_deref()));
+            if let Some(problem) = problem {
+                let fault = FaultMessage::new(&LibraryFault::Repair(problem, data.reason_tone));
+                messages.outcome(match repair {
+                    Some((_, path, exists)) => {
+                        fault.choice(recovery_choice(path, *exists, self.draft_lock()))
+                    }
+                    None => fault,
                 });
             }
-            // A broken manifest's recovery depends on the saved file only, so it stays while
-            // the DM edits.
-            if let Some(repair) = repair {
-                let pressed = &mut footer_repair;
-                footer.legacy_reason("", |ui| {
-                    *pressed = recovery_action(ui, repair, draft_reason);
-                });
-            }
+            // The disk's failure of the last Save of this draft.
             if let Some(failure) = &failed {
-                // The disk's failure of the last Save of this draft.
-                footer.legacy_reason(failure.as_str(), |ui| {
-                    design::message(ui, Tone::Error, failure);
-                });
+                messages.outcome(FaultMessage::new(&LibraryFault::NotSaved(failure)));
             }
             // The repair this note was opened for.
-            if let Some(words) = link_words {
-                footer.legacy_notice(words, |ui| {
-                    design::message(ui, Tone::Warning, words);
-                });
+            if let Some((line, words)) = &missing_link {
+                messages.outcome(FaultMessage::new(&LibraryFault::Link {
+                    line: *line,
+                    words,
+                }));
             }
-            for words in broken {
-                footer.legacy_notice(words.as_str(), |ui| {
-                    design::message(ui, Tone::Warning, words);
-                });
+            for words in &data.broken_cache {
+                messages.outcome(Notice::warning(words.clone()));
             }
-            if let Some((words, action, _)) = heading.fix.as_ref() {
-                let fix = &mut heading_fix;
-                footer.legacy_notice(words.as_str(), |ui| {
-                    *fix = design::message_with_action(ui, Tone::Warning, words, action);
-                });
+            for (key, label, value, words) in &data.vitals {
+                messages.outcome(Notice::warning(words.clone()).choice(Choice::named(
+                    crate::choice!("Use {}", value),
+                    LibraryPress::UseVital(key, label, *value),
+                )));
             }
-            if !vitals.is_empty() {
-                let vital_use = &mut vital_use;
-                let words = vitals
-                    .iter()
-                    .map(|(_, _, _, words)| words.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                footer.legacy_notice(words, move |ui| {
-                    for (key, label, value, message) in vitals {
-                        if design::message_with_action(
-                            ui,
-                            Tone::Warning,
-                            message,
-                            &format!("Use {value}"),
-                        ) {
-                            *vital_use = Some((*key, *label, *value));
-                        }
-                    }
-                });
-            }
-            // Round 26 FC4: the duplicate warning and its choices join Edit Markdown's messages,
-            // with the campaign links in Read. The kept results and the heading's warning and
-            // result are already in the list above.
-            reader_messages(
-                &mut footer,
-                None,
-                &no_results,
-                Some((self.loaded.as_ref().unwrap(), note, &duplicate_indices)),
-                draft_reason,
-                &dependencies,
-                &dependency_results,
-                &mut reader_press,
-            );
-            page_error(&mut footer, self.error.as_ref().map(PageError::words));
-            pane_footer = Some(footer);
-        } else if choices_in_reader {
-            let mut footer = design::Footer::new(
-                ("library_footer", note.owner.key(), &note.path),
-                editor_width.min(design::READER_MEASURE),
-            );
-            reader_messages(
-                &mut footer,
-                Some(&heading),
-                &results,
-                Some((self.loaded.as_ref().unwrap(), note, &duplicate_indices)),
-                draft_reason,
-                &dependencies,
-                &dependency_results,
-                &mut reader_press,
-            );
-            page_error(&mut footer, self.error.as_ref().map(PageError::words));
-            pane_footer = Some(footer);
         }
+        if let Some((words, name, _)) = &heading.fix {
+            messages.outcome(Notice::warning(words.clone()).choice(Choice::named(
+                crate::choice!("Use {}", name),
+                LibraryPress::FixHeading,
+            )));
+        }
+        if !duplicate_indices.is_empty() {
+            messages.outcome(duplicate_notice(
+                ui,
+                self.loaded.as_ref().unwrap(),
+                note,
+                &duplicate_indices,
+                self.draft_lock(),
+            ));
+        }
+        // A package entry's links to entries in this campaign only, each with its copy action.
+        for (id, words, (name, package)) in &dependencies {
+            let choice = Choice::named(
+                crate::choice!("Copy {} to {}", name, package),
+                LibraryPress::CopyDependency(*id),
+            );
+            messages.outcome(
+                Notice::warning(words.clone()).choice(match self.draft_lock() {
+                    Some(reason) => choice.blocked(reason),
+                    None => choice,
+                }),
+            );
+        }
+        page_faults(&mut messages, &[self.error.as_ref()]);
+        let mut messages = Some(messages);
+        let mut footer_pressed = None;
         let mut reload_from_disk = false;
         let mut read_disk_again = false;
         if let Some(fault) = self
@@ -9557,87 +8803,86 @@ impl Library {
             // tall as its text while the pane fits, and scrolling inside the region when it does
             // not, so the footer under it stays in view (round 28 P2). With no save row the
             // footer is empty, and the pane is still the editor's.
-            let footer = pane_footer.take().unwrap_or_else(|| {
-                design::Footer::new(
-                    ("library_source", note.owner.key(), &note.path),
-                    editor_width,
-                )
-            });
-            footer.pane_editor(ui, |ui, region| {
-                egui::Frame::new()
-                    .fill(colors().well)
-                    .stroke(egui::Stroke::new(
-                        design::HAIRLINE_WIDTH,
-                        colors().field_border,
-                    ))
-                    .corner_radius(design::RADIUS_CONTROL)
-                    .inner_margin(design::S)
-                    .show(ui, |ui| {
-                        ui.set_max_width(editor_width - (design::S + design::HAIRLINE_WIDTH) * 2.0);
-                        let width = ui.available_width();
-                        let output =
-                            region.editor(ui, note.markdown_field(), &mut self.draft, |edit| {
-                                edit.font(egui::TextStyle::Monospace)
-                                    .frame(false)
-                                    .margin(egui::Vec2::ZERO)
-                                    .desired_width(width)
-                                    .interactive(editable)
-                            });
-                        // Each edit is a new draft: a failed Save of the old words ends.
-                        if output.response.changed() {
-                            self.draft_revision += 1;
-                        }
-                        pressed_link = crate::markdown_source::pressed_note_link(
-                            ui,
-                            &output,
-                            note.entry.as_ref().map(|entry| entry.id),
-                        );
-                        let response = output.response;
-                        design::named(ui, &response, "Markdown editor");
-                        if std::mem::take(&mut self.focus_markdown) {
-                            response.request_focus();
-                        }
-                        // The caret goes to the broken line; the region reveals a caret that
-                        // moved outside its view, centred (P2).
-                        if std::mem::take(&mut self.focus_repair)
-                            && let Some(line) = repair_line
-                        {
-                            let at = self
-                                .draft
-                                .lines()
-                                .take(line.saturating_sub(1))
-                                .map(|line| line.chars().count() + 1)
-                                .sum();
-                            response.request_focus();
-                            let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                .unwrap_or_default();
-                            state
-                                .cursor
-                                .set_char_range(Some(egui::text::CCursorRange::one(
-                                    egui::text::CCursor::new(at),
-                                )));
-                            state.store(ui.ctx(), response.id);
-                        }
-                        if std::mem::take(&mut self.focus_hp)
-                            && let Some(at) = self
-                                .draft
-                                .find("initiative: ")
-                                .map(|at| at + "initiative: ".len())
-                        {
-                            response.request_focus();
-                            let at = self.draft[..at].chars().count();
-                            let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                .unwrap_or_default();
-                            state
-                                .cursor
-                                .set_char_range(Some(egui::text::CCursorRange::two(
-                                    egui::text::CCursor::new(at),
-                                    egui::text::CCursor::new(at + 1),
-                                )));
-                            state.store(ui.ctx(), response.id);
-                        }
-                    });
-            });
+            let footer = messages.take().expect("the footer is built above");
+            footer_pressed = footer
+                .pane_editor(ui, |ui, region| {
+                    egui::Frame::new()
+                        .fill(colors().well)
+                        .stroke(egui::Stroke::new(
+                            design::HAIRLINE_WIDTH,
+                            colors().field_border,
+                        ))
+                        .corner_radius(design::RADIUS_CONTROL)
+                        .inner_margin(design::S)
+                        .show(ui, |ui| {
+                            ui.set_max_width(
+                                editor_width - (design::S + design::HAIRLINE_WIDTH) * 2.0,
+                            );
+                            let width = ui.available_width();
+                            let output =
+                                region.editor(ui, note.markdown_field(), &mut self.draft, |edit| {
+                                    edit.font(egui::TextStyle::Monospace)
+                                        .frame(false)
+                                        .margin(egui::Vec2::ZERO)
+                                        .desired_width(width)
+                                        .interactive(editable)
+                                });
+                            // Each edit is a new draft: a failed Save of the old words ends.
+                            if output.response.changed() {
+                                self.draft_revision += 1;
+                            }
+                            pressed_link = crate::markdown_source::pressed_note_link(
+                                ui,
+                                &output,
+                                note.entry.as_ref().map(|entry| entry.id),
+                            );
+                            let response = output.response;
+                            design::named(ui, &response, "Markdown editor");
+                            if std::mem::take(&mut self.focus_markdown) {
+                                response.request_focus();
+                            }
+                            // The caret goes to the broken line; the region reveals a caret that
+                            // moved outside its view, centred (P2).
+                            if std::mem::take(&mut self.focus_repair)
+                                && let Some(line) = repair_line
+                            {
+                                let at = self
+                                    .draft
+                                    .lines()
+                                    .take(line.saturating_sub(1))
+                                    .map(|line| line.chars().count() + 1)
+                                    .sum();
+                                response.request_focus();
+                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                    .unwrap_or_default();
+                                state
+                                    .cursor
+                                    .set_char_range(Some(egui::text::CCursorRange::one(
+                                        egui::text::CCursor::new(at),
+                                    )));
+                                state.store(ui.ctx(), response.id);
+                            }
+                            if std::mem::take(&mut self.focus_hp)
+                                && let Some(at) = self
+                                    .draft
+                                    .find("initiative: ")
+                                    .map(|at| at + "initiative: ".len())
+                            {
+                                response.request_focus();
+                                let at = self.draft[..at].chars().count();
+                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                    .unwrap_or_default();
+                                state
+                                    .cursor
+                                    .set_char_range(Some(egui::text::CCursorRange::two(
+                                        egui::text::CCursor::new(at),
+                                        egui::text::CCursor::new(at + 1),
+                                    )));
+                                state.store(ui.ctx(), response.id);
+                            }
+                        });
+                })
+                .pressed;
         } else {
             // The body's words, in Read (in the pane) and beside an open conflict (in its own
             // scroll area, as Edit Markdown's form keeps until the pane part P2).
@@ -9736,132 +8981,134 @@ impl Library {
             // measure. Read (with or without a changed draft) and an open conflict: the pane draws
             // the body, then its message footer `S` below a short body, or pinned when the body
             // scrolls (round 28 rows 17, 50, 53, 54; G6; P2 for the draft's footer).
-            let footer = pane_footer.take().unwrap_or_else(|| {
-                design::Footer::new(
-                    ("library_footer", note.owner.key(), &note.path),
-                    editor_width.min(design::READER_MEASURE),
-                )
-            });
+            let footer = messages.take().expect("the footer is built above");
             let body = egui::Rect::from_min_max(
                 ui.cursor().min,
                 egui::pos2(right, ui.max_rect().bottom()),
             );
             ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
                 crate::markdown_view::with_wide_tables(ui, |ui| {
-                    footer.pane(ui, design::Body::Content, |ui| content(ui));
+                    footer_pressed = footer
+                        .pane(ui, design::Body::Content, |ui| content(ui))
+                        .pressed;
                 });
             });
         }
-        // The footer's presses, after the pane drew it; its borrows end here.
-        drop(pane_footer);
-        if let Some(data) = edit_data {
-            // Edit Markdown's presses, applied after the pane drew the body and the footer. The
-            // editor shows the changed draft in the next frame, which the change asks for.
-            if data.broken_taken
-                && let Some((_, _, _, warnings)) = &mut self.broken_lines
-            {
-                *warnings = data.broken_cache;
+        // The footer's one press, after the pane drew it. A kept result's acts by its line's
+        // ticket: on the kind its ticket names now, in this frame.
+        let (mut discard_undo, mut heading_undo, mut vital_undo) = (false, false, false);
+        let (mut heading_fix, mut vital_use) = (false, None);
+        let (mut undo_identities, mut undo_identity) = (false, false);
+        let (mut copy_dependency, mut undo_dependency) = (None, None);
+        if let Some(press) = footer_pressed {
+            let kind = press
+                .ticket
+                .as_ref()
+                .and_then(|ticket| self.kept.kind_by(ticket));
+            match (press.id, kind) {
+                (LibraryPress::Undo, Some(KeptKind::Discarded)) => discard_undo = true,
+                (LibraryPress::Undo, Some(KeptKind::Heading)) => heading_undo = true,
+                (LibraryPress::Undo, Some(KeptKind::Vital)) => vital_undo = true,
+                (LibraryPress::Undo, Some(KeptKind::Identities)) => undo_identities = true,
+                (LibraryPress::Undo, Some(KeptKind::Identity)) => undo_identity = true,
+                (LibraryPress::Undo, Some(KeptKind::Copy)) => {
+                    undo_dependency = press
+                        .ticket
+                        .as_ref()
+                        .and_then(|ticket| self.kept.copy_at(ticket));
+                }
+                (LibraryPress::FixHeading, _) => heading_fix = true,
+                (LibraryPress::UseVital(key, label, value), _) => {
+                    vital_use = Some((key, label, value));
+                }
+                (LibraryPress::Repair, _) => repair_pressed = true,
+                (LibraryPress::SeparateEntry(at), _) => new_identity = Some(at),
+                (LibraryPress::SeparateEntries(at), _) => {
+                    let loaded = self.loaded.as_ref().unwrap();
+                    let owner = &loaded.notes[at].owner;
+                    new_identities = loaded
+                        .duplicate_folder_paths(owner)
+                        .zip(owner.root().map(Path::to_path_buf))
+                        .map(|(paths, root)| (root, paths));
+                }
+                (LibraryPress::CopyDependency(id), _) => copy_dependency = Some(id),
+                // The page's results and the package's: after the pane, in `show`.
+                _ => self.footer_press = Some(press),
             }
-            if let Some(shown) = shown.into_inner() {
-                pressed = shown;
-            }
-            let draft_before = self.draft_revision;
-            // A press acts on the draft as it is now, not as the footer saw it: the body may
-            // have changed it in this same frame (a key and a screen reader's activation in one
-            // frame). A fix is computed again from the current text; an Undo acts only while the
-            // draft is still the text its action left, else it does nothing and its entry stays
-            // (its line comes back with its own draft). Typed text is never replaced.
-            if discard_undo.get()
-                && self.draft == note.text
-                && let Some((_, _, text)) = self.kept.take_discarded()
-            {
-                self.draft = text;
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
-            }
-            let current = (heading_fix || vital_use.is_some())
-                .then(|| Entry::parse(&note.path, &self.draft).ok())
-                .flatten()
-                .filter(|_| editable && !conflict);
-            // The open file, whole (owner kind, owner id, path): a fix's Undo acts only on it.
-            let file: FileId = (note.owner.key(), note.path.clone());
-            let heading_now =
-                HeadingChoice::new(current.as_ref(), &self.draft, self.kept.heading(), &file);
-            let pressed_heading = (
-                heading_fix && heading_now.fix.is_some(),
-                heading_undo.get() && self.heading_undo_applies(&file),
-            );
-            if pressed_heading.0 || pressed_heading.1 {
-                self.draft_revision += 1;
-            }
-            save |= heading_now.apply(pressed_heading, &file, &mut self.draft, &mut self.kept);
-            // The stat fix again from the current text: its check must still say this value.
-            let current = vital_use.and_then(|(key, label, value)| {
-                let entry = Entry::parse(&note.path, &self.draft)
-                    .ok()
-                    .filter(|_| editable)?;
-                creature::vital_checks(&entry)
-                    .iter()
-                    .any(|(at, _, now, _)| *at == key && *now == value)
-                    .then_some((key, label, value, entry))
-            });
-            if let Some((key, label, value, entry)) = current {
-                Self::fix_stat(
-                    (
-                        &mut self.kept,
-                        &mut self.draft,
-                        &mut self.draft_revision,
-                        &mut self.error,
-                    ),
-                    file.clone(),
-                    &entry,
-                    (key, label, value),
-                );
-            }
-            if vital_undo.get()
-                && self.stat_undo_applies(&file)
-                && let Some((_, before, _, _)) = self.kept.take_vital()
-            {
-                self.draft = before;
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
-            }
-            // Live, as above: a press that changed the draft ends Discard's Undo.
-            if self.draft != note.text {
-                let _ = self.kept.take_discarded();
-            }
-            if self.draft_revision != draft_before {
-                ui.ctx().request_repaint();
-            }
-            repair_pressed |= footer_repair;
         }
-        if choices_in_reader && !slot_row {
-            heading_pressed = reader_press.heading;
-            // Presses come only from the footer that drew the results: this one in Read. With a
-            // save row, Edit Markdown's list drew them and `pressed` already holds them.
-            pressed = reader_press.results.get();
+        if let Some(data) = edit_data
+            && data.broken_taken
+            && let Some((_, _, _, warnings)) = &mut self.broken_lines
+        {
+            *warnings = data.broken_cache;
         }
-        new_identity = new_identity.or(reader_press.new_identity.take());
-        new_identities = new_identities.or(reader_press.new_identities.take());
-        let copy_dependency = reader_press.copy_dependency;
-        let undo_dependency = reader_press.undo_dependency.get();
-        if heading_pressed.0 || heading_pressed.1 {
-            self.draft_revision += 1;
-        }
-        save |= heading.apply(
-            heading_pressed,
-            &(note.owner.key(), note.path.clone()),
-            &mut self.draft,
-            &mut self.kept,
-        );
-        let undo_identities = pressed.identities;
-        let undo_identity = pressed.identity;
-        if pressed.discarded
+        let draft_before = self.draft_revision;
+        // A press acts on the draft as it is now, not as the footer saw it: the body may have
+        // changed it in this same frame (a key and a screen reader's activation in one frame).
+        // A fix is computed again from the current text; an Undo acts only while the draft is
+        // still the text its action left, else it does nothing and its entry stays (its line
+        // comes back with its own draft). Typed text is never replaced.
+        if discard_undo
+            && self.draft == note.text
             && let Some((_, _, text)) = self.kept.take_discarded()
         {
             self.draft = text;
             // The draft changed: a failed Save of the old words no longer owns it.
             self.draft_revision += 1;
+        }
+        let current = (heading_fix || vital_use.is_some())
+            .then(|| Entry::parse(&note.path, &self.draft).ok())
+            .flatten()
+            .filter(|_| editable && !conflict);
+        // The open file, whole (owner kind, owner id, path): a fix's Undo acts only on it.
+        let file: FileId = (note.owner.key(), note.path.clone());
+        let heading_now =
+            HeadingChoice::new(current.as_ref(), &self.draft, self.kept.heading(), &file);
+        let pressed_heading = (
+            heading_fix && heading_now.fix.is_some(),
+            heading_undo && self.heading_undo_applies(&file),
+        );
+        if pressed_heading.0 || pressed_heading.1 {
+            self.draft_revision += 1;
+        }
+        save |= heading_now.apply(pressed_heading, &file, &mut self.draft, &mut self.kept);
+        // The stat fix again from the current text: its check must still say this value.
+        let current = vital_use.and_then(|(key, label, value)| {
+            let entry = Entry::parse(&note.path, &self.draft)
+                .ok()
+                .filter(|_| editable)?;
+            creature::vital_checks(&entry)
+                .iter()
+                .any(|(at, _, now, _)| *at == key && *now == value)
+                .then_some((key, label, value, entry))
+        });
+        if let Some((key, label, value, entry)) = current {
+            Self::fix_stat(
+                (
+                    &mut self.kept,
+                    &mut self.draft,
+                    &mut self.draft_revision,
+                    &mut self.error,
+                ),
+                file.clone(),
+                &entry,
+                (key, label, value),
+            );
+        }
+        if vital_undo
+            && self.stat_undo_applies(&file)
+            && let Some((_, before, _, _)) = self.kept.take_vital()
+        {
+            self.draft = before;
+            // The draft changed: a failed Save of the old words no longer owns it.
+            self.draft_revision += 1;
+        }
+        // Live, as above: a press that changed the draft ends Discard's Undo.
+        if self.draft != note.text {
+            let _ = self.kept.take_discarded();
+        }
+        if self.draft_revision != draft_before {
+            ui.ctx().request_repaint();
         }
         if repair_pressed {
             if let Some((module, path, exists)) = recovery {
@@ -10031,8 +9278,6 @@ impl Library {
                 self.reveal_row = true;
             }
         }
-        // One press a frame, so no early return above skips one of these.
-        self.apply_package_results(&pressed);
         if let Some(step) = step {
             if dirty {
                 self.peek = self.trail.peek(step).and_then(|target| {
@@ -10049,6 +9294,50 @@ impl Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    impl Library {
+        /// The registration's Undo, pressed on its line: by its entry's ticket.
+        fn undo_registration_of(
+            &mut self,
+            owner: &RegistrationOwner,
+            campaigns: &mut Campaigns,
+        ) -> Result<(), String> {
+            let ticket = self
+                .registrations
+                .get(owner)
+                .ok_or("No package registration to undo.")?
+                .ticket_for_caller_test();
+            self.undo_registration_by(ticket, campaigns)
+        }
+
+        /// A press on a registration's line, or on its source change's (`UndoRosters`), as the
+        /// typed footer gives it: by its entry's ticket. Nothing when the entry is gone.
+        fn press_line(
+            &mut self,
+            id: LibraryPress,
+            owner: &RegistrationOwner,
+            campaigns: &mut Campaigns,
+        ) {
+            let ticket = if id == LibraryPress::UndoRosters {
+                self.rosters
+                    .get(owner)
+                    .map(|shown| shown.ticket_for_caller_test())
+            } else {
+                self.registrations
+                    .get(owner)
+                    .map(|shown| shown.ticket_for_caller_test())
+            };
+            if let Some(ticket) = ticket {
+                self.apply_footer_press(
+                    Press {
+                        id,
+                        ticket: Some(ticket),
+                    },
+                    campaigns,
+                );
+            }
+        }
+    }
 
     #[test]
     fn duplicate_checks_keep_id_key_matches_and_refresh_after_edits() {
@@ -10567,7 +9856,7 @@ mod tests {
             fs::write(&path, format!("{manifest}\nLater edit.\n")).unwrap();
             assert!(
                 library
-                    .undo_package_registration(&owner, &mut app.campaigns)
+                    .undo_registration_of(&owner, &mut app.campaigns)
                     .is_err()
             );
             assert_eq!(
@@ -10576,7 +9865,7 @@ mod tests {
             );
             fs::write(path, manifest).unwrap();
             library
-                .undo_package_registration(&owner, &mut app.campaigns)
+                .undo_registration_of(&owner, &mut app.campaigns)
                 .unwrap();
             assert_eq!(
                 CampaignDocument::load(&campaign).unwrap().text,
@@ -10878,15 +10167,15 @@ mod tests {
             (
                 "src/library.rs",
                 &[
-                    ("kept_result", 5),
-                    // 11 legacy waiting controls, and 3 typed locks of `page_messages` (M-L0.4b:
-                    // the registration's Undo and its `Use the copy`, the source change's Undo).
-                    // A typed lock is not debt, but this count reads text; 4b-2 takes the legacy
-                    // ones out with the reader's footer.
-                    (".blocked(", 14),
+                    ("kept_result", 0),
+                    // The typed locks of the footers (M-L0.4b: `page_messages`, the duplicate
+                    // notice, the dependencies, the recovery choice) and the old waiting
+                    // controls left in the page's body. A typed lock is not debt, but this count
+                    // reads text.
+                    (".blocked(", 12),
                     ("blocked_if(", 0),
-                    ("design::locked(", 6),
-                    ("undo_message(", 7),
+                    ("design::locked(", 4),
+                    ("undo_message(", 0),
                 ],
             ),
             (
@@ -11975,7 +11264,7 @@ mod tests {
     }
     #[test]
     fn creature_spell_links_open_named_spells_and_protect_drafts() {
-        let notes = [
+        let mut notes: Vec<Note> = [
             "creatures/adult_bronze_dragon",
             "spells/detect_magic",
             "spells/guiding_bolt",
@@ -11984,6 +11273,7 @@ mod tests {
             "spells/thaumaturgy",
             "spells/detect_thoughts",
             "spells/water_breathing",
+            "creatures/druid",
         ]
         .map(|name| {
             let path = format!("definitions/{name}.md");
@@ -12000,6 +11290,14 @@ mod tests {
         })
         .into_iter()
         .collect();
+        // The Druid's list lines end with `\`, and here it also casts a spell no note has.
+        let druid = notes.last_mut().unwrap();
+        druid.text = druid.text.replacen(
+            "\n\nSpellcasting. The druid",
+            "\n\nDread Word. The druid casts Vellora's Storm, using the same spellcasting ability as Spellcasting.\n\nSpellcasting. The druid",
+            1,
+        );
+        druid.entry = Some(Entry::parse(&druid.path, &druid.text).unwrap());
         let loaded = Loaded {
             notes,
             ..Default::default()
@@ -12071,6 +11369,15 @@ mod tests {
                 };
                 frame(vec![]);
                 let output = frame(vec![]);
+                // The stat block's spells were resolved once, with the notes' other caches:
+                // another unchanged frame looks none up.
+                let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+                frame(vec![]);
+                assert_eq!(
+                    SPELL_LOOKUPS.with(std::cell::Cell::get),
+                    looked,
+                    "an unchanged frame looks no spell up"
+                );
                 let texts: Vec<_> = output
                     .shapes
                     .iter()
@@ -12179,8 +11486,58 @@ mod tests {
                 }
             }
         }
-        // Conflicting identities must not choose an arbitrary destination.
+        // A stat block whose lists end their lines with `\` and that casts a spell no note has:
+        // an unchanged frame looks none up either.
+        library.open_entry(8);
+        let ctx = egui::Context::default();
+        let mut frame = || {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900.0, 6000.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        library.editor(ui, "Definition · creature", &Campaigns::default())
+                    });
+                },
+            )
+        };
+        frame();
+        let output = frame();
+        let drawn = |words: &str| {
+            output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.starts_with(words))
+            })
+        };
+        assert!(
+            drawn("Dread Word.") && drawn("At Will"),
+            "the Druid is drawn"
+        );
+        let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+        frame();
+        assert_eq!(
+            SPELL_LOOKUPS.with(std::cell::Cell::get),
+            looked,
+            "an unchanged frame of the Druid looks no spell up"
+        );
+        // A change to the notes clears what was resolved through them, with their other caches.
         let loaded = library.loaded.as_mut().unwrap();
+        let dragon = loaded.notes[0].entry.clone().unwrap();
+        spells::resolve(&dragon, &*loaded);
+        let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+        spells::resolve(&dragon, &*loaded);
+        assert_eq!(SPELL_LOOKUPS.with(std::cell::Cell::get), looked);
+        loaded.invalidate();
+        spells::resolve(&dragon, &*loaded);
+        assert!(
+            SPELL_LOOKUPS.with(std::cell::Cell::get) > looked,
+            "a change resolves again"
+        );
+        // Conflicting identities must not choose an arbitrary destination.
         let duplicate = &loaded.notes[2];
         loaded.notes.push(Note {
             path: "duplicate.md".into(),
@@ -13177,9 +12534,10 @@ mod tests {
 
         // `Undo separate entries`: the batch.
         let mut library = Library::default();
-        library
-            .kept
-            .set_identities((edit("batch"), "2 files are now separate entries.".into()));
+        library.kept.set_identities((
+            edit("batch"),
+            crate::sentence!("2 files are now separate entries."),
+        ));
         library.forget_changed_undos();
         assert!(
             library.kept.identities().is_some() && library.kept.marks() == 1,
@@ -13189,9 +12547,10 @@ mod tests {
         // M-L0.4a: the mark (the footer order) ends with its data.
         assert!(library.kept.identities().is_none() && library.kept.marks() == 0);
         // A deleted file of the batch also ends the result.
-        library
-            .kept
-            .set_identities((edit("deleted"), "2 files are now separate entries.".into()));
+        library.kept.set_identities((
+            edit("deleted"),
+            crate::sentence!("2 files are now separate entries."),
+        ));
         library.forget_changed_undos();
         assert!(
             library.kept.identities().is_some(),
@@ -13228,7 +12587,8 @@ mod tests {
             after: fs::read_to_string(root.join(&paths[0])).unwrap(),
             copied_path: paths[1].clone(),
             copied_text: fs::read_to_string(root.join(&paths[1])).unwrap(),
-            result: String::new(),
+            name: "Copied".into(),
+            package: "Package".into(),
         });
         library.forget_changed_undos();
         assert!(!library.kept.copies().is_empty() && library.kept.marks() == 1);
@@ -13466,13 +12826,7 @@ mod tests {
             new: "Ash Wolf".into(),
         };
         library.link_edits.record(b());
-        library.apply_page_press(
-            PagePress {
-                use_copy: Some(a),
-                ..Default::default()
-            },
-            &mut app.campaigns,
-        );
+        library.press_line(LibraryPress::UseCopy, &a, &mut app.campaigns);
         assert!(library.error.is_none(), "{:?}", library.error);
         reload(&mut library, &app.campaigns);
         assert_eq!(
@@ -13497,7 +12851,7 @@ mod tests {
         assert_ne!(a, c);
         assert_eq!(count(&library), 2);
         library
-            .undo_package_registration(&c, &mut app.campaigns)
+            .undo_registration_of(&c, &mut app.campaigns)
             .unwrap();
         reload(&mut library, &app.campaigns);
         assert!(
@@ -13516,13 +12870,7 @@ mod tests {
         assert_eq!(library.shown_registration(&app.campaigns), Some(a));
 
         // Undo of the use change does not bring the clause back: it ended.
-        library.apply_page_press(
-            PagePress {
-                rosters: Some(a),
-                ..Default::default()
-            },
-            &mut app.campaigns,
-        );
+        library.press_line(LibraryPress::UndoRosters, &a, &mut app.campaigns);
         reload(&mut library, &app.campaigns);
         assert!(library.rosters.get(&a).is_none());
         assert_eq!(
@@ -13532,13 +12880,7 @@ mod tests {
         // Undo of A: its words go with its data (the copy unregistered, its choices out of the
         // campaign), B stays, and the campaign file keeps its other edit.
         let modules = app.campaigns.modules().len();
-        library.apply_page_press(
-            PagePress {
-                registration: Some(a),
-                ..Default::default()
-            },
-            &mut app.campaigns,
-        );
+        library.press_line(LibraryPress::UndoRegistration, &a, &mut app.campaigns);
         assert!(library.error.is_none(), "{:?}", library.error);
         assert_eq!(words(&library, &a), None, "R11-undo-a-words");
         assert_eq!(
@@ -13786,13 +13128,7 @@ mod tests {
                 // Undo takes out the copy's choice and touches no other line: the SRD's
                 // hand-written `Only:` line stays byte for byte, its choice stays, and the guard
                 // has nothing to refuse.
-                library.apply_page_press(
-                    PagePress {
-                        registration: Some(d),
-                        ..Default::default()
-                    },
-                    &mut app.campaigns,
-                );
+                library.press_line(LibraryPress::UndoRegistration, &d, &mut app.campaigns);
                 assert_eq!(library.error, None, "srd-only-undo-succeeds");
                 let text = fs::read_to_string(&campaign_file).unwrap();
                 assert!(
@@ -13823,13 +13159,7 @@ mod tests {
                 // block, so B's choice would be lost: the read-back guard refuses the Undo, and
                 // nothing is written. The registration and its result stay; the reason shows.
                 let before_undo = fs::read(&campaign_file).unwrap();
-                library.apply_page_press(
-                    PagePress {
-                        registration: Some(d),
-                        ..Default::default()
-                    },
-                    &mut app.campaigns,
-                );
+                library.press_line(LibraryPress::UndoRegistration, &d, &mut app.campaigns);
                 assert_eq!(
                     library.error.as_ref().map(PageError::words),
                     Some(PACKAGE_LIST_UNSAFE),
@@ -13866,7 +13196,7 @@ mod tests {
                 .unwrap();
                 reload(&mut library, &app.campaigns);
                 library
-                    .undo_package_registration(&d, &mut app.campaigns)
+                    .undo_registration_of(&d, &mut app.campaigns)
                     .unwrap();
                 reload(&mut library, &app.campaigns);
                 continue;
@@ -13887,7 +13217,7 @@ mod tests {
                 });
             }
             library
-                .undo_package_registration(&d, &mut app.campaigns)
+                .undo_registration_of(&d, &mut app.campaigns)
                 .unwrap();
             let after: Vec<_> = CampaignDocument::load(&campaign)
                 .unwrap()
@@ -13987,7 +13317,7 @@ mod tests {
                 .is_some_and(|lock| lock.as_str().starts_with("Other uses this package.")),
             "point-1-lock: {lock:?}"
         );
-        let refused = library.undo_package_registration(&h, &mut app.campaigns);
+        let refused = library.undo_registration_of(&h, &mut app.campaigns);
         assert!(
             refused
                 .as_ref()
@@ -14011,7 +13341,7 @@ mod tests {
             "point-1-free"
         );
         library
-            .undo_package_registration(&h, &mut app.campaigns)
+            .undo_registration_of(&h, &mut app.campaigns)
             .unwrap();
         reload(&mut library, &app.campaigns);
 
@@ -14026,13 +13356,7 @@ mod tests {
         );
         app.campaigns.open_for_test(&campaign);
         assert_eq!(library.shown_registration(&app.campaigns), Some(e));
-        library.apply_page_press(
-            PagePress {
-                use_copy: Some(e),
-                ..Default::default()
-            },
-            &mut app.campaigns,
-        );
+        library.press_line(LibraryPress::UseCopy, &e, &mut app.campaigns);
         assert!(library.rosters.get(&e).is_some());
         app.campaigns.unregister_module(e.package).unwrap();
         reload(&mut library, &app.campaigns);
@@ -14052,7 +13376,7 @@ mod tests {
         assert_eq!(count(&library), 1, "one-result-per-folder");
         assert_eq!(words(&library, &f), None);
         library
-            .undo_package_registration(&g, &mut app.campaigns)
+            .undo_registration_of(&g, &mut app.campaigns)
             .unwrap();
         assert_eq!(
             fs::read(&manifest).unwrap(),
@@ -14064,13 +13388,7 @@ mod tests {
         // The check runs at events, never per frame: with a registration and its source change
         // kept, idle frames of the page after the load leave its count as it was.
         let i = register(&mut library, &mut app.campaigns, &copied, false);
-        library.apply_page_press(
-            PagePress {
-                use_copy: Some(i),
-                ..Default::default()
-            },
-            &mut app.campaigns,
-        );
+        library.press_line(LibraryPress::UseCopy, &i, &mut app.campaigns);
         assert!(
             library.rosters.get(&i).is_some(),
             "fixture: the work's state is there"
@@ -14783,6 +14101,15 @@ mod tests {
                 "Copy: one mark per copy, the first kept"
             );
         }
+        // M-L0.4b: a copy's Undo finds its own copy by its line's ticket, whichever is newer.
+        for (at, copy) in library.kept.copies().iter().enumerate() {
+            let ticket = library.kept.copy_ticket_for_test(copy).unwrap();
+            assert_eq!(
+                library.kept.copy_at(&ticket),
+                Some(at),
+                "each copy's own ticket"
+            );
+        }
         // The boundary's static rung (Astra, PR 477): no method of `LibraryKept` hands out a
         // mutable payload, so no caller can swap one result's data under another's mark.
         let leaks: Vec<&str> = include_str!("library/kept.rs")
@@ -14864,15 +14191,17 @@ mod tests {
         for _ in 0..2 {
             let output = ctx.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    duplicate_choices(
+                    // The warning in a typed footer, as the reader draws it (M-L0.4b).
+                    let frame = PaneFrame::new(ui);
+                    let mut messages = Messages::<LibraryPress>::new(&frame, "duplicates", 600.0);
+                    messages.outcome(duplicate_notice(
                         ui,
                         &loaded,
                         &loaded.notes[0],
                         &[0, 2],
                         None,
-                        &mut None,
-                        &mut None,
-                    );
+                    ));
+                    let _ = messages.pane(ui, design::Body::Content, |_| ());
                 });
             });
             painted = output
@@ -14884,6 +14213,24 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
         }
+        // Issue #505 (M-L0.5): the campaign with the package's UUID is never the package: not in
+        // its scope, not in what unregistering it takes away.
+        assert!(
+            loaded.in_scope(&loaded.notes[0], Scope::Package(shared))
+                && !loaded.in_scope(&loaded.notes[2], Scope::Package(shared)),
+            "the package's scope holds its own notes only"
+        );
+        assert_eq!(
+            unregister_count(&loaded.notes, shared),
+            2,
+            "unregistering the package counts its own two entries"
+        );
+        // Every package check takes the owner's kind: the page's code compares no owner's
+        // UUID alone (`Owner::is_package`).
+        let source = include_str!("library.rs");
+        let code = &source[..source.find("\nmod tests {").unwrap()];
+        let check = ["owner.id() ", "== Some("].concat();
+        assert!(!code.contains(&check), "a package check by UUID alone");
         for words in [
             // The package's batch leaves the campaign's encounter on the campaign's files.
             "Bridge Fight keeps the files in ember/.",
@@ -16298,6 +15645,13 @@ mod tests {
                 .contains(&format!("encounters now {choice}")),
             "FD2-same-words: {USE_COPY} / {}",
             USE_COPY_RESULT.as_str()
+        );
+        // M-L0.4b: the typed footer's checked words are the shared words of World and the
+        // workspace, which other pages still draw.
+        assert_eq!(DUPLICATE_ENTRY.as_str(), crate::world::DUPLICATE_ENTRY);
+        assert_eq!(
+            manifest_replace_help("Package.md").as_str(),
+            crate::content_workspace::manifest_replace_consequence("Package.md")
         );
     }
 

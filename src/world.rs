@@ -2000,10 +2000,6 @@ impl IdentityNoun {
 
 pub(crate) const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
 
-pub(crate) fn separate_entry_action(filename: &str) -> String {
-    IdentityNoun::Entry.action(filename)
-}
-
 /// Long filenames keep the complete repair action inside its secondary border.
 pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
     let label = IdentityNoun::Note.action(filename);
@@ -2022,10 +2018,6 @@ pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
     );
     design::named(ui, &response, &label);
     response.clicked()
-}
-
-pub(crate) fn separate_entry_result(filename: &str) -> String {
-    IdentityNoun::Entry.result(filename)
 }
 
 pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
