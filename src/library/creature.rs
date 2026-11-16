@@ -293,6 +293,9 @@ pub(super) trait Spells {
     /// After a Spellcasting paragraph and its lists, whose words are `text`: the spells they
     /// name or the entry gives that no list showed.
     fn rest(&mut self, ui: &mut egui::Ui, text: &str);
+    /// After a paragraph of its own that casts spells by name (`... casts Fear, using ...`):
+    /// their tiles.
+    fn casts(&mut self, ui: &mut egui::Ui, paragraph: &str);
 }
 
 /// Rules text with nothing to link: a list of spells is prose.
@@ -303,6 +306,7 @@ impl Spells for NoSpells {
         reader_style::source_prose(ui, paragraph);
     }
     fn rest(&mut self, _: &mut egui::Ui, _: &str) {}
+    fn casts(&mut self, _: &mut egui::Ui, _: &str) {}
 }
 
 /// `text` is one part of the entry's `body`. A tile's number is its action's place in the
@@ -370,6 +374,8 @@ fn prose(
         }
         if super::spells::spellcasting(paragraph) {
             spellcasting = Some(paragraph.to_owned());
+        } else if super::spells::cast_names(paragraph).is_some() {
+            spells.casts(ui, paragraph);
         }
     }
     if let Some(group) = spellcasting {

@@ -336,6 +336,17 @@ mod tests {
             damage,
             vec![part("3d10", "Radiant"), part("3d10", "Thunder")]
         );
+        // A type the caster chooses is one part.
+        let wave = "Each creature makes a Constitution saving throw. On a failed save, a target takes 5d6 Thunder damage and 5d6 Radiant or Necrotic damage (your choice).";
+        let Some(RollLink::SaveDc { damage, .. }) =
+            spell_roll("Destructive Wave", wave, 5, 5, &CASTER)
+        else {
+            panic!("Destructive Wave saves");
+        };
+        assert_eq!(
+            damage,
+            vec![part("5d6", "Thunder"), part("5d6", "Radiant or Necrotic")]
+        );
         // A caster with no save DC cannot cast it as a roll.
         assert_eq!(
             spell_roll("Moonbeam", moonbeam, 2, 2, &Caster::default()),

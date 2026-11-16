@@ -1829,7 +1829,11 @@ spell, in printed order. A spell with an attack or a save is an action tile: the
 right-click menu ends with `Read <spell>`, which opens the spell. A spell with neither shows a magic wand icon, its
 level, casting time and range, and opens the spell on a click. A tile's hover is the spell's rules text. A list name
 that no entry matches is on a muted `Not found in this content:` line under its row. A spell that the entry gives or
-its words name, but that no list shows, goes on a muted `Spell descriptions:` line after the lists. A character's
+its words name, but that no list shows, goes on a muted `Spell descriptions:` line after the lists. A paragraph of its
+own that casts spells by name (`Dread Shout. The wight casts Fear, using ...`) keeps its words, with a row of the same
+spell tiles under them, from its own spell save DC or else Spellcasting's; in a run they follow in printed order. An
+action's numbered items (`1. Frost Ray. Dexterity Saving Throw: DC 13 ...`) are tiles of their own. Damage with no
+dice (`Hit: 1 Piercing damage`) and a type to choose (`Necrotic or Radiant damage`) show as printed. A character's
 Actions page shows its
 attacks as tiles, with the reach or range its sheet gives (`Reach 5 ft`, `Range 120 ft`).
 

@@ -246,23 +246,35 @@ pub fn ability(word: &str) -> Option<&'static str> {
         .find(|ability| ability.eq_ignore_ascii_case(word))
 }
 
-/// The damage type and the word `damage` after a group, as in `) Fire damage`.
+/// The damage type and the word `damage` after a group, as in `) Fire damage`, or a type
+/// the attacker chooses, as in `) Necrotic or Radiant damage`.
 pub(crate) fn damage_kind(after: &str) -> Option<Option<String>> {
     let rest = after.trim_start();
     if rest.starts_with("damage") {
         return Some(None);
     }
-    let word: String = rest.chars().take_while(|c| c.is_alphabetic()).collect();
-    let tail = rest[word.len()..].trim_start();
-    (!word.is_empty() && tail.starts_with("damage")).then(|| {
+    let word = |text: &str| -> String { text.chars().take_while(|c| c.is_alphabetic()).collect() };
+    let title = |word: &str| -> String {
         let mut chars = word.chars();
-        Some(chars.next().map_or_else(String::new, |first| {
+        chars.next().map_or_else(String::new, |first| {
             first
                 .to_uppercase()
                 .chain(chars.map(|c| c.to_ascii_lowercase()))
                 .collect()
-        }))
-    })
+        })
+    };
+    let first = word(rest);
+    if first.is_empty() {
+        return None;
+    }
+    let tail = rest[first.len()..].trim_start();
+    if tail.starts_with("damage") {
+        return Some(Some(title(&first)));
+    }
+    let other = word(tail.strip_prefix("or ")?);
+    let tail = tail["or ".len() + other.len()..].trim_start();
+    (!other.is_empty() && tail.starts_with("damage"))
+        .then(|| Some(format!("{} or {}", title(&first), title(&other))))
 }
 
 /// The condition on the damage group at `start..end`: `if …` after its words, up to the next
@@ -419,6 +431,33 @@ pub fn find(text: &str, label: &str) -> Vec<Span> {
         ));
         at = end + 1;
     }
+    // Flat damage, with no dice to roll: `Hit: 1 Piercing damage`.
+    for marker in ["Hit:", "Failure:"] {
+        for (index, _) in text.match_indices(marker) {
+            let rest = &text[index + marker.len()..];
+            let start = index + marker.len() + (rest.len() - rest.trim_start().len());
+            let length = digits(&text[start..]);
+            let end = start + length;
+            if length == 0
+                || !text[end..].starts_with(' ')
+                || groups.iter().any(|(group, ..)| group.contains(&start))
+            {
+                continue;
+            }
+            if let Some(kind) = damage_kind(&text[end..]) {
+                groups.push((
+                    start..end,
+                    DamagePart {
+                        dice: text[start..end].to_owned(),
+                        kind,
+                        when: None,
+                    },
+                    true,
+                ));
+            }
+        }
+    }
+    groups.sort_by_key(|(range, ..)| range.start);
     let damage_in = |range: Range<usize>| -> Vec<DamagePart> {
         groups
             .iter()
@@ -721,6 +760,26 @@ mod tests {
         );
         // Both groups of one sentence are one roll, from either link.
         assert_eq!(spans[1].link, spans[2].link);
+        // A hit may deal flat damage, with no dice; a type may be the attacker's choice.
+        let flat = "Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage.";
+        assert_eq!(
+            find(flat, "Beak")[0].link,
+            RollLink::D20 {
+                what: D20::Attack,
+                bonus: 4,
+                label: "Beak".into(),
+                damage: vec![part("1", "Piercing")],
+            }
+        );
+        let chosen = "Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Necrotic or Radiant damage (its choice).";
+        let Some(RollLink::D20 { damage, .. }) =
+            find(chosen, "Strike").first().map(|s| s.link.clone())
+        else {
+            panic!("an attack");
+        };
+        assert_eq!(damage, vec![part("1d8+3", "Necrotic or Radiant")]);
+        // A number of feet after `Hit:` is no damage.
+        assert!(find("Hit: 5 feet away, the target falls.", "Push").is_empty());
         assert_eq!(
             spans[3].link,
             RollLink::Damage {

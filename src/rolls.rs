@@ -912,12 +912,13 @@ fn parse_actions(text: &str) -> Vec<(usize, Chip)> {
         {
             continue;
         }
-        let Some(title) = design::reader::run_in_title(paragraph) else {
+        // A book may print the parts' labels in italics (`*Melee Attack Roll:* +5`), and one
+        // action may list several as numbered items (`1. **Fear Ray.** *Wisdom Saving Throw:*`).
+        let plain = list_number(paragraph).replace('*', "");
+        let Some(title) = design::reader::run_in_title(&plain) else {
             continue;
         };
         let label = title.split(" (").next().unwrap_or(title);
-        // A book may print the parts' labels in italics: `*Melee Attack Roll:* +5`.
-        let plain = paragraph.replace('*', "");
         let spans = dice_text::find(&plain, label);
         let pick = |test: fn(&RollLink) -> bool| spans.iter().map(|s| &s.link).find(|l| test(l));
         let link = pick(|l| {
@@ -933,13 +934,29 @@ fn parse_actions(text: &str) -> Vec<(usize, Chip)> {
         .or_else(|| pick(|l| matches!(l, RollLink::Damage { .. })));
         if let Some(chip) = link
             .cloned()
-            .and_then(|link| Chip::new(link, paragraph.replace(['*', '_'], "")))
+            .and_then(|link| Chip::new(link, plain.replace('_', "")))
             && !chips.iter().any(|(_, known)| known.label == chip.label)
         {
             chips.push((at, chip));
         }
     }
     chips
+}
+
+/// A paragraph without the number of a list item: `1. **Fear Ray.** ...` is
+/// `**Fear Ray.** ...`.
+fn list_number(paragraph: &str) -> &str {
+    let digits = paragraph.len()
+        - paragraph
+            .trim_start_matches(|c: char| c.is_ascii_digit())
+            .len();
+    if digits > 0
+        && let Some(rest) = paragraph[digits..].strip_prefix(". ")
+    {
+        rest
+    } else {
+        paragraph
+    }
 }
 
 /// The place of an action in an entry's whole list, by which Ctrl+number arms it.
@@ -2152,6 +2169,11 @@ mod tests {
         let caster = "Dagger. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage.\n\nSpellcasting. The mage casts one of the following spells, using Intelligence as the spellcasting ability (spell save DC 14, +6 to hit with spell attacks).\n\nArcane Burst. Ranged Attack Roll: +6, range 120 ft. Hit: 14 (3d8 + 1) Force damage.";
         let labels: Vec<String> = chips(caster).into_iter().map(|chip| chip.label).collect();
         assert_eq!(labels, ["Dagger +4", "Arcane Burst +6"]);
+        // Numbered items under one action are tiles of their own, each with its own number.
+        let rays = "Gaze. The golem shoots one of these rays:\n\n1. **Frost Ray.** *Dexterity Saving Throw:* DC 13. *Failure:* 9 (2d8) Cold damage. *Success:* Half damage.\n\n2. **Slow Ray.** *Wisdom Saving Throw:* DC 13. *Failure:* The target is slowed.";
+        let labels: Vec<String> = chips(rays).into_iter().map(|chip| chip.label).collect();
+        assert_eq!(labels, ["Frost Ray DC 13", "Slow Ray DC 13"]);
+        assert_eq!(actions(rays)[0].0, 1, "the tile stands in its item's place");
         // A rider that is no longer prose is in its tile's hover text.
         let claw = "Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Slashing damage. If the target is a creature that isn't an Undead or elf, it is subjected to the following effect. Constitution Saving Throw: DC 10. Failure: The target has the Paralyzed condition until the end of its next turn.";
         assert!(chips(claw)[0].text.contains("Paralyzed condition"));

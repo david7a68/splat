@@ -118,12 +118,42 @@ struct SpellLinks<'a> {
     opened: Option<usize>,
 }
 
-impl creature::Spells for SpellLinks<'_> {
-    fn list(&mut self, ui: &mut egui::Ui, spellcasting: &str, paragraph: &str) {
-        let caster = spells::caster(self.entry, spellcasting);
+impl SpellLinks<'_> {
+    /// A line's spells as a row of tiles: each that rolls with its number after the stat
+    /// block's actions, and the spell it opens when the DM reads one.
+    fn draw(&mut self, ui: &mut egui::Ui, line: &spells::SpellLine, actions: usize) {
         let rolls = self
             .rolls
             .get_or_insert_with(|| spells::rolls(self.entry, self.links));
+        let tiles: Vec<crate::rolls::Tile> = line
+            .tiles
+            .iter()
+            .map(|spell| match &spell.chip {
+                Some(chip) => crate::rolls::Tile::Roll {
+                    place: rolls
+                        .iter()
+                        .position(|known| known.label == chip.label && known.link == chip.link)
+                        .map(|place| actions + place),
+                    chip: chip.clone(),
+                    read: Some(spell.name.clone()),
+                },
+                None => crate::rolls::Tile::Open(crate::rolls::OpenTile {
+                    name: spell.name.clone(),
+                    facts: spell.facts.clone(),
+                    text: spell.text.clone(),
+                }),
+            })
+            .collect();
+        if let Some(at) = crate::rolls::tile_row(ui, &self.entry.name, &tiles) {
+            self.opened = self.opened.or(Some(line.tiles[at].open));
+        }
+        self.shown.extend(line.tiles.iter().map(|spell| spell.open));
+    }
+}
+
+impl creature::Spells for SpellLinks<'_> {
+    fn list(&mut self, ui: &mut egui::Ui, spellcasting: &str, paragraph: &str) {
+        let caster = spells::caster(self.entry, spellcasting);
         // A spell's number follows the stat block's own actions.
         let actions = crate::rolls::actions(&self.entry.body).len();
         for text in paragraph.lines() {
@@ -131,35 +161,20 @@ impl creature::Spells for SpellLinks<'_> {
                 continue;
             };
             design::help(ui, &line.label);
-            let tiles: Vec<crate::rolls::Tile> = line
-                .tiles
-                .iter()
-                .map(|spell| match &spell.chip {
-                    Some(chip) => crate::rolls::Tile::Roll {
-                        place: rolls
-                            .iter()
-                            .position(|known| known.label == chip.label && known.link == chip.link)
-                            .map(|place| actions + place),
-                        chip: chip.clone(),
-                        read: Some(spell.name.clone()),
-                    },
-                    None => crate::rolls::Tile::Open(crate::rolls::OpenTile {
-                        name: spell.name.clone(),
-                        facts: spell.facts.clone(),
-                        text: spell.text.clone(),
-                    }),
-                })
-                .collect();
-            if let Some(at) = crate::rolls::tile_row(ui, &self.entry.name, &tiles) {
-                self.opened = self.opened.or(Some(line.tiles[at].open));
-            }
-            self.shown.extend(line.tiles.iter().map(|spell| spell.open));
+            self.draw(ui, &line, actions);
             if !line.missing.is_empty() {
                 design::help(
                     ui,
                     &format!("Not found in this content: {}", line.missing.join(", ")),
                 );
             }
+        }
+    }
+
+    fn casts(&mut self, ui: &mut egui::Ui, paragraph: &str) {
+        if let Some(line) = spells::cast_line(self.entry, paragraph, &self.references, self.links) {
+            let actions = crate::rolls::actions(&self.entry.body).len();
+            self.draw(ui, &line, actions);
         }
     }
 

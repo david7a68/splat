@@ -120,21 +120,22 @@ pub(crate) fn caster(entry: &Entry, spellcasting: &str) -> Caster {
         .and_then(|v| v.get("spellcasting"))
         .and_then(|v| v.get("save_dc"))
         .and_then(serde_yaml_ng::Value::as_i64);
-    let words = spellcasting
-        .split_once("spell save DC ")
-        .and_then(|(_, rest)| {
-            rest.split(|c: char| !c.is_ascii_digit())
-                .next()?
-                .parse()
-                .ok()
-        });
-    let dc = data.or(words);
+    let dc = data.or(dc_in(spellcasting));
     Caster {
         dc,
         // A spell attack bonus is always the save DC less 8, so a stat block that prints
         // only the DC still gives it.
         attack: Caster::attack_in(spellcasting).or(dc.map(|dc| dc - 8)),
     }
+}
+
+/// The spell save DC that words give: `spell save DC 13`.
+fn dc_in(words: &str) -> Option<i64> {
+    let (_, rest) = words.split_once("spell save DC ")?;
+    rest.split(|c: char| !c.is_ascii_digit())
+        .next()?
+        .parse()
+        .ok()
 }
 
 /// Whether a paragraph is a Spellcasting feature whose lists follow it: `Spellcasting.`,
@@ -286,8 +287,53 @@ fn without_concentration(facts: &str) -> String {
     facts.replace(" · Concentration", "")
 }
 
-/// The spells of one list line, each found by the entry's own references first, then by
-/// name.
+/// One list item's spell tile, found by the entry's own references first, then by name:
+/// `Err` with the name when no spell has it, `None` for an empty item.
+fn item_tile(
+    item: &str,
+    caster: Caster,
+    references: &[Option<(usize, String)>],
+    links: &dyn Links,
+) -> Option<Result<SpellTile, String>> {
+    let (name, cast) = item_name(item);
+    if name.is_empty() {
+        return None;
+    }
+    // Books print an apostrophe as `’` or `'`; the two name the same spell.
+    let straight = name.replace('’', "'");
+    let curly = name.replace('\'', "’");
+    let named = |name: &str| {
+        [name, &straight, &curly]
+            .into_iter()
+            .find_map(|name| links.spell_named(name))
+    };
+    let found = references
+        .iter()
+        .flatten()
+        .find(|(_, spell)| spell.replace('’', "'").eq_ignore_ascii_case(&straight))
+        .cloned()
+        .or_else(|| named(name))
+        // The SRD drops the name of a spell's maker: `Vellora’s Hideous Laughter` is
+        // `Hideous Laughter` there.
+        .or_else(|| {
+            let (_, rest) = straight.split_once("'s ")?;
+            named(rest)
+        });
+    let Some((open, spell)) = found.and_then(|(open, _)| Some((open, links.entry(open)?))) else {
+        return Some(Err(name.to_owned()));
+    };
+    let mut spell = tile(name, open, spell, cast, caster);
+    // The list may waive it: `Shapechange (... no Concentration ... required)`.
+    if item.to_lowercase().contains("no concentration") {
+        spell.facts = without_concentration(&spell.facts);
+        if let Some(chip) = &mut spell.chip {
+            chip.facts = chip.facts.as_deref().map(without_concentration);
+        }
+    }
+    Some(Ok(spell))
+}
+
+/// The spells of one list line.
 pub(crate) fn line(
     line: &str,
     caster: Caster,
@@ -299,49 +345,92 @@ pub(crate) fn line(
     let mut tiles = Vec::new();
     let mut missing = Vec::new();
     for item in list_items(spells) {
-        let (name, cast) = item_name(item);
-        if name.is_empty() {
-            continue;
-        }
-        // Books print an apostrophe as `’` or `'`; the two name the same spell.
-        let straight = name.replace('’', "'");
-        let curly = name.replace('\'', "’");
-        let named = |name: &str| {
-            [name, &straight, &curly]
-                .into_iter()
-                .find_map(|name| links.spell_named(name))
-        };
-        let found = references
-            .iter()
-            .flatten()
-            .find(|(_, spell)| spell.replace('’', "'").eq_ignore_ascii_case(&straight))
-            .cloned()
-            .or_else(|| named(name))
-            // The SRD drops the name of a spell's maker: `Vellora’s Hideous Laughter` is
-            // `Hideous Laughter` there.
-            .or_else(|| {
-                let (_, rest) = straight.split_once("'s ")?;
-                named(rest)
-            });
-        match found.and_then(|(open, _)| Some((open, links.entry(open)?))) {
-            Some((open, spell)) => {
-                let mut spell = tile(name, open, spell, cast, caster);
-                // The list may waive it: `Shapechange (... no Concentration ... required)`.
-                if item.to_lowercase().contains("no concentration") {
-                    spell.facts = without_concentration(&spell.facts);
-                    if let Some(chip) = &mut spell.chip {
-                        chip.facts = chip.facts.as_deref().map(without_concentration);
-                    }
-                }
-                tiles.push(spell);
-            }
-            None => missing.push(name.to_owned()),
+        match item_tile(item, caster, references, links) {
+            Some(Ok(spell)) => tiles.push(spell),
+            Some(Err(name)) => missing.push(name),
+            None => {}
         }
     }
     Some(SpellLine {
         label: plain_label(label).to_owned(),
         tiles,
         missing,
+    })
+}
+
+/// The spells that a paragraph of its own casts by name, as list items: `Dread Command. The
+/// mummy casts Command (level 2 version), using ...` gives `Command (level 2 version)`. Not
+/// a Spellcasting paragraph, whose lists follow it.
+pub(crate) fn cast_names(paragraph: &str) -> Option<Vec<&str>> {
+    if spellcasting(paragraph) {
+        return None;
+    }
+    crate::design::reader::run_in_title(paragraph)?;
+    let (_, rest) = paragraph.split_once(" casts ")?;
+    let end = [
+        ", using",
+        " using",
+        ", requiring",
+        " requiring",
+        " in response",
+        " twice",
+        " on ",
+        ", but",
+        ". ",
+        ".\n",
+    ]
+    .iter()
+    .filter_map(|stop| rest.find(stop))
+    .min()
+    .unwrap_or(rest.len());
+    let names = rest[..end].trim().trim_end_matches('.');
+    if !names.starts_with(char::is_uppercase) {
+        return None;
+    }
+    // `Darkness, Faerie Fire, or Web` and `Fireball or Lightning Bolt`.
+    Some(
+        list_items(names)
+            .into_iter()
+            .map(|item| {
+                let item = item.trim();
+                item.strip_prefix("or ")
+                    .or_else(|| item.strip_prefix("and "))
+                    .unwrap_or(item)
+            })
+            .flat_map(|item| item.split(" or "))
+            .collect(),
+    )
+}
+
+/// The tiles of the spells a paragraph of its own casts. Its numbers are its own
+/// (`spell save DC 13`), or else those of the creature's Spellcasting, which such a paragraph
+/// names (`using the same spellcasting ability as Spellcasting`). A name that no spell has is
+/// left out: the words may name no spell at all.
+pub(crate) fn cast_line(
+    entry: &Entry,
+    paragraph: &str,
+    references: &[Option<(usize, String)>],
+    links: &dyn Links,
+) -> Option<SpellLine> {
+    let names = cast_names(paragraph)?;
+    let base = groups(&entry.body)
+        .first()
+        .map_or_else(|| caster(entry, ""), |(words, _)| caster(entry, words));
+    let caster = match dc_in(paragraph) {
+        Some(dc) => Caster {
+            dc: Some(dc),
+            attack: Caster::attack_in(paragraph).or(Some(dc - 8)),
+        },
+        None => base,
+    };
+    let tiles: Vec<SpellTile> = names
+        .into_iter()
+        .filter_map(|item| item_tile(item, caster, references, links)?.ok())
+        .collect();
+    (!tiles.is_empty()).then(|| SpellLine {
+        label: String::new(),
+        tiles,
+        missing: Vec::new(),
     })
 }
 
@@ -353,13 +442,13 @@ pub(crate) fn references(entry: &Entry, links: &dyn Links) -> Vec<Option<(usize,
         .collect()
 }
 
-/// Each Spellcasting paragraph of `body` with the list paragraphs after it.
 /// A paragraph that is only a comment, such as `<!-- SRD page 325 -->` where a printed page
 /// ends: it parts no Spellcasting paragraph from its lists.
 pub(crate) fn aside(paragraph: &str) -> bool {
     paragraph.starts_with("<!--") && paragraph.ends_with("-->") && !paragraph[4..].contains("<!--")
 }
 
+/// Each Spellcasting paragraph of `body` with the list paragraphs after it.
 pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
     let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
     let mut open = false;
@@ -383,19 +472,41 @@ pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
 /// stat block's own actions, in the panel, on the action bar and by Ctrl+number.
 pub(crate) fn rolls(entry: &Entry, links: &dyn Links) -> Vec<Chip> {
     let references = references(entry, links);
-    groups(&entry.body)
-        .into_iter()
-        .flat_map(|(spellcasting, lists)| {
-            let caster = caster(entry, spellcasting);
-            lists
-                .into_iter()
-                .flat_map(str::lines)
-                .filter_map(|text| line(text, caster, &references, links))
-                .flat_map(|line| line.tiles)
-                .filter_map(|tile| tile.chip)
-                .collect::<Vec<_>>()
-        })
-        .collect()
+    let mut chips = Vec::new();
+    // The numbers of the Spellcasting paragraph whose lists come next, if any.
+    let mut lists: Option<Caster> = None;
+    for paragraph in entry
+        .body
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+    {
+        if spellcasting(paragraph) {
+            lists = Some(caster(entry, paragraph));
+            continue;
+        }
+        if let Some(caster) = lists {
+            if aside(paragraph) {
+                continue;
+            }
+            if paragraph.lines().all(list_line) {
+                let found = paragraph
+                    .lines()
+                    .filter_map(|text| line(text, caster, &references, links));
+                chips.extend(
+                    found
+                        .flat_map(|line| line.tiles)
+                        .filter_map(|tile| tile.chip),
+                );
+                continue;
+            }
+            lists = None;
+        }
+        if let Some(line) = cast_line(entry, paragraph, &references, links) {
+            chips.extend(line.tiles.into_iter().filter_map(|tile| tile.chip));
+        }
+    }
+    chips
 }
 
 #[cfg(test)]
@@ -614,6 +725,40 @@ mod tests {
         assert!(!shapechange.tiles[0].facts.contains("Concentration"));
         let druidcraft = line("At Will: Druidcraft", numbers, &[], &index).unwrap();
         assert_eq!(druidcraft.tiles[0].facts, "Cantrip · Action · 30 feet");
+        // A paragraph of its own may cast spells by name, with its own DC or Spellcasting's.
+        assert_eq!(
+            cast_names("Web Magic (Recharge 5–6). The spider casts Darkness, Faerie Fire, or Web, requiring no Material components (spell save DC 13).").unwrap(),
+            ["Darkness", "Faerie Fire", "Web"]
+        );
+        assert_eq!(
+            cast_names("Dread Shout. The wight casts Fear or Command (level 2 version), using the same spellcasting ability as Spellcasting.").unwrap(),
+            ["Fear", "Command (level 2 version)"]
+        );
+        assert!(cast_names("Spellcasting. The mage casts one of the following spells:").is_none());
+        assert!(cast_names("Multiattack. The mage makes two attacks, and it can use Spellcasting to cast Light.").is_none());
+        let path = "definitions/creatures/adult_white_dragon.md";
+        let dragon = Entry::parse(
+            path,
+            splat::content::definitions::source_file(path).unwrap(),
+        )
+        .unwrap();
+        let presence = dragon
+            .body
+            .split("\n\n")
+            .find(|paragraph| paragraph.starts_with("Frightful Presence."))
+            .unwrap();
+        let fear = cast_line(&dragon, presence, &[], &index).unwrap();
+        assert_eq!(fear.tiles[0].chip.as_ref().unwrap().label, "Fear DC 14");
+        // In a run it follows the stat block's actions and its lists, in printed order.
+        let order: Vec<String> = rolls(&dragon, &index)
+            .into_iter()
+            .map(|c| c.label)
+            .collect();
+        assert_eq!(
+            order.last().map(String::as_str),
+            Some("Fear DC 14"),
+            "{order:?}"
+        );
         // A tile's facts give the area of the spell's text.
         let fireball = line("1/Day: Fireball", numbers, &[], &index).unwrap();
         assert_eq!(
