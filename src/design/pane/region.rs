@@ -21,7 +21,9 @@
 //! - **Small room (L3).** Below the tallest block, the list is laid out at that height in an
 //!   outer scroll of the room it has; each entry into that state is counted.
 
-use super::plan::{Block, BlockPlan, MeasureEnv, PlanState, Work};
+#[cfg(test)]
+use super::plan::Work;
+use super::plan::{Block, BlockPlan, MeasureEnv, PlanState};
 use crate::design::{layout::ScrollColumn, memo::Revised, tokens};
 use eframe::egui::{self, Id, Key, Rect, Ui, UiBuilder, vec2};
 use std::ops::Range;
@@ -118,6 +120,7 @@ impl RegionState {
     }
 
     /// The plan's work counters (I12) and diagnostics (L6, L7).
+    #[cfg(test)]
     pub(in crate::design) fn work(&self) -> Work {
         self.plan.work()
     }
