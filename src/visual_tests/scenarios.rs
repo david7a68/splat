@@ -6496,6 +6496,26 @@ pub mod settings {
             format!("{UNLINKED_CAMPAIGN} row y after Undo discard: {undone:?}"),
         );
         d.click("Discard");
+        // Migration-32 L2c (L1c, `pane_content_then`): the footer's lines are read after the
+        // form's acts. In the first frame of an edit after Discard, drawn in one pass, and in the
+        // next, the discard's result and its Undo are gone (the edit ended them).
+        d.expect("Campaign details draft discarded.");
+        d.click_field(EDIT_FORM);
+        let edited = d.first_frame_one_pass([egui::Event::Text("x".into())], |d| {
+            (
+                d.painted_rect_in("Campaign details draft discarded.", egui::Rect::EVERYTHING)
+                    .is_some(),
+                d.has("Undo discard of Campaign details"),
+            )
+        });
+        d.observe(
+            "m32-L2c-details-edit-first-frame",
+            edited == ((false, false), (false, false)),
+            format!(
+                "The first frame of an edit after Discard and the next (one pass each): (result painted, Undo offered) = {edited:?}"
+            ),
+        );
+        d.click("Discard");
         d.click(CANCEL);
         d.begin_task();
         d.app_mut().settings.simulate(Account::Connected);
@@ -9673,9 +9693,16 @@ pub mod run_folder_defect {
                 })
             })
         };
+        // Ruling M4 (round 31 SS2, AS2, run-folder-save-action-stability): `Save run settings`
+        // is the commit in every state, at the same place, at 960, 1200 and 1920.
+        let save_places = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, |d| d.place_of("Save run settings")))
+        };
         let clean = form_tops(d);
+        let clean_save = save_places(d);
         d.replace_text_in(RUN_FOLDER, "Elsewhere");
         let typed = form_tops(d);
+        let typed_save = save_places(d);
         d.observe(
             "iter-26-B-FN2-run-folder",
             clean.iter().flatten().all(Option::is_some)
@@ -9683,6 +9710,37 @@ pub mod run_folder_defect {
                 && d.has_containing("From the new folder, Splat will not show"),
             format!("Field and state tops clean {clean:?} and after typing {typed:?}"),
         );
+        // While the folder change leaves saved runs, Save waits in its place with its reason, and
+        // the two choices are the warning's, in the footer under it: a second press where Save
+        // was never moves runs.
+        for size in [SMALL, LARGE] {
+            let placed = d.at_size(size, |d| {
+                let footer = footer_with(d, "From the new folder");
+                let choices =
+                    ["Move runs and save", "Save without moving"].map(|choice| d.place_of(choice));
+                (
+                    d.is_disabled("Save run settings"),
+                    d.visible_text("Choose below to move the runs or not."),
+                    footer.is_some_and(|footer| {
+                        choices
+                            .iter()
+                            .all(|place| place.is_some_and(|place| footer.contains_rect(place)))
+                    }),
+                    choices,
+                )
+            });
+            d.observe(
+                "m32-M4-run-folder-commit",
+                clean_save.iter().all(Option::is_some)
+                    && typed_save == clean_save
+                    && placed.0
+                    && placed.1
+                    && placed.2,
+                format!(
+                    "At {size:?}: Save run settings clean {clean_save:?}, after the folder edit {typed_save:?}; (Save waits, its reason painted, both choices in the warning's footer, choices) = {placed:?}"
+                ),
+            );
+        }
         d.observe_both(
             "iter-18-A-lock",
             "Run settings state the campaign switch lock",
@@ -9700,32 +9758,32 @@ pub mod run_folder_defect {
                     })
             },
         );
-        d.observe_both(
-            "iter-3-C-FT10-spacing",
-            "Full save actions stay directly below their state and reason",
-            |d| {
-                d.place_of("Discard")
-                    .zip(d.place_of("Move runs and save"))
-                    .is_some_and(|(discard, save)| {
-                        save.top() >= discard.bottom()
-                            && save.top() - discard.bottom() <= crate::design::L
-                    })
-            },
-        );
-        // FT4: with no open run, the move is the one primary action on the whole screen.
+        // Ruling M4: the move choices are the warning's and `Save run settings` waits in the
+        // commit place, so no control in view has the accent, as on the Session folder's block.
+        // The old check (Move runs and save the one primary) caught two primaries; this one still
+        // fails on any accent-filled control here.
         d.observe_both(
             "iter-16-B-FT4-primary",
-            "Move runs and save is the only accent-filled control in view",
-            |d| super::session_recording::accent_filled(d) == ["Move runs and save"],
+            "No control is accent-filled while Save run settings waits for the move choice",
+            |d| super::session_recording::accent_filled(d).is_empty(),
         );
-        // Must stay true: the other choice on the row stays quiet.
+        // Must stay true: neither of the warning's two choices stands out over the other. Before
+        // M4 the move was the row's primary and this checked that Save without moving stayed
+        // quiet beside it; now both are the footer's choices, with the one weight the footer's
+        // Choice gives them (and no accent, `iter-16-B-FT4-primary`).
         d.observe_both(
             "iter-16-B-FT4-quiet",
-            "Save without moving stays a quiet action",
+            "The folder warning's two choices have one weight",
             |d| {
-                d.in_view("Save without moving")
-                    && d.control_frame("Save without moving")
-                        .is_some_and(|frame| frame.stroke.width == 0.0)
+                let frame = |name: &str| {
+                    d.in_view(name)
+                        .then(|| d.control_frame(name))
+                        .flatten()
+                        .map(|frame| (frame.fill, frame.stroke))
+                };
+                frame("Save without moving")
+                    .zip(frame("Move runs and save"))
+                    .is_some_and(|(without, with)| without == with)
             },
         );
         // iter-26-B AC2, FN3, SN1 (help): the initiative help wraps at the reader measure, at
@@ -9778,9 +9836,10 @@ pub mod run_folder_defect {
         // its last control, with no hairline, at every size (the footer placed by hand stood at
         // the tab's bottom).
         d.state_prepared("run-folder-edited", Sizes::All, |d| {
+            // The form's last line is now Save's wait reason, under the save row (M4).
             footer_follows(
                 d,
-                "Move runs and save",
+                "Choose below to move the runs or not.",
                 "From the new folder",
                 "m32-L1b-run-folder-footer",
             );
@@ -9981,11 +10040,16 @@ pub mod run_folder_defect {
             )
         });
         std::fs::remove_file(target.join(&run_file)).unwrap();
+        // M4: Move runs and save is the footer's choice now, and a footer press acts after the
+        // footer painted its frame (as every footer Undo does), so its answer comes in the next
+        // frame. The frame of the press keeps the warning whole; the next one shows the error
+        // whole with it. A body act's answer stays in its own frame (`m32-L1c-retype-after-
+        // discard`, `m32-L1c-first-folder-edit`).
         d.observe(
             "m32-L1c-failed-move",
-            failed == ((true, true), (true, true)) && d.has_containing("Could not move runs."),
+            failed.0.1 && failed.1 == (true, true) && d.has_containing("Could not move runs."),
             format!(
-                "The first frame of a failed Move runs and save and the next (one pass each): error whole, warning whole = {failed:?}"
+                "The frame of a failed Move runs and save and the next (one pass each): error whole, warning whole = {failed:?}"
             ),
         );
         // A panic ends this app, so the video stops first and nothing follows.
@@ -14931,8 +14995,8 @@ pub mod session_notes {
                  before {before_scan}, added {after_scan}"
             ),
         );
-        // FT4 (round 16): with no run and no other form, moving the files is the one primary,
-        // as Move runs and save is on Rules and runs.
+        // The session folder's move choices, whole at 960 (ruling R24; Rules and runs' run folder
+        // follows the same rule, M4).
         let offered_whole = d.at_size(SMALL, |d| {
             whole(
                 d,
@@ -23761,7 +23825,7 @@ pub mod run_add_creature {
         d.click_starting("Roll NPC initiative: ");
         d.click("In one group per side");
         d.click("Save run settings");
-        d.expect("No changes");
+        d.expect("Saved");
         go_encounters(d);
         run_saved_encounter(d, "Shrine of Cinders");
         d.click("Roll NPC initiative");
@@ -24004,7 +24068,47 @@ pub mod session_plan_groups {
             d.expect("Save group");
             d.current_page() == "Session"
         });
-        d.click("Save group");
+        // Review of PR 499 (P1): the plan's Ctrl+S saves the group after its WHOLE body took the
+        // frame's input. Words typed into the group's notes and Ctrl+S in ONE input frame (one
+        // pass): the saved file holds them. (The DM's Save act here: the focus is an aside.)
+        // At 1200, where the notes stand beside the search (at 960 they are on the other tab).
+        let ctrl = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        d.act_at_size(DEFAULT, |d| {
+            d.aside(|d| d.click_field("Group notes for Ash Pack"));
+            let _ = d.first_frame_one_pass(
+                [
+                    egui::Event::Text("Dusk.".into()),
+                    egui::Event::Key {
+                        key: Key::S,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: ctrl,
+                    },
+                ],
+                |_| (),
+            );
+        });
+        let ash = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join("Encounter Groups/Ash Pack.md");
+        let saved = std::fs::read_to_string(&ash).unwrap_or_default();
+        d.observe(
+            "m32-L2c-group-notes-ctrl-s-one-frame",
+            saved.contains("Dusk."),
+            format!(
+                "Notes and Ctrl+S in one frame: the saved group holds them: {}",
+                saved.contains("Dusk.")
+            ),
+        );
         d.expect("Edit group Ash Pack");
         d.observe(
             "iter-26-B-FF2-plan",
@@ -27142,8 +27246,35 @@ pub mod session_plan {
             d.has("Save creature") && d.has_containing("Hit points"),
             "A creature that names itself copies, swaps in and opens beside the roster",
         );
-        d.type_text("90");
-        d.press_ctrl(Key::S);
+        // Review of PR 499 (P1): the page's Ctrl+S saves the creature after its fields took the
+        // frame's input. The last digit and Ctrl+S in ONE input frame (one pass): the creature
+        // saves with the digit and closes; the next frame shows the roster with HP 90.
+        d.type_text("9");
+        let ctrl = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        let saved = d.first_frame_one_pass(
+            [
+                egui::Event::Text("0".into()),
+                egui::Event::Key {
+                    key: Key::S,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: ctrl,
+                },
+            ],
+            |d| (d.has(FIND_CREATURE), d.has_containing("HP 90")),
+        );
+        d.observe(
+            "m32-L2c-creature-ctrl-s-one-frame",
+            saved.1 == (true, true),
+            format!(
+                "The frame of `0` + Ctrl+S and the next (one pass each): (search back, roster HP 90) = {saved:?}"
+            ),
+        );
         d.expect(FIND_CREATURE);
         d.goal_within("T12.0", "make a creature your own", 7);
         d.observe(
@@ -27247,6 +27378,17 @@ pub mod npc_in_encounter {
             "P2",
             "A named NPC already on the roster cannot be added again from search",
             |d| d.visible_text("In roster") && !d.has("Add"),
+        );
+        // Round 31 SD10, AD11 (in-roster-check-role): the NPC's `In roster` is the same checked
+        // status as `Party in roster` above it: the check before the word.
+        d.observe_both(
+            "r31-SD10-in-roster-check",
+            "In roster has the check that Party in roster has",
+            |d| {
+                let checked =
+                    |word: &str| d.visible_text(&format!("{} {word}", crate::design::icons::OK));
+                checked("Party in roster") && checked("In roster")
+            },
         );
         d.click(SAVE_ENCOUNTER);
         d.wait_for_text("Saved");
