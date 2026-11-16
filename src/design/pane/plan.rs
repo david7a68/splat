@@ -39,14 +39,19 @@ use crate::design::{
 
 /// A list row of the first vocabulary. Its height is the part's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::design) enum Row {
+pub enum Row {
     /// The `None yet.` row of an empty list.
     Empty,
     /// A row of one line.
     OneLine,
     /// A title over a second line (`two_line_row`).
     TwoLine,
+    /// A Library entry: its name over its detail line (layout PR 3b's first host).
+    Entry,
 }
+
+/// The height of a Library entry row (`Row::Entry`).
+pub const ENTRY_ROW_HEIGHT: f32 = 44.0;
 
 impl Row {
     fn height(self) -> f32 {
@@ -54,6 +59,7 @@ impl Row {
             Self::Empty => Type::Body.line(),
             Self::OneLine => Density::Scan.row(),
             Self::TwoLine => XXL + S,
+            Self::Entry => ENTRY_ROW_HEIGHT,
         }
     }
 }
@@ -61,7 +67,7 @@ impl Row {
 /// One block of a body, in content order: a row, or a list group's heading bound to its first
 /// row (or its `None yet.` row), which are one block while they fit the view together.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::design) enum Block {
+pub enum Block {
     Row(Row),
     Section(Row),
 }
@@ -89,6 +95,8 @@ pub(in crate::design) struct MeasureEnv {
 #[derive(Debug, PartialEq)]
 pub(in crate::design) struct BlockPlan {
     index: Index,
+    /// The tallest block: the least room in which every block can be whole (ruling L3).
+    tallest: f32,
     /// Physical pixels per point: its comparisons are made on that grid.
     scale: f32,
 }
@@ -281,12 +289,17 @@ impl BlockPlan {
             top += height;
         }
         tops.push(top);
+        let tallest = tops
+            .windows(2)
+            .map(|pair| pair[1] - pair[0])
+            .fold(0.0, f32::max);
         work.builds += 1;
         work.blocks_measured += blocks.len();
         work.bytes_indexed +=
             std::mem::size_of_val(tops.as_slice()) + std::mem::size_of_val(heads.as_slice());
         Self {
             index: Index { tops, heads },
+            tallest,
             scale: env.scale,
         }
     }
@@ -300,6 +313,7 @@ impl BlockPlan {
             tops.push(tops.last().copied().unwrap_or(0.0) + height);
         }
         Self {
+            tallest: blocks.iter().map(|(height, _)| *height).fold(0.0, f32::max),
             index: Index {
                 tops,
                 heads: blocks.iter().map(|(_, head)| *head).collect(),
@@ -310,6 +324,11 @@ impl BlockPlan {
 
     pub(in crate::design) fn len(&self) -> usize {
         self.index.heads.len()
+    }
+
+    /// The tallest block: the least room in which every block can be whole (ruling L3).
+    pub(in crate::design) fn tallest(&self) -> f32 {
+        self.tallest
     }
 
     /// The scale the plan was measured at: its comparisons are on that physical pixel grid.

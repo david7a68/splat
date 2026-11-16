@@ -2769,7 +2769,7 @@ pub(crate) fn changed_on_disk(name: &str) -> String {
 pub(crate) const MOVED_ON_DISK: &str =
     "This entry moved on disk. Your draft is safe until you choose.";
 
-const ENTRY_ROW_HEIGHT: f32 = 44.0;
+const ENTRY_ROW_HEIGHT: f32 = design::ENTRY_ROW_HEIGHT;
 const SEARCH_NAME: &str = "Search the Library";
 const LIBRARY_SEARCH: design::FieldId =
     crate::field_id!("library_search").once(design::Once::PageSearch);
@@ -3813,6 +3813,9 @@ pub struct Library {
     draft_parse: Option<(String, String, ParsedDraft)>,
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
+    /// The entry list's region (layout step 3b) and its rows: whole rows only, one offset writer.
+    entry_region: Option<design::RegionState>,
+    entry_rows: Option<design::memo::Revised<Vec<design::Block>>>,
     list_hidden: bool,
     /// The Library's kept results (Undos and notices that stay), with their footer order: data
     /// and mark change together behind one boundary (`kept`, M-L0.4a).
@@ -6131,23 +6134,38 @@ impl Library {
                     }
                 }
                 ui.spacing_mut().item_spacing.y = 0.0;
-                // The list's own scroll column, which keeps its lane; only the rows in view draw.
-                let mut list = design::ScrollColumn::new((
-                    "entry_list",
-                    self.section.label(),
-                    &query,
-                    scope,
-                ));
-                if std::mem::take(&mut self.reveal_row)
-                    && let Some(row) =
-                        selected.and_then(|selected| matches.iter().position(|i| *i == selected))
-                {
-                    list = list.vertical_scroll_offset(
-                        (row as f32 - 2.0).max(0.0) * ENTRY_ROW_HEIGHT,
-                    );
+                // The list's own region (layout step 3b): whole rows only, drawn in its scroll
+                // column with its lane; only the rows in view draw. It is the one writer of its
+                // offset: the selected entry that arrived by a link is a jump to its row.
+                let rows = self
+                    .entry_rows
+                    .get_or_insert_with(|| design::memo::Revised::new(Vec::new()));
+                if rows.len() != matches.len() {
+                    rows.revise(|rows| {
+                        *rows = vec![design::Block::Row(design::Row::Entry); matches.len()];
+                        design::memo::Changed::Yes
+                    });
                 }
-                list.show_rows(ui, ENTRY_ROW_HEIGHT, matches.len(), |ui, range| {
-                        for row in range {
+                let region = self
+                    .entry_region
+                    .get_or_insert_with(|| design::RegionState::new("library_entries"));
+                let selected_row =
+                    selected.and_then(|selected| matches.iter().position(|i| *i == selected));
+                if std::mem::take(&mut self.reveal_row)
+                    && let Some(row) = selected_row
+                {
+                    region.navigate(design::Navigation::Jump { block: row });
+                }
+                // One Tab stop, a list box: Tab enters at the selected entry; Up and Down move.
+                design::BlockRegion::new(
+                    ("entry_list", self.section.label(), &query, scope),
+                    region,
+                    rows,
+                )
+                .name("Library entries")
+                .selected(selected_row)
+                .show(ui, |ui, row| {
+                        {
                             let i = matches[row];
                             let note = &loaded.notes[i];
                             let line = &subtitles[i];
