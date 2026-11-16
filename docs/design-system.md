@@ -1413,7 +1413,12 @@ deleted.` One fault has one tone: the message above the roster and the rows that
 An unreadable file is an error (the error icon and colour in the row), and a deleted entry is a warning. The
 check that finds the fault records its kind, and the message takes its tone from that kind, never from its
 words. A roster fault names the row as the DM sees it, `Row 2 (Cinder Wolf): …`, never its stored key or a
-stored field name. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
+stored field name. A Start fight that such rows refuse is answered with a `Refusal` (ruling M7) in the
+editor's footer, in place of the check's sentence: `No fight started from Bridge Ambush. The creature of the 2 Cinder
+Wolf rows was deleted. Choose replacements for the 2 Cinder Wolf rows first.` (an unreadable creature's file:
+`… Splat cannot read the file of Cinder Wolf. Fix Cinder Wolf in Library first.`). It shows while the draft is the one
+Start checked and the check holds: an edit hides it, an Undo back to that draft shows it again, and a Save, another
+Start, a reload or another campaign ends it. Creatures of several unreadable files keep the check's sentence. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
 on and retains names and starting values, with one Undo. In a group's editor, Use says `Replaced Unknown creature
 with Ember Cultist.` with `Undo replacement` in the editor's footer, where Remove's result goes; the newest member result owns
 that line. Undo puts back only the creature, so later edits stay; a move or a removal ends it.
