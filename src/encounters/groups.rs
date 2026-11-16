@@ -2718,11 +2718,10 @@ impl Encounters {
             }
             state
         };
-        let save_key = in_plan
-            && state.can_save()
-            && ui
-                .ctx()
-                .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        // The plan's Ctrl+S is the group's, taken before its fields and done after its whole
+        // body took this frame's input, when the group then has changes (the first edit too).
+        // On Encounters the page takes it (`save_shortcut`).
+        let save_key = in_plan && super::take_save_key(ui.ctx());
         // R38: the back line on a line of its own above the name row. The group's changes hold
         // it first, then an unsaved creature.
         let head = design::EditorHead::new(design::EditorKind::Group { in_plan }, &*self);
@@ -2946,89 +2945,100 @@ impl Encounters {
             self.discard_group_draft(active);
             return;
         }
-        if save || save_key {
-            self.save_group_draft(ui.ctx(), active, campaigns.modules());
-        }
-        self.refresh_validation_error(true, super::edit_input(ui.ctx()));
-        // FI1's family: the editor's results with a live Undo (the discard, the newest member
-        // result), then Save's reason, then the file's warnings sit in one footer pinned below
-        // the members and the search, so none of them moves a member or a field.
-        // The footer's messages are made before the body: the member result, the discard, the
-        // copies' separations, newest first by their stores, then the reasons and warnings.
-        self.record_member_results();
-        let kinds = self.kept_results(false);
+        // The group's Save (its button above, the plan's or the page's Ctrl+S) is done after the
+        // WHOLE body (the members, the notes) took this frame's input, in the pane's `then`, and
+        // the footer's lines are read after it (L1c, review of PR 499). A key saves only a group
+        // that has changes then; the button is blocked without them.
+        let key = save_key || std::mem::take(&mut self.save_key);
         let frame = design::outcome::PaneFrame::new(ui);
         let footer_id = self.group_draft.as_ref().map(|draft| draft.id());
-        let mut messages = design::outcome::Messages::new(
+        let messages = design::outcome::Messages::new(
             &frame,
             ("group_editor_footer", footer_id),
             ui.available_width(),
         );
-        if let Some(root) = self.active.as_ref().map(|active| active.path.clone())
-            && let Some(draft) = self.group_draft.as_ref()
-            && let Some(shown) = self.member_results.get(&super::MemberOwner {
-                root,
-                draft: draft.results_key(),
-            })
-        {
-            messages.kept(shown.outcome(&frame, super::MemberMark::outcome));
-        }
-        for line in self.kept_lines(&frame, &kinds) {
-            messages.kept(line);
-        }
-        for line in self.separation_lines(&frame, &active.path) {
-            messages.kept(line);
-        }
-        // Save's reason: the last refusal, or the check's fault when the editor shows it at no
-        // other place (a member row or the reason beside Save already says theirs).
-        // R41: a refusal's words take the refusal's tone; a failed write is an error.
-        let live = refusal
-            .as_ref()
-            .and_then(|refusal| refusal.footer().map(|words| (words, refusal.diagnosis())));
-        let reason = match (self.error.clone(), live) {
-            (Some(error), Some((words, found))) if error == words => {
-                Some(super::EncounterFault::refusal(error, found))
-            }
-            (Some(error), _) => Some(super::EncounterFault::Failed(error)),
-            (None, Some((words, found))) => {
-                Some(super::EncounterFault::refusal(words.to_owned(), found))
-            }
-            (None, None) => None,
-        };
-        if let Some(fault) = reason {
-            messages.outcome(design::outcome::FaultMessage::new(&fault));
-        }
-        if let Some(error) = self.separation_failure() {
-            messages.outcome(design::outcome::FaultMessage::new(
-                &super::EncounterFault::SeparationFailed(error),
-            ));
-        }
-        for warning in file_warnings {
-            messages.outcome(design::outcome::FaultMessage::new(
-                &super::EncounterFault::FileWarning(warning),
-            ));
-        }
         // FF8: a press of a copied note's repair in the search, for the page's store.
         let separated = std::cell::Cell::new(None);
         // G122: whether the body drew the refusal's own place whole on screen.
         let gone_shown = std::cell::Cell::new(false);
+        let (separated_ref, gone_ref) = (&separated, &gone_shown);
+        let place = refusal.as_ref().map(Refusal::place);
+        let ctx = ui.ctx().clone();
+        let this = &mut *self;
         // The members and Add creatures are columns, each with its own scroll (in the narrow
         // layout, one of them under its tab): the body fills its room above the footer.
-        let paned = messages.pane(
+        let paned = messages.pane_then(
             ui,
             design::pane::Body::Fills(design::pane::Fills::because(
                 design::pane::FillsReason::Columns,
             )),
-            |ui| {
-                gone_shown.set(self.group_editor_body(
-                    ui,
-                    compact,
-                    name_right,
-                    &separated,
-                    refusal.as_ref().map(Refusal::place),
-                ));
+            move |ui| {
+                gone_ref.set(this.group_editor_body(ui, compact, name_right, separated_ref, place));
+                this
+            },
+            |this, messages| {
+                let keyed = key && this.group_draft.as_ref().is_some_and(GroupDraft::dirty);
+                if save || keyed {
+                    this.save_group_draft(&ctx, active, campaigns.modules());
+                }
+                this.refresh_validation_error(true, super::edit_input(&ctx));
+                // FI1's family: the editor's results with a live Undo (the discard, the newest
+                // member result), then Save's reason, then the file's warnings sit in one footer
+                // pinned below the members and the search, so none of them moves a member or a
+                // field: the member result, the discard, the copies' separations, newest first by
+                // their stores, then the reasons and warnings.
+                this.record_member_results();
+                let kinds = this.kept_results(false);
+                if let Some(root) = this.active.as_ref().map(|active| active.path.clone())
+                    && let Some(draft) = this.group_draft.as_ref()
+                    && let Some(shown) = this.member_results.get(&super::MemberOwner {
+                        root,
+                        draft: draft.results_key(),
+                    })
+                {
+                    messages.kept(shown.outcome(&frame, super::MemberMark::outcome));
+                }
+                for line in this.kept_lines(&frame, &kinds) {
+                    messages.kept(line);
+                }
+                for line in this.separation_lines(&frame, &active.path) {
+                    messages.kept(line);
+                }
+                // Save's reason: the last refusal, or the check's fault when the editor shows it
+                // at no other place (a member row or the reason beside Save already says
+                // theirs). R41: a refusal's words take the refusal's tone; a failed write is an
+                // error.
+                let live = refusal
+                    .as_ref()
+                    .and_then(|refusal| refusal.footer().map(|words| (words, refusal.diagnosis())));
+                let reason = match (this.error.clone(), live) {
+                    (Some(error), Some((words, found))) if error == words => {
+                        Some(super::EncounterFault::refusal(error, found))
+                    }
+                    (Some(error), _) => Some(super::EncounterFault::Failed(error)),
+                    (None, Some((words, found))) => {
+                        Some(super::EncounterFault::refusal(words.to_owned(), found))
+                    }
+                    (None, None) => None,
+                };
+                if let Some(fault) = reason {
+                    messages.outcome(design::outcome::FaultMessage::new(&fault));
+                }
+                if let Some(error) = this.separation_failure() {
+                    messages.outcome(design::outcome::FaultMessage::new(
+                        &super::EncounterFault::SeparationFailed(error),
+                    ));
+                }
+                for warning in file_warnings {
+                    messages.outcome(design::outcome::FaultMessage::new(
+                        &super::EncounterFault::FileWarning(warning),
+                    ));
+                }
+                this
             },
         );
+        let pressed = paned.pressed;
+        let this = paned.body;
         if let (Some(place), Some((tone, words))) = (gone_place, elsewhere.as_ref()) {
             let mut beside = ui.new_child(
                 egui::UiBuilder::new()
@@ -3043,16 +3053,16 @@ impl Encounters {
                 design::small_message(&mut beside, *tone, words);
             }
         }
-        self.record_separation(separated.into_inner());
-        if let Some(press) = paned.pressed {
+        this.record_separation(separated.into_inner());
+        if let Some(press) = pressed {
             match (press.id, press.ticket) {
                 (super::FooterPress::Undo, Some(ticket)) => {
-                    self.undo_by_ticket(ticket, Some((active, campaigns.modules())));
+                    this.undo_by_ticket(ticket, Some((active, campaigns.modules())));
                 }
                 (super::FooterPress::UndoSeparation, Some(ticket)) => {
-                    self.undo_separation(ui.ctx(), ticket, active);
+                    this.undo_separation(ui.ctx(), ticket, active);
                 }
-                (super::FooterPress::UndoMember, Some(ticket)) => self.undo_member(ticket),
+                (super::FooterPress::UndoMember, Some(ticket)) => this.undo_member(ticket),
                 _ => {}
             }
         }

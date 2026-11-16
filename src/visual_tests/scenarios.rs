@@ -6496,6 +6496,26 @@ pub mod settings {
             format!("{UNLINKED_CAMPAIGN} row y after Undo discard: {undone:?}"),
         );
         d.click("Discard");
+        // Migration-32 L2c (L1c, `pane_content_then`): the footer's lines are read after the
+        // form's acts. In the first frame of an edit after Discard, drawn in one pass, and in the
+        // next, the discard's result and its Undo are gone (the edit ended them).
+        d.expect("Campaign details draft discarded.");
+        d.click_field(EDIT_FORM);
+        let edited = d.first_frame_one_pass([egui::Event::Text("x".into())], |d| {
+            (
+                d.painted_rect_in("Campaign details draft discarded.", egui::Rect::EVERYTHING)
+                    .is_some(),
+                d.has("Undo discard of Campaign details"),
+            )
+        });
+        d.observe(
+            "m32-L2c-details-edit-first-frame",
+            edited == ((false, false), (false, false)),
+            format!(
+                "The first frame of an edit after Discard and the next (one pass each): (result painted, Undo offered) = {edited:?}"
+            ),
+        );
+        d.click("Discard");
         d.click(CANCEL);
         d.begin_task();
         d.app_mut().settings.simulate(Account::Connected);
@@ -24004,7 +24024,47 @@ pub mod session_plan_groups {
             d.expect("Save group");
             d.current_page() == "Session"
         });
-        d.click("Save group");
+        // Review of PR 499 (P1): the plan's Ctrl+S saves the group after its WHOLE body took the
+        // frame's input. Words typed into the group's notes and Ctrl+S in ONE input frame (one
+        // pass): the saved file holds them. (The DM's Save act here: the focus is an aside.)
+        // At 1200, where the notes stand beside the search (at 960 they are on the other tab).
+        let ctrl = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        d.act_at_size(DEFAULT, |d| {
+            d.aside(|d| d.click_field("Group notes for Ash Pack"));
+            let _ = d.first_frame_one_pass(
+                [
+                    egui::Event::Text("Dusk.".into()),
+                    egui::Event::Key {
+                        key: Key::S,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: ctrl,
+                    },
+                ],
+                |_| (),
+            );
+        });
+        let ash = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join("Encounter Groups/Ash Pack.md");
+        let saved = std::fs::read_to_string(&ash).unwrap_or_default();
+        d.observe(
+            "m32-L2c-group-notes-ctrl-s-one-frame",
+            saved.contains("Dusk."),
+            format!(
+                "Notes and Ctrl+S in one frame: the saved group holds them: {}",
+                saved.contains("Dusk.")
+            ),
+        );
         d.expect("Edit group Ash Pack");
         d.observe(
             "iter-26-B-FF2-plan",
@@ -27142,8 +27202,35 @@ pub mod session_plan {
             d.has("Save creature") && d.has_containing("Hit points"),
             "A creature that names itself copies, swaps in and opens beside the roster",
         );
-        d.type_text("90");
-        d.press_ctrl(Key::S);
+        // Review of PR 499 (P1): the page's Ctrl+S saves the creature after its fields took the
+        // frame's input. The last digit and Ctrl+S in ONE input frame (one pass): the creature
+        // saves with the digit and closes; the next frame shows the roster with HP 90.
+        d.type_text("9");
+        let ctrl = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        let saved = d.first_frame_one_pass(
+            [
+                egui::Event::Text("0".into()),
+                egui::Event::Key {
+                    key: Key::S,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: ctrl,
+                },
+            ],
+            |d| (d.has(FIND_CREATURE), d.has_containing("HP 90")),
+        );
+        d.observe(
+            "m32-L2c-creature-ctrl-s-one-frame",
+            saved.1 == (true, true),
+            format!(
+                "The frame of `0` + Ctrl+S and the next (one pass each): (search back, roster HP 90) = {saved:?}"
+            ),
+        );
         d.expect(FIND_CREATURE);
         d.goal_within("T12.0", "make a creature your own", 7);
         d.observe(

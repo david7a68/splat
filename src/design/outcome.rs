@@ -2740,6 +2740,38 @@ impl<'f, A: 'static> Messages<'f, A> {
         }
     }
 
+    /// `pane_then` with a `Body::Content` scroll column that behaves as `scroll` says
+    /// (`Footer::pane_content_then`).
+    pub fn pane_content_then<R, T>(
+        self,
+        ui: &mut Ui,
+        scroll: super::pane::ContentScroll,
+        add: impl FnOnce(&mut Ui) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> Paned<T, A> {
+        let (id, width) = (self.id, self.width);
+        let mut messages = self;
+        let mut sink = None;
+        let empty: TypedFooter<A> = TypedFooter {
+            lines: Vec::new(),
+            sink: PressSink(std::rc::Rc::default()),
+            retained: None,
+            plan: None,
+        };
+        let footer = Footer::typed(id, width, Box::new(empty));
+        let body = footer.pane_content_then(ui, scroll, add, |inner, footer| {
+            let out = then(inner, &mut messages);
+            let (lines, press) = messages.into_footer();
+            footer.take_typed(lines);
+            sink = Some(press);
+            out
+        });
+        Paned {
+            body,
+            pressed: sink.and_then(|sink| sink.0.borrow_mut().take()),
+        }
+    }
+
     /// `pane` with a `Body::Content` scroll column that behaves as `scroll` says (opens at the
     /// top, holds a pressed control in place: `pane::ContentScroll`).
     pub fn pane_content<R>(
