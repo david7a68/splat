@@ -767,6 +767,9 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
 }
 
 struct Draft {
+    /// M0205: after `Done` closes a roster row's changes, the least scroll that shows that row
+    /// whole in the roster's column (`design::reveal`): owned by this draft, it ends with it.
+    roster_reveal: design::reveal::Reveal,
     /// The words typed in a field that stores a cleaned value, while it has focus
     /// (`groups::TypedWords`): they end with the draft.
     typed: groups::TypedWords,
@@ -830,6 +833,7 @@ impl Draft {
         Self {
             typed: groups::TypedWords::default(),
             recovery: Default::default(),
+            roster_reveal: Default::default(),
             id,
             path: format!("Encounters/{id}.md"),
             origin: design::save_row::DraftOrigin::New,
@@ -884,6 +888,7 @@ impl Draft {
         Ok(Self {
             typed: groups::TypedWords::default(),
             recovery: Default::default(),
+            roster_reveal: Default::default(),
             id: entry.id,
             path: path.into(),
             origin: design::save_row::DraftOrigin::Saved,
@@ -7952,27 +7957,29 @@ impl Encounters {
         ui.scope_builder(scope, |ui| {
             // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family):
             // the column keeps it.
-            let shown = design::ScrollColumn::new("encounter_editor").show(ui, |ui| {
-                egui::Frame::new()
-                    .inner_margin(egui::Margin {
-                        left: design::S as i8,
-                        ..egui::Margin::ZERO
-                    })
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width().min(design::LIST_MEASURE));
-                        Self::roster_column(
-                            ui,
-                            draft,
-                            snapshot,
-                            focus_search,
-                            expanded,
-                            linked_party,
-                            make_yours,
-                            heading,
-                        )
-                    })
-                    .inner
-            });
+            let shown = design::ScrollColumn::new("encounter_editor")
+                .hosts_reveals()
+                .show(ui, |ui| {
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin {
+                            left: design::S as i8,
+                            ..egui::Margin::ZERO
+                        })
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                            Self::roster_column(
+                                ui,
+                                draft,
+                                snapshot,
+                                focus_search,
+                                expanded,
+                                linked_party,
+                                make_yours,
+                                heading,
+                            )
+                        })
+                        .inner
+                });
             // Test builds keep the column's scroll id by its draft, for the scroll's tests.
             #[cfg(test)]
             ui.data_mut(|data| data.insert_temp(roster_scroll_key(draft.id), shown.id));
@@ -8456,6 +8463,9 @@ impl Encounters {
                     });
                 });
                 let member_row = member_row.response.rect;
+                draft
+                    .roster_reveal
+                    .mark(ui, draft_id, ("roster_row", &slot.key), member_row);
                 if is_open && missing && unreadable.is_none() {
                     if let Some((creature, all)) =
                         replace_missing_creature(ui, snapshot, missing_counts[i], &name)
@@ -8540,7 +8550,7 @@ impl Encounters {
                         },
                     );
                     if let Some(entry) = definition {
-                        let done = groups::overrides_form(
+                        let end = groups::overrides_form(
                             ui,
                             &format!("{}:{}", draft.id, slot.key),
                             &mut slot.overrides,
@@ -8548,11 +8558,15 @@ impl Encounters {
                             &slot.side,
                             Some(&sides),
                             &mut draft.typed,
-                        )
-                        .done;
-                        if done {
+                        );
+                        if end.done {
                             *expanded = None;
-                            ui.scroll_to_rect(member_row, Some(egui::Align::Min));
+                            // The row comes whole into view, by its column's one reveal.
+                            if let Some(act) = end.done_act {
+                                draft
+                                    .roster_reveal
+                                    .ask(act, draft_id, ("roster_row", &slot.key));
+                            }
                         }
                     }
                 }
@@ -10102,6 +10116,84 @@ mod tests {
         harness.run_steps(2);
         assert_eq!(drafts.borrow()[1].name, "Beta", "B keeps its own text");
         assert_eq!(drafts.borrow()[0].name, "Alpha12", "A is unchanged");
+    }
+
+    /// M0205: `Done` in a roster row's changes brings that row whole into view, through the
+    /// roster column's one reveal (`design::reveal`), when the DM scrolled its top out of view.
+    #[test]
+    fn roster_done_brings_its_row_whole_into_view() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let wolf = creature(dir.path(), "Wolf", false);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut draft = Draft::new();
+        for _ in 0..12 {
+            draft.add(wolf, false);
+        }
+        let last = draft.setup.roster.last().unwrap().key.clone();
+        let id = draft.id;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build_state(
+                move |ctx, (draft, expanded): &mut (Draft, Option<String>)| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        Encounters::roster_pane(
+                            ui,
+                            draft,
+                            &snapshot,
+                            &mut false,
+                            expanded,
+                            None,
+                            &mut None,
+                            Some(None),
+                        );
+                    });
+                },
+                (draft, Some(last)),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let scroll = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(id)))
+            .expect("the roster column's scroll id");
+        let row = |harness: &egui_kittest::Harness<'_, (Draft, Option<String>)>| {
+            harness
+                .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                    node.value()
+                        .or(node.label())
+                        .is_some_and(|words| words.starts_with("12. Wolf"))
+                }))
+                .map(|node| node.rect())
+                .next()
+        };
+        // The column's top: where its first line (the roster heading) starts before any scroll.
+        let view_top = harness
+            .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                node.value()
+                    .or(node.label())
+                    .is_some_and(|words| words.to_uppercase().starts_with("ROSTER"))
+            }))
+            .map(|node| node.rect().top())
+            .fold(f32::INFINITY, f32::min);
+        // Scroll so the open row's top is cut by the column's top, its Done still in view.
+        let first = row(&harness).expect("the open row");
+        let mut state = egui::scroll_area::State::load(&harness.ctx, scroll).unwrap();
+        state.offset.y += first.top() - view_top + 4.0;
+        state.store(&harness.ctx, scroll);
+        harness.run_steps(2);
+        let cut = row(&harness).is_none_or(|rect| rect.top() < view_top)
+            && harness.query_by_label("Done with changes").is_some();
+        harness.get_by_label("Done with changes").click();
+        harness.run_steps(8);
+        let shown = row(&harness);
+        assert!(
+            cut && harness.state().1.is_none()
+                && shown.is_some_and(|rect| rect.top() >= view_top - 0.5),
+            "Done closed the form ({:?}) and brought row 12 whole into view: cut before {cut}, row {shown:?}, view top {view_top}",
+            harness.state().1
+        );
     }
 
     #[test]
