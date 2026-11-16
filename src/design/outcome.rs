@@ -1966,12 +1966,63 @@ impl<A> From<FaultMessage<A>> for Outcome<A> {
 /// |---|---|
 /// | `Done`, `Said` | success |
 /// | `Notice` (with its Undo) | info |
+/// | `Offer` (its choices, no Undo) | info |
 /// | `Fault` (with its Undo) | from its `Severity` |
 pub enum KeptOutcome<A> {
     Done(Done<A>),
     Said(Said<A>),
     Notice(Notice<A>, Undo<A>),
+    Offer(Offer<A>),
     Fault(FaultMessage<A>, Undo<A>),
+}
+
+/// A kept offer: something the DM may do now about a kept entry, in the info tone, with its
+/// choice and no Undo (Library's link offer: `Ash is not linked to this campaign.` with `Link
+/// to this campaign`). It is a kept line: `Shown::outcome` makes it from a store's view, so its
+/// choices' presses come back with that entry's [`Ticket`](super::results::Ticket) and the
+/// store acts by it, and a replaced or ended entry's press reaches nothing. It is never a
+/// success-tone `Said`: nothing was done yet. It has at least one choice, and no way to hold an
+/// Undo.
+///
+/// ```
+/// use splat::outcome::{Choice, KeptOutcome, MessageChoice, Offer};
+/// let offer: KeptOutcome<u8> = Offer::new(
+///     splat::sentence!("Ash is not linked to this campaign."),
+///     Choice::new(MessageChoice::Choice("Link to this campaign"), 1),
+/// )
+/// .into();
+/// ```
+/// ```compile_fail
+/// use splat::outcome::{Offer, UndoStep, Verb};
+/// let _ = Offer::<u8>::new(splat::sentence!("Ash is not linked."), todo!())
+///     .undo(UndoStep::verb(Verb::Change).pressed_as(1));
+/// ```
+#[must_use = "give it to `Shown::outcome`"]
+pub struct Offer<A> {
+    words: Sentence,
+    choices: Vec<Choice<A>>,
+}
+
+impl<A> Offer<A> {
+    /// The offer's words and its first choice.
+    pub fn new(words: Sentence, choice: Choice<A>) -> Self {
+        Self {
+            words,
+            choices: vec![choice],
+        }
+    }
+
+    /// Another choice, after the ones before it.
+    pub fn choice(mut self, choice: Choice<A>) -> Self {
+        self.choices.push(choice);
+        self
+    }
+}
+
+impl<A> From<Offer<A>> for KeptOutcome<A> {
+    fn from(offer: Offer<A>) -> Self {
+        Self::Offer(offer)
+    }
 }
 
 impl<A> From<Done<A>> for KeptOutcome<A> {
@@ -2212,6 +2263,7 @@ impl<A> KeptOutcome<A> {
                 Typed::new(notice.tone.tone(), notice.words, Some(undo), notice.choices)
                     .with_file(notice.file)
             }
+            Self::Offer(offer) => Typed::new(Tone::Info, offer.words, None, offer.choices),
             Self::Fault(fault, undo) => {
                 Typed::new(fault.tone, fault.words, Some(undo), fault.choices).with_file(fault.file)
             }
@@ -6088,6 +6140,9 @@ mod tests {
             /// `Day 2 added.` with `Undo add` (no object), and on the newer line `Scene added.`
             /// with `Undo add scene`: one verb, with and without an object (the Session plan).
             MixedAdd,
+            /// `Ash is not linked to this campaign.` with its choice `Link to this campaign`
+            /// and no Undo: a kept offer (Library's link offer).
+            Offer,
         }
         /// Settings' page lock (a round 26 review repair): long enough to wrap in a narrow pane.
         pub(super) const LOCK: Sentence =
@@ -6227,6 +6282,16 @@ mod tests {
                                     Notice::new(crate::sentence!("Scene added.")),
                                     UndoStep::of(Verb::Add, "scene").pressed_as(Act::Undo),
                                 );
+                            }
+                            ("older", OlderLine::Offer) => {
+                                return Offer::new(
+                                    crate::sentence!("Ash is not linked to this campaign."),
+                                    Choice::new(
+                                        MessageChoice::Choice("Link to this campaign"),
+                                        Act::Register,
+                                    ),
+                                )
+                                .into();
                             }
                             (_, OlderLine::Said) | ("newer" | "third", _) => {}
                             ("older", OlderLine::Discard(name)) => {
@@ -6529,6 +6594,38 @@ mod tests {
         let mut h = harness(two());
         h.get_by_label("Register as a new campaign").click();
         h.run_steps(2);
+        assert_eq!((h.state().registered, h.state().acted.len()), (1, 0));
+        // A kept offer (Library's link offer): its words and choice in the info tone, no Undo,
+        // after the result whose Undo is live; its press comes back with its entry's ticket.
+        let mut app = two();
+        app.older_line = OlderLine::Offer;
+        let mut h = harness(app);
+        const OFFER: &str = "Ash is not linked to this campaign.";
+        assert!(
+            top(&h, "Folder saved.") < top(&h, OFFER),
+            "after the live Undo"
+        );
+        let offer = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, OFFER)
+            .rect();
+        let tones: Vec<Tone> = message_rects(&h.ctx)
+            .into_iter()
+            .filter(|(rect, _, _)| rect.contains(offer.center()))
+            .map(|(_, _, tone)| tone)
+            .collect();
+        assert_eq!(tones, [Tone::Info], "the offer is in the info tone");
+        assert!(
+            h.query_by_label("Undo change older").is_none(),
+            "an offer has no Undo"
+        );
+        let older = order(h.state(), "older");
+        h.get_by_label("Link to this campaign").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().presses,
+            [(0, Act::Register, older)],
+            "the offer's press comes back with its entry's ticket"
+        );
         assert_eq!((h.state().registered, h.state().acted.len()), (1, 0));
     }
 
