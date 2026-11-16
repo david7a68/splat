@@ -931,6 +931,23 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/campaigns.rs", "save_form", &[Ban::Results]),
+        // The design system's pane tests with closure lines (the `#[cfg(test)]` `Footer::result`,
+        // `legacy_reason`) and a footer placed by hand (migration-32 L2c: no app code can).
+        (
+            "src/design/components.rs",
+            "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
+        ),
+        (
+            "src/design/components.rs",
+            "iter27_a_footer_results_go_newest_first_by_their_action",
+            &[Ban::Results, Ban::Footer],
+        ),
+        (
+            "src/design/components.rs",
+            "iter27_a_the_footer_follows_a_short_body",
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
+        ),
         (
             "src/design/gallery.rs",
             "components",
@@ -1336,23 +1353,9 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         // Migration-32 L2c: the design system's own pane tests draw closure lines (the
-        // `#[cfg(test)]` `Footer::result`, `legacy_reason`, `legacy_notice`) to place a footer of a
-        // known height; every app footer is typed.
-        (
-            "src/design/components.rs",
-            "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
-        ),
-        (
-            "src/design/components.rs",
-            "iter27_a_footer_results_go_newest_first_by_their_action",
-            &[Ban::Results, Ban::Footer],
-        ),
-        (
-            "src/design/components.rs",
-            "iter27_a_the_footer_follows_a_short_body",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
-        ),
+        // `#[cfg(test)]` `legacy_reason`, `legacy_notice`) to place a footer of a known height;
+        // every app footer is typed. Its other three such tests, which also call
+        // `Footer::result` and `show_by_hand`, stay in `STAGED_ALLOWS`.
         (
             "src/design/components.rs",
             "iter28_p_the_pane_places_its_footer_for_every_body",
