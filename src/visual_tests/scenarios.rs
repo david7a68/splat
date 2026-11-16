@@ -27141,8 +27141,35 @@ pub mod session_plan {
             d.has("Save creature") && d.has_containing("Hit points"),
             "A creature that names itself copies, swaps in and opens beside the roster",
         );
-        d.type_text("90");
-        d.press_ctrl(Key::S);
+        // Review of PR 499 (P1): the page's Ctrl+S saves the creature after its fields took the
+        // frame's input. The last digit and Ctrl+S in ONE input frame (one pass): the creature
+        // saves with the digit and closes; the next frame shows the roster with HP 90.
+        d.type_text("9");
+        let ctrl = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        let saved = d.first_frame_one_pass(
+            [
+                egui::Event::Text("0".into()),
+                egui::Event::Key {
+                    key: Key::S,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: ctrl,
+                },
+            ],
+            |d| (d.has(FIND_CREATURE), d.has_containing("HP 90")),
+        );
+        d.observe(
+            "m32-L2c-creature-ctrl-s-one-frame",
+            saved.1 == (true, true),
+            format!(
+                "The frame of `0` + Ctrl+S and the next (one pass each): (search back, roster HP 90) = {saved:?}"
+            ),
+        );
         d.expect(FIND_CREATURE);
         d.goal_within("T12.0", "make a creature your own", 7);
         d.observe(

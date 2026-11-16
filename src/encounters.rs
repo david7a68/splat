@@ -1425,6 +1425,11 @@ impl CreatureEditor {
         Ok(())
     }
 }
+/// The page's Ctrl+S, taken from this frame's input (`Encounters::save_shortcut`).
+fn take_save_key(ctx: &egui::Context) -> bool {
+    ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
+}
+
 struct Creature {
     unavailable: Option<String>,
     id: Uuid,
@@ -3436,6 +3441,10 @@ pub struct Encounters {
     pub peek: Option<Uuid>,
     focus_name: bool,
     focus_search: bool,
+    /// Ctrl+S taken this frame by `save_shortcut`. The save is done after the fields it writes
+    /// have taken this frame's input (the creature's pane, the editor's `then`, the group
+    /// editor), so a key typed in the frame of Ctrl+S is saved too. `show_page` ends it.
+    save_key: bool,
     editor_pane: EditorPane,
     expanded: Option<String>,
     group_draft: Option<GroupDraft>,
@@ -4736,25 +4745,31 @@ impl Encounters {
         self.member_results
             .end_unreachable(|mark| mark.draft.alive());
     }
-    /// Ctrl+S on this page saves the open encounter.
+    /// Ctrl+S on this page saves the open creature while it has changes, else the open
+    /// encounter or group. The key is taken here, before the page draws; the save is done
+    /// after the fields it writes have taken this frame's input (`save_key`): the creature's
+    /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
+    /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
     pub fn save_shortcut(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
-        if self.creature.as_ref().is_some_and(CreatureEditor::dirty)
-            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
-            && let Some(active) = campaigns.active_campaign()
+        if (self.creature.as_ref().is_some_and(CreatureEditor::dirty) || self.draft_dirty())
+            && campaigns.active_campaign().is_some()
         {
-            self.save_creature(&active, campaigns.modules());
+            self.save_key |= take_save_key(ctx);
+        }
+    }
+    /// The page's Ctrl+S that no pane took after its fields (the creature's pane was not drawn
+    /// this frame, a narrow window's other tab): saved now, as nothing of it was drawn.
+    fn save_by_key(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
+        if !std::mem::take(&mut self.save_key) {
             return;
         }
-        if self.draft_dirty()
-            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
-            && let Some(active) = campaigns.active_campaign()
-        {
-            if self.group_draft.is_some() {
-                self.save_group_draft(ctx, &active, campaigns.modules());
-            } else if !self.save_refused {
-                // FC1: blocked as Save is, while the editor says Invalid.
-                self.save_draft(ctx, &active, campaigns.modules());
-            }
+        if self.creature.as_ref().is_some_and(CreatureEditor::dirty) {
+            self.save_creature(active, modules);
+        } else if self.group_draft.is_some() {
+            self.save_group_draft(ctx, active, modules);
+        } else if self.draft_dirty() && !self.save_refused {
+            // FC1: blocked as Save is, while the editor says Invalid.
+            self.save_draft(ctx, active, modules);
         }
     }
     #[allow(
@@ -4967,6 +4982,7 @@ impl Encounters {
         ui: &mut egui::Ui,
         editor: &mut CreatureEditor,
         root: &std::path::Path,
+        save_key: &mut bool,
     ) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
             if let Some(keep) = editor.recovery.show(
@@ -5117,7 +5133,13 @@ impl Encounters {
                 editor
             },
             |editor, messages| {
-                let saved = save
+                // The page's Ctrl+S is this creature's while it has changes, after its fields
+                // took this frame's input (`save_shortcut`).
+                let keyed = *save_key && editor.dirty();
+                if keyed {
+                    *save_key = false;
+                }
+                let saved = (save || keyed)
                     && match editor.save(root) {
                         Ok(()) => true,
                         Err(e) => {
@@ -5391,6 +5413,7 @@ impl Encounters {
     ) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
+            self.save_key = false;
             return;
         };
         if self
@@ -5403,6 +5426,7 @@ impl Encounters {
                 Tone::Warning,
                 "Save or discard the previous campaign’s encounter first.",
             );
+            self.save_key = false;
             return;
         }
         if self.draft_dirty() {
@@ -5424,6 +5448,8 @@ impl Encounters {
         } else {
             self.list_view(ui, &active, campaigns, story);
         }
+        // A Ctrl+S that no view took this frame ends with it.
+        self.save_key = false;
     }
 
     fn start_blocked(&self) -> Option<&'static str> {
@@ -7071,6 +7097,9 @@ impl Encounters {
                 this
             },
             |this, messages| {
+                // Ctrl+S that the creature's pane did not take: the encounter (or a creature whose
+                // pane was not drawn), after the fields took this frame's input.
+                this.save_by_key(&ctx, active, campaigns.modules());
                 // A creature saved or made yours in the panes reads the campaign's creatures
                 // again: then the unread rows are read again, with their names.
                 let unread = if this.snapshot.as_ref().map(|snapshot| snapshot.revision) == read {
@@ -7161,7 +7190,8 @@ impl Encounters {
                 EditorPane::Add => {
                     match &mut self.creature {
                         Some(editor) => {
-                            creature_step = Self::creature_pane(ui, editor, &active.path);
+                            creature_step =
+                                Self::creature_pane(ui, editor, &active.path, &mut self.save_key);
                         }
                         None => Self::add_pane(
                             ui,
@@ -7197,6 +7227,7 @@ impl Encounters {
                     .max(ui.available_width() - ROSTER_MAX_WIDTH)
                     .min(ADD_PANE_MAX_WIDTH);
                 let creature = &mut self.creature;
+                let save_key = &mut self.save_key;
                 design::Column::right(
                     ADD_PANE,
                     width,
@@ -7217,7 +7248,7 @@ impl Encounters {
                     });
                     match creature {
                         Some(editor) => {
-                            creature_step = Self::creature_pane(ui, editor, &active.path);
+                            creature_step = Self::creature_pane(ui, editor, &active.path, save_key);
                         }
                         None => Self::add_pane(
                             ui,
@@ -9880,12 +9911,15 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(480.0, 600.0))
             .build_state(
-                move |ctx, editor: &mut CreatureEditor| {
+                move |ctx, (editor, key): &mut (CreatureEditor, bool)| {
+                    // The page's Ctrl+S, taken before the pane draws (`save_shortcut`).
+                    *key |= take_save_key(ctx);
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        Encounters::creature_pane(ui, editor, &root);
+                        Encounters::creature_pane(ui, editor, &root, key);
                     });
+                    *key = false;
                 },
-                editor,
+                (editor, false),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -9915,7 +9949,7 @@ mod tests {
         // Migration-32 L2c: a refused Save's reason is a typed fault in the pane's footer, at
         // the pane's bottom: the fields keep their place, and an unchanged frame makes no plan,
         // sorts, names, fits or lays out nothing.
-        let name_top = |harness: &egui_kittest::Harness<'_, CreatureEditor>| {
+        let name_top = |harness: &egui_kittest::Harness<'_, (CreatureEditor, bool)>| {
             harness
                 .query_all_by_label("Name")
                 .map(|node| node.rect().top())
@@ -9923,7 +9957,7 @@ mod tests {
         };
         let before = name_top(&harness);
         const REFUSED: &str = "Splat could not write Wolf.md.";
-        harness.state_mut().error = Some(REFUSED.to_owned());
+        harness.state_mut().0.error = Some(REFUSED.to_owned());
         harness.run_steps(4);
         let reason = harness
             .query_all_by_role_and_label(egui::accesskit::Role::Label, REFUSED)
@@ -9961,20 +9995,61 @@ mod tests {
         // Migration-32 L2c (L1c, `pane_then`): Save is done after the fields, and the footer
         // reads its reason after it. A Save that cannot write (hit points that are not a
         // number), pressed in a frame drawn in ONE pass, shows its reason in that frame.
-        harness.state_mut().error = None;
-        harness.state_mut().fields.hp = "lots".into();
+        harness.state_mut().0.error = None;
+        harness.state_mut().0.fields.hp = "lots".into();
         harness.run_steps(2);
         harness
             .ctx
             .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
         harness.get_by_label("Save creature").click_accesskit();
         harness.step();
-        let error = harness.state().error.clone().expect("the save was refused");
+        let error = harness
+            .state()
+            .0
+            .error
+            .clone()
+            .expect("the save was refused");
         let painted = harness.output().shapes.iter().any(|shape| {
             matches!(&shape.shape, egui::Shape::Text(text)
                 if text.galley.job.text.contains(error.trim_end_matches('.')))
         });
         assert!(painted, "the frame of the press shows its reason: {error}");
+        // Review of PR 499 (P1): Ctrl+S is done after the fields too. A digit typed into hit
+        // points and Ctrl+S in ONE input frame (one pass), while the save cannot write (no
+        // name): the save runs after the digit, says why in that frame, and the typed text
+        // stays.
+        harness.state_mut().0.error = None;
+        harness.state_mut().0.fields.name = String::new();
+        harness.state_mut().0.fields.hp = "12".into();
+        harness.run_steps(2);
+        harness
+            .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Hit points")
+            .next()
+            .expect("the hit points field")
+            .focus();
+        harness.run_steps(2);
+        harness.event(egui::Event::Text("3".into()));
+        harness.event(egui::Event::Key {
+            key: egui::Key::S,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        });
+        harness.step();
+        let typed = harness.state().0.fields.hp.clone();
+        let error = harness.state().0.error.clone();
+        let painted = harness.output().shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Text(text)
+                if text.galley.job.text.contains("Enter a name"))
+        });
+        assert!(
+            typed.len() == 3
+                && typed.contains('3')
+                && error.as_deref() == Some("Enter a name.")
+                && painted,
+            "Ctrl+S with the digit: the field keeps {typed:?}, the save says {error:?} (painted {painted})"
+        );
     }
 
     #[test]

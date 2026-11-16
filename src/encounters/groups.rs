@@ -2946,7 +2946,9 @@ impl Encounters {
             self.discard_group_draft(active);
             return;
         }
-        if save || save_key {
+        // The page's Ctrl+S (`save_shortcut`), after the group's fields took this frame's input.
+        let page_key = std::mem::take(&mut self.save_key);
+        if save || save_key || page_key {
             self.save_group_draft(ui.ctx(), active, campaigns.modules());
         }
         self.refresh_validation_error(true, super::edit_input(ui.ctx()));
