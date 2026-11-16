@@ -68,6 +68,19 @@ fn fault_here(fault: &FileFault) -> String {
     }
 }
 
+/// Draws `add`, a read fault's message, with its words at the reader measure (round 25 FB3, SB1:
+/// the recovery steps are prose): the room is the measure and the words' start after the bar and
+/// the icon (`design::message_choice_row`'s inset).
+fn at_reader_measure<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let inset =
+        design::S + 1.0 + design::number_width(ui, icons::ERROR, &Type::Body.font(ui)) + design::XS;
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(design::READER_MEASURE + inset));
+        add(ui)
+    })
+    .inner
+}
+
 /// A file the reader cannot read: what is wrong and how to recover, with `Try again`, then its
 /// Technical details (M20: a typed body fault).
 #[allow(
@@ -75,10 +88,12 @@ fn fault_here(fault: &FileFault) -> String {
     reason = "a read fault in the reader’s body, with its repair (ruling M20)"
 )]
 fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
-    let again = BodyFault::new(&LibraryFault::Unread(fault, false))
-        .repair(Repair::new("Try again", ()))
-        .show(ui)
-        .is_some();
+    let again = at_reader_measure(ui, |ui| {
+        BodyFault::new(&LibraryFault::Unread(fault, false))
+            .repair(Repair::new("Try again", ()))
+            .show(ui)
+            .is_some()
+    });
     design::gap(ui, design::Gap::S);
     design::quiet_section(ui, "Technical details", |ui| {
         ui.add(egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted)).wrap());
@@ -8710,16 +8725,18 @@ impl Library {
             // The file is there but cannot be read. Saving the draft over it would replace bytes
             // Splat never read, so the choices are to read it again or to let the draft go
             // (M20: a typed placeholder; its red choice `L` after the safe one).
-            let choice = PagePlaceholder::new(&LibraryFault::Unread(&fault, true))
-                .choice(Choice::new(
-                    MessageChoice::Choice("Try again"),
-                    DiskChoice::Again,
-                ))
-                .choice(Choice::new(
-                    MessageChoice::Lose("Reload and lose my draft"),
-                    DiskChoice::Reload,
-                ))
-                .show(ui);
+            let choice = at_reader_measure(ui, |ui| {
+                PagePlaceholder::new(&LibraryFault::Unread(&fault, true))
+                    .choice(Choice::new(
+                        MessageChoice::Choice("Try again"),
+                        DiskChoice::Again,
+                    ))
+                    .choice(Choice::new(
+                        MessageChoice::Lose("Reload and lose my draft"),
+                        DiskChoice::Reload,
+                    ))
+                    .show(ui)
+            });
             design::gap(ui, design::Gap::S);
             design::quiet_section(ui, "Technical details", |ui| {
                 ui.add(
@@ -8732,20 +8749,23 @@ impl Library {
         } else if let Some(change) = &mut self.disk_change {
             // R10 (G16, G164, G165): a changed entry is named, as Encounters and World name
             // theirs; `This entry` only for an entry with no name.
-            let text = if change.moved_to.is_some() {
-                MOVED_ON_DISK
-            } else if change.text.is_some() {
-                changed_on_disk(note.entry.as_ref().map_or("", |entry| &entry.name))
-            } else {
-                DELETED_ON_DISK
-            };
             let names = if change.text.is_none() {
                 self.loaded.as_ref().unwrap().dependents(note)
             } else {
                 DependentNames::default()
             };
-            // The choices start at the message text, as in World and the run; the entries that
-            // need a deleted one are the red choice's help line (M8).
+            // The entries that need a deleted one follow its words, so the choices keep one
+            // line: the safe one, then the red one `L` after it.
+            let text = if change.moved_to.is_some() {
+                MOVED_ON_DISK
+            } else if change.text.is_some() {
+                changed_on_disk(note.entry.as_ref().map_or("", |entry| &entry.name))
+            } else if names.is_empty() {
+                DELETED_ON_DISK
+            } else {
+                DELETED_ON_DISK.then(crate::sentence!("{} needs this entry.", name_list(&names)))
+            };
+            // The choices start at the message text, as in World and the run.
             let save = match (&change.moved_to, &change.text) {
                 (Some(path), _) => Choice::named(
                     crate::choice!("Save my draft to {}", path),
@@ -8768,11 +8788,6 @@ impl Library {
                 }),
                 DiskChoice::Reload,
             );
-            let lose = if names.is_empty() {
-                lose
-            } else {
-                lose.help(crate::sentence!("{} needs this entry.", name_list(&names)))
-            };
             let choice = PagePlaceholder::new(&LibraryFault::Warning(&text))
                 .choice(save)
                 .choice(lose)
