@@ -1093,7 +1093,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
         ("src/encounters.rs", "run_settings", &[Ban::Results]),
-        ("src/encounters.rs", "save_draft", &[Ban::Results]),
         // Layout PR 2b: the test of the legacy `Footer::legacy_kept`.
         (
             "src/design/results.rs",
@@ -1723,7 +1722,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaigns.rs", 1),
             ("src/design/components.rs", 1),
             ("src/design/gallery.rs", 2),
-            ("src/encounters.rs", 3),
+            ("src/encounters.rs", 2),
             ("src/world/edit.rs", 1),
         ],
     ),
