@@ -1066,10 +1066,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
         ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
+        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c).
         (
             "src/encounter_run/view.rs",
             "groups_tab",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::Footer],
+            &[Ban::Layout(1), Ban::Pane(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -1148,6 +1149,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1), Ban::Footer],
         ),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
+        // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
+        ("src/library.rs", "cause", &[Ban::Words]),
+        // M17 (M-L0.4b): a manifest write's words, which start with the file's path from disk.
+        ("src/library.rs", "outcome_of", &[Ban::Words]),
         ("src/library.rs", "reader_messages", &[Ban::Footer]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
         // R24: a value block's save row shows its own messages (the Session folder's).
@@ -1690,7 +1695,6 @@ pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, u
 pub(crate) const LEGACY_FOOTER_LINES: &[(&str, usize)] = &[
     ("src/design/components.rs", 11),
     ("src/design/results.rs", 1),
-    ("src/encounter_run/view.rs", 2),
     ("src/library.rs", 12),
 ];
 

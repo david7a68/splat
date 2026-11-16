@@ -181,7 +181,8 @@ names it, the action's width), the room the lines take (`bare`), the room their 
   (`LEGACY_FOOTER_LINES`) in every call form, read as tokens with the L0 freeze's machinery (a method, an
   associated call, a reference: ruling L13). First callers moved: Rules and runs (its discard joins the page's
   `kept` store), Settings and Link and folder (Campaigns, the account, D&D Beyond); then (L2c) the encounter
-  editor's file flags (into the editor's one footer, with the file's line) and the creature pane's refusal.
+  editor's file flags (into the editor's one footer, with the file's line) and the creature pane's refusal;
+  then the run's Arrivals footer (the newest arrival's result with its Move choice, and the totals' reasons).
 - **Limits.** Building `Messages` each frame (the caller's words) and comparing them stays O(the footer's
   words); a caller that keeps owner revisions could skip both, which is later work. Fonts changed with
   `set_fonts` are not part of the plan's key (only width, scale and style).
