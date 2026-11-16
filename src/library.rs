@@ -2777,6 +2777,10 @@ const NEW_ENTRY_FOLDER: design::FieldId =
     crate::field_id!("new_entry_folder").once(design::Once::CreateForm);
 const LIBRARY_SECTION: design::FieldId =
     crate::field_id!("library_section").once(design::Once::PageSearch);
+/// What the Library shows (M0341). Its id is the field's, so an open list stays with the
+/// control as it moves between columns when the reader narrows.
+const LIBRARY_SCOPE: design::FieldId =
+    crate::field_id!("library_scope").once(design::Once::PageSearch);
 const NEW_ENTRY_NAME: design::FieldId =
     crate::field_id!("new_entry_name").once(design::Once::CreateForm);
 const NEW_ENTRY_KIND: design::FieldId =
@@ -6520,11 +6524,9 @@ impl Library {
         self.reconcile_registrations(campaigns);
     }
 
-    /// What the catalogue shows. Choosing here never changes the active campaign.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
+    /// What the catalogue shows. Choosing here never changes the active campaign. M0341: the
+    /// shared drop-down; `All` and `Can use` are one group, `D&D 2024`, the packages and the
+    /// campaign's entries another, under a rule.
     fn scope_menu(
         ui: &mut egui::Ui,
         compact: bool,
@@ -6541,75 +6543,41 @@ impl Library {
             *current
         };
         let before = scope;
-        // This control moves between columns as the reader narrows. Keep an open
-        // menu attached to it when the window changes size.
-        ui.scope_builder(egui::UiBuilder::new().id("library_scope_host"), |ui| {
-            let width = ui.available_width().min(if compact {
-                ui.available_width()
-            } else {
-                166.0 + design::lane_width()
-            });
-            let selected = match scope {
-                Scope::Uses => "Can use".to_owned(),
-                Scope::Builtin => "D&D 2024".to_owned(),
-                Scope::Campaign => "Campaign entries".to_owned(),
-                _ => label(scope),
-            };
-            let budget = width - design::XXL - design::L;
-            let fitted = if matches!(scope, Scope::Package(_)) {
-                scope_label(ui, &selected, budget)
-            } else {
-                selected
-            };
-            // Wrapped names make the menu taller, so it may use the window's height below the
-            // control before it scrolls.
-            let height = (ui.ctx().content_rect().bottom()
-                - ui.next_widget_position().y
-                - design::XXL * 2.0)
-                .max(design::XXL * 4.0);
-            let combo = egui::ComboBox::from_id_salt("library_scope")
-                .icon(design::combo_icon)
-                .width(width)
-                .height(height)
-                .wrap()
-                .selected_text(design::Dropdown::selected_words(ui, fitted))
-                .show_ui(ui, |ui| {
-                    // The popup is as wide as the control, so it covers the counts beside it and
-                    // stays in the scope's column, clear of the splitter. Its content is the
-                    // control's width less the popup's frame. A long package name wraps.
-                    let frame = ui.style().spacing.menu_margin.sum().x
-                        + 2.0 * ui.style().visuals.window_stroke.width;
-                    let inner = (width - frame).max(0.0);
-                    ui.set_min_width(inner);
-                    ui.set_max_width(inner);
-                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                    let mut choose = |ui: &mut egui::Ui, choice: Scope| {
-                        if design::extras::choice_wrapped(ui, scope == choice, &label(choice), None)
-                            .clicked()
-                        {
-                            scope = choice;
-                        }
-                    };
-                    if active.is_some() {
-                        choose(ui, Scope::Uses);
-                    }
-                    choose(ui, Scope::All);
-                    ui.separator();
-                    choose(ui, Scope::Builtin);
-                    for m in campaigns.modules() {
-                        choose(ui, Scope::Package(m.id));
-                    }
-                    if active.is_some() {
-                        choose(ui, Scope::Campaign);
-                    }
-                });
-            combo.response.clone().on_hover_text(label(scope));
-            design::named(
-                ui,
-                &combo.response,
-                &format!("What the Library shows: {}", label(scope)),
-            );
+        let width = ui.available_width().min(if compact {
+            ui.available_width()
+        } else {
+            166.0 + design::lane_width()
         });
+        // The closed control keeps whole words of a long package name (`Ashen…`); the list,
+        // the hover and the accessible name keep the whole name.
+        let budget = width - design::XXL - design::L;
+        let first = if active.is_some() {
+            Scope::Uses
+        } else {
+            Scope::All
+        };
+        let mut dropdown = design::Dropdown::new(LIBRARY_SCOPE, "What the Library shows")
+            .choice(first, label(first));
+        if active.is_some() {
+            dropdown = dropdown.choice(Scope::All, label(Scope::All));
+        }
+        dropdown = dropdown.group().choice_with_short_label(
+            Scope::Builtin,
+            label(Scope::Builtin),
+            "D&D 2024",
+        );
+        for module in campaigns.modules() {
+            let package = Scope::Package(module.id);
+            dropdown = dropdown.choice_with_short_label(
+                package,
+                label(package),
+                scope_label(ui, &module.name, budget),
+            );
+        }
+        if active.is_some() {
+            dropdown = dropdown.choice(Scope::Campaign, label(Scope::Campaign));
+        }
+        let _ = dropdown.width(width).show(ui, &mut scope);
         *current = scope;
         if scope != before {
             // The selected entry can stay if it is in this scope. A draft always stays.

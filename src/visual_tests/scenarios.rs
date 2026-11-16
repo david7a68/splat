@@ -11858,6 +11858,7 @@ pub mod library_scope {
     use super::*;
     const USES: &str = "Can use";
     const EVERYTHING: &str = "Everything";
+    const BUILTIN: &str = "D&D 2024 · SRD 5.2.1";
     const ACTIVE: &str = "The Emberfall Marches";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -11871,6 +11872,42 @@ pub mod library_scope {
         // Round 23 AC1: the menu is checked against the splitter beside its column at 960 and
         // 1200, and every choice ends at the control's right edge, `S` before that splitter.
         d.state("scope-menu", Sizes::Standard);
+        // M0341: the scope list is the shared drop-down in two groups. `Can use` and
+        // `Everything` touch; a rule starts the second group at `D&D 2024`.
+        {
+            let row = |d: &Driver<'_>, name: &str, column: Option<egui::Rect>| {
+                d.nodes()
+                    .into_iter()
+                    .filter(|node| node.name == name && node.in_view())
+                    .map(|node| node.rect)
+                    .find(|rect| {
+                        column.is_none_or(|column| (rect.left() - column.left()).abs() < 1.0)
+                    })
+            };
+            let uses = row(d, USES, None);
+            let everything = row(d, EVERYTHING, uses);
+            let builtin = row(d, BUILTIN, uses);
+            let gap = |above: egui::Rect, below: egui::Rect| {
+                egui::Rect::from_x_y_ranges(
+                    above.x_range(),
+                    above.bottom() - 0.5..=below.top() + 0.5,
+                )
+            };
+            let first = uses
+                .zip(everything)
+                .map(|(above, below)| d.line_segments_in(gap(above, below)));
+            let second = everything
+                .zip(builtin)
+                .map(|(above, below)| d.line_segments_in(gap(above, below)));
+            d.observe(
+                "M0341-scope-groups",
+                first.as_ref().is_some_and(Vec::is_empty)
+                    && second.as_ref().is_some_and(|rules| !rules.is_empty()),
+                format!(
+                    "No rule between {USES} and {EVERYTHING} ({first:?}); a rule above {BUILTIN} ({second:?})"
+                ),
+            );
+        }
         for size in [SMALL, DEFAULT] {
             let (control, choices) = d.at_size(size, |d| {
                 (
@@ -11892,10 +11929,11 @@ pub mod library_scope {
             );
         }
         // Round 24 FA5: the open menu is as wide as its control, so it covers the counts beside
-        // the control. Each choice fills the menu's content width, so the choices' insets from
-        // the control's two edges are equal, and each is the menu's frame (its margin and rule).
-        let frame = f32::from(d.app_style().spacing.menu_margin.left)
-            + d.app_style().visuals.window_stroke.width;
+        // the control. M0341: the shared drop-down's rows start one frame stroke inside the
+        // control's left edge and end its scroll lane (and the stroke) inside its right edge,
+        // so the list is exactly as wide as the control.
+        let stroke = d.app_style().visuals.window_stroke.width;
+        let lane = crate::design::lane_width();
         for size in [SMALL, DEFAULT] {
             let (control, choices) = d.at_size(size, |d| {
                 (
@@ -11910,12 +11948,12 @@ pub mod library_scope {
                         choice.is_some_and(|choice| {
                             let left = choice.left() - control.left();
                             let right = control.right() - choice.right();
-                            (left - right).abs() <= 1.0 && right <= frame + 1.0
+                            (left - stroke).abs() <= 1.0 && (right - lane - stroke).abs() <= 1.0
                         })
                     })
                 }),
                 format!(
-                    "At {size:?} the scope menu's choices {choices:?} sit the menu frame ({frame}) inside both edges of the control {control:?}"
+                    "At {size:?} the scope menu's choices {choices:?} start the frame stroke ({stroke}) inside the control {control:?} and end its lane ({lane}) inside it"
                 ),
             );
         }
