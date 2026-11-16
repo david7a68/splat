@@ -10,6 +10,9 @@ pub struct Caster {
     pub dc: Option<i64>,
     /// `+6 to hit with spell attacks`.
     pub attack: Option<i64>,
+    /// The spellcasting ability modifier, for damage `plus your spellcasting ability
+    /// modifier`: the attack bonus less the proficiency bonus.
+    pub modifier: Option<i64>,
 }
 
 impl Caster {
@@ -71,7 +74,7 @@ pub fn spell_roll(
         (_, Some((at, ability))) => (at, Mark::Save(ability)),
         _ => return None,
     };
-    let mut damage = damage_after(&text, marker);
+    let mut damage = damage_after(&text, marker, caster.modifier);
     if level == 0 && cantrip_upgrade && !damage.is_empty() {
         return None;
     }
@@ -86,8 +89,13 @@ pub fn spell_roll(
             damage,
         }),
         Mark::Save(ability) => {
-            // What a success does may be a line or two after the save.
+            // What a success does may be a line or two after the save, but not past the next
+            // save, which is another effect's (`Turn 3. ... Dexterity saving throw ...`).
             let after = &text[marker..];
+            let own = after
+                .find(" saving throw")
+                .map_or(after.len(), |n| n + " saving throw".len());
+            let after = save_at(&after[own..]).map_or(after, |(next, _)| &after[..own + next]);
             let half = after.contains("half as much damage")
                 || after.contains("half the initial damage")
                 || after.contains("half that damage");
@@ -159,7 +167,9 @@ fn sentence_end(text: &str, at: usize) -> usize {
 /// the sentence of `marker` and the one after it. A part after `or` is another choice, and a
 /// part that comes later (`at the end of its next turn`) or on a condition (`if it acts`) is
 /// not part of this roll.
-fn damage_after(text: &str, marker: usize) -> Vec<DamagePart> {
+/// `modifier` is the caster's spellcasting ability modifier, for damage `equal to 3d6 plus
+/// your spellcasting ability modifier`.
+fn damage_after(text: &str, marker: usize, modifier: Option<i64>) -> Vec<DamagePart> {
     // The next sentence may start the next line: `... makes a Wisdom saving throw.` then
     // `On a failed save, the target takes 10d12 Psychic damage`.
     let first = sentence_end(text, marker);
@@ -175,10 +185,42 @@ fn damage_after(text: &str, marker: usize) -> Vec<DamagePart> {
     let mut parts = Vec::new();
     let mut last = 0;
     let mut at = 0;
+    // `Fire damage equal to 3d6 plus your spellcasting ability modifier`.
+    if let Some(equal) = scope.find(" damage equal to ") {
+        let head = &scope[..equal];
+        let kind = head[head.rfind(' ').map_or(0, |n| n + 1)..].to_owned();
+        let dice_start = equal + " damage equal to ".len();
+        if let Some(dice_end) = dice_at(scope, dice_start) {
+            let mut dice = plain_dice(&scope[dice_start..dice_end]);
+            if let Some(modifier) = modifier.filter(|_| {
+                scope[dice_end..].starts_with(" plus your spellcasting ability modifier")
+            }) {
+                dice = format!("{dice}{modifier:+}");
+            }
+            parts.push(DamagePart {
+                dice,
+                kind: damage_kind(&format!("{kind} damage")).flatten(),
+                when: None,
+            });
+            return parts;
+        }
+    }
     while at < scope.len() {
         let starts_term = scope.as_bytes()[at].is_ascii_digit()
             && (at == 0 || !scope.as_bytes()[at - 1].is_ascii_alphanumeric());
-        let Some(term_end) = starts_term.then(|| dice_at(scope, at)).flatten() else {
+        // Dice, or a flat amount with a type: `20 Radiant damage`. A flat amount with no
+        // type (`a total of 60 damage`) is no roll.
+        let term_end = starts_term
+            .then(|| {
+                dice_at(scope, at).or_else(|| {
+                    let digits = scope[at..]
+                        .find(|c: char| !c.is_ascii_digit())
+                        .map_or(scope.len(), |n| at + n);
+                    damage_kind(&scope[digits..]).flatten().map(|_| digits)
+                })
+            })
+            .flatten();
+        let Some(term_end) = term_end else {
             at += 1;
             continue;
         };
@@ -286,6 +328,7 @@ mod tests {
     const CASTER: Caster = Caster {
         dc: Some(13),
         attack: Some(5),
+        modifier: Some(3),
     };
 
     fn part(dice: &str, kind: &str) -> DamagePart {
@@ -298,6 +341,37 @@ mod tests {
 
     #[test]
     fn a_save_spell_rolls_its_failure_damage_with_the_casters_dc() {
+        // SRD 5.2.1 text. A flat amount, and a type chosen from a list, are damage.
+        let guardian = "Any enemy that moves to a space within 10 feet of the guardian for the first time on a turn or starts its turn there makes a Dexterity saving throw, taking 20 Radiant damage on a failed save or half as much damage on a successful one. The guardian vanishes when it has dealt a total of 60 damage.";
+        let Some(RollLink::SaveDc { damage, half, .. }) =
+            spell_roll("Guardian of Faith", guardian, 4, 4, &CASTER)
+        else {
+            panic!("Guardian of Faith saves");
+        };
+        assert!(half);
+        assert_eq!(damage, vec![part("20", "Radiant")]);
+        let glyph = "Explosive Rune. When triggered, the glyph erupts with magical energy in a 20-foot-radius Sphere centered on the glyph. Each creature in the area makes a Dexterity saving throw. A creature takes 5d8 Acid, Cold, Fire, Lightning, or Thunder damage (your choice when you create the glyph) on a failed save or half as much damage on a successful one.";
+        let Some(RollLink::SaveDc { damage, .. }) =
+            spell_roll("Glyph of Warding", glyph, 3, 3, &CASTER)
+        else {
+            panic!("Glyph of Warding saves");
+        };
+        assert_eq!(
+            damage,
+            vec![part("5d8", "Acid, Cold, Fire, Lightning, or Thunder")]
+        );
+        // A later effect's success is not this save's: no half.
+        let storm = "Each creature under the cloud when it appears must succeed on a Constitution saving throw or take 2d6 Thunder damage and have the Deafened condition for the duration.\nTurn 2. Acidic rain falls. Each creature and object under the cloud takes 4d6 Acid damage.\nTurn 3. You call six bolts of lightning from the cloud to strike six different creatures or objects beneath it. Each target makes a Dexterity saving throw, taking 10d6 Lightning damage on a failed save or half as much damage on a successful one.";
+        assert_eq!(
+            spell_roll("Storm of Vengeance", storm, 9, 9, &CASTER),
+            Some(RollLink::SaveDc {
+                label: "Storm of Vengeance".into(),
+                ability: "Constitution".into(),
+                dc: 13,
+                half: false,
+                damage: vec![part("2d6", "Thunder")],
+            })
+        );
         let moonbeam = "A silvery beam of pale light shines down in a 5-foot-radius, 40-foot-high Cylinder centered on a point within range.\n\nWhen the Cylinder appears, each creature in it makes a Constitution saving throw. On a failed save, a creature takes 2d10 Radiant damage, and if the creature is shape-shifted, it reverts to its true form. On a successful save, a creature takes half as much damage only.\n\nUsing a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slot level above 2.";
         assert_eq!(
             spell_roll("Moonbeam", moonbeam, 2, 2, &CASTER),
@@ -369,8 +443,29 @@ mod tests {
         let no_bonus = Caster {
             dc: Some(13),
             attack: None,
+            modifier: None,
         };
         assert_eq!(spell_roll("Guiding Bolt", bolt, 1, 1, &no_bonus), None);
+        // Damage `equal to` dice, plus the caster's spellcasting ability modifier when known.
+        let blade = "As a Magic action, you can make a melee spell attack with the fiery blade. On a hit, the target takes Fire damage equal to 3d6 plus your spellcasting ability modifier.\n\nUsing a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 2.";
+        let Some(RollLink::D20 { damage, .. }) = spell_roll("Flame Blade", blade, 2, 2, &CASTER)
+        else {
+            panic!("Flame Blade attacks");
+        };
+        assert_eq!(damage, vec![part("3d6+3", "Fire")]);
+        let Some(RollLink::D20 { damage, .. }) = spell_roll(
+            "Flame Blade",
+            blade,
+            2,
+            2,
+            &Caster {
+                modifier: None,
+                ..CASTER
+            },
+        ) else {
+            panic!("Flame Blade attacks");
+        };
+        assert_eq!(damage, vec![part("3d6", "Fire")]);
     }
 
     #[test]

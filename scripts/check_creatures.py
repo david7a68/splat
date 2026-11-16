@@ -100,12 +100,15 @@ What Splat shows:
   comes later (at the end of a turn), only on a condition, or as another choice
   (`... or 3d8 Necrotic damage if ...`) is not part of the roll. `half on a success` only
   when the text says a success takes half.
-- `run_order`: the action labels, then the labels of the spells that roll, in printed order.
+- A paragraph of its own that casts spells by name (`Dread Shout. The wight casts Fear,
+  using ...`) also gets spell tiles, from its own spell save DC or else Spellcasting's.
+  They are not in `spellcasting`, but their rolls are in `run_order`.
+- `run_order`: all the action labels, then the labels of the spells that roll (from the
+  lists and from such paragraphs), in printed order.
 
 Accepted limits, do not report: Ice Knife rolls only its hit; Spirit Guardians rolls only
 its first damage choice; a spell whose save is made by someone other than its targets
-(Sanctuary) still rolls a save; a spell of several rays or bolts rolls one of them. A spell that an action casts outside a Spellcasting list
-(`Frightful Presence. The dragon casts Fear ...`) has no tile yet.
+(Sanctuary) still rolls a save; a spell of several rays or bolts rolls one of them.
 
 Use `doubtful`, not `wrong`, when the rules leave room for Splat's reading. Before you
 report a problem, read the stat block or the spell's text again and quote what it says in

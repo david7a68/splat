@@ -247,7 +247,8 @@ pub fn ability(word: &str) -> Option<&'static str> {
 }
 
 /// The damage type and the word `damage` after a group, as in `) Fire damage`, or a type
-/// the attacker chooses, as in `) Necrotic or Radiant damage`.
+/// the attacker chooses, as in `) Necrotic or Radiant damage` or `5d8 Acid, Cold, or Fire
+/// damage`.
 pub(crate) fn damage_kind(after: &str) -> Option<Option<String>> {
     let rest = after.trim_start();
     if rest.starts_with("damage") {
@@ -263,18 +264,29 @@ pub(crate) fn damage_kind(after: &str) -> Option<Option<String>> {
                 .collect()
         })
     };
-    let first = word(rest);
-    if first.is_empty() {
-        return None;
+    let mut kinds = Vec::new();
+    let mut tail = rest;
+    loop {
+        let kind = word(tail);
+        if kind.is_empty() {
+            return None;
+        }
+        kinds.push(title(&kind));
+        tail = tail[kind.len()..].trim_start();
+        if tail.starts_with("damage") {
+            break;
+        }
+        // The next type of a choice: `Acid, Cold, Fire, or Thunder`.
+        tail = [", or ", ", ", "or "]
+            .iter()
+            .find_map(|joint| tail.strip_prefix(joint))?;
     }
-    let tail = rest[first.len()..].trim_start();
-    if tail.starts_with("damage") {
-        return Some(Some(title(&first)));
-    }
-    let other = word(tail.strip_prefix("or ")?);
-    let tail = tail["or ".len() + other.len()..].trim_start();
-    (!other.is_empty() && tail.starts_with("damage"))
-        .then(|| Some(format!("{} or {}", title(&first), title(&other))))
+    Some(Some(match kinds.as_slice() {
+        [one] => one.clone(),
+        [first, second] => format!("{first} or {second}"),
+        [head @ .., last] => format!("{}, or {last}", head.join(", ")),
+        [] => return None,
+    }))
 }
 
 /// The condition on the damage group at `start..end`: `if …` after its words, up to the next
@@ -780,6 +792,14 @@ mod tests {
         assert_eq!(damage, vec![part("1d8+3", "Necrotic or Radiant")]);
         // A number of feet after `Hit:` is no damage.
         assert!(find("Hit: 5 feet away, the target falls.", "Push").is_empty());
+        let several =
+            "Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Acid, Cold, or Fire damage.";
+        let Some(RollLink::D20 { damage, .. }) =
+            find(several, "Strike").first().map(|s| s.link.clone())
+        else {
+            panic!("an attack");
+        };
+        assert_eq!(damage, vec![part("1d8+3", "Acid, Cold, or Fire")]);
         assert_eq!(
             spans[3].link,
             RollLink::Damage {

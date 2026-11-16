@@ -121,11 +121,28 @@ pub(crate) fn caster(entry: &Entry, spellcasting: &str) -> Caster {
         .and_then(|v| v.get("save_dc"))
         .and_then(serde_yaml_ng::Value::as_i64);
     let dc = data.or(dc_in(spellcasting));
+    // A spell attack bonus is always the save DC less 8, so a stat block that prints only
+    // the DC still gives it.
+    numbers(
+        entry,
+        dc,
+        Caster::attack_in(spellcasting).or(dc.map(|dc| dc - 8)),
+    )
+}
+
+/// A caster's numbers, with its spellcasting ability modifier: the attack bonus less the
+/// proficiency bonus that its challenge line prints (`CR 2 (XP 450; PB +2)`).
+fn numbers(entry: &Entry, dc: Option<i64>, attack: Option<i64>) -> Caster {
+    let proficiency = entry.body.split_once("PB +").and_then(|(_, rest)| {
+        rest.split(|c: char| !c.is_ascii_digit())
+            .next()?
+            .parse::<i64>()
+            .ok()
+    });
     Caster {
         dc,
-        // A spell attack bonus is always the save DC less 8, so a stat block that prints
-        // only the DC still gives it.
-        attack: Caster::attack_in(spellcasting).or(dc.map(|dc| dc - 8)),
+        attack,
+        modifier: attack.zip(proficiency).map(|(attack, pb)| attack - pb),
     }
 }
 
@@ -139,14 +156,17 @@ fn dc_in(words: &str) -> Option<i64> {
 }
 
 /// Whether a paragraph is a Spellcasting feature whose lists follow it: `Spellcasting.`,
-/// `Spellcasting (Snake Form Only).`, `Innate Spellcasting.`.
+/// `Spellcasting (Snake Form Only).`, `Innate Spellcasting.`, each introducing its lists (`one
+/// of the following spells`, or a closing colon). A feature so named that casts a spell
+/// itself (`Hellfire Spellcasting (3/Day). The fiend casts Fireball ...`) is a cast line.
 pub(crate) fn spellcasting(paragraph: &str) -> bool {
-    crate::design::reader::run_in_title(paragraph).is_some_and(|title| {
+    let named = crate::design::reader::run_in_title(paragraph).is_some_and(|title| {
         title
             .split(" (")
             .next()
             .is_some_and(|name| name == "Spellcasting" || name.ends_with(" Spellcasting"))
-    })
+    });
+    named && (paragraph.contains("following spell") || paragraph.trim_end().ends_with(':'))
 }
 
 /// A spell's rules text: its printed description, without the lines of facts at its top.
@@ -246,7 +266,8 @@ fn facts(spell: &Entry, cast: Option<u32>, chip: Option<&Chip>, text: &str) -> S
 fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caster) -> SpellTile {
     static TILES: Memo<Arc<SpellTile>> = Memo::new(256);
     let cast_bytes = cast.map_or([0xff; 4], u32::to_le_bytes);
-    let numbers = [caster.dc, caster.attack].map(|n| n.map_or([0xff; 8], i64::to_le_bytes));
+    let numbers =
+        [caster.dc, caster.attack, caster.modifier].map(|n| n.map_or([0xff; 8], i64::to_le_bytes));
     let tile = TILES.get_or(
         &[
             name.as_bytes(),
@@ -256,6 +277,7 @@ fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caste
             cast_bytes.as_slice(),
             numbers[0].as_slice(),
             numbers[1].as_slice(),
+            numbers[2].as_slice(),
         ],
         || {
             let text = rules_text(spell);
@@ -383,7 +405,10 @@ pub(crate) fn cast_names(paragraph: &str) -> Option<Vec<&str>> {
     .filter_map(|stop| rest.find(stop))
     .min()
     .unwrap_or(rest.len());
+    // `casts the Slow spell` names Slow.
     let names = rest[..end].trim().trim_end_matches('.');
+    let names = names.strip_prefix("the ").unwrap_or(names);
+    let names = names.strip_suffix(" spell").unwrap_or(names);
     if !names.starts_with(char::is_uppercase) {
         return None;
     }
@@ -417,10 +442,11 @@ pub(crate) fn cast_line(
         .first()
         .map_or_else(|| caster(entry, ""), |(words, _)| caster(entry, words));
     let caster = match dc_in(paragraph) {
-        Some(dc) => Caster {
-            dc: Some(dc),
-            attack: Caster::attack_in(paragraph).or(Some(dc - 8)),
-        },
+        Some(dc) => numbers(
+            entry,
+            Some(dc),
+            Caster::attack_in(paragraph).or(Some(dc - 8)),
+        ),
         None => base,
     };
     let tiles: Vec<SpellTile> = names
@@ -468,11 +494,65 @@ pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
     groups
 }
 
-/// The spells an entry's lists name that roll, in printed order. In a run they follow the
-/// stat block's own actions, in the panel, on the action bar and by Ctrl+number.
-pub(crate) fn rolls(entry: &Entry, links: &dyn Links) -> Vec<Chip> {
-    let references = references(entry, links);
-    let mut chips = Vec::new();
+/// What an entry's Spellcasting resolves to, once for all the draws that need it: the tiles of
+/// each list line and of each paragraph that casts spells by name, and the spells that roll in
+/// printed order. In a run they follow the stat block's own actions, in the panel, on the
+/// action bar and by Ctrl+number.
+#[derive(Default)]
+pub(crate) struct Resolved {
+    /// The entry's spells, each with the entry it opens, or `None` when it is missing.
+    pub references: Vec<Option<(usize, String)>>,
+    /// Each list line, trimmed, with its tiles.
+    lines: Vec<(String, SpellLine)>,
+    /// Each paragraph that casts spells by name, trimmed, with its tiles.
+    casts: Vec<(String, SpellLine)>,
+    pub rolls: Vec<Chip>,
+}
+
+impl Resolved {
+    /// The tiles of a list line, as its paragraph prints it.
+    pub(crate) fn line(&self, text: &str) -> Option<&SpellLine> {
+        let text = text.trim().trim_end_matches('\\').trim_end();
+        self.lines
+            .iter()
+            .find(|(line, _)| line == text)
+            .map(|(_, line)| line)
+    }
+
+    /// The tiles of a paragraph that casts spells by name.
+    pub(crate) fn cast(&self, paragraph: &str) -> Option<&SpellLine> {
+        let paragraph = paragraph.trim();
+        self.casts
+            .iter()
+            .find(|(text, _)| text == paragraph)
+            .map(|(_, line)| line)
+    }
+}
+
+/// An entry's Spellcasting, resolved. With a version of the links' content to key on (the
+/// content index of Lookup and a run), it is kept from frame to frame, so an unchanged frame
+/// looks nothing up; without one (the Library, whose notes change in place), the caller
+/// resolves it once per frame.
+pub(crate) fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
+    static RESOLVED: Memo<Arc<Resolved>> = Memo::new(64);
+    match links.generation() {
+        Some(generation) => RESOLVED.get_or(
+            &[
+                entry.id.as_bytes().as_slice(),
+                entry.body.as_bytes(),
+                generation.to_le_bytes().as_slice(),
+            ],
+            || Arc::new(build(entry, links)),
+        ),
+        None => Arc::new(build(entry, links)),
+    }
+}
+
+fn build(entry: &Entry, links: &dyn Links) -> Resolved {
+    let mut resolved = Resolved {
+        references: references(entry, links),
+        ..Resolved::default()
+    };
     // The numbers of the Spellcasting paragraph whose lists come next, if any.
     let mut lists: Option<Caster> = None;
     for paragraph in entry
@@ -490,23 +570,32 @@ pub(crate) fn rolls(entry: &Entry, links: &dyn Links) -> Vec<Chip> {
                 continue;
             }
             if paragraph.lines().all(list_line) {
-                let found = paragraph
-                    .lines()
-                    .filter_map(|text| line(text, caster, &references, links));
-                chips.extend(
-                    found
-                        .flat_map(|line| line.tiles)
-                        .filter_map(|tile| tile.chip),
-                );
+                for text in paragraph.lines() {
+                    if let Some(found) = line(text, caster, &resolved.references, links) {
+                        resolved
+                            .rolls
+                            .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
+                        let text = text.trim().trim_end_matches('\\').trim_end();
+                        resolved.lines.push((text.to_owned(), found));
+                    }
+                }
                 continue;
             }
             lists = None;
         }
-        if let Some(line) = cast_line(entry, paragraph, &references, links) {
-            chips.extend(line.tiles.into_iter().filter_map(|tile| tile.chip));
+        if let Some(found) = cast_line(entry, paragraph, &resolved.references, links) {
+            resolved
+                .rolls
+                .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
+            resolved.casts.push((paragraph.to_owned(), found));
         }
     }
-    chips
+    resolved
+}
+
+/// The spells an entry's lists and its paragraphs name that roll, in printed order.
+pub(crate) fn rolls(entry: &Entry, links: &dyn Links) -> Vec<Chip> {
+    resolve(entry, links).rolls.clone()
 }
 
 #[cfg(test)]
@@ -633,6 +722,80 @@ mod tests {
         eprintln!("wrote {written} creatures to {}", out.display());
     }
 
+    /// Links that count their lookups, with a version of their content to key on, or none.
+    struct Counting<'a> {
+        index: &'a crate::lookup::ContentIndex,
+        generation: Option<u64>,
+        lookups: std::cell::Cell<usize>,
+    }
+
+    impl Links for Counting<'_> {
+        fn find(&self, reference: &Reference) -> Option<(usize, String)> {
+            self.lookups.set(self.lookups.get() + 1);
+            self.index.find(reference)
+        }
+        fn find_spell(&self, reference: &Reference) -> Option<(usize, String)> {
+            self.lookups.set(self.lookups.get() + 1);
+            self.index.find_spell(reference)
+        }
+        fn spells_named_in(&self, text: &str) -> Vec<(usize, String)> {
+            self.lookups.set(self.lookups.get() + 1);
+            self.index.spells_named_in(text)
+        }
+        fn spell_named(&self, name: &str) -> Option<(usize, String)> {
+            self.lookups.set(self.lookups.get() + 1);
+            self.index.spell_named(name)
+        }
+        fn entry(&self, index: usize) -> Option<&Entry> {
+            Links::entry(self.index, index)
+        }
+        fn generation(&self) -> Option<u64> {
+            self.generation
+        }
+    }
+
+    #[test]
+    fn an_unchanged_frame_resolves_no_spell_again() {
+        let index = crate::lookup::ContentIndex::load(&[], None).unwrap();
+        let path = "definitions/creatures/druid.md";
+        let druid = Entry::parse(
+            path,
+            splat::content::definitions::source_file(path).unwrap(),
+        )
+        .unwrap();
+        // With a version of the content (Lookup's index, a run's), the second frame looks
+        // nothing up; a new version resolves again.
+        let kept = Counting {
+            index: &index,
+            generation: Some(u64::MAX - 41),
+            lookups: std::cell::Cell::new(0),
+        };
+        let first = resolve(&druid, &kept);
+        let once = kept.lookups.get();
+        assert!(once > 0);
+        let second = resolve(&druid, &kept);
+        assert_eq!(
+            kept.lookups.get(),
+            once,
+            "the second frame looks nothing up"
+        );
+        assert_eq!(first.rolls, second.rolls);
+        let changed = Counting {
+            generation: Some(u64::MAX - 42),
+            ..kept
+        };
+        resolve(&druid, &changed);
+        assert!(changed.lookups.get() > once, "new content resolves again");
+        // With none (the Library), each frame resolves once: the reader keeps it for the frame.
+        let fresh = Counting {
+            index: &index,
+            generation: None,
+            lookups: std::cell::Cell::new(0),
+        };
+        resolve(&druid, &fresh);
+        assert_eq!(fresh.lookups.get(), once);
+    }
+
     #[test]
     fn a_list_item_gives_its_name_and_the_level_cast() {
         assert_eq!(
@@ -713,6 +876,8 @@ mod tests {
         .unwrap();
         let numbers = caster(&druid, "Spellcasting. It casts (spell save DC 13):");
         assert_eq!((numbers.dc, numbers.attack), (Some(13), Some(5)));
+        // Its ability modifier is the attack bonus less its proficiency bonus (`PB +2`).
+        assert_eq!(numbers.modifier, Some(3));
         // A list may waive Concentration; a spell with no roll shows no area, since it may
         // have several, one for each effect.
         let shapechange = line(
@@ -759,6 +924,34 @@ mod tests {
             Some("Fear DC 14"),
             "{order:?}"
         );
+        // `casts the Slow spell` names Slow; a feature named Spellcasting that casts a spell
+        // itself, with no list after it, is a cast line.
+        assert_eq!(
+            cast_names("Slow (Recharge 5–6). The golem casts the Slow spell, requiring no spell components (spell save DC 17).").unwrap(),
+            ["Slow"]
+        );
+        let hellfire = "Hellfire Spellcasting (3/Day). The fiend casts Fireball (level 5 version) twice, requiring no Material components and using Charisma as the spellcasting ability (spell save DC 21).";
+        assert!(!spellcasting(hellfire));
+        assert_eq!(
+            cast_names(hellfire).unwrap(),
+            ["Fireball (level 5 version)"]
+        );
+        for (creature, spell) in [
+            ("stone_golem", "Slow DC 17"),
+            ("pit_fiend", "Fireball DC 21"),
+        ] {
+            let path = format!("definitions/creatures/{creature}.md");
+            let entry = Entry::parse(
+                &path,
+                splat::content::definitions::source_file(&path).unwrap(),
+            )
+            .unwrap();
+            let order: Vec<String> = rolls(&entry, &index).into_iter().map(|c| c.label).collect();
+            assert!(
+                order.iter().any(|label| label == spell),
+                "{creature}: {order:?}"
+            );
+        }
         // A tile's facts give the area of the spell's text.
         let fireball = line("1/Day: Fireball", numbers, &[], &index).unwrap();
         assert_eq!(

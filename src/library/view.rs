@@ -58,6 +58,11 @@ pub(crate) trait Links {
     fn spell_named(&self, name: &str) -> Option<(usize, String)>;
     /// The entry at a place that `find`, `find_spell` or `spell_named` gave.
     fn entry(&self, index: usize) -> Option<&Entry>;
+    /// A version of the content these links read, new whenever it changes, so what was
+    /// resolved through them may be kept; `None` when there is none to tell a change by.
+    fn generation(&self) -> Option<u64> {
+        None
+    }
 }
 
 /// For an entry shown with nothing to link to.
@@ -109,11 +114,10 @@ fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Opti
 /// line after the lists has the spells the entry gives or its words name that no list showed.
 struct SpellLinks<'a> {
     entry: &'a Entry,
-    /// The entry's spells, each with the entry it opens, or `None` when it is missing.
-    references: Vec<Option<(usize, String)>>,
+    /// The entry's spells, its lines' and cast paragraphs' tiles, and the spells that roll
+    /// in printed order, which a tile's Ctrl number counts in.
+    resolved: std::sync::Arc<spells::Resolved>,
     links: &'a dyn Links,
-    /// The spells that roll, in printed order, which a tile's Ctrl number counts in.
-    rolls: Option<Vec<crate::rolls::Chip>>,
     shown: Vec<usize>,
     opened: Option<usize>,
 }
@@ -122,9 +126,7 @@ impl SpellLinks<'_> {
     /// A line's spells as a row of tiles: each that rolls with its number after the stat
     /// block's actions, and the spell it opens when the DM reads one.
     fn draw(&mut self, ui: &mut egui::Ui, line: &spells::SpellLine, actions: usize) {
-        let rolls = self
-            .rolls
-            .get_or_insert_with(|| spells::rolls(self.entry, self.links));
+        let rolls = &self.resolved.rolls;
         let tiles: Vec<crate::rolls::Tile> = line
             .tiles
             .iter()
@@ -157,11 +159,21 @@ impl creature::Spells for SpellLinks<'_> {
         // A spell's number follows the stat block's own actions.
         let actions = crate::rolls::actions(&self.entry.body).len();
         for text in paragraph.lines() {
-            let Some(line) = spells::line(text, caster, &self.references, self.links) else {
-                continue;
+            // Resolved with the entry, unless the reader's words differ from its body's.
+            let resolved = std::sync::Arc::clone(&self.resolved);
+            let fresh;
+            let line = match resolved.line(text) {
+                Some(line) => line,
+                None => match spells::line(text, caster, &resolved.references, self.links) {
+                    Some(line) => {
+                        fresh = line;
+                        &fresh
+                    }
+                    None => continue,
+                },
             };
             design::help(ui, &line.label);
-            self.draw(ui, &line, actions);
+            self.draw(ui, line, actions);
             if !line.missing.is_empty() {
                 design::help(
                     ui,
@@ -172,14 +184,23 @@ impl creature::Spells for SpellLinks<'_> {
     }
 
     fn casts(&mut self, ui: &mut egui::Ui, paragraph: &str) {
-        if let Some(line) = spells::cast_line(self.entry, paragraph, &self.references, self.links) {
+        let resolved = std::sync::Arc::clone(&self.resolved);
+        let fresh;
+        let line = match resolved.cast(paragraph) {
+            Some(line) => Some(line),
+            None => {
+                fresh = spells::cast_line(self.entry, paragraph, &resolved.references, self.links);
+                fresh.as_ref()
+            }
+        };
+        if let Some(line) = line {
             let actions = crate::rolls::actions(&self.entry.body).len();
-            self.draw(ui, &line, actions);
+            self.draw(ui, line, actions);
         }
     }
 
     fn rest(&mut self, ui: &mut egui::Ui, text: &str) {
-        let mut targets = self.references.clone();
+        let mut targets = self.resolved.references.clone();
         for named in self.links.spells_named_in(text) {
             if !targets.contains(&Some(named.clone())) {
                 targets.push(Some(named));
@@ -405,9 +426,8 @@ fn content(
     if let Some(entry) = styled {
         let mut spells = SpellLinks {
             entry,
-            references: spells::references(entry, links),
+            resolved: spells::resolve(entry, links),
             links,
-            rolls: None,
             shown: Vec::new(),
             opened: None,
         };
