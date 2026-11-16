@@ -5352,64 +5352,19 @@ impl Run {
         );
         design::rule(ui);
         if let Some((root, filename)) = &self.roster_source {
-            // FA11: the path in the campaign, as the encounter editor names the same file.
+            // FA11: the path in the campaign, as the encounter editor names the same file. One
+            // file names every unread row, so its line and links show once, under the last
+            // warning about it. R41 (lead ruling, s30 B11): an unread roster row is an error, in
+            // the editor's tone, here as there: the editor's own typed fault (M-R0.6).
             let last = self.roster_faults.len().saturating_sub(1);
             for (index, fault) in self.roster_faults.iter().enumerate() {
-                let words = fault.words();
-                // One file names every unread row, so its name and actions show once, after
-                // the last warning about it.
-                // R41 (lead ruling, s30 B11): an unread roster row is an error, in the editor's
-                // tone (`unread_row_tone`), here as there.
-                if index < last {
-                    design::small_message(ui, crate::encounters::unread_row_tone(), &words);
-                    continue;
-                }
-                ui.scope(|ui| {
-                    ui.spacing_mut().item_spacing.y = design::XS;
-                    let gap = ui.spacing().item_spacing.x;
-                    let inset = design::S
-                        + design::HAIRLINE_WIDTH
-                        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
-                        + gap * 2.0
-                        - design::XS;
-                    let message_width =
-                        design::number_width(ui, &words, &Type::Body.font(ui)) + inset;
-                    let file_width = design::number_width(ui, filename, &Type::Small.font(ui))
-                        + design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
-                        + design::number_width(ui, "Show file", &Type::Body.font(ui))
-                        + gap * 2.0;
-                    if message_width + design::L + file_width <= ui.available_width() {
-                        ui.horizontal_top(|ui| {
-                            ui.allocate_ui_with_layout(
-                                vec2(message_width, 0.0),
-                                Layout::top_down(Align::Min),
-                                |ui| {
-                                    design::small_message(
-                                        ui,
-                                        crate::encounters::unread_row_tone(),
-                                        &words,
-                                    );
-                                },
-                            );
-                            ui.add_space(design::L - gap);
-                            crate::world::entry_file_parts(ui, root, filename, true);
-                        });
-                    } else {
-                        // The file line starts at the warning's words, as every message's
-                        // actions do, and its name wraps whole rather than being cut.
-                        let words_left =
-                            design::small_message(ui, crate::encounters::unread_row_tone(), &words)
-                                .rect
-                                .left();
-                        let inset = words_left - ui.cursor().left();
-                        ui.horizontal_top(|ui| {
-                            ui.add_space(inset);
-                            ui.vertical(|ui| {
-                                crate::encounters::file_line(ui, root, filename);
-                            });
-                        });
-                    }
-                });
+                let message = design::outcome::FaultMessage::<()>::new(fault);
+                let message = if index == last {
+                    message.file(design::outcome::FileLine::new(root, filename).edit().show())
+                } else {
+                    message
+                };
+                let _ = design::outcome::BodyMessage::from(message).show(ui);
             }
         }
         // FI2: errors, the carry-over warning and the rest offers and their result are in the

@@ -273,10 +273,31 @@ pub(crate) struct RosterFault {
 }
 
 impl RosterFault {
-    /// `<name> · line <n>: <problem>`: the one form that the encounter editor, the run setup and
-    /// Save's reason give an unread roster row.
-    pub(crate) fn words(&self) -> String {
-        row_fault_words(&self.name, self.line, &self.problem)
+    /// `<name> · line <n>: <problem>` (`outcome::fault_words` of this fault): the one form that
+    /// the encounter editor, the run setup and Save's reason give an unread roster row.
+    fn row(&self) -> RowFault<'_> {
+        RowFault {
+            name: &self.name,
+            line: self.line,
+            problem: &self.problem,
+        }
+    }
+}
+
+/// The run setup's typed fault of an unread roster row (M-R0.6): the editor's own row fault, so
+/// one form and one tone (R41, `unread_row_tone`) reach both.
+impl design::outcome::Fault for RosterFault {
+    fn severity(&self) -> design::outcome::Severity {
+        self.row().severity()
+    }
+    fn place(&self) -> Option<design::outcome::FaultPlace<'_>> {
+        Some(design::outcome::FaultPlace {
+            name: self.name.as_str().into(),
+            line: u32::try_from(self.line).ok(),
+        })
+    }
+    fn cause(&self) -> design::outcome::Sentence {
+        self.row().cause()
     }
 }
 
@@ -9554,10 +9575,12 @@ mod tests {
                     problem: flag.words().unwrap(),
                     ..row.clone()
                 };
-                assert!(words.contains(&fault.words()), "{}", fault.words());
+                // The run setup's typed fault (`Fault for RosterFault`) gives these words too.
+                let shown = design::outcome::fault_words(&fault);
+                assert!(words.contains(&shown.as_str().to_owned()), "{shown}");
                 let reason = roster_fault_reason(path, std::slice::from_ref(&fault)).unwrap();
                 assert!(
-                    reason.contains(fault.words().trim_end_matches('.')),
+                    reason.contains(shown.as_str().trim_end_matches('.')),
                     "{reason}"
                 );
             }

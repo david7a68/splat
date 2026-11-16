@@ -1100,7 +1100,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(3), Ban::Pane(1)],
+            &[Ban::Layout(1), Ban::Extras(1), Ban::Pane(1)],
         ),
         ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(7)]),
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault

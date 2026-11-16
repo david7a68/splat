@@ -878,8 +878,8 @@ pub fn run(d: &mut Driver<'_>) {
                 && d.visible_text("Fix the unread row first.")
                 && d.in_view("Initiative for Ember Cultist 2")
                 && !d.visible_text("below, 1 needs initiative");
-            // Round 22 AD2: a file line below the warning starts at its words. A wide column
-            // keeps it beside the words instead, so 960 must take the line below.
+            // Round 22 AD2: a file line below the warning starts at its words (the typed
+            // `FileLine`, M-R0.6, is always under them).
             let file = d
                 .nodes()
                 .into_iter()
@@ -887,7 +887,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .map(|node| node.rect);
             let placed = match (warning, file) {
                 (Some(warning), Some(file)) if file.top() >= warning.rect.bottom() - 1.0 => {
-                    super::file_links_at_message_words_by_hand(
+                    super::file_links_at_message_words(
                         d,
                         "Ember Cultist · line 20: The change “HP lots”",
                         &roster_path,
@@ -1023,10 +1023,11 @@ pub fn run(d: &mut Driver<'_>) {
         .iter()
         .filter(|node| node.name.contains("The change “HP lots” was not read"))
         .count();
+    // The typed file line (`outcome::FileLine`, M-R0.6) names its links with the file.
     let show_file = d
         .nodes()
         .iter()
-        .filter(|node| node.name == "Show file")
+        .filter(|node| node.name == "Show file: Encounters/Shrine of Cinders.md")
         .count();
     d.observe(
         "iter-5-B-FD8-two-rows",
@@ -1034,7 +1035,7 @@ pub fn run(d: &mut Driver<'_>) {
         format!("Two unread rows: {warnings} warnings, {show_file} Show file"),
     );
     // Round 22 review: the one file line follows the last warning about the file, at its
-    // words (or beside them, when a wide column has room).
+    // words (the typed `FileLine` is always under them, at every size).
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let placed = d.at_size(size, |d| {
             let mut faults: Vec<_> = d
@@ -1061,7 +1062,7 @@ pub fn run(d: &mut Driver<'_>) {
                 return Err(format!("{} warnings", faults.len()));
             }
             if file.top() >= last.rect.bottom() - 1.0 {
-                super::file_links_at_message_words_by_hand(
+                super::file_links_at_message_words(
                     d,
                     &last.name,
                     &roster_path,
