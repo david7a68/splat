@@ -306,6 +306,12 @@ impl Owner {
             Self::Campaign(campaign) => Some(campaign.id),
         }
     }
+    /// Whether this is the package `id`. A campaign may have the same UUID as a package
+    /// (settings check package and campaign UUIDs apart), so the kind is part of the check: a
+    /// UUID alone never stands for a package (issue #505, M-L0.5).
+    fn is_package(&self, id: Uuid) -> bool {
+        matches!(self, Self::Package(module) if module.id == id)
+    }
     /// The owner's kind and id: the owner part of a [`FileId`].
     fn key(&self) -> OwnerKey {
         match self {
@@ -1201,7 +1207,7 @@ fn unregister_count(notes: &[Note], package: Uuid) -> usize {
     notes
         .iter()
         .filter(|n| {
-            n.owner.id() == Some(package)
+            n.owner.is_package(package)
                 && !n.is_manifest()
                 && n.entry.as_ref().is_none_or(|e| e.kind != "reference")
         })
@@ -1994,9 +2000,7 @@ impl Loaded {
                 }
             },
             Scope::Builtin => note.owner == Owner::Builtin,
-            Scope::Package(id) => {
-                matches!(note.owner, Owner::Package(_)) && note.owner.id() == Some(id)
-            }
+            Scope::Package(id) => note.owner.is_package(id),
             Scope::Campaign => matches!(note.owner, Owner::Campaign(_)),
         }
     }
@@ -5771,9 +5775,7 @@ impl Library {
                                 if let Some(name) = l
                                     .notes
                                     .iter()
-                                    .filter(|n| {
-                                        n.owner.id() == Some(module.id) && n.error.is_none()
-                                    })
+                                    .filter(|n| n.owner.is_package(module.id) && n.error.is_none())
                                     .find_map(|n| {
                                         n.entry
                                             .as_ref()
@@ -6179,7 +6181,7 @@ impl Library {
         let scope = self.scope;
         let about_open = self.selected.is_some_and(|at| {
             loaded.notes[at].is_manifest()
-                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.id() == Some(id))
+                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.is_package(id))
         });
         if self
             .scope_counts
@@ -6314,7 +6316,7 @@ impl Library {
                             .notes
                             .iter()
                             .enumerate()
-                            .find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                            .find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
                         && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open)
                             .clicked()
                         && !dirty
@@ -6608,7 +6610,7 @@ impl Library {
                 );
                 if compact
                     && let Scope::Package(package) = scope
-                    && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                    && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
                     && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open).clicked() && !dirty
                 {
                     if self.selected != Some(index) {
@@ -6662,7 +6664,7 @@ impl Library {
                         design::gap(ui, design::Gap::S);
                     }
                     if let Scope::Package(id) = scope && !searching
-                        && !loaded.notes.iter().any(|note| note.owner.id() == Some(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
+                        && !loaded.notes.iter().any(|note| note.owner.is_package(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
                         let name = campaigns.modules().iter().find(|m| m.id == id).map_or("this package", |m| m.name.as_str());
                         let mut create = false;
                         if self.new_form {
@@ -7767,7 +7769,7 @@ impl Library {
             return;
         }
         let in_scope = places.iter().position(|owner| match self.scope {
-            Scope::Package(id) => owner.id() == Some(id),
+            Scope::Package(id) => owner.is_package(id),
             Scope::Campaign => matches!(owner, Owner::Campaign(_)),
             _ => false,
         });
@@ -8614,7 +8616,7 @@ impl Library {
                     .notes
                     .iter()
                     .filter(|n| {
-                        n.owner.id() == Some(module.id)
+                        n.owner.is_package(module.id)
                             && n.entry.as_ref().is_some_and(|e| {
                                 !["package", "reference"].contains(&e.kind.as_str())
                             })
@@ -14949,6 +14951,24 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
         }
+        // Issue #505 (M-L0.5): the campaign with the package's UUID is never the package: not in
+        // its scope, not in what unregistering it takes away.
+        assert!(
+            loaded.in_scope(&loaded.notes[0], Scope::Package(shared))
+                && !loaded.in_scope(&loaded.notes[2], Scope::Package(shared)),
+            "the package's scope holds its own notes only"
+        );
+        assert_eq!(
+            unregister_count(&loaded.notes, shared),
+            2,
+            "unregistering the package counts its own two entries"
+        );
+        // Every package check takes the owner's kind: the page's code compares no owner's
+        // UUID alone (`Owner::is_package`).
+        let source = include_str!("library.rs");
+        let code = &source[..source.find("\nmod tests {").unwrap()];
+        let check = ["owner.id() ", "== Some("].concat();
+        assert!(!code.contains(&check), "a package check by UUID alone");
         for words in [
             // The package's batch leaves the campaign's encounter on the campaign's files.
             "Bridge Fight keeps the files in ember/.",
