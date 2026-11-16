@@ -5276,55 +5276,45 @@ impl Encounters {
             return None;
         }
         let dirty = editor.dirty();
-        let (mut save, mut close) = (false, false);
-        ui.label(
-            Type::Heading
-                .rich(ui, "This campaign’s creature")
-                .color(colors().text),
-        );
+        let mut close = false;
+        // The heading and, while nothing is changed, `Done` at its right: one control high in
+        // both states, so the save row and the fields keep their place when `Done` goes.
         ui.horizontal(|ui| {
-            if dirty {
-                close = Action::quiet("Discard")
-                    .name("Discard creature changes")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked();
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::DRAFT,
-                        word: "Unsaved",
-                        color: colors().document.unsaved,
-                    },
-                );
-            } else {
-                design::save_row_state(
-                    ui,
-                    Status {
-                        icon: icons::OK,
-                        word: "No changes",
-                        color: colors().muted,
-                    },
-                    false,
-                    None,
-                );
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                save = Action::secondary("Save creature")
-                    .density(Density::Read)
-                    .key("Ctrl+S")
-                    .blocked_if(!dirty, "No changes to save.")
-                    .show(ui)
-                    .clicked();
-                if !dirty {
+            ui.set_min_height(Density::Read.control());
+            ui.label(
+                Type::Heading
+                    .rich(ui, "This campaign’s creature")
+                    .color(colors().text),
+            );
+            if !dirty {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     close = Action::quiet("Done")
                         .name("Done with this creature")
                         .density(Density::Read)
                         .show(ui)
                         .clicked();
-                }
-            });
+                });
+            }
         });
+        // M0186: the save row by its one rule (`DraftState`): the word and `Discard` at the
+        // left, `Save creature` at the right. The encounter beside it owns the primary, so Save
+        // stays secondary; a failed Save says `Not saved` until the next one works.
+        let mut state = design::DraftState::new(
+            design::save_row::DraftOrigin::Saved,
+            if dirty {
+                design::save_row::Changed::Yes
+            } else {
+                design::save_row::Changed::No
+            },
+            design::save_row::Primary::Elsewhere,
+        );
+        if editor.error.is_some() {
+            state = state.not_saved();
+        }
+        let row = design::save_row(ui, &state, "Save creature");
+        let save = row.save;
+        // Discard drops the creature's changes and closes its pane.
+        close |= row.discard;
         // A refused Save's reason sits in the pane's footer (typed: migration-32 L2c), so the
         // fields keep their place. The pane's body fills its room: the creature's text is a
         // Markdown editor as tall as the room under the fields. L1c (`pane_then`): Save (or
@@ -10429,6 +10419,29 @@ mod tests {
                 .iter()
                 .any(|text| text.contains("No changes to save."))
         );
+        // M0186: the save row's one rule. Changed, the word comes first and `Discard` after it;
+        // `Done` leaves the heading line, and the save row keeps its place.
+        let save_top = save.rect().top();
+        harness.state_mut().0.fields.name = "Wolf Pup".into();
+        harness.run_steps(2);
+        let word = harness
+            .query_all(
+                egui_kittest::kittest::By::new()
+                    .predicate(|node| node.value().is_some_and(|words| words.contains("Unsaved"))),
+            )
+            .next()
+            .expect("the save row says Unsaved")
+            .rect();
+        let discard = harness.get_by_label("Discard").rect();
+        assert!(
+            harness.query_by_label("Done with this creature").is_none()
+                && word.right() <= discard.left()
+                && (word.center().y - discard.center().y).abs() < design::S
+                && harness.get_by_label("Save creature").rect().top() == save_top,
+            "the word {word:?} before Discard {discard:?}, Save kept at {save_top}"
+        );
+        harness.state_mut().0.fields.name = "Wolf".into();
+        harness.run_steps(2);
         // Migration-32 L2c: a refused Save's reason is a typed fault in the pane's footer, at
         // the pane's bottom: the fields keep their place, and an unchanged frame makes no plan,
         // sorts, names, fits or lays out nothing.
