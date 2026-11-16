@@ -7621,6 +7621,10 @@ impl Encounters {
         Self::creature_search_with_summary(ui, list, search, focus_search, peek, roster, "")
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn creature_search_with_summary(
         ui: &mut egui::Ui,
         list: SearchList<'_>,
@@ -7788,11 +7792,14 @@ impl Encounters {
             };
         // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows, so each
         // `Add` keeps its x as the DM types and the list grows or shrinks.
-        design::ScrollColumn::new(("encounter_results", &query)).show_rows(
-            ui,
-            row_height,
-            matches.len(),
-            |ui, range| {
+        // Still egui's virtual rows: the group editor draws this search inside a `Content` pane,
+        // where a `ScrollColumn` draws every row, so the move waits for that pane (row M0200).
+        let lane = scroll_lane(ui);
+        egui::ScrollArea::vertical()
+            .id_salt(("encounter_results", &query))
+            .auto_shrink([false, false])
+            .show_rows(ui, row_height, matches.len(), |ui, range| {
+                ui.set_max_width(lane);
                 for c in matches[range].iter().map(|&at| &creatures[at]) {
                     ui.push_id(c.id, |ui| {
                         let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
@@ -7805,8 +7812,7 @@ impl Encounters {
                         }
                     });
                 }
-            },
-        );
+            });
         chosen
     }
 
