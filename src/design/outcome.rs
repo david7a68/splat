@@ -4386,6 +4386,48 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
     response
 }
 
+/// A typed message drawn in a pane's body, outside its footer, where the thing it is about stands
+/// (the Run's header notice and its setup warnings, a group row's faults): a [`Notice`] or a
+/// [`FaultMessage`], with its choices (a bordered choice, a red one, a link), its close icon
+/// (`Dismiss`) and its file line, drawn as a footer line draws them: the same words, tone,
+/// order and locks, at the cursor in the full form. It gives back the caller's id of the choice
+/// pressed. It holds no Undo and no ticket: a finished change kept in a store goes in its
+/// footer (`Messages::kept`), so a `Said` or a `Done` is not one. A body place: `show` is a
+/// reviewed suppression (`Ban::Body`).
+///
+/// ```compile_fail
+/// let _ = splat::outcome::BodyMessage::<u8>::from(splat::outcome::Said::new(splat::sentence!("Saved.")));
+/// ```
+#[must_use = "call show"]
+pub struct BodyMessage<A> {
+    typed: Typed<A>,
+}
+
+impl<A> From<Notice<A>> for BodyMessage<A> {
+    fn from(notice: Notice<A>) -> Self {
+        Self {
+            typed: Typed::new(notice.tone.tone(), notice.words, None, notice.choices)
+                .with_file(notice.file),
+        }
+    }
+}
+
+impl<A> From<FaultMessage<A>> for BodyMessage<A> {
+    fn from(fault: FaultMessage<A>) -> Self {
+        Self {
+            typed: Typed::new(fault.tone, fault.words, None, fault.choices).with_file(fault.file),
+        }
+    }
+}
+
+impl<A> BodyMessage<A> {
+    /// Draw it at the cursor; the caller's id of the choice pressed.
+    pub fn show(self, ui: &mut Ui) -> Option<A> {
+        let pressed = self.typed.body.draw(ui, MessagePlace::Page)?;
+        self.typed.id(pressed)
+    }
+}
+
 /// A page or section whose body cannot show: its fault in place of the body, with choices that
 /// repair it under the words. It takes the fault's words and tone when it is made, and gives
 /// back the caller's id of the choice pressed.
@@ -5808,7 +5850,7 @@ mod tests {
     #[test]
     #[allow(
         clippy::disallowed_methods,
-        reason = "the test of the body place `BodyFault::show` itself"
+        reason = "the test of the body places `BodyFault::show` and `BodyMessage::show` themselves"
     )]
     fn a_body_fault_gives_its_repairs_back_by_id() {
         use egui_kittest::kittest::NodeT;
@@ -5817,6 +5859,8 @@ mod tests {
             Open,
             Replace,
             Repair(u8),
+            Log,
+            Dismiss,
         }
         #[derive(Default)]
         struct State {
@@ -5858,6 +5902,24 @@ mod tests {
                                     Fix::Repair(8),
                                 ))
                                 .show(ui);
+                            state.pressed.extend(pressed);
+                            // A typed message in the body (`BodyMessage`): a warning with a
+                            // link and its close icon.
+                            let pressed = BodyMessage::from(
+                                Notice::warning(crate::sentence!("Kaya’s sheet changed."))
+                                    .choice(Choice::new(
+                                        MessageChoice::Link {
+                                            word: "Log",
+                                            hover: None,
+                                        },
+                                        Fix::Log,
+                                    ))
+                                    .choice(Choice::new(
+                                        MessageChoice::Dismiss(Lost::Nothing),
+                                        Fix::Dismiss,
+                                    )),
+                            )
+                            .show(ui);
                             state.pressed.extend(pressed);
                         },
                     );
@@ -5946,6 +6008,26 @@ mod tests {
         h.get_by_label(&name).click();
         h.run_steps(2);
         assert!(h.state().pressed.is_empty());
+        // A typed message in the body (`BodyMessage`, M-R0's Run rows): in its notice's tone; its
+        // link and its close icon give back the caller's ids, once each.
+        let words = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Kaya’s sheet changed.")
+            .rect();
+        let tones: Vec<Tone> = message_rects(&h.ctx)
+            .into_iter()
+            .filter(|(rect, _, _)| rect.contains(words.center()))
+            .map(|(_, _, tone)| tone)
+            .collect();
+        assert_eq!(tones, [Tone::Warning], "the notice's tone");
+        h.get_by_label("Log").click();
+        h.run_steps(2);
+        h.get_by_label(DISMISS_NAME).click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().pressed,
+            [Fix::Log, Fix::Dismiss],
+            "each press once"
+        );
 
         // Review of PR 332, 4: narrower than the shortest cut, the words wrap inside the row;
         // every fixed word is painted, none is cut.
