@@ -1167,6 +1167,8 @@ pub struct Choice<A> {
     id: A,
     lock: Lock,
     hover: Option<String>,
+    /// What pressing it does, painted in a help line under it (ruling M8).
+    help: Option<Sentence>,
 }
 
 /// A control's lock: its reason, and whether it holds now. A control made with `locked_when`
@@ -1189,6 +1191,7 @@ impl<A> Choice<A> {
             id,
             lock: None,
             hover: None,
+            help: None,
         }
     }
 
@@ -1211,12 +1214,21 @@ impl<A> Choice<A> {
             id,
             lock: None,
             hover: None,
+            help: None,
         }
     }
 
     /// Words on hover made at run time, owned (a link's path).
     pub fn hover(mut self, words: String) -> Self {
         self.hover = Some(words);
+        self
+    }
+
+    /// What pressing it does, in a help line under it, as a body fault's [`Repair`] says it
+    /// (ruling M8): painted, never only on hover. A message whose choices have help draws each
+    /// choice on a line of its own (`action_help`).
+    pub fn help(mut self, help: Sentence) -> Self {
+        self.help = Some(help);
         self
     }
 
@@ -1994,6 +2006,8 @@ struct Body {
     named: Vec<Option<(ChoiceKind, ChoiceWords)>>,
     locks: Vec<Lock>,
     hovers: Vec<Option<String>>,
+    /// Each choice's help line (`Choice::help`), by index.
+    helps: Vec<Option<Sentence>>,
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
@@ -2054,6 +2068,7 @@ impl<A> Typed<A> {
         };
         let mut ids = Vec::with_capacity(choices.len());
         let (mut whats, mut locks, mut hovers) = (Vec::new(), Vec::new(), Vec::new());
+        let mut helps = Vec::new();
         let mut named = Vec::new();
         // Safe first: a choice that loses something follows every other (a stable order).
         let mut choices = choices;
@@ -2063,6 +2078,7 @@ impl<A> Typed<A> {
             named.push(choice.named);
             locks.push(choice.lock);
             hovers.push(choice.hover);
+            helps.push(choice.help);
             ids.push(choice.id);
         }
         Self {
@@ -2075,6 +2091,7 @@ impl<A> Typed<A> {
                 named,
                 locks,
                 hovers,
+                helps,
                 file: None,
                 undo_alone: false,
             },
@@ -2640,6 +2657,42 @@ impl<'f, A: 'static> Messages<'f, A> {
         }
     }
 
+    /// `pane` for a body whose acts start or end the footer's lines (a form whose fields, Save
+    /// and Discard change what its footer says; `Footer::pane_then`): `add` draws the body; then
+    /// `then` gets what it returned and these messages, after the body and before the footer
+    /// paints, and adds the lines from the state the body's acts left. So the frame of an act
+    /// shows the line it brought and never one it ended, also when egui draws that frame in one
+    /// pass. Lines added before stay. What `then` returns, and the press.
+    pub fn pane_then<R, T>(
+        self,
+        ui: &mut Ui,
+        body: super::pane::Body,
+        add: impl FnOnce(&mut Ui) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> Paned<T, A> {
+        let (id, width) = (self.id, self.width);
+        let mut messages = self;
+        let mut sink = None;
+        let empty: TypedFooter<A> = TypedFooter {
+            lines: Vec::new(),
+            sink: PressSink(std::rc::Rc::default()),
+            retained: None,
+            plan: None,
+        };
+        let footer = Footer::typed(id, width, Box::new(empty));
+        let body = footer.pane_then(ui, body, add, |inner, footer| {
+            let out = then(inner, &mut messages);
+            let (lines, press) = messages.into_footer();
+            footer.take_typed(lines);
+            sink = Some(press);
+            out
+        });
+        Paned {
+            body,
+            pressed: sink.and_then(|sink| sink.0.borrow_mut().take()),
+        }
+    }
+
     /// `pane` with a `Body::Content` scroll column that behaves as `scroll` says (opens at the
     /// top, holds a pressed control in place: `pane::ContentScroll`).
     pub fn pane_content<R>(
@@ -2679,10 +2732,11 @@ impl<'f, A: 'static> Messages<'f, A> {
 /// the lines (their data, and the state their file lines draw from). It is made by the pass that
 /// draws the lines (the paint is its measure), and only when one of those changed: an unchanged
 /// frame sorts, joins, counts verbs, builds and fits no Undo label and lays out no reservation,
-/// and the pane knows an unchanged footer's height before it draws. A changed
-/// footer's first frame still paints at the last height and measures (its placement in that same
-/// frame comes with layout PR 456, L1c). Each footer's reservations are its own (no shared
-/// state): a pane that gives up its reasons' room takes nothing from another. The plans live in
+/// and the pane knows an unchanged footer's height before it draws. A changed footer's plan is
+/// made before the pane places it, by drawing its lines in a context of their own (`measure`,
+/// L1c): so the pane knows every footer's height before it draws, and draws its lines once, in
+/// their place, from the plan. Each footer's reservations are its own (no shared state): a pane
+/// that gives up its reasons' room takes nothing from another. The plans live in
 /// one store per context, which drops the plan of a footer that no frame drew since the last one
 /// ([`FooterPlans`]).
 struct TypedFooter<A: 'static> {
@@ -2703,6 +2757,8 @@ struct PlanEnv {
     width: u32,
     scale: u32,
     style: std::sync::Arc<egui::Style>,
+    /// The fonts in effect (`font_key`): new fonts, or a family's font replaced, plan again.
+    fonts: u64,
 }
 
 /// One line as the plan sees it: what decides its place and its size. A press's id is not in
@@ -2739,6 +2795,7 @@ fn file_gone(ctx: &egui::Context, body: &Body) -> bool {
 }
 
 /// A footer's retained plan. See [`TypedFooter`].
+#[derive(Clone)]
 struct FooterPlan {
     env: PlanEnv,
     /// The lines' indices in the footer's one order (`footer_order`).
@@ -2765,14 +2822,12 @@ impl FooterPlan {
     }
 }
 
-/// A footer's lines as last planned, their revision, its plan, its own reservations' decision
-/// (ruling R29), and the frame that last drew it.
+/// A footer's lines as last planned, their revision, its plan, and the frame that last drew it.
 #[derive(Clone)]
 struct Retained {
     lines: std::sync::Arc<Vec<PlanLine>>,
     revision: super::memo::Revision,
     plan: Option<std::sync::Arc<FooterPlan>>,
-    give_up: bool,
     drawn: u64,
 }
 
@@ -2909,7 +2964,6 @@ impl<A: 'static> TypedFooter<A> {
                     return kept.clone();
                 }
             }
-            let give_up = plans.plans.get(&id).is_some_and(|kept| kept.give_up);
             let retained = Retained {
                 lines: std::sync::Arc::new(
                     self.lines
@@ -2926,7 +2980,6 @@ impl<A: 'static> TypedFooter<A> {
                 ),
                 revision: super::memo::Revision::next(),
                 plan: None,
-                give_up,
                 drawn: frame,
             };
             plans.plans.insert(id, retained.clone());
@@ -2940,6 +2993,7 @@ impl<A: 'static> TypedFooter<A> {
             width: width.to_bits(),
             scale: ui.ctx().pixels_per_point().to_bits(),
             style: ui.style().clone(),
+            fonts: font_key(ui.ctx()),
         }
     }
 
@@ -2968,16 +3022,17 @@ impl<A: 'static> TypedFooter<A> {
                     .ctx()
                     .data(|data| data.get_temp::<egui::Id>(egui::Id::new("design_footer_drawing")));
                 let id = egui::Id::new(("design_kept_line", pane, ticket.order()));
-                ui.scope_builder(egui::UiBuilder::new().id(id), |ui| {
+                line_ui(ui, Some(id), |ui| {
                     typed
                         .body
                         .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
                 })
-                .inner
             }
-            None => typed
-                .body
-                .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room)),
+            None => line_ui(ui, None, |ui| {
+                typed
+                    .body
+                    .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
+            }),
         };
         if let Some(pressed) = pressed
             && let Some(id) = typed.id(pressed)
@@ -2987,81 +3042,52 @@ impl<A: 'static> TypedFooter<A> {
     }
 }
 
-impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
-    fn is_empty(&self) -> bool {
-        self.lines.is_empty()
-    }
-
-    fn planned(&mut self, ui: &Ui, id: egui::Id, width: f32) -> Option<f32> {
-        let retained = self.revision(ui.ctx(), id);
-        self.retained = Some(retained.clone());
-        let env = Self::env(ui, retained.revision, width);
-        let plan = retained.plan.filter(|plan| plan.env == env)?;
-        let wanted = plan.wanted();
-        self.plan = Some(plan);
-        Some(wanted)
-    }
-
-    fn draw(&mut self, ui: &mut Ui, id: egui::Id, rect: Rect, cut: bool, most: f32, stored: f32) {
-        use super::tokens::HAIRLINE_WIDTH;
-        if cut && rect.height() > 0.0 {
-            // The cut body's last line reads as a list that goes on, not as a drawing fault.
-            ui.painter().hline(
-                rect.x_range(),
-                rect.top() + HAIRLINE_WIDTH / 2.0,
-                egui::Stroke::new(HAIRLINE_WIDTH, super::tokens::colors().hairline),
-            );
-        }
-        let mut lines: Vec<Option<FooterLine<A>>> = std::mem::take(&mut self.lines)
-            .into_iter()
-            .map(Some)
-            .collect();
-        if let Some(plan) = self.plan.take() {
-            // The plan holds: its order, its name, its Undos' forms and its room. Ruling R29:
-            // the open locks' reasons keep their room while the footer has room for it where it
-            // stands; each takes the room the plan measured, with no reason laid out.
-            let mut room = FooterPass {
-                give_up: plan.reserved > 0.0 && plan.wanted() > most,
-                measure: false,
-                reserved: 0.0,
-                drawn: 0.0,
-                rooms: plan.rooms.clone(),
-                next: 0,
-                measured: Vec::new(),
-                line: 0,
-                forms: plan.forms.clone(),
-                fitted: Vec::new(),
-            };
-            let _ = super::components::scroll_part(ui, rect, id, &plan.name, |ui| {
-                for &at in &plan.order {
-                    if let Some(line) = lines[at].take() {
-                        self.draw_line(ui, at, line, plan.alone[at], &mut room);
-                    }
-                }
-            });
-            return;
-        }
-        // The lines, their width, scale or style changed: this pass draws them and is their
-        // measure. The one footer order (`footer_order`), the name, each Undo's form, and the
-        // room.
-        let width = rect.width();
+impl<A: 'static> TypedFooter<A> {
+    /// The footer's plan at `width`: the retained one while it holds, else one made now
+    /// (`measure`) and kept.
+    fn plan_for(&mut self, ui: &Ui, id: egui::Id, width: f32) -> std::sync::Arc<FooterPlan> {
         let retained = match self.retained.take() {
             Some(retained) => retained,
             None => self.revision(ui.ctx(), id),
         };
-        let mut order: Vec<usize> = (0..lines.len()).collect();
-        order.sort_by_key(|&at| {
-            let line = lines[at].as_ref().expect("each line once");
-            (line.rank, line.order.map(std::cmp::Reverse))
+        let env = Self::env(ui, retained.revision, width);
+        if let Some(plan) = retained.plan.as_ref().filter(|plan| plan.env == env) {
+            let plan = plan.clone();
+            self.retained = Some(retained);
+            return plan;
+        }
+        let plan = std::sync::Arc::new(self.measure(ui, id, width, env));
+        let retained = Retained {
+            plan: Some(plan.clone()),
+            ..retained
+        };
+        ui.ctx().data_mut(|data| {
+            data.get_temp_mut_or_default::<FooterPlans>(plans_id())
+                .plans
+                .insert(id, retained.clone());
         });
+        self.retained = Some(retained);
+        plan
+    }
+
+    /// Make the plan of these lines at `width`: their one footer order (`footer_order`), the
+    /// footer's name, which Undo is alone of its verb, each Undo's words as fitted, and the room
+    /// the lines and their open locks' reasons take, by drawing them as the footer draws them,
+    /// in a context of their own with this one's fonts, style and scale (`measuring`). L1c,
+    /// finding 2 of PR 452's review: so a changed footer's demand is known before the pane
+    /// places it, and its lines are drawn once in this context, in their place. A second draw
+    /// here would give each control a second widget and accessible node.
+    fn measure(&self, ui: &Ui, id: egui::Id, width: f32, env: PlanEnv) -> FooterPlan {
+        let lines = &self.lines;
+        let mut order: Vec<usize> = (0..lines.len()).collect();
+        order.sort_by_key(|&at| (lines[at].rank, lines[at].order.map(std::cmp::Reverse)));
         count(|work| {
             work.plans += 1;
             work.sorted += order.len();
         });
         let name = order
             .iter()
-            .filter_map(|&at| lines[at].as_ref())
-            .map(|line| line.typed.body.words.as_str())
+            .map(|&at| lines[at].typed.body.words.as_str())
             .filter(|words| !words.is_empty())
             .collect::<Vec<_>>()
             .join(" ");
@@ -3069,23 +3095,20 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
         // The footer's one short-Undo rule: the verbs of its kept Undos, counted once.
         let verbs: Vec<Verb> = lines
             .iter()
-            .flatten()
             .filter(|line| line.ticket.is_some())
             .filter_map(|line| line.typed.body.undo.as_ref().and_then(UndoStep::counted))
             .collect();
         let alone: Vec<bool> = lines
             .iter()
-            .flatten()
             .map(|line| {
                 count(|work| work.verbs += verbs.len());
                 undo_alone(&verbs, line.typed.body.undo.as_ref())
             })
             .collect();
-        // Ruling R29: whether the reasons give up their room this pass is the footer's own last
-        // decision, kept with its plan; this pass measures what they want and decides again.
-        let give_up = retained.give_up;
+        // Every open lock's reason is laid out and measured (ruling R29): a pass decides from the
+        // plan and the footer's room whether they keep it.
         let mut room = FooterPass {
-            give_up,
+            give_up: false,
             measure: true,
             reserved: 0.0,
             drawn: 0.0,
@@ -3096,15 +3119,30 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
             forms: std::sync::Arc::from([]),
             fitted: vec![None; lines.len()],
         };
-        let (_, content) = super::components::scroll_part(ui, rect, id, &name, |ui| {
-            for &at in &order {
-                if let Some(line) = lines[at].take() {
-                    self.draw_line(ui, at, line, alone[at], &mut room);
-                }
-            }
+        // The state the file lines draw from (a file that is gone adds a reason line).
+        let gone = file_states(ui.ctx(), lines);
+        let content = measuring(ui, &gone, |ui| {
+            let rect = Rect::from_min_size(ui.max_rect().min, egui::vec2(width, MEASURE_ROOM));
+            let (_, content, _) =
+                super::components::scroll_part(ui, rect, id, &name, false, |ui| {
+                    for &at in &order {
+                        let line = &lines[at];
+                        let mut body = line.typed.body.clone();
+                        body.undo_alone = alone[at];
+                        room.line = at;
+                        let scope = line
+                            .ticket
+                            .as_ref()
+                            .map(|ticket| egui::Id::new(("design_kept_line", id, ticket.order())));
+                        let _ = line_ui(ui, scope, |ui| {
+                            body.draw_in(ui, MessagePlace::Footer, Reasons::Planned(&mut room))
+                        });
+                    }
+                });
+            content
         });
-        let plan = FooterPlan {
-            env: Self::env(ui, retained.revision, width),
+        FooterPlan {
+            env,
             order,
             name,
             alone,
@@ -3112,30 +3150,262 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
             bare: content - room.drawn,
             reserved: room.reserved,
             rooms: std::sync::Arc::from(std::mem::take(&mut room.measured)),
+        }
+    }
+}
+
+/// The state each of `lines`' file lines draws from: its key, and whether it says its file is
+/// gone (`FileLine::draw`).
+fn file_states<A>(ctx: &egui::Context, lines: &[FooterLine<A>]) -> Vec<(egui::Id, bool)> {
+    lines
+        .iter()
+        .filter_map(|line| line.typed.body.file.as_ref().and_then(FileLine::path))
+        .map(|path| {
+            let key = egui::Id::new(("design_file_gone", path));
+            (
+                key,
+                ctx.data(|data| data.get_temp::<bool>(key)) == Some(true),
+            )
+        })
+        .collect()
+}
+
+/// The state of the same file lines (`file_states`), read again.
+fn file_states_of(ctx: &egui::Context, files: &[(egui::Id, bool)]) -> Vec<(egui::Id, bool)> {
+    files
+        .iter()
+        .map(|&(key, _)| {
+            (
+                key,
+                ctx.data(|data| data.get_temp::<bool>(key)) == Some(true),
+            )
+        })
+        .collect()
+}
+
+/// A footer line drawn in a scope of its own id (a kept line: its controls' ids come from its
+/// ticket), or in `ui`.
+fn line_ui<R>(ui: &mut Ui, scope: Option<egui::Id>, add: impl FnOnce(&mut Ui) -> R) -> R {
+    match scope {
+        Some(id) => ui.scope_builder(egui::UiBuilder::new().id(id), add).inner,
+        None => add(ui),
+    }
+}
+
+/// The height a footer's lines are measured in: more than any footer takes.
+const MEASURE_ROOM: f32 = 100_000.0;
+
+/// The fonts in effect in `ctx`, as one key: each family's fonts, and each font's name and data
+/// (by its shared data, so new fonts under an old name count). Any `set_fonts` that changes what
+/// a family draws with changes it, not only the theme's. Worked out once a pass.
+fn font_key(ctx: &egui::Context) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let pass = ctx.cumulative_pass_nr();
+    let id = egui::Id::new("design_footer_font_key");
+    if let Some((kept, key)) = ctx.data(|data| data.get_temp::<(u64, u64)>(id))
+        && kept == pass
+    {
+        return key;
+    }
+    let key = ctx.fonts(|view| {
+        let fonts = view.definitions();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        fonts.families.hash(&mut hasher);
+        for (name, data) in &fonts.font_data {
+            name.hash(&mut hasher);
+            std::sync::Arc::as_ptr(data).hash(&mut hasher);
+        }
+        hasher.finish()
+    });
+    ctx.data_mut(|data| data.insert_temp(id, (pass, key)));
+    key
+}
+
+/// The context a footer's lines are measured in (`TypedFooter::measure`), kept in this one's
+/// memory, and the fonts it has (`font_key`).
+#[derive(Clone)]
+struct MeasureContext {
+    ctx: egui::Context,
+    fonts: u64,
+}
+
+/// One pass of the measuring context: `add` gets a `Ui` there with `ui`'s style and this
+/// context's fonts and scale, and the file lines' state `gone`. Nothing it draws reaches this
+/// context: no widget, no accessible node, no focus and no paint. Its root `Ui` is the one
+/// `egui::Ui::new` in the design system: that context has no page, so no host region.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+fn measuring<R>(ui: &Ui, gone: &[(egui::Id, bool)], mut add: impl FnMut(&mut Ui) -> R) -> R {
+    let main = ui.ctx();
+    let key = egui::Id::new("design_footer_measure");
+    // The measuring context has the fonts in effect here, whoever set them (`font_key`).
+    let fonts = font_key(main);
+    let kept = main.data(|data| data.get_temp::<MeasureContext>(key));
+    let measure = match kept {
+        Some(kept) if kept.fonts == fonts => kept.ctx,
+        kept => {
+            let ctx = kept.map(|kept| kept.ctx).unwrap_or_default();
+            ctx.options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+            ctx.set_fonts(main.fonts(|view| view.definitions().clone()));
+            main.data_mut(|data| {
+                data.insert_temp(
+                    key,
+                    MeasureContext {
+                        ctx: ctx.clone(),
+                        fonts,
+                    },
+                );
+            });
+            ctx
+        }
+    };
+    if measure.zoom_factor() != main.zoom_factor() {
+        measure.set_zoom_factor(main.zoom_factor());
+    }
+    measure.data_mut(|data| {
+        for &(key, gone) in gone {
+            if gone {
+                data.insert_temp(key, true);
+            } else {
+                data.remove::<bool>(key);
+            }
+        }
+    });
+    let screen = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(MEASURE_ROOM, MEASURE_ROOM));
+    let mut input = egui::RawInput {
+        screen_rect: Some(screen),
+        ..Default::default()
+    };
+    input.viewports.insert(
+        egui::ViewportId::ROOT,
+        egui::ViewportInfo {
+            native_pixels_per_point: main.native_pixels_per_point(),
+            ..Default::default()
+        },
+    );
+    let style = ui.style().clone();
+    let mut out = None;
+    let _ = measure.run(input, |ctx| {
+        let mut ui = Ui::new(
+            ctx.clone(),
+            egui::Id::new("design_footer_measure"),
+            egui::UiBuilder::new().max_rect(screen).style(style.clone()),
+        );
+        out = Some(add(&mut ui));
+    });
+    out.expect("the measuring context draws one pass")
+}
+
+impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
+    fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+
+    fn planned(&mut self, ui: &Ui, id: egui::Id, width: f32) -> Option<f32> {
+        if self.lines.is_empty() {
+            // No footer: nothing to measure (the store still sees it drawn this frame).
+            self.retained = Some(self.revision(ui.ctx(), id));
+            return None;
+        }
+        let plan = self.plan_for(ui, id, width);
+        let wanted = plan.wanted();
+        self.plan = Some(plan);
+        Some(wanted)
+    }
+
+    fn draw(
+        &mut self,
+        ui: &mut Ui,
+        id: egui::Id,
+        rect: Rect,
+        cut: bool,
+        most: f32,
+        stored: f32,
+        fit: bool,
+    ) -> (Rect, f32) {
+        use super::tokens::HAIRLINE_WIDTH;
+        if cut && rect.height() > 0.0 {
+            // The cut body's last line reads as a list that goes on, not as a drawing fault.
+            ui.painter().hline(
+                rect.x_range(),
+                rect.top() + HAIRLINE_WIDTH / 2.0,
+                egui::Stroke::new(HAIRLINE_WIDTH, super::tokens::colors().hairline),
+            );
+        }
+        // The plan: the pane's (`planned`), else one made now for a footer drawn by hand.
+        let (plan, made) = match self.plan.take() {
+            Some(plan) => (plan, false),
+            None => (self.plan_for(ui, id, rect.width()), true),
+        };
+        let files = file_states(ui.ctx(), &self.lines);
+        let mut lines: Vec<Option<FooterLine<A>>> = std::mem::take(&mut self.lines)
+            .into_iter()
+            .map(Some)
+            .collect();
+        // Its order, its name, its Undos' forms and its room. Ruling R29: the open locks'
+        // reasons keep their room while the footer has room for it where it stands; each takes
+        // the room the plan measured, with no reason laid out.
+        let mut room = FooterPass {
+            give_up: plan.reserved > 0.0 && plan.wanted() > most,
+            measure: false,
+            reserved: 0.0,
+            drawn: 0.0,
+            rooms: plan.rooms.clone(),
+            next: 0,
+            measured: Vec::new(),
+            line: 0,
+            forms: plan.forms.clone(),
+            fitted: Vec::new(),
+        };
+        let (_, content, part) =
+            super::components::scroll_part(ui, rect, id, &plan.name, fit, |ui| {
+                for &at in &plan.order {
+                    if let Some(line) = lines[at].take() {
+                        self.draw_line(ui, at, line, plan.alone[at], &mut room);
+                    }
+                }
+            });
+        // The plan was measured in a context of its own (`measure`): drawn here, the lines take
+        // the room it says, less the reasons' room they keep. A press in this draw can change
+        // what a line shows (a link to a file that is gone adds its reason; the next frame plans
+        // the new lines). Any other difference is a fault of that measure: test builds stop at
+        // it. Either way the plan takes this paint's room, and the pass is drawn again with it.
+        let bare = content - plan.rooms.iter().take(room.next).sum::<f32>();
+        let plan = if (bare - plan.bare).abs() >= HAIRLINE_WIDTH {
+            debug_assert!(
+                files != file_states_of(ui.ctx(), &files),
+                "a footer's lines measure {} and paint {bare}",
+                plan.bare
+            );
+            let plan = std::sync::Arc::new(FooterPlan {
+                bare,
+                ..(*plan).clone()
+            });
+            ui.ctx().data_mut(|data| {
+                if let Some(kept) = data
+                    .get_temp_mut_or_default::<FooterPlans>(plans_id())
+                    .plans
+                    .get_mut(&id)
+                {
+                    kept.plan = Some(plan.clone());
+                }
+            });
+            ui.ctx()
+                .request_discard("a footer's lines paint another room than they measured");
+            plan
+        } else {
+            plan
         };
         let wanted = plan.wanted();
-        let next = plan.reserved > 0.0 && wanted > most;
-        if next != give_up {
-            ui.ctx()
-                .request_discard("the message footer's reservations changed");
-        }
-        if (wanted - stored).abs() >= HAIRLINE_WIDTH {
+        if made && (wanted - stored).abs() >= HAIRLINE_WIDTH {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(id.with("height"), wanted));
             ui.ctx()
                 .request_discard("the message footer changed height");
         }
-        ui.ctx().data_mut(|data| {
-            let plans = data.get_temp_mut_or_default::<FooterPlans>(plans_id());
-            plans.plans.insert(
-                id,
-                Retained {
-                    plan: Some(std::sync::Arc::new(plan)),
-                    give_up: next,
-                    ..retained
-                },
-            );
-        });
+        (part, wanted)
     }
 }
 
@@ -3431,8 +3701,12 @@ impl Body {
                     .row_choices()
                     .map(|(at, choice)| self.choice_width(ui, at, choice) + gap)
                     .sum();
-                let one_line = inset + undo.as_ref().map_or(0.0, |form| form.width + L) + choices
-                    <= ui.available_width();
+                // Ruling M8: a choice with help stands on a line of its own, its help under it, as
+                // a body fault's repair does; then so does every choice of the message.
+                let stacked = self.helps.iter().any(Option::is_some);
+                let one_line = !stacked
+                    && inset + undo.as_ref().map_or(0.0, |form| form.width + L) + choices
+                        <= ui.available_width();
                 if undo.is_some() || one_line {
                     ui.horizontal(|ui| {
                         space(ui, inset);
@@ -3461,7 +3735,32 @@ impl Body {
                         }
                     });
                 }
-                if !one_line {
+                if stacked {
+                    // The bottom of what the choice before drew: its help line, else itself.
+                    let mut below: Option<f32> = None;
+                    for (at, choice) in self.row_choices() {
+                        // A red choice stands exactly `M` below the line before it, measured from
+                        // that line's own bounds: a one-line help sits centred in a taller row.
+                        if let Some(below) = below
+                            && self.loses(at, choice)
+                        {
+                            space(ui, (below + M - ui.cursor().top()).max(0.0));
+                        }
+                        let shown = message_choice_row(ui, self.tone, |ui| {
+                            let room = ui.available_width();
+                            self.draw_choice(ui, at, choice, room, None)
+                        });
+                        let clicked = shown.as_ref().is_some_and(Response::clicked);
+                        activated(ui, pressed, clicked, words, Pressed::Choice(at));
+                        below = shown.as_ref().map(|response| response.rect.bottom());
+                        if let (Some(help), Some(response)) =
+                            (self.helps.get(at).and_then(Option::as_ref), &shown)
+                        {
+                            let lock = self.locks.get(at).and_then(holding);
+                            below = Some(action_help(ui, self.tone, help, response, lock).bottom());
+                        }
+                    }
+                } else if !one_line {
                     ui.horizontal_top(|ui| {
                         space(ui, inset);
                         ui.horizontal_wrapped(|ui| {
@@ -3617,60 +3916,15 @@ impl Body {
         }
     }
 
-    /// The choices, in order: a red one keeps exactly `L` from the one before it on its line, or
-    /// starts a line of its own `M` below the others (`before_lose`). The pressed choice's index.
+    /// The choices, in order, on wrapped lines: a red one keeps exactly `L` from the one before it
+    /// on its line, or starts a line of its own `M` below the others (`before_lose`).
     fn draw_choices(&self, ui: &mut Ui, pressed: &mut Option<Pressed>) {
         let gap = ui.spacing().item_spacing.x;
         for (at, choice) in self.row_choices() {
-            let lock = self.locks.get(at).and_then(holding);
-            let clicked = match (choice, self.named.get(at).and_then(Option::as_ref)) {
-                // Words with objects: whole, cut (named and tipped with the whole words) or
-                // wrapped to the row's width.
-                // Words with objects: cut to the row's width, named with the whole words.
-                (_, Some((kind, words))) => {
-                    if *kind == ChoiceKind::Lose && at > 0 {
-                        before_lose(ui, kind.action(&words.label()).natural_width(ui), gap);
-                    }
-                    data_choice(ui, words, *kind, ui.max_rect().width(), lock).clicked()
-                }
-                (MessageChoice::Choice(word), None) => Action::secondary(word)
-                    .density(Density::Read)
-                    .blocked(lock)
-                    .show(ui)
-                    .clicked(),
-                (MessageChoice::Lose(word), None) => {
-                    if at > 0 {
-                        let width = Action::destructive(word)
-                            .density(Density::Read)
-                            .natural_width(ui);
-                        before_lose(ui, width, gap);
-                    }
-                    Action::destructive(word)
-                        .density(Density::Read)
-                        .blocked(lock)
-                        .show(ui)
-                        .clicked()
-                }
-                (MessageChoice::Link { word, hover }, None) => match lock {
-                    // A locked link is drawn disabled, with its reason, as a blocked action is.
-                    Some(reason) => {
-                        ui.add_enabled_ui(false, |ui| link(ui, word))
-                            .inner
-                            .on_disabled_hover_text(reason);
-                        false
-                    }
-                    None => {
-                        let response = link(ui, word);
-                        let owned = self.hovers.get(at).and_then(Option::as_deref);
-                        match owned.or(hover) {
-                            Some(hover) => response.on_hover_text(hover),
-                            None => response,
-                        }
-                        .clicked()
-                    }
-                },
-                (MessageChoice::Dismiss(_), None) => false,
-            };
+            let room = ui.max_rect().width();
+            let clicked = self
+                .draw_choice(ui, at, choice, room, Some(gap))
+                .is_some_and(|response| response.clicked());
             activated(
                 ui,
                 pressed,
@@ -3678,6 +3932,79 @@ impl Body {
                 self.words.as_str(),
                 Pressed::Choice(at),
             );
+        }
+    }
+
+    /// Whether the choice at `at` loses something (red).
+    fn loses(&self, at: usize, choice: MessageChoice<'_>) -> bool {
+        match self.named.get(at).and_then(Option::as_ref) {
+            Some((kind, _)) => *kind == ChoiceKind::Lose,
+            None => matches!(choice, MessageChoice::Lose(_)),
+        }
+    }
+
+    /// One choice, in `room`; on a wrapped line (`wrapped`: the item gap), a red one keeps its
+    /// `L` or starts a line of its own (`before_lose`). Its response (none for `Dismiss`, which
+    /// is not on a row).
+    fn draw_choice(
+        &self,
+        ui: &mut Ui,
+        at: usize,
+        choice: MessageChoice<'_>,
+        room: f32,
+        wrapped: Option<f32>,
+    ) -> Option<Response> {
+        let lock = self.locks.get(at).and_then(holding);
+        match (choice, self.named.get(at).and_then(Option::as_ref)) {
+            // Words with objects: cut to the row's width, named with the whole words.
+            (_, Some((kind, words))) => {
+                if let Some(gap) = wrapped
+                    && *kind == ChoiceKind::Lose
+                    && at > 0
+                {
+                    before_lose(ui, kind.action(&words.label()).natural_width(ui), gap);
+                }
+                Some(data_choice(ui, words, *kind, room, lock))
+            }
+            (MessageChoice::Choice(word), None) => Some(
+                Action::secondary(word)
+                    .density(Density::Read)
+                    .blocked(lock)
+                    .show(ui),
+            ),
+            (MessageChoice::Lose(word), None) => {
+                if let Some(gap) = wrapped
+                    && at > 0
+                {
+                    let width = Action::destructive(word)
+                        .density(Density::Read)
+                        .natural_width(ui);
+                    before_lose(ui, width, gap);
+                }
+                Some(
+                    Action::destructive(word)
+                        .density(Density::Read)
+                        .blocked(lock)
+                        .show(ui),
+                )
+            }
+            (MessageChoice::Link { word, hover }, None) => match lock {
+                // A locked link is drawn disabled, with its reason, as a blocked action is.
+                Some(reason) => Some(
+                    ui.add_enabled_ui(false, |ui| link(ui, word))
+                        .inner
+                        .on_disabled_hover_text(reason),
+                ),
+                None => {
+                    let response = link(ui, word);
+                    let owned = self.hovers.get(at).and_then(Option::as_deref);
+                    Some(match owned.or(hover) {
+                        Some(hover) => response.on_hover_text(hover),
+                        None => response,
+                    })
+                }
+            },
+            (MessageChoice::Dismiss(_), None) => None,
         }
     }
 
@@ -4036,6 +4363,30 @@ impl<A> Repair<A> {
     }
 }
 
+/// The help line under an action (ruling M8): what pressing it does, in the help words, from
+/// the message's words, painted, never only on hover. The one help line of a body fault's
+/// [`Repair`] and of a footer [`Choice`]. The help belongs to the action: it is the action's
+/// accessible description (after its lock's reason while that holds), and a keyboard focus on
+/// the action brings the action and its help into view together (`reveal_with`). The help
+/// line's rect.
+fn action_help(
+    ui: &mut Ui,
+    tone: Tone,
+    help: &Sentence,
+    action: &Response,
+    lock: Option<&str>,
+) -> Rect {
+    let line = message_choice_row(ui, tone, |ui| super::components::help(ui, help.as_str()));
+    let description = match lock {
+        Some(reason) => format!("{reason} {}", help.as_str()),
+        None => help.as_str().to_owned(),
+    };
+    ui.ctx()
+        .accesskit_node_builder(action.id, |node| node.set_description(description));
+    super::components::reveal_with(ui, action.id, action.rect.union(line.rect));
+    line.rect
+}
+
 /// A fault in a page's body that the DM can repair from where it is (Campaign content's package
 /// and dependency faults): the fault's words and tone, then each [`Repair`] on its own line from
 /// the words, with its lock's reason and its help line under it. Its tone and words come from the
@@ -4078,12 +4429,18 @@ impl<A> BodyFault<A> {
                 let text = words.as_str();
                 tone_message(ui, tone, text);
                 for (at, repair) in repairs.iter().enumerate() {
-                    let clicked = message_choice_row(ui, tone, |ui| {
+                    let lock = holding(&repair.lock);
+                    let action = message_choice_row(ui, tone, |ui| {
                         let room = ui.available_width();
-                        let lock = holding(&repair.lock);
-                        data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock).clicked()
+                        data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock)
                     });
-                    activated(ui, &mut pressed, clicked, text, Pressed::Choice(at));
+                    activated(
+                        ui,
+                        &mut pressed,
+                        action.clicked(),
+                        text,
+                        Pressed::Choice(at),
+                    );
                     if let Some((reason, locked)) = &repair.lock {
                         message_choice_row(ui, tone, |ui| {
                             if *locked {
@@ -4096,9 +4453,7 @@ impl<A> BodyFault<A> {
                         });
                     }
                     if let Some(help) = &repair.help {
-                        message_choice_row(ui, tone, |ui| {
-                            super::components::help(ui, help.as_str());
-                        });
+                        action_help(ui, tone, help, &action, lock);
                     }
                 }
             })
@@ -5105,6 +5460,151 @@ mod tests {
         h.get_by_label("Delete Ash").click();
         h.run_steps(2);
         assert_eq!(h.state().deleted, 1);
+
+        // Ruling M8: a footer choice says what it does in a help line under it, painted, as a
+        // body fault's repair does (`action_help`), wide and narrow: each choice on a line of its
+        // own from the words, its help under it at its words, the red one exactly `M` below the
+        // safe one's help, measured from the help's own bounds, one line wide and wrapped narrow
+        // (review of PR 487, 3); each help is its choice's accessible description (review of
+        // PR 487, 1); the press still comes back.
+        const MOVE_HELP: &str =
+            "Elm keeps its place in the notes; Ash moves to the line before it.";
+        const DELETE_HELP: &str = "Its file goes to the bin.";
+        // Painted whole inside its clip, left of `right`: a line cut off by the footer's edge is
+        // not shown.
+        let whole = |h: &Harness<'_, App>, words: &str, right: f32| {
+            h.output().shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Text(text)
+                if text.galley.job.text == words
+                    && text.pos.x < right
+                    && clipped.clip_rect.expand(0.5).contains_rect(
+                        Rect::from_min_size(text.pos, text.galley.size())
+                    ))
+            })
+        };
+        let helped = || {
+            let mut app = one();
+            app.moves = Some(["Ash", "Elm"]);
+            app.deletes = true;
+            app.helps = true;
+            app
+        };
+        for narrow in [None, Some(320.0)] {
+            let mut app = helped();
+            app.narrow = narrow;
+            let mut h = harness_sized(app, 960.0);
+            let rect = |h: &Harness<'_, App>, name: &str| h.get_by_label(name).rect();
+            let help = |h: &Harness<'_, App>, words: &str| {
+                h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                    .rect()
+            };
+            let (moving, delete) = (rect(&h, "Move Ash before Elm"), rect(&h, "Delete Ash"));
+            let (move_help, delete_help) = (help(&h, MOVE_HELP), help(&h, DELETE_HELP));
+            assert!(
+                whole(&h, MOVE_HELP, f32::INFINITY) && whole(&h, DELETE_HELP, f32::INFINITY),
+                "{narrow:?}: the help is painted whole, not only a hover"
+            );
+            assert!(
+                move_help.top() >= moving.bottom() - 1.0
+                    && (move_help.left() - moving.left()).abs() < 1.0,
+                "{narrow:?}: Move's help under it, at its words: {moving:?} {move_help:?}"
+            );
+            assert_eq!(
+                move_help.height() > 1.5 * Type::Small.line(),
+                narrow.is_some(),
+                "{narrow:?}: Move's help wraps only narrow: {move_help:?}"
+            );
+            assert!(
+                (delete.top() - move_help.bottom() - M).abs() < 0.5
+                    && delete_help.top() >= delete.bottom() - 1.0,
+                "{narrow:?}: Delete exactly M below Move's help, its help under it: {move_help:?} {delete:?} {delete_help:?}"
+            );
+            for (name, description) in [
+                ("Move Ash before Elm", Some(MOVE_HELP)),
+                ("Delete Ash", Some(DELETE_HELP)),
+                ("Register as a new campaign", None),
+            ] {
+                assert_eq!(
+                    h.get_by_label(name)
+                        .accesskit_node()
+                        .description()
+                        .as_deref(),
+                    description,
+                    "{narrow:?}: {name}'s accessible description is its help"
+                );
+            }
+            h.get_by_label("Delete Ash").click();
+            h.run_steps(2);
+            assert_eq!(h.state().deleted, 1, "{narrow:?}: its press comes back");
+        }
+        // Review of PR 487, 2: in a short pane whose footer scrolls, Tab to the lowest choice
+        // brings it into view with its whole help line, not the choice alone.
+        let mut app = helped();
+        app.heights = Some([170.0, 760.0]);
+        let mut h = harness_sized(app, 960.0);
+        h.set_size(egui::vec2(960.0, 800.0));
+        h.run_steps(8);
+        assert!(
+            !whole(&h, DELETE_HELP, 320.0),
+            "the short pane's footer scrolls: Delete's help starts out of view"
+        );
+        let mut reached = false;
+        for _ in 0..40 {
+            h.key_press(egui::Key::Tab);
+            h.run_steps(2);
+            let focused = h
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused());
+            if focused.is_some_and(|node| {
+                node.accesskit_node().label().as_deref() == Some("Delete Ash")
+                    && node.rect().left() < 320.0
+            }) {
+                reached = true;
+                break;
+            }
+        }
+        assert!(reached, "Tab reaches Delete in the short pane");
+        h.run_steps(10);
+        assert!(
+            whole(&h, "Delete Ash", 320.0) && whole(&h, DELETE_HELP, 320.0),
+            "Tab shows Delete and its whole help line"
+        );
+        // The same in a pane's body (`pane::reveal_focus`): Tab to a body fault's repair under
+        // the footer brings it into view above the footer with its whole help line.
+        const FAULT_HELP: &str = "The package opens in Library.";
+        let mut app = helped();
+        app.body_fault = true;
+        app.body_tall = [520.0, 0.0];
+        app.heights = Some([420.0, 760.0]);
+        let mut h = harness_sized(app, 960.0);
+        h.set_size(egui::vec2(960.0, 800.0));
+        h.run_steps(8);
+        assert!(
+            !whole(&h, FAULT_HELP, 320.0),
+            "the body scrolls: the repair's help starts out of view"
+        );
+        let mut reached = false;
+        for _ in 0..40 {
+            h.key_press(egui::Key::Tab);
+            h.run_steps(2);
+            let focused = h
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused());
+            if focused.is_some_and(|node| {
+                node.accesskit_node().label().as_deref() == Some("Open in Library")
+            }) {
+                reached = true;
+                break;
+            }
+        }
+        assert!(reached, "Tab reaches the body repair");
+        h.run_steps(10);
+        assert!(
+            whole(&h, "Open in Library", 320.0) && whole(&h, FAULT_HELP, 320.0),
+            "Tab shows the repair and its whole help line above the footer"
+        );
     }
 
     /// M3 gap 3, in the pilot: a press made on the line before its entry changed in place (in
@@ -5221,6 +5721,17 @@ mod tests {
             help.top() >= replace.bottom() - 1.0,
             "help under its repair"
         );
+        // Review of PR 487, 1: the help is its repair's accessible description; a repair with
+        // no help has none.
+        let description = |h: &Harness<'_, State>, name: &str| {
+            h.get_by_label(name).accesskit_node().description()
+        };
+        assert_eq!(
+            description(&h, &name).as_deref(),
+            Some("Your entries stay."),
+            "the help is the repair's description"
+        );
+        assert_eq!(description(&h, "Repair Cinder Wolf"), None);
         // The fixed words after a cut object stay; the name keeps the whole words.
         let whole = format!("Repair {LONG} in Library");
         let node = h.get_by_label(&whole).rect();
@@ -5263,6 +5774,11 @@ mod tests {
         assert!(
             h.query_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
                 .is_some()
+        );
+        assert_eq!(
+            description(&h, &name).as_deref(),
+            Some("Save or discard campaign changes first. Your entries stay."),
+            "locked: the lock's reason, then the help"
         );
         assert_eq!(
             h.get_by_label("Repair Cinder Wolf").rect().top(),
@@ -5486,6 +6002,12 @@ mod tests {
             pub narrow: Option<f32>,
             /// Two panes side by side, 320 wide, of these heights.
             pub heights: Option<[f32; 2]>,
+            /// Each pane's body is this much taller than its label (a tall body).
+            pub body_tall: [f32; 2],
+            /// The first pane's body ends with a body fault whose repair has a help line (M8).
+            pub body_fault: bool,
+            /// The panes' style draws body text in this font family.
+            pub family: Option<&'static str>,
             /// No Undo or choice has a lock (no reason, open or held, and no room for one).
             pub no_locks: bool,
             /// The next frame asks egui to draw it again (a second pass), once.
@@ -5503,6 +6025,8 @@ mod tests {
             pub moves: Option<[&'static str; 2]>,
             /// It also has a red choice with data, given before `Move` (the part puts it after).
             pub deletes: bool,
+            /// Its `Move` and `Delete` say what they do, in help lines (ruling M8).
+            pub helps: bool,
             pub deleted: usize,
             /// What each Undo press did to the store: the words it took back, or `Gone`.
             pub acted: Vec<Result<&'static str, &'static str>>,
@@ -5517,7 +6041,13 @@ mod tests {
             clippy::disallowed_methods,
             reason = "the pilot's by-owner revision, in the frame of its read"
         )]
-        fn show_active(ui: &mut Ui, dndbeyond: &mut DndBeyond, change: InBody) {
+        fn show_active(
+            ui: &mut Ui,
+            dndbeyond: &mut DndBeyond,
+            change: InBody,
+            tall: f32,
+            fault: bool,
+        ) {
             dndbeyond.edits += 1;
             match change {
                 InBody::Nothing => {}
@@ -5535,6 +6065,17 @@ mod tests {
                 }
             }
             ui.label("Link and folder");
+            if tall > 0.0 {
+                let _ = ui.allocate_exact_size(egui::vec2(10.0, tall), egui::Sense::hover());
+            }
+            if fault {
+                let _ = BodyFault::new(&super::Hp(Severity::NeedsFixing, None))
+                    .repair(
+                        Repair::new("Open in Library", Act::Rename)
+                            .help(crate::sentence!("The package opens in Library.")),
+                    )
+                    .show(ui);
+            }
         }
 
         /// One pane: its footer shows the store's kept lines; its body changes the owner.
@@ -5555,6 +6096,7 @@ mod tests {
                     let two_choices = app.two_choices;
                     let moves = app.moves;
                     let deletes = app.deletes;
+                    let helps = app.helps;
                     let line = shown.outcome(&frame, |saved| {
                         match (owner, older_line) {
                             ("newer", OlderLine::Discard(_)) if same_verb => {
@@ -5617,16 +6159,30 @@ mod tests {
                             });
                             if let Some([a, b]) = moves {
                                 if deletes {
-                                    said = said.choice(Choice::named_as(
+                                    let mut delete = Choice::named_as(
                                         ChoiceKind::Lose,
                                         crate::choice!("Delete {}", a),
                                         Act::Delete,
-                                    ));
+                                    );
+                                    if helps {
+                                        delete = delete
+                                            .help(crate::sentence!("Its file goes to the bin."));
+                                    }
+                                    said = said.choice(delete);
                                 }
-                                said = said.choice(Choice::named(
+                                let mut moving = Choice::named(
                                     crate::choice!("Move {} before {}", a, b),
                                     Act::Rename,
-                                ));
+                                );
+                                if helps {
+                                    // Long enough to wrap in a 320 px pane.
+                                    moving = moving.help(crate::sentence!(
+                                        "{} keeps its place in the notes; {} moves to the line before it.",
+                                        b,
+                                        a
+                                    ));
+                                }
+                                said = said.choice(moving);
                             }
                             if two_choices {
                                 said = said.choice(Choice::new(
@@ -5654,8 +6210,10 @@ mod tests {
             };
             // The body changes the store's owner by `&mut` while the footer holds its lines:
             // the gap the pilot found (E0502 with a borrowing entry).
+            let tall = app.body_tall[pane];
+            let fault = app.body_fault && pane == 0;
             let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
-                show_active(ui, &mut app.dndbeyond, change);
+                show_active(ui, &mut app.dndbeyond, change, tall, fault);
                 7
             });
             assert_eq!(paned.body, 7);
@@ -5683,6 +6241,13 @@ mod tests {
 
         pub(super) fn frame(ui: &mut Ui, app: &mut App) {
             app.passes += 1;
+            if let Some(family) = app.family {
+                use crate::design::tokens::Type;
+                ui.style_mut().text_styles.insert(
+                    Type::Body.style(),
+                    egui::FontId::new(Type::Body.size(), egui::FontFamily::Name(family.into())),
+                );
+            }
             if let Some(heights) = app.heights {
                 ui.horizontal_top(|ui| {
                     for (pane, height) in heights.into_iter().enumerate() {
@@ -6124,6 +6689,127 @@ mod tests {
         // Layout PR 2b (ruling L9): each pane's typed footer keeps its plan. Frames with no
         // change compare the lines and sort, join and measure nothing; a new width and a lock
         // that goes make the plan again, and the footer's room is what a fresh pane measures.
+        // Review of PR 452, finding 2 (L1c): already in the first frame of the change, drawn in
+        // one pass.
+        use crate::design::pane::{Placement, pane_records};
+        /// Each pane's footer and where it stands, left to right; where each kept line's words
+        /// are painted, and whether whole inside their clip; each Undo's accessible bounds.
+        type Shown = (
+            Vec<(egui::Rect, Placement)>,
+            Vec<(egui::Rect, bool)>,
+            Vec<(String, egui::Rect)>,
+        );
+        fn shown(h: &egui_kittest::Harness<'_, App>) -> Shown {
+            fn walk(shape: &egui::Shape, clip: egui::Rect, out: &mut Vec<(egui::Rect, bool)>) {
+                match shape {
+                    egui::Shape::Vec(shapes) => {
+                        shapes.iter().for_each(|shape| walk(shape, clip, out));
+                    }
+                    egui::Shape::Text(text)
+                        if ["Campaign link saved.", "Folder saved."]
+                            .contains(&text.galley.text()) =>
+                    {
+                        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                        out.push((rect, clip.expand(0.5).contains_rect(rect)));
+                    }
+                    _ => {}
+                }
+            }
+            let mut panes: Vec<_> = pane_records(&h.ctx)
+                .iter()
+                .filter_map(|record| record.footer().map(|rect| (rect, record.placement())))
+                .collect();
+            panes.sort_by(|a, b| a.0.left().total_cmp(&b.0.left()));
+            let mut words = Vec::new();
+            for shape in &h.output().shapes {
+                walk(&shape.shape, shape.clip_rect, &mut words);
+            }
+            words.sort_by(|a, b| {
+                (a.0.left(), a.0.top())
+                    .partial_cmp(&(b.0.left(), b.0.top()))
+                    .expect("finite")
+            });
+            let mut undos: Vec<(String, egui::Rect)> = h
+                .query_all_by_role(egui::accesskit::Role::Button)
+                .filter_map(|node| {
+                    let label = node.accesskit_node().label()?;
+                    label
+                        .starts_with("Undo change")
+                        .then(|| (label.to_owned(), node.rect()))
+                })
+                .collect();
+            undos.sort_by(|a, b| {
+                (a.1.left(), a.1.top())
+                    .partial_cmp(&(b.1.left(), b.1.top()))
+                    .expect("finite")
+            });
+            (panes, words, undos)
+        }
+        /// The same, within a hundredth of a point.
+        fn same(a: &Shown, b: &Shown) -> bool {
+            let near = |a: egui::Rect, b: egui::Rect| {
+                (a.min - b.min).length() < 0.01 && (a.max - b.max).length() < 0.01
+            };
+            a.0.len() == b.0.len()
+                && a.1.len() == b.1.len()
+                && a.2.len() == b.2.len()
+                && a.0
+                    .iter()
+                    .zip(&b.0)
+                    .all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
+                && a.1
+                    .iter()
+                    .zip(&b.1)
+                    .all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
+                && a.2
+                    .iter()
+                    .zip(&b.2)
+                    .all(|(a, b)| a.0 == b.0 && near(a.1, b.1))
+        }
+        /// A frame drawn in one pass (egui declines the rerun a changed footer asks for), then
+        /// the next frame, in one pass too: what each shows.
+        fn one_pass(h: &mut egui_kittest::Harness<'_, App>) -> (Shown, Shown) {
+            let passes = h.ctx.options(|options| options.max_passes);
+            h.ctx
+                .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+            let before = h.state().passes;
+            h.step();
+            let first = shown(h);
+            h.step();
+            let next = shown(h);
+            h.ctx.options_mut(|options| options.max_passes = passes);
+            assert_eq!(h.state().passes - before, 2, "two frames of one pass");
+            (first, next)
+        }
+        /// A frame drawn in one pass, then a press at `at` decided on that frame's targets: the
+        /// pointer goes down in the next frame and up in the one after, one pass each. What the
+        /// first frame shows.
+        fn press_after_one_pass(h: &mut egui_kittest::Harness<'_, App>, at: egui::Pos2) -> Shown {
+            let passes = h.ctx.options(|options| options.max_passes);
+            h.ctx
+                .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+            h.step();
+            let first = shown(h);
+            pointer(h, at, true);
+            h.step();
+            pointer(h, at, false);
+            h.step();
+            h.ctx.options_mut(|options| options.max_passes = passes);
+            first
+        }
+        /// A fresh pane of `app` at `size`, settled: what it shows.
+        fn settles(app: App, size: egui::Vec2) -> Shown {
+            let mut h = harness_sized(app, size.x);
+            h.set_size(size);
+            h.run_steps(6);
+            shown(&h)
+        }
+        fn panes(no_locks: bool) -> App {
+            let mut app = two();
+            app.two_panes = true;
+            app.no_locks = no_locks;
+            app
+        }
         let footers = |h: &egui_kittest::Harness<'_, App>| -> Vec<f32> {
             let mut rects: Vec<egui::Rect> = crate::design::pane::pane_records(&h.ctx)
                 .iter()
@@ -6177,7 +6863,15 @@ mod tests {
         let wide = footers(&h);
         assert_eq!(wide, fresh(1200.0, false));
         h.set_size(egui::vec2(700.0, 500.0));
-        h.run_steps(6);
+        let (first, next) = one_pass(&mut h);
+        let settled = settles(panes(false), egui::vec2(700.0, 500.0));
+        assert!(
+            same(&first, &settled),
+            "the first frame at a new width is where a fresh pane settles: {first:?}, \
+             settled {settled:?}"
+        );
+        assert!(same(&next, &first), "and the next moves nothing: {next:?}");
+        h.run_steps(4);
         let replanned = footer_work();
         assert!(
             replanned.plans > after.plans
@@ -6203,7 +6897,15 @@ mod tests {
         assert_ne!(narrow, wide, "the width changes the footers' room");
         assert_eq!(footers(&h), narrow, "at the new width, a fresh pane's room");
         h.state_mut().no_locks = true;
-        h.run_steps(6);
+        let (first, next) = one_pass(&mut h);
+        let settled = settles(panes(true), egui::vec2(700.0, 500.0));
+        assert!(
+            same(&first, &settled),
+            "the first frame with the locks gone is where a fresh pane settles: {first:?}, \
+             settled {settled:?}"
+        );
+        assert!(same(&next, &first), "and the next moves nothing: {next:?}");
+        h.run_steps(4);
         let unlocked = fresh(700.0, true);
         assert_ne!(unlocked, narrow, "the locks' reasons hold room");
         assert_eq!(
@@ -6211,6 +6913,141 @@ mod tests {
             unlocked,
             "with the locks gone, a fresh pane's room"
         );
+
+        // A footer that comes, then grows: its first frame, drawn in one pass, is where a fresh
+        // pane settles it, its words whole as there; the next frame moves nothing. Beside short
+        // bodies it follows them (two panes). In two panes 300 points tall it is pinned: beside a
+        // tall body (left), and beside a body that fitted its pane until the footer came (right),
+        // not cut short below that body.
+        let lines = [("older", "Campaign link saved"), ("newer", "Folder saved")];
+        for (heights, tall, size) in [
+            (None, [0.0; 2], egui::vec2(1200.0, 500.0)),
+            (Some([300.0; 2]), [1000.0, 230.0], egui::vec2(960.0, 800.0)),
+        ] {
+            let app = |kept: &[(&'static str, &'static str)]| {
+                let mut app = App {
+                    two_panes: heights.is_none(),
+                    heights,
+                    body_tall: tall,
+                    ..App::default()
+                };
+                for &(owner, words) in kept {
+                    app.dndbeyond.results.record(Saved(Campaign(owner), words));
+                }
+                app
+            };
+            let mut h = harness_sized(app(&[]), size.x);
+            h.set_size(size);
+            h.run_steps(4);
+            assert!(shown(&h).0.is_empty(), "no footer yet");
+            let fits: Vec<bool> = pane_records(&h.ctx)
+                .iter()
+                .map(crate::design::pane::PaneRecord::fits)
+                .collect();
+            for (at, &(owner, words)) in lines.iter().enumerate() {
+                h.state_mut()
+                    .dndbeyond
+                    .results
+                    .record(Saved(Campaign(owner), words));
+                let (first, next) = one_pass(&mut h);
+                let settled = settles(app(&lines[..=at]), size);
+                let kept = at + 1;
+                assert!(
+                    same(&first, &settled),
+                    "{heights:?}, {kept} kept: the first frame {first:?}, settled {settled:?}"
+                );
+                assert!(
+                    same(&next, &first),
+                    "{heights:?}, {kept} kept: the next frame {next:?}"
+                );
+                h.run_steps(4);
+            }
+            // The fixture: where the footers stand, and which body fitted its pane with none.
+            let stand: Vec<Placement> = shown(&h).0.iter().map(|(_, stand)| *stand).collect();
+            let want = if heights.is_some() {
+                ([false, true], [Placement::Pinned; 2])
+            } else {
+                ([true, true], [Placement::Follows; 2])
+            };
+            assert_eq!(
+                (fits.as_slice(), stand.as_slice()),
+                (&want.0[..], &want.1[..])
+            );
+            // Its controls take presses where they are painted in the frame that brings them: a
+            // third result comes, and a press on its Undo where a fresh pane settles it, decided
+            // on that first frame's targets, reaches it.
+            h.run_steps(2);
+            h.state_mut()
+                .dndbeyond
+                .results
+                .record(Saved(Campaign("third"), "Folder chosen"));
+            let third = order(h.state(), "third");
+            let settled = settles(app(&[lines[0], lines[1], ("third", "Folder chosen")]), size);
+            let (_, undo) = settled
+                .2
+                .iter()
+                .find(|(label, _)| label == "Undo change third")
+                .expect("the third result's Undo, in the left pane");
+            let before = h.state().presses.len();
+            let first = press_after_one_pass(&mut h, undo.center());
+            assert!(
+                same(&first, &settled),
+                "{heights:?}, 3 kept: the first frame {first:?}, settled {settled:?}"
+            );
+            assert_eq!(
+                &h.state().presses[before..],
+                [(0, Act::Undo, third)],
+                "{heights:?}: a press on the new Undo, decided on its first frame's targets"
+            );
+        }
+
+        // Review of PR 456 (re-review, P2): fonts set after the footers were planned reach their
+        // plan and its measure, whoever sets them. Every family's first font replaced by a larger
+        // one, then a new family that the panes' style picks for body text: the first frame,
+        // drawn in one pass, is where a fresh pane with those fonts settles, and the next frame
+        // moves nothing.
+        for family in [None, Some("pilot")] {
+            let mut h = harness_sized(panes(false), 1200.0);
+            h.run_steps(4);
+            let mut fonts = h.ctx.fonts(|view| view.definitions().clone());
+            let mono = fonts.families[&egui::FontFamily::Monospace][0].clone();
+            let mut larger = (*fonts.font_data[&mono]).clone();
+            larger.tweak.scale = 1.5;
+            fonts
+                .font_data
+                .insert("pilot larger".into(), std::sync::Arc::new(larger));
+            match family {
+                None => {
+                    for faces in fonts.families.values_mut() {
+                        faces.insert(0, "pilot larger".into());
+                    }
+                }
+                Some(family) => {
+                    fonts.families.insert(
+                        egui::FontFamily::Name(family.into()),
+                        vec!["pilot larger".into()],
+                    );
+                }
+            }
+            h.ctx.set_fonts(fonts.clone());
+            h.state_mut().family = family;
+            let (first, next) = one_pass(&mut h);
+            let mut fresh = harness_sized(panes(false), 1200.0);
+            fresh.ctx.set_fonts(fonts);
+            fresh.run_steps(2);
+            fresh.state_mut().family = family;
+            fresh.run_steps(6);
+            let settled = shown(&fresh);
+            assert!(
+                same(&first, &settled) && settled != shown(&harness_sized(panes(false), 1200.0)),
+                "{family:?}: the first frame with the new fonts is where a fresh pane settles, \
+                 and the fonts change it: {first:?}, settled {settled:?}"
+            );
+            assert!(
+                same(&next, &first),
+                "{family:?}: and the next moves nothing: {next:?}"
+            );
+        }
 
         // Review of PR 452, 5: a footer that no frame draws has ended, and its plan with its
         // lines goes; the context keeps the plans of the footers in view, whatever was shown.

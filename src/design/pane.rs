@@ -121,6 +121,9 @@
 
 pub use super::components::Footer;
 use super::{layout::ScrollColumn, tokens::S};
+
+/// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
+mod plan;
 use eframe::egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 
 /// What a pane's body is, for the footer's place.
@@ -717,12 +720,13 @@ fn widget_count(ui: &Ui) -> usize {
         .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
 }
 
-/// A body control that gained keyboard focus in this pass comes whole into the pane's view,
-/// above the footer: Tab never reaches a control hidden under it. So does the focused control
-/// when the visible room changes under it (the footer came or grew, the session banner came, the
-/// whole-row cut came with it; review of PR 306): a key press then never reaches a hidden control. Only
-/// a control that the body added (`widgets`, on the pane's layer) is scrolled to; a change of
-/// focus with a pointer press, hold or release is not, as `scroll_part` does for the footer.
+/// A body control that gained keyboard focus in this pass comes whole into the pane's view, with
+/// the words that belong to it (`components::reveal_with`), above the footer: Tab never reaches
+/// a control hidden under it. So does the focused control when the visible room changes under it
+/// (the footer came or grew, the session banner came, the whole-row cut came with it; review of
+/// PR 306): a key press then never reaches a hidden control. Only a control that the body added
+/// (`widgets`, on the pane's layer) is scrolled to; a change of focus with a pointer press, hold
+/// or release is not, as `scroll_part` does for the footer.
 fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
     let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
@@ -744,13 +748,16 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     });
     let layer = ui.layer_id();
     let rect = focused.filter(|_| !pointer).and_then(|focused| {
-        ui.ctx().viewport(|viewport| {
-            let widgets_now = &viewport.this_pass.widgets;
-            let (at_layer, at) = widgets_now.order(focused)?;
-            (at_layer == layer && widgets.contains(&at))
-                .then(|| widgets_now.get(focused).map(|widget| widget.rect))
-                .flatten()
-        })
+        ui.ctx()
+            .viewport(|viewport| {
+                let widgets_now = &viewport.this_pass.widgets;
+                let (at_layer, at) = widgets_now.order(focused)?;
+                (at_layer == layer && widgets.contains(&at))
+                    .then(|| widgets_now.get(focused).map(|widget| widget.rect))
+                    .flatten()
+            })
+            // With the words that belong to it (a repair's help line), as `scroll_part` does.
+            .map(|rect| super::components::reveal_rect(ui.ctx(), focused, rect))
     });
     // A reveal that runs in this column owns its scroll (`design::reveal`).
     if let Some(rect) = rect
@@ -1380,6 +1387,171 @@ pub fn note_bottom_banner(ctx: &egui::Context) {
     ctx.data_mut(|data| data.insert_temp(banner_id(), pass));
 }
 
+/// A footer that empties forgets its measured height and the words it was measured with.
+fn forget(ui: &Ui, id: Id) {
+    ui.ctx().data_mut(|data| {
+        data.remove::<f32>(id.with("height"));
+        data.remove::<u64>(id.with("words"));
+    });
+}
+
+/// Where the next pass, measured, places a footer of `demand` (`place`).
+struct Next {
+    placement: Placement,
+    rect: Rect,
+    /// The most it may take where it stands (Q-c): the room to the pane's end, or a third.
+    most: f32,
+    /// The body's room, and a `Content` body's scroll output in it.
+    body_room: Rect,
+    view: Option<Scroll>,
+}
+
+/// The body's room ends `S` above the footer's height, a third of the pane at most; the footer
+/// follows the content when the content fits that room, else it is pinned at the pane's bottom.
+/// The content is laid out the same in that room: `scroll` is this pass's output.
+fn next_place(room: Rect, width: f32, demand: f32, third: f32, scroll: Option<Scroll>) -> Next {
+    let height = demand.min(third);
+    let limit = if height > 0.0 {
+        room.bottom() - height - S
+    } else {
+        room.bottom()
+    };
+    let body_room = Rect::from_min_max(room.min, pos2(room.right(), limit.max(room.top())));
+    let view = scroll.map(|scroll| Scroll {
+        viewport: Rect::from_min_max(
+            scroll.viewport.min,
+            pos2(
+                scroll.viewport.right(),
+                body_room.bottom().max(scroll.viewport.top()),
+            ),
+        ),
+        ..scroll
+    });
+    let (placement, top, most) = match view {
+        Some(view) if view.fits() => {
+            let top = (view.viewport.top() + view.height + S).min(room.bottom() - height);
+            (Placement::Follows, top, room.bottom() - top)
+        }
+        _ => (Placement::Pinned, room.bottom() - height, third),
+    };
+    Next {
+        placement,
+        rect: Rect::from_min_size(pos2(room.left(), top), vec2(width, demand.min(most))),
+        most,
+        body_room,
+        view,
+    }
+}
+
+/// A typed footer whose lines came after the body (`pane_then`), drawn where the next pass places
+/// it (`next_place`) after the body was laid out for another demand.
+struct Stop {
+    id: Id,
+    layer: LayerId,
+    room: Rect,
+    width: f32,
+    next: Next,
+    /// The body's paint, and its widgets on the pane's layer (their places in egui's list).
+    body: (usize, usize),
+    widgets: (usize, usize),
+    /// The row cut's hairline that the pass drew for the body's room, if any.
+    cut_line: Option<usize>,
+    rows_before: usize,
+}
+
+/// The body stops where the next pass's body room ends (`Stop`): at that room's end, or at its
+/// last whole registered row there (N12) with that row cut's hairline, which the next pass keeps,
+/// so it is drawn the same; a line cut's hairline at the footer's top. Nothing moves: the footer
+/// was drawn once, in its place. The edge holds for presses and for a screen reader as for the
+/// paint (review of PR 456, P2): each body widget that reaches below it takes presses only above
+/// it from now on (re-registered with its rect cut at the edge, for hover only: egui keeps the
+/// last rect, so its press area ends there, and its focus order, accessible node and id stay), and one wholly below it is hidden from a
+/// screen reader. The focused control keeps both: the next pass, in the new room, brings it whole
+/// into view (`reveal_focus`: the room changed under it). Returns whether content goes on below
+/// the body's room.
+fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
+    use egui::layers::ShapeIdx;
+    let Stop {
+        id,
+        layer,
+        room,
+        width,
+        next,
+        body,
+        widgets,
+        cut_line,
+        rows_before,
+    } = stop;
+    let cut = next.view.is_some_and(Scroll::cut);
+    let row_cut = next.view.filter(|_| cut).and_then(|view| {
+        let rows = super::components::rows_this_pass(ui.ctx());
+        whole_row_cut(rows.get(rows_before..).unwrap_or_default(), view.viewport)
+    });
+    let limit = row_cut.unwrap_or(next.body_room.bottom());
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    let below: Vec<egui::WidgetRect> = ui.ctx().viewport(|viewport| {
+        viewport
+            .this_pass
+            .widgets
+            .get_layer(layer)
+            .skip(widgets.0)
+            .take(widgets.1.saturating_sub(widgets.0))
+            .filter(|widget| widget.interact_rect.bottom() > limit && Some(widget.id) != focused)
+            .copied()
+            .collect()
+    });
+    if !below.is_empty() {
+        // Its rect cut at the edge: egui keeps the last rect given for an id, and its press area
+        // is that rect inside the clip (empty for a widget wholly below the edge).
+        let edge = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(id.with("stop_body"))
+                .disabled(),
+        );
+        let above = Rect::everything_above(limit);
+        for widget in &below {
+            let _ = edge.interact(widget.rect.intersect(above), widget.id, Sense::hover());
+            if widget.rect.top() >= limit {
+                ui.ctx()
+                    .accesskit_node_builder(widget.id, |node| node.set_hidden());
+            }
+        }
+    }
+    ui.ctx().graphics_mut(|graphics| {
+        let list = graphics.entry(layer);
+        for at in body.0..body.1 {
+            list.mutate_shape(ShapeIdx(at), |shape| {
+                shape.clip_rect.max.y = shape.clip_rect.max.y.min(limit);
+            });
+        }
+        // The row cut's hairline of the body's room as this pass had it goes.
+        if let Some(at) = cut_line {
+            list.reset_shape(ShapeIdx(at));
+        }
+    });
+    let hairline = |y: f32| {
+        ui.painter().hline(
+            room.left()..=room.left() + width,
+            y,
+            egui::Stroke::new(
+                super::tokens::HAIRLINE_WIDTH,
+                super::tokens::colors().hairline,
+            ),
+        );
+    };
+    if let Some(cut) = row_cut {
+        hairline(cut - super::tokens::HAIRLINE_WIDTH / 2.0);
+    } else if cut {
+        hairline(next.rect.top() + super::tokens::HAIRLINE_WIDTH / 2.0);
+    }
+    // Keep this cut for the next pass's body room.
+    ui.ctx().data_mut(|data| match row_cut {
+        Some(cut) => data.insert_temp(id.with("row_cut"), (next.body_room, cut)),
+        None => data.remove::<(Rect, f32)>(id.with("row_cut")),
+    });
+    cut
+}
+
 fn banner_below(ctx: &egui::Context) -> bool {
     let pass = ctx.cumulative_pass_nr();
     ctx.data(|data| data.get_temp::<u64>(banner_id())) == Some(pass)
@@ -1393,7 +1565,37 @@ impl Footer<'_> {
     /// height (and `S`) while the footer holds a message. The pane takes the rest of `ui`. `ui`
     /// lays out top down. Returns what `add` returns.
     pub fn pane<R>(self, ui: &mut Ui, body: Body, add: impl FnOnce(&mut Ui) -> R) -> R {
-        self.place(ui, body, ContentScroll::default(), |ui, _| add(ui))
+        self.place(
+            ui,
+            body,
+            ContentScroll::default(),
+            false,
+            |ui, _| add(ui),
+            |inner, _| inner,
+        )
+    }
+
+    /// `pane` for a body whose acts start or end its footer's messages (a form whose fields,
+    /// Save and Discard change what the footer says). `add` draws the body; then `then` gets what
+    /// `add` returned and this footer, after the body and before the footer paints, and adds the
+    /// messages from the state the body's acts left. So the frame of an act shows the message
+    /// the act brought and never one it ended, also when egui draws that frame in one pass (no
+    /// discarded pass hides it). Messages added before stay. Returns what `then` returns.
+    pub fn pane_then<R, T>(
+        self,
+        ui: &mut Ui,
+        body: Body,
+        add: impl FnOnce(&mut Ui) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
+        self.place(
+            ui,
+            body,
+            ContentScroll::default(),
+            true,
+            |ui, _| add(ui),
+            then,
+        )
     }
 
     /// `pane` with `Body::Content`, whose scroll column behaves as `scroll` says.
@@ -1403,7 +1605,14 @@ impl Footer<'_> {
         scroll: ContentScroll,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> R {
-        self.place(ui, Body::Content, scroll, |ui, _| add(ui))
+        self.place(
+            ui,
+            Body::Content,
+            scroll,
+            false,
+            |ui, _| add(ui),
+            |inner, _| inner,
+        )
     }
 
     /// A `Body::Content` pane whose body holds one editor that grows with its text: the body
@@ -1422,16 +1631,26 @@ impl Footer<'_> {
         ui: &mut Ui,
         add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
     ) -> R {
-        self.place(ui, Body::Content, ContentScroll::default(), add)
+        self.place(
+            ui,
+            Body::Content,
+            ContentScroll::default(),
+            false,
+            add,
+            |inner, _| inner,
+        )
     }
 
-    fn place<R>(
+    /// The pane. `late`: messages also come after the body, from `then` (`pane_then`).
+    fn place<R, T>(
         mut self,
         ui: &mut Ui,
         body: Body,
         options: ContentScroll,
+        late: bool,
         add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
-    ) -> R {
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
         debug_assert!(
             ui.layout().main_dir() == egui::Direction::TopDown,
             "a pane's message footer ends a top-down Ui"
@@ -1444,8 +1663,10 @@ impl Footer<'_> {
         claim(ui, id);
         let key = id.with("height");
         // A typed footer whose retained plan holds knows its demand now (layout PR 2b); else the
-        // last pass's demand, which this pass measures again.
-        let stored = match self.planned(ui, width) {
+        // last pass's demand, which this pass measures again. A footer whose messages come after
+        // the body (`pane_then`) is planned after it.
+        let planned = if late { None } else { self.planned(ui, width) };
+        let stored = match planned {
             Some(demand) => {
                 ui.ctx().data_mut(|data| data.insert_temp(key, demand));
                 demand
@@ -1455,9 +1676,12 @@ impl Footer<'_> {
                 .data(|data| data.get_temp::<f32>(key))
                 .unwrap_or(0.0),
         };
-        let shown = !self.is_empty();
-        if !shown && stored != 0.0 {
-            ui.ctx().data_mut(|data| data.remove::<f32>(key));
+        // Whether the footer holds a message while the body draws. Messages that come after the
+        // body (`pane_then`) are known only then: until then the footer keeps the room it had in
+        // the last pass, as it does when its messages stay (it showed when it has a height).
+        let held = !self.is_empty() || (late && stored != 0.0);
+        if !held && stored != 0.0 {
+            forget(ui, id);
             ui.ctx().request_discard("the message footer emptied");
         }
         // Ruling Q-c: a pinned footer takes at most a third of the pane; a footer that follows a
@@ -1465,7 +1689,7 @@ impl Footer<'_> {
         let most = (room.height() / 3.0).floor().max(0.0);
         // Last pass's demand, whole (what the messages want, uncapped); a change is measured
         // below, and the pass is drawn again.
-        let demand = if shown { stored } else { 0.0 };
+        let demand = if held { stored } else { 0.0 };
         // The pinned footer's height.
         let height = demand.min(most);
         let pinned = room.bottom() - height;
@@ -1495,8 +1719,15 @@ impl Footer<'_> {
         );
         body_ui.set_clip_rect(visible);
         let rows_before = super::components::rows_this_pass(ui.ctx()).len();
+        let layer = ui.layer_id();
+        let paint_at = |ui: &Ui| {
+            ui.ctx()
+                .graphics(|graphics| graphics.get(layer).map_or(0, |list| list.next_idx().0))
+        };
+        let body_from = paint_at(ui);
+        let widgets_from = widget_count(ui);
         // An edge (the footer, the session banner) ends the body: no registered row is cut.
-        let edge = shown || banner_below(ui.ctx());
+        let edge = held || banner_below(ui.ctx());
         // What a layer opened from the body may use: the body's room, inside the clip.
         let usable = visible.intersect(body_room);
         let mut hold_facts = None;
@@ -1639,6 +1870,26 @@ impl Footer<'_> {
             }
         };
         drop(body_ui);
+        let body_to = paint_at(ui);
+        let widgets_to = widget_count(ui);
+        // `pane_then`: the messages from the state the body's acts left, before the footer
+        // paints.
+        let out = then(inner, &mut self);
+        let shown = !self.is_empty();
+        if !shown && held && stored != 0.0 {
+            forget(ui, id);
+            ui.ctx().request_discard("the message footer emptied");
+        }
+        // Typed lines that came after the body: their retained plan, now (it holds when they are
+        // the last pass's lines at this width).
+        let planned = if late && shown {
+            self.planned(ui, width)
+        } else {
+            planned
+        };
+        if late && let Some(demand) = planned {
+            ui.ctx().data_mut(|data| data.insert_temp(key, demand));
+        }
         // N12: an edge (the footer, the session banner) never cuts through a registered row.
         let new_cut = match scroll {
             Some(scroll) if edge && scroll.cut() => {
@@ -1654,6 +1905,7 @@ impl Footer<'_> {
             });
             ui.ctx().request_discard("the body's whole-row cut moved");
         }
+        let cut_line = paint_at(ui);
         if let Some(cut) = new_cut {
             // The hairline marks where the rows stop.
             ui.painter().hline(
@@ -1666,14 +1918,15 @@ impl Footer<'_> {
             );
         }
 
-        let placement = match scroll {
+        let mut placement = match scroll {
             Some(scroll) if scroll.fits() => Placement::Follows,
             _ => Placement::Pinned,
         };
         // Content goes on below the room: the footer cuts it, and draws its hairline.
-        let cut = shown && scroll.is_some_and(Scroll::cut);
+        let mut cut = shown && scroll.is_some_and(Scroll::cut);
         let mut footer = None;
         if shown {
+            let third = most;
             // Where the footer starts, and the most it may take there: below a short body, `S`
             // after the content and the room down to the pane's end (Q-c); pinned, a third of
             // the pane. It is as tall as its demand up to that, and scrolls inside beyond it.
@@ -1684,7 +1937,50 @@ impl Footer<'_> {
                 }
                 _ => (pinned, most),
             };
-            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, demand.min(most)));
+            // A typed footer is always measured: its plan is made before it is placed (`planned`,
+            // L1c). A legacy footer is measured when it was measured with these words. One that
+            // was not (an act brought its messages in this pass, or it comes) below a short body
+            // is laid out in its whole room there and fitted to what it shows, in this pass, so
+            // its messages show whole at once, even in a frame of one pass; the pass is drawn
+            // again, measured. Pinned, it keeps its measured room until that pass (the legacy
+            // footer's limit: its words are closures, measured only by drawing them).
+            let measured = if self.is_typed() {
+                planned.is_some()
+            } else {
+                let words = self.words_key();
+                let words_id = id.with("words");
+                let measured = demand > 0.0
+                    && ui.ctx().data(|data| data.get_temp::<u64>(words_id)) == Some(words);
+                if !measured {
+                    ui.ctx().data_mut(|data| data.insert_temp(words_id, words));
+                }
+                measured
+            };
+            let fit = placement == Placement::Follows && !measured;
+            // Lines that come after the body (`pane_then`) are planned after it. When their demand
+            // is not the one the body's room was made for, the footer is placed by it as the next
+            // pass places it and drawn there once; the body's paint stops at its edge
+            // (`stop_body`), and the pass is drawn again with the body in its new room.
+            let after = planned
+                .filter(|_| late)
+                .filter(|now| (now - demand).abs() >= super::tokens::HAIRLINE_WIDTH)
+                .map(|now| next_place(room, width, now, third, scroll));
+            let (top, most) = match &after {
+                Some(next) => (next.rect.top(), next.most),
+                None => (top, most),
+            };
+            let tall = if let Some(next) = &after {
+                ui.ctx()
+                    .request_discard("the body's room changed with its footer");
+                next.rect.height()
+            } else if fit {
+                ui.ctx()
+                    .request_discard("the message footer measures its new messages");
+                most
+            } else {
+                demand.min(most)
+            };
+            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, tall));
             // Nothing in the body under the footer takes a press there, nor in the `S` above it
             // (egui gives a press to a widget a few points away): the footer comes after the body,
             // so this blank target is above the body's, and the footer's own controls above it.
@@ -1697,7 +1993,36 @@ impl Footer<'_> {
             // The kept lines take their control ids from this pane's footer and their ticket.
             ui.ctx()
                 .data_mut(|data| data.insert_temp(Id::new("design_footer_drawing"), id));
-            self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored);
+            // Laid out in its room; when fitted, as tall as what it shows, in this same pass. It
+            // draws the hairline of a line cut at its top; placed after the body was laid out for
+            // another demand, `stop_body` draws the hairlines.
+            let rect = self
+                .draw_messages(
+                    ui,
+                    rect,
+                    after.is_none() && cut && new_cut.is_none(),
+                    most,
+                    stored,
+                    fit,
+                )
+                .0;
+            if let Some(next) = after {
+                placement = next.placement;
+                cut = stop_body(
+                    ui,
+                    Stop {
+                        id,
+                        layer,
+                        room,
+                        width,
+                        next,
+                        body: (body_from, body_to),
+                        widgets: (widgets_from, widgets_to),
+                        cut_line: new_cut.map(|_| cut_line),
+                        rows_before,
+                    },
+                );
+            }
             if rect.height() > 0.0 {
                 footer = Some(rect);
                 #[cfg(test)]
@@ -1735,8 +2060,8 @@ impl Footer<'_> {
             },
         );
         #[cfg(not(test))]
-        let _ = (footer, placement, local);
-        inner
+        let _ = (footer, placement, cut, local);
+        out
     }
 }
 
@@ -2182,6 +2507,380 @@ mod row_cut_tests {
         assert!(
             plain_fills_cut > 0,
             "n12-plain-fills: with no edge a `Fills` column keeps its plain cut"
+        );
+
+        // Migration-32 layout step 3a: the same rule from the whole-block plan, before anything
+        // paints (`plan`). Checked against the blocks' own spans, never against the mask itself.
+        use super::plan::{Block, BlockPlan, MeasureEnv, Part, PlanState, Route, Row, index_reads};
+        // On the plan's physical pixel grid (design §3: at most one physical pixel after rounding).
+        let grid = |plan: &BlockPlan, y: f32| (y * plan.scale()).round();
+        // Whether block `at` lies whole in the view.
+        let inside = |plan: &BlockPlan, at: usize, offset: f32, view: f32| {
+            let (top, end) = plan.span(at);
+            grid(plan, top) >= grid(plan, offset) && grid(plan, end) <= grid(plan, offset + view)
+        };
+        // I1 at one offset and view: a block that fits is eligible exactly when it is whole in
+        // the view; nothing eligible lies outside the view; a view that holds a whole block that
+        // fits has eligible blocks. I12: the mask counts every index entry it reads.
+        let i1 = |plan: &BlockPlan, offset: f32, view: f32, case: &str| {
+            let before = index_reads();
+            let mask = plan.mask("plan_test", offset, view);
+            assert_eq!(
+                index_reads() - before,
+                mask.read,
+                "plan-i12 {case}: the mask counts each index entry it reads (offset {offset}, view {view})"
+            );
+            let mut any_whole = false;
+            for at in 0..plan.len() {
+                let (top, end) = plan.span(at);
+                let fits = grid(plan, end - top) <= grid(plan, view);
+                let whole = inside(plan, at, offset, view);
+                any_whole |= whole && fits;
+                let eligible = mask.eligible.is_some_and(|(from, to)| {
+                    grid(plan, top) >= grid(plan, from) && grid(plan, end) <= grid(plan, to)
+                });
+                if fits {
+                    assert_eq!(
+                        (eligible, mask.whole.contains(&at)),
+                        (whole, whole),
+                        "plan-i1 {case}: block {at} {top}..{end} at offset {offset} in a view of {view} at scale {}: {mask:?}",
+                        plan.scale()
+                    );
+                }
+            }
+            if let Some((from, to)) = mask.eligible {
+                assert!(
+                    grid(plan, from) >= grid(plan, offset)
+                        && grid(plan, to) <= grid(plan, offset + view),
+                    "plan-i1 {case}: eligible {from}..{to} lies in the view {offset}+{view} at scale {}",
+                    plan.scale()
+                );
+            }
+            assert!(
+                !any_whole || !mask.whole.is_empty(),
+                "plan-i1 {case}: a whole block at offset {offset} in {view} is eligible: {mask:?}"
+            );
+            // Review of PR 461 (re-check, 1): each route the mask returns shows its unit whole
+            // there, by the mask's own rule; so does `offset_showing` for each block in the view
+            // that is not whole.
+            let routes = mask
+                .no_whole
+                .iter()
+                .flat_map(|gap| [Some(gap.above), gap.below])
+                .flatten();
+            for route in routes {
+                if let Some(at) = route.offset {
+                    let shown = plan.mask("plan_test", at, view);
+                    assert!(
+                        shown.eligible.is_some_and(|(from, to)| {
+                            grid(plan, route.top) >= grid(plan, from)
+                                && grid(plan, route.top + route.height) <= grid(plan, to)
+                        }),
+                        "plan-l7 {case}: at offset {offset} in {view} the route {at} shows {route:?} whole: {shown:?}"
+                    );
+                }
+            }
+            for at in 0..plan.len() {
+                let (top, end) = plan.span(at);
+                let meets = grid(plan, end) > grid(plan, offset)
+                    && grid(plan, top) < grid(plan, offset + view);
+                if meets
+                    && !inside(plan, at, offset, view)
+                    && let Some(route) = plan.offset_showing(at, view, offset)
+                {
+                    let shown = plan.mask("plan_test", route, view);
+                    assert!(
+                        shown.whole.contains(&at),
+                        "plan-route {case}: offset_showing({at}) from {offset} in {view} is {route}, where block {at} is whole: {shown:?}"
+                    );
+                }
+            }
+            mask
+        };
+        let blocks = || {
+            std::iter::once(Block::Section(Row::TwoLine))
+                .chain(std::iter::repeat_n(Block::Row(Row::TwoLine), 29))
+                .chain([Block::Section(Row::Empty)])
+                .chain(std::iter::repeat_n(Block::Row(Row::OneLine), 10))
+                .collect::<Vec<_>>()
+        };
+        let mut content = crate::design::memo::Revised::new(blocks());
+        let env = MeasureEnv {
+            width: 600.0,
+            fonts: 1,
+            scale: 1.0,
+        };
+        // Top and bottom edges at every offset, a quarter point apart in turn (fractional
+        // offsets), at scales 1 to 4, with a footer that comes, grows and goes (the view shrinks
+        // and comes back; the plan does not change).
+        for scale in [1.0, 1.5, 2.0, 4.0] {
+            let mut scaled = PlanState::new("plan_test");
+            let plan = scaled.plan(&content, MeasureEnv { scale, ..env });
+            let n = plan.len();
+            let extent = plan.extent();
+            assert_eq!((n, plan.scale()), (41, scale), "plan-setup: 41 blocks");
+            for view in [100.0, 300.0, 333.0] {
+                let mut step = 0;
+                loop {
+                    let offset = 7.0 * step as f32 + [0.0, 0.25, 0.5, 0.75][step % 4];
+                    if offset > plan.max_offset(view) {
+                        break;
+                    }
+                    i1(plan, offset, view, "sweep");
+                    step += 1;
+                }
+                // I2: the native range is the whole extent, whatever the mask; at the largest
+                // offset the last block is whole and eligible.
+                let last = plan.max_offset(view);
+                let mask = i1(plan, last, view, "max offset");
+                assert!(
+                    (last - (extent - view)).abs() <= 0.5
+                        && mask.whole.end == n
+                        && plan.extent() == extent,
+                    "plan-i2: at the largest offset {last} of {extent} in {view} the last block is whole: {mask:?}"
+                );
+            }
+        }
+        // Design §3 (review of PR 461, 3): at scale 4, a 40 pt row with half a point of it above
+        // the view (two physical pixels) is not whole; with no unit whole, the offset stays and
+        // the routes show each row whole.
+        let rows = BlockPlan::of_heights(&[(40.0, None), (40.0, None)], 4.0);
+        let pixels = i1(&rows, 0.5, 40.0, "scale 4");
+        assert_eq!(
+            (
+                pixels.whole.is_empty(),
+                pixels.eligible,
+                pixels
+                    .no_whole
+                    .map(|gap| (gap.above.offset, gap.below.and_then(|below| below.offset)))
+            ),
+            (true, None, Some((Some(0.0), Some(40.0)))),
+            "plan-grid: two pixels above the view at scale 4 leave the first row not whole: {pixels:?}"
+        );
+
+        let mut state = PlanState::new("plan_test");
+        let plan = state.plan(&content, env);
+        let n = plan.len();
+        // A section taller than the view splits at its heading (ruling L6); a row taller than
+        // the view is a counted `TooTall`, never eligible.
+        let section = plan.span(0).1;
+        let split = plan.mask("plan_test", 0.0, section - 10.0);
+        let row_end = plan.span(1).1;
+        assert!(
+            split.whole.is_empty()
+                && split
+                    .eligible
+                    .is_some_and(|(from, to)| from == 0.0 && to < section)
+                && split.too_tall.is_empty(),
+            "plan-l6: a section of {section} in a view of {} shows its heading whole: {split:?}",
+            section - 10.0
+        );
+        let tall = plan.mask("plan_test", section, 30.0);
+        assert!(
+            tall.eligible.is_none()
+                && tall
+                    .too_tall
+                    .iter()
+                    .map(|tall| (tall.block, tall.part))
+                    .eq([(1, Part::Block)]),
+            "plan-l6: a row of {} in a view of 30 is too tall: {tall:?} (ends {row_end})",
+            row_end - section
+        );
+        // Review of PR 461, 2: each part of a split section is checked alone. A section of a
+        // 34 pt heading over a 40 pt row in a 35 pt view: the heading is whole, and the row,
+        // taller than the view, is the section's `TooTall`.
+        let two_line = BlockPlan::of_heights(&[(74.0, Some(34.0))], 1.0);
+        let heading_whole = i1(&two_line, 0.0, 35.0, "heading over a tall row");
+        assert!(
+            heading_whole.eligible == Some((0.0, 34.0))
+                && heading_whole
+                    .too_tall
+                    .iter()
+                    .map(|tall| (tall.block, tall.part, tall.height))
+                    .eq([(0, Part::Row, 40.0)]),
+            "plan-l6: the heading is whole and the row is too tall: {heading_whole:?}"
+        );
+
+        // Ruling L7: two 90 px blocks in a 100 px view at offset 40 leave neither whole. The
+        // offset stays, the diagnostic is there, and its routes show each block whole.
+        let pair = BlockPlan::of_heights(&[(90.0, None), (90.0, None)], 1.0);
+        let mask = i1(&pair, 40.0, 100.0, "90/100/40");
+        let gap = mask
+            .no_whole
+            .expect("plan-l7: the 90/100/40 case reports no whole block");
+        let route = |block, part, top, height, offset| Route {
+            block,
+            part,
+            top,
+            height,
+            offset: Some(offset),
+        };
+        assert_eq!(
+            (gap.offset, gap.view, gap.above, gap.below),
+            (
+                40.0,
+                100.0,
+                route(0, Part::Block, 0.0, 90.0, 0.0),
+                Some(route(1, Part::Block, 90.0, 90.0, 80.0))
+            ),
+            "plan-l7: the diagnostic names the offset, the view and both blocks with their routes"
+        );
+        for (at, route) in [(0, 0.0), (1, 80.0)] {
+            assert_eq!(
+                (
+                    pair.offset_showing(at, 100.0, 40.0),
+                    i1(&pair, route, 100.0, "route").whole
+                ),
+                (Some(route), at..at + 1),
+                "plan-l7: the route {route} shows block {at} whole"
+            );
+        }
+        // Review of PR 461, 1: a split section's routes come from its parts. A 54 pt section
+        // (heading 34, empty row 20) in a 35 pt view at offset 10: neither part is whole, no part
+        // is too tall, and the routes show the heading (offset 0) and the row (offset 19).
+        let empty = BlockPlan::of_heights(&[(54.0, Some(34.0))], 1.0);
+        let parts = i1(&empty, 10.0, 35.0, "split section");
+        assert_eq!(
+            (
+                parts.eligible,
+                parts.too_tall.clone(),
+                parts.no_whole.map(|gap| (gap.above, gap.below))
+            ),
+            (
+                None,
+                Vec::new(),
+                Some((
+                    route(0, Part::Heading, 0.0, 34.0, 0.0),
+                    Some(route(0, Part::Row, 34.0, 20.0, 19.0))
+                ))
+            ),
+            "plan-l7: a split section's routes are its parts: {parts:?}"
+        );
+        for (route, part) in [(0.0, (0.0, 34.0)), (19.0, (34.0, 54.0))] {
+            assert_eq!(
+                i1(&empty, route, 35.0, "part route").eligible,
+                Some(part),
+                "plan-l7: the route {route} shows the part {part:?} whole"
+            );
+        }
+
+        // Review of PR 461 (re-check, 1): at scale 1.25 a 32 pt row after a 74 pt section in a
+        // 31.9 pt view: at offset 74 the row is not whole (its end's pixel is below the view's),
+        // and the route that `offset_showing` gives shows it whole, by the mask's rule.
+        let after_section = BlockPlan::of_heights(&[(74.0, Some(34.0)), (32.0, None)], 1.25);
+        let hidden = i1(&after_section, 74.0, 31.9, "scale 1.25");
+        let shown = after_section
+            .offset_showing(1, 31.9, 74.0)
+            .map(|at| i1(&after_section, at, 31.9, "scale 1.25 route").whole);
+        assert!(
+            !hidden.whole.contains(&1) && shown == Some(1..2),
+            "plan-route: the row's route at scale 1.25 shows it whole: {hidden:?}, {shown:?}"
+        );
+        // Review of PR 461 (re-check, 2): every unit too tall for the view that meets it is
+        // reported and counted. Rows of 40, 20 and 40 pt in a 35 pt view at offset 30: the middle
+        // row is whole, and both outer rows are too tall.
+        let three = crate::design::memo::Revised::new(vec![
+            Block::Row(Row::TwoLine),
+            Block::Row(Row::Empty),
+            Block::Row(Row::TwoLine),
+        ]);
+        let mut counted = PlanState::new("plan_test");
+        let both = counted.mask(&three, env, 30.0, 35.0);
+        assert_eq!(
+            (
+                both.eligible,
+                both.too_tall
+                    .iter()
+                    .map(|tall| (tall.block, tall.part, tall.height))
+                    .collect::<Vec<_>>(),
+                counted.work().too_tall
+            ),
+            (
+                Some((40.0, 60.0)),
+                vec![(0, Part::Block, 40.0), (2, Part::Block, 40.0)],
+                2
+            ),
+            "plan-l6: both outer rows are too tall, each counted: {both:?}"
+        );
+
+        // I12 and M6: a quiet frame (same content, same environment) measures nothing, and a
+        // mask reads `O(log n)` index entries, every one counted: three searches of
+        // ⌈log2(n + 1)⌉ reads at most, and 19 more (the eligible span, the two cut blocks' spans
+        // and boundaries, and the two routes), here and in 100,000 blocks.
+        let quiet = state.work();
+        assert_eq!(
+            (quiet.builds, quiet.blocks_measured),
+            (1, n),
+            "plan-i12: one plan"
+        );
+        let bound = |n: usize| 3 * (usize::BITS - n.leading_zeros()) as usize + 19;
+        for frame in 0..10 {
+            let mask = state.mask(&content, env, 7.0 * frame as f32, 300.0);
+            assert!(
+                mask.read <= bound(n),
+                "plan-i12: a mask reads at most {} entries in {n} blocks: {}",
+                bound(n),
+                mask.read
+            );
+        }
+        let many: Vec<(f32, Option<f32>)> = (0..100_000)
+            .map(|at| {
+                if at % 50 == 0 {
+                    (74.0, Some(34.0))
+                } else {
+                    (40.0, None)
+                }
+            })
+            .collect();
+        let large = BlockPlan::of_heights(&many, 1.0);
+        let most = (0..200)
+            .flat_map(|at| [(at as f32 * 20_011.5, 300.0), (at as f32 * 20_011.5, 35.0)])
+            .map(|(offset, view)| {
+                i1(&large, offset.min(large.max_offset(view)), view, "large").read
+            })
+            .max()
+            .unwrap_or(0);
+        assert!(
+            most <= bound(large.len()),
+            "plan-i12: a mask reads at most {} entries in {} blocks: {most}",
+            bound(large.len()),
+            large.len()
+        );
+        let after = state.work();
+        assert_eq!(
+            (after.builds, after.blocks_measured, after.bytes_indexed),
+            (quiet.builds, quiet.blocks_measured, quiet.bytes_indexed),
+            "plan-i12: ten quiet frames measure and index nothing"
+        );
+        let wider = MeasureEnv {
+            width: 640.0,
+            ..env
+        };
+        let _ = state.plan(&content, wider);
+        assert_eq!(
+            state.work().builds,
+            2,
+            "plan-m6: a new width measures the plan again"
+        );
+        // Content that shrinks while scrolled: the new revision measures again, the offset is
+        // kept in the new range (never snapped), and there the last block is whole.
+        let far = state.plan(&content, wider).max_offset(300.0);
+        content.revise(|blocks| {
+            blocks.truncate(12);
+            crate::design::memo::Changed::Yes
+        });
+        let shrunk = state.plan(&content, wider);
+        let kept = shrunk.clamp(far, 300.0);
+        assert!(
+            shrunk.len() == 12
+                && kept == shrunk.max_offset(300.0)
+                && i1(shrunk, kept, 300.0, "shrunk").whole.end == 12,
+            "plan-shrink: offset {far} kept at {kept} in the shrunk content, its last block whole"
+        );
+        assert_eq!(
+            state.work().builds,
+            3,
+            "plan-m6: a new content revision measures again"
         );
     }
 

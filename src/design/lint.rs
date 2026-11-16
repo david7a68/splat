@@ -312,7 +312,7 @@ fn arrow_argument(argument: Option<&syn::Expr>) -> bool {
 /// Controls whose label is only an arrow, read by `syn`, on lines up to `last_line`: the first
 /// argument of `Action::quiet`, `secondary`, `primary` or `destructive`, of `Link::new` and
 /// `Button::new`, of a `.link(…)`, `.button(…)` or `.small_button(…)` call, and the icon of
-/// `icon_button(ui, icon, name)`, when it is a literal of arrows alone or names an arrow glyph
+/// `icon_button(ui, icon, name)` and `icon_button_with_hint(ui, icon, name, hint)`, when it is a literal of arrows alone or names an arrow glyph
 /// (the legacy back arrow, `egui_phosphor::regular::ARROW_LEFT`). Limit: an arrow behind another
 /// name (a local `const` or binding) passes; the legacy arrow's STAGED count is the second net.
 fn arrow_labels(text: &str, last_line: usize) -> usize {
@@ -343,7 +343,7 @@ fn arrow_labels(text: &str, last_line: usize) -> usize {
                     || ["Link", "Button"].contains(&owner) && last == "new"
                 {
                     call.args.first()
-                } else if last == "icon_button" {
+                } else if ["icon_button", "icon_button_with_hint"].contains(&last) {
                     call.args.iter().nth(1)
                 } else {
                     None
@@ -464,19 +464,275 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
 
 /// Format strings are Rust literals, so read them through `syn`, including raw and multiline
 /// literals. The formatter owns HP fractions; sheet facts go through the separator-free part.
+///
+/// `fact-owner` (ruling M5): a sheet fact is drawn only by `design::fact`. Outside
+/// `src/design/fact.rs`, read by `syn` per function (a method too), following each value to
+/// where it is used, it counts a local copy of the part:
+/// - a fact format: a format string with `{…}: {…}` whose value is joined by the middle dot,
+///   given as an argument (`values.join(" · ")`) or read through a name bound to such a join
+///   (`{values}`), whatever the helper is called;
+/// - a tile label with no colon: a format string of placeholders and spaces only (`{}{} {}`,
+///   raw or not) given as the label of a stat tile (`stat_tile`, `roll_tile`, `metric`,
+///   `roll_metric`), directly or through a name bound to it; the part's form is
+///   `fact::tile_label`;
+/// - a rolling tile: `rolls::link(…, Type::NumeralLarge, …)`; the part is `fact::roll_tile`.
+///
+/// A name is bound to a value by a `let` of it or of another such name, typed or not, also
+/// through a chain (`let b = a.clone(); let c: &str = &b;`: `clone`, `to_owned`, `to_string`,
+/// `as_str`, `into`, a reference); a new binding of the name ends it. The named legacy exceptions are counts in
+/// the allowlist.
+///
+/// Named limits (ruling of the PR 470 review): the rule reads one function at a time. It does
+/// not find a join made in another function and returned (`fn joined() -> String`), nor a
+/// label made in a closure and passed through another function (`label()`) into `stat_tile`.
+/// Review finds those; `docs/design-system.md` (Party) names them too.
 fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
+    use syn::spanned::Spanned;
     use syn::visit::Visit;
+    /// The stat tile calls whose second argument is the tile's label.
+    const TILES: [&str; 4] = ["stat_tile", "roll_tile", "metric", "roll_metric"];
+    /// What one function does that a fact's part owns.
+    #[derive(Default, Clone)]
+    struct Fact {
+        /// The names bound to values joined by the middle dot.
+        dot_names: std::collections::BTreeSet<String>,
+        /// The names bound to a format of placeholders and spaces only, each with its format
+        /// site: a name bound to another name has that name's site.
+        bare_names: std::collections::BTreeMap<String, usize>,
+        /// The format sites of `bare_names` so far, and those already counted (one count per
+        /// format site, however often and under however many names it is used).
+        sites: usize,
+        counted: std::collections::BTreeSet<usize>,
+        /// The local copies found.
+        copies: usize,
+    }
+    /// A format string of placeholders and spaces only, two placeholders or more and a space.
+    fn bare(words: &str) -> bool {
+        if words.contains("{{") || words.contains("}}") {
+            return false;
+        }
+        let (mut places, mut rest, mut inside) = (0, String::new(), false);
+        for c in words.chars() {
+            match (inside, c) {
+                (false, '{') => inside = true,
+                (true, '}') => {
+                    inside = false;
+                    places += 1;
+                }
+                (true, _) => {}
+                (false, c) => rest.push(c),
+            }
+        }
+        places >= 2 && !rest.is_empty() && rest.chars().all(|c| c == ' ')
+    }
+    /// A macro's arguments, when they parse as expressions.
+    fn macro_args(mac: &syn::Macro) -> Option<Vec<syn::Expr>> {
+        mac.parse_body_with(
+            syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated,
+        )
+        .ok()
+        .map(|args| args.into_iter().collect())
+    }
+    /// The format string of a macro call (`format!("…", …)`), raw or not.
+    fn template(expr: &syn::Expr) -> Option<String> {
+        let syn::Expr::Macro(call) = expr else {
+            return None;
+        };
+        match macro_args(&call.mac)?.first()? {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(words),
+                ..
+            }) => Some(words.value()),
+            _ => None,
+        }
+    }
+    /// `expr` without the references around it (`&label`).
+    fn unref(expr: &syn::Expr) -> &syn::Expr {
+        match expr {
+            syn::Expr::Reference(reference) => unref(&reference.expr),
+            other => other,
+        }
+    }
+    /// The name whose value `expr` is (`a`, `&a`, `a.clone()`, `(a).to_string()`), if any.
+    fn alias(expr: &syn::Expr) -> Option<String> {
+        match unref(expr) {
+            syn::Expr::Paren(inner) => alias(&inner.expr),
+            syn::Expr::MethodCall(call)
+                if call.args.is_empty()
+                    && ["clone", "to_owned", "to_string", "as_str", "into"]
+                        .iter()
+                        .any(|method| call.method == method) =>
+            {
+                alias(&call.receiver)
+            }
+            other => ident(other),
+        }
+    }
+    /// The one name `expr` is (`label`), if it is a plain name.
+    fn ident(expr: &syn::Expr) -> Option<String> {
+        match unref(expr) {
+            syn::Expr::Path(path) => path.path.get_ident().map(ToString::to_string),
+            _ => None,
+        }
+    }
+    /// The names a pattern binds (`label`, `(label, key)`).
+    fn bound(pattern: &syn::Pat) -> Vec<String> {
+        struct Names(Vec<String>);
+        impl<'ast> Visit<'ast> for Names {
+            fn visit_pat_ident(&mut self, name: &'ast syn::PatIdent) {
+                self.0.push(name.ident.to_string());
+                syn::visit::visit_pat_ident(self, name);
+            }
+        }
+        let mut names = Names(Vec::new());
+        names.visit_pat(pattern);
+        names.0
+    }
+    /// Whether `expr` joins values with the middle dot (`.join(" · ")`).
+    fn dot_join(expr: &syn::Expr) -> bool {
+        struct Join(bool);
+        impl<'ast> Visit<'ast> for Join {
+            fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+                if call.method == "join"
+                    && let Some(syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(separator),
+                        ..
+                    })) = call.args.first()
+                    && separator.value().contains('·')
+                {
+                    self.0 = true;
+                }
+                syn::visit::visit_expr_method_call(self, call);
+            }
+        }
+        let mut join = Join(false);
+        join.visit_expr(expr);
+        join.0
+    }
+    /// The names a format string reads inline: `{values}`, `{values:>8}`.
+    fn inline_names(words: &str) -> Vec<String> {
+        words
+            .split('{')
+            .skip(1)
+            .filter_map(|rest| rest.split('}').next())
+            .map(|inside| inside.split(':').next().unwrap_or("").trim().to_owned())
+            .filter(|name| {
+                !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+            })
+            .collect()
+    }
     struct Formats<'a> {
         path: &'a str,
         function: String,
         last_line: usize,
         found: Vec<&'static str>,
+        fact: Fact,
+    }
+    impl Formats<'_> {
+        /// Visits one function's body with its own fact state, then counts its copies.
+        fn function(&mut self, name: String, visit: impl FnOnce(&mut Self)) {
+            let previous = std::mem::replace(&mut self.function, name);
+            let outer = std::mem::take(&mut self.fact);
+            visit(self);
+            if !self.path.ends_with("src/design/fact.rs") {
+                self.found
+                    .extend((0..self.fact.copies).map(|_| "fact-owner"));
+            }
+            self.fact = outer;
+            self.function = previous;
+        }
+        fn counts(&self, span: proc_macro2::Span) -> bool {
+            span.start().line <= self.last_line
+        }
     }
     impl<'ast> Visit<'ast> for Formats<'_> {
+        fn visit_local(&mut self, local: &'ast syn::Local) {
+            // What the value is, read before the binding ends what its names held: a join, a
+            // bare format, or another name's value (`let b = a.clone();`).
+            let init = local.init.as_ref().map(|init| &*init.expr);
+            let source = init.and_then(alias);
+            let dots = init.is_some_and(dot_join)
+                || source
+                    .as_ref()
+                    .is_some_and(|source| self.fact.dot_names.contains(source));
+            let site = if init.and_then(template).is_some_and(|words| bare(&words)) {
+                self.fact.sites += 1;
+                Some(self.fact.sites)
+            } else {
+                source.and_then(|source| self.fact.bare_names.get(&source).copied())
+            };
+            // A new binding ends what the name held before.
+            for name in bound(&local.pat) {
+                self.fact.dot_names.remove(&name);
+                self.fact.bare_names.remove(&name);
+            }
+            // A typed binding (`let shown: String = …`) binds its inner name the same way.
+            let pattern = match &local.pat {
+                syn::Pat::Type(typed) => &*typed.pat,
+                other => other,
+            };
+            if let syn::Pat::Ident(name) = pattern {
+                let name = name.ident.to_string();
+                if dots {
+                    self.fact.dot_names.insert(name.clone());
+                }
+                if let Some(site) = site {
+                    self.fact.bare_names.insert(name, site);
+                }
+            }
+            syn::visit::visit_local(self, local);
+        }
+        fn visit_expr_for_loop(&mut self, looped: &'ast syn::ExprForLoop) {
+            for name in bound(&looped.pat) {
+                self.fact.dot_names.remove(&name);
+                self.fact.bare_names.remove(&name);
+            }
+            syn::visit::visit_expr_for_loop(self, looped);
+        }
         fn visit_item_fn(&mut self, item: &'ast syn::ItemFn) {
-            let previous = std::mem::replace(&mut self.function, item.sig.ident.to_string());
-            syn::visit::visit_item_fn(self, item);
-            self.function = previous;
+            self.function(item.sig.ident.to_string(), |this| {
+                syn::visit::visit_item_fn(this, item);
+            });
+        }
+        fn visit_impl_item_fn(&mut self, item: &'ast syn::ImplItemFn) {
+            self.function(item.sig.ident.to_string(), |this| {
+                syn::visit::visit_impl_item_fn(this, item);
+            });
+        }
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if let syn::Expr::Path(function) = &*call.func
+                && self.counts(function.path.span())
+            {
+                let names: Vec<String> = function
+                    .path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect();
+                let last = names.last().map_or("", String::as_str);
+                // A tile's label with no colon, given here or through a name.
+                if TILES.contains(&last)
+                    && let Some(label) = call.args.iter().nth(1)
+                {
+                    if template(unref(label)).is_some_and(|words| bare(&words)) {
+                        self.fact.copies += 1;
+                    } else if let Some(site) =
+                        alias(label).and_then(|name| self.fact.bare_names.get(&name).copied())
+                        && self.fact.counted.insert(site)
+                    {
+                        self.fact.copies += 1;
+                    }
+                }
+                // A rolling tile by hand.
+                let numeral = call.args.iter().any(|argument| {
+                    matches!(argument, syn::Expr::Path(path)
+                        if path.path.segments.last().is_some_and(|segment| segment.ident == "NumeralLarge"))
+                });
+                if names.ends_with(&["rolls".to_owned(), "link".to_owned()]) && numeral {
+                    self.fact.copies += 1;
+                }
+            }
+            syn::visit::visit_expr_call(self, call);
         }
         fn visit_macro(&mut self, mac: &'ast syn::Macro) {
             // Macro tokens are not expressions in syn's default visitor. Parse expression
@@ -484,16 +740,44 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
             if let Ok(args) = mac.parse_body_with(
                 syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated,
             ) {
+                // A fact format: `{…}: {…}` whose value is joined by the middle dot, given as an
+                // argument or read inline through a name bound to such a join.
+                if let Some(syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(words),
+                    ..
+                })) = args.first()
+                    && self.counts(words.span())
+                    && words.value().contains("}: {")
+                {
+                    let names = &self.fact.dot_names;
+                    let inline = inline_names(&words.value())
+                        .iter()
+                        .any(|name| names.contains(name));
+                    let given = args.iter().skip(1).any(|argument| {
+                        dot_join(argument)
+                            || alias(argument).is_some_and(|name| names.contains(&name))
+                    });
+                    if inline || given {
+                        self.fact.copies += 1;
+                    }
+                }
                 let mut nested = Formats {
                     path: self.path,
                     function: self.function.clone(),
                     last_line: self.last_line,
                     found: Vec::new(),
+                    fact: Fact {
+                        copies: 0,
+                        ..self.fact.clone()
+                    },
                 };
                 for argument in &args {
                     nested.visit_expr(argument);
                 }
                 self.found.extend(nested.found);
+                self.fact.copies += nested.fact.copies;
+                self.fact.counted = nested.fact.counted;
+                self.fact.sites = nested.fact.sites;
             }
         }
         fn visit_path(&mut self, path: &'ast syn::Path) {
@@ -575,6 +859,7 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
         function: String::new(),
         last_line,
         found: Vec::new(),
+        fact: Fact::default(),
     };
     formats.visit_file(&syn::parse_file(text).expect("format lint source parses"));
     formats.found
@@ -699,6 +984,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 }
                 "phrase-owner" => {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
+                }
+                "fact-owner" => {
+                    "Draw a sheet's fact with `design::fact::line`, a tile label that holds its number with `fact::tile_label` and a rolling tile with `fact::roll_tile` (M5)"
                 }
                 "arrow-label" => {
                     "Give the control its word: an editor's back is `EditorHead` (its `BackTo` gives the word) above its name row; a back link that starts a line is `TitleLine::back` with its word"
@@ -853,6 +1141,7 @@ fn the_message_rules_find_what_they_should() {
         "fn f() { Action::quiet((\"←\")).show(ui); }".to_owned(),
         format!("fn f() {{ design::icon_button(ui, icons::{LEGACY}, \"Back\"); }}"),
         "fn f() { icon_button(ui, \"←\", \"Back\"); }".to_owned(),
+        "fn f() { icon_button_with_hint(ui, \"←\", \"Back\", \"Back (Alt+Left)\"); }".to_owned(),
         "fn f() { ui.link(\"←\"); }".to_owned(),
         "fn f() { ui.add(egui::Link::new(egui_phosphor::regular::CARET_LEFT)); }".to_owned(),
         "fn f() { ui.add(egui::Button::new(\"‹\")); }".to_owned(),
@@ -1084,4 +1373,125 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
         ),
         ["hp-fraction-owner"]
     );
+    // `fact-owner` (M5, review of PR 470): a local copy of the fact part is found by what it
+    // does, under any name, in any file; the part itself is its owner.
+    let copy = r#"fn sheet_label2(ui: &mut Ui, label: &str, values: &[&str]) {
+        let values = values.join(" · ");
+        ui.label(format!("{label}: {values}"));
+    }"#;
+    for path in ["src/party.rs", "src/a.rs"] {
+        assert_eq!(
+            rules(path, copy),
+            ["fact-owner"],
+            "a renamed helper in {path}"
+        );
+    }
+    assert!(
+        rules("src/design/fact.rs", copy).is_empty(),
+        "the part owns it"
+    );
+    assert_eq!(
+        rules(
+            "src/party.rs",
+            r#"fn senses_line() { ui.label(format!("{}: {}", "Senses", senses.join(" · "))); }"#
+        ),
+        ["fact-owner"],
+        "the join given as the value"
+    );
+    // A chain of `let` bindings carries the join, given or read inline, also when a name is
+    // bound again to its own copy (review of PR 470).
+    for code in [
+        r#"fn senses() {
+            let joined = senses.join(" · ");
+            let shown = joined.clone();
+            let text = &shown;
+            ui.label(format!("{}: {}", "Senses", text));
+        }"#,
+        r#"fn senses() {
+            let joined = senses.join(" · ");
+            let joined = joined.to_owned();
+            let words = (joined).to_string();
+            ui.label(format!("{label}: {words}"));
+        }"#,
+        r#"fn senses() {
+            let joined = values.join(" · ");
+            let shown: String = joined.clone();
+            ui.label(format!("{label}: {shown}"));
+        }"#,
+    ] {
+        assert_eq!(rules("src/a.rs", code), ["fact-owner"], "{code}");
+    }
+    // A tile label with no colon, raw or not, counted once at its format site; a rolling tile
+    // by hand.
+    assert_eq!(
+        rules(
+            "src/party.rs",
+            r##"fn overview() {
+                let label = format!(r#"{}{} {}"#, a, b, c);
+                match bonus {
+                    Some(bonus) => roll_metric(ui, &label, &value, &link),
+                    None => metric(ui, &label, value),
+                }
+            }"##
+        ),
+        ["fact-owner"]
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            r#"fn tiles() { design::stat_tile(ui, &format!("{} {}", a, b), "15"); }"#
+        ),
+        ["fact-owner"]
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            r#"fn tiles() {
+                let label = format!("{} {}", a, b);
+                let shown = label.clone();
+                let text = shown.as_str();
+                stat_tile(ui, text, "15");
+                metric(ui, &label, "15");
+            }"#
+        ),
+        ["fact-owner"],
+        "a chain to a tile's label, one format site"
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            r#"fn tiles() {
+                let label: String = format!("{} {}", a, b);
+                let shown: &str = label.as_str();
+                stat_tile(ui, shown, "15");
+            }"#
+        ),
+        ["fact-owner"],
+        "typed bindings to a tile's label"
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            r#"fn dex() { crate::rolls::link(ui, value, Type::NumeralLarge, &link); }"#
+        ),
+        ["fact-owner"]
+    );
+    // Not a fact: a join with no colon form, a name bound again to another value (its count),
+    // a status word beside a tile, a name a loop binds again, the part itself.
+    for code in [
+        r#"fn row() { let s = parts.join(" · "); ui.label(format!("{} rows", s)); }"#,
+        r#"fn row() {
+            let s = parts.join(" · ");
+            let s = s.len().to_string();
+            ui.label(format!("{label}: {s}"));
+        }"#,
+        r#"fn reference() { stat_tile(ui, "AC", &ac); let icon = format!("{} {word}", a); }"#,
+        r#"fn passive() {
+            let label = format!("{} {}", a, b);
+            for (label, key) in pairs { metric(ui, label, value(key)); }
+        }"#,
+        r#"fn facts(ui: &mut Ui) { design::fact::line(ui, "Senses", senses); }"#,
+    ] {
+        assert!(rules("src/a.rs", code).is_empty(), "{code}");
+    }
 }

@@ -54,6 +54,8 @@ pub enum Sizes {
     StandardAndHiDpi,
     /// Only the minimum size, for a change specific to the narrow layout.
     Small,
+    /// Only the large size, for a change only a wide window has room for.
+    Large,
     /// The same two sizes, plus the default size at twice the pixel density.
     DefaultAndHiDpi,
     /// The minimum, default and large sizes.
@@ -66,6 +68,7 @@ impl Sizes {
     fn plan(self) -> &'static [((f32, f32), f32)] {
         match self {
             Self::Small => &[(SMALL, 1.0)],
+            Self::Large => &[(LARGE, 1.0)],
             Self::Default | Self::Standard => &[(SMALL, 1.0), (DEFAULT, 1.0)],
             Self::DefaultAndHiDpi | Self::StandardAndHiDpi => {
                 &[(SMALL, 1.0), (DEFAULT, 1.0), (DEFAULT, 2.0)]
@@ -1244,6 +1247,64 @@ impl<'a> Driver<'a> {
         seen
     }
 
+    /// One input frame of `events`, drawn in ONE layout pass (egui's reruns denied, as when the
+    /// frame's pass budget is spent), then `look` at what that first presented frame painted and
+    /// named, and again at the next frame (no input, one pass); then reruns come back and the
+    /// app settles. No discarded pass can hide a stale view here, and the second look shows what
+    /// the first frame's view became (migration-32 L1c: a footer's facts are fresh, and placed,
+    /// in the frame of the act).
+    pub fn first_frame_one_pass<T>(
+        &mut self,
+        events: impl IntoIterator<Item = egui::Event>,
+        look: impl Fn(&Self) -> T,
+    ) -> (T, T) {
+        let passes = self.harness.ctx.options(|options| options.max_passes);
+        self.harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        let receipt = super::input_frame::one_pass(&mut self.harness, events);
+        assert_eq!(
+            receipt.layout_passes, 1,
+            "{}: the frame of the act ran more than one layout pass",
+            self.scenario
+        );
+        let first = look(self);
+        let receipt = super::input_frame::one_pass(&mut self.harness, []);
+        assert_eq!(
+            receipt.layout_passes, 1,
+            "{}: the frame after the act ran more than one layout pass",
+            self.scenario
+        );
+        let next = look(self);
+        self.harness
+            .ctx
+            .options_mut(|options| options.max_passes = passes);
+        self.interactions += 1;
+        self.settle();
+        (first, next)
+    }
+
+    /// A screen reader's Click on the visible control named `name`, as one input event.
+    pub fn click_event(&self, name: &str) -> egui::Event {
+        let target = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == name && Self::is_control(node) && node.in_view())
+            .map(|node| node.id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}: no visible control {name:?}.\n{}",
+                    self.scenario,
+                    self.describe()
+                )
+            });
+        egui::Event::AccessKitActionRequest(accesskit::ActionRequest {
+            target,
+            action: accesskit::Action::Click,
+            data: None,
+        })
+    }
+
     /// Text typed into the focused field and a screen reader's Click on the control named
     /// `name`, in ONE pass. `Harness::step` runs one pass per queued event, so both events go
     /// straight into the next frame's input and one checked frame runs; queued actions fail. egui
@@ -2248,7 +2309,7 @@ impl<'a> Driver<'a> {
         )
     }
 
-    fn click_field(&mut self, field: &str) {
+    pub(super) fn click_field(&mut self, field: &str) {
         let rect = self.aim(&format!("text field {field:?}"), |node| {
             Self::is_text_input(node.role)
                 && !node.disabled

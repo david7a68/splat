@@ -27,6 +27,11 @@ use uuid::Uuid;
 struct GroupDrag(Uuid);
 
 pub(super) const AMOUNT: &str = "Amount";
+/// The run's one damage and healing amount: one field, keyed by its run.
+const AMOUNT_FIELD: design::FieldName = crate::field_id!("run_amount");
+/// A group's typed initiative total in Arrivals, keyed by its run and the group (two groups can
+/// have one name; two runs can offer one group).
+const ARRIVAL_TOTAL_FIELD: design::FieldName = crate::field_id!("run_arrival_total");
 const OTHER_EFFECT_FIELD: design::FieldName = crate::field_id!("run_other_effect");
 const OUTCOME_FIELD: design::FieldName = crate::field_id!("run_outcome");
 const DM_NOTE_FIELD: design::FieldName = crate::field_id!("run_dm_note");
@@ -86,7 +91,12 @@ pub(crate) fn other_effects_list<'a>(
         ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| {
             ui.set_max_width(row);
             design::row_menu(ui, effect, |ui| {
-                if ui.button("Remove").clicked() {
+                // A menu's choice is a quiet action, as the Encounters row menus' are.
+                if Action::quiet("Remove")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
                     removed = Some(at);
                     ui.close();
                 }
@@ -645,6 +655,11 @@ impl Run {
         false
     }
 
+    /// The Amount field's id: the dock draws it, and the keys read whether it has focus.
+    pub(super) fn amount_id(&self) -> egui::Id {
+        AMOUNT_FIELD.of(self.id).id()
+    }
+
     pub(super) fn run_command(&mut self, command: Command) {
         let follow = matches!(command, Command::Next | Command::Begin | Command::Continue);
         // A field that reports each key keeps the keyboard, or the next digit lands in the
@@ -802,7 +817,7 @@ impl Run {
         if ui.ctx().memory(|memory| memory.top_modal_layer()).is_some() {
             return;
         }
-        let amount_id = design::focus_id(AMOUNT);
+        let amount_id = self.amount_id();
         let focused = ui.ctx().memory(|memory| memory.focused());
         if focused.is_some_and(|id| id != amount_id) && ui.ctx().wants_keyboard_input() {
             return;
@@ -4346,7 +4361,9 @@ impl Run {
             let response = design::locked(ui, group.problem.as_deref(), |ui| {
                 design::number_field_with_id(
                     ui,
-                    design::focus_id(&field).with(group.id),
+                    // The typed totals are this run's (`group_totals`): keyed by the run and
+                    // the group, so another run's field of the same group shares no text Undo.
+                    ARRIVAL_TOTAL_FIELD.of(self.id).with(group.id).id(),
                     &field,
                     text,
                     "Roll",
@@ -4866,9 +4883,9 @@ impl Run {
                 let mut max = p.max_hp;
                 design::heading(ui, design::Heading::Group { title: "Correct HP", count: 0 });
                 let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
-                optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
+                optional_number(ui, "Current HP", &mut hp, 0..=1_000_000, design::stepper);
                 design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
-                    optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                    optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000, design::stepper);
                 });
                 if sheet_decides {
                     design::help(ui, MAX_FROM_SHEET);
@@ -4884,7 +4901,14 @@ impl Run {
                     // FJ8 (iter-27-R): the bonus has its own heading, as live play's total has.
                     design::heading(ui, design::Heading::Group { title: "Correct initiative", count: 0 });
                     let mut bonus = p.initiative_bonus;
-                    optional_number(ui, "Initiative bonus", &mut bonus, -1000..=1000);
+                    // M0169: a modifier, so the signed stepper (`+2`, `−1`; reads `-1` too).
+                    optional_number(
+                        ui,
+                        "Initiative bonus",
+                        &mut bonus,
+                        -1000..=1000,
+                        design::signed_stepper,
+                    );
                     if bonus != p.initiative_bonus {
                         command = Some(Command::Bonus(index, bonus));
                     }
@@ -5143,14 +5167,15 @@ impl Run {
                                         );
                                         for mode in &roll_choices {
                                             // FJ4 (iter-27-R): the selected choice has a check,
-                                            // not only its fill; every word keeps one x.
-                                            let selected = *mode == default_roll;
-                                            let item = ui.selectable_label(
-                                                selected,
-                                                checked_choice(ui, selected, mode.label()),
-                                            );
-                                            design::named(ui, &item, mode.label());
-                                            if item.clicked() {
+                                            // not only its fill; every word keeps one x. The
+                                            // shared choice row owns both.
+                                            if design::choice(
+                                                ui,
+                                                *mode == default_roll,
+                                                mode.label(),
+                                            )
+                                            .clicked()
+                                            {
                                                 command = Some(Command::RollNpcs(*mode));
                                             }
                                         }
@@ -6175,17 +6200,9 @@ impl Run {
                                         ..egui::Margin::ZERO
                                     })
                                     .show(ui, |ui| {
-                                        if choosing {
-                                            design::section(ui, "Combat log", |ui| {
-                                                self.log_tab(ui)
-                                            });
-                                        } else {
-                                            design::heading(
-                                                ui,
-                                                design::Heading::Label("Combat log"),
-                                            );
-                                            self.log_tab(ui);
-                                        }
+                                        // SM11, AM14: Prep's peer, so one form, closed, with
+                                        // or without choices to make.
+                                        design::section(ui, "Combat log", |ui| self.log_tab(ui));
                                     });
                             });
                     }
@@ -7585,36 +7602,6 @@ pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
 
 fn hp_word(p: &Participant) -> Option<(&'static str, &'static str, egui::Color32)> {
     design::hp_word(p.hp, p.max_hp)
-}
-
-/// A menu choice's words after a check slot: the check shows on the selected choice, and the
-/// slot is kept on the others, so every choice's words start at one x (FJ4).
-fn checked_choice(ui: &egui::Ui, selected: bool, words: &str) -> egui::text::LayoutJob {
-    let font = Type::Body.font(ui);
-    let c = colors();
-    let mut job = egui::text::LayoutJob::default();
-    for (text, color) in [
-        (
-            format!("{} ", icons::OK),
-            if selected {
-                c.text
-            } else {
-                egui::Color32::TRANSPARENT
-            },
-        ),
-        (words.to_owned(), c.text),
-    ] {
-        job.append(
-            &text,
-            0.0,
-            egui::TextFormat {
-                font_id: font.clone(),
-                color,
-                ..Default::default()
-            },
-        );
-    }
-    job
 }
 
 /// The death-save counts in words: `1 success · 0 failures`.
@@ -9581,7 +9568,7 @@ fn paint_row(
     );
 }
 
-/// A number that can be unknown. `Mark unknown` clears it, away from the value,
+/// A number that can be unknown. `Clear` empties it, away from the value,
 /// so that a click meant for the number cannot lose it.
 fn correction_label(ui: &mut egui::Ui, label: &str) {
     let size = vec2(correction_label_width(ui), Density::Read.control());
@@ -9635,42 +9622,25 @@ fn correction_label_width(ui: &egui::Ui) -> f32 {
         .fold(design::L * 6.0, f32::max)
 }
 
-fn signed_bonus(value: i64) -> String {
-    if value < 0 {
-        format!("−{}", value.unsigned_abs())
-    } else {
-        format!("+{value}")
-    }
-}
-
-fn parse_bonus(text: &str) -> Option<f64> {
-    text.trim().replace('−', "-").parse().ok()
-}
-
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// One value of the Correct tab that may be unknown: its label, then its value in the shared
+/// `stepper` (`design::stepper`, or `design::signed_stepper` for a modifier) with `Mark
+/// unknown`, or `Unknown` and `Enter` while it has none.
 fn optional_number(
     ui: &mut egui::Ui,
     label: &str,
     value: &mut Option<i64>,
     range: std::ops::RangeInclusive<i64>,
+    stepper: fn(&mut egui::Ui, &str, &mut i64, std::ops::RangeInclusive<i64>) -> bool,
 ) {
     // Its words stay on one line, in any width of panel.
     ui.horizontal(|ui| {
         correction_label(ui, label);
         if let Some(n) = value {
-            let mut field = egui::DragValue::new(n).range(range);
-            if label == "Initiative bonus" {
-                field = field
-                    .custom_formatter(|value, _| signed_bonus(value as i64))
-                    .custom_parser(parse_bonus);
-            }
-            let response = ui.add(field);
-            design::named(ui, &response, label);
-            if Action::quiet("Mark unknown")
-                .name(&format!("Mark {label} unknown"))
+            stepper(ui, label, n, range);
+            // `Clear` empties the number, so it reads `Unknown`: a short plain word that keeps
+            // its line beside the stepper at every size (M-R0.4: `Mark unknown` was cut at 960).
+            if Action::quiet("Clear")
+                .name(&format!("Clear {label}"))
                 .density(Density::Read)
                 .show(ui)
                 .clicked()
@@ -10953,6 +10923,43 @@ mod tests {
         run.borrow_mut().undo();
         harness.run_steps(2);
         assert_eq!(shown(&harness), both, "m-r0-R35-undo");
+        // Astra's review of PR 480 (P2): a typed total is its run's (`group_totals`), so its
+        // field is keyed by the run and the group. Run A types 17, pauses, erases it; run B,
+        // opened with the same group, gets nothing of A's text Undo in its empty field.
+        let total = "Initiative total for Mist Riders";
+        harness.get_by_label(total).click();
+        harness.run_steps(1);
+        harness.get_by_label(total).type_text("17");
+        harness.run_steps(16);
+        for _ in 0..2 {
+            harness.key_press(Key::Backspace);
+            harness.run_steps(1);
+        }
+        harness.run_steps(16);
+        let mut other = super::super::tests::run();
+        other.groups = run.borrow().groups.clone();
+        assert_ne!(other.id, run.borrow().id);
+        let run_a = std::mem::replace(&mut *run.borrow_mut(), other);
+        harness.run_steps(2);
+        harness.get_by_label(total).click();
+        harness.run_steps(1);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, Key::Z);
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow()
+                .group_totals
+                .get(&riders.id)
+                .map(String::as_str)
+                .unwrap_or_default(),
+            "",
+            "m-r0-3-total-owner: Ctrl+Z in run B's field brought back run A's total"
+        );
+        assert!(
+            run_a
+                .group_totals
+                .get(&riders.id)
+                .is_none_or(|text| text.is_empty())
+        );
     }
 
     #[test]
@@ -12287,10 +12294,11 @@ mod tests {
 
     #[test]
     fn initiative_bonus_formats_and_parses_signed_values() {
+        // The Correct tab's local copies went with M0169: the bonus is `design::signed_stepper`,
+        // which shows the shared form; its reading of `−1` and `-1` is checked through the real
+        // field in `iter9_b_correct_does_not_change_sync_and_explicit_stop_stays`.
         for (value, shown) in [(1, "+1"), (0, "+0"), (-1, "−1")] {
-            assert_eq!(signed_bonus(value), shown);
-            assert_eq!(parse_bonus(shown), Some(value as f64));
-            assert_eq!(parse_bonus(&value.to_string()), Some(value as f64));
+            assert_eq!(design::signed(value), shown);
         }
     }
 
@@ -13323,6 +13331,62 @@ mod tests {
                 );
             }
         }
+        // M-R0.4 (M0169): in setup, the bonus is the shared signed stepper. It shows `+2`, and
+        // `-1` typed in its field is read back and shown with a true minus.
+        use egui_kittest::kittest::Queryable;
+        let run = Rc::new(RefCell::new(super::super::tests::run()));
+        assert_eq!(run.borrow().state.participants[0].initiative_bonus, Some(2));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(560.0, 900.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| shown.borrow_mut().record_tab(ui, 0));
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let painted = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            painted(&harness).iter().any(|text| text == "+2"),
+            "m-r0-4-signed-shown: {:?}",
+            painted(&harness)
+        );
+        // The field, not the row's words of the same name.
+        let field = |harness: &egui_kittest::Harness<'_>, act: &dyn Fn(&egui_kittest::Node<'_>)| {
+            use egui_kittest::kittest::NodeT;
+            let node = harness
+                .query_all_by_label("Initiative bonus")
+                .find(|node| node.accesskit_node().role() == egui::accesskit::Role::SpinButton)
+                .expect("the bonus field");
+            act(&node);
+        };
+        field(&harness, &|node| node.click());
+        harness.run_steps(2);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, Key::A);
+        harness.run_steps(1);
+        field(&harness, &|node| node.type_text("-1"));
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(
+            run.borrow().state.participants[0].initiative_bonus,
+            Some(-1),
+            "m-r0-4-typed-read"
+        );
+        assert!(
+            painted(&harness).iter().any(|text| text == "\u{2212}1"),
+            "m-r0-4-signed-minus: {:?}",
+            painted(&harness)
+        );
     }
 
     #[test]
