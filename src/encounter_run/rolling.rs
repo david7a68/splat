@@ -1350,12 +1350,18 @@ impl Run {
         ))
     }
 
-    /// The actions of a row: from its linked sheet, or else from its stat block's text.
+    /// The actions of a row: from its linked sheet, or else from its stat block's text, then
+    /// the spells its Spellcasting lists that roll.
     pub(super) fn chips(&self, row: usize) -> Vec<Chip> {
         if let Some(record) = self.sheet.as_ref().filter(|_| self.sheet_for == Some(row)) {
             return crate::party::sheet_chips(record);
         }
-        rolls::chips(&self.state.participants[row].definition.body)
+        let definition = &self.state.participants[row].definition;
+        let mut chips = rolls::chips(&definition.body);
+        if let Some(content) = &self.content {
+            chips.extend(crate::library::spells::rolls(definition, content.as_ref()));
+        }
+        chips
     }
 
     /// The room above the dock for the action bar: only while the panel is hidden.
@@ -2382,6 +2388,50 @@ mod tests {
                 Some("Saved · 5 damage (half)".to_owned()),
                 Some("Failed · 10 damage".to_owned())
             ],
+        );
+
+        // A creature's listed spells that roll follow its own actions, in the panel, on the
+        // action bar and by Ctrl+number, with its spell save DC. Druidcraft and Speak with
+        // Animals roll nothing, and Longstrider has no save.
+        run.disarm();
+        let row = run.panel_row();
+        let druid = "definitions/creatures/druid.md";
+        run.state.participants[row].definition = std::sync::Arc::new(
+            Entry::parse(
+                druid,
+                splat::content::definitions::source_file(druid).unwrap(),
+            )
+            .unwrap(),
+        );
+        run.content = Some(std::sync::Arc::new(
+            crate::lookup::ContentIndex::load(&[], None).unwrap(),
+        ));
+        let labels: Vec<_> = run.chips(row).into_iter().map(|chip| chip.label).collect();
+        assert_eq!(
+            labels,
+            [
+                "Vine Staff +5",
+                "Verdant Wisp +5",
+                "Entangle DC 13",
+                "Thunderwave DC 13",
+                "Animal Messenger DC 13",
+                "Moonbeam DC 13"
+            ]
+        );
+        run.arm_by_number(4);
+        assert_eq!(
+            run.armed.as_ref().map(|armed| &armed.link),
+            Some(&RollLink::SaveDc {
+                label: "Thunderwave".into(),
+                ability: "Constitution".into(),
+                dc: 13,
+                half: true,
+                damage: vec![DamagePart {
+                    dice: "2d8".into(),
+                    kind: Some("Thunder".into()),
+                    when: None,
+                }],
+            })
         );
     }
 

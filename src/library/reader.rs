@@ -253,7 +253,7 @@ fn structured_value(ui: &mut egui::Ui, value: &serde_yaml_ng::Value) {
     }
 }
 
-fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)> {
+pub(super) fn spell_facts(spell: &serde_yaml_ng::Value) -> Vec<(String, String)> {
     // Use the table's printed values, including text ranges and
     // component codes. A reader must not expose the model's internal shapes.
     let mut spell = spell.clone();

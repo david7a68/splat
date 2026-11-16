@@ -359,8 +359,16 @@ pub(crate) fn menu_heading(link: &RollLink) -> Option<String> {
 /// stays in view, headed in muted Small with what it rolls, and its choices start at the
 /// heading's words. It stays inside its pane, whose right edge is `right`. Returns how to
 /// roll it, when one was chosen.
-fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(Mode, bool)> {
-    let heading = menu_heading(link)?;
+fn mode_menu(
+    response: &egui::Response,
+    link: &RollLink,
+    right: f32,
+    read: Option<&str>,
+) -> Option<Pick> {
+    let modes = menu_heading(link);
+    let heading = modes
+        .clone()
+        .or_else(|| read.map(|_| link_label(link).to_owned()))?;
     let inspired = response
         .ctx
         .data(|data| data.get_temp::<bool>(inspired_id()))
@@ -383,11 +391,19 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
             // The area keeps the size it had; the content sets it each frame.
             ui.set_width(width);
             menu_text(ui, &heading, colors().muted);
-            for (words, mode, inspired) in mode_choices("Roll", inspired) {
-                if menu_choice(ui, &words) {
-                    chosen = Some((mode, inspired));
-                    ui.close();
+            if modes.is_some() {
+                for (words, mode, inspired) in mode_choices("Roll", inspired) {
+                    if menu_choice(ui, &words) {
+                        chosen = Some(Pick::Roll(mode, inspired));
+                        ui.close();
+                    }
                 }
+            }
+            if let Some(read) = read
+                && menu_choice(ui, &format!("Read {read}"))
+            {
+                chosen = Some(Pick::Read);
+                ui.close();
             }
         });
     chosen
@@ -503,7 +519,7 @@ pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -
 
 /// Hover words and a press with its keys, on a drawn number that rolls.
 pub(crate) fn interact(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
-    press(ui, response, link);
+    press(ui, response, link, None);
     if !response.hovered() {
         return;
     }
@@ -512,13 +528,24 @@ pub(crate) fn interact(ui: &egui::Ui, response: &egui::Response, link: &RollLink
 }
 
 /// A click asks for `link` with the keys held; a choice in its right-click menu asks its way.
-fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
+/// `read` names what the menu's `Read` choice opens, such as a spell; true when it was chosen.
+fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink, read: Option<&str>) -> bool {
     if response.clicked() {
         ask(ui.ctx(), link.clone(), Mode::from_keys(ui, link), false);
     }
-    if let Some((mode, inspired)) = mode_menu(response, link, ui.clip_rect().right()) {
-        ask(ui.ctx(), link.clone(), mode, inspired);
+    match mode_menu(response, link, ui.clip_rect().right(), read) {
+        Some(Pick::Roll(mode, inspired)) => ask(ui.ctx(), link.clone(), mode, inspired),
+        Some(Pick::Read) => return true,
+        None => {}
     }
+    false
+}
+
+/// A choice in a roll's right-click menu.
+enum Pick {
+    Roll(Mode, bool),
+    /// Open what the roll is from, such as its spell.
+    Read,
 }
 
 /// One group of dice in a result: a label, each face and whether it was dropped.
@@ -834,6 +861,9 @@ pub(crate) struct Chip {
     pub link: RollLink,
     /// The rules text, for hover.
     pub text: String,
+    /// A tile's last line when the rules text does not give it: a spell's level, casting time
+    /// and range, which come from its entry, not from the words of the stat block.
+    pub facts: Option<String>,
 }
 
 impl Chip {
@@ -849,7 +879,12 @@ impl Chip {
             RollLink::Damage { label, parts } => format!("{label} {}", parts_text(parts)),
             _ => return None,
         };
-        Some(Self { label, link, text })
+        Some(Self {
+            label,
+            link,
+            text,
+            facts: None,
+        })
     }
 }
 
@@ -870,15 +905,21 @@ pub(crate) fn actions(text: &str) -> Arc<Vec<(usize, Chip)>> {
 fn parse_actions(text: &str) -> Vec<(usize, Chip)> {
     let mut chips: Vec<(usize, Chip)> = Vec::new();
     for (at, paragraph) in text.split("\n\n").map(str::trim).enumerate() {
-        // Spellcasting stays prose: it lists spells, with links to them.
-        if paragraph.starts_with(['>', '|', '#', '<']) || paragraph.starts_with("Spellcasting") {
+        // Spellcasting stays prose; its lists of spells are tiles of their own (`library::spells`).
+        if paragraph.starts_with(['>', '|', '#', '<'])
+            || paragraph.starts_with("Spellcasting")
+            || crate::library::spells::spellcasting(paragraph)
+        {
             continue;
         }
-        let Some(title) = design::reader::run_in_title(paragraph) else {
+        // A book may print the parts' labels in italics (`*Melee Attack Roll:* +5`), and one
+        // action may list several as numbered items (`1. **Fear Ray.** *Wisdom Saving Throw:*`).
+        let plain = list_number(paragraph).replace('*', "");
+        let Some(title) = design::reader::run_in_title(&plain) else {
             continue;
         };
         let label = title.split(" (").next().unwrap_or(title);
-        let spans = dice_text::find(paragraph, label);
+        let spans = dice_text::find(&plain, label);
         let pick = |test: fn(&RollLink) -> bool| spans.iter().map(|s| &s.link).find(|l| test(l));
         let link = pick(|l| {
             matches!(
@@ -893,13 +934,29 @@ fn parse_actions(text: &str) -> Vec<(usize, Chip)> {
         .or_else(|| pick(|l| matches!(l, RollLink::Damage { .. })));
         if let Some(chip) = link
             .cloned()
-            .and_then(|link| Chip::new(link, paragraph.replace(['*', '_'], "")))
+            .and_then(|link| Chip::new(link, plain.replace('_', "")))
             && !chips.iter().any(|(_, known)| known.label == chip.label)
         {
             chips.push((at, chip));
         }
     }
     chips
+}
+
+/// A paragraph without the number of a list item: `1. **Fear Ray.** ...` is
+/// `**Fear Ray.** ...`.
+fn list_number(paragraph: &str) -> &str {
+    let digits = paragraph.len()
+        - paragraph
+            .trim_start_matches(|c: char| c.is_ascii_digit())
+            .len();
+    if digits > 0
+        && let Some(rest) = paragraph[digits..].strip_prefix(". ")
+    {
+        rest
+    } else {
+        paragraph
+    }
 }
 
 /// The place of an action in an entry's whole list, by which Ctrl+number arms it.
@@ -1298,6 +1355,12 @@ fn with_changes(link: &RollLink, (attack, damage): (i64, i64)) -> RollLink {
     link
 }
 
+/// A tile's two lines of words, its numbers and its facts, for a check outside the app.
+#[cfg(test)]
+pub(crate) fn tile_words(chip: &Chip) -> (String, Option<String>) {
+    (tile_detail(&chip.link), tile_facts(chip))
+}
+
 /// A tile's numbers: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
 fn tile_detail(link: &RollLink) -> String {
     match link {
@@ -1351,7 +1414,7 @@ fn feet_after<'t>(text: &'t str, key: &str) -> Option<&'t str> {
 
 /// An area in lower-case rules text, `10-foot emanation` or `20-foot-radius sphere`, as
 /// `10-ft emanation`.
-fn area(text: &str) -> Option<String> {
+pub(crate) fn area(text: &str) -> Option<String> {
     const SHAPES: [&str; 7] = [
         "cone",
         "cube",
@@ -1368,6 +1431,22 @@ fn area(text: &str) -> Option<String> {
             continue;
         }
         let rest = &text[at + "-foot".len()..];
+        // A line gives its length first, then its width: `90-foot-long, 5-foot-wide line`.
+        if let Some(after) = rest.strip_prefix("-long")
+            && let Some(words) = after.split(['.', ';']).next()
+            && words.split_whitespace().any(|w| w.starts_with("line"))
+        {
+            let length = &size[size.len() - digits..];
+            // The digits just before `-foot-wide`.
+            let wide = words
+                .split_once("-foot-wide")
+                .and_then(|(head, _)| head.rsplit(|c: char| !c.is_ascii_digit()).next())
+                .filter(|wide| !wide.is_empty());
+            return Some(match wide {
+                Some(wide) => format!("{length}-ft line, {wide} ft wide"),
+                None => format!("{length}-ft line"),
+            });
+        }
         let (radius, rest) = match rest
             .strip_prefix("-radius")
             .or_else(|| rest.strip_prefix(" radius"))
@@ -1392,6 +1471,9 @@ fn area(text: &str) -> Option<String> {
 /// Where and how an action lands, from its rules text, for a tile's last line: `Reach 5 ft`,
 /// `Range 80/320 ft`, `10-ft emanation · Half on a success`. `None` when the text says none.
 fn tile_facts(chip: &Chip) -> Option<String> {
+    if chip.facts.is_some() {
+        return chip.facts.clone();
+    }
     let text = chip.text.to_lowercase();
     let mut facts = Vec::new();
     if let Some(reach) = feet_after(&text, "reach ") {
@@ -1468,6 +1550,30 @@ impl TileText {
         }
     }
 
+    /// The words of a tile that opens an entry: a spell's icon and name, then its facts.
+    fn open(ui: &egui::Ui, name: &str, facts: &str, width: f32) -> Self {
+        let c = colors();
+        let inner = (width - 2.0 * design::S).max(1.0);
+        let mark = design::one_line(
+            ui,
+            design::icons::SPELL,
+            Type::Body.font(ui),
+            c.muted,
+            f32::INFINITY,
+        );
+        let room = (inner - mark.size().x - design::XS).max(1.0);
+        let shown = design::words_that_fit(ui, name, &Type::Strong.font(ui), room);
+        Self {
+            mark,
+            digit: None,
+            name: design::one_line(ui, &shown, Type::Strong.font(ui), c.text, room),
+            detail: ui
+                .painter()
+                .layout(facts.to_owned(), Type::Small.font(ui), c.muted, inner),
+            facts: None,
+        }
+    }
+
     /// The height of a tile with these words.
     fn height(&self) -> f32 {
         Type::Strong.line()
@@ -1500,7 +1606,8 @@ fn key_hint(
 
 /// One action as a tile: its icon, name and hotkey number, then its numbers and where it
 /// lands. The rules text shows on hover and on keyboard focus, and is the tile's accessible
-/// description. It is painted, so the tile is one control with one name.
+/// description. It is painted, so the tile is one control with one name. `read` names what
+/// its menu's `Read` choice opens.
 fn tile(
     ui: &mut egui::Ui,
     chip: &Chip,
@@ -1508,8 +1615,8 @@ fn tile(
     size: egui::Vec2,
     number: Option<usize>,
     armed: bool,
+    read: Option<&str>,
 ) -> egui::Response {
-    let c = colors();
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let keys = number.map_or_else(String::new, |n| format!(" Ctrl+{n}."));
@@ -1522,53 +1629,94 @@ fn tile(
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
     if ui.is_rect_visible(rect) {
         let text = TileText::new(ui, chip, shown, rect.width(), number, armed);
-        let painter = ui.painter_at(rect);
-        let edge = if armed {
-            c.accent
-        } else if response.hovered() {
-            c.focus
-        } else {
-            c.rule
-        };
-        painter.rect(
-            rect,
-            design::RADIUS_CONTROL,
-            if armed { c.selected } else { c.page },
-            egui::Stroke::new(design::HAIRLINE_WIDTH, edge),
-            egui::StrokeKind::Inside,
-        );
-        let inner = rect.shrink2(egui::vec2(design::S, design::XS));
-        let mark_width = text.mark.size().x + design::XS;
-        painter.galley(inner.min, text.mark, c.text);
-        if let Some(digit) = text.digit {
-            painter.galley(
-                egui::pos2(inner.right() - digit.size().x, inner.top()),
-                digit,
-                c.faint,
-            );
-        }
-        painter.galley(inner.min + egui::vec2(mark_width, 0.0), text.name, c.text);
-        let detail_top = inner.top() + Type::Strong.line();
-        let facts_top = detail_top + text.detail.size().y;
-        painter.galley(egui::pos2(inner.left(), detail_top), text.detail, c.muted);
-        if let Some(facts) = text.facts {
-            painter.galley(egui::pos2(inner.left(), facts_top), facts, c.muted);
-        }
+        paint_tile(ui, rect, response.hovered(), text, armed);
     }
     if response.has_focus() {
         design::focus_ring(ui, rect);
     }
-    rules_on_hover_and_focus(response, chip, shown, &keys)
+    rules_on_hover_and_focus(response, chip, shown, &keys, read)
+}
+
+/// A tile that opens an entry, such as a spell with no attack or save: its icon, name and
+/// facts, its rules text on hover and on keyboard focus.
+fn open_tile(ui: &mut egui::Ui, open: &OpenTile, size: egui::Vec2) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let label = if open.facts.is_empty() {
+        format!("{}. Opens its description.", open.name)
+    } else {
+        format!("{} · {}. Opens its description.", open.name, open.facts)
+    };
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
+    if ui.is_rect_visible(rect) {
+        let text = TileText::open(ui, &open.name, &open.facts, rect.width());
+        paint_tile(ui, rect, response.hovered(), text, false);
+    }
+    if response.has_focus() {
+        design::focus_ring(ui, rect);
+    }
+    let mut lines = Vec::new();
+    if !open.text.is_empty() {
+        lines.push(design::TipLine::body(open.text.as_str()));
+    }
+    lines.push(design::TipLine::detail(format!(
+        "Click to read {}.",
+        open.name
+    )));
+    let response = design::rich_tip(response, &lines);
+    response.ctx.accesskit_node_builder(response.id, |node| {
+        node.set_description(open.text.clone());
+    });
+    response
+}
+
+/// A tile's frame and words: its icon, its keys at the right, its name, then its numbers and
+/// its facts.
+fn paint_tile(ui: &egui::Ui, rect: egui::Rect, hovered: bool, text: TileText, armed: bool) {
+    let c = colors();
+    let painter = ui.painter_at(rect);
+    let edge = if armed {
+        c.accent
+    } else if hovered {
+        c.focus
+    } else {
+        c.rule
+    };
+    painter.rect(
+        rect,
+        design::RADIUS_CONTROL,
+        if armed { c.selected } else { c.page },
+        egui::Stroke::new(design::HAIRLINE_WIDTH, edge),
+        egui::StrokeKind::Inside,
+    );
+    let inner = rect.shrink2(egui::vec2(design::S, design::XS));
+    let mark_width = text.mark.size().x + design::XS;
+    painter.galley(inner.min, text.mark, c.text);
+    if let Some(digit) = text.digit {
+        painter.galley(
+            egui::pos2(inner.right() - digit.size().x, inner.top()),
+            digit,
+            c.faint,
+        );
+    }
+    painter.galley(inner.min + egui::vec2(mark_width, 0.0), text.name, c.text);
+    let detail_top = inner.top() + Type::Strong.line();
+    let facts_top = detail_top + text.detail.size().y;
+    painter.galley(egui::pos2(inner.left(), detail_top), text.detail, c.muted);
+    if let Some(facts) = text.facts {
+        painter.galley(egui::pos2(inner.left(), facts_top), facts, c.muted);
+    }
 }
 
 /// A tile's rules text, and its printed numbers (when a run changes them) and keys, on hover
 /// and on keyboard focus (a click gives no focus), and as the control's accessible
-/// description: one `rich_tip`.
+/// description: one `rich_tip`. A tile whose menu can read its source says so.
 fn rules_on_hover_and_focus(
     response: egui::Response,
     chip: &Chip,
     shown: &RollLink,
     keys: &str,
+    read: Option<&str>,
 ) -> egui::Response {
     let mut lines = vec![design::TipLine::body(chip.text.as_str())];
     if *shown != chip.link {
@@ -1578,6 +1726,11 @@ fn rules_on_hover_and_focus(
         )));
     }
     lines.push(design::TipLine::detail(format!("{}{keys}", hint(shown))));
+    if let Some(read) = read {
+        lines.push(design::TipLine::detail(format!(
+            "Right-click or Shift+F10 to read {read}."
+        )));
+    }
     let response = design::rich_tip(response, &lines);
     // The description stays the rules text alone, as it was (iter-19-R ST3): the tip's other
     // lines repeat the tile's own name and keys.
@@ -1588,9 +1741,10 @@ fn rules_on_hover_and_focus(
 }
 
 /// How `count` tiles share lines `line` wide: each line's number of tiles and their width.
-/// As many 208 px tiles as fit go on a line; a tile that stands alone on its line, by itself
-/// or as the last of an odd row, takes the line's width up to the reader measure, so it wraps
-/// nothing it need not and its edge meets the reader's.
+/// As many 208 px tiles as fit go on a line. A tile that stands alone on its line, by itself
+/// or as the last of an odd row, takes the width of a full row, so its right edge meets the
+/// row above it and every row of tiles has one right edge; where only one tile fits, that is
+/// the line's width. The only tile is never wider than the reader measure.
 fn tile_lines(line: f32, count: usize) -> Vec<(usize, f32)> {
     let per = if line >= 2.0 * TILE_WIDTH + design::S {
         (((line + design::S) / (TILE_WIDTH + design::S)) as usize).max(2)
@@ -1601,7 +1755,15 @@ fn tile_lines(line: f32, count: usize) -> Vec<(usize, f32)> {
     let mut left = count;
     while left > 0 {
         let here = left.min(per);
-        let width = if here == 1 {
+        let width = if here == 1 && per > 1 {
+            let row = per as f32 * TILE_WIDTH + (per - 1) as f32 * design::S;
+            // Under a full row, its edge; the only tile keeps the reader measure.
+            if count > per {
+                row
+            } else {
+                row.min(design::READER_MEASURE)
+            }
+        } else if here == 1 {
             line.clamp(48.0, design::READER_MEASURE)
         } else {
             TILE_WIDTH
@@ -1702,20 +1864,63 @@ fn armed_hint(ui: &mut egui::Ui, status: &str, reserve: &str) {
     });
 }
 
+/// A tile that opens an entry instead of rolling: a spell with no attack or save.
+#[derive(Clone, Debug)]
+pub(crate) struct OpenTile {
+    pub name: String,
+    /// `Cantrip · Action · 30 feet`.
+    pub facts: String,
+    /// The rules text, for hover.
+    pub text: String,
+}
+
+/// What a tile does.
+#[derive(Clone, Debug)]
+pub(crate) enum Tile {
+    /// Roll an action. `place` is its place in the entry's whole list of actions, the number
+    /// that arms it; `read` names what its menu's `Read` choice opens.
+    Roll {
+        place: Option<usize>,
+        chip: Chip,
+        read: Option<String>,
+    },
+    Open(OpenTile),
+}
+
 /// An entry's actions as tiles. In a run a tile arms its action, and the line under the
 /// tiles says how to use it; outside a run a tile previews, and the line shows the result.
 ///
 /// Each tile comes with its place in the entry's whole list of actions, if it has one: the
 /// number it shows is the number that arms it.
 pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chip)]) {
-    if chips.is_empty() {
-        return;
+    let tiles: Vec<Tile> = chips
+        .iter()
+        .map(|(place, chip)| Tile::Roll {
+            place: *place,
+            chip: chip.clone(),
+            read: None,
+        })
+        .collect();
+    tile_row(ui, entry, &tiles);
+}
+
+/// Tiles that roll or open, as `tiles` draws them. Returns the place in `tiles` of the tile
+/// whose entry the DM opened: an open tile's click, or a roll tile's `Read` choice.
+pub(crate) fn tile_row(ui: &mut egui::Ui, entry: &str, tiles: &[Tile]) -> Option<usize> {
+    if tiles.is_empty() {
+        return None;
     }
     let ctx = ui.ctx().clone();
     let in_run = roller(&ctx).is_some();
+    let rolled = || {
+        tiles.iter().filter_map(|tile| match tile {
+            Tile::Roll { chip, .. } => Some(chip),
+            Tile::Open(_) => None,
+        })
+    };
     let armed = ctx
         .data(|data| data.get_temp::<ArmedView>(armed_id()))
-        .filter(|view| in_run && chips.iter().any(|(_, chip)| chip.link == view.link));
+        .filter(|view| in_run && rolled().any(|chip| chip.link == view.link));
     let changes = if in_run { roller_changes(&ctx) } else { (0, 0) };
     // A tile's number is its place in the entry's whole list, which Ctrl+number arms from.
     let number = |place: &Option<usize>| {
@@ -1725,11 +1930,22 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
     };
     set_entry(&ctx, entry);
     design::gap(ui, design::Gap::XS);
-    let lines = tile_lines(ui.available_width(), chips.len());
-    let shown: Vec<RollLink> = chips
+    let lines = tile_lines(ui.available_width(), tiles.len());
+    let shown: Vec<Option<RollLink>> = tiles
         .iter()
-        .map(|(_, chip)| with_changes(&chip.link, changes))
+        .map(|tile| match tile {
+            Tile::Roll { chip, .. } => Some(with_changes(&chip.link, changes)),
+            Tile::Open(_) => None,
+        })
         .collect();
+    let text = |ui: &egui::Ui, at: usize, width: f32| match (&tiles[at], &shown[at]) {
+        (Tile::Roll { place, chip, .. }, Some(shown)) => {
+            TileText::new(ui, chip, shown, width, number(place), false)
+        }
+        (Tile::Roll { chip, .. }, None) => TileText::new(ui, chip, &chip.link, width, None, false),
+        (Tile::Open(open), _) => TileText::open(ui, &open.name, &open.facts, width),
+    };
+    let mut opened = None;
     let mut at = 0;
     for (line, (count, width)) in lines.into_iter().enumerate() {
         if line > 0 {
@@ -1740,25 +1956,28 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
         // One height for the tiles of a line, so the line keeps one edge.
         let height = range
             .clone()
-            .map(|at| {
-                let (place, chip) = &chips[at];
-                TileText::new(ui, chip, &shown[at], width, number(place), false).height()
-            })
+            .map(|at| text(ui, at, width).height())
             .fold(0.0, f32::max);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(design::S, design::S);
             for at in range {
-                let (place, chip) = &chips[at];
-                let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
-                let response = tile(
-                    ui,
-                    chip,
-                    &shown[at],
-                    egui::vec2(width, height),
-                    number(place),
-                    lit,
-                );
-                press(ui, &response, &chip.link);
+                let size = egui::vec2(width, height);
+                match (&tiles[at], &shown[at]) {
+                    (Tile::Roll { place, chip, read }, Some(shown)) => {
+                        let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
+                        let response =
+                            tile(ui, chip, shown, size, number(place), lit, read.as_deref());
+                        if press(ui, &response, &chip.link, read.as_deref()) {
+                            opened = Some(at);
+                        }
+                    }
+                    (Tile::Open(open), _) => {
+                        if open_tile(ui, open, size).clicked() {
+                            opened = Some(at);
+                        }
+                    }
+                    (Tile::Roll { .. }, None) => {}
+                }
             }
         });
     }
@@ -1771,7 +1990,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
         }
     } else if !in_run
         && let Some(outcome) =
-            preview_outcome(&ctx, entry).filter(|o| chips.iter().any(|(_, c)| c.link == o.link))
+            preview_outcome(&ctx, entry).filter(|o| rolled().any(|chip| chip.link == o.link))
     {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = design::S;
@@ -1779,6 +1998,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
         });
     }
     design::gap(ui, design::Gap::S);
+    opened
 }
 
 /// The totals of an outcome in Strong, with their dice in hover. A muted `·` comes between
@@ -1854,8 +2074,8 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
                 break;
             }
             let response = action.show(ui);
-            let response = rules_on_hover_and_focus(response, chip, &shown, "");
-            press(ui, &response, &chip.link);
+            let response = rules_on_hover_and_focus(response, chip, &shown, "", None);
+            press(ui, &response, &chip.link, None);
         }
     });
 }
@@ -1953,6 +2173,11 @@ mod tests {
         let caster = "Dagger. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage.\n\nSpellcasting. The mage casts one of the following spells, using Intelligence as the spellcasting ability (spell save DC 14, +6 to hit with spell attacks).\n\nArcane Burst. Ranged Attack Roll: +6, range 120 ft. Hit: 14 (3d8 + 1) Force damage.";
         let labels: Vec<String> = chips(caster).into_iter().map(|chip| chip.label).collect();
         assert_eq!(labels, ["Dagger +4", "Arcane Burst +6"]);
+        // Numbered items under one action are tiles of their own, each with its own number.
+        let rays = "Gaze. The golem shoots one of these rays:\n\n1. **Frost Ray.** *Dexterity Saving Throw:* DC 13. *Failure:* 9 (2d8) Cold damage. *Success:* Half damage.\n\n2. **Slow Ray.** *Wisdom Saving Throw:* DC 13. *Failure:* The target is slowed.";
+        let labels: Vec<String> = chips(rays).into_iter().map(|chip| chip.label).collect();
+        assert_eq!(labels, ["Frost Ray DC 13", "Slow Ray DC 13"]);
+        assert_eq!(actions(rays)[0].0, 1, "the tile stands in its item's place");
         // A rider that is no longer prose is in its tile's hover text.
         let claw = "Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Slashing damage. If the target is a creature that isn't an Undead or elf, it is subjected to the following effect. Constitution Saving Throw: DC 10. Failure: The target has the Paralyzed condition until the end of its next turn.";
         assert!(chips(claw)[0].text.contains("Paralyzed condition"));
@@ -2236,6 +2461,20 @@ mod tests {
             facts("Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage."),
             "Reach 5 ft"
         );
+        // A book may print the parts' labels in italics; the tile reads the same.
+        let italic =
+            "Bite. *Melee Attack Roll:* +4, reach 5 ft. *Hit:* 7 (2d4 + 2) Piercing damage.";
+        assert_eq!(chips(italic)[0].label, "Bite +4");
+        assert_eq!(facts(italic), "Reach 5 ft");
+        let italic_save = "Burst. *Dexterity Saving Throw:* DC 12, each creature in a 10-foot Emanation. *Failure:* 7 (2d6) Fire damage. *Success:* Half damage.";
+        assert_eq!(facts(italic_save), "10-ft emanation · half on a success");
+        // A line gives its length first.
+        assert_eq!(
+            facts(
+                "Lightning Breath. Dexterity Saving Throw: DC 19, each creature in a 90-foot-long, 5-foot-wide Line. Failure: 55 (10d10) Lightning damage. Success: Half damage."
+            ),
+            "90-ft line, 5 ft wide · half on a success"
+        );
         assert_eq!(
             facts(
                 "Longbow. Ranged Attack Roll: +4, range 150/600 ft. Hit: 6 (1d8 + 2) Piercing damage."
@@ -2276,20 +2515,25 @@ mod tests {
     }
 
     #[test]
-    fn a_tile_alone_on_its_line_takes_the_line_and_two_share_a_wide_one() {
+    fn a_tile_alone_on_its_line_takes_a_rows_width_and_two_share_a_wide_one() {
         // A narrow line holds one tile, at the line's width.
         assert_eq!(tile_lines(416.0, 2), vec![(1, 416.0), (1, 416.0)]);
         assert_eq!(tile_lines(300.0, 1), vec![(1, 300.0)]);
         assert_eq!(tile_lines(423.0, 1), vec![(1, 423.0)]);
-        // iter-20-R-ST2: a lone tile on a line that holds two takes the line, up to the
-        // measure; the old rule gave it 208 px.
+        // iter-20-R-ST2: a lone tile on a line that holds two is wider than 208 px. It takes
+        // the width of a full row, not the line, so its right edge meets the row above it.
         let pair = 2.0 * TILE_WIDTH + design::S;
         assert_eq!(tile_lines(pair, 2), vec![(2, TILE_WIDTH)]);
-        assert_eq!(tile_lines(488.0, 1), vec![(1, 488.0)]);
+        assert_eq!(tile_lines(488.0, 1), vec![(1, pair)]);
         assert_eq!(
             tile_lines(488.0, 3),
-            vec![(2, TILE_WIDTH), (1, 488.0)],
-            "the last of an odd row stands alone and takes the line"
+            vec![(2, TILE_WIDTH), (1, pair)],
+            "the last of an odd row stands alone, as wide as the pair above it"
+        );
+        let three = 3.0 * TILE_WIDTH + 2.0 * design::S;
+        assert_eq!(
+            tile_lines(three + 40.0, 4),
+            vec![(3, TILE_WIDTH), (1, three)]
         );
         assert_eq!(tile_lines(2000.0, 1), vec![(1, design::READER_MEASURE)]);
         // Must stay true: three fit on a wide line, at 208 px each.

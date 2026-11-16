@@ -1827,7 +1827,9 @@ current values.`
 
 A stat block's actions are tiles: each rules paragraph with an attack, a save DC or damage, in printed order, in a
 wrapping row with `S` gaps. As many 208 px tiles as fit share a line; a tile alone on its line (the only tile, or the
-last of an odd row) takes the line's width, up to the reader measure, in a run, the Library and Party. Tiles on one line
+last of an odd row) takes the width of a full row, so every row of tiles has one right edge, in a run, the Library and
+Party. Where only one tile fits, a tile takes the line's width. The only tile is never wider than the reader measure.
+Tiles on one line
 share one height. A tile has a hairline frame with control radius:
 a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its keys in faint Small at the
 right in a run (`Ctrl+1`, never a bare digit; when the name would be cut beside them, the keys give way and the hover
@@ -1835,10 +1837,21 @@ keeps them), then its numbers in muted Small, then, when the text says, where it
 (`Reach 5 ft`, `Range 80/320 ft`, `10-ft emanation · half on a success`). Numbers and that line wrap; they are never
 cut. The rules paragraph shows on hover and on keyboard focus, and it is the tile's accessible description. Hover
 draws the frame in the focus colour. In a run a tile shows the numbers Splat rolls, with the run's attack and damage
-changes in them; its hover adds the printed numbers. Spellcasting stays prose, and each spell its lists name
-(`At Will: Druidcraft, Light`) is a link in place that opens the spell; words in brackets after a name
-(`(level 2 version)`) stay outside the link. A spell that the entry gives or its words name, but that no list links,
-goes on a muted `Spell descriptions:` line after the lists. A character's Actions page shows its
+changes in them; its hover adds the printed numbers. The Spellcasting paragraph stays prose. Each of its list lines
+(`At Will: Druidcraft, Light`) is its label in muted Small (`At Will`, `2/Day Each`) over a row of tiles, one for each
+spell, in printed order. A spell with an attack or a save is an action tile: the caster's attack bonus
+(`+6 to hit with spell attacks`) or spell save DC, the damage of a hit or a failed save at the level the list casts it
+(`Guiding Bolt (level 2 version)`), then the spell's level, casting time, range, `Concentration` and
+`half on a success`. It arms and rolls as any action tile does, and its number follows the stat block's own actions. Its
+right-click menu ends with `Read <spell>`, which opens the spell. A spell with neither shows a magic wand icon, its
+level, casting time and range, and opens the spell on a click. A tile's hover is the spell's rules text. A list name
+that no entry matches is on a muted `Not found in this content:` line under its row. A spell that the entry gives or
+its words name, but that no list shows, goes on a muted `Spell descriptions:` line after the lists. A paragraph of its
+own that casts spells by name (`Dread Shout. The wight casts Fear, using ...`) keeps its words, with a row of the same
+spell tiles under them, from its own spell save DC or else Spellcasting's; in a run they follow in printed order. An
+action's numbered items (`1. Frost Ray. Dexterity Saving Throw: DC 13 ...`) are tiles of their own. Damage with no
+dice (`Hit: 1 Piercing damage`) and a type to choose (`Necrotic or Radiant damage`) show as printed. A character's
+Actions page shows its
 attacks as tiles, with the reach or range its sheet gives (`Reach 5 ft`, `Range 120 ft`).
 
 In a run a tile arms its action: its frame turns accent on the selected fill and its icon becomes a crosshair, and

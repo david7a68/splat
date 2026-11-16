@@ -7448,18 +7448,19 @@ pub mod run_lookup {
         );
 
         d.review("T6.4", "the run's creature reader");
-        let linked = d
-            .nodes()
-            .iter()
-            .any(|node| node.is_link() && node.name.contains(SPELL_IN_STAT_BLOCK));
+        // The spell the cultist casts is a tile that opens it (PR 492, 498); it was a link.
+        let tile = d.nodes().iter().any(|node| {
+            node.name.starts_with(SPELL_IN_STAT_BLOCK)
+                && node.name.ends_with("Opens its description.")
+        });
         d.begin_task();
         let unread = !d.visible_text(SPELL_BODY);
-        d.click(SPELL_IN_STAT_BLOCK);
+        d.click_starting(SPELL_IN_STAT_BLOCK);
         let opened = d.visible_text(SPELL_BODY) && d.in_view(NEXT_TURN);
         d.state("spell-from-stat-block", Sizes::Default);
         d.observe(
             "T2.4",
-            linked && unread && opened,
+            tile && unread && opened,
             "A spell named in a run stat block opens its text beside the roster",
         );
         let cost = d.goal("read the creature's details in the run");
