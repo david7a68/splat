@@ -437,7 +437,7 @@ impl Run {
     /// Beside Notes, a letter in Amount means the DM went on writing. It and the digits
     /// before it go to the note, and they never apply as an amount.
     fn take_words_for_note(&mut self, ui: &egui::Ui) {
-        let id = design::focus_id(AMOUNT);
+        let id = self.amount_id();
         if let Some(typed) =
             Self::words_in_number_field(self.notes_open, ui, id, |c| c.is_ascii_digit())
         {
@@ -448,8 +448,10 @@ impl Run {
 
     fn amount_field(&mut self, ui: &mut egui::Ui, width: f32) {
         self.take_words_for_note(ui);
-        let response = design::number_field(
+        let id = self.amount_id();
+        let response = design::number_field_with_id(
             ui,
+            id,
             AMOUNT,
             &mut self.amount,
             AMOUNT,
@@ -787,6 +789,19 @@ mod tests {
             harness.get_by_label("Amount").is_focused(),
             "Escape puts focus in Amount"
         );
+        // M-R0.3: the field and what reads its focus share one id, the run's (`amount_id`).
+        // With Notes open, a letter typed in Amount goes to the note, with the digits before it.
+        run.borrow_mut().notes_open = true;
+        harness.event(egui::Event::Text("4n".into()));
+        harness.run_steps(1);
+        assert_eq!(
+            run.borrow_mut().for_note.take().as_deref(),
+            Some("4n"),
+            "m-r0-3-amount-id: Amount's words reach the note"
+        );
+        run.borrow_mut().notes_open = false;
+        harness.get_by_label("Amount").click();
+        harness.run_steps(1);
         // Next turn moves the selection: the field closes, and its words wait for its row.
         harness.get_by_label("Effect: words for this row").click();
         harness.run_steps(3);
