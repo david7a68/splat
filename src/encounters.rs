@@ -1303,9 +1303,10 @@ fn set_table_value(text: &mut String, key: &str, value: &str) -> bool {
     true
 }
 
-/// What the DM asked of the creature open beside the roster.
+/// What the DM did with the creature open beside the roster.
 enum CreatureStep {
-    Save,
+    /// Saved it (the pane saved it after its fields, in the frame of the press).
+    Saved,
     Close,
 }
 
@@ -4944,15 +4945,17 @@ impl Encounters {
             return;
         };
         match editor.save(&active.path) {
-            Ok(()) => {
-                self.creature = None;
-                self.clear_creature_block();
-                self.reload_snapshot(active, modules);
-                self.saved = true;
-                self.focus_search = true;
-            }
+            Ok(()) => self.creature_saved(active, modules),
             Err(e) => editor.error = Some(e),
         }
+    }
+    /// The open creature was saved: it closes and the campaign's creatures are read again.
+    fn creature_saved(&mut self, active: &Campaign, modules: &[Module]) {
+        self.creature = None;
+        self.clear_creature_block();
+        self.reload_snapshot(active, modules);
+        self.saved = true;
+        self.focus_search = true;
     }
     /// Beside the roster, in place of the search. It says what this creature is, and only the
     /// numbers a DM most often changes have fields of their own.
@@ -4960,7 +4963,11 @@ impl Encounters {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
-    fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
+    fn creature_pane(
+        ui: &mut egui::Ui,
+        editor: &mut CreatureEditor,
+        root: &std::path::Path,
+    ) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
             if let Some(keep) = editor.recovery.show(
                 ui,
@@ -5031,85 +5038,103 @@ impl Encounters {
         });
         // A refused Save's reason sits in the pane's footer (typed: migration-32 L2c), so the
         // fields keep their place. The pane's body fills its room: the creature's text is a
-        // Markdown editor as tall as the room under the fields.
+        // Markdown editor as tall as the room under the fields. L1c (`pane_then`): Save (or
+        // Ctrl+S on it) is done after the fields, so it writes what this frame typed, and its
+        // reason is read after it: the frame of the press shows it.
         let frame = design::outcome::PaneFrame::new(ui);
-        let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new(
+        let messages = design::outcome::Messages::<design::outcome::NoPress>::new(
             &frame,
             ("creature_footer", editor.path.clone()),
             ui.available_width(),
         );
-        if let Some(error) = editor.error.clone() {
-            messages.outcome(design::outcome::FaultMessage::new(&EncounterFault::Failed(
-                error,
-            )));
-        }
         let body = design::pane::Body::Fills(design::pane::Fills::because(
             design::pane::FillsReason::MarkdownEditor,
         ));
-        let _ = messages.pane(ui, body, |ui| {
-            // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
-            // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
-            design::field(ui, "Name", None, None, |ui| {
-                let width = ui.available_width();
-                design::line_field(
-                    ui,
-                    CREATURE_NAME.of(design::TextKey::from_data(editor.path.clone())),
-                    "Name",
-                    &mut editor.fields.name,
-                    "Name",
-                    width,
-                )
-            });
-            let focus_hp = std::mem::take(&mut editor.focus);
-            ui.horizontal(|ui| {
-                design::field(ui, "Hit points", None, None, |ui| {
-                    let response = design::number_field(
+        let paned = messages.pane_then(
+            ui,
+            body,
+            move |ui| {
+                // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
+                // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
+                design::field(ui, "Name", None, None, |ui| {
+                    let width = ui.available_width();
+                    design::line_field(
                         ui,
-                        "Hit points",
-                        &mut editor.fields.hp,
-                        "HP",
-                        56.0,
-                        Density::Read.control(),
-                    );
-                    if focus_hp {
-                        design::focus_and_select(ui, response.id, &editor.fields.hp);
-                    }
+                        CREATURE_NAME.of(design::TextKey::from_data(editor.path.clone())),
+                        "Name",
+                        &mut editor.fields.name,
+                        "Name",
+                        width,
+                    )
                 });
-                design::field(ui, "Armor class", None, None, |ui| {
-                    design::number_field(
-                        ui,
-                        "Armor class",
-                        &mut editor.fields.armor_class,
-                        "AC",
-                        56.0,
-                        Density::Read.control(),
-                    );
-                });
-            });
-            // The file's source, closed until wanted: the common changes have fields above.
-            design::quiet_section(ui, "Its text, as Markdown", |ui| {
-                let room = ui.available_height();
-                egui::ScrollArea::vertical()
-                    .id_salt("creature_text")
-                    .max_height(room)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        let output = egui::TextEdit::multiline(&mut editor.fields.body)
-                            .font(egui::TextStyle::Monospace)
-                            .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                            .margin(egui::vec2(design::S, design::S))
-                            .show(ui);
-                        if let Some(note) =
-                            crate::markdown_source::pressed_note_link(ui, &output, None)
-                        {
-                            crate::markdown_view::send_note_link(ui.ctx(), note, None);
+                let focus_hp = std::mem::take(&mut editor.focus);
+                ui.horizontal(|ui| {
+                    design::field(ui, "Hit points", None, None, |ui| {
+                        let response = design::number_field(
+                            ui,
+                            "Hit points",
+                            &mut editor.fields.hp,
+                            "HP",
+                            56.0,
+                            Density::Read.control(),
+                        );
+                        if focus_hp {
+                            design::focus_and_select(ui, response.id, &editor.fields.hp);
                         }
-                        design::named(ui, &output.response, "Creature text");
                     });
-            });
-        });
-        if save {
-            Some(CreatureStep::Save)
+                    design::field(ui, "Armor class", None, None, |ui| {
+                        design::number_field(
+                            ui,
+                            "Armor class",
+                            &mut editor.fields.armor_class,
+                            "AC",
+                            56.0,
+                            Density::Read.control(),
+                        );
+                    });
+                });
+                // The file's source, closed until wanted: the common changes have fields above.
+                design::quiet_section(ui, "Its text, as Markdown", |ui| {
+                    let room = ui.available_height();
+                    egui::ScrollArea::vertical()
+                        .id_salt("creature_text")
+                        .max_height(room)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            let output = egui::TextEdit::multiline(&mut editor.fields.body)
+                                .font(egui::TextStyle::Monospace)
+                                .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                                .margin(egui::vec2(design::S, design::S))
+                                .show(ui);
+                            if let Some(note) =
+                                crate::markdown_source::pressed_note_link(ui, &output, None)
+                            {
+                                crate::markdown_view::send_note_link(ui.ctx(), note, None);
+                            }
+                            design::named(ui, &output.response, "Creature text");
+                        });
+                });
+                editor
+            },
+            |editor, messages| {
+                let saved = save
+                    && match editor.save(root) {
+                        Ok(()) => true,
+                        Err(e) => {
+                            editor.error = Some(e);
+                            false
+                        }
+                    };
+                if let Some(error) = editor.error.clone() {
+                    messages.outcome(design::outcome::FaultMessage::new(&EncounterFault::Failed(
+                        error,
+                    )));
+                }
+                saved
+            },
+        );
+        if paned.body {
+            Some(CreatureStep::Saved)
         } else {
             close.then_some(CreatureStep::Close)
         }
@@ -5123,7 +5148,7 @@ impl Encounters {
         modules: &[Module],
     ) {
         match step {
-            Some(CreatureStep::Save) => self.save_creature(active, modules),
+            Some(CreatureStep::Saved) => self.creature_saved(active, modules),
             Some(CreatureStep::Close) => {
                 self.clear_notice();
                 self.creature = None;
@@ -7087,7 +7112,9 @@ impl Encounters {
                 ),
                 EditorPane::Add => {
                     match &mut self.creature {
-                        Some(editor) => creature_step = Self::creature_pane(ui, editor),
+                        Some(editor) => {
+                            creature_step = Self::creature_pane(ui, editor, &active.path);
+                        }
                         None => Self::add_pane(
                             ui,
                             draft,
@@ -7141,7 +7168,9 @@ impl Encounters {
                         data.insert_temp(pane_right_id(draft.id, ADD_PANE), right)
                     });
                     match creature {
-                        Some(editor) => creature_step = Self::creature_pane(ui, editor),
+                        Some(editor) => {
+                            creature_step = Self::creature_pane(ui, editor, &active.path);
+                        }
                         None => Self::add_pane(
                             ui,
                             draft,
@@ -9799,12 +9828,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         creature(dir.path(), "Wolf", false);
         let editor = CreatureEditor::open(dir.path(), "Wolf.md").unwrap();
+        let root = dir.path().to_path_buf();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(480.0, 600.0))
             .build_state(
-                |ctx, editor: &mut CreatureEditor| {
+                move |ctx, editor: &mut CreatureEditor| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        Encounters::creature_pane(ui, editor);
+                        Encounters::creature_pane(ui, editor, &root);
                     });
                 },
                 editor,
@@ -9880,6 +9910,23 @@ mod tests {
             (0, 0, 0, 0, 0),
             "an unchanged frame of the creature's footer"
         );
+        // Migration-32 L2c (L1c, `pane_then`): Save is done after the fields, and the footer
+        // reads its reason after it. A Save that cannot write (hit points that are not a
+        // number), pressed in a frame drawn in ONE pass, shows its reason in that frame.
+        harness.state_mut().error = None;
+        harness.state_mut().fields.hp = "lots".into();
+        harness.run_steps(2);
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        harness.get_by_label("Save creature").click_accesskit();
+        harness.step();
+        let error = harness.state().error.clone().expect("the save was refused");
+        let painted = harness.output().shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Text(text)
+                if text.galley.job.text.contains(error.trim_end_matches('.')))
+        });
+        assert!(painted, "the frame of the press shows its reason: {error}");
     }
 
     #[test]
