@@ -767,6 +767,8 @@ mod tests {
     struct Counting<'a> {
         index: &'a crate::lookup::ContentIndex,
         cache: Option<SpellCache>,
+        /// Use the content index's own cache.
+        index_cache: bool,
         lookups: std::cell::Cell<usize>,
     }
 
@@ -791,6 +793,9 @@ mod tests {
             Links::entry(self.index, index)
         }
         fn spell_cache(&self) -> Option<&SpellCache> {
+            if self.index_cache {
+                return Links::spell_cache(self.index);
+            }
             self.cache.as_ref()
         }
     }
@@ -808,6 +813,7 @@ mod tests {
         let mut kept = Counting {
             index: &index,
             cache: Some(SpellCache::default()),
+            index_cache: false,
             lookups: std::cell::Cell::new(0),
         };
         let first = resolve(&druid, &kept);
@@ -837,14 +843,25 @@ mod tests {
             "a cleared cache resolves again"
         );
         // The content index of Lookup and a run keeps what it resolved.
-        assert!(
-            Arc::ptr_eq(&resolve(&druid, &index), &resolve(&druid, &index)),
+        let through_index = Counting {
+            index: &index,
+            cache: None,
+            index_cache: true,
+            lookups: std::cell::Cell::new(0),
+        };
+        resolve(&druid, &through_index);
+        let first = through_index.lookups.get();
+        resolve(&druid, &through_index);
+        assert_eq!(
+            through_index.lookups.get(),
+            first,
             "the content index keeps it"
         );
         // Links with no cache resolve on each call.
         let fresh = Counting {
             index: &index,
             cache: None,
+            index_cache: false,
             lookups: std::cell::Cell::new(0),
         };
         resolve(&druid, &fresh);
