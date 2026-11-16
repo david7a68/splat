@@ -1579,11 +1579,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "split_action",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/design/components.rs",
-            "stepper_with_density",
-            &[Ban::Layout(1)],
-        ),
+        ("src/design/components.rs", "stepper_as", &[Ban::Layout(1)]),
         (
             "src/design/components.rs",
             "text_field_label",
