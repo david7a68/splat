@@ -1414,14 +1414,21 @@ pub(crate) fn area(text: &str) -> Option<String> {
             continue;
         }
         let rest = &text[at + "-foot".len()..];
-        // A line gives its length first: `90-foot-long, 5-foot-wide line`.
+        // A line gives its length first, then its width: `90-foot-long, 5-foot-wide line`.
         if let Some(after) = rest.strip_prefix("-long")
-            && after
-                .split(['.', ';'])
-                .next()
-                .is_some_and(|words| words.split_whitespace().any(|w| w.starts_with("line")))
+            && let Some(words) = after.split(['.', ';']).next()
+            && words.split_whitespace().any(|w| w.starts_with("line"))
         {
-            return Some(format!("{}-ft line", &size[size.len() - digits..]));
+            let length = &size[size.len() - digits..];
+            // The digits just before `-foot-wide`.
+            let wide = words
+                .split_once("-foot-wide")
+                .and_then(|(head, _)| head.rsplit(|c: char| !c.is_ascii_digit()).next())
+                .filter(|wide| !wide.is_empty());
+            return Some(match wide {
+                Some(wide) => format!("{length}-ft line, {wide} ft wide"),
+                None => format!("{length}-ft line"),
+            });
         }
         let (radius, rest) = match rest
             .strip_prefix("-radius")
@@ -2440,7 +2447,7 @@ mod tests {
             facts(
                 "Lightning Breath. Dexterity Saving Throw: DC 19, each creature in a 90-foot-long, 5-foot-wide Line. Failure: 55 (10d10) Lightning damage. Success: Half damage."
             ),
-            "90-ft line · half on a success"
+            "90-ft line, 5 ft wide · half on a success"
         );
         assert_eq!(
             facts(
