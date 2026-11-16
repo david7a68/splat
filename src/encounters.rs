@@ -5608,8 +5608,7 @@ impl Encounters {
         };
         if let Some(snapshot) = &self.snapshot {
             run.set_roster_names(snapshot.revision, &snapshot.known_creature_names);
-            run.groups = Some(snapshot.groups.clone());
-            run.scale = Some(snapshot.scale.clone());
+            run.set_reads(snapshot.revision, &snapshot.groups, &snapshot.scale);
             run.creatures = Some(snapshot.run_creatures.clone());
         }
         run.planned.clone_from(&self.planned_groups);
