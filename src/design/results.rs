@@ -1241,11 +1241,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "setup_row",
             &[Ban::Layout(1), Ban::Extras(7)],
         ),
-        (
-            "src/encounters.rs",
-            "creature_search_with_summary",
-            &[Ban::Layout(1)],
-        ),
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
@@ -1254,7 +1249,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "roster",
             &[Ban::Layout(1), Ban::RowKey(1)],
         ),
-        ("src/encounters.rs", "roster_pane", &[Ban::Layout(1)]),
         (
             "src/encounters/groups.rs",
             "change_row",

@@ -1457,6 +1457,12 @@ impl CreatureEditor {
         Ok(())
     }
 }
+/// Where test builds keep the roster column's scroll id for a draft (`roster_pane`).
+#[cfg(test)]
+fn roster_scroll_key(draft: Uuid) -> egui::Id {
+    egui::Id::new(("encounter_roster_scroll", draft))
+}
+
 /// The page's Ctrl+S, taken from this frame's input (`Encounters::save_shortcut`).
 pub(super) fn take_save_key(ctx: &egui::Context) -> bool {
     ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
@@ -7615,10 +7621,6 @@ impl Encounters {
         Self::creature_search_with_summary(ui, list, search, focus_search, peek, roster, "")
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn creature_search_with_summary(
         ui: &mut egui::Ui,
         list: SearchList<'_>,
@@ -7809,10 +7811,6 @@ impl Encounters {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn roster_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -7841,29 +7839,31 @@ impl Encounters {
         ui.scope_builder(scope, |ui| {
             // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family):
             // the column keeps it.
-            design::ScrollColumn::new("encounter_editor")
-                .show(ui, |ui| {
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin {
-                            left: design::S as i8,
-                            ..egui::Margin::ZERO
-                        })
-                        .show(ui, |ui| {
-                            ui.set_width(ui.available_width().min(design::LIST_MEASURE));
-                            Self::roster_column(
-                                ui,
-                                draft,
-                                snapshot,
-                                focus_search,
-                                expanded,
-                                linked_party,
-                                make_yours,
-                                heading,
-                            )
-                        })
-                        .inner
-                })
-                .inner
+            let shown = design::ScrollColumn::new("encounter_editor").show(ui, |ui| {
+                egui::Frame::new()
+                    .inner_margin(egui::Margin {
+                        left: design::S as i8,
+                        ..egui::Margin::ZERO
+                    })
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                        Self::roster_column(
+                            ui,
+                            draft,
+                            snapshot,
+                            focus_search,
+                            expanded,
+                            linked_party,
+                            make_yours,
+                            heading,
+                        )
+                    })
+                    .inner
+            });
+            // Test builds keep the column's scroll id by its draft, for the scroll's tests.
+            #[cfg(test)]
+            ui.data_mut(|data| data.insert_temp(roster_scroll_key(draft.id), shown.id));
+            shown.inner
         })
         .inner
     }
@@ -9666,7 +9666,12 @@ mod tests {
                         ));
                     }
                     let separated = std::cell::Cell::new(None);
-                    let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+                    // As the editor draws the search: a column of a `Fills` body, whose
+                    // results scroll on their own.
+                    let body = design::pane::Body::Fills(design::pane::Fills::because(
+                        design::pane::FillsReason::Columns,
+                    ));
+                    let paned = messages.pane(ui, body, |ui| {
                         if !shown.load(std::sync::atomic::Ordering::Relaxed) {
                             return;
                         }
@@ -10034,8 +10039,10 @@ mod tests {
         let text = draft.borrow().body.clone();
         assert!(text.contains("Unsent tactics."));
         // Outer scroll moves down to the caret; keep that same scroll state when the parent changes.
-        let scroll_id = egui::Id::new(("encounter_roster", draft.borrow().id))
-            .with(egui::Id::new("encounter_editor"));
+        let scroll_id = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(draft.borrow().id)))
+            .expect("the roster column's scroll id");
         let offset = egui::scroll_area::State::load(&harness.ctx, scroll_id)
             .unwrap()
             .offset
@@ -10063,10 +10070,14 @@ mod tests {
         // keyed by the draft, not shared with the encounter before it.
         let mut second = Draft::new();
         second.body = (1..=600).map(|n| format!("Second line {n}.\n")).collect();
-        let second_scroll =
-            egui::Id::new(("encounter_roster", second.id)).with(egui::Id::new("encounter_editor"));
+        let second_id = second.id;
         *draft.borrow_mut() = second;
         harness.run_steps(2);
+        let second_scroll = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(second_id)))
+            .expect("the second roster's scroll id");
+        assert_ne!(second_scroll, scroll_id, "each draft has its own scroll");
         let top =
             egui::scroll_area::State::load(&harness.ctx, second_scroll).map(|state| state.offset.y);
         assert!(
