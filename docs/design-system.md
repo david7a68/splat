@@ -1590,8 +1590,7 @@ line; Escape lets go of a chosen one first. So the DM sees how to finish, and th
 one form's. Enter or `Add` adds; Escape or `Cancel` clears the words and the caller closes the field. Keys only,
 with no actions, is `add_field(id, name, hint).keys_only(beside_width, beside)`: its field is its owner's (`FieldId`,
 so focus and text history follow the owner, not the place) and its line keeps one `Read` row's height. It is staged (Clippy,
-`Ban::Extras`, one row each in `STAGED_ALLOWS`) for the two flows this section and the run's Effect describe; the older
-`add_field_keys` (its field by place) stays staged until those two callers move. The loot list's field, which stays open, has keys only: no button, Enter
+`Ban::Extras`, one row each in `STAGED_ALLOWS`) for the two flows this section and the run's Effect describe. The loot list's field, which stays open, has keys only: no button, Enter
 adds, Escape clears the chosen suggestion, or the words when none is chosen, and the field stays open after Enter where several
 lines follow each other, as loot lines do. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
 only by arrows then Enter, or a click. `Roll on a table` beside the field lists every table. A creature's list
@@ -1760,7 +1759,7 @@ control of the line moves. That room alone decides: it shows with its word while
 beside a name that its slot cut; else with its icon; and not at all otherwise. Where it has no room, the
 Conditions tab's field says `Other effect, such as Bless 10 rounds`. With several rows selected it is absent.
 `Effect` makes line two one `add_field`, `Effect on <name>, such as Bless 10 rounds`, that belongs to its row,
-with keys only (`add_field_keys`, staged), so the row keeps its height: Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
+with keys only (`add_field(…).keys_only`, staged), keyed by its participant, so the row keeps its height: Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
 words wait for that row. `E` opens that field, or the Conditions tab's `Other effect…` field with focus when
 `Effect` has no room. Both fields read one rule: `10 rounds`; `1 minute`, as 10 rounds; `on its turn`; `3 uses`;
 `recharge 6`, `recharge 5–6` or `recharge 5-6` at the end. Anything else stays words. An official condition's
@@ -1981,8 +1980,11 @@ list is a warning `message`, in the same form as the member faults above it.
 In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
 (`message_with_actions`): a bordered secondary button whose frame starts at the warning text. Arrivals and the
 Encounters list draw a member fault with its repair (`Campaign → Packages` or `Edit group`) through
-`groups::member_fault_row` (`message_with_action`): a bordered secondary button beside the fault after an `L` gap, or
-below it at the words when there is no room. A message action without an icon is never a link.
+`groups::member_fault_row`: the fault's typed message (`FaultMessage` in a `BodyMessage`), its repair a bordered
+choice on the line under the words, from their first letter, at every width. When every fault of an Arrivals group
+points to packages, its last fault also offers `Edit group`, after `Campaign → Packages` on that line, so the group
+editor stays one click away. The Encounters list does not add it: its row's `Edit` is one click away. A message action without
+an icon is never a link.
 
 Join status parts sit on one line with dot separators before the first member, in every group: never beside the group name, so no heading gives a fact of its `Fight after` line to a status and every heading gives way in one order. Use a separate line only when the member slot has no room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
 with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error, and so is a member row or a creature file that cannot be read (R41); a member that is missing (not in this campaign's packages) or that cannot join (a D&D Beyond link, no maximum HP) is a warning. Every view draws each member fault in its own tone. The group adds its own reason (`No members can join.`) as a warning message only when no member fault shows; with faults, `0 of N can join` and the faults already say it. Live initiative notices name who joins and the total. Before the current turn,

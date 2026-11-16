@@ -2143,7 +2143,7 @@ impl<'a, T> AddFieldForm<'a, T, NoActions> {
     /// Keys only, no actions: Enter adds; Escape lets go of a chosen suggestion, then clears
     /// the words. The field is keyed by its owner (`id`), and its line keeps one `Read` row's
     /// height, empty or not. `beside` draws a control right of the field, `beside_width` wide,
-    /// and can choose a value too. Staged, as [`add_field_keys`] is: Clippy refuses it outside
+    /// and can choose a value too. Staged: Clippy refuses it outside
     /// `src/design/` (`Ban::Extras`), and each use is a row of `design::results::STAGED_ALLOWS`
     /// with its reason (the run's `Effect` line, the loot list's own field).
     pub fn keys_only(
@@ -2317,7 +2317,7 @@ fn reveal_least(ui: &Ui, block: std::ops::RangeInclusive<f32>) {
 }
 
 /// The suggestions under an add field, and the arrow keys that choose one: Enter takes the
-/// chosen one, as does a click. Shared by [`AddFieldForm`] and [`add_field_keys`].
+/// chosen one, as does a click. Shared by both forms of [`AddFieldForm`].
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
@@ -2365,39 +2365,8 @@ fn suggestion_rows<T>(
     chosen
 }
 
-/// An add field with keys only and no actions: Enter adds, Escape clears the highlight, then
-/// the words. Staged: Clippy refuses it outside `src/design/` (`Ban::Extras`), and each use is a
-/// row of `design::results::STAGED_ALLOWS` with its reason. Two flows keep it as the design
-/// system describes them: the loot list's own field, which stays open, and the run's `Effect`
-/// field in a row's line two. Every other add field is [`add_field`], with its actions.
-/// `beside` draws a control right of the field, `beside_width` wide, and can choose a value too.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-)]
-pub fn add_field_keys<T>(
-    ui: &mut Ui,
-    state: &mut AddField,
-    name: &str,
-    hint: &str,
-    beside_width: f32,
-    beside: impl FnOnce(&mut Ui) -> Option<T>,
-    suggest: impl FnOnce(&str) -> Vec<Suggestions<T>>,
-) -> AddFieldResult<T> {
-    let suggest: Suggest<'_, T> = Box::new(suggest);
-    keys_field(
-        ui,
-        state,
-        beside_width,
-        beside,
-        Some(suggest),
-        |ui, words, width| text_input(ui, name, words, hint, width),
-    )
-}
-
-/// The keys-only add field's line and keys, with its text field drawn by `field` in the width
-/// it is given: [`add_field_keys`] (staged, its field by place) and `AddFieldForm::keys_only`
-/// (its field by its owner's `FieldId`).
+/// The keys-only add field's line and keys (`AddFieldForm::keys_only`), with its text field,
+/// keyed by its owner's `FieldId`, drawn by `field` in the width it is given.
 fn keys_field<T>(
     ui: &mut Ui,
     state: &mut AddField,

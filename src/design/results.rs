@@ -1127,7 +1127,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
-        ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
+        // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
+        // `line_row`'s lines are; the list has no typed owner yet.
+        (
+            "src/loot_editor.rs",
+            "add_row",
+            &[Ban::Extras(1), Ban::RowKey(1)],
+        ),
         (
             "src/loot_editor.rs",
             "line_row",
@@ -1219,6 +1225,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "cause", &[Ban::Words]),
         ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
         ("src/encounters.rs", "outcome_words", &[Ban::Words]),
+        // M0126 (M-R0.9): a group row's member faults are typed messages in the row they are
+        // about, with their repairs (`BodyMessage`); their words are the loader's, with the
+        // DM's names in them (`Sentence::outside`).
+        ("src/encounters/groups.rs", "cause", &[Ban::Words]),
+        ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
@@ -1349,11 +1360,6 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/design/components.rs",
             "iter28_p_the_pane_places_its_footer_for_every_body",
             &[Ban::Layout(1), Ban::Footer],
-        ),
-        (
-            "src/design/components.rs",
-            "add_field_keys",
-            &[Ban::Layout(1)],
         ),
         // The test of the staged keys-only add field itself (`AddFieldForm::keys_only`).
         (
@@ -1608,7 +1614,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/content_workspace.rs", 1),
             ("src/design/comparison.rs", 1),
             ("src/encounter_run/undo.rs", 2),
-            ("src/encounter_run/view.rs", 2),
             ("src/library.rs", 2),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),

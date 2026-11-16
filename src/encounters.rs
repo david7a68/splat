@@ -205,7 +205,9 @@ mod history;
 mod results_key;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
-pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
+pub(crate) use groups::{
+    ENCOUNTER_DELETED, MemberRepair, NO_MAX_HP_CAUSE, member_fault, member_fault_row,
+};
 #[cfg(test)]
 pub(crate) use groups::{change_copies, group_checks, member_comparisons};
 pub(crate) use history::{Template, template_of};
@@ -5608,8 +5610,7 @@ impl Encounters {
         };
         if let Some(snapshot) = &self.snapshot {
             run.set_roster_names(snapshot.revision, &snapshot.known_creature_names);
-            run.groups = Some(snapshot.groups.clone());
-            run.scale = Some(snapshot.scale.clone());
+            run.set_reads(snapshot.revision, &snapshot.groups, &snapshot.scale);
             run.creatures = Some(snapshot.run_creatures.clone());
         }
         run.planned.clone_from(&self.planned_groups);

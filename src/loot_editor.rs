@@ -250,12 +250,22 @@ pub fn show(
             state.removed = None;
         }
     }
-    add_row(ui, name, lines, &mut state, sources.as_deref(), one_cell);
+    add_row(
+        ui,
+        id,
+        name,
+        lines,
+        &mut state,
+        sources.as_deref(),
+        one_cell,
+    );
     ui.data_mut(|data| data.insert_temp(id, state));
     *lines != before
 }
 
 const LOOT_LINE: design::FieldName = crate::field_id!("loot_line");
+/// The list's own add field (keys only).
+const LOOT_ADD: design::FieldName = crate::field_id!("loot_add");
 
 /// One line. Returns its place when the DM removes it.
 #[allow(clippy::too_many_arguments)]
@@ -451,6 +461,7 @@ const NO_TABLES: &str =
 )]
 fn add_row(
     ui: &mut egui::Ui,
+    owner: egui::Id,
     name: &str,
     lines: &mut Vec<String>,
     state: &mut State,
@@ -459,16 +470,13 @@ fn add_row(
 ) {
     // The gap is the row's item spacing, so the menu ends at the column's right edge.
     let menu = design::menu_button_width(ui, ROLL_MENU) + ui.spacing().item_spacing.x;
-    let added = design::add_field_keys(
-        ui,
-        &mut state.add,
-        &format!("Add loot to {name}"),
-        "Type loot, or find an item or table",
-        menu,
-        |ui| {
-            table_menu(ui, ROLL_MENU, &format!("{ROLL_MENU} for {name}"), sources).map(Pick::Table)
-        },
-        |typed| {
+    // The list's own field (M0404), keyed by the list's owner (its caller's id), as its lines
+    // are (`line_row`).
+    let field = LOOT_ADD.of(design::TextKey::from_data(format!("{owner:?}")));
+    let label = format!("Add loot to {name}");
+    let menu_name = format!("{ROLL_MENU} for {name}");
+    let added = design::add_field(field, &label, "Type loot, or find an item or table")
+        .suggest(|typed| {
             let Some(sources) = sources else {
                 return Vec::new();
             };
@@ -506,8 +514,11 @@ fn add_row(
                         .collect(),
                 },
             ]
-        },
-    );
+        })
+        .keys_only(menu, |ui| {
+            table_menu(ui, ROLL_MENU, &menu_name, sources).map(Pick::Table)
+        })
+        .show(ui, &mut state.add);
     if added.field.changed() {
         state.reason = None;
     }
@@ -659,12 +670,12 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(640.0, 400.0))
             .build_state(
-                |ctx, loot: &mut Option<String>| {
+                |ctx, (key, name, loot): &mut (&str, &str, Option<String>)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        show_cell(ui, "goblin", "Goblin", loot);
+                        show_cell(ui, *key, name, loot);
                     });
                 },
-                Some("Iron; Roll gems".to_owned()),
+                ("goblin", "Goblin", Some("Iron; Roll gems".to_owned())),
             );
         crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -675,13 +686,42 @@ mod tests {
             harness.get_by_label("Goblin loot line 1").type_text(typed);
             harness.run_steps(2);
         }
-        assert_eq!(harness.state().as_deref(), Some("Iron key; Roll gems"));
+        assert_eq!(harness.state().2.as_deref(), Some("Iron key; Roll gems"));
         // The cell never holds an empty part, and the row stays while it has focus.
         harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
         harness.key_press(egui::Key::Backspace);
         harness.run_steps(2);
-        assert_eq!(harness.state().as_deref(), Some("Roll gems"));
+        assert_eq!(harness.state().2.as_deref(), Some("Roll gems"));
         assert!(harness.query_by_label("Goblin loot line 1").is_some());
+        // M-R0.7 (m-r0-7-loot-owner): the add field is its list's (`LOOT_ADD` keyed by the
+        // list's owner), not its place's. Words typed and erased in the goblin's field do not
+        // come back with Ctrl+Z in the orc's field, drawn at the same place.
+        let add = "Add loot to Goblin";
+        harness.get_by_label(add).click();
+        harness.run_steps(1);
+        harness.get_by_label(add).type_text("Gem");
+        harness.run_steps(16);
+        harness.get_by_label(add).type_text("s");
+        harness.run_steps(1);
+        for _ in 0.."Gems".len() {
+            harness.key_press(egui::Key::Backspace);
+        }
+        harness.run_steps(1);
+        *harness.state_mut() = ("orc", "Orc", None);
+        harness.run_steps(2);
+        let add = "Add loot to Orc";
+        harness.get_by_label(add).click();
+        harness.run_steps(1);
+        assert!(harness.get_by_label(add).is_focused());
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        harness.run_steps(2);
+        assert!(
+            harness
+                .get_by_label(add)
+                .value()
+                .is_none_or(|words| words.is_empty()),
+            "m-r0-7-loot-owner: Ctrl+Z in the orc's field gave it the goblin's words"
+        );
     }
 
     #[test]
