@@ -7158,7 +7158,10 @@ pub(super) fn undo_forms(
 }
 
 /// The first of `undo_forms`' target forms that fits `width`, else its shortest one. The
-/// caller measures it, and goes on to the bare forms, then `Undo` alone.
+/// caller measures it, and goes on to the bare forms, then `Undo` alone. For the tests of
+/// `undo_forms`' order (the header's Undo fits them with `Run::undo_words_in`); the tie's Move
+/// shortens as a typed choice since migration-32 L2c (`move_choice`).
+#[cfg(test)]
 pub(super) fn undo_words(
     ui: &egui::Ui,
     (label, target): (&str, Option<&str>),
