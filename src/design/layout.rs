@@ -1640,10 +1640,13 @@ pub struct TitleLine<'a> {
     role: TitleType,
     actions: Vec<TitleAction<'a>>,
     /// A status link after the actions, and the menu it opens.
-    status: Option<(Status<'a>, Box<dyn FnOnce(&mut Ui) + 'a>)>,
+    status: Option<StatusMenu<'a>>,
     /// A close icon at the right end of the title's line, and its accessible name.
     close: Option<&'a str>,
 }
+
+/// A title line's status link and the menu it opens.
+type StatusMenu<'a> = (Status<'a>, Box<dyn FnOnce(&mut Ui) + 'a>);
 
 /// The type of a title line's title.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
