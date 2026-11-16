@@ -130,9 +130,7 @@ scroll-area	src/encounter_run/view.rs	Run::ended_view	2	Run
 scroll-area	src/encounter_run/view.rs	Run::groups_tab	1	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
-scroll-area	src/encounters.rs	Encounters::creature_pane	1	Encounters
 scroll-area	src/encounters.rs	Encounters::creature_search_with_summary	1	Encounters
-scroll-area	src/encounters.rs	Encounters::roster_pane	1	Encounters
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
 scroll-area	src/markdown_view.rs	reader_table	1	Reader
 scroll-area	src/sessions/page.rs	Sessions::banner	1	Sessions

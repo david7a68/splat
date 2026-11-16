@@ -1510,6 +1510,12 @@ impl CreatureEditor {
         Ok(())
     }
 }
+/// Where test builds keep the roster column's scroll id for a draft (`roster_pane`).
+#[cfg(test)]
+fn roster_scroll_key(draft: Uuid) -> egui::Id {
+    egui::Id::new(("encounter_roster_scroll", draft))
+}
+
 /// The page's Ctrl+S, taken from this frame's input (`Encounters::save_shortcut`).
 pub(super) fn take_save_key(ctx: &egui::Context) -> bool {
     ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
@@ -3809,6 +3815,8 @@ fn name_field(ui: &mut egui::Ui, draft: &mut Draft, width: f32) -> egui::Respons
 
 const ENCOUNTER_NAME: design::FieldName = crate::field_id!("encounter_name");
 const CREATURE_NAME: design::FieldName = crate::field_id!("encounter_creature_name");
+/// The creature pane's Markdown text, by the creature's file.
+const CREATURE_TEXT: design::FieldName = crate::field_id!("encounter_creature_text");
 const INITIATIVE_GROUP: design::FieldName = crate::field_id!("roster_initiative_group");
 const RUN_FOLDER: design::FieldName = crate::field_id!("run_folder");
 const RUN_INITIATIVE: design::FieldName = crate::field_id!("run_initiative");
@@ -5335,13 +5343,15 @@ impl Encounters {
             ui,
             body,
             move |ui| {
+                // The creature's fields, keyed by its file.
+                let key = design::TextKey::from_data(editor.path.clone());
                 // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
                 // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
                 design::field(ui, "Name", None, None, |ui| {
                     let width = ui.available_width();
                     design::line_field(
                         ui,
-                        CREATURE_NAME.of(design::TextKey::from_data(editor.path.clone())),
+                        CREATURE_NAME.of(key.clone()),
                         "Name",
                         &mut editor.fields.name,
                         "Name",
@@ -5377,16 +5387,19 @@ impl Encounters {
                 // The file's source, closed until wanted: the common changes have fields above.
                 design::quiet_section(ui, "Its text, as Markdown", |ui| {
                     let room = ui.available_height();
-                    egui::ScrollArea::vertical()
-                        .id_salt("creature_text")
+                    design::ScrollColumn::new("creature_text")
                         .max_height(room)
-                        .auto_shrink([false, true])
+                        .fit_height()
                         .show(ui, |ui| {
-                            let output = egui::TextEdit::multiline(&mut editor.fields.body)
-                                .font(egui::TextStyle::Monospace)
-                                .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                                .margin(egui::vec2(design::S, design::S))
-                                .show(ui);
+                            let width = ui.available_width() - 2.0 * design::S - design::M;
+                            let output =
+                                CREATURE_TEXT
+                                    .of(key)
+                                    .editor(ui, &mut editor.fields.body, |edit| {
+                                        edit.font(egui::TextStyle::Monospace)
+                                            .desired_width(width)
+                                            .margin(egui::vec2(design::S, design::S))
+                                    });
                             if let Some(note) =
                                 crate::markdown_source::pressed_note_link(ui, &output, None)
                             {
@@ -7577,10 +7590,6 @@ impl Encounters {
         self.after_panes(creature_step, make_yours, active, campaigns.modules());
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn add_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -7592,7 +7601,13 @@ impl Encounters {
         compact: bool,
     ) {
         if !compact {
-            design::group_heading(ui, "Add participants", 0);
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "Add participants",
+                    count: 0,
+                },
+            );
         }
         // FB2: the party lines stay whatever the search adds to (the party always joins the
         // roster), and `Adding to …` has one place directly above the search, so a change of
@@ -7874,6 +7889,8 @@ impl Encounters {
             };
         // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows, so each
         // `Add` keeps its x as the DM types and the list grows or shrinks.
+        // Still egui's virtual rows: the group editor draws this search inside a `Content` pane,
+        // where a `ScrollColumn` draws every row, so the move waits for that pane (row M0200).
         let lane = scroll_lane(ui);
         egui::ScrollArea::vertical()
             .id_salt(("encounter_results", &query))
@@ -7897,10 +7914,6 @@ impl Encounters {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn roster_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -7927,33 +7940,33 @@ impl Encounters {
             .id(("encounter_roster", draft.id))
             .max_rect(area.with_min_x(area.min.x - design::S));
         ui.scope_builder(scope, |ui| {
-            // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family).
-            let lane = scroll_lane(ui) - design::S;
-            egui::ScrollArea::vertical()
-                .id_salt("encounter_editor")
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin {
-                            left: design::S as i8,
-                            ..egui::Margin::ZERO
-                        })
-                        .show(ui, |ui| {
-                            ui.set_width(ui.available_width().min(design::LIST_MEASURE).min(lane));
-                            Self::roster_column(
-                                ui,
-                                draft,
-                                snapshot,
-                                focus_search,
-                                expanded,
-                                linked_party,
-                                make_yours,
-                                heading,
-                            )
-                        })
-                        .inner
-                })
-                .inner
+            // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family):
+            // the column keeps it.
+            let shown = design::ScrollColumn::new("encounter_editor").show(ui, |ui| {
+                egui::Frame::new()
+                    .inner_margin(egui::Margin {
+                        left: design::S as i8,
+                        ..egui::Margin::ZERO
+                    })
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                        Self::roster_column(
+                            ui,
+                            draft,
+                            snapshot,
+                            focus_search,
+                            expanded,
+                            linked_party,
+                            make_yours,
+                            heading,
+                        )
+                    })
+                    .inner
+            });
+            // Test builds keep the column's scroll id by its draft, for the scroll's tests.
+            #[cfg(test)]
+            ui.data_mut(|data| data.insert_temp(roster_scroll_key(draft.id), shown.id));
+            shown.inner
         })
         .inner
     }
@@ -8003,7 +8016,6 @@ impl Encounters {
         ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
         // FI7: what the option changes, in the form the sync option's help uses.
         design::help(ui, REPEATABLE_HELP);
-        design::gap(ui, design::Gap::M);
         Self::loot_field(ui, draft);
         design::gap(ui, design::Gap::M);
         design::field(ui, NOTES_LABEL, None, None, |ui| {
@@ -8026,12 +8038,15 @@ impl Encounters {
 
     /// What the party finds when this fight is over, one line each. The note keeps it as its
     /// `## Loot` list, which Obsidian shows too.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn loot_field(ui: &mut egui::Ui, draft: &mut Draft) {
-        design::group_heading(ui, LOOT_FIELD, draft.loot.len());
+        // The heading keeps its own space above (`Heading::above`).
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: LOOT_FIELD,
+                count: draft.loot.len(),
+            },
+        );
         if !draft.loot_owned {
             blocked_reason(
                 ui,
@@ -8494,13 +8509,13 @@ impl Encounters {
                                 }
                             }
                             if enabled {
-                                let mut value =
-                                    slot.initial.get(field).and_then(Value::as_u64).unwrap_or(0);
-                                let response = ui.add(
-                                    egui::DragValue::new(&mut value).range(0..=i64::MAX as u64),
-                                );
-                                design::named(ui, &response, label);
-                                if response.changed() {
+                                let mut value = slot
+                                    .initial
+                                    .get(field)
+                                    .and_then(Value::as_u64)
+                                    .and_then(|value| i64::try_from(value).ok())
+                                    .unwrap_or(0);
+                                if design::stepper(ui, label, &mut value, 0..=i64::MAX) {
                                     slot.initial.insert(field.into(), value.into());
                                 }
                             }
@@ -10122,8 +10137,10 @@ mod tests {
         let text = draft.borrow().body.clone();
         assert!(text.contains("Unsent tactics."));
         // Outer scroll moves down to the caret; keep that same scroll state when the parent changes.
-        let scroll_id = egui::Id::new(("encounter_roster", draft.borrow().id))
-            .with(egui::Id::new("encounter_editor"));
+        let scroll_id = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(draft.borrow().id)))
+            .expect("the roster column's scroll id");
         let offset = egui::scroll_area::State::load(&harness.ctx, scroll_id)
             .unwrap()
             .offset
@@ -10151,10 +10168,14 @@ mod tests {
         // keyed by the draft, not shared with the encounter before it.
         let mut second = Draft::new();
         second.body = (1..=600).map(|n| format!("Second line {n}.\n")).collect();
-        let second_scroll =
-            egui::Id::new(("encounter_roster", second.id)).with(egui::Id::new("encounter_editor"));
+        let second_id = second.id;
         *draft.borrow_mut() = second;
         harness.run_steps(2);
+        let second_scroll = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(second_id)))
+            .expect("the second roster's scroll id");
+        assert_ne!(second_scroll, scroll_id, "each draft has its own scroll");
         let top =
             egui::scroll_area::State::load(&harness.ctx, second_scroll).map(|state| state.offset.y);
         assert!(
