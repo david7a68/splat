@@ -256,6 +256,12 @@ impl Owner {
             Self::Campaign(campaign) => Some(campaign.id),
         }
     }
+    /// Whether this is the package `id`. A campaign may have the same UUID as a package
+    /// (settings check package and campaign UUIDs apart), so the kind is part of the check: a
+    /// UUID alone never stands for a package (issue #505, M-L0.5).
+    fn is_package(&self, id: Uuid) -> bool {
+        matches!(self, Self::Package(module) if module.id == id)
+    }
     /// The owner's kind and id: the owner part of a [`FileId`].
     fn key(&self) -> OwnerKey {
         match self {
@@ -1084,7 +1090,7 @@ fn unregister_count(notes: &[Note], package: Uuid) -> usize {
     notes
         .iter()
         .filter(|n| {
-            n.owner.id() == Some(package)
+            n.owner.is_package(package)
                 && !n.is_manifest()
                 && n.entry.as_ref().is_none_or(|e| e.kind != "reference")
         })
@@ -1877,9 +1883,7 @@ impl Loaded {
                 }
             },
             Scope::Builtin => note.owner == Owner::Builtin,
-            Scope::Package(id) => {
-                matches!(note.owner, Owner::Package(_)) && note.owner.id() == Some(id)
-            }
+            Scope::Package(id) => note.owner.is_package(id),
             Scope::Campaign => matches!(note.owner, Owner::Campaign(_)),
         }
     }
@@ -2765,7 +2769,7 @@ pub(crate) fn changed_on_disk(name: &str) -> String {
 pub(crate) const MOVED_ON_DISK: &str =
     "This entry moved on disk. Your draft is safe until you choose.";
 
-const ENTRY_ROW_HEIGHT: f32 = 44.0;
+const ENTRY_ROW_HEIGHT: f32 = design::ENTRY_ROW_HEIGHT;
 const SEARCH_NAME: &str = "Search the Library";
 const LIBRARY_SEARCH: design::FieldId =
     crate::field_id!("library_search").once(design::Once::PageSearch);
@@ -3809,6 +3813,9 @@ pub struct Library {
     draft_parse: Option<(String, String, ParsedDraft)>,
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
+    /// The entry list's region (layout step 3b) and its rows: whole rows only, one offset writer.
+    entry_region: Option<design::RegionState>,
+    entry_rows: Option<design::memo::Revised<Vec<design::Block>>>,
     list_hidden: bool,
     /// The Library's kept results (Undos and notices that stay), with their footer order: data
     /// and mark change together behind one boundary (`kept`, M-L0.4a).
@@ -5249,9 +5256,7 @@ impl Library {
                                 if let Some(name) = l
                                     .notes
                                     .iter()
-                                    .filter(|n| {
-                                        n.owner.id() == Some(module.id) && n.error.is_none()
-                                    })
+                                    .filter(|n| n.owner.is_package(module.id) && n.error.is_none())
                                     .find_map(|n| {
                                         n.entry
                                             .as_ref()
@@ -5593,7 +5598,7 @@ impl Library {
         let scope = self.scope;
         let about_open = self.selected.is_some_and(|at| {
             loaded.notes[at].is_manifest()
-                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.id() == Some(id))
+                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.is_package(id))
         });
         if self
             .scope_counts
@@ -5728,7 +5733,7 @@ impl Library {
                             .notes
                             .iter()
                             .enumerate()
-                            .find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                            .find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
                         && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open)
                             .clicked()
                         && !dirty
@@ -6022,7 +6027,7 @@ impl Library {
                 );
                 if compact
                     && let Scope::Package(package) = scope
-                    && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                    && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
                     && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open).clicked() && !dirty
                 {
                     if self.selected != Some(index) {
@@ -6076,7 +6081,7 @@ impl Library {
                         design::gap(ui, design::Gap::S);
                     }
                     if let Scope::Package(id) = scope && !searching
-                        && !loaded.notes.iter().any(|note| note.owner.id() == Some(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
+                        && !loaded.notes.iter().any(|note| note.owner.is_package(id) && note.entry.as_ref().is_some_and(|entry| entry.kind != "package")) {
                         let name = campaigns.modules().iter().find(|m| m.id == id).map_or("this package", |m| m.name.as_str());
                         let mut create = false;
                         if self.new_form {
@@ -6129,23 +6134,38 @@ impl Library {
                     }
                 }
                 ui.spacing_mut().item_spacing.y = 0.0;
-                // The list's own scroll column, which keeps its lane; only the rows in view draw.
-                let mut list = design::ScrollColumn::new((
-                    "entry_list",
-                    self.section.label(),
-                    &query,
-                    scope,
-                ));
-                if std::mem::take(&mut self.reveal_row)
-                    && let Some(row) =
-                        selected.and_then(|selected| matches.iter().position(|i| *i == selected))
-                {
-                    list = list.vertical_scroll_offset(
-                        (row as f32 - 2.0).max(0.0) * ENTRY_ROW_HEIGHT,
-                    );
+                // The list's own region (layout step 3b): whole rows only, drawn in its scroll
+                // column with its lane; only the rows in view draw. It is the one writer of its
+                // offset: the selected entry that arrived by a link is a jump to its row.
+                let rows = self
+                    .entry_rows
+                    .get_or_insert_with(|| design::memo::Revised::new(Vec::new()));
+                if rows.len() != matches.len() {
+                    rows.revise(|rows| {
+                        *rows = vec![design::Block::Row(design::Row::Entry); matches.len()];
+                        design::memo::Changed::Yes
+                    });
                 }
-                list.show_rows(ui, ENTRY_ROW_HEIGHT, matches.len(), |ui, range| {
-                        for row in range {
+                let region = self
+                    .entry_region
+                    .get_or_insert_with(|| design::RegionState::new("library_entries"));
+                let selected_row =
+                    selected.and_then(|selected| matches.iter().position(|i| *i == selected));
+                if std::mem::take(&mut self.reveal_row)
+                    && let Some(row) = selected_row
+                {
+                    region.navigate(design::Navigation::Jump { block: row });
+                }
+                // One Tab stop, a list box: Tab enters at the selected entry; Up and Down move.
+                design::BlockRegion::new(
+                    ("entry_list", self.section.label(), &query, scope),
+                    region,
+                    rows,
+                )
+                .name("Library entries")
+                .selected(selected_row)
+                .show(ui, |ui, row| {
+                        {
                             let i = matches[row];
                             let note = &loaded.notes[i];
                             let line = &subtitles[i];
@@ -7140,7 +7160,7 @@ impl Library {
             return;
         }
         let in_scope = places.iter().position(|owner| match self.scope {
-            Scope::Package(id) => owner.id() == Some(id),
+            Scope::Package(id) => owner.is_package(id),
             Scope::Campaign => matches!(owner, Owner::Campaign(_)),
             _ => false,
         });
@@ -7971,7 +7991,7 @@ impl Library {
                     .notes
                     .iter()
                     .filter(|n| {
-                        n.owner.id() == Some(module.id)
+                        n.owner.is_package(module.id)
                             && n.entry.as_ref().is_some_and(|e| {
                                 !["package", "reference"].contains(&e.kind.as_str())
                             })
@@ -14193,6 +14213,24 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
         }
+        // Issue #505 (M-L0.5): the campaign with the package's UUID is never the package: not in
+        // its scope, not in what unregistering it takes away.
+        assert!(
+            loaded.in_scope(&loaded.notes[0], Scope::Package(shared))
+                && !loaded.in_scope(&loaded.notes[2], Scope::Package(shared)),
+            "the package's scope holds its own notes only"
+        );
+        assert_eq!(
+            unregister_count(&loaded.notes, shared),
+            2,
+            "unregistering the package counts its own two entries"
+        );
+        // Every package check takes the owner's kind: the page's code compares no owner's
+        // UUID alone (`Owner::is_package`).
+        let source = include_str!("library.rs");
+        let code = &source[..source.find("\nmod tests {").unwrap()];
+        let check = ["owner.id() ", "== Some("].concat();
+        assert!(!code.contains(&check), "a package check by UUID alone");
         for words in [
             // The package's batch leaves the campaign's encounter on the campaign's files.
             "Bridge Fight keeps the files in ember/.",

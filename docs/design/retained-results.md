@@ -168,18 +168,20 @@ names it, the action's width), the room the lines take (`bare`), the room their 
 - **Reasons' room (R29), per footer.** Each pass decides `give_up` from its plan's numbers and the room where
   the footer stands; the plan measures every open lock's reason (L1c: made before the footer is placed). It
   keeps each reservation's room also when it gives that room up, so after the pane grows (the plan
-  holds: height is not in its key) a quiet frame takes the room and lays out no reason. No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay
-  for the legacy footer only (`Reasons::Legacy`).
+  holds: height is not in its key) a quiet frame takes the room and lays out no reason. No state is shared between
+  panes. A message outside a footer keeps its reasons' room and measures and counts nothing (`Reasons::Body`).
+  The legacy footer's shared flags (`GIVE_UP`, `RESERVED`, `DRAWN`) went with it (L2c).
 - **Lifetime.** The plans of one context live in one store (`FooterPlans`). A footer that no frame drew since
   the last one has ended (its pane closed, its owner changed), and its plan, with its lines, is dropped by the
   store's sweep, once per frame when the first footer draws: the store holds the footers of about two frames.
   The sweep visits each kept footer once (`FooterWork::swept`), and the store's spare room shrinks with it.
 - **Presses.** One press slot per `Messages` per pass, taken by `pane`; nothing keeps a press across passes, so
   a press is acted on once, also when egui draws the frame again or declines to.
-- **The old path.** `Footer::legacy_reason`, `legacy_notice`, `legacy_kept`, `legacy_kept_line` (and the
-  staged `result`) are banned by Clippy, listed per function (`Ban::Footer`, exact) and counted per file
-  (`LEGACY_FOOTER_LINES`) in every call form, read as tokens with the L0 freeze's machinery (a method, an
-  associated call, a reference: ruling L13). First callers moved: Rules and runs (its discard joins the page's
+- **The old path, removed (L2c).** Every app footer is typed. `Footer::legacy_kept`, `legacy_kept_line`,
+  `FooterResult`, `Shown::footer`, `outcome::kept_result` and `KeptGroup` are gone; `Footer::result`,
+  `legacy_reason` and `legacy_notice` are `#[cfg(test)]`: only the design system's own pane tests draw closure
+  lines (listed per function, `Ban::Footer`, in `OWNED_ALLOWS`, and counted per file in
+  `LEGACY_FOOTER_LINES`), so no app code can. The callers moved: Rules and runs (its discard joins the page's
   `kept` store), Settings and Link and folder (Campaigns, the account, D&D Beyond); then (L2c) the encounter
   editor's file flags (into the editor's one footer, with the file's line) and the creature pane's refusal;
   then the run's Arrivals footer (the newest arrival's result with its Move choice, and the totals' reasons).

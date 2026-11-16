@@ -96,9 +96,11 @@ impl Shape {
 /// Builder types whose banned methods are counted in a constructor's chain.
 const BUILDERS: [&str; 1] = ["Button"];
 
-/// The egui types whose banned functions are methods of a value.
-const RECEIVERS: [&str; 8] = [
+/// The egui types whose banned functions are methods of a value (and the design's `Footer` and
+/// `AddFieldForm`, whose staged methods `legacy_kept` and `keys_only` are).
+const RECEIVERS: [&str; 9] = [
     "Footer",
+    "AddFieldForm",
     "Ui",
     "Response",
     "Context",
@@ -710,6 +712,13 @@ mod tests {
         assert_eq!(
             extras("fn f() { Action::quiet(\"Absent\").selected(true).show(ui); }"),
             0
+        );
+        // The staged keys-only add field, a method of the add field's form (M-P0.10).
+        assert_eq!(
+            extras(
+                "fn f() { add_field::<()>(id, \"Effect\", \"Bless\").keys_only(0.0, |_| None).show(ui, s); }"
+            ),
+            1
         );
         // K's count does not see X's calls, nor X's K's.
         assert_eq!(

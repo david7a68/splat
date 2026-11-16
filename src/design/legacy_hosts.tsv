@@ -85,7 +85,6 @@ virtual-rows	src/design/layout.rs	ScrollColumn::show_in_region	1	design	design i
 virtual-rows	src/design/layout.rs	ScrollColumn::show_rows	1	design	design implementation boundary
 virtual-rows	src/design/layout.rs	ScrollColumn::show_viewport	1	design	design implementation boundary
 virtual-rows	src/encounters.rs	Encounters::creature_search_with_summary	1	Encounters	creature search; step 4
-virtual-rows	src/library.rs	Library::show	1	Library	the entry list; step 3b
 row-register	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign
 row-register	src/design/components.rs	row	1	design	design implementation boundary
 row-register	src/dndbeyond.rs	DndBeyond::show_import	1	Settings
@@ -184,7 +183,8 @@ scroll-offset	src/design/layout.rs	ScrollColumn::area_in	1	design	design impleme
 scroll-offset	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
 scroll-offset	src/design/pane.rs	Footer::place	2	design	design implementation boundary
 scroll-offset	src/design/popups.rs	Dropdown::list	1	design	design implementation boundary
-scroll-offset	src/library.rs	Library::show	1	Library	on ScrollColumn, not a raw scroll area
 scroll-offset	src/markdown_view.rs	reader_table	1	Reader
 scroll-offset	src/sessions/page.rs	Sessions::note_editor	2	Sessions
 scroll-offset	src/timeline/page.rs	TimelinePage::detail	1	Timeline
+virtual-rows	src/design/pane/region.rs	BlockRegion::region	1	design	the region of an owned list body (layout 3b; raised)
+scroll-offset	src/design/pane/region.rs	BlockRegion::region	1	design	the region's one offset writer (L10; raised)

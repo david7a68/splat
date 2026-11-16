@@ -2048,6 +2048,11 @@ fn result_room() -> f32 {
 pub struct NoActions;
 /// Typestate of an [`AddFieldForm`]: `Add` and `Cancel` are given.
 pub struct WithActions;
+/// Typestate of an [`AddFieldForm`]: keys only, no actions (`keys_only`).
+pub struct KeysOnly;
+
+/// A control right of a keys-only add field, its width, which can choose a value too.
+type Beside<'a, T> = (f32, Box<dyn FnOnce(&mut Ui) -> Option<T> + 'a>);
 
 /// The suggestions of an add field for its typed words.
 type Suggest<'a, T> = Box<dyn FnOnce(&str) -> Vec<Suggestions<T>> + 'a>;
@@ -2091,6 +2096,8 @@ pub struct AddFieldForm<'a, T, A> {
     suggest: Option<Suggest<'a, T>>,
     /// The caller's one-line result, drawn in the room the form keeps for it.
     result: Option<ResultDraw<'a>>,
+    /// A keys-only field's control on its right.
+    beside: Option<Beside<'a, T>>,
     state: std::marker::PhantomData<A>,
 }
 
@@ -2108,6 +2115,7 @@ pub fn add_field<'a, T>(
         actions: None,
         suggest: None,
         result: None,
+        beside: None,
         state: std::marker::PhantomData,
     }
 }
@@ -2126,8 +2134,58 @@ impl<'a, T> AddFieldForm<'a, T, NoActions> {
             actions: Some((add, cancel)),
             suggest: self.suggest,
             result: self.result,
+            beside: None,
             state: std::marker::PhantomData,
         }
+    }
+
+    /// Keys only, no actions: Enter adds; Escape lets go of a chosen suggestion, then clears
+    /// the words. The field is keyed by its owner (`id`), and its line keeps one `Read` row's
+    /// height, empty or not. `beside` draws a control right of the field, `beside_width` wide,
+    /// and can choose a value too. Staged, as [`add_field_keys`] is: Clippy refuses it outside
+    /// `src/design/` (`Ban::Extras`), and each use is a row of `design::results::STAGED_ALLOWS`
+    /// with its reason (the run's `Effect` line, the loot list's own field).
+    pub fn keys_only(
+        self,
+        beside_width: f32,
+        beside: impl FnOnce(&mut Ui) -> Option<T> + 'a,
+    ) -> AddFieldForm<'a, T, KeysOnly> {
+        AddFieldForm {
+            id: self.id,
+            name: self.name,
+            hint: self.hint,
+            actions: None,
+            suggest: self.suggest,
+            result: None,
+            beside: Some((beside_width, Box::new(beside))),
+            state: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T> AddFieldForm<'_, T, KeysOnly> {
+    pub fn show(self, ui: &mut Ui, state: &mut AddField) -> AddFieldResult<T> {
+        let (beside_width, beside) = self.beside.expect("KeysOnly holds its control");
+        let (id, name, hint) = (self.id, self.name, self.hint);
+        keys_field(
+            ui,
+            state,
+            beside_width,
+            beside,
+            self.suggest,
+            |ui, words, width| {
+                ui.set_min_height(Density::Read.control());
+                let hint = placeholder(ui, hint);
+                let response = id.single_line(ui, words, |edit| {
+                    edit.desired_width(width - 2.0 * S)
+                        .min_size(vec2(width, Density::Read.control()))
+                        .margin(vec2(S, 4.0))
+                        .hint_text(hint)
+                });
+                named(ui, &response, name);
+                response
+            },
+        )
     }
 }
 
@@ -2325,11 +2383,33 @@ pub fn add_field_keys<T>(
     beside: impl FnOnce(&mut Ui) -> Option<T>,
     suggest: impl FnOnce(&str) -> Vec<Suggestions<T>>,
 ) -> AddFieldResult<T> {
+    let suggest: Suggest<'_, T> = Box::new(suggest);
+    keys_field(
+        ui,
+        state,
+        beside_width,
+        beside,
+        Some(suggest),
+        |ui, words, width| text_input(ui, name, words, hint, width),
+    )
+}
+
+/// The keys-only add field's line and keys, with its text field drawn by `field` in the width
+/// it is given: [`add_field_keys`] (staged, its field by place) and `AddFieldForm::keys_only`
+/// (its field by its owner's `FieldId`).
+fn keys_field<T>(
+    ui: &mut Ui,
+    state: &mut AddField,
+    beside_width: f32,
+    beside: impl FnOnce(&mut Ui) -> Option<T>,
+    suggest: Option<Suggest<'_, T>>,
+    field: impl FnOnce(&mut Ui, &mut String, f32) -> Response,
+) -> AddFieldResult<T> {
     let mut chosen = None;
     let field = ui
         .horizontal(|ui| {
             let width = (ui.available_width() - beside_width).max(160.0);
-            let field = text_input(ui, name, &mut state.words, hint, width);
+            let field = field(ui, &mut state.words, width);
             chosen = beside(ui);
             field
         })
@@ -2345,8 +2425,7 @@ pub fn add_field_keys<T>(
     if cancel {
         state.words.clear();
     }
-    let suggest: Suggest<'_, T> = Box::new(suggest);
-    let suggested = suggestion_rows(ui, state, &field, enter, Some(suggest));
+    let suggested = suggestion_rows(ui, state, &field, enter, suggest);
     AddFieldResult {
         field,
         chosen: suggested.or(chosen),
@@ -3099,28 +3178,6 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     dirty && Action::quiet("Discard").blocked(blocked).show(ui).clicked()
 }
 
-/// Names the discarded draft in an Undo message. Its one Undo follows the footer's rule for a
-/// lone Undo (ruling M9, `UndoStep::alone`): `Undo discard of <name>` wherever it fits, else
-/// `Undo discard`; its accessible name always names the draft. Returns true when undo is
-/// pressed.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-// M-L0.4b: the Library's footers are typed; only the gallery and this file's tests draw it.
-#[cfg(test)]
-pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
-    let step = super::outcome::UndoStep::of(super::outcome::Verb::Discard, name);
-    let whole = step.label();
-    let shown = step.alone(ui, super::outcome::undo_room(ui, Tone::Info, &whole));
-    undo_message_capped(
-        ui,
-        Tone::Info,
-        &format!("{name} draft discarded."),
-        &shown,
-        Some(&whole),
-    )
-}
-
 /// A message with one action beside it, capped at `LIST_MEASURE` like every notice. Returns true
 /// when the action is used.
 #[deprecated(
@@ -3300,7 +3357,7 @@ type SpaceMessage<'a, R> = (&'a str, Box<dyn FnOnce(&mut Ui) -> R + 'a>);
 /// ```ignore
 /// let pressed = design::MessageSpace::new("library_message", width)
 ///     .reason(problem, |ui| { design::message(ui, Tone::Error, problem); })
-///     .result(&words, true, |ui| design::draft_discarded(ui, name))
+///     .result(&words, true, |ui| design::message(ui, Tone::Info, &words))
 ///     .show(ui);
 /// ```
 // Library, World repair and Campaign repair adopt it this round (iter-25 packages L, D and C).
@@ -3611,21 +3668,26 @@ type FooterMessage<'a> = (
 /// footer. The caller gets no y. `show_by_hand` is the old way, staged out (Clippy's
 /// `disallowed-methods` and the lint rule `footer-by-hand`).
 ///
+/// Every app footer is typed: its lines are data (`outcome::Messages`), which builds the footer
+/// and gives it to the pane.
+///
 /// ```ignore
-/// let mut undo = false;
-/// let mut footer = design::Footer::new(("library_footer", path), width);
-/// // `discarded_order` was issued with `ResultOrder::issue()` when the draft was discarded.
-/// footer.result(discarded_order, &words, true, |ui| undo = design::draft_discarded(ui, name));
-/// footer.reason(problem, |ui| { design::message(ui, Tone::Error, problem); });
-/// footer.pane(ui, design::Body::Content, |ui| {
+/// let frame = design::outcome::PaneFrame::new(ui);
+/// let mut messages = design::outcome::Messages::new(&frame, ("library_footer", path), width);
+/// if let Some(shown) = results.get(&owner) {
+///     messages.kept(shown.outcome(&frame, |kept| kept.outcome()));
+/// }
+/// messages.outcome(design::outcome::FaultMessage::new(&fault));
+/// let paned = messages.pane(ui, design::Body::Content, |ui| {
 ///     // ...the body...
 /// });
 /// ```
 pub struct Footer<'a> {
     id: Id,
     width: f32,
-    /// The legacy lines: each lowered to a closure (`result`, `legacy_reason`, `legacy_notice`,
-    /// `legacy_kept`, `legacy_kept_line`). Banned and counted (`clippy.toml`, `Ban::Footer`).
+    /// Lines lowered to a closure (`result`, `legacy_reason`, `legacy_notice`): only the design
+    /// system's own pane tests make them (the entries are `#[cfg(test)]`); every app footer is
+    /// typed. Empty outside tests.
     messages: Vec<FooterMessage<'a>>,
     /// A typed footer's lines (`outcome::Messages`): data, drawn in the order of the footer's
     /// retained plan (layout PR 2b).
@@ -3690,6 +3752,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
+    #[cfg(test)]
     pub fn result(
         &mut self,
         order: ResultOrder,
@@ -3711,6 +3774,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
+    #[cfg(test)]
     pub fn legacy_reason(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
@@ -3725,6 +3789,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
+    #[cfg(test)]
     pub fn legacy_notice(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
@@ -3732,18 +3797,6 @@ impl<'a> Footer<'a> {
     ) -> &mut Self {
         self.messages
             .push((FooterRank::Notice, None, words.into(), Box::new(draw)));
-        self
-    }
-
-    /// One message at its place in the footer's order: the typed form is `Footer::outcome`.
-    pub(super) fn push(
-        &mut self,
-        rank: FooterRank,
-        order: Option<ResultOrder>,
-        words: std::borrow::Cow<'a, str>,
-        draw: impl FnOnce(&mut Ui) + 'a,
-    ) -> &mut Self {
-        self.messages.push((rank, order, words, Box::new(draw)));
         self
     }
 
@@ -3954,46 +4007,16 @@ impl<'a> Footer<'a> {
             .collect::<Vec<_>>()
             .join(" ");
         let messages = std::mem::take(&mut self.messages);
-        // Ruling R29: the room an open lock keeps for its reason is a reservation. It stays while
-        // the footer has room for it where it stands (`most`), so a lock moves nothing; else it
-        // is not drawn, so it never makes the footer scroll. The footer keeps its height (up to
-        // `most`) either way: a message that comes later takes that room, and no pressed choice
-        // moves. The room the reservations want is measured in this pass, at this width, for
-        // these messages.
-        use super::outcome::{DRAWN, GIVE_UP, RESERVED};
-        let give_up_key = self.id.with("give_up");
-        let give_up = ui
-            .ctx()
-            .data(|data| data.get_temp::<bool>(give_up_key).unwrap_or(false));
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(Id::new(GIVE_UP), give_up);
-            data.insert_temp(Id::new(RESERVED), 0.0_f32);
-            data.insert_temp(Id::new(DRAWN), 0.0_f32);
-        });
         let (_, content, part) = scroll_part(ui, rect, self.id, &name, fit, |ui| {
             for (_, _, _, draw) in messages {
                 draw(ui);
             }
         });
-        let (room, drawn) = ui.ctx().data_mut(|data| {
-            data.remove::<bool>(Id::new(GIVE_UP));
-            (
-                data.remove_temp::<f32>(Id::new(RESERVED)).unwrap_or(0.0),
-                data.remove_temp::<f32>(Id::new(DRAWN)).unwrap_or(0.0),
-            )
-        });
-        let bare = content - drawn;
-        let fits = (bare + room + 2.0 * PART_INSET).ceil() <= most;
-        let next = room > 0.0 && !fits;
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(give_up_key, next));
-        if next != give_up {
-            ui.ctx()
-                .request_discard("the message footer's reservations changed");
-        }
         // The demand, whole: a pinned footer and a following one take it up to their own `most`
-        // (ruling Q-c), so neither is measured at the other's cap.
-        let wanted = (bare + room + 2.0 * PART_INSET).ceil();
+        // (ruling Q-c), so neither is measured at the other's cap. (Closure lines keep no
+        // reservations: an open lock's reason room is a typed footer's, ruling R29.)
+        let _ = most;
+        let wanted = (content + 2.0 * PART_INSET).ceil();
         if (wanted - stored).abs() >= HAIRLINE_WIDTH {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(self.id.with("height"), wanted));
@@ -5978,26 +6001,6 @@ mod tests {
                     "SD1-beside at {width}: message {message:?}, Undo {action:?}, icon {icon:?}"
                 );
             }
-        }
-        // Ruling M9: the legacy discard message's one Undo measures its whole form first, as a
-        // lone Undo in a footer does (`UndoStep::alone`): wide, it names the draft; narrow,
-        // where that does not fit, `Undo discard`. Its accessible name always names the draft.
-        const WHOLE: &str = "Undo discard of Bridge Ambush";
-        for (width, shown) in [(900.0, WHOLE), (200.0, "Undo discard")] {
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(vec2(width, 200.0))
-                .build_ui(|ui| {
-                    let _ = draft_discarded(ui, "Bridge Ambush");
-                });
-            super::super::theme::install(&harness.ctx);
-            harness.run_steps(2);
-            let undos: Vec<String> = painted_texts(&harness)
-                .into_iter()
-                .map(|(text, _)| text)
-                .filter(|text| text.starts_with("Undo"))
-                .collect();
-            assert_eq!(undos, [shown], "M9 discard at {width}");
-            let _ = egui_kittest::kittest::Queryable::get_by_label(&harness, WHOLE);
         }
         // P3a, ruling R19 (proof 3): a hanging Undo keeps keyboard focus, Enter, Space and an
         // AccessKit click with the pointer anywhere; one input frame per step, counted in it.
@@ -8729,6 +8732,10 @@ mod tests {
     /// During an input method's composition, Enter belongs to the input method: it adds nothing
     /// and the commit lands in the field.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the staged keys-only add field itself"
+    )]
     fn iter29_p1_an_opened_add_field_shows_add_and_cancel() {
         use egui_kittest::kittest::Queryable;
         const NAME: &str = "Log line for Hob";
@@ -8966,6 +8973,57 @@ mod tests {
             (now - (opened - 60.0)).abs() <= 1.0,
             "the DM's scroll stays: offset {opened} then {now}, the wheel put it at {}",
             opened - 60.0
+        );
+
+        // The keys-only add field (M-R0's run `Effect` line and loot field): no actions; the
+        // field is its owner's (`FieldId`), so focus and its text history follow the owner, not
+        // its place; its line keeps one `Read` row's height, empty or with words; Enter adds.
+        let owner = crate::field_id!("test_keys_field").of(uuid::Uuid::from_u128(7));
+        let mut keys = egui_kittest::Harness::builder()
+            .with_size(vec2(480.0, 200.0))
+            .build_ui_state(
+                move |ui, (field, seen): &mut Seen| {
+                    let result = add_field::<()>(owner, NAME, "What happened?")
+                        .keys_only(0.0, |_| None)
+                        .show(ui, field);
+                    if result.enter || result.cancel {
+                        seen.push((result.enter, result.cancel, field.words.clone()));
+                    }
+                },
+                (
+                    AddField {
+                        focus: true,
+                        ..AddField::default()
+                    },
+                    Vec::new(),
+                ),
+            );
+        super::super::theme::install(&keys.ctx);
+        keys.run_steps(2);
+        assert!(
+            keys.query_by_label("Add").is_none() && keys.query_by_label("Cancel").is_none(),
+            "keys only: no actions"
+        );
+        assert_eq!(
+            keys.ctx.memory(|memory| memory.focused()),
+            Some(owner.id()),
+            "the field is its owner's"
+        );
+        let empty = keys.get_by_label(NAME).rect().height();
+        keys.get_by_label(NAME).type_text("Ash");
+        keys.run_steps(2);
+        let typed = keys.get_by_label(NAME).rect().height();
+        assert!(
+            (empty - Density::Read.control()).abs() < 0.5
+                && (typed - Density::Read.control()).abs() < 0.5,
+            "one Read row, empty {empty} and typed {typed}"
+        );
+        keys.key_press(egui::Key::Enter);
+        keys.run_steps(2);
+        assert_eq!(
+            keys.state().1,
+            [(true, false, "Ash".to_owned())],
+            "Enter adds the words"
         );
     }
 }

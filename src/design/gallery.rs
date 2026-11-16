@@ -396,7 +396,14 @@ pub fn components(ui: &mut egui::Ui) {
             });
         });
     });
-    let _ = draft_discarded(ui, "Fireball");
+    // A discarded draft's message and its Undo (the legacy `draft_discarded` went with the
+    // legacy footer, migration-32 L2c; its typed form is a kept result in a footer).
+    let _ = undo_message(
+        ui,
+        Tone::Info,
+        "Fireball draft discarded.",
+        "Undo discard of Fireball",
+    );
     use crate::timeline::Kind;
     hanging_add_strip(
         ui,

@@ -217,13 +217,6 @@ pub struct ParticipantKey {
 
 impl ParticipantKey {
     /// The key of `participant`'s fields in the run `run`.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "lane M-R0 keys the setup initiative fields and the initiative-roll Dropdown (M0150) with it"
-        )
-    )]
     pub(crate) fn of(run: uuid::Uuid, participant: &crate::encounter_run::Participant) -> Self {
         Self {
             run,

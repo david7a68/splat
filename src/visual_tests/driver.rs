@@ -3544,15 +3544,36 @@ impl<'a> Driver<'a> {
 
     pub fn check_tab_order(&mut self, view: &str) {
         let controls = ergonomics::controls(&self.harness);
-        let expected: Vec<u64> = controls
-            .iter()
-            .filter(|control| {
-                !control.disabled
-                    && (!control.chrome || control.role == Role::Splitter)
-                    && !control.is_label()
+        // A list box is one Tab stop (layout 3b, the lead's ruling B): Tab reaches one of its
+        // options, the arrows the others. Each list box counts once, under one key.
+        let lists: Vec<std::collections::HashSet<u64>> = self
+            .harness
+            .root()
+            .children_recursive()
+            .filter(|node| node.accesskit_node().role() == Role::ListBox)
+            .map(|list| {
+                list.children_recursive()
+                    .map(|node| node.accesskit_node().id().0)
+                    .collect()
             })
-            .map(|control| control.id)
             .collect();
+        let stop_of = |id: u64| {
+            lists
+                .iter()
+                .position(|members| members.contains(&id))
+                .map_or(id, |list| u64::MAX - list as u64)
+        };
+        let mut expected: Vec<u64> = Vec::new();
+        for control in controls.iter().filter(|control| {
+            !control.disabled
+                && (!control.chrome || control.role == Role::Splitter)
+                && !control.is_label()
+        }) {
+            let stop = stop_of(control.id);
+            if !expected.contains(&stop) {
+                expected.push(stop);
+            }
+        }
         let total = controls
             .iter()
             .filter(|control| !control.disabled && !control.is_label())
@@ -3575,6 +3596,7 @@ impl<'a> Driver<'a> {
             let Some((id, name)) = focused else {
                 continue;
             };
+            let id = stop_of(id);
             if stops.contains(&id) {
                 continue;
             }
