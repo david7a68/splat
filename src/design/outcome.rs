@@ -1995,7 +1995,7 @@ pub enum KeptOutcome<A> {
 /// ```compile_fail
 /// use splat::outcome::{Offer, UndoStep, Verb};
 /// let _ = Offer::<u8>::new(splat::sentence!("Ash is not linked."), todo!())
-///     .undo(UndoStep::verb(Verb::Change).pressed_as(1));
+///     .undo(UndoStep::of(Verb::Change, "Ash").pressed_as(1));
 /// ```
 #[must_use = "give it to `Shown::outcome`"]
 pub struct Offer<A> {
