@@ -9568,7 +9568,7 @@ fn paint_row(
     );
 }
 
-/// A number that can be unknown. `Mark unknown` clears it, away from the value,
+/// A number that can be unknown. `Clear` empties it, away from the value,
 /// so that a click meant for the number cannot lose it.
 fn correction_label(ui: &mut egui::Ui, label: &str) {
     let size = vec2(correction_label_width(ui), Density::Read.control());
@@ -9637,8 +9637,10 @@ fn optional_number(
         correction_label(ui, label);
         if let Some(n) = value {
             stepper(ui, label, n, range);
-            if Action::quiet("Mark unknown")
-                .name(&format!("Mark {label} unknown"))
+            // `Clear` empties the number, so it reads `Unknown`: a short plain word that keeps
+            // its line beside the stepper at every size (M-R0.4: `Mark unknown` was cut at 960).
+            if Action::quiet("Clear")
+                .name(&format!("Clear {label}"))
                 .density(Density::Read)
                 .show(ui)
                 .clicked()
