@@ -1205,8 +1205,8 @@ fn file_links_at_message_words(
 }
 
 /// The same for a file line still drawn by hand (`encounters::file_line` in
-/// `message_with_actions`: Campaign's flags, run setup), whose links are named only
-/// `Edit in Obsidian` and `Show file`.
+/// `message_with_actions`: Campaign's flags), whose links are named only `Edit in Obsidian` and
+/// `Show file`. Run setup's file line is the typed `FileLine` (M-P0 item 7).
 fn file_links_at_message_words_by_hand(
     d: &Driver<'_>,
     message: &str,

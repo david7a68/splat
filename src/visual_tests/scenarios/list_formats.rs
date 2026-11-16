@@ -887,7 +887,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .map(|node| node.rect);
             let placed = match (warning, file) {
                 (Some(warning), Some(file)) if file.top() >= warning.rect.bottom() - 1.0 => {
-                    super::file_links_at_message_words_by_hand(
+                    super::file_links_at_message_words(
                         d,
                         "Ember Cultist · line 20: The change “HP lots”",
                         &roster_path,
@@ -1026,7 +1026,8 @@ pub fn run(d: &mut Driver<'_>) {
     let show_file = d
         .nodes()
         .iter()
-        .filter(|node| node.name == "Show file")
+        // M-P0 item 7: the typed file line names its link with the file's path.
+        .filter(|node| node.name == "Show file: Encounters/Shrine of Cinders.md")
         .count();
     d.observe(
         "iter-5-B-FD8-two-rows",
@@ -1061,7 +1062,7 @@ pub fn run(d: &mut Driver<'_>) {
                 return Err(format!("{} warnings", faults.len()));
             }
             if file.top() >= last.rect.bottom() - 1.0 {
-                super::file_links_at_message_words_by_hand(
+                super::file_links_at_message_words(
                     d,
                     &last.name,
                     &roster_path,
