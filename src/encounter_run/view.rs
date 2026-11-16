@@ -7018,22 +7018,20 @@ fn close_saved_words(sync: bool) -> String {
 /// message that names its arrival whole, and it only ever moves that arrival, so when the whole
 /// words do not fit, an arrival named by its first member, `Shrine Reserve (Goblin Warrior 3)`,
 /// gives up the parenthesis, never just the member's name: `Move Shrine Reserve before Brannoch
-/// Vale`, then the two names' last words in turn (`shortened_names`). A bare `(… 3)` tells the
-/// DM nothing. The typed choice shows the first form that fits (`ChoiceWords::or_shorter`);
-/// hover and the accessible name keep the whole words.
+/// Vale`. A bare `(… 3)` tells the DM nothing. Then (at once, for an arrival with no
+/// parenthesis) the two names give up their last words in turn (`shortened_names`): the label
+/// shortens by whole words only (R3f X43, X44). The typed choice shows the first form that fits
+/// (`ChoiceWords::or_shorter`); hover and the accessible name keep the whole words.
 fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
     let whole = crate::choice!("Move {} before {}", arrival, before);
     let group = arrival
         .strip_suffix(')')
         .and_then(|rest| rest.rsplit_once(" ("))
         .map_or(arrival, |(group, _)| group);
-    if group == arrival {
-        return whole;
-    }
-    whole.or_shorter(
-        shortened_names(group, before)
-            .map(|(group, before)| crate::choice!("Move {} before {}", group, before)),
-    )
+    // With no parenthesis, the first pair is the whole words again.
+    let forms = shortened_names(group, before).skip(usize::from(group == arrival));
+    whole
+        .or_shorter(forms.map(|(group, before)| crate::choice!("Move {} before {}", group, before)))
 }
 
 /// Two names with their last words given up in turn, the other name's last: each pair from
@@ -12655,10 +12653,10 @@ mod tests {
                 let alone =
                     |width: f32| shown_in(move_choice("Shrine Reserve", "Brannoch Vale"), width);
                 assert_eq!(alone(plain_width), plain);
-                let cut = alone(plain_width - 1.0);
-                assert!(
-                    cut.starts_with("Move Shr") && cut.contains("… before "),
-                    "no shorter form: its names are cut: {cut}"
+                // With no parenthesis the names give up their last words at once (R3f X43, X44).
+                assert_eq!(
+                    alone(plain_width - 1.0),
+                    "Move Shrine… before Brannoch Vale"
                 );
                 // SP3 (iter-29 G177, `docs/design-system.md:1538`): the source goes first, and
                 // the name stays whole; only then does the name shorten. Never `D&D Beyond HP
