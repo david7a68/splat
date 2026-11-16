@@ -4,8 +4,8 @@
 //! Save's weight ([`DraftState::save_weight`]), why Save waits ([`DraftState::save_blocked`]),
 //! whether `Discard` shows, and the campaign-switch reason ([`DraftState::lock_reason`]). The
 //! caller says what is true of the draft (new or saved, changed or not, what Save's check found
-//! and why, changed on disk, a failed Save, who owns the primary); it never picks a word, a
-//! weight, a tone or a reason.
+//! and why, changed on disk, a failed Save, who owns the primary, a repair that a clean draft's
+//! Save writes, a wait outside the draft); it never picks a word, a weight, a tone or a reason.
 //!
 //! The draft's origin ([`DraftOrigin`]) and Save's check ([`Diagnosis`]) are facts, and the word
 //! comes from them (R37, Q-m): a new draft that lacks a required part says `New` in a neutral
@@ -279,6 +279,9 @@ pub enum SaveWord {
     Unsaved,
     /// The draft on screen was saved and has not changed since.
     Saved,
+    /// A clean draft whose Save writes to repair its file (an unread choice): the row names the
+    /// write ([`DraftState::status`]), in the warning tone.
+    Repair,
     NoChanges,
 }
 
@@ -291,6 +294,7 @@ impl SaveWord {
             Self::NotSaved => "Not saved",
             Self::Unsaved => "Unsaved",
             Self::Saved => "Saved",
+            Self::Repair => "Repair",
             Self::NoChanges => "No changes",
         }
     }
@@ -309,6 +313,7 @@ impl SaveWord {
             Self::ChangedOnDisk => (icons::WARN, d.external),
             Self::Unsaved => (icons::DRAFT, d.unsaved),
             Self::Saved => (icons::OK, d.saved),
+            Self::Repair => Tone::Warning.parts(),
             Self::NoChanges => (icons::OK, d.clean),
         };
         Status {
@@ -349,6 +354,12 @@ pub struct DraftState<'a> {
     not_saved: bool,
     saved: bool,
     locks_campaign: bool,
+    /// The write a clean draft's Save makes to repair its file (`repairs`).
+    repair: Option<Cow<'a, str>>,
+    /// Why Save waits for something outside the draft (`waits`, `commits_elsewhere`).
+    waits: Option<&'a str>,
+    /// The wait is another commit that saves this draft (`commits_elsewhere`).
+    elsewhere: bool,
 }
 
 impl<'a> DraftState<'a> {
@@ -364,7 +375,37 @@ impl<'a> DraftState<'a> {
             not_saved: false,
             saved: false,
             locks_campaign: false,
+            repair: None,
+            waits: None,
+            elsewhere: false,
         }
+    }
+
+    /// A clean draft whose Save writes to repair its file (Rules and runs' unread choice): the
+    /// row names that write (`write`, such as `Save replaces the unread choice on line 23 with
+    /// these settings`) in the warning tone, Save is open (and `Ctrl+S`), and there is no
+    /// Discard, since nothing changed. A changed draft says `Unsaved`: its Save repairs too.
+    pub fn repairs(mut self, write: impl Into<Cow<'a, str>>) -> Self {
+        self.repair = Some(write.into());
+        self
+    }
+
+    /// Save waits for something outside the draft, not a fault of it (an open run, a folder
+    /// Splat cannot read): Save is blocked with `why`, the word stays the draft's, and Discard
+    /// stays; the campaign switch says Discard is the way out.
+    pub fn waits(mut self, why: &'a str) -> Self {
+        self.waits = Some(why);
+        self.elsewhere = false;
+        self
+    }
+
+    /// Save waits because another commit takes its place now (a folder move's two choices):
+    /// blocked with `why`, as [`Self::waits`], but those choices save the draft, so the campaign
+    /// switch still says Save or discard.
+    pub fn commits_elsewhere(mut self, why: &'a str) -> Self {
+        self.waits = Some(why);
+        self.elsewhere = true;
+        self
     }
 
     /// What Save's own check found, changed or not. It joins what was reported before
@@ -463,6 +504,8 @@ impl<'a> DraftState<'a> {
             SaveWord::NotSaved
         } else if self.changed() {
             SaveWord::Unsaved
+        } else if self.repair.is_some() {
+            SaveWord::Repair
         } else if self.saved {
             SaveWord::Saved
         } else {
@@ -470,11 +513,24 @@ impl<'a> DraftState<'a> {
         }
     }
 
+    /// The row's state as it paints: [`Self::word`]'s status, and for a repair the write it names.
+    pub fn status(&self) -> Status<'_> {
+        match (self.word(), &self.repair) {
+            (SaveWord::Repair, Some(write)) => Status {
+                word: write,
+                ..SaveWord::Repair.status()
+            },
+            (word, _) => word.status(),
+        }
+    }
+
     /// Why Save waits, or `None` when Save would run.
     pub fn save_blocked(&self) -> Option<&str> {
         if self.on_disk {
             Some(CHANGED_ON_DISK)
-        } else if !self.changed() {
+        } else if let Some(why) = self.waits {
+            Some(why)
+        } else if !self.changed() && self.repair.is_none() {
             Some(NO_CHANGES)
         } else {
             self.refusal()
@@ -510,7 +566,7 @@ impl<'a> DraftState<'a> {
     /// The campaign-switch reason after `Discard`, for a draft that locks the switch.
     pub fn lock_reason(&self) -> Option<&'static str> {
         (self.locks_campaign && self.changed()).then(|| {
-            if self.can_save() {
+            if self.can_save() || self.elsewhere {
                 SAVE_OR_DISCARD_TO_SWITCH
             } else {
                 DISCARD_TO_SWITCH
@@ -553,7 +609,7 @@ pub(in crate::design) fn save_row_with(
     save: &str,
     reason: Option<RowReason<'_>>,
 ) -> SaveRow {
-    let save_action = || {
+    let save_action = |width: f32| {
         match state.save_weight() {
             SaveWeight::Primary => Action::primary(save),
             SaveWeight::Secondary => Action::secondary(save),
@@ -561,6 +617,8 @@ pub(in crate::design) fn save_row_with(
         .density(Density::Read)
         .blocked(state.save_blocked())
         .key("Ctrl+S")
+        // Its widest weight's width in every state, so a change of weight moves nothing.
+        .min_width(width)
     };
     let gap = ui.spacing().item_spacing.x;
     let small = super::Type::Small.font(ui);
@@ -621,9 +679,9 @@ pub(in crate::design) fn save_row_with(
     ui.horizontal(|ui| {
         ui.set_min_height(Density::Scan.control());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            pressed.save = save_action().show(ui).clicked();
+            pressed.save = save_action(save_width).show(ui).clicked();
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                status(ui, state.word().status());
+                status(ui, state.status());
                 if state.discard_shown() {
                     pressed.discard = Action::quiet("Discard").show(ui).clicked();
                 }
@@ -997,6 +1055,51 @@ mod tests {
                 Some(CHANGED_ON_DISK),
                 false,
             ),
+            // M-E0 (Rules and runs): a clean draft whose Save repairs its file names the write,
+            // and Save (and Ctrl+S) is open, with nothing to discard.
+            (
+                "repair",
+                no().repairs("Save replaces the unread choice on line 23 with these settings"),
+                SaveWord::Repair,
+                SaveWeight::Primary,
+                None,
+                false,
+            ),
+            // A changed draft says Unsaved; its Save repairs too.
+            (
+                "repair changed",
+                yes().repairs("Save replaces …"),
+                SaveWord::Unsaved,
+                SaveWeight::Primary,
+                None,
+                true,
+            ),
+            // A wait that is not the draft's: Save waits with it, the word stays the draft's,
+            // and Discard stays. It outranks No changes.
+            (
+                "waits changed",
+                yes().waits("Close the open run to save run settings."),
+                SaveWord::Unsaved,
+                SaveWeight::Secondary,
+                Some("Close the open run to save run settings."),
+                true,
+            ),
+            (
+                "waits clean",
+                no().waits("Close the open run to save run settings."),
+                SaveWord::NoChanges,
+                SaveWeight::Secondary,
+                Some("Close the open run to save run settings."),
+                false,
+            ),
+            (
+                "commits elsewhere",
+                yes().commits_elsewhere("Choose below to move the runs or not."),
+                SaveWord::Unsaved,
+                SaveWeight::Secondary,
+                Some("Choose below to move the runs or not."),
+                true,
+            ),
         ];
         for (name, state, word, weight, blocked, discard) in rows {
             assert_eq!(
@@ -1110,6 +1213,18 @@ mod tests {
             None,
             "a draft that does not lock the switch says nothing"
         );
+        // A wait outside the draft leaves Discard the way out; another commit that saves the
+        // draft keeps Save in the sentence.
+        assert_eq!(
+            state(Changed::Yes).waits("Close the run.").lock_reason(),
+            Some(DISCARD_TO_SWITCH)
+        );
+        assert_eq!(
+            state(Changed::Yes)
+                .commits_elsewhere("Choose below.")
+                .lock_reason(),
+            Some(SAVE_OR_DISCARD_TO_SWITCH)
+        );
     }
 
     /// The row draws what the state decides: the word, Discard only with changes, and Save with
@@ -1126,6 +1241,13 @@ mod tests {
             (
                 DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft),
                 "No changes",
+                false,
+            ),
+            // A repair's row names its write.
+            (
+                DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft)
+                    .repairs("Save replaces the unread choice on line 23 with these settings"),
+                "Save replaces the unread choice on line 23",
                 false,
             ),
         ] {

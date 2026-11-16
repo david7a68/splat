@@ -8741,21 +8741,10 @@ impl Encounters {
             // leaves saved runs, it waits in its place, and the folder warning's two choices (the
             // footer's, `then` below) commit, so a second press where Save was never moves runs.
             let choose_move = run_files > 0 && !run_open;
-            let blocked = if run_open { Some("Close the open run to save run settings.") }
-                else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
-                else if choose_move { Some(CHOOSE_MOVE) }
-                else if !changed && rule_lines.is_empty() { Some(design::save_row::NO_CHANGES) } else { None };
-            // The word by the one rule (`DraftState`): `Unsaved` while changed, `Saved` while the
-            // last Save's settings hold, else `No changes`. A repair of an unread choice names
-            // its write instead (the save row rule in docs/design-system.md), which `DraftState`
-            // cannot say yet, nor a wait that is not the draft's (an open run, the move choice).
-            let state = design::DraftState::new(
-                design::save_row::DraftOrigin::Saved,
-                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
-                design::save_row::Primary::Draft,
-            );
-            let state = if this.options_saved.is_some() { state.just_saved() } else { state };
-            let repair = (!changed && !rule_lines.is_empty()).then(|| {
+            // One rule for the row (`DraftState`): the word (`Unsaved`, `Saved` while the last
+            // Save's settings hold, `No changes`), the repair of an unread choice, Save's weight
+            // and why it waits, Discard and the campaign lock.
+            let repair = (!rule_lines.is_empty()).then(|| {
                 // Save is the repair here: it writes the shown settings over the unread choice.
                 let lines = match rule_lines.split_last() {
                     Some((last, [])) => format!("line {last}"),
@@ -8764,79 +8753,55 @@ impl Encounters {
                 };
                 format!("Save replaces the unread choice on {lines} with these settings")
             });
+            let mut state = design::DraftState::new(
+                design::save_row::DraftOrigin::Saved,
+                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
+                design::save_row::Primary::Draft,
+            )
+            .locks_campaign();
+            if this.options_saved.is_some() {
+                state = state.just_saved();
+            }
+            if let Some(write) = repair {
+                state = state.repairs(write);
+            }
+            if run_open {
+                state = state.waits("Close the open run to save run settings.");
+            } else if folder_changed && left.is_err() {
+                state = state.waits("Could not read saved runs. Check the old run folder before saving.");
+            } else if choose_move {
+                state = state.commits_elsewhere(CHOOSE_MOVE);
+            }
+            if changed {
+                this.discarded_options = None;
+            }
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
-                // other change too.
-                // Not under a modal (the app's one test) nor the form's lock (review of PR 525).
-                let save_key = blocked.is_none()
+                // other change too. Not under a modal (the app's one test) nor the form's lock
+                // (review of PR 525).
+                let save_key = state.can_save()
                     && !modal
                     && ui.is_enabled()
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                // AF1: the state starts the row and Save ends it, as on every save row; without
-                // room, the state's words and the reasons wrap before Save. One row in every
-                // state (M4), so the commit keeps its place and its job.
-                let pressed = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            // Disabled, the primary loses its fill and keeps its width, so a
-                            // wait moves nothing.
-                            let pressed = Action::primary(SAVE_RUN_SETTINGS)
-                                .key("Ctrl+S")
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked();
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center)
-                                    .with_main_wrap(true),
-                                |ui| {
-                                    if changed {
-                                        this.discarded_options = None;
-                                    }
-                                    let word = match &repair {
-                                        Some(word) => Status {
-                                            icon: icons::WARN,
-                                            word,
-                                            color: colors().result.warning,
-                                        },
-                                        None => state.word().status(),
-                                    };
-                                    if design::save_row_state(ui, word, state.discard_shown(), None) {
-                                        this.discarded_options = Some(std::mem::replace(
-                                            &mut snapshot.options,
-                                            snapshot.saved_options.clone(),
-                                        ));
-                                        Self::record_kept(
-                                            &mut this.kept,
-                                            this.active.as_ref(),
-                                            KeptResult::OptionsDiscarded,
-                                        );
-                                    }
-                                    if snapshot.options != snapshot.saved_options {
-                                        // FB6: while Save is blocked, Discard is the one way
-                                        // out; the move choices also save.
-                                        design::blocked_reason(
-                                            ui,
-                                            Some(if blocked.is_some() && !choose_move {
-                                                blocked_draft_switch_reason()
-                                            } else {
-                                                draft_switch_reason()
-                                            }),
-                                        );
-                                    }
-                                },
-                            );
-                            pressed
-                        },
-                    )
-                    .inner;
-                // Why Save waits, on its own line under the row (as `save_row`'s narrow slot),
-                // while the form has changes: a wrapped label inside the row would cover Discard.
-                if snapshot.options != snapshot.saved_options {
-                    design::blocked_reason(ui, blocked);
+                // The state and Discard start the row, the lock's reason after them, and Save
+                // ends it (`save_row`), in every state (M4).
+                let row = design::save_row(ui, &state, SAVE_RUN_SETTINGS);
+                if row.discard {
+                    this.discarded_options = Some(std::mem::replace(
+                        &mut snapshot.options,
+                        snapshot.saved_options.clone(),
+                    ));
+                    Self::record_kept(
+                        &mut this.kept,
+                        this.active.as_ref(),
+                        KeptResult::OptionsDiscarded,
+                    );
                 }
-                if (pressed || save_key) && blocked.is_none() {
+                // Why Save waits, on its own line under the row, while the form has changes.
+                if snapshot.options != snapshot.saved_options {
+                    design::blocked_reason(ui, state.save_blocked());
+                }
+                if (row.save || save_key) && state.can_save() {
                     commit = Some(commit_options(snapshot, active, OptionsCommit::Save));
                 }
             });

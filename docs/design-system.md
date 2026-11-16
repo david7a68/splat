@@ -254,8 +254,11 @@ refuses says `Invalid`, changed or not: validity comes before whether the text c
 the exception: it says `Invalid` only while it has changes, because a clean one has nothing for Save to refuse, and
 its rows' warnings name the faults. Other clean rows say `No
 changes`, unless Save is enabled to repair something the file holds: then the state names the write with the warning
-icon (`Save replaces the unread choice on line 23 with these settings`), and `Ctrl+S` saves exactly when the button
-can. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
+icon (`Save replaces the unread choice on line 23 with these settings`; `DraftState::repairs`), with no Discard, and
+`Ctrl+S` saves exactly when the button can. When Save waits for something outside the draft (an open run, a folder
+Splat cannot read: `DraftState::waits`), or another commit takes its place (a folder move's choices:
+`DraftState::commits_elsewhere`), Save is blocked with that reason and the word stays the draft's; the campaign
+switch then says `Discard to switch campaign.`, or `Save or discard…` while the other commit can save. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
 has one weight: its Save is primary while the draft has changes that it can save, its last Save did not fail, and no open
 run owns `Next turn`, and secondary otherwise (a blocked Save is secondary too). `design::save_row` decides this. An unsaved draft owns the primary over its own page's other actions: while an encounter
 draft has changes, `Save encounter` is primary and `Resume` or `Start fight` is secondary until the draft is saved or
