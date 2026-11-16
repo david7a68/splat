@@ -1361,13 +1361,6 @@ pub fn stepper_with_density(
 /// A stepper whose value is a modifier: it shows `+2` and `−1`, with a true minus sign
 /// (`signed`), and reads back what the DM types in either form (`−3`, `-3`, `+2`, `2`). The
 /// same − and + and limits as [`stepper`] (the Run's Correct tab: an initiative bonus).
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "lane M-R0 moves the Correct tab's initiative bonus to it (M0169); the expectation fails once it does, so this goes"
-    )
-)]
 pub fn signed_stepper(
     ui: &mut Ui,
     name: &str,
@@ -2709,11 +2702,10 @@ pub fn inline_status_link<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Resp
 
 /// A label over a large value, with no box. The label stays on one line.
 pub fn stat_tile(ui: &mut Ui, label: &str, value: &str) {
-    let c = colors();
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        ui.add(egui::Label::new(Type::Small.rich(ui, label).color(c.muted)).truncate());
-        ui.label(Type::NumeralLarge.rich(ui, value).color(c.text));
+        super::fact::tile_label_line(ui, label);
+        ui.label(Type::NumeralLarge.rich(ui, value).color(colors().text));
     });
 }
 
@@ -3496,7 +3488,7 @@ pub(super) fn scroll_part<R>(
                     .filter(|_| !pointer)
                     .filter(|focused| *focused != focus)
                     .and_then(|focused| ui.ctx().read_response(focused))
-                    .map(|response| response.rect)
+                    .map(|response| reveal_rect(ui.ctx(), response.id, response.rect))
                     .filter(|rect| ui.min_rect().contains_rect(*rect))
                 {
                     ui.scroll_to_rect(rect, None);
@@ -3527,6 +3519,28 @@ pub(super) fn scroll_part<R>(
         );
     }
     (output.inner, output.content_size.y, rect)
+}
+
+/// The key of a control's `reveal_with` rect in egui's temporary data.
+const REVEAL_WITH: &str = "reveal_with";
+
+/// A control and the words that belong to it (an action's help line under it): the rect a
+/// keyboard focus on the control brings into view, so `scroll_part` and a pane's body never
+/// show the control with its words cut off below. Set it in each pass the control is drawn,
+/// after its words; a rect from an earlier pass is not used.
+pub(super) fn reveal_with(ui: &Ui, control: Id, rect: Rect) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(control.with(REVEAL_WITH), (pass, rect)));
+}
+
+/// What to bring into view for the focused control `id`, whose own rect is `own`: with the
+/// words `reveal_with` set for it in this pass, else only itself.
+pub(super) fn reveal_rect(ctx: &egui::Context, id: Id, own: Rect) -> Rect {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|data| data.get_temp::<(u64, Rect)>(id.with(REVEAL_WITH)))
+        .filter(|(set, _)| *set == pass)
+        .map_or(own, |(_, rect)| rect.union(own))
 }
 
 /// Where a footer message stands in the footer's one order.
