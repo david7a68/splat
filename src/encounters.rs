@@ -2614,11 +2614,15 @@ struct ReplacementPickers {
 }
 
 impl ReplacementPickers {
+    /// Once per frame, by the first picker that draws: it visits each kept picker once
+    /// (counted in tests: `REPLACEMENT_SWEPT`), not once for every picker that draws.
     fn sweep(&mut self, frame: u64) {
         if self.swept == Some(frame) {
             return;
         }
         self.swept = Some(frame);
+        #[cfg(test)]
+        REPLACEMENT_SWEPT.with(|visits| visits.set(visits.get() + self.kept.len()));
         self.kept.retain(|_, kept| kept.drawn + 1 >= frame);
     }
 }
@@ -2642,6 +2646,13 @@ fn kept_replacement_pickers(ctx: &egui::Context) -> usize {
 #[cfg(test)]
 thread_local! {
     static REPLACEMENT_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+// Kept pickers the replacement pickers' sweep visited on this thread, for a test that it runs
+// once per frame (review of PR 473, P3).
+#[cfg(test)]
+thread_local! {
+    static REPLACEMENT_SWEPT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // Group members use the same picker without the roster's bulk action.
@@ -8761,18 +8772,18 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 600.0))
             .build_ui_state(
-                |ui, (snapshot, open): &mut (Snapshot, Option<u8>)| {
-                    if let Some(row) = *open {
+                |ui, (snapshot, open): &mut (Snapshot, Vec<u8>)| {
+                    for &row in open.iter() {
                         ui.push_id(row, |ui| {
                             let _ = replace_missing_creature(ui, snapshot, 1, "Missing");
                         });
                     }
                 },
-                (Snapshot::load(&active, &[]).unwrap(), None),
+                (Snapshot::load(&active, &[]).unwrap(), Vec::new()),
             );
         crate::design::theme::install(&harness.ctx);
         for row in 1..=5 {
-            harness.state_mut().1 = Some(row);
+            harness.state_mut().1 = vec![row];
             harness.run_steps(2);
             harness
                 .get_by_label("Replacement creature")
@@ -8783,15 +8794,29 @@ mod tests {
                 1,
                 "row {row}'s picker open: its five, and no closed row's"
             );
-            harness.state_mut().1 = None;
+            harness.state_mut().1 = Vec::new();
             harness.run_steps(2);
         }
-        harness.state_mut().1 = Some(1);
+        harness.state_mut().1 = vec![1];
         harness.run_steps(2);
         assert_eq!(
             kept_replacement_pickers(&harness.ctx),
             1,
             "five rows closed in turn, one open again: one picker's five"
+        );
+        // Review of PR 473, P3: three pickers open at once; the sweep runs once per frame and
+        // visits each kept picker once, not once for every picker that draws.
+        harness.state_mut().1 = vec![1, 2, 3];
+        harness.run_steps(2);
+        let swept = || REPLACEMENT_SWEPT.with(std::cell::Cell::get);
+        let (before, frame) = (swept(), harness.ctx.cumulative_frame_nr());
+        harness.run_steps(4);
+        let (visits, frames) = (swept() - before, harness.ctx.cumulative_frame_nr() - frame);
+        let kept = kept_replacement_pickers(&harness.ctx);
+        assert_eq!(kept, 3, "three pickers open, three kept");
+        assert!(
+            visits > 0 && visits as u64 <= frames * kept as u64,
+            "the sweep runs once per frame: {visits} visits in {frames} frames"
         );
     }
 

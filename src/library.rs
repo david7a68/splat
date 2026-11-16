@@ -13,8 +13,12 @@ use crate::{
     content_workspace::{CampaignDocument, Catalogue},
     design::{
         self, Action, Density, Status, Tone, Type, colors, icons,
-        outcome::{FaultStatus, UndoStep, Verb},
+        outcome::{
+            Choice, FaultMessage, FaultStatus, KeptOutcome, MessageChoice, Messages, Notice,
+            PaneFrame, Press, Said, Sentence, UndoStep, Verb,
+        },
         reader as reader_style,
+        results::{ByTicket, Ticket},
     },
     history::{self, Step, Trail},
     matching::{CLOSE_NAMES, Rank, Typed, with_other},
@@ -40,7 +44,7 @@ const BUILTIN_NAME: &str = "D&D 2024 · SRD 5.2.1";
 
 /// The choice after a package copy's registration names what it changes, in its result's words.
 pub(crate) const USE_COPY: &str = "Use the copy in encounters";
-pub(crate) const USE_COPY_RESULT: &str = "Encounters now use the copy.";
+pub(crate) const USE_COPY_RESULT: Sentence = crate::sentence!("Encounters now use the copy.");
 
 /// Why source editing is blocked for a file that the system will not read.
 const UNREAD_EDIT: design::outcome::Sentence =
@@ -270,7 +274,7 @@ type DraftParts<'a> = (
     &'a mut LibraryKept,
     &'a mut String,
     &'a mut u64,
-    &'a mut Option<String>,
+    &'a mut Option<PageError>,
 );
 
 /// One file in the Library: its owner (kind and id) and its path in the owner's folder. Two
@@ -493,20 +497,138 @@ fn add_results<'a>(
     }
 }
 
-/// The pane's message footer when it has no reader: below a form, or below the empty state of a
-/// scope with no entries. It holds the page's results and its error; `pressed` gets the press.
-/// The caller draws its body through the footer's `pane`, so the footer follows a short form.
-fn form_footer<'a>(
-    width: f32,
-    results: &'a ReaderResults,
-    (form_error, error): (Option<&'a str>, Option<&'a str>),
-    pressed: &'a std::cell::Cell<ResultPress>,
-) -> design::Footer<'a> {
-    let mut footer = design::Footer::new("library_form_footer", width.min(design::READER_MEASURE));
-    add_results(&mut footer, results, pressed);
-    page_error(&mut footer, form_error);
-    page_error(&mut footer, error);
-    footer
+/// What a press in a Library typed footer asks for (M-L0.4b). A kept result's press comes back
+/// with its ticket, which names the entry its line showed: the act runs only while that entry
+/// stands, so a press never reaches a newer result of the same kind or owner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LibraryPress {
+    /// The Undo of a result in the Library's own store (`LibraryKept`): the ticket gives its kind.
+    Undo,
+    /// The link offer's `Update <n> links`. The offer is a notice with no ticket (no ticketed
+    /// line of the typed footer has the info tone without an Undo): its press acts on the open
+    /// entry's offer that this frame's footer showed.
+    UpdateLinks,
+    /// The link update's Undo.
+    UndoLinks,
+    /// The registration's Undo.
+    UndoRegistration,
+    /// `Use the copy in encounters`, on the registration's line: the registration's ticket.
+    UseCopy,
+    /// The source change's Undo.
+    UndoRosters,
+}
+
+/// The page's last error (`Library::error`, the New entry form's `new_error`): the app's own
+/// words, a checked sentence, or words from outside the app (the system's, the workspace's,
+/// the content layer's), which only the typed footer's escape takes (ruling M17).
+#[derive(Clone, Debug, PartialEq)]
+enum PageError {
+    Own(Sentence),
+    Outside(String),
+    /// The app's own words, then the outside words that say why (`because`).
+    Because {
+        own: Sentence,
+        cause: String,
+        words: String,
+    },
+}
+
+impl From<String> for PageError {
+    fn from(words: String) -> Self {
+        Self::Outside(words)
+    }
+}
+
+impl PageError {
+    /// The app's own words `own`, then the outside words `cause`.
+    fn because(own: &Sentence, cause: String) -> Self {
+        Self::Because {
+            words: format!("{own} {cause}"),
+            own: own.clone(),
+            cause,
+        }
+    }
+
+    /// Its words, for the legacy footer lines and the tests.
+    fn words(&self) -> &str {
+        match self {
+            Self::Own(words) => words.as_str(),
+            Self::Outside(words) | Self::Because { words, .. } => words,
+        }
+    }
+}
+
+/// Why `Undo package choice` wrote nothing: the campaign's choices changed since (note §4).
+static CHOICES_CHANGED: Sentence = crate::sentence!(
+    "Campaign choices changed. Keep them and edit the package choices in Campaign."
+);
+/// Why `Undo unregister` wrote nothing: its folder holds another package now.
+static FOLDER_HOLDS_ANOTHER_PACKAGE: Sentence =
+    crate::sentence!("That folder now holds a different package.");
+/// Why loading stopped before it finished.
+static LOADING_STOPPED: Sentence = crate::sentence!("Library loading stopped. Reload to retry.");
+/// Why a new entry made in a package is not chosen for the open campaign (its cause follows).
+static ENTRY_NOT_CHOSEN: Sentence =
+    crate::sentence!("Entry created. Splat could not use it in this campaign.");
+/// Why a save's search for its moved file stopped: one folder has two files with its ID.
+static SEVERAL_FILES_KEEP_ONE: Sentence =
+    crate::sentence!("Several files have this entry’s ID. Keep one file, then try again.");
+/// Why a save's search for its moved file stopped: two folders have a file with its ID.
+static SEVERAL_FILES_CHOOSE_ONE: Sentence =
+    crate::sentence!("Several files have this entry’s ID. Choose one in Library.");
+/// Why a new entry was not made: its name.
+static NAME_WITHOUT_SEPARATORS: Sentence =
+    crate::sentence!("Use a name without path separators or line breaks.");
+
+/// A fault of the Library page, as its typed footer states it.
+enum LibraryFault<'a> {
+    /// The app's own words, checked.
+    Own(&'a Sentence),
+    /// Words from outside the app: the system's or the workspace's.
+    Error(&'a str),
+    /// The app's own words, then the outside words that say why.
+    Because(&'a Sentence, &'a str),
+}
+
+impl<'a> From<&'a PageError> for LibraryFault<'a> {
+    fn from(error: &'a PageError) -> Self {
+        match error {
+            PageError::Own(words) => Self::Own(words),
+            PageError::Outside(words) => Self::Error(words),
+            PageError::Because { own, cause, .. } => Self::Because(own, cause),
+        }
+    }
+}
+
+impl design::outcome::Fault for LibraryFault<'_> {
+    fn severity(&self) -> design::outcome::Severity {
+        // An act's write or read did not work: the error tone, as the legacy line had.
+        design::outcome::Severity::NotSaved
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the page’s error carries the system’s or the workspace’s words (ruling M17)"
+    )]
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::Own(words) => (*words).clone(),
+            Self::Because(own, cause) => match Sentence::outside(*cause) {
+                Some(cause) => (*own).clone().then(cause),
+                None => (*own).clone(),
+            },
+            // `Error:` leads, as before; the words after it keep their spelling (a path).
+            Self::Error(words) => Sentence::outside_after(crate::lead!("Error:"), *words)
+                .unwrap_or(crate::sentence!("Something went wrong.")),
+        }
+    }
+}
+
+/// The page's errors as typed footer faults: a form's own error first, then the page's.
+fn page_faults(messages: &mut Messages<'_, LibraryPress>, errors: &[Option<&PageError>]) {
+    for error in errors.iter().flatten() {
+        messages.outcome(FaultMessage::new(&LibraryFault::from(*error)));
+    }
 }
 
 /// What the DM pressed in the reader's messages in the pane's message footer.
@@ -793,6 +915,16 @@ const SOURCE_CHANGE_UNDO: UndoStep = UndoStep::words("Undo source change");
 /// One file made a separate entry from Library's duplicate warning: its result's Undo. World's
 /// own Undo of the same act names its file (`Undo separate <file>`); this one is Library's.
 const SEPARATE_ENTRY_UNDO: UndoStep = UndoStep::words("Undo separate entry");
+/// `Choose all` on a package About page: its result's Undo.
+const PACKAGE_CHOICE_UNDO: UndoStep = UndoStep::words("Undo package choice");
+/// A link update after a rename: its result's Undo.
+const LINK_UPDATE_UNDO: UndoStep = UndoStep::words("Undo link update");
+/// Why an act waits for a campaign entry's draft, as a typed lock: `DraftBlocks`' own words.
+static DRAFT_BLOCKS_IN_CAMPAIGN: Sentence =
+    crate::sentence!("Save or discard to copy, add an entry, change packages or switch campaign.");
+/// Why an act waits for a package entry's draft, as a typed lock: `DraftBlocks`' own words.
+static DRAFT_BLOCKS_IN_PACKAGE: Sentence =
+    crate::sentence!("Save or discard to copy, add an entry or change packages.");
 
 /// Why the page's other actions wait while the open entry's file changed on disk.
 static CHANGED_FILE_FIRST: design::outcome::Sentence =
@@ -1221,10 +1353,38 @@ struct DuplicateIndex {
     keys: std::collections::HashMap<String, Vec<usize>>,
 }
 
+/// An entry as other entries name it: its id, and its key when it has one.
+type EntryRef = (Uuid, Option<String>);
+
+/// The entries that need one entry, by name, as `Loaded` keeps them: a lookup hands out the
+/// kept names (an `Arc`), never a copy. Only `new` makes one, from names just found, so every
+/// copy of names is counted in tests.
+#[derive(Clone, Default)]
+struct DependentNames(std::sync::Arc<[String]>);
+
+impl DependentNames {
+    fn new(names: Vec<String>) -> Self {
+        #[cfg(test)]
+        DEPENDENT_NAMES.with(|copied| copied.set(copied.get() + names.len()));
+        Self(names.into())
+    }
+}
+
+impl std::ops::Deref for DependentNames {
+    type Target = [String];
+    fn deref(&self) -> &[String] {
+        &self.0
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     /// How many times the notes were read to count a rename's links.
     static RENAME_LINK_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times the notes were read to find the entries that need one entry.
+    static DEPENDENT_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many dependent names were copied into a new `DependentNames`.
+    static DEPENDENT_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The link index a scan used, and each listed entry's position and broken link count.
@@ -1280,6 +1440,10 @@ pub(crate) struct Loaded {
     /// How many links a rename's offer would change, for its old and new names. A reload (a new
     /// `Loaded`) or an edited note (`invalidate`) counts them again.
     rename_links: std::sync::Mutex<Option<((String, String), usize)>>,
+    /// The entries that need an entry (by its id and key), by name: Remove's result and a
+    /// deleted draft's warning show them in every frame. A reload (a new `Loaded`) or an edited
+    /// note (`invalidate`) finds them again.
+    dependents: std::sync::Mutex<std::collections::HashMap<EntryRef, DependentNames>>,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -1476,28 +1640,42 @@ impl Loaded {
                 .collect()
         })
     }
-    fn dependents(&self, note: &Note) -> Vec<String> {
+    fn dependents(&self, note: &Note) -> DependentNames {
         let Some(id) = crate::content_workspace::note_id(&note.text) else {
-            return Vec::new();
+            return DependentNames::default();
         };
-        self.notes
-            .iter()
-            .filter_map(|other| {
-                let entry = other.entry.as_ref()?;
-                (entry.id != id
-                    && content::required_references(entry).is_ok_and(|refs| {
-                        refs.contains(&content::Reference::Id(id))
-                            || note
-                                .entry
-                                .as_ref()
-                                .and_then(|entry| entry.key.as_ref())
-                                .is_some_and(|key| {
-                                    refs.contains(&content::Reference::Key(key.clone()))
-                                })
-                    }))
-                .then(|| entry.name.clone())
-            })
-            .collect()
+        let known = (id, note.entry.as_ref().and_then(|entry| entry.key.clone()));
+        let mut cache = self
+            .dependents
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(names) = cache.get(&known) {
+            return names.clone();
+        }
+        #[cfg(test)]
+        DEPENDENT_SCANS.with(|scans| scans.set(scans.get() + 1));
+        let names = DependentNames::new(
+            self.notes
+                .iter()
+                .filter_map(|other| {
+                    let entry = other.entry.as_ref()?;
+                    (entry.id != id
+                        && content::required_references(entry).is_ok_and(|refs| {
+                            refs.contains(&content::Reference::Id(id))
+                                || note
+                                    .entry
+                                    .as_ref()
+                                    .and_then(|entry| entry.key.as_ref())
+                                    .is_some_and(|key| {
+                                        refs.contains(&content::Reference::Key(key.clone()))
+                                    })
+                        }))
+                    .then(|| entry.name.clone())
+                })
+                .collect(),
+        );
+        cache.insert(known, names.clone());
+        names
     }
     fn duplicate_index(&self) -> &DuplicateIndex {
         self.duplicates.get_or_init(|| {
@@ -1877,6 +2055,10 @@ impl Loaded {
             .rename_links
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.dependents
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.subtitles.take();
         self.counts.take();
         self.duplicate_ids.take();
@@ -2288,16 +2470,18 @@ fn copy_choices(
 
 impl Registration {
     /// The result's words. They say what the registration did, not what the campaign uses now.
-    fn words(&self) -> String {
+    fn words(&self) -> Sentence {
         let name = &self.copy.module.name;
         match (self.clause, self.written.is_some()) {
-            (false, _) => format!("{name} is registered."),
-            (true, true) => {
-                format!("{name} is registered, with every entry chosen for this campaign.")
-            }
-            (true, false) => {
-                format!("{name} is registered, with no entries chosen for this campaign.")
-            }
+            (false, _) => crate::sentence!("{} is registered.", name),
+            (true, true) => crate::sentence!(
+                "{} is registered, with every entry chosen for this campaign.",
+                name
+            ),
+            (true, false) => crate::sentence!(
+                "{} is registered, with no entries chosen for this campaign.",
+                name
+            ),
         }
     }
 
@@ -2756,8 +2940,8 @@ impl ReaderResults {
     /// Undo says the reason under its own words, its room kept while open (R29), so the lock
     /// coming or going moves nothing below it. A reason shared by several Undos repeats: open
     /// debt (packet 2, the cut of ruling 3).
-    fn draft_lock(&self, step: UndoStep) -> design::outcome::Undo<()> {
-        let undo = step.pressed_as(());
+    fn draft_lock<A>(&self, step: UndoStep, id: A) -> design::outcome::Undo<A> {
+        let undo = step.pressed_as(id);
         if !self.lock_can_come && self.locked.is_none() {
             return undo;
         }
@@ -2833,7 +3017,8 @@ impl ReaderResults {
         add(ResultKind::Unregistered, page.unregistered.clone(), true);
         add(
             ResultKind::PackageUse,
-            self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()),
+            self.package_use
+                .then(|| PACKAGE_USE_RESULT.as_str().to_owned()),
             true,
         );
         add(
@@ -2965,28 +3150,28 @@ fn show_result(
                 pressed.package_use = design::undo_message(
                     ui,
                     Tone::Success,
-                    PACKAGE_USE_RESULT,
+                    PACKAGE_USE_RESULT.as_str(),
                     "Undo package choice",
                 );
             }
         }
         ResultKind::Manifest => {
             if let Some((words, _)) = &results.manifest {
-                let undo = results.draft_lock(step());
+                let undo = results.draft_lock(step(), ());
                 pressed.manifest =
                     design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
             }
         }
         ResultKind::Identities => {
             if let Some(words) = &results.identities {
-                let undo = results.draft_lock(step());
+                let undo = results.draft_lock(step(), ());
                 pressed.identities =
                     design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
             }
         }
         ResultKind::Identity => {
             if let Some(words) = &results.identity {
-                let undo = results.draft_lock(step());
+                let undo = results.draft_lock(step(), ());
                 pressed.identity =
                     design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
             }
@@ -2999,12 +3184,19 @@ fn show_result(
     }
 }
 
+/// Why the scope widened to show the entry `name`: the scope notice's one form of words.
+fn scope_notice_words(name: &str) -> Sentence {
+    crate::sentence!("Scope is now Everything, to show {}.", name)
+}
+
 /// The result of `Choose all` on a package About page.
-pub(crate) const PACKAGE_USE_RESULT: &str =
-    "Every entry in this package is now chosen for this campaign.";
+pub(crate) const PACKAGE_USE_RESULT: Sentence =
+    crate::sentence!("Every entry in this package is now chosen for this campaign.");
 
 /// Why a link update wrote nothing: the renamed entry changed on disk since the offer was made.
-pub(crate) const LINKS_NOT_CHANGED: &str = "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again.";
+pub(crate) static LINKS_NOT_CHANGED: Sentence = crate::sentence!(
+    "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again."
+);
 
 /// The warning for a draft whose file changed on disk (R10): the entry by its name, or `This
 /// entry` when it has none.
@@ -3661,7 +3853,7 @@ pub(crate) fn write_note(
         return Err("A note with this name already exists. Choose another name.".into());
     }
     if current.as_deref() != baseline {
-        return Err(NOTE_CHANGED.into());
+        return Err(NOTE_CHANGED.as_str().into());
     }
     // The system's words name no file; the DM reads which note and how to recover.
     let failed = crate::world::file_fault::write_error(relative);
@@ -4096,6 +4288,9 @@ pub struct Library {
     page_results: PageResults,
     /// Which page result's action the reader pressed, applied after the reader is drawn.
     page_pressed: PagePress,
+    /// The press in the empty reader's typed footer, applied after the pane is drawn, as the
+    /// reader's (`apply_footer_press`).
+    footer_press: Option<Press<LibraryPress>>,
     copied_package: Option<Module>,
     copy_name: String,
     copy_name_open: bool,
@@ -4131,7 +4326,7 @@ pub struct Library {
     typo_from: usize,
     section: Section,
     unreadable_kind: Option<Section>,
-    error: Option<String>,
+    error: Option<PageError>,
     form: bool,
     path: String,
     name: String,
@@ -4155,7 +4350,7 @@ pub struct Library {
     new_not_used: bool,
     /// The New entry form's last create error. It shows in the pane's message footer and ends
     /// when the form closes, the name changes, or an entry is created.
-    new_error: Option<String>,
+    new_error: Option<PageError>,
     package_not_used: bool,
     focus_package_name: bool,
     package_path: Option<PathBuf>,
@@ -4234,7 +4429,7 @@ fn file_line_row(ui: &mut egui::Ui, wrap: bool, add: impl FnOnce(&mut egui::Ui))
         },
     );
 }
-const NOTE_CHANGED: &str = "This entry changed on disk.";
+static NOTE_CHANGED: Sentence = crate::sentence!("This entry changed on disk.");
 /// What is on disk now, in place of what the draft started from.
 struct DiskChange {
     /// None when the file has gone, or cannot be read.
@@ -4257,7 +4452,7 @@ fn read_disk(root: &Path, relative: &str) -> Result<Option<String>, FileFault> {
 }
 
 /// Check readable and broken notes, so a move cannot create a second identity.
-fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String)>, String> {
+fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String)>, PageError> {
     let (entries, errors) = content::read_directory(root)?;
     let mut found = None;
     for path in entries
@@ -4273,9 +4468,7 @@ fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String
             .map_err(|e| FileFault::read(&path, &e).message())?;
         if crate::content_workspace::note_id(&text) == Some(id) {
             if found.is_some() {
-                return Err(
-                    "Several files have this entry’s ID. Keep one file, then try again.".into(),
-                );
+                return Err(PageError::Own(SEVERAL_FILES_KEEP_ONE.clone()));
             }
             found = Some((path, text));
         }
@@ -4305,6 +4498,196 @@ fn file_at(notes: &[Note], (owner, path): (OwnerKey, &str)) -> Option<usize> {
         .position(|note| note.owner.key() == owner && note.path == path)
 }
 impl Library {
+    /// The typed outcome of the Library's kept result `kind` (M-L0.4b), made from its data in
+    /// the store: its words and its Undo, with the lock the open draft puts on it (`results`).
+    /// The one place a kind's line is made for a typed footer. `None` for a kind that no typed
+    /// footer shows yet (the reader's and the editor's, in 4b-2) or whose data has gone.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a manifest write’s words start with the file’s path from disk (ruling M17)"
+    )]
+    fn outcome_of(
+        &self,
+        kind: KeptKind,
+        results: &ReaderResults,
+    ) -> Option<KeptOutcome<LibraryPress>> {
+        let undo = |step: UndoStep| step.pressed_as(LibraryPress::Undo);
+        Some(match kind {
+            KeptKind::Unregistered => {
+                let module = self.kept.unregistered()?;
+                // A finished change: the package left this campaign's lists.
+                Said::new(crate::sentence!(
+                    "{} is unregistered. Its files stay in {}.",
+                    module.name,
+                    module.path.display()
+                ))
+                .undo(undo(UndoStep::of(Verb::Unregister, module.name.as_str())))
+                .into()
+            }
+            KeptKind::PackageUse => Said::new(PACKAGE_USE_RESULT)
+                .undo(undo(PACKAGE_CHOICE_UNDO))
+                .into(),
+            KeptKind::Manifest => {
+                let write = self.kept.manifest()?;
+                let step = UndoStep::of(Verb::Write, write.path().to_string());
+                Said::new(
+                    Sentence::outside(write.message())
+                        .unwrap_or(crate::sentence!("The manifest was written again.")),
+                )
+                .undo(results.draft_lock(step, LibraryPress::Undo))
+                .into()
+            }
+            KeptKind::Removed => {
+                let LetGo { note, .. } = self.kept.removed()?;
+                let names = self
+                    .loaded
+                    .as_ref()
+                    .map(|loaded| loaded.dependents(note))
+                    .unwrap_or_default();
+                let words = if names.is_empty() {
+                    crate::sentence!("{} removed. Its draft was discarded.", note.name())
+                } else {
+                    crate::sentence!(
+                        "{} removed. Its draft was discarded. {} now needs a missing entry.",
+                        note.name(),
+                        name_list(&names)
+                    )
+                };
+                KeptOutcome::Notice(
+                    Notice::new(words),
+                    undo(UndoStep::of(Verb::Remove, note.name())),
+                )
+            }
+            KeptKind::ScopeNotice
+            | KeptKind::Identities
+            | KeptKind::Identity
+            | KeptKind::Discarded
+            | KeptKind::Heading
+            | KeptKind::Vital
+            | KeptKind::Copy => return None,
+        })
+    }
+
+    /// Why an act waits for the open draft, as a typed lock (`draft_reason`'s words).
+    fn draft_lock(&self) -> Option<Sentence> {
+        if self.disk_change.is_some() {
+            Some(CHANGED_FILE_FIRST.clone())
+        } else if self.dirty() {
+            Some(match self.draft_blocks() {
+                design::DraftBlocks::EntryInCampaign => DRAFT_BLOCKS_IN_CAMPAIGN.clone(),
+                design::DraftBlocks::EntryInPackage => DRAFT_BLOCKS_IN_PACKAGE.clone(),
+            })
+        } else {
+            None
+        }
+    }
+
+    /// The page's results and this pane's kept results as typed lines of a footer with no
+    /// reader: a form's, the empty scope's and the empty reader's (M-L0.4b). Each comes from its
+    /// own store, with its ticket, under the rules `show` gives the reader's legacy footer
+    /// (`PageResults`); `results` says whether this pane shows the package choice and the
+    /// manifest write, and the open draft's lock. The scope notice and the link offer have no
+    /// Undo: they are notices, in the info tone.
+    fn page_messages<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, LibraryPress>,
+        results: &ReaderResults,
+        campaigns: &Campaigns,
+    ) {
+        if let Some((name, _)) = self.kept.scope_notice() {
+            // It wrote nothing: the scope only widened to show the entry.
+            messages.outcome(Notice::new(scope_notice_words(name)));
+        }
+        // A link offer and a link result show only in their own entry's reader (or a form in
+        // its place).
+        let open = self.open_link_owner();
+        if let Some(shown) = open
+            .as_ref()
+            .and_then(|owner| self.renamed_links.get(owner))
+        {
+            let offer = shown.value();
+            let count = self.link_rename_count(&offer.old, &offer.new);
+            if count > 0 {
+                // The offer names both names, so the DM can check the words before the write.
+                messages.outcome(
+                    Notice::new(crate::sentence!(
+                        "Change links from “{}” to “{}”.",
+                        offer.old,
+                        offer.new
+                    ))
+                    .choice(Choice::named(
+                        crate::choice!("Update {}", design::count(count, "link", "links")),
+                        LibraryPress::UpdateLinks,
+                    )),
+                );
+            }
+        }
+        if let Some(shown) = open.as_ref().and_then(|owner| self.link_edits.get(owner)) {
+            messages.kept(shown.outcome(frame, |result| {
+                Said::new(crate::sentence!("Links now say “{}”.", result.new))
+                    .undo(LINK_UPDATE_UNDO.pressed_as(LibraryPress::UndoLinks))
+                    .into()
+            }));
+        }
+        // This campaign's newest registration result. Another campaign's stays in the store and
+        // shows there.
+        let registration = self.shown_registration(campaigns);
+        if let Some(owner) = &registration
+            && let Some(shown) = self.registrations.get(owner)
+        {
+            // The other choice starts below, at the message words. Only Undo is quiet.
+            let use_copy = (campaigns.active_campaign().is_some()
+                && self.rosters.get(owner).is_none())
+            .then(|| {
+                let choice = Choice::new(MessageChoice::Choice(USE_COPY), LibraryPress::UseCopy);
+                match self.draft_lock() {
+                    Some(reason) => choice.blocked(reason),
+                    None => choice,
+                }
+            });
+            messages.kept(shown.outcome(frame, |registered| {
+                // After an outside change the Undo stays, blocked, with its reason. The result
+                // still happened.
+                let undo = PACKAGE_REGISTRATION_UNDO.pressed_as(LibraryPress::UndoRegistration);
+                let undo = match registered.lock() {
+                    Some(reason) => undo.blocked(reason),
+                    None => undo,
+                };
+                let said = Said::new(registered.words()).undo(undo);
+                match use_copy {
+                    Some(choice) => said.choice(choice),
+                    None => said,
+                }
+                .into()
+            }));
+        }
+        if let Some(shown) = registration.and_then(|owner| self.rosters.get(&owner)) {
+            messages.kept(shown.outcome(frame, |source| {
+                let undo = SOURCE_CHANGE_UNDO.pressed_as(LibraryPress::UndoRosters);
+                let undo = if source.blocked {
+                    undo.blocked(crate::content_workspace::UNDO_ENDED_REASON)
+                } else {
+                    undo
+                };
+                Said::new(USE_COPY_RESULT).undo(undo).into()
+            }));
+        }
+        for (kind, shows) in [
+            (KeptKind::Unregistered, true),
+            (KeptKind::PackageUse, results.package_use),
+            (KeptKind::Manifest, results.manifest.is_some()),
+        ] {
+            if shows
+                && let Some(line) = self
+                    .kept
+                    .outcome(frame, kind, || self.outcome_of(kind, results))
+            {
+                messages.kept(line);
+            }
+        }
+    }
+
     /// The footer line of each kept result in `results` that the Library's store marks: its
     /// words with the order its act issued. The page's store-made lines (link offer, links,
     /// registration, rosters) are already in `results.page`.
@@ -4355,7 +4738,7 @@ impl Library {
                 // The draft changed: a failed Save of the old words no longer owns it.
                 *revision += 1;
             }
-            Err(failure) => *error = Some(failure),
+            Err(failure) => *error = Some(failure.into()),
         }
     }
 
@@ -4495,49 +4878,107 @@ impl Library {
         owner: &RegistrationOwner,
         campaigns: &mut Campaigns,
     ) -> Result<(), String> {
-        // Point 1 of the review: while another campaign chose the copy, Undo is refused; its
-        // choices there would name identities that Undo removes. Checked again here, at the
-        // press, as well as by the reconcile event that locks the Undo.
         let manifests = package_manifests(campaigns);
-        if self.registrations.get(owner).is_some()
-            && let Some(name) =
-                used_elsewhere(owner.package, owner.campaign, campaigns.all(), &manifests)
-        {
-            return Err(used_reason(&name).as_str().to_owned());
+        if self.registrations.get(owner).is_some() {
+            Self::registration_in_use(owner, campaigns, &manifests)?;
         }
         let rosters = &self.rosters;
         let (registered, ()) = self
             .registrations
             .undo(owner, |registered| {
-                let mut extra: Vec<_> = registered.campaign_undo(&manifests)?.into_iter().collect();
-                if let Some(source) = rosters.get(owner) {
-                    extra.extend(source.value().edits.inverse_files());
-                }
-                let edits = registered.copy.undo_with(extra)?;
-                if let Err(error) = campaigns.unregister_module(registered.copy.module.id) {
-                    return Err(match edits.undo() {
-                        Ok(()) => error,
-                        Err(restore) => format!("{error}. Could not restore the copy: {restore}"),
-                    });
-                }
-                Ok(())
+                Self::registration_undo(registered, rosters, owner, &manifests, campaigns)
             })
             .ok_or("No package registration to undo.")??;
-        // The source change it reversed ends with it; so does the result of choosing its
-        // entries, whose data the Undo also reversed.
+        self.registration_undone(owner, &registered, &manifests);
+        Ok(())
+    }
+
+    /// `undo_package_registration` by the ticket of the line pressed (M-L0.4b): a registration
+    /// replaced or ended since its line was drawn is gone, and nothing changes.
+    fn undo_registration_by(
+        &mut self,
+        ticket: Ticket,
+        campaigns: &mut Campaigns,
+    ) -> Result<(), String> {
+        let Some(owner) = self
+            .registrations
+            .get_by(&ticket)
+            .map(|shown| design::results::Kept::owner(shown.value()))
+        else {
+            return Ok(());
+        };
+        let manifests = package_manifests(campaigns);
+        Self::registration_in_use(&owner, campaigns, &manifests)?;
+        let rosters = &self.rosters;
+        let registered = match self.registrations.undo_by(ticket, |registered| {
+            Self::registration_undo(registered, rosters, &owner, &manifests, campaigns)
+        }) {
+            Ok((registered, ())) => registered,
+            Err(ByTicket::Gone) => return Ok(()),
+            Err(ByTicket::Failed(error)) => return Err(error),
+        };
+        self.registration_undone(&owner, &registered, &manifests);
+        Ok(())
+    }
+
+    /// Point 1 of the review: while another campaign chose the copy, Undo is refused; its
+    /// choices there would name identities that Undo removes. Checked again at the press, as
+    /// well as by the reconcile event that locks the Undo.
+    fn registration_in_use(
+        owner: &RegistrationOwner,
+        campaigns: &Campaigns,
+        manifests: &[Entry],
+    ) -> Result<(), String> {
+        match used_elsewhere(owner.package, owner.campaign, campaigns.all(), manifests) {
+            Some(name) => Err(used_reason(&name).as_str().to_owned()),
+            None => Ok(()),
+        }
+    }
+
+    /// The registration's Undo itself: one checked write of the copy, the campaign file and the
+    /// source change, then the unregister; a failed unregister puts the files back.
+    fn registration_undo(
+        registered: &Registration,
+        rosters: &design::Results<RegistrationOwner, RostersUse>,
+        owner: &RegistrationOwner,
+        manifests: &[Entry],
+        campaigns: &mut Campaigns,
+    ) -> Result<(), String> {
+        let mut extra: Vec<_> = registered.campaign_undo(manifests)?.into_iter().collect();
+        if let Some(source) = rosters.get(owner) {
+            extra.extend(source.value().edits.inverse_files());
+        }
+        let edits = registered.copy.undo_with(extra)?;
+        if let Err(error) = campaigns.unregister_module(registered.copy.module.id) {
+            return Err(match edits.undo() {
+                Ok(()) => error,
+                Err(restore) => format!("{error}. Could not restore the copy: {restore}"),
+            });
+        }
+        Ok(())
+    }
+
+    /// The registration's Undo worked. The source change it reversed ends with it; so does the
+    /// result of choosing its entries, whose data the Undo also reversed.
+    fn registration_undone(
+        &mut self,
+        owner: &RegistrationOwner,
+        registered: &Registration,
+        manifests: &[Entry],
+    ) {
         self.rosters.owner_changed(owner);
         let package = registered.copy.module.id;
         if self.kept.package_use().is_some_and(|undo| {
             registered.campaign.as_ref().map(|c| c.id) == Some(undo.campaign.id)
-                && undo.after.iter().any(|selection| {
-                    chosen_package(&selection.package, &manifests) == Some(package)
-                })
+                && undo
+                    .after
+                    .iter()
+                    .any(|selection| chosen_package(&selection.package, manifests) == Some(package))
         }) {
             let _ = self.kept.take_package_use();
         }
         self.content_changed = Some(registered.copy.module.path.clone());
         self.stale = true;
-        Ok(())
     }
 
     /// The registration whose result the page shows: the newest of the open campaign. Another
@@ -4607,15 +5048,34 @@ impl Library {
             holds(&undo.root, &undo.path, &undo.after)
                 && holds(&undo.root, &undo.copied_path, &undo.copied_text)
         });
-        // Its Undo checks the package choices only, so other campaign edits keep it.
+        // Its Undo checks the package choices only, so other campaign edits keep it. It ends
+        // only when a read proves the choices differ: a campaign file that cannot be read now
+        // keeps it, as its failed Undo does (note §4), so the DM can try again once it reads.
         if self.kept.package_use().is_some_and(|undo| {
-            !CampaignDocument::load(&undo.campaign)
-                .is_ok_and(|document| document.selections == undo.after)
+            CampaignDocument::load(&undo.campaign)
+                .is_ok_and(|document| document.selections != undo.after)
         }) {
             let _ = self.kept.take_package_use();
         }
         self.link_edits
             .disk_changed(|result| result.edits.on_disk());
+    }
+
+    /// A new entry made in a package is chosen for the open campaign, unless the DM unticked
+    /// it. `Err`: why it could not be, in the app's words with the cause after them.
+    fn choose_new_entry(
+        &self,
+        owner: &Owner,
+        entry: Uuid,
+        campaigns: &Campaigns,
+    ) -> Result<(), PageError> {
+        let (false, Owner::Package(module), Some(campaign)) =
+            (self.new_not_used, owner, campaigns.active_campaign())
+        else {
+            return Ok(());
+        };
+        crate::content_workspace::use_in_campaign(&campaign, module.id, &module.name, Some(entry))
+            .map_err(|cause| PageError::because(&ENTRY_NOT_CHOSEN, cause))
     }
 
     /// The manifest repair: `Package.md` written again for `module`. Its result, with Undo, is
@@ -4627,7 +5087,7 @@ impl Library {
                 self.stale = true;
                 self.content_changed = Some(module.path);
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.error = Some(error.into()),
         }
     }
 
@@ -4653,7 +5113,7 @@ impl Library {
                 self.reconcile_registrations(campaigns);
                 self.content_changed = Some(campaign.path);
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.error = Some(error.into()),
         }
     }
 
@@ -4814,7 +5274,7 @@ impl Library {
     }
 
     pub fn report_error(&mut self, error: String) {
-        self.error = Some(error);
+        self.error = Some(error.into());
     }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
@@ -4921,7 +5381,7 @@ impl Library {
         if !note.is_manifest() && !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
             self.kept
-                .set_scope_notice(format!("Scope is now Everything, to show {}.", note.name()));
+                .set_scope_notice((note.name().to_owned(), Scope::All));
         }
         self.selected = Some(index);
         self.draft = note.text.clone();
@@ -5332,12 +5792,12 @@ impl Library {
                             self.loaded = Some(l);
                             self.invalidate();
                         }
-                        Err(e) => self.error = Some(e),
+                        Err(e) => self.error = Some(e.into()),
                     }
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
-                    self.error = Some("Library loading stopped. Reload to retry.".into());
+                    self.error = Some(PageError::Own(LOADING_STOPPED.clone()));
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
@@ -5652,7 +6112,11 @@ impl Library {
             registration: registration.and_then(|owner| {
                 let shown = self.registrations.get(&owner)?;
                 let lock = shown.value().lock();
-                Some((shown.footer(Registration::words), lock, owner))
+                Some((
+                    shown.footer(|registered| registered.words().as_str().to_owned()),
+                    lock,
+                    owner,
+                ))
             }),
             use_copy: registration
                 .filter(|owner| {
@@ -5663,11 +6127,17 @@ impl Library {
                 .and_then(|owner| self.rosters.get(&owner))
                 .map(|shown| {
                     let blocked = shown.value().blocked;
-                    (shown.footer(|_| USE_COPY_RESULT.to_owned()), blocked)
+                    (
+                        shown.footer(|_| USE_COPY_RESULT.as_str().to_owned()),
+                        blocked,
+                    )
                 }),
             // Round 25 FG4: the unregister result sits in the pane's message footer, so the scope,
             // the search and the list never move when it comes or goes.
-            scope_notice: self.kept.scope_notice().cloned(),
+            scope_notice: self
+                .kept
+                .scope_notice()
+                .map(|(name, _)| scope_notice_words(name).as_str().to_owned()),
             unregistered: self.kept.unregistered().map(|module| {
                 format!(
                     "{} is unregistered. Its files stay in {}.",
@@ -5687,7 +6157,7 @@ impl Library {
         let Some(loaded) = &self.loaded else {
             // Nothing loaded: there is no pane, so a failed load says so here.
             if let Some(error) = &self.error {
-                design::message_with_code(ui, Tone::Error, &format!("Error: {error}"));
+                design::message_with_code(ui, Tone::Error, &format!("Error: {}", error.words()));
             }
             return;
         };
@@ -5733,6 +6203,18 @@ impl Library {
             .map(|(_, counts)| counts.clone())
             .unwrap_or_default();
         let searching = !self.search.trim().is_empty();
+        // The scope notice stands while the list keeps the scope it widened to, with no query:
+        // the DM's own scope change or search ends it. (`open_entry` changes the scope itself,
+        // so the list's last scope is not the notice's: comparing with it ended the notice in
+        // the frame after it came, before any footer drew it.) Settled here, before every
+        // footer of the page: the empty scope's, a form's and the reader's.
+        if self
+            .kept
+            .scope_notice()
+            .is_some_and(|(_, widened)| *widened != scope || searching)
+        {
+            let _ = self.kept.take_scope_notice();
+        }
         let empty_scope = scope == Scope::Campaign && count_of(Section::All, &counts) == 0;
         if empty_scope {
             ui.scope(|ui| {
@@ -5748,25 +6230,11 @@ impl Library {
             });
             // Round 26 review: the page's results and error sit in this pane's footer too, below
             // the form or the empty state.
-            let mut results = ReaderResults {
-                page: std::mem::take(&mut self.page_results),
-                ..Default::default()
-            };
-            results.lines = self.kept_lines(&results);
-            let pressed = std::cell::Cell::new(ResultPress::default());
-            let (new_error, error) = (self.new_error.clone(), self.error.clone());
-            // The footer holds its own lines: the body below changes the Library.
-            let footer = form_footer(
-                ui.available_width(),
-                &results,
-                (
-                    self.new_form.then_some(new_error.as_deref()).flatten(),
-                    error.as_deref(),
-                ),
-                &pressed,
-            );
+            let frame = PaneFrame::new(ui);
+            let messages = self.form_messages(&frame, ui.available_width(), campaigns);
             let mut can_use = false;
-            footer.pane(ui, design::Body::Content, |ui| {
+            // The footer holds its own lines: the body below changes the Library.
+            let paned = messages.pane(ui, design::Body::Content, |ui| {
                 if self.new_form {
                     self.new_entry(ui, dirty, campaigns);
                 } else {
@@ -5802,9 +6270,9 @@ impl Library {
             if can_use {
                 self.scope = Scope::Uses;
             }
-            self.page_pressed = pressed.get().page;
-            let pressed = std::mem::take(&mut self.page_pressed);
-            self.apply_page_press(pressed, campaigns);
+            if let Some(press) = paned.pressed {
+                self.apply_footer_press(press, campaigns);
+            }
             return;
         }
         if !compact && self.disk_change.is_none() {
@@ -5968,14 +6436,6 @@ impl Library {
         let searching = !query.is_empty();
         let filtering =
             (self.section == Section::Creatures || searching) && !self.filter.is_empty();
-        if self.matches_scope != Some(scope)
-            || self
-                .matches
-                .as_ref()
-                .is_some_and(|(_, prior, _)| *prior != query)
-        {
-            let _ = self.kept.take_scope_notice();
-        }
         if self.matches_scope != Some(scope)
             || self
                 .matches
@@ -6347,37 +6807,50 @@ impl Library {
                 if self.form || self.new_form {
                     // A form has no reader: the page's results sit in the pane's message footer,
                     // `S` below a short form, pinned under a long one (round 26; round 28 pane).
-                    let mut results = ReaderResults {
-                        page: std::mem::take(&mut self.page_results),
-                        ..Default::default()
-                    };
-                    results.lines = self.kept_lines(&results);
-                    let pressed = std::cell::Cell::new(ResultPress::default());
-                    let (new_error, error) = (self.new_error.clone(), self.error.clone());
+                    let frame = PaneFrame::new(ui);
+                    let messages = self.form_messages(&frame, ui.available_width(), campaigns);
                     // The footer holds its own lines: the form below changes the Library.
-                    let footer = form_footer(
-                        ui.available_width(),
-                        &results,
-                        (
-                            self.new_form.then_some(new_error.as_deref()).flatten(),
-                            error.as_deref(),
-                        ),
-                        &pressed,
-                    );
-                    footer.pane(ui, design::Body::Content, |ui| {
+                    let paned = messages.pane(ui, design::Body::Content, |ui| {
                         if self.form {
                             self.package_form(ui, campaigns);
                         } else {
                             self.new_entry(ui, dirty, campaigns);
                         }
                     });
-                    self.page_pressed = pressed.get().page;
+                    self.footer_press = paned.pressed;
                 } else {
                     self.editor(ui, &subtitle, campaigns);
                 }
             });
         let pressed = std::mem::take(&mut self.page_pressed);
         self.apply_page_press(pressed, campaigns);
+        if let Some(press) = self.footer_press.take() {
+            self.apply_footer_press(press, campaigns);
+        }
+    }
+
+    /// The footer of a pane with no reader below a form or the empty scope (M-L0.4b): the
+    /// page's results, then the form's own error and the page's, typed.
+    fn form_messages<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        width: f32,
+        campaigns: &Campaigns,
+    ) -> Messages<'f, LibraryPress> {
+        let mut messages = Messages::new(
+            frame,
+            "library_form_footer",
+            width.min(design::READER_MEASURE),
+        );
+        self.page_messages(frame, &mut messages, &ReaderResults::default(), campaigns);
+        page_faults(
+            &mut messages,
+            &[
+                self.new_error.as_ref().filter(|_| self.new_form),
+                self.error.as_ref(),
+            ],
+        );
+        messages
     }
 
     /// The open entry's identity and root: what owns a link offer and its result.
@@ -6404,12 +6877,14 @@ impl Library {
         if pressed.unregistered
             && let Some(module) = self.kept.unregistered().cloned()
         {
-            let result = local_module(&module.path).and_then(|found| {
-                if found.id != module.id {
-                    return Err("That folder now holds a different package.".into());
-                }
-                campaigns.restore_module(module)
-            });
+            let result = local_module(&module.path)
+                .map_err(PageError::from)
+                .and_then(|found| {
+                    if found.id != module.id {
+                        return Err(PageError::Own(FOLDER_HOLDS_ANOTHER_PACKAGE.clone()));
+                    }
+                    campaigns.restore_module(module).map_err(PageError::from)
+                });
             match result {
                 Ok(()) => {
                     let _ = self.kept.take_unregistered();
@@ -6431,7 +6906,7 @@ impl Library {
             // write (after the scan and after each linking file is checked against the disk),
             // against the entry's own file on disk. A stale offer goes and writes nothing.
             if !loaded.offer_holds(&offer) {
-                self.error = Some(LINKS_NOT_CHANGED.into());
+                self.error = Some(PageError::Own(LINKS_NOT_CHANGED.clone()));
             } else {
                 let files: Vec<_> = loaded
                     .notes
@@ -6454,7 +6929,7 @@ impl Library {
                     if loaded.offer_holds_on_disk(&offer) {
                         Ok(())
                     } else {
-                        Err(LINKS_NOT_CHANGED.into())
+                        Err(LINKS_NOT_CHANGED.as_str().into())
                     }
                 });
                 let LinkOffer {
@@ -6478,7 +6953,7 @@ impl Library {
                         self.content_changed =
                             campaigns.active_campaign().map(|campaign| campaign.path);
                     }
-                    Err(error) => self.error = Some(error),
+                    Err(error) => self.error = Some(error.into()),
                 }
             }
         }
@@ -6490,35 +6965,14 @@ impl Library {
             // its Undo.
             match self.link_edits.undo(owner, |result| result.edits.undo()) {
                 None => {}
-                Some(Ok((result, ()))) => {
-                    // The links say the old name again: the rename's offer comes back in the
-                    // result's place, with a new order. The reload checks it again, as every
-                    // offer. The offer keeps the source version it was made from: its write
-                    // checks it again.
-                    let LinkResult {
-                        owner,
-                        source,
-                        old,
-                        new,
-                        ..
-                    } = result;
-                    self.renamed_links.record(LinkOffer {
-                        owner,
-                        source,
-                        old,
-                        new,
-                    });
-                    self.stale = true;
-                    self.content_changed =
-                        campaigns.active_campaign().map(|campaign| campaign.path);
-                }
-                Some(Err(error)) => self.error = Some(error),
+                Some(Ok((result, ()))) => self.links_undone(result, campaigns),
+                Some(Err(error)) => self.error = Some(error.into()),
             }
         }
         if let Some(owner) = pressed.registration
             && let Err(error) = self.undo_package_registration(&owner, campaigns)
         {
-            self.error = Some(error);
+            self.error = Some(error.into());
         }
         // The use changes here; the registration's clause ends at this write's event
         // (`reconcile_registrations`), as for every other use change.
@@ -6538,21 +6992,125 @@ impl Library {
                     self.stale = true;
                     self.reconcile_registrations(campaigns);
                 }
-                Err(error) => self.error = Some(error),
+                Err(error) => self.error = Some(error.into()),
             }
         }
         if let Some(owner) = pressed.rosters {
             match self.rosters.undo(&owner, |source| source.edits.undo()) {
-                Some(Ok(_)) => {
-                    self.content_changed =
-                        campaigns.active_campaign().map(|campaign| campaign.path);
-                    self.stale = true;
-                    self.reconcile_registrations(campaigns);
-                }
-                Some(Err(error)) => self.error = Some(error),
+                Some(Ok(_)) => self.rosters_undone(campaigns),
+                Some(Err(error)) => self.error = Some(error.into()),
                 None => {}
             }
         }
+    }
+
+    /// A press in a Library typed footer (M-L0.4b), in the frame of the press, after the pane is
+    /// drawn. A kept result's press acts by its ticket: on the entry its line showed, while that
+    /// entry stands. A ticket of a result replaced or ended since does nothing.
+    fn apply_footer_press(
+        &mut self,
+        Press { id, ticket }: Press<LibraryPress>,
+        campaigns: &mut Campaigns,
+    ) {
+        if id == LibraryPress::UpdateLinks {
+            // The offer's notice has no ticket: the open entry's offer, which this frame's
+            // footer showed (`LibraryPress::UpdateLinks`).
+            self.apply_page_press(
+                PagePress {
+                    link_offer: true,
+                    ..Default::default()
+                },
+                campaigns,
+            );
+            return;
+        }
+        let Some(ticket) = ticket else {
+            return;
+        };
+        match id {
+            LibraryPress::Undo => match self.kept.kind_by(&ticket) {
+                // The flag's path acts on the result the ticket names: its kind holds one.
+                Some(KeptKind::Unregistered) => self.apply_page_press(
+                    PagePress {
+                        unregistered: true,
+                        ..Default::default()
+                    },
+                    campaigns,
+                ),
+                Some(KeptKind::PackageUse) => self.undo_package_use(),
+                Some(KeptKind::Manifest) => self.undo_manifest(),
+                // Gone (replaced or ended since its line was drawn), or a kind that no typed
+                // footer shows yet.
+                _ => {}
+            },
+            LibraryPress::UndoLinks => {
+                match self
+                    .link_edits
+                    .undo_by(ticket, |result| result.edits.undo())
+                {
+                    Ok((result, ())) => self.links_undone(result, campaigns),
+                    Err(ByTicket::Failed(error)) => self.error = Some(error.into()),
+                    Err(ByTicket::Gone) => {}
+                }
+            }
+            LibraryPress::UndoRegistration => {
+                if let Err(error) = self.undo_registration_by(ticket, campaigns) {
+                    self.error = Some(error.into());
+                }
+            }
+            LibraryPress::UseCopy => {
+                // The registration the line showed, in the frame of the press.
+                if let Some(owner) = self
+                    .registrations
+                    .get_by(&ticket)
+                    .map(|shown| design::results::Kept::owner(shown.value()))
+                {
+                    self.apply_page_press(
+                        PagePress {
+                            use_copy: Some(owner),
+                            ..Default::default()
+                        },
+                        campaigns,
+                    );
+                }
+            }
+            LibraryPress::UndoRosters => {
+                match self.rosters.undo_by(ticket, |source| source.edits.undo()) {
+                    Ok(_) => self.rosters_undone(campaigns),
+                    Err(ByTicket::Failed(error)) => self.error = Some(error.into()),
+                    Err(ByTicket::Gone) => {}
+                }
+            }
+            LibraryPress::UpdateLinks => {}
+        }
+    }
+
+    /// A link update's Undo worked: the links say the old name again, so the rename's offer
+    /// comes back in the result's place, with a new order. The reload checks it again, as every
+    /// offer. The offer keeps the source version it was made from: its write checks it again.
+    fn links_undone(&mut self, result: LinkResult, campaigns: &Campaigns) {
+        let LinkResult {
+            owner,
+            source,
+            old,
+            new,
+            ..
+        } = result;
+        self.renamed_links.record(LinkOffer {
+            owner,
+            source,
+            old,
+            new,
+        });
+        self.stale = true;
+        self.content_changed = campaigns.active_campaign().map(|campaign| campaign.path);
+    }
+
+    /// The source change's Undo worked.
+    fn rosters_undone(&mut self, campaigns: &Campaigns) {
+        self.content_changed = campaigns.active_campaign().map(|campaign| campaign.path);
+        self.stale = true;
+        self.reconcile_registrations(campaigns);
     }
 
     /// What the catalogue shows. Choosing here never changes the active campaign.
@@ -6752,7 +7310,7 @@ impl Library {
                 self.scope = Scope::default();
                 self.stale = true;
             }
-            Err(e) => self.error = Some(e),
+            Err(e) => self.error = Some(e.into()),
         }
     }
 
@@ -6860,7 +7418,7 @@ impl Library {
                                 self.stale = true;
                             }
                             Ok(None) => {}
-                            Err(error) => self.error = Some(error),
+                            Err(error) => self.error = Some(error.into()),
                         }
                     }
                 }
@@ -6948,7 +7506,7 @@ impl Library {
                         if register {
                             if self.copy_name_open {
                                 if let Err(error) = self.register_copy(campaigns) {
-                                    self.error = Some(error);
+                                    self.error = Some(error.into());
                                 }
                             } else {
                                 self.copy_name_open = true;
@@ -7101,7 +7659,7 @@ impl Library {
                                     self.focus_new_name = true;
                                     self.stale = true;
                                 }
-                                Err(error) => self.error = Some(error),
+                                Err(error) => self.error = Some(error.into()),
                             }
                         }
                     }
@@ -7352,8 +7910,7 @@ impl Library {
                     if create {
                         let name = self.new_name.trim();
                         if name.contains(['/', '\\', '\n', '\r']) || name == "." || name == ".." {
-                            self.new_error =
-                                Some("Use a name without path separators or line breaks.".into());
+                            self.new_error = Some(PageError::Own(NAME_WITHOUT_SEPARATORS.clone()));
                             return;
                         }
                         let path = relative.clone();
@@ -7364,22 +7921,7 @@ impl Library {
                         let left = self.here();
                         match write_note(&root, &path, None, &text) {
                             Ok(entry) => {
-                                let used =
-                                    if !self.new_not_used && matches!(owner, Owner::Package(_)) {
-                                        campaigns
-                                            .active_campaign()
-                                            .map(|campaign| {
-                                                crate::content_workspace::use_in_campaign(
-                                                    &campaign,
-                                                    owner.id().unwrap(),
-                                                    owner.source(),
-                                                    Some(entry.id),
-                                                )
-                                            })
-                                            .transpose()
-                                    } else {
-                                        Ok(None)
-                                    };
+                                let used = self.choose_new_entry(&owner, entry.id, campaigns);
                                 let l = self.loaded.as_mut().unwrap();
                                 if !self.new_not_used
                                     && used.is_ok()
@@ -7417,11 +7959,7 @@ impl Library {
                                 self.new_error = None;
                                 self.new_folder.clear();
                                 self.new_form = false;
-                                self.error = used.err().map(|error| {
-                                    format!(
-                                        "Entry created. Could not use it in this campaign: {error}"
-                                    )
-                                });
+                                self.error = used.err();
                                 // Show the new entry, wherever the DM chose to put it.
                                 if self
                                     .selected
@@ -7431,7 +7969,7 @@ impl Library {
                                 }
                                 self.content_changed = Some(root);
                             }
-                            Err(e) => self.new_error = Some(e),
+                            Err(e) => self.new_error = Some(e.into()),
                         }
                     }
                 })();
@@ -7526,10 +8064,7 @@ impl Library {
                         };
                         if let Some((path, text)) = moved_note(owner.root().unwrap(), id, old)? {
                             if found.is_some() {
-                                return Err(
-                                    "Several files have this entry’s ID. Choose one in Library."
-                                        .to_owned(),
-                                );
+                                return Err(PageError::Own(SEVERAL_FILES_CHOOSE_ONE.clone()));
                             }
                             found = Some((owner, path, text));
                         }
@@ -7548,7 +8083,7 @@ impl Library {
                             moved_to: Some(note.path.clone()),
                             fault: None,
                         });
-                        self.error = Some(NOTE_CHANGED.into());
+                        self.error = Some(PageError::Own(NOTE_CHANGED.clone()));
                         return;
                     }
                     file_gone = false;
@@ -7570,7 +8105,7 @@ impl Library {
             Elsewhere(String),
             Back(Option<String>),
             Unread(FileFault),
-            Failed(String),
+            Failed(PageError),
         }
         let gone = {
             let note = &self.loaded.as_ref().unwrap().notes[i];
@@ -7595,9 +8130,10 @@ impl Library {
         match gone {
             Some(Gone::Create) => file_gone = true,
             Some(Gone::Elsewhere(path)) => {
-                self.error = Some(format!(
-                    "Not saved. This package’s manifest is now in {path}. Reload from disk to open it there."
-                ));
+                self.error = Some(PageError::Own(crate::sentence!(
+                    "Not saved. This package’s manifest is now in {}. Reload from disk to open it there.",
+                    path
+                )));
                 return;
             }
             Some(Gone::Failed(error)) => {
@@ -7705,7 +8241,7 @@ impl Library {
                         fault: Some(fault),
                     });
                 }
-                Ok(text) if e == NOTE_CHANGED => {
+                Ok(text) if e == NOTE_CHANGED.as_str() => {
                     self.disk_change = Some(DiskChange {
                         moved_to: None,
                         text,
@@ -7736,33 +8272,65 @@ impl Library {
     /// page results' presses wait until the reader is drawn.
     fn apply_package_results(&mut self, pressed: &ResultPress) {
         self.page_pressed = pressed.page;
-        if pressed.package_use
-            && let Some(undo) = self.kept.take_package_use()
-        {
-            let result = crate::content_workspace::CampaignDocument::load(&undo.campaign).and_then(|mut document| {
-                if document.selections != undo.after { return Err("Campaign choices changed. Keep them and edit the package choices in Campaign.".into()); }
-                document.selections = undo.before;
-                document.save()
-            });
-            match result {
-                Ok(()) => {
-                    self.stale = true;
-                    self.content_changed = Some(undo.campaign.path);
-                }
-                Err(error) => self.error = Some(error),
-            }
+        if pressed.package_use {
+            self.undo_package_use();
         }
-        if pressed.manifest
-            && let Some(write) = self.kept.manifest()
-        {
-            match write.undo() {
-                Ok(root) => {
-                    self.content_changed = Some(root);
-                    let _ = self.kept.take_manifest();
-                    self.stale = true;
+        if pressed.manifest {
+            self.undo_manifest();
+        }
+    }
+
+    /// Undo package choice (note §4, M-L0.4b): the campaign's choices go back to what they
+    /// were, and the result leaves only when that write works. A file that cannot be read or
+    /// written keeps the result and its Undo, with the error, so the DM can try again. Choices
+    /// changed since (by the DM, in Campaign or another page) end it with the words that say
+    /// so, as a reload would: Undo would undo those changes too.
+    fn undo_package_use(&mut self) {
+        /// Why the Undo wrote nothing.
+        enum NotUndone {
+            Changed,
+            Failed(String),
+        }
+        let Some(undo) = self.kept.package_use() else {
+            return;
+        };
+        let result = CampaignDocument::load(&undo.campaign)
+            .map_err(NotUndone::Failed)
+            .and_then(|mut document| {
+                if document.selections != undo.after {
+                    return Err(NotUndone::Changed);
                 }
-                Err(error) => self.error = Some(error),
+                document.selections = undo.before.clone();
+                document.save().map_err(NotUndone::Failed)
+            });
+        match result {
+            Ok(()) => {
+                let path = undo.campaign.path.clone();
+                let _ = self.kept.take_package_use();
+                self.stale = true;
+                self.content_changed = Some(path);
             }
+            Err(NotUndone::Changed) => {
+                let _ = self.kept.take_package_use();
+                self.error = Some(PageError::Own(CHOICES_CHANGED.clone()));
+            }
+            Err(NotUndone::Failed(error)) => self.error = Some(error.into()),
+        }
+    }
+
+    /// Undo write of a manifest: the file gets its old text back. A failure keeps the result
+    /// and its Undo, with the error.
+    fn undo_manifest(&mut self) {
+        let Some(write) = self.kept.manifest() else {
+            return;
+        };
+        match write.undo() {
+            Ok(root) => {
+                self.content_changed = Some(root);
+                let _ = self.kept.take_manifest();
+                self.stale = true;
+            }
+            Err(error) => self.error = Some(error.into()),
         }
     }
 
@@ -7801,45 +8369,28 @@ impl Library {
             page: std::mem::take(&mut self.page_results),
             ..Default::default()
         };
-        // With no entry open, the results and Remove's notice sit in the pane's message footer,
-        // below the empty reader (round 26). Its id is the reader's, so one pane has one footer.
-        let gone_notice = self.kept.removed().map(|LetGo { note, .. }| {
-            let names = self
-                .loaded
-                .as_ref()
-                .map(|loaded| loaded.dependents(note))
-                .unwrap_or_default();
-            if names.is_empty() {
-                format!("{} removed. Its draft was discarded.", note.name())
-            } else {
-                format!(
-                    "{} removed. Its draft was discarded. {} now needs a missing entry.",
-                    note.name(),
-                    name_list(&names)
-                )
-            }
-        });
         let mut undo_remove = false;
         if self.selected.is_none() {
-            let pressed = std::cell::Cell::new(ResultPress::default());
-            results.lines = self.kept_lines(&results);
-            let gone_line = gone_notice
-                .filter(|_| !self.dirty())
-                .and_then(|words| self.kept.line(KeptKind::Removed, || words));
-            let mut footer = design::Footer::new(
+            // With no entry open, the results and Remove's notice sit in the pane's message
+            // footer, below the empty reader (round 26). Its id is the reader's, so one pane has
+            // one footer. A typed footer (M-L0.4b): each kept line has its ticket.
+            let frame = PaneFrame::new(ui);
+            let mut messages = Messages::new(
+                &frame,
                 "library_footer",
                 ui.available_width().min(design::READER_MEASURE),
             );
-            if let Some(line) = &gone_line {
-                let undo = &mut undo_remove;
-                add_reader_result(&mut footer, line, true, move |ui| {
-                    *undo = design::undo_message(ui, Tone::Info, line.words(), "Undo remove");
-                });
+            if !self.dirty()
+                && let Some(line) = self.kept.outcome(&frame, KeptKind::Removed, || {
+                    self.outcome_of(KeptKind::Removed, &results)
+                })
+            {
+                messages.kept(line);
             }
-            add_results(&mut footer, &results, &pressed);
-            page_error(&mut footer, self.error.as_deref());
+            self.page_messages(&frame, &mut messages, &results, campaigns);
+            page_faults(&mut messages, &[self.error.as_ref()]);
             // The empty reader is the pane's body; the footer follows it (round 28 pane).
-            footer.pane(ui, design::Body::Content, |ui| {
+            let paned = messages.pane(ui, design::Body::Content, |ui| {
                 design::empty_state(
                     ui,
                     icons::LIBRARY,
@@ -7852,7 +8403,15 @@ impl Library {
                     |_| {},
                 );
             });
-            self.apply_package_results(&pressed.get());
+            // Undo remove acts here, as before; every other press after the pane is drawn, with
+            // the reader's (`show`). Each by its line's ticket.
+            match paned.pressed {
+                Some(Press {
+                    id: LibraryPress::Undo,
+                    ticket: Some(ticket),
+                }) if self.kept.kind_by(&ticket) == Some(KeptKind::Removed) => undo_remove = true,
+                pressed => self.footer_press = pressed,
+            }
         }
         let recovery = self
             .selected
@@ -8454,7 +9013,7 @@ impl Library {
         if !choices_in_reader && !slot_row {
             // A file changed on disk: the comparison owns the pane, and its messages stay above it.
             if let Some(error) = &self.error {
-                design::message_with_code(ui, Tone::Error, &format!("Error: {error}"));
+                design::message_with_code(ui, Tone::Error, &format!("Error: {}", error.words()));
             }
             pressed = show_results(ui, &results);
         }
@@ -8688,7 +9247,7 @@ impl Library {
                     self.content_changed = Some(campaign.path.clone());
                     self.open_world_npc = Some(id);
                 }
-                Err(error) => self.error = Some(error),
+                Err(error) => self.error = Some(error.into()),
             }
         }
         // Live, because Discard in this same frame changed the draft.
@@ -8853,7 +9412,7 @@ impl Library {
                 &dependency_results,
                 &mut reader_press,
             );
-            page_error(&mut footer, self.error.as_deref());
+            page_error(&mut footer, self.error.as_ref().map(PageError::words));
             pane_footer = Some(footer);
         } else if choices_in_reader {
             let mut footer = design::Footer::new(
@@ -8870,7 +9429,7 @@ impl Library {
                 &dependency_results,
                 &mut reader_press,
             );
-            page_error(&mut footer, self.error.as_deref());
+            page_error(&mut footer, self.error.as_ref().map(PageError::words));
             pane_footer = Some(footer);
         }
         let mut reload_from_disk = false;
@@ -8930,7 +9489,7 @@ impl Library {
             let names = if change.text.is_none() {
                 self.loaded.as_ref().unwrap().dependents(note)
             } else {
-                Vec::new()
+                DependentNames::default()
             };
             // The note and the choices start at the message text, as in World and the run.
             let (overwrite, reload) = design::message_with_actions(ui, Tone::Warning, text, |ui| {
@@ -9342,7 +9901,7 @@ impl Library {
             Ok(())
         })();
         if let Err(error) = reconnect {
-            self.error = Some(error);
+            self.error = Some(error.into());
         }
         if reload_from_disk {
             self.reload_note_from_disk(i);
@@ -9437,7 +9996,7 @@ impl Library {
             Ok(())
         };
         if let Err(error) = identity_result {
-            self.error = Some(error);
+            self.error = Some(error.into());
         }
         if let Some(index) = open_link {
             if dirty {
@@ -10302,10 +10861,14 @@ mod tests {
                 "src/library.rs",
                 &[
                     ("kept_result", 5),
-                    (".blocked(", 11),
+                    // 11 legacy waiting controls, and 3 typed locks of `page_messages` (M-L0.4b:
+                    // the registration's Undo and its `Use the copy`, the source change's Undo).
+                    // A typed lock is not debt, but this count reads text; 4b-2 takes the legacy
+                    // ones out with the reader's footer.
+                    (".blocked(", 14),
                     ("blocked_if(", 0),
                     ("design::locked(", 6),
-                    ("undo_message(", 8),
+                    ("undo_message(", 7),
                 ],
             ),
             (
@@ -10434,7 +10997,8 @@ mod tests {
         assert!(
             library
                 .error
-                .as_deref()
+                .as_ref()
+                .map(PageError::words)
                 .is_some_and(|error| error.contains("Module.md")),
             "the refusal names where the manifest is: {:?}",
             library.error
@@ -12694,6 +13258,98 @@ mod tests {
         assert!(library.kept.package_use().is_none() && library.kept.marks() == 0);
         assert_eq!(fs::read(&campaign_file).unwrap(), cleared);
         fs::write(&campaign_file, saved).unwrap();
+        // M-L0.4b, proof 5 (note §4): a write that fails keeps `Undo package choice`, with the
+        // error, so the DM can try again; with the file writable, the next Undo puts the choices
+        // back. Choices changed since end it, with the words that say so.
+        let choices = CampaignDocument::load(&campaign).unwrap().selections;
+        assert!(!choices.is_empty(), "fixture: the campaign has choices");
+        let with_choices = fs::read(&campaign_file).unwrap();
+        let choice_undo = || SelectionUndo {
+            campaign: campaign.clone(),
+            before: Vec::new(),
+            after: choices.clone(),
+        };
+        library.kept.set_package_use(choice_undo());
+        let writable = fs::metadata(&campaign_file).unwrap().permissions();
+        let mut read_only = writable.clone();
+        read_only.set_readonly(true);
+        fs::set_permissions(&campaign_file, read_only).unwrap();
+        library.error = None;
+        library.undo_package_use();
+        assert!(
+            library.error.is_some()
+                && library.kept.package_use().is_some()
+                && library.kept.marks() == 1,
+            "a failed write keeps Undo package choice: {:?}",
+            library.error
+        );
+        fs::set_permissions(&campaign_file, writable.clone()).unwrap();
+        // Astra on 3a2f6d42: a file that cannot be READ keeps it too, and so does a reload
+        // while it still cannot be read (`forget_changed_undos`): only a read that proves the
+        // choices differ ends it. Once the file reads again, a reload keeps it (its choices are
+        // the same) and its Undo works.
+        let mut unreadable = writable.clone();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut unreadable, 0o000);
+        fs::set_permissions(&campaign_file, unreadable).unwrap();
+        // While it cannot be read, a new entry made in the package cannot be chosen for the
+        // campaign: the app's own words first, checked, then the system's cause.
+        let not_chosen = library
+            .choose_new_entry(
+                &Owner::Package(original.clone()),
+                Uuid::new_v4(),
+                &app.campaigns,
+            )
+            .unwrap_err();
+        assert!(
+            matches!(&not_chosen, PageError::Because { own, .. } if *own == ENTRY_NOT_CHOSEN),
+            "the app's words are checked: {not_chosen:?}"
+        );
+        assert!(
+            design::outcome::Fault::cause(&LibraryFault::from(&not_chosen))
+                .as_str()
+                .starts_with("Entry created. Splat could not use it in this campaign. "),
+            "{not_chosen:?}"
+        );
+        library.error = None;
+        library.undo_package_use();
+        assert!(
+            library.error.is_some() && library.kept.package_use().is_some(),
+            "a failed read keeps Undo package choice: {:?}",
+            library.error
+        );
+        library.forget_changed_undos();
+        assert!(
+            library.kept.package_use().is_some() && library.kept.marks() == 1,
+            "a reload while the file cannot be read keeps Undo package choice"
+        );
+        fs::set_permissions(&campaign_file, writable).unwrap();
+        library.forget_changed_undos();
+        assert!(
+            library.kept.package_use().is_some(),
+            "a reload once it reads keeps it: the choices are the ones it wrote"
+        );
+        library.undo_package_use();
+        assert!(
+            library.kept.package_use().is_none()
+                && library.kept.marks() == 0
+                && CampaignDocument::load(&campaign)
+                    .unwrap()
+                    .selections
+                    .is_empty(),
+            "the next Undo puts the choices back"
+        );
+        library.error = None;
+        library.kept.set_package_use(choice_undo());
+        library.undo_package_use();
+        assert!(
+            library.kept.package_use().is_none()
+                && library.kept.marks() == 0
+                && library.error == Some(PageError::Own(CHOICES_CHANGED.clone())),
+            "choices changed since end it, in the app's own checked words: {:?}",
+            library.error
+        );
+        library.error = None;
+        fs::write(&campaign_file, with_choices).unwrap();
 
         // `Undo package registration`: a copied file changed. Each registration result lives in
         // its store entry, with all its Undo needs (review of PR 367, points 1 to 4).
@@ -12726,7 +13382,7 @@ mod tests {
             library
                 .registrations
                 .get(owner)
-                .map(|shown| shown.value().words())
+                .map(|shown| shown.value().words().as_str().to_owned())
         };
         let blocked = |library: &Library, owner: &RegistrationOwner| {
             library
@@ -13157,7 +13813,7 @@ mod tests {
                     &mut app.campaigns,
                 );
                 assert_eq!(
-                    library.error.as_deref(),
+                    library.error.as_ref().map(PageError::words),
                     Some(PACKAGE_LIST_UNSAFE),
                     "guard-refused\nbefore:\n{}\nafter:\n{}\nselections {:?}",
                     String::from_utf8_lossy(&before_undo),
@@ -13854,6 +14510,82 @@ mod tests {
             library.open_entry(at(&library, name));
             replaced(&library, KeptKind::ScopeNotice, before);
         }
+        // M-L0.4b: the notice stands through the list's next frames, where the footer draws it
+        // (main's list ended it in the first frame, as the scope it had listed was not the
+        // notice's: no footer ever drew it). The DM's own search, or scope, ends it.
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let painted = |library: &mut Library, campaigns: &mut Campaigns| {
+            let mut texts = Vec::new();
+            for _ in 0..2 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(1200.0, 800.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
+                    },
+                );
+                texts = output
+                    .shapes
+                    .into_iter()
+                    .filter_map(|shape| match shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+            }
+            texts.join("\n")
+        };
+        let notice = "Scope is now Everything, to show Brand.";
+        let shown = painted(&mut library, &mut campaigns);
+        assert!(
+            shown.contains(notice) && library.kept.scope_notice().is_some(),
+            "the scope notice shows after the list's frames\n{shown}"
+        );
+        library.search = "Ash".into();
+        let searched = painted(&mut library, &mut campaigns);
+        assert!(
+            !searched.contains(notice) && library.kept.scope_notice().is_none(),
+            "a search ends the scope notice\n{searched}"
+        );
+        library.search.clear();
+        library.scope = Scope::Package(Uuid::new_v4());
+        library.open_entry(at(&library, "Ash"));
+        assert!(
+            painted(&mut library, &mut campaigns).contains("Scope is now Everything, to show Ash."),
+            "fixture: a new notice shows"
+        );
+        library.scope = Scope::Builtin;
+        let _ = painted(&mut library, &mut campaigns);
+        assert!(
+            library.kept.scope_notice().is_none(),
+            "the DM's scope change ends the scope notice"
+        );
+        // Astra on 3a2f6d42: the change to an empty Campaign scope (this campaign has no
+        // entries of its own) ends it too, before that scope's own footer draws.
+        library.scope = Scope::Package(Uuid::new_v4());
+        library.open_entry(at(&library, "Brand"));
+        assert!(
+            painted(&mut library, &mut campaigns)
+                .contains("Scope is now Everything, to show Brand."),
+            "fixture: a new notice shows"
+        );
+        library.scope = Scope::Campaign;
+        let empty = painted(&mut library, &mut campaigns);
+        assert!(
+            empty.contains("No entries of your own yet"),
+            "fixture: the empty Campaign scope\n{empty}"
+        );
+        assert!(
+            library.kept.scope_notice().is_none() && !empty.contains("Scope is now Everything"),
+            "an empty Campaign scope ends the scope notice\n{empty}"
+        );
+        library.scope = Scope::All;
         // Identity, by `give_new_identity` of the open entry.
         for name in ["Ash", "Brand"] {
             let before = library.kept.order_of(KeptKind::Identity);
@@ -13943,11 +14675,40 @@ mod tests {
             replaced(&library, KeptKind::Vital, before);
         }
         // Unregistered, by `unregister` (from its dialog).
+        let mut tickets = Vec::new();
         for module in &unregistered {
             let before = library.kept.order_of(KeptKind::Unregistered);
             library.unregister(module.clone(), &mut campaigns);
             replaced(&library, KeptKind::Unregistered, before);
+            tickets.push(library.kept.ticket_of(KeptKind::Unregistered).unwrap());
         }
+        // M-L0.4b: a press acts by its line's ticket. The second unregister replaced the first:
+        // the first line's ticket reaches nothing, and the newer one's Undo works.
+        let registered = |campaigns: &Campaigns, module: &Module| {
+            campaigns
+                .modules()
+                .iter()
+                .any(|known| known.id == module.id)
+        };
+        let undo = |ticket| Press {
+            id: LibraryPress::Undo,
+            ticket: Some(ticket),
+        };
+        let mut tickets = tickets.into_iter();
+        let (stale, newer) = (tickets.next().unwrap(), tickets.next().unwrap());
+        library.apply_footer_press(undo(stale), &mut campaigns);
+        assert!(
+            library.kept.unregistered() == Some(&unregistered[1])
+                && !registered(&campaigns, &unregistered[0])
+                && !registered(&campaigns, &unregistered[1]),
+            "a replaced result's ticket reaches nothing"
+        );
+        library.apply_footer_press(undo(newer), &mut campaigns);
+        assert!(
+            library.kept.unregistered().is_none() && registered(&campaigns, &unregistered[1]),
+            "the newer line's Undo registers U2 again: {:?}",
+            library.error
+        );
         // Manifest, by the repair's `write_manifest` of a deleted manifest (twice).
         for _ in 0..2 {
             let before = library.kept.order_of(KeptKind::Manifest);
@@ -14116,6 +14877,187 @@ mod tests {
                 "each batch names its own owner's outside encounter: {words}\n{painted:#?}"
             );
         }
+    }
+
+    #[test]
+    fn the_empty_readers_undos_name_their_object_whole_or_short() {
+        // M-L0.4b, the three proofs of the M9 labels (`Undo unregister <package>`, `Undo remove
+        // <name>`) in the empty reader's typed footer:
+        // 8. At every width each Undo shows its whole label where it fits the Undo's own room
+        //    (the line, capped at `LIST_MEASURE`, less the message's inset and the action's icon
+        //    and padding), else its short form: never cut, never past the pane.
+        // 9. Its accessible name is the whole label at every width, also where it shows short.
+        // 10. An unchanged frame builds and measures no label, and makes no plan.
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let temp = tempfile::tempdir().unwrap();
+        let m = create_module(&temp.path().join("module"), "Module", "test").unwrap();
+        // Long names, as the DM's data may hold, so the widths cross each label's boundary.
+        let entry = "Ash Exposure in the Burning Wastes";
+        let package = "The Ashen Marches of the Cinder Reach";
+        let creature = note_text(entry, "creature", None);
+        let id = Entry::parse("x.md", &creature).unwrap().id;
+        fs::write(m.path.join(format!("{entry}.md")), creature).unwrap();
+        // Four encounters need it, so the Remove line names the first three "and 1 more".
+        for at in 1..=4 {
+            let name = format!("Bridge {at}");
+            let path = format!("{name}.md");
+            let fields = format!(
+                "splat_id: {}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster:\n  - key: foe\n    creature: {{id: {id}}}\n    side: enemies\n    controller: {{kind: manual, role: gm}}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n",
+                Uuid::new_v4()
+            );
+            let text = content::formats::fixture(&path, &fields, &format!("\n# {name}\n")).unwrap();
+            fs::write(m.path.join(path), text).unwrap();
+        }
+        let mut library = Library {
+            loaded: Some(load(Some(&m)).unwrap()),
+            ..Default::default()
+        };
+        // The real Remove: a draft over a file that has gone.
+        let index = library
+            .loaded
+            .as_ref()
+            .unwrap()
+            .notes
+            .iter()
+            .position(|note| note.path == format!("{entry}.md"))
+            .unwrap();
+        library.selected = Some(index);
+        library.draft = "An unsaved draft.".into();
+        library.disk_change = Some(DiskChange {
+            text: None,
+            moved_to: None,
+            fault: None,
+        });
+        library.reload_note_from_disk(index);
+        library.kept.set_unregistered(Module {
+            id: Uuid::new_v4(),
+            name: package.into(),
+            path: temp.path().join("modules/ashen-marches"),
+        });
+        assert!(library.selected.is_none(), "fixture: no entry open");
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            |ui, library: &mut Library| library.editor(ui, "Entry", &Campaigns::default()),
+            library,
+        );
+        design::theme::install(&harness.ctx);
+        let (unregister, remove) = (
+            format!("Undo unregister {package}"),
+            format!("Undo remove {entry}"),
+        );
+        let labels = [
+            ("Undo unregister", unregister.as_str()),
+            ("Undo remove", remove.as_str()),
+        ];
+        let mut forms = std::collections::BTreeSet::new();
+        for width in (260..=900).step_by(4) {
+            let width = width as f32;
+            harness.set_size(egui::vec2(width, 700.0));
+            harness.run_steps(2);
+            // Each text with its rect, the rect it is clipped to, and whether its layout cut it
+            // (`elided`: egui's `…` is in the galley, not in its words): a text past its clip or
+            // elided is cut.
+            let painted: Vec<(String, egui::Rect, egui::Rect, bool)> = harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some((
+                        text.galley.job.text.clone(),
+                        text.galley.rect.translate(text.pos.to_vec2()),
+                        shape.clip_rect,
+                        text.galley.elided,
+                    )),
+                    _ => None,
+                })
+                .collect();
+            for (short, whole) in labels {
+                let named = harness
+                    .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                        node.role() == egui::accesskit::Role::Button
+                            && node.label().is_some_and(|label| label.starts_with(short))
+                    }))
+                    .map(|node| node.accesskit_node().label().unwrap_or_default())
+                    .collect::<Vec<_>>();
+                assert_eq!(named, [whole], "9: the whole accessible name at {width}");
+                let shown: Vec<_> = painted
+                    .iter()
+                    .filter(|(text, ..)| text.starts_with(short))
+                    .collect();
+                assert!(
+                    shown.len() == 1
+                        && (shown[0].0 == whole || shown[0].0 == short)
+                        && shown[0].1.right() <= shown[0].2.right().min(width) + 0.5
+                        && !shown[0].3,
+                    "8: whole where it fits, else short, never cut, at {width}: {shown:?}"
+                );
+                forms.insert((short, shown[0].0 == whole));
+            }
+            assert!(
+                !painted
+                    .iter()
+                    .any(|(text, _, _, elided)| *elided || text.contains('…')),
+                "8: nothing cut at {width}"
+            );
+        }
+        for (short, _) in labels {
+            assert!(
+                forms.contains(&(short, true)) && forms.contains(&(short, false)),
+                "fixture: the widths reach the whole and the short form of {short}: {forms:?}"
+            );
+        }
+        // 10. Quiet frames at one width: no footer plan, and no content-sized work for the
+        // Remove line's words (the entries that need the removed one, found once per content).
+        harness.set_size(egui::vec2(700.0, 700.0));
+        harness.run_steps(2);
+        let scans = || DEPENDENT_SCANS.with(std::cell::Cell::get);
+        let copied = || DEPENDENT_NAMES.with(std::cell::Cell::get);
+        assert!(
+            scans() > 0 && copied() >= 4,
+            "fixture: the Remove line found the four encounters that need its entry"
+        );
+        let painted: Vec<String> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            painted
+                .iter()
+                .any(|text| text.contains("Bridge 1, Bridge 2, Bridge 3 and 1 more now needs")),
+            "fixture: the Remove line names them\n{painted:#?}"
+        );
+        let (quiet, scanned, names) = (crate::design::outcome::footer_work(), scans(), copied());
+        harness.run_steps(4);
+        let after = crate::design::outcome::footer_work();
+        assert_eq!(
+            scans(),
+            scanned,
+            "10: an unchanged frame reads no note for the Remove line"
+        );
+        assert_eq!(
+            copied(),
+            names,
+            "10: an unchanged frame copies none of the names that need the removed entry"
+        );
+        assert!(
+            after.compared > quiet.compared,
+            "the frames drew the footer"
+        );
+        assert_eq!(
+            (
+                after.plans - quiet.plans,
+                after.sorted - quiet.sorted,
+                after.named - quiet.named,
+                after.undo_fits - quiet.undo_fits,
+                after.laid - quiet.laid,
+            ),
+            (0, 0, 0, 0, 0),
+            "10: an unchanged frame of the empty reader's footer"
+        );
     }
 
     #[test]
@@ -15333,9 +16275,11 @@ mod tests {
         let choice = USE_COPY.trim_end_matches(" in encounters").to_lowercase();
         assert!(
             USE_COPY_RESULT
+                .as_str()
                 .to_lowercase()
                 .contains(&format!("encounters now {choice}")),
-            "FD2-same-words: {USE_COPY} / {USE_COPY_RESULT}"
+            "FD2-same-words: {USE_COPY} / {}",
+            USE_COPY_RESULT.as_str()
         );
     }
 
@@ -15353,14 +16297,47 @@ mod tests {
         library.save_selected(false);
         let error = library
             .error
-            .clone()
-            .expect("the search stops at the unreadable file");
+            .as_ref()
+            .map(PageError::words)
+            .expect("the search stops at the unreadable file")
+            .to_owned();
         assert!(
             error.starts_with("Splat cannot read Other.md as text."),
             "SD1-moved: {error}"
         );
         assert!(!error.contains("stream"), "{error}");
+        assert!(
+            matches!(library.error, Some(PageError::Outside(_))),
+            "the system's words stay outside words"
+        );
         assert!(!module.path.join("Wolf.md").exists(), "nothing is written");
         assert_eq!(fs::read(module.path.join("Other.md")).unwrap(), NOT_TEXT);
+        // Two files in its folder have its ID: the app's own refusal, checked.
+        fs::remove_file(module.path.join("Other.md")).unwrap();
+        for name in ["Wolf A.md", "Wolf B.md"] {
+            fs::write(module.path.join(name), &text).unwrap();
+        }
+        library.save_selected(false);
+        assert_eq!(
+            library.error,
+            Some(PageError::Own(SEVERAL_FILES_KEEP_ONE.clone())),
+            "one folder with two files of its ID"
+        );
+        // One file in each of two folders: the other refusal, checked.
+        fs::remove_file(module.path.join("Wolf B.md")).unwrap();
+        let other = create_module(&temp.path().join("other"), "Other", "other").unwrap();
+        fs::write(other.path.join("Wolf.md"), &text).unwrap();
+        library
+            .loaded
+            .as_mut()
+            .unwrap()
+            .owners
+            .push(Owner::Package(other));
+        library.save_selected(false);
+        assert_eq!(
+            library.error,
+            Some(PageError::Own(SEVERAL_FILES_CHOOSE_ONE.clone())),
+            "two folders, each with a file of its ID"
+        );
     }
 }
