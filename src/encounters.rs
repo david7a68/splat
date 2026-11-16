@@ -3741,6 +3741,8 @@ fn name_field(ui: &mut egui::Ui, draft: &mut Draft, width: f32) -> egui::Respons
 
 const ENCOUNTER_NAME: design::FieldName = crate::field_id!("encounter_name");
 const CREATURE_NAME: design::FieldName = crate::field_id!("encounter_creature_name");
+/// The creature pane's Markdown text, by the creature's file.
+const CREATURE_TEXT: design::FieldName = crate::field_id!("encounter_creature_text");
 const INITIATIVE_GROUP: design::FieldName = crate::field_id!("roster_initiative_group");
 const RUN_FOLDER: design::FieldName = crate::field_id!("run_folder");
 const RUN_INITIATIVE: design::FieldName = crate::field_id!("run_initiative");
@@ -5291,16 +5293,20 @@ impl Encounters {
                 // The file's source, closed until wanted: the common changes have fields above.
                 design::quiet_section(ui, "Its text, as Markdown", |ui| {
                     let room = ui.available_height();
-                    egui::ScrollArea::vertical()
-                        .id_salt("creature_text")
+                    let key = design::TextKey::from_data(editor.path.clone());
+                    design::ScrollColumn::new("creature_text")
                         .max_height(room)
-                        .auto_shrink([false, true])
+                        .fit_height()
                         .show(ui, |ui| {
-                            let output = egui::TextEdit::multiline(&mut editor.fields.body)
-                                .font(egui::TextStyle::Monospace)
-                                .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                                .margin(egui::vec2(design::S, design::S))
-                                .show(ui);
+                            let width = ui.available_width() - 2.0 * design::S - design::M;
+                            let output =
+                                CREATURE_TEXT
+                                    .of(key)
+                                    .editor(ui, &mut editor.fields.body, |edit| {
+                                        edit.font(egui::TextStyle::Monospace)
+                                            .desired_width(width)
+                                            .margin(egui::vec2(design::S, design::S))
+                                    });
                             if let Some(note) =
                                 crate::markdown_source::pressed_note_link(ui, &output, None)
                             {
@@ -7495,7 +7501,13 @@ impl Encounters {
         compact: bool,
     ) {
         if !compact {
-            design::group_heading(ui, "Add participants", 0);
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "Add participants",
+                    count: 0,
+                },
+            );
         }
         // FB2: the party lines stay whatever the search adds to (the party always joins the
         // roster), and `Adding to …` has one place directly above the search, so a change of
@@ -7777,12 +7789,11 @@ impl Encounters {
             };
         // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows, so each
         // `Add` keeps its x as the DM types and the list grows or shrinks.
-        let lane = scroll_lane(ui);
-        egui::ScrollArea::vertical()
-            .id_salt(("encounter_results", &query))
-            .auto_shrink([false, false])
-            .show_rows(ui, row_height, matches.len(), |ui, range| {
-                ui.set_max_width(lane);
+        design::ScrollColumn::new(("encounter_results", &query)).show_rows(
+            ui,
+            row_height,
+            matches.len(),
+            |ui, range| {
                 for c in matches[range].iter().map(|&at| &creatures[at]) {
                     ui.push_id(c.id, |ui| {
                         let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
@@ -7795,7 +7806,8 @@ impl Encounters {
                         }
                     });
                 }
-            });
+            },
+        );
         chosen
     }
 
@@ -7830,11 +7842,9 @@ impl Encounters {
             .id(("encounter_roster", draft.id))
             .max_rect(area.with_min_x(area.min.x - design::S));
         ui.scope_builder(scope, |ui| {
-            // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family).
-            let lane = scroll_lane(ui) - design::S;
-            egui::ScrollArea::vertical()
-                .id_salt("encounter_editor")
-                .auto_shrink([false, false])
+            // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family):
+            // the column keeps it.
+            design::ScrollColumn::new("encounter_editor")
                 .show(ui, |ui| {
                     egui::Frame::new()
                         .inner_margin(egui::Margin {
@@ -7842,7 +7852,7 @@ impl Encounters {
                             ..egui::Margin::ZERO
                         })
                         .show(ui, |ui| {
-                            ui.set_width(ui.available_width().min(design::LIST_MEASURE).min(lane));
+                            ui.set_width(ui.available_width().min(design::LIST_MEASURE));
                             Self::roster_column(
                                 ui,
                                 draft,
@@ -7906,7 +7916,6 @@ impl Encounters {
         ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
         // FI7: what the option changes, in the form the sync option's help uses.
         design::help(ui, REPEATABLE_HELP);
-        design::gap(ui, design::Gap::M);
         Self::loot_field(ui, draft);
         design::gap(ui, design::Gap::M);
         design::field(ui, NOTES_LABEL, None, None, |ui| {
@@ -7934,7 +7943,14 @@ impl Encounters {
         reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn loot_field(ui: &mut egui::Ui, draft: &mut Draft) {
-        design::group_heading(ui, LOOT_FIELD, draft.loot.len());
+        // The heading keeps its own space above (`Heading::above`).
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: LOOT_FIELD,
+                count: draft.loot.len(),
+            },
+        );
         if !draft.loot_owned {
             blocked_reason(
                 ui,
@@ -8397,13 +8413,13 @@ impl Encounters {
                                 }
                             }
                             if enabled {
-                                let mut value =
-                                    slot.initial.get(field).and_then(Value::as_u64).unwrap_or(0);
-                                let response = ui.add(
-                                    egui::DragValue::new(&mut value).range(0..=i64::MAX as u64),
-                                );
-                                design::named(ui, &response, label);
-                                if response.changed() {
+                                let mut value = slot
+                                    .initial
+                                    .get(field)
+                                    .and_then(Value::as_u64)
+                                    .and_then(|value| i64::try_from(value).ok())
+                                    .unwrap_or(0);
+                                if design::stepper(ui, label, &mut value, 0..=i64::MAX) {
                                     slot.initial.insert(field.into(), value.into());
                                 }
                             }
