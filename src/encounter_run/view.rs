@@ -33,6 +33,15 @@ const AMOUNT_FIELD: design::FieldName = crate::field_id!("run_amount");
 /// have one name; two runs can offer one group).
 const ARRIVAL_TOTAL_FIELD: design::FieldName = crate::field_id!("run_arrival_total");
 const OTHER_EFFECT_FIELD: design::FieldName = crate::field_id!("run_other_effect");
+/// A participant's initiative total in setup, keyed by the run and the participant: a rename
+/// keeps its focus and its text, and another run's participant of the same slot shares neither.
+const SETUP_INITIATIVE_FIELD: design::FieldName = crate::field_id!("run_setup_initiative");
+/// A participant's initiative total opened on its roster row in play.
+const LIVE_INITIATIVE_FIELD: design::FieldName = crate::field_id!("run_live_initiative");
+/// A participant's initiative total in the Correct tab, in play.
+const CORRECT_INITIATIVE_FIELD: design::FieldName = crate::field_id!("run_correct_initiative");
+/// A participant's initiative roll mode (normal, advantage, disadvantage) in setup.
+const ROLL_MODE_FIELD: design::FieldName = crate::field_id!("run_initiative_mode");
 const OUTCOME_FIELD: design::FieldName = crate::field_id!("run_outcome");
 const DM_NOTE_FIELD: design::FieldName = crate::field_id!("run_dm_note");
 const READ_ALOUD: &str = "Read-aloud and notes";
@@ -653,6 +662,25 @@ impl Run {
         }
         self.autosave();
         false
+    }
+
+    /// A participant's setup initiative field: the setup row draws it, and the tie slot and the
+    /// shared-roll marks read it.
+    pub(super) fn setup_initiative_id(&self, participant: &super::Participant) -> egui::Id {
+        self.participant_field(SETUP_INITIATIVE_FIELD, participant)
+    }
+
+    /// A participant's field in this run, keyed by the run and the participant
+    /// (`ParticipantKey`): a rename keeps its focus and text, and another run's participant of
+    /// the same slot shares neither.
+    fn participant_field(
+        &self,
+        field: design::FieldName,
+        participant: &super::Participant,
+    ) -> egui::Id {
+        field
+            .of(design::ParticipantKey::of(self.id, participant))
+            .id()
     }
 
     /// The Amount field's id: the dock draws it, and the keys read whether it has focus.
@@ -2017,6 +2045,7 @@ impl Run {
                             ),
                             vec2(layout.initiative_right - design::S, Density::Read.control()),
                         );
+                        let initiative_id = self.participant_field(LIVE_INITIATIVE_FIELD, p);
                         ui.scope_builder(egui::UiBuilder::new().max_rect(field), |ui| {
                             let name = format!("Initiative for {}", p.name);
                             let text = self.setup_inputs.entry(index).or_default();
@@ -2025,7 +2054,7 @@ impl Run {
                             // name never takes over its text, cursor or selection.
                             let response = design::number_field_with_id(
                                 ui,
-                                egui::Id::new(("run_initiative", self.id, &p.key)),
+                                initiative_id,
                                 &name,
                                 text,
                                 "",
@@ -4971,12 +5000,14 @@ impl Run {
                     let had = p.initiative;
                     design::heading(ui, design::Heading::Group { title: "Correct initiative", count: 0 });
                     let field = format!("Initiative for {}", p.name);
+                    let id = self.participant_field(CORRECT_INITIATIVE_FIELD, p);
                     let text = self.setup_inputs.entry(index).or_default();
                     let total = text.trim().parse::<i64>().ok();
                     ui.horizontal(|ui| {
                         correction_label(ui, "Initiative");
-                        let response = design::number_field(
+                        let response = design::number_field_with_id(
                             ui,
+                            id,
                             &field,
                             text,
                             "Total",
@@ -5465,10 +5496,7 @@ impl Run {
                                                 for p in &self.state.participants {
                                                     if let Some(key) = p.shared_roll.as_deref()
                                                         && let Some(field) = ui.ctx().read_response(
-                                                            design::focus_id(&format!(
-                                                                "Initiative for {}",
-                                                                p.name
-                                                            )),
+                                                            self.setup_initiative_id(p),
                                                         )
                                                     {
                                                         shared
@@ -5601,7 +5629,7 @@ impl Run {
             self.state
                 .participants
                 .iter()
-                .any(|p| focused == design::focus_id(&format!("Initiative for {}", p.name)))
+                .any(|p| focused == self.setup_initiative_id(p))
         });
         let tie = if in_initiative {
             ui.data(|data| data.get_temp::<f32>(slot_width))
@@ -5799,7 +5827,7 @@ impl Run {
             }
             let field_name = format!("Initiative for {name}");
             // Beside Notes, a letter goes to the note, and the number stays as it is.
-            let in_field = design::focus_id(&field_name);
+            let in_field = self.setup_initiative_id(&self.state.participants[index]);
             if let Some(typed) = Self::words_in_number_field(self.notes_open, ui, in_field, |c| {
                 c.is_ascii_digit() || c == '-'
             }) {
@@ -5817,8 +5845,9 @@ impl Run {
                         .setup_inputs
                         .entry(index)
                         .or_insert_with(|| initiative.map_or_else(String::new, |n| n.to_string()));
-                    let response = design::number_field(
+                    let response = design::number_field_with_id(
                         ui,
+                        in_field,
                         &field_name,
                         text,
                         "",
@@ -5972,16 +6001,15 @@ impl Run {
                     command = Some(Command::Npc(index, is_npc));
                 }
                 let mut picked = mode;
-                let combo = egui::ComboBox::from_id_salt("initiative_mode")
-                    .icon(design::combo_icon)
-                    .width(170.0)
-                    .selected_text(mode_label(mode))
-                    .show_ui(ui, |ui| {
-                        for m in [-1, 0, 1] {
-                            design::choice_value(ui, &mut picked, m, mode_label(m));
-                        }
-                    });
-                design::named(ui, &combo.response, &format!("Initiative roll for {name}"));
+                let owner = design::ParticipantKey::of(self.id, &self.state.participants[index]);
+                design::Dropdown::new(
+                    ROLL_MODE_FIELD.of(owner),
+                    &format!("Initiative roll for {name}"),
+                )
+                .choice(-1, mode_label(-1))
+                .choices([0, 1].map(|m| (m, mode_label(m))))
+                .width(170.0)
+                .show(ui, &mut picked);
                 if picked != mode {
                     command = Some(Command::RollMode(index, picked));
                 }
@@ -9939,13 +9967,18 @@ mod tests {
             design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let label = "Initiative for Guard 3";
+            // The field's id is its participant's in this run (`ParticipantKey`).
+            let field = {
+                let run = run.borrow();
+                run.setup_initiative_id(&run.state.participants[2])
+            };
             harness.get_by_label(label).click();
             harness.run_steps(2);
             let before = harness.get_by_label(label).rect().min;
             harness.event(egui::Event::Text("10".into()));
             harness.run_steps(2);
             assert_eq!(run.borrow().state.participants[2].initiative, Some(10));
-            assert!(harness.ctx.memory(|m| m.has_focus(design::focus_id(label))));
+            assert!(harness.ctx.memory(|m| m.has_focus(field)));
             assert!(
                 harness
                     .query(
@@ -9985,9 +10018,7 @@ mod tests {
                 before,
                 "iter8-B-FT1: backspace keeps x and y"
             );
-            harness
-                .ctx
-                .memory_mut(|m| m.surrender_focus(design::focus_id(label)));
+            harness.ctx.memory_mut(|m| m.surrender_focus(field));
             harness.run_steps(2);
             assert_eq!(
                 harness.get_by_label(label).rect().min,
@@ -10013,7 +10044,7 @@ mod tests {
             harness.key_press(Key::Tab);
             harness.run_steps(2);
             assert!(
-                !harness.ctx.memory(|m| m.has_focus(design::focus_id(label))),
+                !harness.ctx.memory(|m| m.has_focus(field)),
                 "iter8-B-tie: Tab leaves the field"
             );
             assert!(
@@ -13375,6 +13406,16 @@ mod tests {
         // the words of its name. A rename while it is open keeps its focus and its selection.
         run.borrow_mut().state.participants[2].name = "Guard Captain".into();
         harness.run_steps(2);
+        // M-R0.5: the field is keyed by its participant in this run (`ParticipantKey`), not by
+        // the words of its name, so it still has the keyboard after the rename.
+        let field = {
+            let run = run.borrow();
+            run.participant_field(LIVE_INITIATIVE_FIELD, &run.state.participants[2])
+        };
+        assert!(
+            harness.ctx.memory(|m| m.has_focus(field)),
+            "m-r0-5-rename-keeps-focus"
+        );
         harness
             .get_by_label("Initiative for Guard Captain")
             .type_text("18");

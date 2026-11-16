@@ -1215,11 +1215,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "setup_body",
             &[Ban::Layout(1), Ban::Extras(3), Ban::Pane(1)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "setup_row",
-            &[Ban::Layout(1), Ban::Extras(7)],
-        ),
+        ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(7)]),
         (
             "src/encounters.rs",
             "creature_search_with_summary",
