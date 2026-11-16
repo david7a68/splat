@@ -4883,9 +4883,9 @@ impl Run {
                 let mut max = p.max_hp;
                 design::heading(ui, design::Heading::Group { title: "Correct HP", count: 0 });
                 let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
-                optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
+                optional_number(ui, "Current HP", &mut hp, 0..=1_000_000, design::stepper);
                 design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
-                    optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                    optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000, design::stepper);
                 });
                 if sheet_decides {
                     design::help(ui, MAX_FROM_SHEET);
@@ -4901,7 +4901,14 @@ impl Run {
                     // FJ8 (iter-27-R): the bonus has its own heading, as live play's total has.
                     design::heading(ui, design::Heading::Group { title: "Correct initiative", count: 0 });
                     let mut bonus = p.initiative_bonus;
-                    optional_number(ui, "Initiative bonus", &mut bonus, -1000..=1000);
+                    // M0169: a modifier, so the signed stepper (`+2`, `−1`; reads `-1` too).
+                    optional_number(
+                        ui,
+                        "Initiative bonus",
+                        &mut bonus,
+                        -1000..=1000,
+                        design::signed_stepper,
+                    );
                     if bonus != p.initiative_bonus {
                         command = Some(Command::Bonus(index, bonus));
                     }
@@ -9615,40 +9622,21 @@ fn correction_label_width(ui: &egui::Ui) -> f32 {
         .fold(design::L * 6.0, f32::max)
 }
 
-fn signed_bonus(value: i64) -> String {
-    if value < 0 {
-        format!("−{}", value.unsigned_abs())
-    } else {
-        format!("+{value}")
-    }
-}
-
-fn parse_bonus(text: &str) -> Option<f64> {
-    text.trim().replace('−', "-").parse().ok()
-}
-
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// One value of the Correct tab that may be unknown: its label, then its value in the shared
+/// `stepper` (`design::stepper`, or `design::signed_stepper` for a modifier) with `Mark
+/// unknown`, or `Unknown` and `Enter` while it has none.
 fn optional_number(
     ui: &mut egui::Ui,
     label: &str,
     value: &mut Option<i64>,
     range: std::ops::RangeInclusive<i64>,
+    stepper: fn(&mut egui::Ui, &str, &mut i64, std::ops::RangeInclusive<i64>) -> bool,
 ) {
     // Its words stay on one line, in any width of panel.
     ui.horizontal(|ui| {
         correction_label(ui, label);
         if let Some(n) = value {
-            let mut field = egui::DragValue::new(n).range(range);
-            if label == "Initiative bonus" {
-                field = field
-                    .custom_formatter(|value, _| signed_bonus(value as i64))
-                    .custom_parser(parse_bonus);
-            }
-            let response = ui.add(field);
-            design::named(ui, &response, label);
+            stepper(ui, label, n, range);
             if Action::quiet("Mark unknown")
                 .name(&format!("Mark {label} unknown"))
                 .density(Density::Read)
@@ -12304,10 +12292,11 @@ mod tests {
 
     #[test]
     fn initiative_bonus_formats_and_parses_signed_values() {
+        // The Correct tab's local copies went with M0169: the bonus is `design::signed_stepper`,
+        // which shows the shared form; its reading of `−1` and `-1` is checked through the real
+        // field in `iter9_b_correct_does_not_change_sync_and_explicit_stop_stays`.
         for (value, shown) in [(1, "+1"), (0, "+0"), (-1, "−1")] {
-            assert_eq!(signed_bonus(value), shown);
-            assert_eq!(parse_bonus(shown), Some(value as f64));
-            assert_eq!(parse_bonus(&value.to_string()), Some(value as f64));
+            assert_eq!(design::signed(value), shown);
         }
     }
 
@@ -13340,6 +13329,62 @@ mod tests {
                 );
             }
         }
+        // M-R0.4 (M0169): in setup, the bonus is the shared signed stepper. It shows `+2`, and
+        // `-1` typed in its field is read back and shown with a true minus.
+        use egui_kittest::kittest::Queryable;
+        let run = Rc::new(RefCell::new(super::super::tests::run()));
+        assert_eq!(run.borrow().state.participants[0].initiative_bonus, Some(2));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(560.0, 900.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| shown.borrow_mut().record_tab(ui, 0));
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let painted = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            painted(&harness).iter().any(|text| text == "+2"),
+            "m-r0-4-signed-shown: {:?}",
+            painted(&harness)
+        );
+        // The field, not the row's words of the same name.
+        let field = |harness: &egui_kittest::Harness<'_>, act: &dyn Fn(&egui_kittest::Node<'_>)| {
+            use egui_kittest::kittest::NodeT;
+            let node = harness
+                .query_all_by_label("Initiative bonus")
+                .find(|node| node.accesskit_node().role() == egui::accesskit::Role::SpinButton)
+                .expect("the bonus field");
+            act(&node);
+        };
+        field(&harness, &|node| node.click());
+        harness.run_steps(2);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, Key::A);
+        harness.run_steps(1);
+        field(&harness, &|node| node.type_text("-1"));
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(
+            run.borrow().state.participants[0].initiative_bonus,
+            Some(-1),
+            "m-r0-4-typed-read"
+        );
+        assert!(
+            painted(&harness).iter().any(|text| text == "\u{2212}1"),
+            "m-r0-4-signed-minus: {:?}",
+            painted(&harness)
+        );
     }
 
     #[test]
