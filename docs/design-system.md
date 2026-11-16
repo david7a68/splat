@@ -1459,7 +1459,10 @@ and row actions. Add participants sits directly beside that column; extra space 
 Its note says where party members come from in the DM's words: `Party members come from the sheets Splat
 saved last.`
 Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll. Beside the roster, `This campaign’s
-creature` ends its Name field where Save creature ends. Rules and runs puts its save state, Discard and reasons at
+creature` ends its Name field where Save creature ends. Its save row follows the save row rule (`save_row`): the
+word and Discard (which also closes the pane) at the left, Save creature at the right, secondary, since the encounter
+beside it owns the primary; `Done` sits at the right of its heading line while nothing is changed, and that line keeps
+one control's height, so the save row never moves. Rules and runs puts its save state, Discard and reasons at
 the start of one row with `Save run settings` at its end; without room, the state's words wrap before Save. After
 a Save writes (also a repair or a move), the row says `Saved` until the form's next edit, another campaign, or a
 change of the file's settings outside Splat; an edit put back then says `No changes`.
