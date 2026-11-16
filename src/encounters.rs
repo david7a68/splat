@@ -9761,12 +9761,7 @@ mod tests {
                         ));
                     }
                     let separated = std::cell::Cell::new(None);
-                    // As the editor draws the search: a column of a `Fills` body, whose
-                    // results scroll on their own.
-                    let body = design::pane::Body::Fills(design::pane::Fills::because(
-                        design::pane::FillsReason::Columns,
-                    ));
-                    let paned = messages.pane(ui, body, |ui| {
+                    let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
                         if !shown.load(std::sync::atomic::Ordering::Relaxed) {
                             return;
                         }
