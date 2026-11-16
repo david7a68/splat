@@ -167,6 +167,7 @@ disallowed-methods = [
     { path = "splat::design::outcome::row_fault", reason = "put the fault in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::PagePlaceholder::show", reason = "a page placeholder is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::BodyFault::show", reason = "a fault with repairs in a page's body is a review decision: `Ban::Body`" },
+    { path = "splat::design::outcome::BodyMessage::show", reason = "a typed message in a body, outside its footer, is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::RowMessages::new", reason = "put the message in the pane's `Footer`; a save row's own messages in its value block are a review decision: `Ban::Body`" },
     # Package X: design extras. Each part decides its own space, its check mark and its Clear, so
     # a caller cannot add or forget them. A suppression's row in `design::results::STAGED_ALLOWS`

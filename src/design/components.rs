@@ -3106,6 +3106,8 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
 #[deprecated(
     note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
 )]
+// M-L0.4b: the Library's footers are typed; only the gallery and this file's tests draw it.
+#[cfg(test)]
 pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
     let step = super::outcome::UndoStep::of(super::outcome::Verb::Discard, name);
     let whole = step.label();

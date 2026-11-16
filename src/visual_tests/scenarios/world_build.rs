@@ -6298,12 +6298,14 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "Undo link update",
     );
     let result = d.painted_word_rect("Links now say “Ash Wolf”.", egui::Rect::EVERYTHING);
+    // M-L0.4b: the typed footer is pinned to the pane's bottom; the offer (its words, then its
+    // choice) is two rows and the result one, so the result starts at the offer's words and no
+    // higher: nothing in the body above moves.
     d.observe(
         "iter-19-E-AD3-link-place",
         !d.has("Update 1 link")
             && offer.zip(result).is_some_and(|(offer, result)| {
-                (offer.top() - result.top()).abs() <= 1.0
-                    && (offer.left() - result.left()).abs() <= 1.0
+                result.top() >= offer.top() - 1.0 && (offer.left() - result.left()).abs() <= 1.0
             }),
         format!("The result {result:?} takes the offer's place {offer:?}, and the offer has gone"),
     );
@@ -8301,9 +8303,10 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     assert!(!d.app_mut().encounters.has_run());
     d.state("invalid-package-blocks-new-fight", Sizes::All);
     // iter-19-B-FD5: the message and the two rows that state the same fault share its error tone.
-    // SC7, FC3: the rows say the cause and `Open in Library`; the message says only the next act,
-    // and neither the cause nor the link again.
-    let fix_words = "Fix the file of the 2 Cinder Wolf rows before you save or start a fight.";
+    // SC7, FC3: the rows say the cause and `Open in Library`; the message never says the old
+    // cause-and-link words again. Round 31 SE3, AE4 (ruling M7): the refused Start's answer says
+    // first that no fight started, then the part's cause and next step.
+    let fix_words = "No fight started from Bridge Ambush. Splat cannot read the file of Cinder Wolf. Fix Cinder Wolf in Library first.";
     let mut repeats = 0;
     d.each_painted_text(|text, _| {
         let words = text.galley.job.text.as_str();
@@ -8589,10 +8592,12 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click("More actions for Bridge Ambush");
     d.click("Start another fight");
     assert!(!d.app_mut().encounters.has_run());
-    // iter-29 G125 (AD5): the rows keep the cause; the message says only the next act, naming
-    // and counting the rows, whole and in view at every size.
-    let next_act =
-        "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.";
+    // iter-29 G125 (AD5): the rows keep the cause; one message names and counts the rows, whole
+    // and in view at every size. Round 31 SE3, AE4 (start-fight-result-first, ruling M7): the
+    // refused Start's answer says first that no fight started, then the cause once and the one
+    // next step, in the part's words (`Refusal`). Before M7 the message said only the next act
+    // (`… before you save or start a fight.`), and this check refused the cause in it.
+    let next_act = "No fight started from Bridge Ambush. The creature of the 2 Cinder Wolf rows was deleted. Choose replacements for the 2 Cinder Wolf rows first.";
     d.state_prepared("deleted-package-blocks-new-fight", Sizes::All, |d| {
         let mut messages = Vec::new();
         d.each_painted_text(|text, _| {
@@ -8605,10 +8610,10 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         d.observe(
             "iter-29-BC5-G125",
             d.visible_text(next_act)
-                && !messages.is_empty()
-                && messages.iter().all(|words| !words.contains("deleted"))
+                && messages.len() == 1
+                && messages.iter().all(|words| words.starts_with("No fight started"))
                 && rows == 2,
-            format!("The message {messages:?} says only the next act; {rows} rows say the cause"),
+            format!("One answer {messages:?}: the act first, then the cause and the next step; {rows} rows say the cause"),
         );
     });
     // iter-19-B-FD5 must stay true: a deleted entry stays a warning in the message and the rows.
@@ -9283,9 +9288,13 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
             let changes = d
                 .place_of("Bridge Ambush will then use Cinder Wolf copy.md.")
                 .unwrap();
-            (keeps.top() - first.bottom() - crate::design::XS).abs() < 1.0
-                && second.top() - keeps.bottom() >= crate::design::L
-                && (changes.top() - second.bottom() - crate::design::XS).abs() < 1.0
+            // M-L0.4b: each consequence is its choice's help line (M8): under it, at its left,
+            // before the next choice. The gaps are the design part's.
+            keeps.top() >= first.bottom()
+                && (keeps.left() - first.left()).abs() <= 1.0
+                && second.top() >= keeps.bottom()
+                && changes.top() >= second.bottom()
+                && (changes.left() - second.left()).abs() <= 1.0
         },
     );
     // Round 24 AC1: both files of the duplicate identity are marked, and the header counts both.
@@ -11336,12 +11345,19 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             );
             (action, words, message, frame, icon, clear)
         });
+        // M-L0.4b: in the typed footer a choice follows the Undo on its line when both fit
+        // (`L` after it), else starts a line below at the message words.
+        let undo = d.at_size(size, |d| d.place_of("Undo package registration"));
         d.observe(
             "iter-23-C-FB3-use-copy",
             action.zip(words).zip(message).is_some_and(|((action, words), message)| {
-                action.top() >= message.bottom()
-                    && (action.left() - message.left()).abs() <= 1.0
-                    && words > action.left()
+                let below = action.top() >= message.bottom()
+                    && (action.left() - message.left()).abs() <= 1.0;
+                let after_undo = undo.is_some_and(|undo| {
+                    (action.center().y - undo.center().y).abs() <= 1.0
+                        && action.left() >= undo.right()
+                });
+                (below || after_undo) && words > action.left()
             }) && frame == Some(design::colors().field_border)
                 && !icon
                 && clear.is_ok(),
@@ -11376,10 +11392,13 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                     && undo.left() >= message.right();
                 let wrapped = undo.top() >= message.bottom() - 1.0
                     && message.width() + undo.width() > measure;
-                (same_line || wrapped) && action.top() >= undo.bottom()
+                // M-L0.4b: Use the copy follows the Undo on its row, or starts the row below.
+                let follows = (action.center().y - undo.center().y).abs() <= 1.0
+                    && action.left() >= undo.right();
+                (same_line || wrapped) && (action.top() >= undo.bottom() || follows)
             }),
             format!(
-                "At {size:?}, Undo package registration {undo:?} is on the message line {message:?} where both fit in the measure ({measure}), and Use the copy in encounters {action:?} is the one row below"
+                "At {size:?}, Undo package registration {undo:?} is on the message line {message:?} where both fit in the measure ({measure}), and Use the copy in encounters {action:?} follows it on its row or is the one row below"
             ),
         );
     }
@@ -11682,10 +11701,12 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                         .ends_with(&format!("files in {folder}/ separate entries"))
             });
             let line = d.place_of(result);
+            // M-L0.4b: the consequence is its choice's help line (M8), under it at its left;
+            // its gap is the design part's, so the line is the next one painted below it.
             let fits = button.as_ref().zip(line).is_some_and(|(button, line)| {
                 d.visible_text(result)
                     && line.top() >= button.rect.bottom()
-                    && line.top() - button.rect.bottom() <= design::XS + 1.0
+                    && line.top() - button.rect.bottom() < button.rect.height()
                     && (line.left() - button.rect.left()).abs() < 1.0
             });
             if !fits {
