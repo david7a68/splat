@@ -1426,7 +1426,7 @@ impl CreatureEditor {
     }
 }
 /// The page's Ctrl+S, taken from this frame's input (`Encounters::save_shortcut`).
-fn take_save_key(ctx: &egui::Context) -> bool {
+pub(super) fn take_save_key(ctx: &egui::Context) -> bool {
     ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
 }
 
@@ -4762,7 +4762,9 @@ impl Encounters {
     /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
     /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
     pub fn save_shortcut(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
-        if (self.creature.as_ref().is_some_and(CreatureEditor::dirty) || self.draft_dirty())
+        // Taken for the open editor whether or not it has changes yet: the first edit can come
+        // in the same frame. Its owner saves only if it has changes after its fields ran.
+        if (self.creature.is_some() || self.draft.is_some() || self.group_draft.is_some())
             && campaigns.active_campaign().is_some()
         {
             self.save_key |= take_save_key(ctx);
@@ -11696,6 +11698,68 @@ mod tests {
             assert!(editor.dirty());
             assert_eq!(editor.draft.as_ref().unwrap().text().unwrap(), expected);
         }
+        // Review of PR 499 (P2): the FIRST edit and Ctrl+S in ONE input frame. A saved, clean
+        // encounter; a letter typed into its name and Ctrl+S together: the page takes the key
+        // although nothing had changed before the frame (`save_shortcut`), and the editor saves
+        // after the name field took the letter.
+        editor.draft.as_mut().unwrap().name = "Hero fight".into();
+        editor.save_draft(&ctx, &campaign, &[]);
+        assert!(!editor.dirty(), "saved and clean");
+        let path = campaign.path.join(&editor.draft.as_ref().unwrap().path);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_state(
+                move |ctx, editor: &mut Encounters| {
+                    editor.save_shortcut(ctx, &campaigns);
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        editor.show(
+                            ui,
+                            &campaigns,
+                            &Party::default(),
+                            &Story {
+                                events: &[],
+                                sessions: &[],
+                            },
+                        );
+                    });
+                },
+                editor,
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        {
+            use egui_kittest::kittest::{NodeT, Queryable};
+            harness
+                .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                    node.role() == egui::accesskit::Role::TextInput
+                        && node
+                            .label()
+                            .is_some_and(|label| label.starts_with("Encounter name"))
+                }))
+                .next()
+                .expect("the encounter's name field")
+                .focus();
+        }
+        harness.run_steps(2);
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        harness.event(egui::Event::Text("X".into()));
+        harness.event(egui::Event::Key {
+            key: egui::Key::S,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        });
+        harness.step();
+        let saved = fs::read_to_string(&path).unwrap();
+        let name = harness.state().draft.as_ref().unwrap().name.clone();
+        assert!(
+            name.contains('X') && saved.contains(&name) && !harness.state().dirty(),
+            "the first edit and Ctrl+S in one frame: the name {name:?} saved ({}) and clean",
+            saved.contains(&name)
+        );
     }
     #[test]
     fn dm_run_requires_saved_current_template_and_protects_its_memory_state() {

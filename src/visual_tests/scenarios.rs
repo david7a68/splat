@@ -24023,7 +24023,44 @@ pub mod session_plan_groups {
             d.expect("Save group");
             d.current_page() == "Session"
         });
-        d.click("Save group");
+        // Review of PR 499 (P1): the plan's Ctrl+S saves the group after its WHOLE body took the
+        // frame's input. Words typed into the group's notes and Ctrl+S in ONE input frame (one
+        // pass): the saved file holds them. (The DM's Save act here: the focus is an aside.)
+        d.aside(|d| d.click_field("Group notes"));
+        let ctrl = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        let _ = d.first_frame_one_pass(
+            [
+                egui::Event::Text("Dusk.".into()),
+                egui::Event::Key {
+                    key: Key::S,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: ctrl,
+                },
+            ],
+            |_| (),
+        );
+        let ash = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join("Encounter Groups/Ash Pack.md");
+        let saved = std::fs::read_to_string(&ash).unwrap_or_default();
+        d.observe(
+            "m32-L2c-group-notes-ctrl-s-one-frame",
+            saved.contains("Dusk."),
+            format!(
+                "Notes and Ctrl+S in one frame: the saved group holds them: {}",
+                saved.contains("Dusk.")
+            ),
+        );
         d.expect("Edit group Ash Pack");
         d.observe(
             "iter-26-B-FF2-plan",
