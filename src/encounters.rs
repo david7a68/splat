@@ -5251,13 +5251,15 @@ impl Encounters {
             ui,
             body,
             move |ui| {
+                // The creature's fields, keyed by its file.
+                let key = design::TextKey::from_data(editor.path.clone());
                 // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
                 // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
                 design::field(ui, "Name", None, None, |ui| {
                     let width = ui.available_width();
                     design::line_field(
                         ui,
-                        CREATURE_NAME.of(design::TextKey::from_data(editor.path.clone())),
+                        CREATURE_NAME.of(key.clone()),
                         "Name",
                         &mut editor.fields.name,
                         "Name",
@@ -5293,7 +5295,6 @@ impl Encounters {
                 // The file's source, closed until wanted: the common changes have fields above.
                 design::quiet_section(ui, "Its text, as Markdown", |ui| {
                     let room = ui.available_height();
-                    let key = design::TextKey::from_data(editor.path.clone());
                     design::ScrollColumn::new("creature_text")
                         .max_height(room)
                         .fit_height()
@@ -7486,10 +7487,6 @@ impl Encounters {
         self.after_panes(creature_step, make_yours, active, campaigns.modules());
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn add_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,

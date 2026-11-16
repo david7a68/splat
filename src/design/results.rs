@@ -1090,7 +1090,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
+            &[Ban::Results, Ban::Pane(1), Ban::RowKey(1)],
         ),
         ("src/encounters.rs", "run_settings", &[Ban::Results]),
         ("src/library.rs", "add_reader_result", &[Ban::Footer]),
@@ -1407,7 +1407,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
         ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
         (
