@@ -58,9 +58,9 @@ pub(crate) trait Links {
     fn spell_named(&self, name: &str) -> Option<(usize, String)>;
     /// The entry at a place that `find`, `find_spell` or `spell_named` gave.
     fn entry(&self, index: usize) -> Option<&Entry>;
-    /// A version of the content these links read, new whenever it changes, so what was
-    /// resolved through them may be kept; `None` when there is none to tell a change by.
-    fn generation(&self) -> Option<u64> {
+    /// Where an entry's resolved Spellcasting is kept, with the content's other caches; `None`
+    /// to resolve it on each call.
+    fn spell_cache(&self) -> Option<&super::spells::SpellCache> {
         None
     }
 }
@@ -201,7 +201,12 @@ impl creature::Spells for SpellLinks<'_> {
 
     fn rest(&mut self, ui: &mut egui::Ui, text: &str) {
         let mut targets = self.resolved.references.clone();
-        for named in self.links.spells_named_in(text) {
+        // Resolved with the entry, unless the reader's words differ from its body's.
+        let named = self.resolved.named_in(text).map_or_else(
+            || self.links.spells_named_in(text),
+            <[(usize, String)]>::to_vec,
+        );
+        for named in named {
             if !targets.contains(&Some(named.clone())) {
                 targets.push(Some(named));
             }

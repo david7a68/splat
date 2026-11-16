@@ -234,6 +234,9 @@ pub struct ContentIndex {
     /// Different for each index this process loads, so a cache of its answers can tell when
     /// the index changed.
     generation: u64,
+    /// Creatures' Spellcasting resolved through this index. The index never changes, so it
+    /// keeps them until it is replaced.
+    spell_cache: crate::library::spells::SpellCache,
     /// Plain world notes and world entries.
     world: Vec<usize>,
     mentions: HashMap<Uuid, Vec<Mention>>,
@@ -1755,8 +1758,8 @@ impl view::Links for ContentIndex {
     fn entry(&self, index: usize) -> Option<&splat::content::Entry> {
         self.items.get(index).map(|item| &item.entry)
     }
-    fn generation(&self) -> Option<u64> {
-        Some(self.generation)
+    fn spell_cache(&self) -> Option<&crate::library::spells::SpellCache> {
+        Some(&self.spell_cache)
     }
 }
 

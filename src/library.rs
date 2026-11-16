@@ -1444,6 +1444,8 @@ pub(crate) struct Loaded {
     /// deleted draft's warning show them in every frame. A reload (a new `Loaded`) or an edited
     /// note (`invalidate`) finds them again.
     dependents: std::sync::Mutex<std::collections::HashMap<EntryRef, DependentNames>>,
+    /// Creatures' Spellcasting resolved through these notes, cleared with the other caches.
+    spells: spells::SpellCache,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -2059,6 +2061,7 @@ impl Loaded {
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
+        self.spells.clear();
         self.subtitles.take();
         self.counts.take();
         self.duplicate_ids.take();
@@ -2219,10 +2222,17 @@ impl view::Links for Loaded {
         Some((index, self.notes[index].name().to_owned()))
     }
     fn find_spell(&self, reference: &content::Reference) -> Option<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         let index = self.resolve_spell(reference)?;
         Some((index, self.notes[index].name().to_owned()))
     }
+    fn spell_cache(&self) -> Option<&spells::SpellCache> {
+        Some(&self.spells)
+    }
     fn spells_named_in(&self, text: &str) -> Vec<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         self.notes
             .iter()
             .enumerate()
@@ -2234,6 +2244,8 @@ impl view::Links for Loaded {
             .collect()
     }
     fn spell_named(&self, name: &str) -> Option<(usize, String)> {
+        #[cfg(test)]
+        SPELL_LOOKUPS.with(|count| count.set(count.get() + 1));
         self.notes
             .iter()
             .position(|note| {
@@ -4177,6 +4189,8 @@ struct RepairLink {
 #[cfg(test)]
 thread_local! {
     static REPAIR_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Each spell the Library's notes look up for a stat block.
+    static SPELL_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The row that links a repair's reference. Every repair lookup goes through here, and the
@@ -8477,6 +8491,7 @@ impl Library {
                 Some(text) => self.loaded.as_mut().unwrap().notes[i].text = text,
                 None => file_gone = true,
             }
+            self.loaded.as_mut().unwrap().invalidate();
         }
         let draft_reason = self.draft_reason();
         let parsed_draft = self.parsed_draft(i);
@@ -12053,6 +12068,15 @@ mod tests {
                 };
                 frame(vec![]);
                 let output = frame(vec![]);
+                // The stat block's spells were resolved once, with the notes' other caches:
+                // another unchanged frame looks none up.
+                let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+                frame(vec![]);
+                assert_eq!(
+                    SPELL_LOOKUPS.with(std::cell::Cell::get),
+                    looked,
+                    "an unchanged frame looks no spell up"
+                );
                 let texts: Vec<_> = output
                     .shapes
                     .iter()
@@ -12161,8 +12185,20 @@ mod tests {
                 }
             }
         }
-        // Conflicting identities must not choose an arbitrary destination.
+        // A change to the notes clears what was resolved through them, with their other caches.
         let loaded = library.loaded.as_mut().unwrap();
+        let dragon = loaded.notes[0].entry.clone().unwrap();
+        spells::resolve(&dragon, &*loaded);
+        let looked = SPELL_LOOKUPS.with(std::cell::Cell::get);
+        spells::resolve(&dragon, &*loaded);
+        assert_eq!(SPELL_LOOKUPS.with(std::cell::Cell::get), looked);
+        loaded.invalidate();
+        spells::resolve(&dragon, &*loaded);
+        assert!(
+            SPELL_LOOKUPS.with(std::cell::Cell::get) > looked,
+            "a change resolves again"
+        );
+        // Conflicting identities must not choose an arbitrary destination.
         let duplicate = &loaded.notes[2];
         loaded.notes.push(Note {
             path: "duplicate.md".into(),
