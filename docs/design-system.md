@@ -1427,7 +1427,8 @@ deleted.` One fault has one tone: the message above the roster and the rows that
 An unreadable file is an error (the error icon and colour in the row), and a deleted entry is a warning. The
 check that finds the fault records its kind, and the message takes its tone from that kind, never from its
 words. A roster fault names the row as the DM sees it, `Row 2 (Cinder Wolf): …`, never its stored key or a
-stored field name. A Start fight that such rows refuse is answered with a `Refusal` (ruling M7) in the
+stored field name. `Done` in a roster row's changes brings that row whole into view in the roster's column, the least
+scroll (`design::reveal`, owned by the draft). A Start fight that such rows refuse is answered with a `Refusal` (ruling M7) in the
 editor's footer, in place of the check's sentence: `No fight started from Bridge Ambush. The creature of the 2 Cinder
 Wolf rows was deleted. Choose replacements for the 2 Cinder Wolf rows first.` (an unreadable creature's file:
 `… Splat cannot read the file of Cinder Wolf. Fix Cinder Wolf in Library first.`). It shows while the draft is the one
