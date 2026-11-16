@@ -121,6 +121,9 @@
 
 pub use super::components::Footer;
 use super::{layout::ScrollColumn, tokens::S};
+
+/// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
+mod plan;
 use eframe::egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 
 /// What a pane's body is, for the footer's place.
@@ -2504,6 +2507,380 @@ mod row_cut_tests {
         assert!(
             plain_fills_cut > 0,
             "n12-plain-fills: with no edge a `Fills` column keeps its plain cut"
+        );
+
+        // Migration-32 layout step 3a: the same rule from the whole-block plan, before anything
+        // paints (`plan`). Checked against the blocks' own spans, never against the mask itself.
+        use super::plan::{Block, BlockPlan, MeasureEnv, Part, PlanState, Route, Row, index_reads};
+        // On the plan's physical pixel grid (design §3: at most one physical pixel after rounding).
+        let grid = |plan: &BlockPlan, y: f32| (y * plan.scale()).round();
+        // Whether block `at` lies whole in the view.
+        let inside = |plan: &BlockPlan, at: usize, offset: f32, view: f32| {
+            let (top, end) = plan.span(at);
+            grid(plan, top) >= grid(plan, offset) && grid(plan, end) <= grid(plan, offset + view)
+        };
+        // I1 at one offset and view: a block that fits is eligible exactly when it is whole in
+        // the view; nothing eligible lies outside the view; a view that holds a whole block that
+        // fits has eligible blocks. I12: the mask counts every index entry it reads.
+        let i1 = |plan: &BlockPlan, offset: f32, view: f32, case: &str| {
+            let before = index_reads();
+            let mask = plan.mask("plan_test", offset, view);
+            assert_eq!(
+                index_reads() - before,
+                mask.read,
+                "plan-i12 {case}: the mask counts each index entry it reads (offset {offset}, view {view})"
+            );
+            let mut any_whole = false;
+            for at in 0..plan.len() {
+                let (top, end) = plan.span(at);
+                let fits = grid(plan, end - top) <= grid(plan, view);
+                let whole = inside(plan, at, offset, view);
+                any_whole |= whole && fits;
+                let eligible = mask.eligible.is_some_and(|(from, to)| {
+                    grid(plan, top) >= grid(plan, from) && grid(plan, end) <= grid(plan, to)
+                });
+                if fits {
+                    assert_eq!(
+                        (eligible, mask.whole.contains(&at)),
+                        (whole, whole),
+                        "plan-i1 {case}: block {at} {top}..{end} at offset {offset} in a view of {view} at scale {}: {mask:?}",
+                        plan.scale()
+                    );
+                }
+            }
+            if let Some((from, to)) = mask.eligible {
+                assert!(
+                    grid(plan, from) >= grid(plan, offset)
+                        && grid(plan, to) <= grid(plan, offset + view),
+                    "plan-i1 {case}: eligible {from}..{to} lies in the view {offset}+{view} at scale {}",
+                    plan.scale()
+                );
+            }
+            assert!(
+                !any_whole || !mask.whole.is_empty(),
+                "plan-i1 {case}: a whole block at offset {offset} in {view} is eligible: {mask:?}"
+            );
+            // Review of PR 461 (re-check, 1): each route the mask returns shows its unit whole
+            // there, by the mask's own rule; so does `offset_showing` for each block in the view
+            // that is not whole.
+            let routes = mask
+                .no_whole
+                .iter()
+                .flat_map(|gap| [Some(gap.above), gap.below])
+                .flatten();
+            for route in routes {
+                if let Some(at) = route.offset {
+                    let shown = plan.mask("plan_test", at, view);
+                    assert!(
+                        shown.eligible.is_some_and(|(from, to)| {
+                            grid(plan, route.top) >= grid(plan, from)
+                                && grid(plan, route.top + route.height) <= grid(plan, to)
+                        }),
+                        "plan-l7 {case}: at offset {offset} in {view} the route {at} shows {route:?} whole: {shown:?}"
+                    );
+                }
+            }
+            for at in 0..plan.len() {
+                let (top, end) = plan.span(at);
+                let meets = grid(plan, end) > grid(plan, offset)
+                    && grid(plan, top) < grid(plan, offset + view);
+                if meets
+                    && !inside(plan, at, offset, view)
+                    && let Some(route) = plan.offset_showing(at, view, offset)
+                {
+                    let shown = plan.mask("plan_test", route, view);
+                    assert!(
+                        shown.whole.contains(&at),
+                        "plan-route {case}: offset_showing({at}) from {offset} in {view} is {route}, where block {at} is whole: {shown:?}"
+                    );
+                }
+            }
+            mask
+        };
+        let blocks = || {
+            std::iter::once(Block::Section(Row::TwoLine))
+                .chain(std::iter::repeat_n(Block::Row(Row::TwoLine), 29))
+                .chain([Block::Section(Row::Empty)])
+                .chain(std::iter::repeat_n(Block::Row(Row::OneLine), 10))
+                .collect::<Vec<_>>()
+        };
+        let mut content = crate::design::memo::Revised::new(blocks());
+        let env = MeasureEnv {
+            width: 600.0,
+            fonts: 1,
+            scale: 1.0,
+        };
+        // Top and bottom edges at every offset, a quarter point apart in turn (fractional
+        // offsets), at scales 1 to 4, with a footer that comes, grows and goes (the view shrinks
+        // and comes back; the plan does not change).
+        for scale in [1.0, 1.5, 2.0, 4.0] {
+            let mut scaled = PlanState::new("plan_test");
+            let plan = scaled.plan(&content, MeasureEnv { scale, ..env });
+            let n = plan.len();
+            let extent = plan.extent();
+            assert_eq!((n, plan.scale()), (41, scale), "plan-setup: 41 blocks");
+            for view in [100.0, 300.0, 333.0] {
+                let mut step = 0;
+                loop {
+                    let offset = 7.0 * step as f32 + [0.0, 0.25, 0.5, 0.75][step % 4];
+                    if offset > plan.max_offset(view) {
+                        break;
+                    }
+                    i1(plan, offset, view, "sweep");
+                    step += 1;
+                }
+                // I2: the native range is the whole extent, whatever the mask; at the largest
+                // offset the last block is whole and eligible.
+                let last = plan.max_offset(view);
+                let mask = i1(plan, last, view, "max offset");
+                assert!(
+                    (last - (extent - view)).abs() <= 0.5
+                        && mask.whole.end == n
+                        && plan.extent() == extent,
+                    "plan-i2: at the largest offset {last} of {extent} in {view} the last block is whole: {mask:?}"
+                );
+            }
+        }
+        // Design §3 (review of PR 461, 3): at scale 4, a 40 pt row with half a point of it above
+        // the view (two physical pixels) is not whole; with no unit whole, the offset stays and
+        // the routes show each row whole.
+        let rows = BlockPlan::of_heights(&[(40.0, None), (40.0, None)], 4.0);
+        let pixels = i1(&rows, 0.5, 40.0, "scale 4");
+        assert_eq!(
+            (
+                pixels.whole.is_empty(),
+                pixels.eligible,
+                pixels
+                    .no_whole
+                    .map(|gap| (gap.above.offset, gap.below.and_then(|below| below.offset)))
+            ),
+            (true, None, Some((Some(0.0), Some(40.0)))),
+            "plan-grid: two pixels above the view at scale 4 leave the first row not whole: {pixels:?}"
+        );
+
+        let mut state = PlanState::new("plan_test");
+        let plan = state.plan(&content, env);
+        let n = plan.len();
+        // A section taller than the view splits at its heading (ruling L6); a row taller than
+        // the view is a counted `TooTall`, never eligible.
+        let section = plan.span(0).1;
+        let split = plan.mask("plan_test", 0.0, section - 10.0);
+        let row_end = plan.span(1).1;
+        assert!(
+            split.whole.is_empty()
+                && split
+                    .eligible
+                    .is_some_and(|(from, to)| from == 0.0 && to < section)
+                && split.too_tall.is_empty(),
+            "plan-l6: a section of {section} in a view of {} shows its heading whole: {split:?}",
+            section - 10.0
+        );
+        let tall = plan.mask("plan_test", section, 30.0);
+        assert!(
+            tall.eligible.is_none()
+                && tall
+                    .too_tall
+                    .iter()
+                    .map(|tall| (tall.block, tall.part))
+                    .eq([(1, Part::Block)]),
+            "plan-l6: a row of {} in a view of 30 is too tall: {tall:?} (ends {row_end})",
+            row_end - section
+        );
+        // Review of PR 461, 2: each part of a split section is checked alone. A section of a
+        // 34 pt heading over a 40 pt row in a 35 pt view: the heading is whole, and the row,
+        // taller than the view, is the section's `TooTall`.
+        let two_line = BlockPlan::of_heights(&[(74.0, Some(34.0))], 1.0);
+        let heading_whole = i1(&two_line, 0.0, 35.0, "heading over a tall row");
+        assert!(
+            heading_whole.eligible == Some((0.0, 34.0))
+                && heading_whole
+                    .too_tall
+                    .iter()
+                    .map(|tall| (tall.block, tall.part, tall.height))
+                    .eq([(0, Part::Row, 40.0)]),
+            "plan-l6: the heading is whole and the row is too tall: {heading_whole:?}"
+        );
+
+        // Ruling L7: two 90 px blocks in a 100 px view at offset 40 leave neither whole. The
+        // offset stays, the diagnostic is there, and its routes show each block whole.
+        let pair = BlockPlan::of_heights(&[(90.0, None), (90.0, None)], 1.0);
+        let mask = i1(&pair, 40.0, 100.0, "90/100/40");
+        let gap = mask
+            .no_whole
+            .expect("plan-l7: the 90/100/40 case reports no whole block");
+        let route = |block, part, top, height, offset| Route {
+            block,
+            part,
+            top,
+            height,
+            offset: Some(offset),
+        };
+        assert_eq!(
+            (gap.offset, gap.view, gap.above, gap.below),
+            (
+                40.0,
+                100.0,
+                route(0, Part::Block, 0.0, 90.0, 0.0),
+                Some(route(1, Part::Block, 90.0, 90.0, 80.0))
+            ),
+            "plan-l7: the diagnostic names the offset, the view and both blocks with their routes"
+        );
+        for (at, route) in [(0, 0.0), (1, 80.0)] {
+            assert_eq!(
+                (
+                    pair.offset_showing(at, 100.0, 40.0),
+                    i1(&pair, route, 100.0, "route").whole
+                ),
+                (Some(route), at..at + 1),
+                "plan-l7: the route {route} shows block {at} whole"
+            );
+        }
+        // Review of PR 461, 1: a split section's routes come from its parts. A 54 pt section
+        // (heading 34, empty row 20) in a 35 pt view at offset 10: neither part is whole, no part
+        // is too tall, and the routes show the heading (offset 0) and the row (offset 19).
+        let empty = BlockPlan::of_heights(&[(54.0, Some(34.0))], 1.0);
+        let parts = i1(&empty, 10.0, 35.0, "split section");
+        assert_eq!(
+            (
+                parts.eligible,
+                parts.too_tall.clone(),
+                parts.no_whole.map(|gap| (gap.above, gap.below))
+            ),
+            (
+                None,
+                Vec::new(),
+                Some((
+                    route(0, Part::Heading, 0.0, 34.0, 0.0),
+                    Some(route(0, Part::Row, 34.0, 20.0, 19.0))
+                ))
+            ),
+            "plan-l7: a split section's routes are its parts: {parts:?}"
+        );
+        for (route, part) in [(0.0, (0.0, 34.0)), (19.0, (34.0, 54.0))] {
+            assert_eq!(
+                i1(&empty, route, 35.0, "part route").eligible,
+                Some(part),
+                "plan-l7: the route {route} shows the part {part:?} whole"
+            );
+        }
+
+        // Review of PR 461 (re-check, 1): at scale 1.25 a 32 pt row after a 74 pt section in a
+        // 31.9 pt view: at offset 74 the row is not whole (its end's pixel is below the view's),
+        // and the route that `offset_showing` gives shows it whole, by the mask's rule.
+        let after_section = BlockPlan::of_heights(&[(74.0, Some(34.0)), (32.0, None)], 1.25);
+        let hidden = i1(&after_section, 74.0, 31.9, "scale 1.25");
+        let shown = after_section
+            .offset_showing(1, 31.9, 74.0)
+            .map(|at| i1(&after_section, at, 31.9, "scale 1.25 route").whole);
+        assert!(
+            !hidden.whole.contains(&1) && shown == Some(1..2),
+            "plan-route: the row's route at scale 1.25 shows it whole: {hidden:?}, {shown:?}"
+        );
+        // Review of PR 461 (re-check, 2): every unit too tall for the view that meets it is
+        // reported and counted. Rows of 40, 20 and 40 pt in a 35 pt view at offset 30: the middle
+        // row is whole, and both outer rows are too tall.
+        let three = crate::design::memo::Revised::new(vec![
+            Block::Row(Row::TwoLine),
+            Block::Row(Row::Empty),
+            Block::Row(Row::TwoLine),
+        ]);
+        let mut counted = PlanState::new("plan_test");
+        let both = counted.mask(&three, env, 30.0, 35.0);
+        assert_eq!(
+            (
+                both.eligible,
+                both.too_tall
+                    .iter()
+                    .map(|tall| (tall.block, tall.part, tall.height))
+                    .collect::<Vec<_>>(),
+                counted.work().too_tall
+            ),
+            (
+                Some((40.0, 60.0)),
+                vec![(0, Part::Block, 40.0), (2, Part::Block, 40.0)],
+                2
+            ),
+            "plan-l6: both outer rows are too tall, each counted: {both:?}"
+        );
+
+        // I12 and M6: a quiet frame (same content, same environment) measures nothing, and a
+        // mask reads `O(log n)` index entries, every one counted: three searches of
+        // ⌈log2(n + 1)⌉ reads at most, and 19 more (the eligible span, the two cut blocks' spans
+        // and boundaries, and the two routes), here and in 100,000 blocks.
+        let quiet = state.work();
+        assert_eq!(
+            (quiet.builds, quiet.blocks_measured),
+            (1, n),
+            "plan-i12: one plan"
+        );
+        let bound = |n: usize| 3 * (usize::BITS - n.leading_zeros()) as usize + 19;
+        for frame in 0..10 {
+            let mask = state.mask(&content, env, 7.0 * frame as f32, 300.0);
+            assert!(
+                mask.read <= bound(n),
+                "plan-i12: a mask reads at most {} entries in {n} blocks: {}",
+                bound(n),
+                mask.read
+            );
+        }
+        let many: Vec<(f32, Option<f32>)> = (0..100_000)
+            .map(|at| {
+                if at % 50 == 0 {
+                    (74.0, Some(34.0))
+                } else {
+                    (40.0, None)
+                }
+            })
+            .collect();
+        let large = BlockPlan::of_heights(&many, 1.0);
+        let most = (0..200)
+            .flat_map(|at| [(at as f32 * 20_011.5, 300.0), (at as f32 * 20_011.5, 35.0)])
+            .map(|(offset, view)| {
+                i1(&large, offset.min(large.max_offset(view)), view, "large").read
+            })
+            .max()
+            .unwrap_or(0);
+        assert!(
+            most <= bound(large.len()),
+            "plan-i12: a mask reads at most {} entries in {} blocks: {most}",
+            bound(large.len()),
+            large.len()
+        );
+        let after = state.work();
+        assert_eq!(
+            (after.builds, after.blocks_measured, after.bytes_indexed),
+            (quiet.builds, quiet.blocks_measured, quiet.bytes_indexed),
+            "plan-i12: ten quiet frames measure and index nothing"
+        );
+        let wider = MeasureEnv {
+            width: 640.0,
+            ..env
+        };
+        let _ = state.plan(&content, wider);
+        assert_eq!(
+            state.work().builds,
+            2,
+            "plan-m6: a new width measures the plan again"
+        );
+        // Content that shrinks while scrolled: the new revision measures again, the offset is
+        // kept in the new range (never snapped), and there the last block is whole.
+        let far = state.plan(&content, wider).max_offset(300.0);
+        content.revise(|blocks| {
+            blocks.truncate(12);
+            crate::design::memo::Changed::Yes
+        });
+        let shrunk = state.plan(&content, wider);
+        let kept = shrunk.clamp(far, 300.0);
+        assert!(
+            shrunk.len() == 12
+                && kept == shrunk.max_offset(300.0)
+                && i1(shrunk, kept, 300.0, "shrunk").whole.end == 12,
+            "plan-shrink: offset {far} kept at {kept} in the shrunk content, its last block whole"
+        );
+        assert_eq!(
+            state.work().builds,
+            3,
+            "plan-m6: a new content revision measures again"
         );
     }
 
