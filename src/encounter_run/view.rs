@@ -3314,6 +3314,10 @@ impl Run {
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
     /// with its button, by the rule the campaign chose for initiative.
     /// Whatever joins a fight after it starts: one creature, or a prepared group.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: Arrivals keeps its own scroll under a `Fills` body (`FillsReason::ArrivalsList`), counted (design::results::STAGED_ALLOWS)"
+    )]
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
         // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned
         // to the panel's bottom, below the scrolling list. The list keeps its top, so a result
@@ -3338,25 +3342,38 @@ impl Run {
             ui.available_width(),
         );
         let this = &mut *self;
-        // FJ1: the pane's scroll column keeps the scroll bar's lane whether or not the bar
-        // shows, as the Encounters list does, so a list that grows long moves no field and no Add.
+        // The list keeps its own scroll (`FillsReason::ArrivalsList`): a group block is taller
+        // than a row, and the footer's edge cuts it plainly, as before (no block is hidden).
+        let body = design::pane::Body::Fills(design::pane::Fills::because(
+            design::pane::FillsReason::ArrivalsList,
+        ));
         let paned = messages.pane_then(
             ui,
-            design::pane::Body::Content,
+            body,
             move |ui| {
-                ui.spacing_mut().item_spacing.y = design::XS;
-                if this
-                    .groups
-                    .as_ref()
-                    .is_some_and(|groups| !groups.is_empty())
-                {
-                    design::help(ui, "Drag a group name to the list, or use Add.");
-                }
-                // Measured once: the search field and the group list share the block.
-                let arrival = this.arrival_block(ui);
-                this.add_creature_form(ui, arrival.map(|(_, block)| block));
-                design::rule(ui);
-                let add = this.group_list(ui, arrival);
+                // FJ1: the list keeps the scroll bar's lane whether or not the bar shows, as the
+                // Encounters list does, so a list that grows long moves no field and no Add.
+                let lane = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
+                let add = egui::ScrollArea::vertical()
+                    .id_salt("run_groups")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.set_max_width(lane);
+                        ui.spacing_mut().item_spacing.y = design::XS;
+                        if this
+                            .groups
+                            .as_ref()
+                            .is_some_and(|groups| !groups.is_empty())
+                        {
+                            design::help(ui, "Drag a group name to the list, or use Add.");
+                        }
+                        // Measured once: the search field and the group list share the block.
+                        let arrival = this.arrival_block(ui);
+                        this.add_creature_form(ui, arrival.map(|(_, block)| block));
+                        design::rule(ui);
+                        this.group_list(ui, arrival)
+                    })
+                    .inner;
                 (this, add)
             },
             |(this, add), messages| {

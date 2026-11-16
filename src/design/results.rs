@@ -1066,6 +1066,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
         ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
+        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c).
+        (
+            "src/encounter_run/view.rs",
+            "groups_tab",
+            &[Ban::Layout(1), Ban::Pane(1)],
+        ),
         (
             "src/encounters/groups.rs",
             "discard_group_draft",
