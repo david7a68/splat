@@ -524,6 +524,12 @@ enum LibraryPress {
 enum PageError {
     Own(Sentence),
     Outside(String),
+    /// The app's own words, then the outside words that say why (`because`).
+    Because {
+        own: Sentence,
+        cause: String,
+        words: String,
+    },
 }
 
 impl From<String> for PageError {
@@ -533,11 +539,20 @@ impl From<String> for PageError {
 }
 
 impl PageError {
+    /// The app's own words `own`, then the outside words `cause`.
+    fn because(own: &Sentence, cause: String) -> Self {
+        Self::Because {
+            words: format!("{own} {cause}"),
+            own: own.clone(),
+            cause,
+        }
+    }
+
     /// Its words, for the legacy footer lines and the tests.
     fn words(&self) -> &str {
         match self {
             Self::Own(words) => words.as_str(),
-            Self::Outside(words) => words,
+            Self::Outside(words) | Self::Because { words, .. } => words,
         }
     }
 }
@@ -551,6 +566,15 @@ static FOLDER_HOLDS_ANOTHER_PACKAGE: Sentence =
     crate::sentence!("That folder now holds a different package.");
 /// Why loading stopped before it finished.
 static LOADING_STOPPED: Sentence = crate::sentence!("Library loading stopped. Reload to retry.");
+/// Why a new entry made in a package is not chosen for the open campaign (its cause follows).
+static ENTRY_NOT_CHOSEN: Sentence =
+    crate::sentence!("Entry created. Splat could not use it in this campaign.");
+/// Why a save's search for its moved file stopped: one folder has two files with its ID.
+static SEVERAL_FILES_KEEP_ONE: Sentence =
+    crate::sentence!("Several files have this entry’s ID. Keep one file, then try again.");
+/// Why a save's search for its moved file stopped: two folders have a file with its ID.
+static SEVERAL_FILES_CHOOSE_ONE: Sentence =
+    crate::sentence!("Several files have this entry’s ID. Choose one in Library.");
 /// Why a new entry was not made: its name.
 static NAME_WITHOUT_SEPARATORS: Sentence =
     crate::sentence!("Use a name without path separators or line breaks.");
@@ -561,6 +585,8 @@ enum LibraryFault<'a> {
     Own(&'a Sentence),
     /// Words from outside the app: the system's or the workspace's.
     Error(&'a str),
+    /// The app's own words, then the outside words that say why.
+    Because(&'a Sentence, &'a str),
 }
 
 impl<'a> From<&'a PageError> for LibraryFault<'a> {
@@ -568,6 +594,7 @@ impl<'a> From<&'a PageError> for LibraryFault<'a> {
         match error {
             PageError::Own(words) => Self::Own(words),
             PageError::Outside(words) => Self::Error(words),
+            PageError::Because { own, cause, .. } => Self::Because(own, cause),
         }
     }
 }
@@ -585,6 +612,10 @@ impl design::outcome::Fault for LibraryFault<'_> {
     fn cause(&self) -> Sentence {
         match self {
             Self::Own(words) => (*words).clone(),
+            Self::Because(own, cause) => match Sentence::outside(*cause) {
+                Some(cause) => (*own).clone().then(cause),
+                None => (*own).clone(),
+            },
             // `Error:` leads, as before; the words after it keep their spelling (a path).
             Self::Error(words) => Sentence::outside_after(crate::lead!("Error:"), *words)
                 .unwrap_or(crate::sentence!("Something went wrong.")),
@@ -1324,12 +1355,35 @@ struct DuplicateIndex {
 /// An entry as other entries name it: its id, and its key when it has one.
 type EntryRef = (Uuid, Option<String>);
 
+/// The entries that need one entry, by name, as `Loaded` keeps them: a lookup hands out the
+/// kept names (an `Arc`), never a copy. Only `new` makes one, from names just found, so every
+/// copy of names is counted in tests.
+#[derive(Clone, Default)]
+struct DependentNames(std::sync::Arc<[String]>);
+
+impl DependentNames {
+    fn new(names: Vec<String>) -> Self {
+        #[cfg(test)]
+        DEPENDENT_NAMES.with(|copied| copied.set(copied.get() + names.len()));
+        Self(names.into())
+    }
+}
+
+impl std::ops::Deref for DependentNames {
+    type Target = [String];
+    fn deref(&self) -> &[String] {
+        &self.0
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     /// How many times the notes were read to count a rename's links.
     static RENAME_LINK_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many times the notes were read to find the entries that need one entry.
     static DEPENDENT_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many dependent names were copied into a new `DependentNames`.
+    static DEPENDENT_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The link index a scan used, and each listed entry's position and broken link count.
@@ -1388,7 +1442,7 @@ pub(crate) struct Loaded {
     /// The entries that need an entry (by its id and key), by name: Remove's result and a
     /// deleted draft's warning show them in every frame. A reload (a new `Loaded`) or an edited
     /// note (`invalidate`) finds them again.
-    dependents: std::sync::Mutex<std::collections::HashMap<EntryRef, Vec<String>>>,
+    dependents: std::sync::Mutex<std::collections::HashMap<EntryRef, DependentNames>>,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -1585,9 +1639,9 @@ impl Loaded {
                 .collect()
         })
     }
-    fn dependents(&self, note: &Note) -> Vec<String> {
+    fn dependents(&self, note: &Note) -> DependentNames {
         let Some(id) = crate::content_workspace::note_id(&note.text) else {
-            return Vec::new();
+            return DependentNames::default();
         };
         let known = (id, note.entry.as_ref().and_then(|entry| entry.key.clone()));
         let mut cache = self
@@ -1599,25 +1653,26 @@ impl Loaded {
         }
         #[cfg(test)]
         DEPENDENT_SCANS.with(|scans| scans.set(scans.get() + 1));
-        let names: Vec<String> = self
-            .notes
-            .iter()
-            .filter_map(|other| {
-                let entry = other.entry.as_ref()?;
-                (entry.id != id
-                    && content::required_references(entry).is_ok_and(|refs| {
-                        refs.contains(&content::Reference::Id(id))
-                            || note
-                                .entry
-                                .as_ref()
-                                .and_then(|entry| entry.key.as_ref())
-                                .is_some_and(|key| {
-                                    refs.contains(&content::Reference::Key(key.clone()))
-                                })
-                    }))
-                .then(|| entry.name.clone())
-            })
-            .collect();
+        let names = DependentNames::new(
+            self.notes
+                .iter()
+                .filter_map(|other| {
+                    let entry = other.entry.as_ref()?;
+                    (entry.id != id
+                        && content::required_references(entry).is_ok_and(|refs| {
+                            refs.contains(&content::Reference::Id(id))
+                                || note
+                                    .entry
+                                    .as_ref()
+                                    .and_then(|entry| entry.key.as_ref())
+                                    .is_some_and(|key| {
+                                        refs.contains(&content::Reference::Key(key.clone()))
+                                    })
+                        }))
+                    .then(|| entry.name.clone())
+                })
+                .collect(),
+        );
         cache.insert(known, names.clone());
         names
     }
@@ -4384,7 +4439,7 @@ fn read_disk(root: &Path, relative: &str) -> Result<Option<String>, FileFault> {
 }
 
 /// Check readable and broken notes, so a move cannot create a second identity.
-fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String)>, String> {
+fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String)>, PageError> {
     let (entries, errors) = content::read_directory(root)?;
     let mut found = None;
     for path in entries
@@ -4400,9 +4455,7 @@ fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String
             .map_err(|e| FileFault::read(&path, &e).message())?;
         if crate::content_workspace::note_id(&text) == Some(id) {
             if found.is_some() {
-                return Err(
-                    "Several files have this entry’s ID. Keep one file, then try again.".into(),
-                );
+                return Err(PageError::Own(SEVERAL_FILES_KEEP_ONE.clone()));
             }
             found = Some((path, text));
         }
@@ -4993,6 +5046,23 @@ impl Library {
         }
         self.link_edits
             .disk_changed(|result| result.edits.on_disk());
+    }
+
+    /// A new entry made in a package is chosen for the open campaign, unless the DM unticked
+    /// it. `Err`: why it could not be, in the app's words with the cause after them.
+    fn choose_new_entry(
+        &self,
+        owner: &Owner,
+        entry: Uuid,
+        campaigns: &Campaigns,
+    ) -> Result<(), PageError> {
+        let (false, Owner::Package(module), Some(campaign)) =
+            (self.new_not_used, owner, campaigns.active_campaign())
+        else {
+            return Ok(());
+        };
+        crate::content_workspace::use_in_campaign(&campaign, module.id, &module.name, Some(entry))
+            .map_err(|cause| PageError::because(&ENTRY_NOT_CHOSEN, cause))
     }
 
     /// The manifest repair: `Package.md` written again for `module`. Its result, with Undo, is
@@ -7838,22 +7908,7 @@ impl Library {
                         let left = self.here();
                         match write_note(&root, &path, None, &text) {
                             Ok(entry) => {
-                                let used =
-                                    if !self.new_not_used && matches!(owner, Owner::Package(_)) {
-                                        campaigns
-                                            .active_campaign()
-                                            .map(|campaign| {
-                                                crate::content_workspace::use_in_campaign(
-                                                    &campaign,
-                                                    owner.id().unwrap(),
-                                                    owner.source(),
-                                                    Some(entry.id),
-                                                )
-                                            })
-                                            .transpose()
-                                    } else {
-                                        Ok(None)
-                                    };
+                                let used = self.choose_new_entry(&owner, entry.id, campaigns);
                                 let l = self.loaded.as_mut().unwrap();
                                 if !self.new_not_used
                                     && used.is_ok()
@@ -7891,11 +7946,7 @@ impl Library {
                                 self.new_error = None;
                                 self.new_folder.clear();
                                 self.new_form = false;
-                                self.error = used.err().map(|error| {
-                                    PageError::Outside(format!(
-                                        "Entry created. Could not use it in this campaign: {error}"
-                                    ))
-                                });
+                                self.error = used.err();
                                 // Show the new entry, wherever the DM chose to put it.
                                 if self
                                     .selected
@@ -8000,10 +8051,7 @@ impl Library {
                         };
                         if let Some((path, text)) = moved_note(owner.root().unwrap(), id, old)? {
                             if found.is_some() {
-                                return Err(
-                                    "Several files have this entry’s ID. Choose one in Library."
-                                        .to_owned(),
-                                );
+                                return Err(PageError::Own(SEVERAL_FILES_CHOOSE_ONE.clone()));
                             }
                             found = Some((owner, path, text));
                         }
@@ -8029,7 +8077,7 @@ impl Library {
                     self.stale = true;
                 }
                 Err(error) => {
-                    self.error = Some(error.into());
+                    self.error = Some(error);
                     return;
                 }
                 _ => {}
@@ -8044,7 +8092,7 @@ impl Library {
             Elsewhere(String),
             Back(Option<String>),
             Unread(FileFault),
-            Failed(String),
+            Failed(PageError),
         }
         let gone = {
             let note = &self.loaded.as_ref().unwrap().notes[i];
@@ -8076,7 +8124,7 @@ impl Library {
                 return;
             }
             Some(Gone::Failed(error)) => {
-                self.error = Some(error.into());
+                self.error = Some(error);
                 return;
             }
             Some(Gone::Back(text)) => {
@@ -9428,7 +9476,7 @@ impl Library {
             let names = if change.text.is_none() {
                 self.loaded.as_ref().unwrap().dependents(note)
             } else {
-                Vec::new()
+                DependentNames::default()
             };
             // The note and the choices start at the message text, as in World and the run.
             let (overwrite, reload) = design::message_with_actions(ui, Tone::Warning, text, |ui| {
@@ -13201,6 +13249,25 @@ mod tests {
         let mut unreadable = writable.clone();
         std::os::unix::fs::PermissionsExt::set_mode(&mut unreadable, 0o000);
         fs::set_permissions(&campaign_file, unreadable).unwrap();
+        // While it cannot be read, a new entry made in the package cannot be chosen for the
+        // campaign: the app's own words first, checked, then the system's cause.
+        let not_chosen = library
+            .choose_new_entry(
+                &Owner::Package(original.clone()),
+                Uuid::new_v4(),
+                &app.campaigns,
+            )
+            .unwrap_err();
+        assert!(
+            matches!(&not_chosen, PageError::Because { own, .. } if *own == ENTRY_NOT_CHOSEN),
+            "the app's words are checked: {not_chosen:?}"
+        );
+        assert!(
+            design::outcome::Fault::cause(&LibraryFault::from(&not_chosen))
+                .as_str()
+                .starts_with("Entry created. Splat could not use it in this campaign. "),
+            "{not_chosen:?}"
+        );
         library.error = None;
         library.undo_package_use();
         assert!(
@@ -14785,11 +14852,20 @@ mod tests {
         // Long names, as the DM's data may hold, so the widths cross each label's boundary.
         let entry = "Ash Exposure in the Burning Wastes";
         let package = "The Ashen Marches of the Cinder Reach";
-        fs::write(
-            m.path.join(format!("{entry}.md")),
-            note_text(entry, "rule", None),
-        )
-        .unwrap();
+        let creature = note_text(entry, "creature", None);
+        let id = Entry::parse("x.md", &creature).unwrap().id;
+        fs::write(m.path.join(format!("{entry}.md")), creature).unwrap();
+        // Four encounters need it, so the Remove line names the first three "and 1 more".
+        for at in 1..=4 {
+            let name = format!("Bridge {at}");
+            let path = format!("{name}.md");
+            let fields = format!(
+                "splat_id: {}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster:\n  - key: foe\n    creature: {{id: {id}}}\n    side: enemies\n    controller: {{kind: manual, role: gm}}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n",
+                Uuid::new_v4()
+            );
+            let text = content::formats::fixture(&path, &fields, &format!("\n# {name}\n")).unwrap();
+            fs::write(m.path.join(path), text).unwrap();
+        }
         let mut library = Library {
             loaded: Some(load(Some(&m)).unwrap()),
             ..Default::default()
@@ -14892,17 +14968,38 @@ mod tests {
         harness.set_size(egui::vec2(700.0, 700.0));
         harness.run_steps(2);
         let scans = || DEPENDENT_SCANS.with(std::cell::Cell::get);
+        let copied = || DEPENDENT_NAMES.with(std::cell::Cell::get);
         assert!(
-            scans() > 0,
-            "fixture: the Remove line read what needs its entry"
+            scans() > 0 && copied() >= 4,
+            "fixture: the Remove line found the four encounters that need its entry"
         );
-        let (quiet, scanned) = (crate::design::outcome::footer_work(), scans());
+        let painted: Vec<String> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            painted
+                .iter()
+                .any(|text| text.contains("Bridge 1, Bridge 2, Bridge 3 and 1 more now needs")),
+            "fixture: the Remove line names them\n{painted:#?}"
+        );
+        let (quiet, scanned, names) = (crate::design::outcome::footer_work(), scans(), copied());
         harness.run_steps(4);
         let after = crate::design::outcome::footer_work();
         assert_eq!(
             scans(),
             scanned,
             "10: an unchanged frame reads no note for the Remove line"
+        );
+        assert_eq!(
+            copied(),
+            names,
+            "10: an unchanged frame copies none of the names that need the removed entry"
         );
         assert!(
             after.compared > quiet.compared,
@@ -16167,7 +16264,38 @@ mod tests {
             "SD1-moved: {error}"
         );
         assert!(!error.contains("stream"), "{error}");
+        assert!(
+            matches!(library.error, Some(PageError::Outside(_))),
+            "the system's words stay outside words"
+        );
         assert!(!module.path.join("Wolf.md").exists(), "nothing is written");
         assert_eq!(fs::read(module.path.join("Other.md")).unwrap(), NOT_TEXT);
+        // Two files in its folder have its ID: the app's own refusal, checked.
+        fs::remove_file(module.path.join("Other.md")).unwrap();
+        for name in ["Wolf A.md", "Wolf B.md"] {
+            fs::write(module.path.join(name), &text).unwrap();
+        }
+        library.save_selected(false);
+        assert_eq!(
+            library.error,
+            Some(PageError::Own(SEVERAL_FILES_KEEP_ONE.clone())),
+            "one folder with two files of its ID"
+        );
+        // One file in each of two folders: the other refusal, checked.
+        fs::remove_file(module.path.join("Wolf B.md")).unwrap();
+        let other = create_module(&temp.path().join("other"), "Other", "other").unwrap();
+        fs::write(other.path.join("Wolf.md"), &text).unwrap();
+        library
+            .loaded
+            .as_mut()
+            .unwrap()
+            .owners
+            .push(Owner::Package(other));
+        library.save_selected(false);
+        assert_eq!(
+            library.error,
+            Some(PageError::Own(SEVERAL_FILES_CHOOSE_ONE.clone())),
+            "two folders, each with a file of its ID"
+        );
     }
 }
