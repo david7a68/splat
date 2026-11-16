@@ -8169,18 +8169,13 @@ impl Library {
         // M0355 (round 31 reader-toolbar-icon-form): every toolbar action has one form, its
         // words; Back is navigation and keeps its arrow.
         if can_copy {
-            toolbar = toolbar.action("Copy to…", None, Extra::Copy, copy_availability);
+            toolbar = toolbar.action("Copy to…", Extra::Copy, copy_availability);
         }
         if can_make {
-            toolbar = toolbar.action(
-                "Make NPC note",
-                None,
-                Extra::Make,
-                design::Availability::Draft,
-            );
+            toolbar = toolbar.action("Make NPC note", Extra::Make, design::Availability::Draft);
         }
         if let Some(label) = choose {
-            toolbar = toolbar.action(label, None, Extra::Choose, design::Availability::Draft);
+            toolbar = toolbar.action(label, Extra::Choose, design::Availability::Draft);
         }
         // The toolbar, the file line between, and the save row with the draft's reason are one
         // part's draw: it paints the reason itself, on the save row's line or under the toolbar.

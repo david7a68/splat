@@ -1417,7 +1417,8 @@ pub fn status_slot<K: Copy>(
 #[doc(hidden)]
 pub mod doc_parts {
     pub use crate::design::{
-        Action, AddField, Density, FolderGroup, add_field, folder_group_heading, icons,
+        Action, AddField, Availability, Density, FolderGroup, ModeLock, ReaderToolbar, add_field,
+        folder_group_heading, icons,
     };
 }
 
