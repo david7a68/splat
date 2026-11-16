@@ -7985,7 +7985,7 @@ impl Encounters {
         }
         let add_width = columns.width(lane);
         design::BlockRegion::new(("encounter_results", &query), region, rows)
-            .name("Creatures")
+            .name("Creature results")
             .show(ui, |ui, row| {
                 let c = &creatures[matches[row]];
                 let rect = egui::Rect::from_min_size(

@@ -53,8 +53,9 @@ pub enum Row {
     Action { status: bool, wrapped: bool },
 }
 
-/// The height of a fact/action row's facts (`Row::Action`).
-pub const ACTION_ROW: f32 = super::super::tokens::XL + super::super::tokens::L + S;
+/// The height of a fact/action row's facts (`Row::Action`): the name's link target (`XL`) and
+/// a line of facts, which egui lays out at its control height.
+pub const ACTION_ROW: f32 = super::super::tokens::XL + super::super::theme::INTERACT_HEIGHT;
 
 /// The height of a Library entry row (`Row::Entry`).
 pub const ENTRY_ROW_HEIGHT: f32 = 44.0;
