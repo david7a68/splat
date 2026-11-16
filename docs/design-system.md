@@ -1585,8 +1585,10 @@ and then quiet `Cancel` (key `Esc`) are on the form's action line under the fiel
 keeps the whole room; in a narrow column `Cancel` wraps under `Add` at the text edge. Suggestions go under the action
 line; Escape lets go of a chosen one first. So the DM sees how to finish, and the form's keys and input-method guard are the
 one form's. Enter or `Add` adds; Escape or `Cancel` clears the words and the caller closes the field. Keys only,
-with no actions, is `add_field_keys`: staged (Clippy, `Ban::Extras`, one row each in `STAGED_ALLOWS`) for the two
-flows this section and the run's Effect describe. The loot list's field, which stays open, has keys only: no button, Enter
+with no actions, is `add_field(id, name, hint).keys_only(beside_width, beside)`: its field is its owner's (`FieldId`,
+so focus and text history follow the owner, not the place) and its line keeps one `Read` row's height. It is staged (Clippy,
+`Ban::Extras`, one row each in `STAGED_ALLOWS`) for the two flows this section and the run's Effect describe; the older
+`add_field_keys` (its field by place) stays staged until those two callers move. The loot list's field, which stays open, has keys only: no button, Enter
 adds, Escape clears the chosen suggestion, or the words when none is chosen, and the field stays open after Enter where several
 lines follow each other, as loot lines do. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
 only by arrows then Enter, or a click. `Roll on a table` beside the field lists every table. A creature's list

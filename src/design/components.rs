@@ -2048,6 +2048,11 @@ fn result_room() -> f32 {
 pub struct NoActions;
 /// Typestate of an [`AddFieldForm`]: `Add` and `Cancel` are given.
 pub struct WithActions;
+/// Typestate of an [`AddFieldForm`]: keys only, no actions (`keys_only`).
+pub struct KeysOnly;
+
+/// A control right of a keys-only add field, its width, which can choose a value too.
+type Beside<'a, T> = (f32, Box<dyn FnOnce(&mut Ui) -> Option<T> + 'a>);
 
 /// The suggestions of an add field for its typed words.
 type Suggest<'a, T> = Box<dyn FnOnce(&str) -> Vec<Suggestions<T>> + 'a>;
@@ -2091,6 +2096,8 @@ pub struct AddFieldForm<'a, T, A> {
     suggest: Option<Suggest<'a, T>>,
     /// The caller's one-line result, drawn in the room the form keeps for it.
     result: Option<ResultDraw<'a>>,
+    /// A keys-only field's control on its right.
+    beside: Option<Beside<'a, T>>,
     state: std::marker::PhantomData<A>,
 }
 
@@ -2108,6 +2115,7 @@ pub fn add_field<'a, T>(
         actions: None,
         suggest: None,
         result: None,
+        beside: None,
         state: std::marker::PhantomData,
     }
 }
@@ -2126,8 +2134,58 @@ impl<'a, T> AddFieldForm<'a, T, NoActions> {
             actions: Some((add, cancel)),
             suggest: self.suggest,
             result: self.result,
+            beside: None,
             state: std::marker::PhantomData,
         }
+    }
+
+    /// Keys only, no actions: Enter adds; Escape lets go of a chosen suggestion, then clears
+    /// the words. The field is keyed by its owner (`id`), and its line keeps one `Read` row's
+    /// height, empty or not. `beside` draws a control right of the field, `beside_width` wide,
+    /// and can choose a value too. Staged, as [`add_field_keys`] is: Clippy refuses it outside
+    /// `src/design/` (`Ban::Extras`), and each use is a row of `design::results::STAGED_ALLOWS`
+    /// with its reason (the run's `Effect` line, the loot list's own field).
+    pub fn keys_only(
+        self,
+        beside_width: f32,
+        beside: impl FnOnce(&mut Ui) -> Option<T> + 'a,
+    ) -> AddFieldForm<'a, T, KeysOnly> {
+        AddFieldForm {
+            id: self.id,
+            name: self.name,
+            hint: self.hint,
+            actions: None,
+            suggest: self.suggest,
+            result: None,
+            beside: Some((beside_width, Box::new(beside))),
+            state: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T> AddFieldForm<'_, T, KeysOnly> {
+    pub fn show(self, ui: &mut Ui, state: &mut AddField) -> AddFieldResult<T> {
+        let (beside_width, beside) = self.beside.expect("KeysOnly holds its control");
+        let (id, name, hint) = (self.id, self.name, self.hint);
+        keys_field(
+            ui,
+            state,
+            beside_width,
+            beside,
+            self.suggest,
+            |ui, words, width| {
+                ui.set_min_height(Density::Read.control());
+                let hint = placeholder(ui, hint);
+                let response = id.single_line(ui, words, |edit| {
+                    edit.desired_width(width - 2.0 * S)
+                        .min_size(vec2(width, Density::Read.control()))
+                        .margin(vec2(S, 4.0))
+                        .hint_text(hint)
+                });
+                named(ui, &response, name);
+                response
+            },
+        )
     }
 }
 
@@ -2325,11 +2383,33 @@ pub fn add_field_keys<T>(
     beside: impl FnOnce(&mut Ui) -> Option<T>,
     suggest: impl FnOnce(&str) -> Vec<Suggestions<T>>,
 ) -> AddFieldResult<T> {
+    let suggest: Suggest<'_, T> = Box::new(suggest);
+    keys_field(
+        ui,
+        state,
+        beside_width,
+        beside,
+        Some(suggest),
+        |ui, words, width| text_input(ui, name, words, hint, width),
+    )
+}
+
+/// The keys-only add field's line and keys, with its text field drawn by `field` in the width
+/// it is given: [`add_field_keys`] (staged, its field by place) and `AddFieldForm::keys_only`
+/// (its field by its owner's `FieldId`).
+fn keys_field<T>(
+    ui: &mut Ui,
+    state: &mut AddField,
+    beside_width: f32,
+    beside: impl FnOnce(&mut Ui) -> Option<T>,
+    suggest: Option<Suggest<'_, T>>,
+    field: impl FnOnce(&mut Ui, &mut String, f32) -> Response,
+) -> AddFieldResult<T> {
     let mut chosen = None;
     let field = ui
         .horizontal(|ui| {
             let width = (ui.available_width() - beside_width).max(160.0);
-            let field = text_input(ui, name, &mut state.words, hint, width);
+            let field = field(ui, &mut state.words, width);
             chosen = beside(ui);
             field
         })
@@ -2345,8 +2425,7 @@ pub fn add_field_keys<T>(
     if cancel {
         state.words.clear();
     }
-    let suggest: Suggest<'_, T> = Box::new(suggest);
-    let suggested = suggestion_rows(ui, state, &field, enter, Some(suggest));
+    let suggested = suggestion_rows(ui, state, &field, enter, suggest);
     AddFieldResult {
         field,
         chosen: suggested.or(chosen),
@@ -8653,6 +8732,10 @@ mod tests {
     /// During an input method's composition, Enter belongs to the input method: it adds nothing
     /// and the commit lands in the field.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the staged keys-only add field itself"
+    )]
     fn iter29_p1_an_opened_add_field_shows_add_and_cancel() {
         use egui_kittest::kittest::Queryable;
         const NAME: &str = "Log line for Hob";
@@ -8890,6 +8973,57 @@ mod tests {
             (now - (opened - 60.0)).abs() <= 1.0,
             "the DM's scroll stays: offset {opened} then {now}, the wheel put it at {}",
             opened - 60.0
+        );
+
+        // The keys-only add field (M-R0's run `Effect` line and loot field): no actions; the
+        // field is its owner's (`FieldId`), so focus and its text history follow the owner, not
+        // its place; its line keeps one `Read` row's height, empty or with words; Enter adds.
+        let owner = crate::field_id!("test_keys_field").of(uuid::Uuid::from_u128(7));
+        let mut keys = egui_kittest::Harness::builder()
+            .with_size(vec2(480.0, 200.0))
+            .build_ui_state(
+                move |ui, (field, seen): &mut Seen| {
+                    let result = add_field::<()>(owner, NAME, "What happened?")
+                        .keys_only(0.0, |_| None)
+                        .show(ui, field);
+                    if result.enter || result.cancel {
+                        seen.push((result.enter, result.cancel, field.words.clone()));
+                    }
+                },
+                (
+                    AddField {
+                        focus: true,
+                        ..AddField::default()
+                    },
+                    Vec::new(),
+                ),
+            );
+        super::super::theme::install(&keys.ctx);
+        keys.run_steps(2);
+        assert!(
+            keys.query_by_label("Add").is_none() && keys.query_by_label("Cancel").is_none(),
+            "keys only: no actions"
+        );
+        assert_eq!(
+            keys.ctx.memory(|memory| memory.focused()),
+            Some(owner.id()),
+            "the field is its owner's"
+        );
+        let empty = keys.get_by_label(NAME).rect().height();
+        keys.get_by_label(NAME).type_text("Ash");
+        keys.run_steps(2);
+        let typed = keys.get_by_label(NAME).rect().height();
+        assert!(
+            (empty - Density::Read.control()).abs() < 0.5
+                && (typed - Density::Read.control()).abs() < 0.5,
+            "one Read row, empty {empty} and typed {typed}"
+        );
+        keys.key_press(egui::Key::Enter);
+        keys.run_steps(2);
+        assert_eq!(
+            keys.state().1,
+            [(true, false, "Ash".to_owned())],
+            "Enter adds the words"
         );
     }
 }
