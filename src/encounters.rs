@@ -8653,7 +8653,9 @@ impl Encounters {
                 Some("Relative to the campaign folder, or an absolute path."),
                 None,
             );
-            design::small_field(ui, "Roll NPC initiative", None, None, |ui| {
+            // M0206: the help is the field's (`small_field`), with the field's own `L` after it,
+            // so it reads as this choice's and not the next one's.
+            design::small_field(ui, "Roll NPC initiative", Some(INITIATIVE_HELP), None, |ui| {
                 // The menu ends at the form's edge, where Run folder and Save end.
                 let _ = design::Dropdown::new(RUN_INITIATIVE.of(active.id), "Roll NPC initiative")
                     .width(ui.available_width())
@@ -8668,10 +8670,6 @@ impl Encounters {
                     )
                     .show(ui, &mut snapshot.options.initiative.grouping);
             });
-            design::help(
-                ui,
-                "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.",
-            );
             ui.checkbox(
                 &mut snapshot.options.initiative.roster_ties,
                 "Break initiative ties in roster order",
@@ -9022,6 +9020,9 @@ impl Encounters {
         }
     }
 }
+
+/// What Rules and runs' initiative choice does (its field's help).
+const INITIATIVE_HELP: &str = "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.";
 
 /// `Save run settings` waits for the folder warning's choices (ruling M4), as `Save folder` does.
 const CHOOSE_MOVE: &str = "Choose below to move the runs or not.";

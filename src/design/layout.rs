@@ -3702,13 +3702,7 @@ impl PathLine {
 /// keep the same `choice`/`choice_wrapped` rows inside, and remove the row's `Ban::Layout` count.
 pub fn menu_popup<'a, P: MenuPane + ?Sized>(pane: &P, response: &'a Response) -> MenuPopup<'a> {
     let pane = pane.pane();
-    let rightward = menu_room(pane, response.rect, egui::RectAlign::BOTTOM_START);
-    let leftward = menu_room(pane, response.rect, egui::RectAlign::BOTTOM_END);
-    let (align, room) = if rightward >= leftward {
-        (egui::RectAlign::BOTTOM_START, rightward)
-    } else {
-        (egui::RectAlign::BOTTOM_END, leftward)
-    };
+    let (align, room) = menu_side(pane, response.rect);
     MenuPopup {
         id: egui::Popup::default_response_id(response),
         popup: menu_popup_raw(response).align(align).width(room),
@@ -3739,6 +3733,18 @@ impl MenuPane for Ui {
 impl MenuPane for egui::Context {
     fn pane(&self) -> Rect {
         self.content_rect()
+    }
+}
+
+/// The side a menu opens on beside `control` in `pane`, and its room there: rightward from the
+/// control's left edge, unless its right edge leaves more room leftward.
+fn menu_side(pane: Rect, control: Rect) -> (egui::RectAlign, f32) {
+    let rightward = menu_room(pane, control, egui::RectAlign::BOTTOM_START);
+    let leftward = menu_room(pane, control, egui::RectAlign::BOTTOM_END);
+    if rightward >= leftward {
+        (egui::RectAlign::BOTTOM_START, rightward)
+    } else {
+        (egui::RectAlign::BOTTOM_END, leftward)
     }
 }
 
@@ -3778,6 +3784,18 @@ impl MenuPopup<'_> {
     pub fn align(mut self, align: egui::RectAlign) -> Self {
         self.room = menu_room(self.pane, self.control, align);
         self.popup = self.popup.align(align).width(self.room);
+        self
+    }
+
+    /// A smaller room owned by the control's layout (as [`Dropdown::within`](super::popups::Dropdown::within)):
+    /// a column of a header that spans two panes, the list beside a splitter. The part
+    /// intersects it with the pane, then chooses the menu's side and width inside it again, one
+    /// lane clear of its edges. It cannot widen the pane's room.
+    pub fn within(mut self, room: Rect) -> Self {
+        self.pane = self.pane.intersect(room);
+        let (align, width) = menu_side(self.pane, self.control);
+        self.room = width;
+        self.popup = self.popup.align(align).width(width);
         self
     }
 
