@@ -649,8 +649,9 @@ narrow), so it never sends the file line's path to a second row and the title ke
 
 Missing dependencies lead with the owner and retained member name: `Lost Patrol needs Scout, which was
 deleted.` Without a known name, say `Lost Patrol needs a creature that cannot be found.` The repair opens Edit
-Markdown with the caret on the missing link's line and names it in the reserved reason line (`Line 14: Lost Patrol
-needs a creature that cannot be found. Replace the link on this line with another creature, or remove its row.`)
+Markdown with the caret on the missing link's line and names it in the reserved reason line, a fault with its entry
+and line (`Bridge Ambush · line 14: Lost Patrol needs a creature that cannot be found. Replace the link on this line
+with another creature, or remove its row.`)
 while the draft holds that link. When Save's reason or the discard result needs that line, the guidance comes first,
 directly above it. The guidance belongs to its entry: when another entry is selected, by any path, it ends. The link is found as the reader reads the member's Creature cell, never by
 matching its id in the text, so notes that mention the id are not the repair. Link repair to the
@@ -775,8 +776,9 @@ first H1 only when it matches the source name.
 A copy preview explains dependencies: “Also copies <entry>, because <source> links to it.” For several copies,
 say “because a copied entry links to it.” Copy both copies a campaign dependency with its entry and reconnects
 references. The warning action (`Copy Captain Varra to Ashen Marches`) copies and reconnects one entry; its result
-names both in the button's words (`Captain Varra copied to Ashen Marches and linked.`), and `Undo copy` restores the
-reference and removes the unchanged copy. Keep room for Copy both and Cancel, with no outer scroll handle below them.
+names both in the button's words (`Captain Varra copied to Ashen Marches and linked.`), and `Undo copy Captain Varra`
+(the whole label where its line has room, else `Undo copy`: ruling M9) restores the reference and removes the
+unchanged copy. Keep room for Copy both and Cancel, with no outer scroll handle below them.
 
 ## Files and recovery
 
@@ -825,7 +827,12 @@ With none of these, the footer says why other actions wait for the draft, as an 
 with its bar and icon, the form of the footer's other messages. So no result, reason, warning, Discard or
 Undo moves the editor's top. With no entry
 open, they sit in the footer below the empty reader, with Remove's `Undo remove <name>`, and below a form that takes the
-reader's place. A file that changed on disk keeps its messages above the comparison, which owns the pane. The link offer after a
+reader's place. A file that changed on disk keeps its results, its duplicate warning and the page's error in the
+pane's footer under the comparison, which owns the pane's body; its own warning and choices stay above it. Every
+Library footer is a typed `Messages` footer: each kept result is a line of its store with its ticket, and a press acts
+by that ticket (M-L0.4b). Each repair choice of the duplicate warning (`Make <file> a separate entry`, `Make all N
+files in <folder>/ separate entries`) says in a help line under it which encounters keep or will then use which files
+(ruling M8). The link offer after a
 rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
 open, and end on its next link update or saved edit (a saved edit ends the earlier offer whatever it offers), on
 Undo, or when a file the update wrote changes on disk. An offer is checked again on every load and before its write:
