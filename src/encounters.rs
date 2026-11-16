@@ -3273,6 +3273,10 @@ enum FooterPress {
     UndoMember,
     /// The Undo of a copied note's separation (`separations`).
     UndoSeparation,
+    /// Rules and runs: the run folder warning's choices (ruling M4). `Save run settings` waits
+    /// in its place while the folder change leaves saved runs.
+    MoveRuns,
+    SaveWithoutMoving,
 }
 
 /// Whose member result it is: the campaign and the group draft's content (`results_key`). A
@@ -3413,6 +3417,12 @@ pub struct Encounters {
     /// The Rules and runs draft that Discard set aside; its result is in `kept`
     /// (`KeptResult::OptionsDiscarded`), which issued its order at the discard.
     discarded_options: Option<crate::encounter_settings::Options>,
+    /// Rules and runs' `Saved` (round 31 SD7, save-result-lifetime): the campaign and the
+    /// settings that its last Save wrote (Save run settings, a repair of an unread choice, or
+    /// one of the folder move's two choices). Its save row says `Saved` while the form and the
+    /// file still hold exactly these settings. It ends at the form's next edit, at a campaign
+    /// switch, and when the file's settings change outside Splat (`run_settings`).
+    options_saved: Option<(Uuid, crate::encounter_settings::Options)>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
     /// The encounter editor's last frame found that Save would refuse its changed draft, so
@@ -4592,6 +4602,7 @@ impl Encounters {
             self.discarded = None;
             self.discarded_group = None;
             self.discarded_options = None;
+            self.options_saved = None;
         }
         // Its path can be out of date after this, so undo could put it where nothing lists it.
         self.deleted_run = None;
@@ -5840,7 +5851,8 @@ impl Encounters {
             FooterPress::UndoSeparation => self.undo_separation(ctx, ticket, active),
             FooterPress::UndoMember => self.undo_member(ticket),
             FooterPress::UndoEditor => self.undo_editor(ticket),
-            FooterPress::ChooseFolder => {}
+            // Rules and runs' own choices (`run_settings`).
+            FooterPress::ChooseFolder | FooterPress::MoveRuns | FooterPress::SaveWithoutMoving => {}
         }
     }
 
@@ -6435,9 +6447,12 @@ impl Encounters {
                     }
                 }
                 FooterPress::ChooseFolder => self.wants_run_folder = true,
-                // The list shows no member result and no separation.
-                FooterPress::UndoMember | FooterPress::UndoSeparation | FooterPress::UndoEditor => {
-                }
+                // The list shows no member result, no separation and no run settings.
+                FooterPress::UndoMember
+                | FooterPress::UndoSeparation
+                | FooterPress::UndoEditor
+                | FooterPress::MoveRuns
+                | FooterPress::SaveWithoutMoving => {}
             }
         }
         let Some(action) = paned.body else {
@@ -8241,8 +8256,7 @@ impl Encounters {
             ui,
             design::Body::Content,
             move |ui| {
-        let mut settings_saved = false;
-        let mut error = None;
+        let mut commit = None;
         let mut form_left = None;
         if let Some(snapshot) = this.snapshot.as_mut() {
         ui.vertical(|ui| {
@@ -8328,149 +8342,131 @@ impl Encounters {
                 });
             }
             let changed = snapshot.options != snapshot.saved_options;
+            // SD7: the last Save's `Saved` ends at the form's first edit (as the discard's result
+            // does), at another campaign, and when the file's settings changed outside Splat.
+            if changed
+                || this.options_saved.as_ref().is_some_and(|(campaign, saved)| {
+                    *campaign != active.id || *saved != snapshot.saved_options
+                })
+            {
+                this.options_saved = None;
+            }
             // The run files the folder change leaves, read once a frame for the folder the
             // fields left; the footer's warning says them (`then` below).
             let left = snapshot.options.runs_left_in(&snapshot.saved_options, active);
             let left_folder = snapshot.options.folder.clone();
             let run_files = left.as_ref().map_or(0, Vec::len);
             let folder_changed = snapshot.options.directory(active).ok() != snapshot.saved_options.directory(active).ok();
+            // M4: `Save run settings` is the commit in every state. While the folder change
+            // leaves saved runs, it waits in its place, and the folder warning's two choices (the
+            // footer's, `then` below) commit, so a second press where Save was never moves runs.
+            let choose_move = run_files > 0 && !run_open;
             let blocked = if run_open { Some("Close the open run to save run settings.") }
                 else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
-                else if !changed && rule_lines.is_empty() { Some("No changes to save.") } else { None };
+                else if choose_move { Some(CHOOSE_MOVE) }
+                else if !changed && rule_lines.is_empty() { Some(design::save_row::NO_CHANGES) } else { None };
+            // The word by the one rule (`DraftState`): `Unsaved` while changed, `Saved` while the
+            // last Save's settings hold, else `No changes`. A repair of an unread choice names
+            // its write instead (the save row rule in docs/design-system.md), which `DraftState`
+            // cannot say yet, nor a wait that is not the draft's (an open run, the move choice).
+            let state = design::DraftState::new(
+                design::save_row::DraftOrigin::Saved,
+                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
+                design::save_row::Primary::Draft,
+            );
+            let state = if this.options_saved.is_some() { state.just_saved() } else { state };
+            let repair = (!changed && !rule_lines.is_empty()).then(|| {
+                // Save is the repair here: it writes the shown settings over the unread choice.
+                let lines = match rule_lines.split_last() {
+                    Some((last, [])) => format!("line {last}"),
+                    Some((last, before)) => format!("lines {} and {last}", before.join(", ")),
+                    None => String::new(),
+                };
+                format!("Save replaces the unread choice on {lines} with these settings")
+            });
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
                 // other change too.
-                let save_key = blocked.is_none() && run_files == 0
+                let save_key = blocked.is_none()
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                // The save state, Discard and the reasons; then Save, or the two run-moving
-                // choices.
-                macro_rules! save_state {
-                    ($ui:ident) => {{
-                        let ui = &mut *$ui;
-                if changed {
-                    this.discarded_options = None;
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::DRAFT,
-                            word: "Unsaved",
-                            color: colors().document.unsaved,
-                        },
-                    );
-                    if Action::quiet("Discard").show(ui).clicked() {
-                        this.discarded_options = Some(std::mem::replace(
-                            &mut snapshot.options,
-                            snapshot.saved_options.clone(),
-                        ));
-                        Self::record_kept(
-                            &mut this.kept,
-                            this.active.as_ref(),
-                            KeptResult::OptionsDiscarded,
-                        );
-                    }
-                }
-                if !changed && !rule_lines.is_empty() {
-                    // Save is the repair here: it writes the shown settings over the unread choice.
-                    let lines = match rule_lines.split_last() {
-                        Some((last, [])) => format!("line {last}"),
-                        Some((last, before)) => format!("lines {} and {last}", before.join(", ")),
-                        None => String::new(),
-                    };
-                    let word = format!("Save replaces the unread choice on {lines} with these settings");
-                    design::save_row_state(ui, Status { icon: icons::WARN, word: &word, color: colors().result.warning }, false, None);
-                } else if !changed {
-                    design::save_row_state(ui, Status { icon: icons::OK, word: "No changes", color: colors().muted }, false, None);
-                }
-                if snapshot.options != snapshot.saved_options {
-                    // FB6: while Save is blocked, Discard is the one way out.
-                    design::blocked_reason(
-                        ui,
-                        Some(if blocked.is_some() {
-                            blocked_draft_switch_reason()
-                        } else {
-                            draft_switch_reason()
-                        }),
-                    );
-                }
-                    }};
-                }
-                macro_rules! save_actions {
-                    ($ui:ident) => {{
-                        let ui = &mut *$ui;
-                        if run_files > 0 && !run_open {
-                            let move_runs = Action::primary("Move runs and save").show(ui).clicked();
-                            let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
-                            if move_runs {
-                                match snapshot.options.move_runs_and_save(&snapshot.saved_options, active, &snapshot.campaign_text) {
-                                    Ok(warning) => { settings_saved = true; error = warning; },
-                                    Err(e) => error = Some(e),
-                                }
-                            }
-                            leave_runs
-                        } else {
-                            let pressed = Action::primary("Save run settings").key("Ctrl+S")
-                                .blocked(blocked).show(ui).clicked();
-                            design::blocked_reason(ui, blocked.filter(|_| changed));
-                            pressed
-                        }
-                    }};
-                }
-                // AF1: with one Save, the state starts the row and Save ends it, as on every save
-                // row; without room, the state's words wrap before Save. The two run-moving
-                // choices need the width, so they take the row below the state.
-                let one_row = run_files == 0 || run_open;
-                let pressed = if one_row {
-                    ui.allocate_ui_with_layout(
+                // AF1: the state starts the row and Save ends it, as on every save row; without
+                // room, the state's words and the reasons wrap before Save. One row in every
+                // state (M4), so the commit keeps its place and its job.
+                let pressed = ui
+                    .allocate_ui_with_layout(
                         egui::vec2(ui.available_width(), Density::Scan.control()),
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            let pressed = save_actions!(ui);
+                            // A blocked Save is secondary (the save row rule).
+                            let pressed = if blocked.is_none() {
+                                Action::primary(SAVE_RUN_SETTINGS)
+                            } else {
+                                Action::secondary(SAVE_RUN_SETTINGS)
+                            }
+                            .key("Ctrl+S")
+                            .blocked(blocked)
+                            .show(ui)
+                            .clicked();
                             ui.with_layout(
                                 egui::Layout::left_to_right(egui::Align::Center)
                                     .with_main_wrap(true),
-                                |ui| save_state!(ui),
+                                |ui| {
+                                    if changed {
+                                        this.discarded_options = None;
+                                    }
+                                    let word = match &repair {
+                                        Some(word) => Status {
+                                            icon: icons::WARN,
+                                            word,
+                                            color: colors().result.warning,
+                                        },
+                                        None => state.word().status(),
+                                    };
+                                    if design::save_row_state(ui, word, state.discard_shown(), None) {
+                                        this.discarded_options = Some(std::mem::replace(
+                                            &mut snapshot.options,
+                                            snapshot.saved_options.clone(),
+                                        ));
+                                        Self::record_kept(
+                                            &mut this.kept,
+                                            this.active.as_ref(),
+                                            KeptResult::OptionsDiscarded,
+                                        );
+                                    }
+                                    if snapshot.options != snapshot.saved_options {
+                                        // FB6: while Save is blocked, Discard is the one way
+                                        // out; the move choices also save.
+                                        design::blocked_reason(
+                                            ui,
+                                            Some(if blocked.is_some() && !choose_move {
+                                                blocked_draft_switch_reason()
+                                            } else {
+                                                draft_switch_reason()
+                                            }),
+                                        );
+                                        design::blocked_reason(ui, blocked);
+                                    }
+                                },
                             );
                             pressed
                         },
                     )
-                    .inner
-                } else {
-                    // As tall as the one-row form, so the state keeps its y when the folder
-                    // changes.
-                    ui.horizontal(|ui| {
-                        ui.set_min_height(Density::Scan.control());
-                        save_state!(ui)
-                    });
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| save_actions!(ui),
-                    )
-                    .inner
-                };
-                if (pressed || save_key) && !run_open {
-                    if folder_changed && let Err(e) = &left { error = Some(e.clone()); return; }
-                    match snapshot.options.save(active, &snapshot.campaign_text) {
-                        Ok(()) => settings_saved = true,
-                        Err(e) => error = Some(e),
-                    }
+                    .inner;
+                if (pressed || save_key) && blocked.is_none() {
+                    commit = Some(commit_options(snapshot, active, OptionsCommit::Save));
                 }
             });
             form_left = Some((left_folder, left));
         });
         });
         }
-        (this, settings_saved, error, form_left)
+        (this, commit, form_left)
             },
-            |(this, settings_saved, error, form_left), messages| {
+            |(this, commit, form_left), messages| {
                 // The acts' own effects first: a save reloads the settings (which ends the
                 // error), and a failed attempt says why.
-                if settings_saved {
-                    this.saved = true;
-                    this.reload(&ctx, active.clone(), modules.to_vec());
-                }
-                if let Some(e) = error {
-                    this.error = Some(e);
+                if let Some(commit) = commit {
+                    this.options_committed(&ctx, active, modules.to_vec(), commit);
                 }
                 // Then the footer's lines, each from its owner as the acts left it. The
                 // discard's result is the page's store's (`KeptResult::OptionsDiscarded`, Undo by
@@ -8556,7 +8552,22 @@ impl Encounters {
                             runs.len()
                         )
                     };
-                    messages.outcome(design::outcome::Notice::warning(outcome_words(&words)));
+                    // M4: the warning's two choices are the folder's commit while it leaves
+                    // runs; none while a run or the open encounter locks the form (the save row
+                    // says why).
+                    let mut warning = design::outcome::Notice::warning(outcome_words(&words));
+                    if !run_open && !draft_open {
+                        for (words, press) in [
+                            ("Move runs and save", FooterPress::MoveRuns),
+                            ("Save without moving", FooterPress::SaveWithoutMoving),
+                        ] {
+                            warning = warning.choice(design::outcome::Choice::new(
+                                design::outcome::MessageChoice::Choice(words),
+                                press,
+                            ));
+                        }
+                    }
+                    messages.outcome(warning);
                 }
                 if this.draft_dirty() {
                     messages.outcome(design::outcome::Notice::new(crate::sentence!(
@@ -8567,13 +8578,91 @@ impl Encounters {
         );
         // `Undo discard of Rules and runs`: the page's store acts by the press's ticket, and only
         // then is the draft put back.
-        if let Some(press) = paned.pressed
-            && press.id == FooterPress::Undo
-            && let Some(ticket) = press.ticket
+        let Some(press) = paned.pressed else {
+            return;
+        };
+        let commit = match press.id {
+            FooterPress::Undo => {
+                if let Some(ticket) = press.ticket {
+                    self.undo_by_ticket(ticket, None);
+                }
+                return;
+            }
+            FooterPress::MoveRuns => OptionsCommit::MoveRuns,
+            FooterPress::SaveWithoutMoving => OptionsCommit::WithoutMoving,
+            _ => return,
+        };
+        // The folder warning's choice (M4), offered only while no run or encounter draft locks
+        // the form.
+        if !run_open
+            && !draft_open
+            && let Some(snapshot) = &self.snapshot
         {
-            self.undo_by_ticket(ticket, None);
+            let result = commit_options(snapshot, active, commit);
+            self.options_committed(
+                &ui.ctx().clone(),
+                active,
+                campaigns.modules().to_vec(),
+                result,
+            );
         }
     }
+
+    /// The effects of one commit of Rules and runs (`commit_options`): a write records its
+    /// settings for the save row's `Saved` (`options_saved`), tells the app the file changed
+    /// and reads the settings again (which ends the last error); a move's warning or a failure
+    /// is the footer's error.
+    fn options_committed(
+        &mut self,
+        ctx: &egui::Context,
+        active: &Campaign,
+        modules: Vec<Module>,
+        result: Result<Option<String>, String>,
+    ) {
+        match result {
+            Ok(warning) => {
+                self.options_saved = self
+                    .snapshot
+                    .as_ref()
+                    .map(|snapshot| (active.id, snapshot.options.clone()));
+                self.saved = true;
+                self.reload(ctx, active.clone(), modules);
+                self.error = warning;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+}
+
+/// `Save run settings` waits for the folder warning's choices (ruling M4), as `Save folder` does.
+const CHOOSE_MOVE: &str = "Choose below to move the runs or not.";
+const SAVE_RUN_SETTINGS: &str = "Save run settings";
+
+/// How Rules and runs commits its settings (ruling M4): `Save run settings`, or one of the folder
+/// warning's two choices while the folder change leaves saved runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OptionsCommit {
+    Save,
+    MoveRuns,
+    WithoutMoving,
+}
+
+/// Writes the shown settings: `Ok` with a move's warning when it wrote, `Err` with why it did
+/// not. A save that leaves the old folder reads it again at the act, and stops when it cannot.
+fn commit_options(
+    snapshot: &Snapshot,
+    active: &Campaign,
+    commit: OptionsCommit,
+) -> Result<Option<String>, String> {
+    let options = &snapshot.options;
+    let saved = &snapshot.saved_options;
+    if commit == OptionsCommit::MoveRuns {
+        return options.move_runs_and_save(saved, active, &snapshot.campaign_text);
+    }
+    if options.directory(active).ok() != saved.directory(active).ok() {
+        options.runs_left_in(saved, active)?;
+    }
+    options.save(active, &snapshot.campaign_text).map(|()| None)
 }
 
 /// The unread rule choices Campaign sends to Rules and runs with their repair link, by their kind,

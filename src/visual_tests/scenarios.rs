@@ -9672,9 +9672,16 @@ pub mod run_folder_defect {
                 })
             })
         };
+        // Ruling M4 (round 31 SS2, AS2, run-folder-save-action-stability): `Save run settings`
+        // is the commit in every state, at the same place, at 960, 1200 and 1920.
+        let save_places = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, |d| d.place_of("Save run settings")))
+        };
         let clean = form_tops(d);
+        let clean_save = save_places(d);
         d.replace_text_in(RUN_FOLDER, "Elsewhere");
         let typed = form_tops(d);
+        let typed_save = save_places(d);
         d.observe(
             "iter-26-B-FN2-run-folder",
             clean.iter().flatten().all(Option::is_some)
@@ -9682,6 +9689,37 @@ pub mod run_folder_defect {
                 && d.has_containing("From the new folder, Splat will not show"),
             format!("Field and state tops clean {clean:?} and after typing {typed:?}"),
         );
+        // While the folder change leaves saved runs, Save waits in its place with its reason, and
+        // the two choices are the warning's, in the footer under it: a second press where Save
+        // was never moves runs.
+        for size in [SMALL, LARGE] {
+            let placed = d.at_size(size, |d| {
+                let footer = footer_with(d, "From the new folder");
+                let choices =
+                    ["Move runs and save", "Save without moving"].map(|choice| d.place_of(choice));
+                (
+                    d.is_disabled("Save run settings"),
+                    d.visible_text("Choose below to move the runs or not."),
+                    footer.is_some_and(|footer| {
+                        choices
+                            .iter()
+                            .all(|place| place.is_some_and(|place| footer.contains_rect(place)))
+                    }),
+                    choices,
+                )
+            });
+            d.observe(
+                "m32-M4-run-folder-commit",
+                clean_save.iter().all(Option::is_some)
+                    && typed_save == clean_save
+                    && placed.0
+                    && placed.1
+                    && placed.2,
+                format!(
+                    "At {size:?}: Save run settings clean {clean_save:?}, after the folder edit {typed_save:?}; (Save waits, its reason painted, both choices in the warning's footer, choices) = {placed:?}"
+                ),
+            );
+        }
         d.observe_both(
             "iter-18-A-lock",
             "Run settings state the campaign switch lock",
@@ -9699,25 +9737,16 @@ pub mod run_folder_defect {
                     })
             },
         );
-        d.observe_both(
-            "iter-3-C-FT10-spacing",
-            "Full save actions stay directly below their state and reason",
-            |d| {
-                d.place_of("Discard")
-                    .zip(d.place_of("Move runs and save"))
-                    .is_some_and(|(discard, save)| {
-                        save.top() >= discard.bottom()
-                            && save.top() - discard.bottom() <= crate::design::L
-                    })
-            },
-        );
-        // FT4: with no open run, the move is the one primary action on the whole screen.
+        // Ruling M4: the move choices are the warning's and `Save run settings` waits in the
+        // commit place, so no control in view has the accent, as on the Session folder's block.
+        // The old check (Move runs and save the one primary) caught two primaries; this one still
+        // fails on any accent-filled control here.
         d.observe_both(
             "iter-16-B-FT4-primary",
-            "Move runs and save is the only accent-filled control in view",
-            |d| super::session_recording::accent_filled(d) == ["Move runs and save"],
+            "No control is accent-filled while Save run settings waits for the move choice",
+            |d| super::session_recording::accent_filled(d).is_empty(),
         );
-        // Must stay true: the other choice on the row stays quiet.
+        // Must stay true: the warning's choices stay quiet.
         d.observe_both(
             "iter-16-B-FT4-quiet",
             "Save without moving stays a quiet action",
@@ -9779,7 +9808,7 @@ pub mod run_folder_defect {
         d.state_prepared("run-folder-edited", Sizes::All, |d| {
             footer_follows(
                 d,
-                "Move runs and save",
+                "Save run settings",
                 "From the new folder",
                 "m32-L1b-run-folder-footer",
             );
@@ -14930,8 +14959,8 @@ pub mod session_notes {
                  before {before_scan}, added {after_scan}"
             ),
         );
-        // FT4 (round 16): with no run and no other form, moving the files is the one primary,
-        // as Move runs and save is on Rules and runs.
+        // The session folder's move choices, whole at 960 (ruling R24; Rules and runs' run folder
+        // follows the same rule, M4).
         let offered_whole = d.at_size(SMALL, |d| {
             whole(
                 d,

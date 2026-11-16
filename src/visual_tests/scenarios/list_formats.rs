@@ -294,7 +294,9 @@ pub fn run(d: &mut Driver<'_>) {
     let with_warning = form_tops(d);
     // The Ctrl+S that Save shows saves exactly when Save can.
     d.press_ctrl(Key::S);
-    d.expect("No changes");
+    // Round 31 SD7 (save-result-lifetime): the repair wrote, so the row says `Saved`, not
+    // `No changes`.
+    d.expect("Saved");
     let repaired = form_tops(d);
     d.observe(
         "iter-26-B-FC5",
@@ -307,6 +309,20 @@ pub fn run(d: &mut Driver<'_>) {
         "iter-23-B-AA2",
         !d.has_containing("Imaginary initiative") && !d.visible_text(REPAIR_STATE),
         "Ctrl+S writes the shown settings over the unread choice, as Save does",
+    );
+    // SD7: `Saved` is the last Save's (`options_saved`): it stays while nothing changes, and the
+    // form's next edit ends it, so an edit put back says `No changes`, not `Saved` again.
+    let kept = d.visible_text("Saved") && !d.visible_text("No changes");
+    d.click("Break initiative ties in roster order");
+    let edited = d.visible_text("Unsaved") && !d.visible_text("Saved");
+    d.click("Break initiative ties in roster order");
+    let put_back = d.visible_text("No changes") && !d.visible_text("Saved");
+    d.observe(
+        "r31-SD7-saved-ends-at-edit",
+        kept && edited && put_back,
+        format!(
+            "After the repair: Saved {kept}; an edit says Unsaved {edited}; the edit put back says No changes {put_back}"
+        ),
     );
     // Put the unread choice back for the pointer's repair below. The changed file makes a run
     // settings draft; discard it, then read the file again.
@@ -325,7 +341,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_starting("Roll NPC initiative: ");
     d.click("Individually");
     d.click("Save run settings");
-    d.expect("No changes");
+    d.expect("Saved");
     d.observe_both(
         "W12 rule repair",
         "Saving the chosen rule clears its warning",

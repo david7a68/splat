@@ -1003,8 +1003,11 @@ hover and in its accessible description), so a save never moves the save row. Th
 `Save folder` in every state: while the current folder keeps files it waits, disabled with its reason, and Move files
 and save and Save without moving are the warning's quiet choices under it, so a second press where Save was never
 moves files. Refuse collisions and copy every owned file before changing the manifest. A run-folder
-change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
-shows only while no run is open. It stages all files without replacement, saves
+change counts saved files left behind. Rules and runs keeps the same commit rule (ruling M4): `Save run settings`
+holds its place in every state; while the folder change leaves saved runs it waits, disabled with its reason
+(`Choose below to move the runs or not.`), and Move runs and save and Save without moving are the folder warning's
+quiet choices in the tab's footer, offered only while no run and no encounter draft locks the form. Move runs and
+save stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
 run-settings saves while a run is open. Folder changes name hidden unfinished runs and their states. A move
 result gives counts and destination without another Saved label. A moved run has confirmation and Undo move
@@ -1302,7 +1305,7 @@ newest member result, then Save's reason, then the file's warnings. Rules and ru
 (`Footer::pane_then`): the footer starts `S` below the form while the form fits, and is pinned at the tab's bottom only
 when the form scrolls. Its messages are read from their owners after the form's acts, so the frame of an edit, a
 Discard or a failed Save already shows what that act left. It holds the discard's result, the reasons (an error, the unread choice's warning with its file
-line), then the folder move's warning. Faults that belong to one row, member or field stay there.
+line), then the folder move's warning with its two choices. Faults that belong to one row, member or field stay there.
 
 Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, READY TO RUN, GROUPS and
 HISTORY in that order. The counts are in those headings (`IN PROGRESS 2`), so the page header's context stays
@@ -1432,7 +1435,9 @@ Its note says where party members come from in the DM's words: `Party members co
 saved last.`
 Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll. Beside the roster, `This campaign’s
 creature` ends its Name field where Save creature ends. Rules and runs puts its save state, Discard and reasons at
-the start of one row with `Save run settings` at its end; without room, the state's words wrap before Save.
+the start of one row with `Save run settings` at its end; without room, the state's words wrap before Save. After
+a Save writes (also a repair or a move), the row says `Saved` until the form's next edit, another campaign, or a
+change of the file's settings outside Splat; an edit put back then says `No changes`.
 
 The editor header keeps Save and Start on line one; the name field gives up width, also beside Lookup at the
 minimum window. They take a line of their own only when no name field fits beside them. While Save would refuse a
