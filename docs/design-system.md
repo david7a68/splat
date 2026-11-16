@@ -582,7 +582,8 @@ they need together, as Campaign's package row counts them
 with Undo. Its result
 and Undo sit in the pane's message footer, like manifest-write results (see Files and recovery). `Undo package
 choice` puts the campaign's choices back and leaves only when that write works: a campaign file that cannot be read or
-written keeps the result and its Undo, with the error, so the DM can try again; choices changed since end it with
+written keeps the result and its Undo, with the error, so the DM can try again, and so does a reload while it cannot be
+read; only a read that shows other choices ends it. Choices changed since end it with
 `Campaign choices changed. Keep them and edit the package choices in Campaign.`, as a reload would. Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The validation count says how

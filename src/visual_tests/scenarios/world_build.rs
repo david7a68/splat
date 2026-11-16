@@ -6592,7 +6592,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let linking = fs::read(&path).unwrap();
     d.click("Update 1 link");
     d.settle();
-    let refused = d.has_containing(crate::library::LINKS_NOT_CHANGED)
+    let refused = d.has_containing(crate::library::LINKS_NOT_CHANGED.as_str())
         && fs::read(&path).unwrap() == linking
         && !d.has("Undo link update");
     d.observe(
@@ -6687,7 +6687,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let last_moment_kept = pressed
         && hooked.get()
         && fs::read(&wraith).unwrap() == linking
-        && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED.as_str());
     // Back to a fresh offer: B named LAMP on disk, reloaded, then renamed in Splat again.
     rename_outside(LAMP);
     d.click("Packages");
@@ -6719,7 +6719,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.settle();
     let twin_refused = twin_pressed
         && fs::read(&wraith).unwrap() == linking_before
-        && d.has_containing(crate::library::LINKS_NOT_CHANGED)
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED.as_str())
         && !d.has("Undo link update");
     d.observe(
         "iter-26-L-offer-identity",
@@ -6759,7 +6759,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.settle();
     let no_reload_kept = pressed
         && fs::read(&wraith).unwrap() == linking
-        && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED.as_str());
     let with_error = save_and_editor(d);
     let error_below = d
         .input_frame("Markdown editor")

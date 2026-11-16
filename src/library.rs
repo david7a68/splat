@@ -273,7 +273,7 @@ type DraftParts<'a> = (
     &'a mut LibraryKept,
     &'a mut String,
     &'a mut u64,
-    &'a mut Option<String>,
+    &'a mut Option<PageError>,
 );
 
 /// One file in the Library: its owner (kind and id) and its path in the owner's folder. Two
@@ -517,10 +517,59 @@ enum LibraryPress {
     UndoRosters,
 }
 
+/// The page's last error (`Library::error`, the New entry form's `new_error`): the app's own
+/// words, a checked sentence, or words from outside the app (the system's, the workspace's,
+/// the content layer's), which only the typed footer's escape takes (ruling M17).
+#[derive(Clone, Debug, PartialEq)]
+enum PageError {
+    Own(Sentence),
+    Outside(String),
+}
+
+impl From<String> for PageError {
+    fn from(words: String) -> Self {
+        Self::Outside(words)
+    }
+}
+
+impl PageError {
+    /// Its words, for the legacy footer lines and the tests.
+    fn words(&self) -> &str {
+        match self {
+            Self::Own(words) => words.as_str(),
+            Self::Outside(words) => words,
+        }
+    }
+}
+
+/// Why `Undo package choice` wrote nothing: the campaign's choices changed since (note §4).
+static CHOICES_CHANGED: Sentence = crate::sentence!(
+    "Campaign choices changed. Keep them and edit the package choices in Campaign."
+);
+/// Why `Undo unregister` wrote nothing: its folder holds another package now.
+static FOLDER_HOLDS_ANOTHER_PACKAGE: Sentence =
+    crate::sentence!("That folder now holds a different package.");
+/// Why loading stopped before it finished.
+static LOADING_STOPPED: Sentence = crate::sentence!("Library loading stopped. Reload to retry.");
+/// Why a new entry was not made: its name.
+static NAME_WITHOUT_SEPARATORS: Sentence =
+    crate::sentence!("Use a name without path separators or line breaks.");
+
 /// A fault of the Library page, as its typed footer states it.
 enum LibraryFault<'a> {
-    /// The page's last error: the system's or the workspace's words.
+    /// The app's own words, checked.
+    Own(&'a Sentence),
+    /// Words from outside the app: the system's or the workspace's.
     Error(&'a str),
+}
+
+impl<'a> From<&'a PageError> for LibraryFault<'a> {
+    fn from(error: &'a PageError) -> Self {
+        match error {
+            PageError::Own(words) => Self::Own(words),
+            PageError::Outside(words) => Self::Error(words),
+        }
+    }
 }
 
 impl design::outcome::Fault for LibraryFault<'_> {
@@ -535,6 +584,7 @@ impl design::outcome::Fault for LibraryFault<'_> {
     )]
     fn cause(&self) -> Sentence {
         match self {
+            Self::Own(words) => (*words).clone(),
             // `Error:` leads, as before; the words after it keep their spelling (a path).
             Self::Error(words) => Sentence::outside_after(crate::lead!("Error:"), *words)
                 .unwrap_or(crate::sentence!("Something went wrong.")),
@@ -543,9 +593,9 @@ impl design::outcome::Fault for LibraryFault<'_> {
 }
 
 /// The page's errors as typed footer faults: a form's own error first, then the page's.
-fn page_faults(messages: &mut Messages<'_, LibraryPress>, errors: &[Option<&str>]) {
+fn page_faults(messages: &mut Messages<'_, LibraryPress>, errors: &[Option<&PageError>]) {
     for error in errors.iter().flatten() {
-        messages.outcome(FaultMessage::new(&LibraryFault::Error(error)));
+        messages.outcome(FaultMessage::new(&LibraryFault::from(*error)));
     }
 }
 
@@ -1271,10 +1321,15 @@ struct DuplicateIndex {
     keys: std::collections::HashMap<String, Vec<usize>>,
 }
 
+/// An entry as other entries name it: its id, and its key when it has one.
+type EntryRef = (Uuid, Option<String>);
+
 #[cfg(test)]
 thread_local! {
     /// How many times the notes were read to count a rename's links.
     static RENAME_LINK_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times the notes were read to find the entries that need one entry.
+    static DEPENDENT_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The link index a scan used, and each listed entry's position and broken link count.
@@ -1330,6 +1385,10 @@ pub(crate) struct Loaded {
     /// How many links a rename's offer would change, for its old and new names. A reload (a new
     /// `Loaded`) or an edited note (`invalidate`) counts them again.
     rename_links: std::sync::Mutex<Option<((String, String), usize)>>,
+    /// The entries that need an entry (by its id and key), by name: Remove's result and a
+    /// deleted draft's warning show them in every frame. A reload (a new `Loaded`) or an edited
+    /// note (`invalidate`) finds them again.
+    dependents: std::sync::Mutex<std::collections::HashMap<EntryRef, Vec<String>>>,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -1530,7 +1589,18 @@ impl Loaded {
         let Some(id) = crate::content_workspace::note_id(&note.text) else {
             return Vec::new();
         };
-        self.notes
+        let known = (id, note.entry.as_ref().and_then(|entry| entry.key.clone()));
+        let mut cache = self
+            .dependents
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(names) = cache.get(&known) {
+            return names.clone();
+        }
+        #[cfg(test)]
+        DEPENDENT_SCANS.with(|scans| scans.set(scans.get() + 1));
+        let names: Vec<String> = self
+            .notes
             .iter()
             .filter_map(|other| {
                 let entry = other.entry.as_ref()?;
@@ -1547,7 +1617,9 @@ impl Loaded {
                     }))
                 .then(|| entry.name.clone())
             })
-            .collect()
+            .collect();
+        cache.insert(known, names.clone());
+        names
     }
     fn duplicate_index(&self) -> &DuplicateIndex {
         self.duplicates.get_or_init(|| {
@@ -1927,6 +1999,10 @@ impl Loaded {
             .rename_links
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.dependents
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.subtitles.take();
         self.counts.take();
         self.duplicate_ids.take();
@@ -3050,7 +3126,9 @@ pub(crate) const PACKAGE_USE_RESULT: Sentence =
     crate::sentence!("Every entry in this package is now chosen for this campaign.");
 
 /// Why a link update wrote nothing: the renamed entry changed on disk since the offer was made.
-pub(crate) const LINKS_NOT_CHANGED: &str = "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again.";
+pub(crate) static LINKS_NOT_CHANGED: Sentence = crate::sentence!(
+    "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again."
+);
 
 /// The warning for a draft whose file changed on disk (R10): the entry by its name, or `This
 /// entry` when it has none.
@@ -3707,7 +3785,7 @@ pub(crate) fn write_note(
         return Err("A note with this name already exists. Choose another name.".into());
     }
     if current.as_deref() != baseline {
-        return Err(NOTE_CHANGED.into());
+        return Err(NOTE_CHANGED.as_str().into());
     }
     // The system's words name no file; the DM reads which note and how to recover.
     let failed = crate::world::file_fault::write_error(relative);
@@ -4180,7 +4258,7 @@ pub struct Library {
     typo_from: usize,
     section: Section,
     unreadable_kind: Option<Section>,
-    error: Option<String>,
+    error: Option<PageError>,
     form: bool,
     path: String,
     name: String,
@@ -4204,7 +4282,7 @@ pub struct Library {
     new_not_used: bool,
     /// The New entry form's last create error. It shows in the pane's message footer and ends
     /// when the form closes, the name changes, or an entry is created.
-    new_error: Option<String>,
+    new_error: Option<PageError>,
     package_not_used: bool,
     focus_package_name: bool,
     package_path: Option<PathBuf>,
@@ -4283,7 +4361,7 @@ fn file_line_row(ui: &mut egui::Ui, wrap: bool, add: impl FnOnce(&mut egui::Ui))
         },
     );
 }
-const NOTE_CHANGED: &str = "This entry changed on disk.";
+static NOTE_CHANGED: Sentence = crate::sentence!("This entry changed on disk.");
 /// What is on disk now, in place of what the draft started from.
 struct DiskChange {
     /// None when the file has gone, or cannot be read.
@@ -4594,7 +4672,7 @@ impl Library {
                 // The draft changed: a failed Save of the old words no longer owns it.
                 *revision += 1;
             }
-            Err(failure) => *error = Some(failure),
+            Err(failure) => *error = Some(failure.into()),
         }
     }
 
@@ -4904,10 +4982,12 @@ impl Library {
             holds(&undo.root, &undo.path, &undo.after)
                 && holds(&undo.root, &undo.copied_path, &undo.copied_text)
         });
-        // Its Undo checks the package choices only, so other campaign edits keep it.
+        // Its Undo checks the package choices only, so other campaign edits keep it. It ends
+        // only when a read proves the choices differ: a campaign file that cannot be read now
+        // keeps it, as its failed Undo does (note §4), so the DM can try again once it reads.
         if self.kept.package_use().is_some_and(|undo| {
-            !CampaignDocument::load(&undo.campaign)
-                .is_ok_and(|document| document.selections == undo.after)
+            CampaignDocument::load(&undo.campaign)
+                .is_ok_and(|document| document.selections != undo.after)
         }) {
             let _ = self.kept.take_package_use();
         }
@@ -4924,7 +5004,7 @@ impl Library {
                 self.stale = true;
                 self.content_changed = Some(module.path);
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.error = Some(error.into()),
         }
     }
 
@@ -4950,7 +5030,7 @@ impl Library {
                 self.reconcile_registrations(campaigns);
                 self.content_changed = Some(campaign.path);
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.error = Some(error.into()),
         }
     }
 
@@ -5111,7 +5191,7 @@ impl Library {
     }
 
     pub fn report_error(&mut self, error: String) {
-        self.error = Some(error);
+        self.error = Some(error.into());
     }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
@@ -5629,12 +5709,12 @@ impl Library {
                             self.loaded = Some(l);
                             self.invalidate();
                         }
-                        Err(e) => self.error = Some(e),
+                        Err(e) => self.error = Some(e.into()),
                     }
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
-                    self.error = Some("Library loading stopped. Reload to retry.".into());
+                    self.error = Some(PageError::Own(LOADING_STOPPED.clone()));
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
@@ -5994,7 +6074,7 @@ impl Library {
         let Some(loaded) = &self.loaded else {
             // Nothing loaded: there is no pane, so a failed load says so here.
             if let Some(error) = &self.error {
-                design::message_with_code(ui, Tone::Error, &format!("Error: {error}"));
+                design::message_with_code(ui, Tone::Error, &format!("Error: {}", error.words()));
             }
             return;
         };
@@ -6040,6 +6120,18 @@ impl Library {
             .map(|(_, counts)| counts.clone())
             .unwrap_or_default();
         let searching = !self.search.trim().is_empty();
+        // The scope notice stands while the list keeps the scope it widened to, with no query:
+        // the DM's own scope change or search ends it. (`open_entry` changes the scope itself,
+        // so the list's last scope is not the notice's: comparing with it ended the notice in
+        // the frame after it came, before any footer drew it.) Settled here, before every
+        // footer of the page: the empty scope's, a form's and the reader's.
+        if self
+            .kept
+            .scope_notice()
+            .is_some_and(|(_, widened)| *widened != scope || searching)
+        {
+            let _ = self.kept.take_scope_notice();
+        }
         let empty_scope = scope == Scope::Campaign && count_of(Section::All, &counts) == 0;
         if empty_scope {
             ui.scope(|ui| {
@@ -6261,17 +6353,6 @@ impl Library {
         let searching = !query.is_empty();
         let filtering =
             (self.section == Section::Creatures || searching) && !self.filter.is_empty();
-        // The scope notice stands while the list keeps the scope it widened to, with no query:
-        // the DM's own scope change or search ends it. (`open_entry` changes the scope itself,
-        // so the list's last scope is not the notice's: comparing with it ended the notice in
-        // the frame after it came, before any footer drew it.)
-        if self
-            .kept
-            .scope_notice()
-            .is_some_and(|(_, widened)| *widened != scope || searching)
-        {
-            let _ = self.kept.take_scope_notice();
-        }
         if self.matches_scope != Some(scope)
             || self
                 .matches
@@ -6682,8 +6763,8 @@ impl Library {
         page_faults(
             &mut messages,
             &[
-                self.new_error.as_deref().filter(|_| self.new_form),
-                self.error.as_deref(),
+                self.new_error.as_ref().filter(|_| self.new_form),
+                self.error.as_ref(),
             ],
         );
         messages
@@ -6713,12 +6794,14 @@ impl Library {
         if pressed.unregistered
             && let Some(module) = self.kept.unregistered().cloned()
         {
-            let result = local_module(&module.path).and_then(|found| {
-                if found.id != module.id {
-                    return Err("That folder now holds a different package.".into());
-                }
-                campaigns.restore_module(module)
-            });
+            let result = local_module(&module.path)
+                .map_err(PageError::from)
+                .and_then(|found| {
+                    if found.id != module.id {
+                        return Err(PageError::Own(FOLDER_HOLDS_ANOTHER_PACKAGE.clone()));
+                    }
+                    campaigns.restore_module(module).map_err(PageError::from)
+                });
             match result {
                 Ok(()) => {
                     let _ = self.kept.take_unregistered();
@@ -6740,7 +6823,7 @@ impl Library {
             // write (after the scan and after each linking file is checked against the disk),
             // against the entry's own file on disk. A stale offer goes and writes nothing.
             if !loaded.offer_holds(&offer) {
-                self.error = Some(LINKS_NOT_CHANGED.into());
+                self.error = Some(PageError::Own(LINKS_NOT_CHANGED.clone()));
             } else {
                 let files: Vec<_> = loaded
                     .notes
@@ -6763,7 +6846,7 @@ impl Library {
                     if loaded.offer_holds_on_disk(&offer) {
                         Ok(())
                     } else {
-                        Err(LINKS_NOT_CHANGED.into())
+                        Err(LINKS_NOT_CHANGED.as_str().into())
                     }
                 });
                 let LinkOffer {
@@ -6787,7 +6870,7 @@ impl Library {
                         self.content_changed =
                             campaigns.active_campaign().map(|campaign| campaign.path);
                     }
-                    Err(error) => self.error = Some(error),
+                    Err(error) => self.error = Some(error.into()),
                 }
             }
         }
@@ -6800,13 +6883,13 @@ impl Library {
             match self.link_edits.undo(owner, |result| result.edits.undo()) {
                 None => {}
                 Some(Ok((result, ()))) => self.links_undone(result, campaigns),
-                Some(Err(error)) => self.error = Some(error),
+                Some(Err(error)) => self.error = Some(error.into()),
             }
         }
         if let Some(owner) = pressed.registration
             && let Err(error) = self.undo_package_registration(&owner, campaigns)
         {
-            self.error = Some(error);
+            self.error = Some(error.into());
         }
         // The use changes here; the registration's clause ends at this write's event
         // (`reconcile_registrations`), as for every other use change.
@@ -6826,13 +6909,13 @@ impl Library {
                     self.stale = true;
                     self.reconcile_registrations(campaigns);
                 }
-                Err(error) => self.error = Some(error),
+                Err(error) => self.error = Some(error.into()),
             }
         }
         if let Some(owner) = pressed.rosters {
             match self.rosters.undo(&owner, |source| source.edits.undo()) {
                 Some(Ok(_)) => self.rosters_undone(campaigns),
-                Some(Err(error)) => self.error = Some(error),
+                Some(Err(error)) => self.error = Some(error.into()),
                 None => {}
             }
         }
@@ -6883,13 +6966,13 @@ impl Library {
                     .undo_by(ticket, |result| result.edits.undo())
                 {
                     Ok((result, ())) => self.links_undone(result, campaigns),
-                    Err(ByTicket::Failed(error)) => self.error = Some(error),
+                    Err(ByTicket::Failed(error)) => self.error = Some(error.into()),
                     Err(ByTicket::Gone) => {}
                 }
             }
             LibraryPress::UndoRegistration => {
                 if let Err(error) = self.undo_registration_by(ticket, campaigns) {
-                    self.error = Some(error);
+                    self.error = Some(error.into());
                 }
             }
             LibraryPress::UseCopy => {
@@ -6911,7 +6994,7 @@ impl Library {
             LibraryPress::UndoRosters => {
                 match self.rosters.undo_by(ticket, |source| source.edits.undo()) {
                     Ok(_) => self.rosters_undone(campaigns),
-                    Err(ByTicket::Failed(error)) => self.error = Some(error),
+                    Err(ByTicket::Failed(error)) => self.error = Some(error.into()),
                     Err(ByTicket::Gone) => {}
                 }
             }
@@ -7144,7 +7227,7 @@ impl Library {
                 self.scope = Scope::default();
                 self.stale = true;
             }
-            Err(e) => self.error = Some(e),
+            Err(e) => self.error = Some(e.into()),
         }
     }
 
@@ -7252,7 +7335,7 @@ impl Library {
                                 self.stale = true;
                             }
                             Ok(None) => {}
-                            Err(error) => self.error = Some(error),
+                            Err(error) => self.error = Some(error.into()),
                         }
                     }
                 }
@@ -7340,7 +7423,7 @@ impl Library {
                         if register {
                             if self.copy_name_open {
                                 if let Err(error) = self.register_copy(campaigns) {
-                                    self.error = Some(error);
+                                    self.error = Some(error.into());
                                 }
                             } else {
                                 self.copy_name_open = true;
@@ -7493,7 +7576,7 @@ impl Library {
                                     self.focus_new_name = true;
                                     self.stale = true;
                                 }
-                                Err(error) => self.error = Some(error),
+                                Err(error) => self.error = Some(error.into()),
                             }
                         }
                     }
@@ -7744,8 +7827,7 @@ impl Library {
                     if create {
                         let name = self.new_name.trim();
                         if name.contains(['/', '\\', '\n', '\r']) || name == "." || name == ".." {
-                            self.new_error =
-                                Some("Use a name without path separators or line breaks.".into());
+                            self.new_error = Some(PageError::Own(NAME_WITHOUT_SEPARATORS.clone()));
                             return;
                         }
                         let path = relative.clone();
@@ -7810,9 +7892,9 @@ impl Library {
                                 self.new_folder.clear();
                                 self.new_form = false;
                                 self.error = used.err().map(|error| {
-                                    format!(
+                                    PageError::Outside(format!(
                                         "Entry created. Could not use it in this campaign: {error}"
-                                    )
+                                    ))
                                 });
                                 // Show the new entry, wherever the DM chose to put it.
                                 if self
@@ -7823,7 +7905,7 @@ impl Library {
                                 }
                                 self.content_changed = Some(root);
                             }
-                            Err(e) => self.new_error = Some(e),
+                            Err(e) => self.new_error = Some(e.into()),
                         }
                     }
                 })();
@@ -7940,14 +8022,14 @@ impl Library {
                             moved_to: Some(note.path.clone()),
                             fault: None,
                         });
-                        self.error = Some(NOTE_CHANGED.into());
+                        self.error = Some(PageError::Own(NOTE_CHANGED.clone()));
                         return;
                     }
                     file_gone = false;
                     self.stale = true;
                 }
                 Err(error) => {
-                    self.error = Some(error);
+                    self.error = Some(error.into());
                     return;
                 }
                 _ => {}
@@ -7987,13 +8069,14 @@ impl Library {
         match gone {
             Some(Gone::Create) => file_gone = true,
             Some(Gone::Elsewhere(path)) => {
-                self.error = Some(format!(
-                    "Not saved. This package’s manifest is now in {path}. Reload from disk to open it there."
-                ));
+                self.error = Some(PageError::Own(crate::sentence!(
+                    "Not saved. This package’s manifest is now in {}. Reload from disk to open it there.",
+                    path
+                )));
                 return;
             }
             Some(Gone::Failed(error)) => {
-                self.error = Some(error);
+                self.error = Some(error.into());
                 return;
             }
             Some(Gone::Back(text)) => {
@@ -8097,7 +8180,7 @@ impl Library {
                         fault: Some(fault),
                     });
                 }
-                Ok(text) if e == NOTE_CHANGED => {
+                Ok(text) if e == NOTE_CHANGED.as_str() => {
                     self.disk_change = Some(DiskChange {
                         moved_to: None,
                         text,
@@ -8168,12 +8251,9 @@ impl Library {
             }
             Err(NotUndone::Changed) => {
                 let _ = self.kept.take_package_use();
-                self.error = Some(
-                    "Campaign choices changed. Keep them and edit the package choices in Campaign."
-                        .into(),
-                );
+                self.error = Some(PageError::Own(CHOICES_CHANGED.clone()));
             }
-            Err(NotUndone::Failed(error)) => self.error = Some(error),
+            Err(NotUndone::Failed(error)) => self.error = Some(error.into()),
         }
     }
 
@@ -8189,7 +8269,7 @@ impl Library {
                 let _ = self.kept.take_manifest();
                 self.stale = true;
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.error = Some(error.into()),
         }
     }
 
@@ -8247,7 +8327,7 @@ impl Library {
                 messages.kept(line);
             }
             self.page_messages(&frame, &mut messages, &results, campaigns);
-            page_faults(&mut messages, &[self.error.as_deref()]);
+            page_faults(&mut messages, &[self.error.as_ref()]);
             // The empty reader is the pane's body; the footer follows it (round 28 pane).
             let paned = messages.pane(ui, design::Body::Content, |ui| {
                 design::empty_state(
@@ -8872,7 +8952,7 @@ impl Library {
         if !choices_in_reader && !slot_row {
             // A file changed on disk: the comparison owns the pane, and its messages stay above it.
             if let Some(error) = &self.error {
-                design::message_with_code(ui, Tone::Error, &format!("Error: {error}"));
+                design::message_with_code(ui, Tone::Error, &format!("Error: {}", error.words()));
             }
             pressed = show_results(ui, &results);
         }
@@ -9106,7 +9186,7 @@ impl Library {
                     self.content_changed = Some(campaign.path.clone());
                     self.open_world_npc = Some(id);
                 }
-                Err(error) => self.error = Some(error),
+                Err(error) => self.error = Some(error.into()),
             }
         }
         // Live, because Discard in this same frame changed the draft.
@@ -9271,7 +9351,7 @@ impl Library {
                 &dependency_results,
                 &mut reader_press,
             );
-            page_error(&mut footer, self.error.as_deref());
+            page_error(&mut footer, self.error.as_ref().map(PageError::words));
             pane_footer = Some(footer);
         } else if choices_in_reader {
             let mut footer = design::Footer::new(
@@ -9288,7 +9368,7 @@ impl Library {
                 &dependency_results,
                 &mut reader_press,
             );
-            page_error(&mut footer, self.error.as_deref());
+            page_error(&mut footer, self.error.as_ref().map(PageError::words));
             pane_footer = Some(footer);
         }
         let mut reload_from_disk = false;
@@ -9760,7 +9840,7 @@ impl Library {
             Ok(())
         })();
         if let Err(error) = reconnect {
-            self.error = Some(error);
+            self.error = Some(error.into());
         }
         if reload_from_disk {
             self.reload_note_from_disk(i);
@@ -9855,7 +9935,7 @@ impl Library {
             Ok(())
         };
         if let Err(error) = identity_result {
-            self.error = Some(error);
+            self.error = Some(error.into());
         }
         if let Some(index) = open_link {
             if dirty {
@@ -10856,7 +10936,8 @@ mod tests {
         assert!(
             library
                 .error
-                .as_deref()
+                .as_ref()
+                .map(PageError::words)
                 .is_some_and(|error| error.contains("Module.md")),
             "the refusal names where the manifest is: {:?}",
             library.error
@@ -13112,7 +13193,32 @@ mod tests {
             "a failed write keeps Undo package choice: {:?}",
             library.error
         );
+        fs::set_permissions(&campaign_file, writable.clone()).unwrap();
+        // Astra on 3a2f6d42: a file that cannot be READ keeps it too, and so does a reload
+        // while it still cannot be read (`forget_changed_undos`): only a read that proves the
+        // choices differ ends it. Once the file reads again, a reload keeps it (its choices are
+        // the same) and its Undo works.
+        let mut unreadable = writable.clone();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut unreadable, 0o000);
+        fs::set_permissions(&campaign_file, unreadable).unwrap();
+        library.error = None;
+        library.undo_package_use();
+        assert!(
+            library.error.is_some() && library.kept.package_use().is_some(),
+            "a failed read keeps Undo package choice: {:?}",
+            library.error
+        );
+        library.forget_changed_undos();
+        assert!(
+            library.kept.package_use().is_some() && library.kept.marks() == 1,
+            "a reload while the file cannot be read keeps Undo package choice"
+        );
         fs::set_permissions(&campaign_file, writable).unwrap();
+        library.forget_changed_undos();
+        assert!(
+            library.kept.package_use().is_some(),
+            "a reload once it reads keeps it: the choices are the ones it wrote"
+        );
         library.undo_package_use();
         assert!(
             library.kept.package_use().is_none()
@@ -13129,11 +13235,8 @@ mod tests {
         assert!(
             library.kept.package_use().is_none()
                 && library.kept.marks() == 0
-                && library
-                    .error
-                    .as_deref()
-                    .is_some_and(|error| error.starts_with("Campaign choices changed.")),
-            "choices changed since end it: {:?}",
+                && library.error == Some(PageError::Own(CHOICES_CHANGED.clone())),
+            "choices changed since end it, in the app's own checked words: {:?}",
             library.error
         );
         library.error = None;
@@ -13601,7 +13704,7 @@ mod tests {
                     &mut app.campaigns,
                 );
                 assert_eq!(
-                    library.error.as_deref(),
+                    library.error.as_ref().map(PageError::words),
                     Some(PACKAGE_LIST_UNSAFE),
                     "guard-refused\nbefore:\n{}\nafter:\n{}\nselections {:?}",
                     String::from_utf8_lossy(&before_undo),
@@ -14354,6 +14457,26 @@ mod tests {
             library.kept.scope_notice().is_none(),
             "the DM's scope change ends the scope notice"
         );
+        // Astra on 3a2f6d42: the change to an empty Campaign scope (this campaign has no
+        // entries of its own) ends it too, before that scope's own footer draws.
+        library.scope = Scope::Package(Uuid::new_v4());
+        library.open_entry(at(&library, "Brand"));
+        assert!(
+            painted(&mut library, &mut campaigns)
+                .contains("Scope is now Everything, to show Brand."),
+            "fixture: a new notice shows"
+        );
+        library.scope = Scope::Campaign;
+        let empty = painted(&mut library, &mut campaigns);
+        assert!(
+            empty.contains("No entries of your own yet"),
+            "fixture: the empty Campaign scope\n{empty}"
+        );
+        assert!(
+            library.kept.scope_notice().is_none() && !empty.contains("Scope is now Everything"),
+            "an empty Campaign scope ends the scope notice\n{empty}"
+        );
+        library.scope = Scope::All;
         // Identity, by `give_new_identity` of the open entry.
         for name in ["Ash", "Brand"] {
             let before = library.kept.order_of(KeptKind::Identity);
@@ -14764,12 +14887,23 @@ mod tests {
                 "fixture: the widths reach the whole and the short form of {short}: {forms:?}"
             );
         }
-        // 10. Quiet frames at one width.
+        // 10. Quiet frames at one width: no footer plan, and no content-sized work for the
+        // Remove line's words (the entries that need the removed one, found once per content).
         harness.set_size(egui::vec2(700.0, 700.0));
         harness.run_steps(2);
-        let quiet = crate::design::outcome::footer_work();
+        let scans = || DEPENDENT_SCANS.with(std::cell::Cell::get);
+        assert!(
+            scans() > 0,
+            "fixture: the Remove line read what needs its entry"
+        );
+        let (quiet, scanned) = (crate::design::outcome::footer_work(), scans());
         harness.run_steps(4);
         let after = crate::design::outcome::footer_work();
+        assert_eq!(
+            scans(),
+            scanned,
+            "10: an unchanged frame reads no note for the Remove line"
+        );
         assert!(
             after.compared > quiet.compared,
             "the frames drew the footer"
@@ -16024,8 +16158,10 @@ mod tests {
         library.save_selected(false);
         let error = library
             .error
-            .clone()
-            .expect("the search stops at the unreadable file");
+            .as_ref()
+            .map(PageError::words)
+            .expect("the search stops at the unreadable file")
+            .to_owned();
         assert!(
             error.starts_with("Splat cannot read Other.md as text."),
             "SD1-moved: {error}"
