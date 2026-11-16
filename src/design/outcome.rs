@@ -3736,17 +3736,28 @@ impl Body {
                     });
                 }
                 if stacked {
+                    // The bottom of what the choice before drew: its help line, else itself.
+                    let mut below: Option<f32> = None;
                     for (at, choice) in self.row_choices() {
-                        if at > 0 && self.loses(at, choice) {
-                            space(ui, (M - ui.spacing().item_spacing.y).max(0.0));
+                        // A red choice stands exactly `M` below the line before it, measured from
+                        // that line's own bounds: a one-line help sits centred in a taller row.
+                        if let Some(below) = below
+                            && self.loses(at, choice)
+                        {
+                            space(ui, (below + M - ui.cursor().top()).max(0.0));
                         }
-                        let clicked = message_choice_row(ui, self.tone, |ui| {
+                        let shown = message_choice_row(ui, self.tone, |ui| {
                             let room = ui.available_width();
                             self.draw_choice(ui, at, choice, room, None)
                         });
+                        let clicked = shown.as_ref().is_some_and(Response::clicked);
                         activated(ui, pressed, clicked, words, Pressed::Choice(at));
-                        if let Some(help) = self.helps.get(at).and_then(Option::as_ref) {
-                            action_help(ui, self.tone, help);
+                        below = shown.as_ref().map(|response| response.rect.bottom());
+                        if let (Some(help), Some(response)) =
+                            (self.helps.get(at).and_then(Option::as_ref), &shown)
+                        {
+                            let lock = self.locks.get(at).and_then(holding);
+                            below = Some(action_help(ui, self.tone, help, response, lock).bottom());
                         }
                     }
                 } else if !one_line {
@@ -3911,7 +3922,9 @@ impl Body {
         let gap = ui.spacing().item_spacing.x;
         for (at, choice) in self.row_choices() {
             let room = ui.max_rect().width();
-            let clicked = self.draw_choice(ui, at, choice, room, Some(gap));
+            let clicked = self
+                .draw_choice(ui, at, choice, room, Some(gap))
+                .is_some_and(|response| response.clicked());
             activated(
                 ui,
                 pressed,
@@ -3931,7 +3944,8 @@ impl Body {
     }
 
     /// One choice, in `room`; on a wrapped line (`wrapped`: the item gap), a red one keeps its
-    /// `L` or starts a line of its own (`before_lose`). Whether it was pressed.
+    /// `L` or starts a line of its own (`before_lose`). Its response (none for `Dismiss`, which
+    /// is not on a row).
     fn draw_choice(
         &self,
         ui: &mut Ui,
@@ -3939,7 +3953,7 @@ impl Body {
         choice: MessageChoice<'_>,
         room: f32,
         wrapped: Option<f32>,
-    ) -> bool {
+    ) -> Option<Response> {
         let lock = self.locks.get(at).and_then(holding);
         match (choice, self.named.get(at).and_then(Option::as_ref)) {
             // Words with objects: cut to the row's width, named with the whole words.
@@ -3950,13 +3964,14 @@ impl Body {
                 {
                     before_lose(ui, kind.action(&words.label()).natural_width(ui), gap);
                 }
-                data_choice(ui, words, *kind, room, lock).clicked()
+                Some(data_choice(ui, words, *kind, room, lock))
             }
-            (MessageChoice::Choice(word), None) => Action::secondary(word)
-                .density(Density::Read)
-                .blocked(lock)
-                .show(ui)
-                .clicked(),
+            (MessageChoice::Choice(word), None) => Some(
+                Action::secondary(word)
+                    .density(Density::Read)
+                    .blocked(lock)
+                    .show(ui),
+            ),
             (MessageChoice::Lose(word), None) => {
                 if let Some(gap) = wrapped
                     && at > 0
@@ -3966,31 +3981,30 @@ impl Body {
                         .natural_width(ui);
                     before_lose(ui, width, gap);
                 }
-                Action::destructive(word)
-                    .density(Density::Read)
-                    .blocked(lock)
-                    .show(ui)
-                    .clicked()
+                Some(
+                    Action::destructive(word)
+                        .density(Density::Read)
+                        .blocked(lock)
+                        .show(ui),
+                )
             }
             (MessageChoice::Link { word, hover }, None) => match lock {
                 // A locked link is drawn disabled, with its reason, as a blocked action is.
-                Some(reason) => {
+                Some(reason) => Some(
                     ui.add_enabled_ui(false, |ui| link(ui, word))
                         .inner
-                        .on_disabled_hover_text(reason);
-                    false
-                }
+                        .on_disabled_hover_text(reason),
+                ),
                 None => {
                     let response = link(ui, word);
                     let owned = self.hovers.get(at).and_then(Option::as_deref);
-                    match owned.or(hover) {
+                    Some(match owned.or(hover) {
                         Some(hover) => response.on_hover_text(hover),
                         None => response,
-                    }
-                    .clicked()
+                    })
                 }
             },
-            (MessageChoice::Dismiss(_), None) => false,
+            (MessageChoice::Dismiss(_), None) => None,
         }
     }
 
@@ -4351,11 +4365,26 @@ impl<A> Repair<A> {
 
 /// The help line under an action (ruling M8): what pressing it does, in the help words, from
 /// the message's words, painted, never only on hover. The one help line of a body fault's
-/// [`Repair`] and of a footer [`Choice`].
-fn action_help(ui: &mut Ui, tone: Tone, help: &Sentence) {
-    message_choice_row(ui, tone, |ui| {
-        super::components::help(ui, help.as_str());
-    });
+/// [`Repair`] and of a footer [`Choice`]. The help belongs to the action: it is the action's
+/// accessible description (after its lock's reason while that holds), and a keyboard focus on
+/// the action brings the action and its help into view together (`reveal_with`). The help
+/// line's rect.
+fn action_help(
+    ui: &mut Ui,
+    tone: Tone,
+    help: &Sentence,
+    action: &Response,
+    lock: Option<&str>,
+) -> Rect {
+    let line = message_choice_row(ui, tone, |ui| super::components::help(ui, help.as_str()));
+    let description = match lock {
+        Some(reason) => format!("{reason} {}", help.as_str()),
+        None => help.as_str().to_owned(),
+    };
+    ui.ctx()
+        .accesskit_node_builder(action.id, |node| node.set_description(description));
+    super::components::reveal_with(ui, action.id, action.rect.union(line.rect));
+    line.rect
 }
 
 /// A fault in a page's body that the DM can repair from where it is (Campaign content's package
@@ -4400,12 +4429,18 @@ impl<A> BodyFault<A> {
                 let text = words.as_str();
                 tone_message(ui, tone, text);
                 for (at, repair) in repairs.iter().enumerate() {
-                    let clicked = message_choice_row(ui, tone, |ui| {
+                    let lock = holding(&repair.lock);
+                    let action = message_choice_row(ui, tone, |ui| {
                         let room = ui.available_width();
-                        let lock = holding(&repair.lock);
-                        data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock).clicked()
+                        data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock)
                     });
-                    activated(ui, &mut pressed, clicked, text, Pressed::Choice(at));
+                    activated(
+                        ui,
+                        &mut pressed,
+                        action.clicked(),
+                        text,
+                        Pressed::Choice(at),
+                    );
                     if let Some((reason, locked)) = &repair.lock {
                         message_choice_row(ui, tone, |ui| {
                             if *locked {
@@ -4418,7 +4453,7 @@ impl<A> BodyFault<A> {
                         });
                     }
                     if let Some(help) = &repair.help {
-                        action_help(ui, tone, help);
+                        action_help(ui, tone, help, &action, lock);
                     }
                 }
             })
@@ -5428,17 +5463,36 @@ mod tests {
 
         // Ruling M8: a footer choice says what it does in a help line under it, painted, as a
         // body fault's repair does (`action_help`), wide and narrow: each choice on a line of its
-        // own from the words, its help under it at its words, the red one below the safe one's
-        // help; the press still comes back.
-        for narrow in [None, Some(320.0)] {
+        // own from the words, its help under it at its words, the red one exactly `M` below the
+        // safe one's help, measured from the help's own bounds, one line wide and wrapped narrow
+        // (review of PR 487, 3); each help is its choice's accessible description (review of
+        // PR 487, 1); the press still comes back.
+        const MOVE_HELP: &str =
+            "Elm keeps its place in the notes; Ash moves to the line before it.";
+        const DELETE_HELP: &str = "Its file goes to the bin.";
+        // Painted whole inside its clip, left of `right`: a line cut off by the footer's edge is
+        // not shown.
+        let whole = |h: &Harness<'_, App>, words: &str, right: f32| {
+            h.output().shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Text(text)
+                if text.galley.job.text == words
+                    && text.pos.x < right
+                    && clipped.clip_rect.expand(0.5).contains_rect(
+                        Rect::from_min_size(text.pos, text.galley.size())
+                    ))
+            })
+        };
+        let helped = || {
             let mut app = one();
             app.moves = Some(["Ash", "Elm"]);
             app.deletes = true;
             app.helps = true;
+            app
+        };
+        for narrow in [None, Some(320.0)] {
+            let mut app = helped();
             app.narrow = narrow;
             let mut h = harness_sized(app, 960.0);
-            const MOVE_HELP: &str = "Elm keeps its place in the notes.";
-            const DELETE_HELP: &str = "Its file goes to the bin.";
             let rect = |h: &Harness<'_, App>, name: &str| h.get_by_label(name).rect();
             let help = |h: &Harness<'_, App>, words: &str| {
                 h.get_by_role_and_label(egui::accesskit::Role::Label, words)
@@ -5447,22 +5501,110 @@ mod tests {
             let (moving, delete) = (rect(&h, "Move Ash before Elm"), rect(&h, "Delete Ash"));
             let (move_help, delete_help) = (help(&h, MOVE_HELP), help(&h, DELETE_HELP));
             assert!(
-                painted(&h, MOVE_HELP) && painted(&h, DELETE_HELP),
-                "{narrow:?}: the help is painted, not only a hover"
+                whole(&h, MOVE_HELP, f32::INFINITY) && whole(&h, DELETE_HELP, f32::INFINITY),
+                "{narrow:?}: the help is painted whole, not only a hover"
             );
             assert!(
                 move_help.top() >= moving.bottom() - 1.0
                     && (move_help.left() - moving.left()).abs() < 1.0,
                 "{narrow:?}: Move's help under it, at its words: {moving:?} {move_help:?}"
             );
-            assert!(
-                delete.top() >= move_help.bottom() && delete_help.top() >= delete.bottom() - 1.0,
-                "{narrow:?}: Delete on its own line, its help under it: {move_help:?} {delete:?} {delete_help:?}"
+            assert_eq!(
+                move_help.height() > 1.5 * Type::Small.line(),
+                narrow.is_some(),
+                "{narrow:?}: Move's help wraps only narrow: {move_help:?}"
             );
+            assert!(
+                (delete.top() - move_help.bottom() - M).abs() < 0.5
+                    && delete_help.top() >= delete.bottom() - 1.0,
+                "{narrow:?}: Delete exactly M below Move's help, its help under it: {move_help:?} {delete:?} {delete_help:?}"
+            );
+            for (name, description) in [
+                ("Move Ash before Elm", Some(MOVE_HELP)),
+                ("Delete Ash", Some(DELETE_HELP)),
+                ("Register as a new campaign", None),
+            ] {
+                assert_eq!(
+                    h.get_by_label(name)
+                        .accesskit_node()
+                        .description()
+                        .as_deref(),
+                    description,
+                    "{narrow:?}: {name}'s accessible description is its help"
+                );
+            }
             h.get_by_label("Delete Ash").click();
             h.run_steps(2);
             assert_eq!(h.state().deleted, 1, "{narrow:?}: its press comes back");
         }
+        // Review of PR 487, 2: in a short pane whose footer scrolls, Tab to the lowest choice
+        // brings it into view with its whole help line, not the choice alone.
+        let mut app = helped();
+        app.heights = Some([170.0, 760.0]);
+        let mut h = harness_sized(app, 960.0);
+        h.set_size(egui::vec2(960.0, 800.0));
+        h.run_steps(8);
+        assert!(
+            !whole(&h, DELETE_HELP, 320.0),
+            "the short pane's footer scrolls: Delete's help starts out of view"
+        );
+        let mut reached = false;
+        for _ in 0..40 {
+            h.key_press(egui::Key::Tab);
+            h.run_steps(2);
+            let focused = h
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused());
+            if focused.is_some_and(|node| {
+                node.accesskit_node().label().as_deref() == Some("Delete Ash")
+                    && node.rect().left() < 320.0
+            }) {
+                reached = true;
+                break;
+            }
+        }
+        assert!(reached, "Tab reaches Delete in the short pane");
+        h.run_steps(10);
+        assert!(
+            whole(&h, "Delete Ash", 320.0) && whole(&h, DELETE_HELP, 320.0),
+            "Tab shows Delete and its whole help line"
+        );
+        // The same in a pane's body (`pane::reveal_focus`): Tab to a body fault's repair under
+        // the footer brings it into view above the footer with its whole help line.
+        const FAULT_HELP: &str = "The package opens in Library.";
+        let mut app = helped();
+        app.body_fault = true;
+        app.body_tall = [520.0, 0.0];
+        app.heights = Some([420.0, 760.0]);
+        let mut h = harness_sized(app, 960.0);
+        h.set_size(egui::vec2(960.0, 800.0));
+        h.run_steps(8);
+        assert!(
+            !whole(&h, FAULT_HELP, 320.0),
+            "the body scrolls: the repair's help starts out of view"
+        );
+        let mut reached = false;
+        for _ in 0..40 {
+            h.key_press(egui::Key::Tab);
+            h.run_steps(2);
+            let focused = h
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused());
+            if focused.is_some_and(|node| {
+                node.accesskit_node().label().as_deref() == Some("Open in Library")
+            }) {
+                reached = true;
+                break;
+            }
+        }
+        assert!(reached, "Tab reaches the body repair");
+        h.run_steps(10);
+        assert!(
+            whole(&h, "Open in Library", 320.0) && whole(&h, FAULT_HELP, 320.0),
+            "Tab shows the repair and its whole help line above the footer"
+        );
     }
 
     /// M3 gap 3, in the pilot: a press made on the line before its entry changed in place (in
@@ -5579,6 +5721,17 @@ mod tests {
             help.top() >= replace.bottom() - 1.0,
             "help under its repair"
         );
+        // Review of PR 487, 1: the help is its repair's accessible description; a repair with
+        // no help has none.
+        let description = |h: &Harness<'_, State>, name: &str| {
+            h.get_by_label(name).accesskit_node().description()
+        };
+        assert_eq!(
+            description(&h, &name).as_deref(),
+            Some("Your entries stay."),
+            "the help is the repair's description"
+        );
+        assert_eq!(description(&h, "Repair Cinder Wolf"), None);
         // The fixed words after a cut object stay; the name keeps the whole words.
         let whole = format!("Repair {LONG} in Library");
         let node = h.get_by_label(&whole).rect();
@@ -5621,6 +5774,11 @@ mod tests {
         assert!(
             h.query_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
                 .is_some()
+        );
+        assert_eq!(
+            description(&h, &name).as_deref(),
+            Some("Save or discard campaign changes first. Your entries stay."),
+            "locked: the lock's reason, then the help"
         );
         assert_eq!(
             h.get_by_label("Repair Cinder Wolf").rect().top(),
@@ -5846,6 +6004,8 @@ mod tests {
             pub heights: Option<[f32; 2]>,
             /// Each pane's body is this much taller than its label (a tall body).
             pub body_tall: [f32; 2],
+            /// The first pane's body ends with a body fault whose repair has a help line (M8).
+            pub body_fault: bool,
             /// The panes' style draws body text in this font family.
             pub family: Option<&'static str>,
             /// No Undo or choice has a lock (no reason, open or held, and no room for one).
@@ -5881,7 +6041,13 @@ mod tests {
             clippy::disallowed_methods,
             reason = "the pilot's by-owner revision, in the frame of its read"
         )]
-        fn show_active(ui: &mut Ui, dndbeyond: &mut DndBeyond, change: InBody, tall: f32) {
+        fn show_active(
+            ui: &mut Ui,
+            dndbeyond: &mut DndBeyond,
+            change: InBody,
+            tall: f32,
+            fault: bool,
+        ) {
             dndbeyond.edits += 1;
             match change {
                 InBody::Nothing => {}
@@ -5901,6 +6067,14 @@ mod tests {
             ui.label("Link and folder");
             if tall > 0.0 {
                 let _ = ui.allocate_exact_size(egui::vec2(10.0, tall), egui::Sense::hover());
+            }
+            if fault {
+                let _ = BodyFault::new(&super::Hp(Severity::NeedsFixing, None))
+                    .repair(
+                        Repair::new("Open in Library", Act::Rename)
+                            .help(crate::sentence!("The package opens in Library.")),
+                    )
+                    .show(ui);
             }
         }
 
@@ -6001,9 +6175,11 @@ mod tests {
                                     Act::Rename,
                                 );
                                 if helps {
+                                    // Long enough to wrap in a 320 px pane.
                                     moving = moving.help(crate::sentence!(
-                                        "{} keeps its place in the notes.",
-                                        b
+                                        "{} keeps its place in the notes; {} moves to the line before it.",
+                                        b,
+                                        a
                                     ));
                                 }
                                 said = said.choice(moving);
@@ -6035,8 +6211,9 @@ mod tests {
             // The body changes the store's owner by `&mut` while the footer holds its lines:
             // the gap the pilot found (E0502 with a borrowing entry).
             let tall = app.body_tall[pane];
+            let fault = app.body_fault && pane == 0;
             let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
-                show_active(ui, &mut app.dndbeyond, change, tall);
+                show_active(ui, &mut app.dndbeyond, change, tall, fault);
                 7
             });
             assert_eq!(paned.body, 7);
