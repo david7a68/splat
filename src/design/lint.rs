@@ -477,9 +477,9 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
 ///   `fact::tile_label`;
 /// - a rolling tile: `rolls::link(…, Type::NumeralLarge, …)`; the part is `fact::roll_tile`.
 ///
-/// A name is bound to a value by a `let` of it or of another such name, also through a chain
-/// (`let b = a.clone(); let c = &b;`: `clone`, `to_owned`, `to_string`, `as_str`, `into`, a
-/// reference); a new binding of the name ends it. The named legacy exceptions are counts in
+/// A name is bound to a value by a `let` of it or of another such name, typed or not, also
+/// through a chain (`let b = a.clone(); let c: &str = &b;`: `clone`, `to_owned`, `to_string`,
+/// `as_str`, `into`, a reference); a new binding of the name ends it. The named legacy exceptions are counts in
 /// the allowlist.
 ///
 /// Named limits (ruling of the PR 470 review): the rule reads one function at a time. It does
@@ -666,7 +666,12 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                 self.fact.dot_names.remove(&name);
                 self.fact.bare_names.remove(&name);
             }
-            if let syn::Pat::Ident(name) = &local.pat {
+            // A typed binding (`let shown: String = …`) binds its inner name the same way.
+            let pattern = match &local.pat {
+                syn::Pat::Type(typed) => &*typed.pat,
+                other => other,
+            };
+            if let syn::Pat::Ident(name) = pattern {
                 let name = name.ident.to_string();
                 if dots {
                     self.fact.dot_names.insert(name.clone());
@@ -1408,6 +1413,11 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
             let words = (joined).to_string();
             ui.label(format!("{label}: {words}"));
         }"#,
+        r#"fn senses() {
+            let joined = values.join(" · ");
+            let shown: String = joined.clone();
+            ui.label(format!("{label}: {shown}"));
+        }"#,
     ] {
         assert_eq!(rules("src/a.rs", code), ["fact-owner"], "{code}");
     }
@@ -1446,6 +1456,18 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
         ),
         ["fact-owner"],
         "a chain to a tile's label, one format site"
+    );
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            r#"fn tiles() {
+                let label: String = format!("{} {}", a, b);
+                let shown: &str = label.as_str();
+                stat_tile(ui, shown, "15");
+            }"#
+        ),
+        ["fact-owner"],
+        "typed bindings to a tile's label"
     );
     assert_eq!(
         rules(
