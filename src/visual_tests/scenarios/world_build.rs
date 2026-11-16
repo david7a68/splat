@@ -8301,9 +8301,10 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     assert!(!d.app_mut().encounters.has_run());
     d.state("invalid-package-blocks-new-fight", Sizes::All);
     // iter-19-B-FD5: the message and the two rows that state the same fault share its error tone.
-    // SC7, FC3: the rows say the cause and `Open in Library`; the message says only the next act,
-    // and neither the cause nor the link again.
-    let fix_words = "Fix the file of the 2 Cinder Wolf rows before you save or start a fight.";
+    // SC7, FC3: the rows say the cause and `Open in Library`; the message never says the old
+    // cause-and-link words again. Round 31 SE3, AE4 (ruling M7): the refused Start's answer says
+    // first that no fight started, then the part's cause and next step.
+    let fix_words = "No fight started from Bridge Ambush. Splat cannot read the file of Cinder Wolf. Fix Cinder Wolf in Library first.";
     let mut repeats = 0;
     d.each_painted_text(|text, _| {
         let words = text.galley.job.text.as_str();
@@ -8589,10 +8590,12 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click("More actions for Bridge Ambush");
     d.click("Start another fight");
     assert!(!d.app_mut().encounters.has_run());
-    // iter-29 G125 (AD5): the rows keep the cause; the message says only the next act, naming
-    // and counting the rows, whole and in view at every size.
-    let next_act =
-        "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.";
+    // iter-29 G125 (AD5): the rows keep the cause; one message names and counts the rows, whole
+    // and in view at every size. Round 31 SE3, AE4 (start-fight-result-first, ruling M7): the
+    // refused Start's answer says first that no fight started, then the cause once and the one
+    // next step, in the part's words (`Refusal`). Before M7 the message said only the next act
+    // (`… before you save or start a fight.`), and this check refused the cause in it.
+    let next_act = "No fight started from Bridge Ambush. The creature of the 2 Cinder Wolf rows was deleted. Choose replacements for the 2 Cinder Wolf rows first.";
     d.state_prepared("deleted-package-blocks-new-fight", Sizes::All, |d| {
         let mut messages = Vec::new();
         d.each_painted_text(|text, _| {
@@ -8605,10 +8608,10 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         d.observe(
             "iter-29-BC5-G125",
             d.visible_text(next_act)
-                && !messages.is_empty()
-                && messages.iter().all(|words| !words.contains("deleted"))
+                && messages.len() == 1
+                && messages.iter().all(|words| words.starts_with("No fight started"))
                 && rows == 2,
-            format!("The message {messages:?} says only the next act; {rows} rows say the cause"),
+            format!("One answer {messages:?}: the act first, then the cause and the next step; {rows} rows say the cause"),
         );
     });
     // iter-19-B-FD5 must stay true: a deleted entry stays a warning in the message and the rows.
