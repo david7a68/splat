@@ -24026,25 +24026,28 @@ pub mod session_plan_groups {
         // Review of PR 499 (P1): the plan's Ctrl+S saves the group after its WHOLE body took the
         // frame's input. Words typed into the group's notes and Ctrl+S in ONE input frame (one
         // pass): the saved file holds them. (The DM's Save act here: the focus is an aside.)
-        d.aside(|d| d.click_field("Group notes"));
+        // At 1200, where the notes stand beside the search (at 960 they are on the other tab).
         let ctrl = egui::Modifiers {
             ctrl: true,
             command: true,
             ..Default::default()
         };
-        let _ = d.first_frame_one_pass(
-            [
-                egui::Event::Text("Dusk.".into()),
-                egui::Event::Key {
-                    key: Key::S,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: ctrl,
-                },
-            ],
-            |_| (),
-        );
+        d.act_at_size(DEFAULT, |d| {
+            d.aside(|d| d.click_field("Group notes for Ash Pack"));
+            let _ = d.first_frame_one_pass(
+                [
+                    egui::Event::Text("Dusk.".into()),
+                    egui::Event::Key {
+                        key: Key::S,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: ctrl,
+                    },
+                ],
+                |_| (),
+            );
+        });
         let ash = d
             .app_mut()
             .campaigns
