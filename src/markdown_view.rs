@@ -10,13 +10,6 @@ use std::{borrow::Cow, sync::Arc};
 pub const NOTE_LINK: &str = "splat-note:";
 /// An embedded image, as `world::with_links` writes one.
 pub const FILE_LINK: &str = "splat-file:";
-/// An entry at this place in the reader's list of entries. Only `show_reader_entries` follows
-/// one, so words the DM typed cannot make one.
-pub const ENTRY_LINK: &str = "splat-entry:";
-
-fn clicked_entry_id() -> egui::Id {
-    egui::Id::new("markdown_clicked_entry")
-}
 
 fn clicked_id() -> egui::Id {
     egui::Id::new("markdown_clicked_note")
@@ -56,20 +49,12 @@ pub fn wanted_heading(ctx: &egui::Context, heading: &str) -> bool {
 
 #[cfg(test)]
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
-    show_with_density(ui, markdown, false, ShortLinks::Prose, None, false);
+    show_with_density(ui, markdown, false, ShortLinks::Prose, None);
 }
 
 /// The Reader's Markdown.
 pub fn show_reader(ui: &mut egui::Ui, markdown: &str) {
-    ui.scope(|ui| show_with_density(ui, markdown, false, ShortLinks::Prose, None, false));
-}
-
-/// The Reader's Markdown, whose `ENTRY_LINK` links open entries. Returns the place of the
-/// entry the DM pressed.
-pub fn show_reader_entries(ui: &mut egui::Ui, markdown: &str) -> Option<usize> {
-    ui.scope(|ui| show_with_density(ui, markdown, false, ShortLinks::Prose, None, true));
-    ui.ctx()
-        .data_mut(|data| data.remove_temp::<usize>(clicked_entry_id()))
+    ui.scope(|ui| show_with_density(ui, markdown, false, ShortLinks::Prose, None));
 }
 
 /// A plan row's words, such as a scene's line: the plan row title's type (`Body`) at every
@@ -84,7 +69,6 @@ pub fn show_row_words(ui: &mut egui::Ui, markdown: &str, muted: bool) {
             false,
             ShortLinks::Prose,
             Some(RowWords { muted }),
-            false,
         );
     });
 }
@@ -93,7 +77,7 @@ pub fn show_row_words(ui: &mut egui::Ui, markdown: &str, muted: bool) {
 pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
-        show_with_density(ui, markdown, true, ShortLinks::Prose, None, false);
+        show_with_density(ui, markdown, true, ShortLinks::Prose, None);
     });
 }
 
@@ -102,7 +86,7 @@ pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
 pub fn show_skills(ui: &mut egui::Ui, markdown: &str) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
-        show_with_density(ui, markdown, true, ShortLinks::Entries, None, false);
+        show_with_density(ui, markdown, true, ShortLinks::Entries, None);
     });
 }
 
@@ -178,7 +162,6 @@ fn show_with_density(
     dense: bool,
     short_links: ShortLinks,
     row: Option<RowWords>,
-    entries: bool,
 ) {
     let prose = if dense {
         Type::Stat
@@ -292,13 +275,7 @@ fn show_with_density(
                     link = Some((job.text.len(), LinkTarget::Missing));
                     continue;
                 }
-                if let Some(at) = dest_url
-                    .strip_prefix(ENTRY_LINK)
-                    .filter(|_| entries)
-                    .and_then(|at| at.parse().ok())
-                {
-                    link = Some((job.text.len(), LinkTarget::Entry(at)));
-                } else if let Some(destination) = LinkTarget::from_destination(&dest_url) {
+                if let Some(destination) = LinkTarget::from_destination(&dest_url) {
                     link = Some((job.text.len(), destination));
                 }
             }
@@ -1278,9 +1255,6 @@ pub(crate) enum LinkTarget {
     Url(String),
     /// A dice link in a stat block or a sheet. The run or the preview stream rolls it.
     Roll(splat::content::dice_text::RollLink),
-    /// An entry at this place in the reader's list (`ENTRY_LINK`), such as a spell that a stat
-    /// block lists.
-    Entry(usize),
 }
 
 impl LinkTarget {
@@ -1440,9 +1414,6 @@ fn draw_with_links(
             Some(LinkTarget::Lookup(words)) => ui.ctx().data_mut(|data| {
                 data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
             }),
-            Some(LinkTarget::Entry(at)) => ui
-                .ctx()
-                .data_mut(|data| data.insert_temp(clicked_entry_id(), *at)),
             _ => {}
         }
     }
@@ -2042,7 +2013,6 @@ fn link_name(words: &str, destination: &LinkTarget) -> String {
         LinkTarget::Missing => format!("{words} (not found in this campaign)"),
         LinkTarget::Note(note) => format!("{words} (opens {note})"),
         LinkTarget::Lookup(_) => format!("{words} (opens in Lookup)"),
-        LinkTarget::Entry(_) => format!("{words} (opens its description)"),
         LinkTarget::Url(url) => format!("{words} (opens {url})"),
         LinkTarget::Roll(link) => crate::rolls::hint(link),
     }

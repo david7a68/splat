@@ -36,6 +36,7 @@ pub mod list_formats;
 pub mod loot;
 mod markdown;
 mod model;
+pub mod spell_rolls;
 pub use markdown::{body_text, inline_text};
 mod shared;
 pub mod stat_blocks;

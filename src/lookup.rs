@@ -1746,6 +1746,18 @@ impl view::Links for ContentIndex {
             .map(|index| (*index, self.items[*index].entry.name.clone()))
             .collect()
     }
+    fn spell_named(&self, name: &str) -> Option<(usize, String)> {
+        self.spells
+            .iter()
+            .find(|index| self.items[**index].entry.name.eq_ignore_ascii_case(name))
+            .map(|index| (*index, self.items[*index].entry.name.clone()))
+    }
+    fn entry(&self, index: usize) -> Option<&splat::content::Entry> {
+        self.items.get(index).map(|item| &item.entry)
+    }
+    fn generation(&self) -> Option<u64> {
+        Some(self.generation)
+    }
 }
 
 /// Whether an entry's name is the typed words: the whole name, or the name without its kind
