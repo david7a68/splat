@@ -118,6 +118,8 @@ pub struct Dropdown<'a, T, State = NoChoice> {
     room: Option<Rect>,
     blocked: Option<&'a str>,
     command: Option<Word>,
+    /// The next choice starts a new group, under a rule (`group`).
+    group_next: bool,
     state: PhantomData<State>,
 }
 
@@ -127,6 +129,8 @@ struct Entry<'a, T> {
     label: Cow<'a, str>,
     short: Option<Cow<'a, str>>,
     blocked: Option<&'a str>,
+    /// It starts a group: a rule above it.
+    rule_before: bool,
 }
 
 /// What the DM did with a [`Dropdown`] this frame.
@@ -150,13 +154,15 @@ impl<'a, T> Dropdown<'a, T, NoChoice> {
             room: None,
             blocked: None,
             command: None,
+            group_next: false,
             state: PhantomData,
         }
     }
 }
 
 impl<'a, T, State> Dropdown<'a, T, State> {
-    fn push(mut self, entry: Entry<'a, T>) -> Dropdown<'a, T, HasChoices> {
+    fn push(mut self, mut entry: Entry<'a, T>) -> Dropdown<'a, T, HasChoices> {
+        entry.rule_before = std::mem::take(&mut self.group_next);
         self.choices.push(entry);
         Dropdown {
             id: self.id,
@@ -166,6 +172,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
             room: self.room,
             blocked: self.blocked,
             command: self.command,
+            group_next: false,
             state: PhantomData,
         }
     }
@@ -176,6 +183,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
             label: label.into(),
             short: None,
             blocked: None,
+            rule_before: false,
         })
     }
 
@@ -192,6 +200,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
             label: label.into(),
             short: Some(short.into()),
             blocked: None,
+            rule_before: false,
         })
     }
 
@@ -207,6 +216,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
             label: label.into(),
             short: None,
             blocked: Some(reason),
+            rule_before: false,
         })
     }
 
@@ -245,13 +255,24 @@ impl<'a, T> Dropdown<'a, T, HasChoices> {
         mut self,
         more: impl IntoIterator<Item = (T, L)>,
     ) -> Self {
-        self.choices
-            .extend(more.into_iter().map(|(value, label)| Entry {
+        for (value, label) in more {
+            let rule_before = std::mem::take(&mut self.group_next);
+            self.choices.push(Entry {
                 value,
                 label: label.into(),
                 short: None,
                 blocked: None,
-            }));
+                rule_before,
+            });
+        }
+        self
+    }
+
+    /// The choices after this start a new group, under a rule, as the command does (`All`
+    /// apart from `D&D 2024` and the packages). Only between choices: one before the first
+    /// choice does not compile, and one with no choice after it draws nothing.
+    pub fn group(mut self) -> Self {
+        self.group_next = true;
         self
     }
 }
@@ -565,6 +586,13 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             .map(|entry| (entry.label.as_ref(), entry.blocked))
             .chain(self.command.map(|word| (word.as_str(), None)))
             .collect();
+        let groups: Vec<usize> = self
+            .choices
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| entry.rule_before)
+            .map(|(at, _)| at)
+            .collect();
         let key = list.with("metrics");
         let font = Type::Body.font(ui);
         let small = Type::Small.font(ui);
@@ -581,6 +609,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     && kept.small == small
                     && kept.scale == scale
                     && kept.command == self.command.is_some()
+                    && kept.groups == groups
                     && kept.words.len() == words.len()
                     && kept
                         .words
@@ -616,7 +645,9 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                 let mut places = Vec::with_capacity(words.len());
                 let mut top = 0.0;
                 for (at, (label, reason)) in words.iter().enumerate() {
-                    if at == self.choices.len() {
+                    if at == self.choices.len()
+                        || self.choices.get(at).is_some_and(|entry| entry.rule_before)
+                    {
                         top += HAIRLINE_WIDTH;
                     }
                     let height =
@@ -637,6 +668,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     small,
                     scale,
                     command: self.command.is_some(),
+                    groups: groups.clone(),
                     places,
                     top,
                 });
@@ -704,6 +736,9 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 column.show(ui, |ui| {
                     for (at, entry) in self.choices.iter().enumerate() {
+                        if entry.rule_before {
+                            rule(ui);
+                        }
                         let selected = entry.value == *current;
                         let row = super::extras::choice_wrapped(
                             ui,
@@ -761,6 +796,8 @@ struct RowMetrics {
     small: egui::FontId,
     scale: f32,
     command: bool,
+    /// The choices that start a group, under a rule.
+    groups: Vec<usize>,
     places: Vec<(f32, f32)>,
     top: f32,
 }
