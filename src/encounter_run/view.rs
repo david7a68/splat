@@ -1489,64 +1489,35 @@ impl Run {
                                                         } else {
                                                             shown
                                                         };
-                                                        // FJ4: the words get `text_room`; the message's bar, icon and
-                                                        // their gaps take room before them. A fitted notice then keeps
-                                                        // one line, and its band the height the list gave up.
-                                                        let message_width = text_room
-                                                            + lead
-                                                            + ui.spacing().item_spacing.x * 2.0;
-                                                        let response = ui
-                                                            .allocate_ui_with_layout(
-                                                                vec2(
-                                                                    message_width,
-                                                                    if compact
-                                                                        || one_line
-                                                                        || self
-                                                                            .notice_summary
-                                                                            .is_some()
-                                                                    {
-                                                                        Type::Small.line()
-                                                                    } else {
-                                                                        notice_height
-                                                                    },
-                                                                ),
-                                                                Layout::left_to_right(Align::TOP),
-                                                                |ui| {
-                                                                    // One form for every result: the tone marks
-                                                                    // the icon and bar, the words keep text colour.
-                                                                    let tone = if self
-                                                                        .notice_summary
-                                                                        .is_some()
-                                                                    {
-                                                                        Tone::Warning
-                                                                    } else {
-                                                                        Tone::Success
-                                                                    };
-                                                                    design::small_message(
-                                                                        ui, tone, shown,
-                                                                    )
-                                                                },
-                                                            )
-                                                            .inner;
-                                                        let detail =
-                                                            self.notice.as_deref().unwrap_or(shown);
-                                                        design::named(ui, &response, detail);
-                                                        response.on_hover_text(detail);
-                                                        let log = log_link(ui);
-                                                        design::named(ui, &log, "Log");
-                                                        if log.clicked() {
-                                                            self.panel = Panel::Log;
-                                                            self.close_lookup = true;
-                                                        }
-                                                        let dismiss = design::icon_button(
-                                                            ui,
-                                                            icons::CLOSE,
-                                                            "Dismiss this message",
-                                                        )
-                                                        .clicked();
-                                                        if dismiss {
-                                                            self.notice = None;
-                                                            self.return_focus = self.lookup_open;
+                                                        // M-P0 item 7: the notice is one typed compact message: its words (a sheet
+                                                        // notice's fitted to `text_room`), `Log` and its close icon in one band beside
+                                                        // them, one control high. A sheet notice is a warning; a result is said in the
+                                                        // success tone, with no way back here. The whole notice is the words' name and
+                                                        // hover.
+                                                        let detail = self
+                                                            .notice
+                                                            .clone()
+                                                            .unwrap_or_else(|| shown.to_owned());
+                                                        if let Some(words) =
+                                                            outside_words(shown.to_owned())
+                                                        {
+                                                            match live_notice(
+                                                                ui,
+                                                                self.notice_summary.is_some(),
+                                                                words,
+                                                                detail,
+                                                            ) {
+                                                                Some(LiveNotice::Log) => {
+                                                                    self.panel = Panel::Log;
+                                                                    self.close_lookup = true;
+                                                                }
+                                                                Some(LiveNotice::Dismiss) => {
+                                                                    self.notice = None;
+                                                                    self.return_focus =
+                                                                        self.lookup_open;
+                                                                }
+                                                                None => {}
+                                                            }
                                                         }
                                                     },
                                                 );
@@ -5352,64 +5323,25 @@ impl Run {
         );
         design::rule(ui);
         if let Some((root, filename)) = &self.roster_source {
-            // FA11: the path in the campaign, as the encounter editor names the same file.
+            // FA11: the path in the campaign, as the encounter editor names the same file. Each
+            // unread row is one typed compact message (`BodyMessage::compact`), at a row
+            // message's size. R41 (lead ruling, s30 B11): an unread roster row is an error, in
+            // the editor's tone (`unread_row_tone`), here as there: the run's `CannotRead`. One
+            // file names every unread row, so its file line shows once, with the last warning:
+            // on its row when it fits, else under its words.
             let last = self.roster_faults.len().saturating_sub(1);
             for (index, fault) in self.roster_faults.iter().enumerate() {
-                let words = fault.words();
-                // One file names every unread row, so its name and actions show once, after
-                // the last warning about it.
-                // R41 (lead ruling, s30 B11): an unread roster row is an error, in the editor's
-                // tone (`unread_row_tone`), here as there.
-                if index < last {
-                    design::small_message(ui, crate::encounters::unread_row_tone(), &words);
+                let Some(words) = outside_words(fault.words()) else {
                     continue;
+                };
+                let mut message = design::outcome::FaultMessage::<()>::new(&RunFault::Error(words));
+                if index == last {
+                    message =
+                        message.file(design::outcome::FileLine::new(root, filename).edit().show());
                 }
-                ui.scope(|ui| {
-                    ui.spacing_mut().item_spacing.y = design::XS;
-                    let gap = ui.spacing().item_spacing.x;
-                    let inset = design::S
-                        + design::HAIRLINE_WIDTH
-                        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
-                        + gap * 2.0
-                        - design::XS;
-                    let message_width =
-                        design::number_width(ui, &words, &Type::Body.font(ui)) + inset;
-                    let file_width = design::number_width(ui, filename, &Type::Small.font(ui))
-                        + design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
-                        + design::number_width(ui, "Show file", &Type::Body.font(ui))
-                        + gap * 2.0;
-                    if message_width + design::L + file_width <= ui.available_width() {
-                        ui.horizontal_top(|ui| {
-                            ui.allocate_ui_with_layout(
-                                vec2(message_width, 0.0),
-                                Layout::top_down(Align::Min),
-                                |ui| {
-                                    design::small_message(
-                                        ui,
-                                        crate::encounters::unread_row_tone(),
-                                        &words,
-                                    );
-                                },
-                            );
-                            ui.add_space(design::L - gap);
-                            crate::world::entry_file_parts(ui, root, filename, true);
-                        });
-                    } else {
-                        // The file line starts at the warning's words, as every message's
-                        // actions do, and its name wraps whole rather than being cut.
-                        let words_left =
-                            design::small_message(ui, crate::encounters::unread_row_tone(), &words)
-                                .rect
-                                .left();
-                        let inset = words_left - ui.cursor().left();
-                        ui.horizontal_top(|ui| {
-                            ui.add_space(inset);
-                            ui.vertical(|ui| {
-                                crate::encounters::file_line(ui, root, filename);
-                            });
-                        });
-                    }
-                });
+                let _ = design::outcome::BodyMessage::from(message)
+                    .compact()
+                    .show(ui);
             }
         }
         // FI2: errors, the carry-over warning and the rest offers and their result are in the
@@ -6667,6 +6599,42 @@ fn snapshot_values_line(notice_shown: bool) -> &'static str {
     }
 }
 
+/// What the DM pressed on the live view's notice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LiveNotice {
+    Log,
+    Dismiss,
+}
+
+/// The live view's notice (M0102, M0103): a sheet notice (`warning`) or a result, in the
+/// compact form with `Log` and its close icon beside its words; `detail` is the whole notice.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a body place: the live view says its notice where it is (Ban::Body)"
+)]
+fn live_notice(
+    ui: &mut egui::Ui,
+    warning: bool,
+    words: design::outcome::Sentence,
+    detail: String,
+) -> Option<LiveNotice> {
+    use design::outcome::{BodyMessage, Choice, Lost, MessageChoice, Notice};
+    let log = Choice::new(
+        MessageChoice::Link {
+            word: "Log",
+            hover: None,
+        },
+        LiveNotice::Log,
+    );
+    let dismiss = Choice::new(MessageChoice::Dismiss(Lost::Nothing), LiveNotice::Dismiss);
+    let message = if warning {
+        BodyMessage::from(Notice::warning(words).choice(log).choice(dismiss))
+    } else {
+        BodyMessage::result(words, [log, dismiss])
+    };
+    message.compact().detail(detail).show(ui)
+}
+
 /// Words from outside the app's own: a write's or the system's error, a stat block's file
 /// name, the DM's names in a recharge roll or a carry-over. `Sentence::outside` gives them a
 /// capital and an end mark; blank words give `None`.
@@ -6674,7 +6642,7 @@ fn snapshot_values_line(notice_shown: bool) -> &'static str {
     clippy::disallowed_methods,
     reason = "the run’s errors carry the system’s words, and its results the DM’s names"
 )]
-fn outside_words(words: String) -> Option<design::outcome::Sentence> {
+pub(super) fn outside_words(words: String) -> Option<design::outcome::Sentence> {
     design::outcome::Sentence::outside(words)
 }
 
@@ -7712,45 +7680,6 @@ impl TurnMark {
             Self::None
         }
     }
-}
-
-/// Everything on a row, for assistive technology and for the tests.
-/// The notice's `Log` link. The underline covers only the word, and the word starts where the
-/// item gap puts it. The 24 px target is the link's own minimum size: a word narrower than that
-/// gets the extra width evenly on both sides, inside the gaps, so nothing beside it moves.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-pub(super) fn log_link(ui: &mut egui::Ui) -> egui::Response {
-    const WORD: &str = "Log";
-    let c = colors();
-    let galley = ui
-        .painter()
-        .layout_no_wrap(WORD.to_owned(), Type::Small.font(ui), c.accent);
-    let (id, word) = ui.allocate_space(vec2(galley.size().x, galley.size().y.max(design::XL)));
-    let target = word.expand2(vec2(((design::XL - word.width()) / 2.0).max(0.0), 0.0));
-    let response = ui.interact(target, id, egui::Sense::click());
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), WORD));
-    if ui.is_rect_visible(target) {
-        let top = word.center().y - galley.size().y / 2.0;
-        let color = if response.hovered() {
-            c.focus
-        } else {
-            c.accent
-        };
-        ui.painter().hline(
-            word.x_range(),
-            top + galley.size().y - 1.0,
-            egui::Stroke::new(design::HAIRLINE_WIDTH, color.gamma_multiply(0.6)),
-        );
-        ui.painter().galley(pos2(word.left(), top), galley, color);
-        if response.has_focus() {
-            design::focus_ring(ui, target);
-        }
-    }
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// Concentration, as a run row marks it and History's Final state repeats it: its icon and

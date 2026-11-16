@@ -1100,7 +1100,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(3), Ban::Pane(1)],
+            &[Ban::Layout(1), Ban::Extras(1), Ban::Pane(1), Ban::Body],
         ),
         ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(7)]),
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
@@ -1255,13 +1255,15 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/encounter_run/view.rs", "live_view", &[Ban::Pane(1)]),
+        // M-P0 item 7: the run's notices in the compact typed form, where they stand.
+        ("src/encounter_run/view.rs", "live_notice", &[Ban::Body]),
+        ("src/encounter_run/notice.rs", "header_notice", &[Ban::Body]),
         ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
         (
             "src/encounter_run/view.rs",
             "setup_tie_controls",
             &[Ban::Extras(1)],
         ),
-        ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
