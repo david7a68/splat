@@ -64,7 +64,7 @@ type Script = fn(&mut Driver<'_>);
 
 const DEFAULT_JOBS: usize = 4;
 
-const SCENARIOS: [(&str, Seed, Script); 95] = [
+const SCENARIOS: [(&str, Seed, Script); 96] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -362,6 +362,7 @@ const SCENARIOS: [(&str, Seed, Script); 95] = [
         scenarios::party_bar_crowded::run,
     ),
     ("session-plan", Seed::Campaign, scenarios::session_plan::run),
+    ("dm-screen", Seed::Campaign, scenarios::dm_screen::run),
     (
         "session-plan-groups",
         Seed::Groups,

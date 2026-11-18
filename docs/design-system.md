@@ -2081,6 +2081,12 @@ chosen, or its file went), and the narrow page keeps its own `All sessions` link
 stays for when it shows again. Nothing is only in the list: another session's recording, processing and
 failures are also in the rail and the bottom banner.
 
+`DM screen` opens a fixed preview on the Session page. Play puts the live plan beside an editor for
+`What happened`, with `Open threads` and the remaining note in the third column. The widgets become
+tabs when the page is too narrow for three columns. The Play and Notes buttons below the widgets,
+or Ctrl+PageUp and Ctrl+PageDown, move between the preview and the full session view. Both use the
+same session draft and save state. The preview is opt-in and lasts for the app run.
+
 ### Notes and templates
 
 Notes are Markdown in the campaign folder. Write styles source in Reader faces: large ruled headings, italic

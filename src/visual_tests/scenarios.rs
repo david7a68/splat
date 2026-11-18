@@ -14,6 +14,7 @@ use super::{
     steps::*,
 };
 use eframe::egui::{self, Key, Pos2, pos2};
+pub mod dm_screen;
 pub mod encounter_difficulty;
 pub mod file_formats;
 pub mod integrity;
