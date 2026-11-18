@@ -1117,11 +1117,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
-        (
-            "src/encounters.rs",
-            "creature_search_with_summary",
-            &[Ban::Layout(1)],
-        ),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
         (
             "src/encounters/groups.rs",
@@ -1239,6 +1234,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Ruling M20 (M0192): the page's placeholder while another campaign's encounter is open;
         // it replaces an untyped `design::message`.
         ("src/encounters.rs", "show_page", &[Ban::Body]),
+        // M0126 (M-R0.9): a group row's member faults are typed messages in the row they are
+        // about, with their repairs (`BodyMessage`); their words are the loader's, with the
+        // DM's names in them (`Sentence::outside`).
+        ("src/encounters/groups.rs", "cause", &[Ban::Words]),
+        ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",

@@ -23,7 +23,7 @@
 //! from that part.
 use super::components::{
     Action, FooterRank, blocked_reason, first_line_centre, icon_button, link, message_choice_row,
-    number_width, small_tone_message, tone_message, undo_message_line,
+    number_width, single_action_message, small_tone_message, tone_message, undo_message_line,
 };
 pub use super::components::{Footer, ResultOrder, Tone};
 pub use super::results::{ByTicket, Gone, Ticket};
@@ -4311,7 +4311,8 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
 /// (the Run's header notice and its setup warnings, a group row's faults): a [`Notice`] or a
 /// [`FaultMessage`], with its choices (a bordered choice, a red one, a link), its close icon
 /// (`Dismiss`) and its file line, drawn as a footer line draws them: the same words, tone,
-/// order and locks, at the cursor in the full form. It gives back the caller's id of the choice
+/// order and locks, at the cursor in the full form. A [list row with one repair](Self::row_repair)
+/// fits the repair beside the fault. Both forms give back the caller's id of the choice
 /// pressed. It holds no Undo and no ticket: a finished change kept in a store goes in its
 /// footer (`Messages::kept`), so a `Said` or a `Done` is not one. A body place: `show` is a
 /// reviewed suppression (`Ban::Body`).
@@ -4320,32 +4321,60 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
 /// let _ = splat::outcome::BodyMessage::<u8>::from(splat::outcome::Said::new(splat::sentence!("Saved.")));
 /// ```
 #[must_use = "call show"]
-pub struct BodyMessage<A> {
-    typed: Typed<A>,
+pub struct BodyMessage<A>(BodyForm<A>);
+
+enum BodyForm<A> {
+    Full(Outcome<A>),
+    RowRepair {
+        tone: Tone,
+        words: Sentence,
+        label: &'static str,
+        id: A,
+    },
 }
 
 impl<A> From<Notice<A>> for BodyMessage<A> {
     fn from(notice: Notice<A>) -> Self {
-        Self {
-            typed: Typed::new(notice.tone.tone(), notice.words, None, notice.choices)
-                .with_file(notice.file),
-        }
+        Self(BodyForm::Full(notice.into()))
     }
 }
 
 impl<A> From<FaultMessage<A>> for BodyMessage<A> {
     fn from(fault: FaultMessage<A>) -> Self {
-        Self {
-            typed: Typed::new(fault.tone, fault.words, None, fault.choices).with_file(fault.file),
-        }
+        Self(BodyForm::Full(fault.into()))
     }
 }
 
 impl<A> BodyMessage<A> {
+    /// A list row with one repair. The button shares the fault's line when both fit.
+    pub fn row_repair(fault: &dyn Fault, label: &'static str, id: A) -> Self {
+        Self(BodyForm::RowRepair {
+            tone: fault.severity().tone(),
+            words: fault_words(fault),
+            label,
+            id,
+        })
+    }
+
     /// Draw it at the cursor; the caller's id of the choice pressed.
     pub fn show(self, ui: &mut Ui) -> Option<A> {
-        let pressed = self.typed.body.draw(ui, MessagePlace::Page)?;
-        self.typed.id(pressed)
+        match self.0 {
+            BodyForm::Full(message) => {
+                let (_, typed) = message.parts();
+                let pressed = typed.body.draw(ui, MessagePlace::Page)?;
+                typed.id(pressed)
+            }
+            BodyForm::RowRepair {
+                tone,
+                words,
+                label,
+                id,
+            } => {
+                let row = single_action_message(ui, tone, words.as_str(), label);
+                register(ui, row.response.rect, MessagePlace::Row, tone);
+                row.inner.then_some(id)
+            }
+        }
     }
 }
 
