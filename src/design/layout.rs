@@ -3842,7 +3842,9 @@ fn menu_side(pane: Rect, control: Rect) -> (egui::RectAlign, f32) {
 }
 
 /// A menu's room in `pane` beside `control` for `align`: from the control's left edge to the
-/// pane's inner right edge (or from its right edge leftward), one lane clear of the edges.
+/// pane's inner right edge (or from its right edge leftward), one lane clear of the edges. It is
+/// never wider than that, also when that is narrower than a control (issue #549): a narrow
+/// room makes a narrow menu, and a room with no space for the menu's frame shows none.
 fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
     let clear = lane_width().max(S);
     let room = if align.parent().x() == egui::Align::Max {
@@ -3850,7 +3852,7 @@ fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
     } else {
         pane.right() - clear - control.left()
     };
-    room.max(Density::Read.control())
+    room.max(0.0)
 }
 
 #[allow(
@@ -3883,9 +3885,18 @@ impl MenuPopup<'_> {
     /// A smaller room owned by the control's layout (as [`Dropdown::within`](super::popups::Dropdown::within)):
     /// a column of a header that spans two panes, the list beside a splitter. The part
     /// intersects it with the pane, then chooses the menu's side and width inside it again, one
-    /// lane clear of its edges. It cannot widen the pane's room.
+    /// lane clear of its edges. It cannot widen the pane's room. A control that reaches past
+    /// the room's inner edges anchors the menu at those edges, so that the menu never starts
+    /// past the room (issue #549); a room too narrow for the menu's frame shows none.
     pub fn within(mut self, room: Rect) -> Self {
         self.pane = self.pane.intersect(room);
+        let clear = lane_width().max(S);
+        let (left, right) = (self.pane.left() + clear, self.pane.right() - clear);
+        self.control.min.x = self.control.min.x.max(left).min(right);
+        self.control.max.x = self.control.max.x.min(right).max(left);
+        self.popup = self
+            .popup
+            .anchor(egui::PopupAnchor::ParentRect(self.control));
         let (align, width) = menu_side(self.pane, self.control);
         self.room = width;
         self.popup = self.popup.align(align).width(width);
@@ -3929,9 +3940,15 @@ impl MenuPopup<'_> {
         } = self;
         let ctx = popup.ctx().clone();
         let key = id.with("splat_menu_width");
+        let style = ctx.style();
+        let frame = style.spacing.menu_margin.sum().x + 2.0 * style.visuals.window_stroke.width;
+        // A room that cannot hold the frame and anything in it shows no menu, rather than one
+        // drawn past the room (issue #549). It opens when the room is there again.
+        if room <= frame {
+            ctx.data_mut(|data| data.remove_temp::<f32>(key));
+            return None;
+        }
         let shown = popup.show(|ui| {
-            let frame = ui.style().spacing.menu_margin.sum().x
-                + 2.0 * ui.style().visuals.window_stroke.width;
             let inner_room = (room - frame).max(0.0);
             let decided = ui.data(|data| data.get_temp::<f32>(key));
             let width = decided.unwrap_or(inner_room).min(inner_room);

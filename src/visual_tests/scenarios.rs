@@ -2709,10 +2709,10 @@ pub mod library_navigation {
 
         // M0330: a long issues menu stops at six controls and scrolls, and still ends at the
         // count. Read without a capture: the gate cannot yet tell a scrolling popup's
-        // background from a control (its rows reach below its frame). Known fault, not this
-        // check's claim: lines wider than the room between the reader's splitter and the count
-        // make the menu reach over the list at 960 and 1200 (`menu_popup` has no room inside
-        // the reader yet); the detail names each lane it crosses.
+        // background from a control (its rows reach below its frame). Issue #504: the menu
+        // keeps to the reader's room (`MenuPopup::within`), so lines wider than the room
+        // between the reader's splitter and the count no longer reach over the list's scroll
+        // bar (960) or the splitter (1200); and its last link comes into view by scrolling.
         for n in 1..=BROKEN_FILES {
             let name = format!("Broken Watch {n}");
             std::fs::write(
@@ -2729,7 +2729,7 @@ pub mod library_navigation {
         d.wait_for_text("Broken Watch 1");
         let count = issues_count(d);
         for size in [SMALL, DEFAULT, LARGE] {
-            let (control, frame, margins, stroke, lanes) = d.act_at_size(size, |d| {
+            let (control, frame, margins, stroke, lanes, last) = d.act_at_size(size, |d| {
                 if !d.has_containing("Broken Watch 1.md: ") {
                     d.click(&count);
                 }
@@ -2740,7 +2740,38 @@ pub mod library_navigation {
                     .map(|node| node.rect);
                 let frame = first.and_then(|first| d.painted_frame_around(first));
                 let (_, margins, stroke) = issues_menu_frame(d);
-                (d.place_of(&count), frame, margins, stroke, d.chrome_lanes())
+                let lanes = d.chrome_lanes();
+                // The menu's last link, scrolled out of view at first: the wheel over the
+                // menu brings it into view, whole and inside the frame.
+                let links = |d: &Driver<'_>| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.is_link() && node.name.contains(".md: "))
+                        .collect::<Vec<_>>()
+                };
+                let last = links(d)
+                    .into_iter()
+                    .max_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))
+                    .map(|node| node.name);
+                let hidden = last.as_ref().is_some_and(|last| !d.in_view(last));
+                if let Some(frame) = frame {
+                    d.scroll_at(frame.center(), 10);
+                }
+                let reached = last
+                    .as_ref()
+                    .and_then(|last| links(d).into_iter().find(|node| &node.name == last));
+                let reached = reached.zip(frame).map(|(node, frame)| {
+                    (
+                        node.name.clone(),
+                        hidden,
+                        node.fully_in_view() && frame.contains_rect(node.shown),
+                    )
+                });
+                // Back to the top, so the menu that stays open starts there at the next size.
+                if let Some(frame) = frame {
+                    d.scroll_up_at(frame.center(), 10);
+                }
+                (d.place_of(&count), frame, margins, stroke, lanes, reached)
             });
             // The lanes outside the menu that it reaches over (its own scroll bar is inside).
             let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
@@ -2760,15 +2791,40 @@ pub mod library_navigation {
                 control.zip(frame).is_some_and(|(control, frame)| {
                     (frame.height() - most).abs() <= 1.0
                         && (frame.right() - control.right()).abs() <= crate::design::S
-                }),
+                }) && crossed.is_empty()
+                    && last
+                        .as_ref()
+                        .is_some_and(|(_, hidden, reached)| *hidden && *reached),
                 format!(
-                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}) and ends at the count {control:?}; known fault, lanes it reaches over: {crossed:?}"
+                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), ends at the count {control:?}, reaches over no scroll bar or splitter (crossed: {crossed:?}), and its last link (name, out of view at first, then whole in view inside the frame after scrolling) comes into view: {last:?}"
                 ),
             );
         }
         if d.has_containing("Broken Watch 1.md: ") {
             d.press(Key::Escape);
         }
+        // M0331: while a draft holds the open entry, no other entry opens from the menu: it
+        // says why, and lists the files as text, not links.
+        d.click_starting("Broken Watch 1 · ");
+        d.click(EDIT_MARKDOWN);
+        d.type_into_editor("A draft that holds this entry. ");
+        d.click(&count);
+        let files: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.contains("Broken Watch 2.md: "))
+            .collect();
+        d.observe(
+            "M0331-issues-menu-locked",
+            d.has_label("Save or discard this entry first.")
+                && !files.is_empty()
+                && files.iter().all(|node| !node.is_link()),
+            format!(
+                "With a draft, the menu says why no entry opens and lists the files as text (link: {:?})",
+                files.iter().map(crate::visual_tests::driver::Found::is_link).collect::<Vec<_>>()
+            ),
+        );
+        d.press(Key::Escape);
     }
 
     /// Files that M0330's long issues menu lists, more than its six controls hold.

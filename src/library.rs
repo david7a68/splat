@@ -5213,6 +5213,69 @@ impl Library {
         }
     }
 
+    /// The section rows' column, on a wide page with no disk change. M0333: the section rows
+    /// keep the scroll column's lane, so the column is that much wider and the rows keep their
+    /// room.
+    fn sections_column(&self, compact: bool) -> Option<design::Column> {
+        (!compact && self.disk_change.is_none()).then(|| {
+            let lane = design::lane_width();
+            let (width, room) = (166.0 + lane, 150.0 + lane..=280.0 + lane);
+            design::Column::left("library_sections", width, room)
+                // The drag handle is on this edge, so the rows stop short of it.
+                .frame(egui::Frame::new().inner_margin(egui::Margin {
+                    right: design::S as i8,
+                    ..Default::default()
+                }))
+        })
+    }
+
+    /// The entry list's column in a room `width` wide, or none: beside Lookup at the minimum
+    /// window, a draft needs the room more than the list. A wide window's list gets room too,
+    /// so that long names keep their second line.
+    fn entries_column(&self, ui: &egui::Ui, width: f32, dirty: bool) -> Option<design::Column> {
+        if self.disk_change.is_some() || (width < 480.0 && (dirty || self.source)) {
+            return None;
+        }
+        let min_list_width =
+            (design::number_width(ui, "Can use", &Type::Strong.font(ui)) + design::XXL + design::L)
+                * 2.0
+                + design::S * 2.0
+                + ui.spacing().item_spacing.x;
+        let list_width = (width * 0.38).clamp(min_list_width, 420.0);
+        Some(
+            design::Column::left("library_entries", list_width, min_list_width..=560.0).frame(
+                egui::Frame::new().inner_margin(egui::Margin {
+                    left: design::S as i8,
+                    right: design::S as i8,
+                    top: 0,
+                    bottom: 0,
+                }),
+            ),
+        )
+    }
+
+    /// The reader's room on the page that `ui` lays out next: right of the section rows and
+    /// the entry list when they show. The header asks the columns for their widths before
+    /// they draw (`Column::width_within`), so its issues menu keeps to the reader, clear of
+    /// the splitter and the list's scroll bar (issue #504). With no columns (a load, an
+    /// empty scope) it is the whole page.
+    fn reader_room(&self, ui: &egui::Ui, compact: bool, dirty: bool, total: usize) -> egui::Rect {
+        let mut room = ui.available_rect_before_wrap();
+        if self.pending.is_some()
+            || self.loaded.is_none()
+            || (self.scope == Scope::Campaign && total == 0)
+        {
+            return room;
+        }
+        if let Some(column) = self.sections_column(compact) {
+            room.min.x += column.width_within(ui.ctx(), room);
+        }
+        if let Some(column) = self.entries_column(ui, room.width(), dirty) {
+            room.min.x += column.width_within(ui.ctx(), room);
+        }
+        room
+    }
+
     fn draft_reason(&self) -> Option<&'static str> {
         if self.disk_change.is_some() {
             Some(CHANGED_FILE_FIRST.as_str())
@@ -5363,12 +5426,18 @@ impl Library {
                 .count()
         });
         let mut new_entry = false;
+        let reader_room = self.reader_room(ui, compact, dirty, total);
         let link_index = ui.ctx().data(|data| {
             data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
                 "reader_link_index",
             ))
         });
-        let draft_reason = self.draft_reason();
+        // What keeps another entry from opening (`open_entry`) while a draft holds this one, in
+        // that act's words; a file changed on disk says its own.
+        let open_lock = match self.draft_reason() {
+            Some(_) if self.disk_change.is_none() => Some("Save or discard this entry first."),
+            reason => reason,
+        };
         let mut open_broken = None;
         // An open draft's file that stopped reading has no reload yet: the header counts it now,
         // as a reload would, and names its short cause.
@@ -5465,9 +5534,11 @@ impl Library {
                         },
                     );
                     // Round 26 FB1: the menu is as wide as its content, up to the reader
-                    // measure, and ends at the count's right edge, so it stays clear of the
-                    // splitter between the list and the reader.
+                    // measure, and ends at the count's right edge. Its room is the reader's
+                    // (issue #504), so a long line stays clear of the splitter between the
+                    // list and the reader, and of the list's scroll bar.
                     design::menu_popup(&*ui, &response)
+                        .within(reader_room)
                         .align(egui::RectAlign::BOTTOM_END)
                         .show(|ui| {
                             let link_label = |at: usize, count: usize| {
@@ -5500,7 +5571,9 @@ impl Library {
                             // The scroll column keeps its lane beside the widest line. It is as
                             // tall as its lines up to six controls, so one link leaves no empty
                             // band below it (M0330) and a long list scrolls.
-                            ui.set_width(width + design::lane_width());
+                            // It never asks for more than the menu's room (the reader's): a longer
+                            // link is cut and a message wraps.
+                            ui.set_width((width + design::lane_width()).min(ui.available_width()));
                             design::ScrollColumn::new("library_file_issues")
                                 .max_height(design::XXL * 6.0)
                                 .fit_height()
@@ -5521,16 +5594,27 @@ impl Library {
                                         );
                                     }
                                     // As in World, each entry with a broken link opens from here.
-                                    design::locked(ui, draft_reason, |ui| {
-                                        for &(at, count) in &broken {
-                                            if design::small_link(ui, &link_label(at, count))
-                                                .clicked()
-                                            {
-                                                open_broken = Some(at);
-                                                ui.close();
-                                            }
+                                    // M0331: while a draft holds the open entry, no other one
+                                    // opens; the menu says why and lists the files as text.
+                                    if !broken.is_empty() {
+                                        design::blocked_reason(ui, open_lock);
+                                    }
+                                    for &(at, count) in &broken {
+                                        let label = link_label(at, count);
+                                        if open_lock.is_some() {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    Type::Small
+                                                        .rich(ui, &label)
+                                                        .color(colors().muted),
+                                                )
+                                                .wrap(),
+                                            );
+                                        } else if design::small_link(ui, &label).clicked() {
+                                            open_broken = Some(at);
+                                            ui.close();
                                         }
-                                    });
+                                    }
                                 });
                         });
                 }
@@ -5723,161 +5807,150 @@ impl Library {
             }
             return;
         }
-        if !compact && self.disk_change.is_none() {
-            // M0333: the section rows keep the scroll column's lane, so the column is that
-            // much wider and the rows keep their room.
-            let lane = design::lane_width();
-            let (width, room) = (166.0 + lane, 150.0 + lane..=280.0 + lane);
-            design::Column::left("library_sections", width, room)
-                // The drag handle is on this edge, so the rows stop short of it.
-                .frame(egui::Frame::new().inner_margin(egui::Margin {
-                    right: design::S as i8,
-                    ..Default::default()
-                }))
-                .show_inside(ui, |ui| {
-                    Self::scope_menu(
-                        ui,
-                        compact,
-                        campaigns,
-                        &mut self.scope,
-                        &mut self.section,
-                        &mut self.search,
-                    );
-                    if let Scope::Package(package) = scope
-                        && let Some((index, note)) = loaded
-                            .notes
-                            .iter()
-                            .enumerate()
-                            .find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
-                        && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open)
-                            .clicked()
-                        && !dirty
-                    {
-                        // Round 26 SB1: a list click records the trail, as a link does.
-                        if self.selected != Some(index) {
-                            self.trail.leave(place(
-                                loaded,
-                                self.selected,
-                                self.scope,
-                                self.section,
-                                &self.search,
-                            ));
-                        }
-                        self.selected = Some(index);
-                        self.draft = note.text.clone();
-                        self.section = Section::All;
-                        self.unreadable_kind = None;
-                        self.source = false;
+        if let Some(column) = self.sections_column(compact) {
+            column.show_inside(ui, |ui| {
+                Self::scope_menu(
+                    ui,
+                    compact,
+                    campaigns,
+                    &mut self.scope,
+                    &mut self.section,
+                    &mut self.search,
+                );
+                if let Scope::Package(package) = scope
+                    && let Some((index, note)) = loaded
+                        .notes
+                        .iter()
+                        .enumerate()
+                        .find(|(_, n)| n.owner.is_package(package) && n.is_manifest())
+                    && about_row(ui, &note.about_label(loaded.has_problem(note)), about_open)
+                        .clicked()
+                    && !dirty
+                {
+                    // Round 26 SB1: a list click records the trail, as a link does.
+                    if self.selected != Some(index) {
+                        self.trail.leave(place(
+                            loaded,
+                            self.selected,
+                            self.scope,
+                            self.section,
+                            &self.search,
+                        ));
                     }
-                    // M0333: the shared scroll column keeps its lane, so a count never moves
-                    // when the bar comes or goes.
-                    design::ScrollColumn::new("section_list").show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        for &(group, sections) in Section::GROUPS {
-                            // Keep the empty encounter section discoverable, but hide an unused fallback.
-                            if sections
-                                .iter()
-                                .all(|section| count_of(*section, &counts) == 0)
-                            {
+                    self.selected = Some(index);
+                    self.draft = note.text.clone();
+                    self.section = Section::All;
+                    self.unreadable_kind = None;
+                    self.source = false;
+                }
+                // M0333: the shared scroll column keeps its lane, so a count never moves
+                // when the bar comes or goes.
+                design::ScrollColumn::new("section_list").show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for &(group, sections) in Section::GROUPS {
+                        // Keep the empty encounter section discoverable, but hide an unused fallback.
+                        if sections
+                            .iter()
+                            .all(|section| count_of(*section, &counts) == 0)
+                        {
+                            continue;
+                        }
+                        if !group.is_empty() {
+                            design::heading(
+                                ui,
+                                design::Heading::Group {
+                                    title: group,
+                                    count: sections
+                                        .iter()
+                                        .map(|section| count_of(*section, &counts))
+                                        .sum(),
+                                },
+                            );
+                        }
+                        for &section in sections {
+                            let count = count_of(section, &counts);
+                            if count == 0 {
                                 continue;
                             }
-                            if !group.is_empty() {
-                                design::heading(
-                                    ui,
-                                    design::Heading::Group {
-                                        title: group,
-                                        count: sections
-                                            .iter()
-                                            .map(|section| count_of(*section, &counts))
-                                            .sum(),
-                                    },
-                                );
-                            }
-                            for &section in sections {
-                                let count = count_of(section, &counts);
-                                if count == 0 {
-                                    continue;
-                                }
-                                if section == Section::Unreadable {
-                                    for kind in Section::GROUPS
+                            if section == Section::Unreadable {
+                                for kind in Section::GROUPS
+                                    .iter()
+                                    .flat_map(|(_, sections)| sections.iter())
+                                    .copied()
+                                {
+                                    let count = loaded
+                                        .notes
                                         .iter()
-                                        .flat_map(|(_, sections)| sections.iter())
-                                        .copied()
-                                    {
-                                        let count = loaded
-                                            .notes
-                                            .iter()
-                                            .filter(|note| {
-                                                note.error.is_some()
-                                                    && loaded.in_scope(note, scope)
-                                                    && note.unreadable_kind() == kind
-                                            })
-                                            .count();
-                                        if count == 0 {
-                                            continue;
-                                        }
-                                        let label = if kind == Section::Unreadable {
-                                            "Entries"
-                                        } else {
-                                            kind.label()
-                                        };
-                                        if section_row(
-                                            ui,
-                                            label,
-                                            count,
-                                            !about_open
-                                                && self.section == section
-                                                && self.unreadable_kind == Some(kind)
-                                                && !searching,
-                                        )
-                                        .clicked()
-                                        {
-                                            self.section = section;
-                                            self.unreadable_kind = Some(kind);
-                                            self.matches = None;
-                                            self.search.clear();
-                                        }
-                                    }
-                                    continue;
-                                }
-                                let selected = self.section == section && !searching && !about_open;
-                                let label = section.label();
-                                // Round 30 AI4: with no search, All entries paints no
-                                // count, which would repeat the header's; its name keeps
-                                // it. During a search it paints the number of matches,
-                                // zero included, from the list's kept result for this
-                                // query and scope (no new work); until that result exists,
-                                // no count.
-                                let (count, painted) = if section == Section::All {
-                                    let query = self.search.trim().to_lowercase();
-                                    let found = self
-                                        .matches
-                                        .as_ref()
-                                        .filter(|(_, kept, _)| {
-                                            searching
-                                                && *kept == query
-                                                && self.matches_scope == Some(scope)
+                                        .filter(|note| {
+                                            note.error.is_some()
+                                                && loaded.in_scope(note, scope)
+                                                && note.unreadable_kind() == kind
                                         })
-                                        .map(|(.., found)| found.len());
-                                    (found.unwrap_or(count), found.is_some())
-                                } else {
-                                    (count, true)
-                                };
-                                let response =
-                                    section_row_counted(ui, label, count, selected, painted);
-                                if response.clicked() {
-                                    if about_open && !dirty {
-                                        self.selected = None;
-                                        self.draft.clear();
+                                        .count();
+                                    if count == 0 {
+                                        continue;
                                     }
-                                    self.section = section;
-                                    self.unreadable_kind = None;
-                                    self.search.clear();
+                                    let label = if kind == Section::Unreadable {
+                                        "Entries"
+                                    } else {
+                                        kind.label()
+                                    };
+                                    if section_row(
+                                        ui,
+                                        label,
+                                        count,
+                                        !about_open
+                                            && self.section == section
+                                            && self.unreadable_kind == Some(kind)
+                                            && !searching,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.section = section;
+                                        self.unreadable_kind = Some(kind);
+                                        self.matches = None;
+                                        self.search.clear();
+                                    }
                                 }
+                                continue;
+                            }
+                            let selected = self.section == section && !searching && !about_open;
+                            let label = section.label();
+                            // Round 30 AI4: with no search, All entries paints no
+                            // count, which would repeat the header's; its name keeps
+                            // it. During a search it paints the number of matches,
+                            // zero included, from the list's kept result for this
+                            // query and scope (no new work); until that result exists,
+                            // no count.
+                            let (count, painted) = if section == Section::All {
+                                let query = self.search.trim().to_lowercase();
+                                let found = self
+                                    .matches
+                                    .as_ref()
+                                    .filter(|(_, kept, _)| {
+                                        searching
+                                            && *kept == query
+                                            && self.matches_scope == Some(scope)
+                                    })
+                                    .map(|(.., found)| found.len());
+                                (found.unwrap_or(count), found.is_some())
+                            } else {
+                                (count, true)
+                            };
+                            let response = section_row_counted(ui, label, count, selected, painted);
+                            if response.clicked() {
+                                if about_open && !dirty {
+                                    self.selected = None;
+                                    self.draft.clear();
+                                }
+                                self.section = section;
+                                self.unreadable_kind = None;
+                                self.search.clear();
                             }
                         }
-                    });
+                    }
                 });
+            });
         }
         // A query always searches the whole scope. Clearing it returns to the selected section.
         let query = self.search.trim().to_lowercase();
@@ -5967,28 +6040,12 @@ impl Library {
                 "reader_link_index",
             ))
         });
-        // A wide window's list gets room too, so that long names keep their second line.
-        let min_list_width =
-            (design::number_width(ui, "Can use", &Type::Strong.font(ui)) + design::XXL + design::L)
-                * 2.0
-                + design::S * 2.0
-                + ui.spacing().item_spacing.x;
-        let list_width = (ui.available_width() * 0.38).clamp(min_list_width, 420.0);
         let mut peek = None;
         let mut search_everything = false;
-        // Beside Lookup at the minimum window, a draft needs the room more than the list.
-        let hide_list =
-            self.disk_change.is_some() || (ui.available_width() < 480.0 && (dirty || self.source));
-        self.list_hidden = hide_list;
-        if !hide_list {
-            design::Column::left("library_entries", list_width, min_list_width..=560.0)
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::S as i8,
-                right: design::S as i8,
-                top: 0,
-                bottom: 0,
-            }))
-            .show_inside(ui, |ui| {
+        let entries = self.entries_column(ui, ui.available_width(), dirty);
+        self.list_hidden = entries.is_none();
+        if let Some(column) = entries {
+            column.show_inside(ui, |ui| {
                 if compact {
                     let half = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
                     ui.horizontal_top(|ui| {
@@ -10177,7 +10234,7 @@ mod tests {
                     // reads text.
                     (".blocked(", 14),
                     ("blocked_if(", 0),
-                    ("design::locked(", 2),
+                    ("design::locked(", 1),
                     ("undo_message(", 0),
                 ],
             ),
