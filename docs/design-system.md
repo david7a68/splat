@@ -1981,10 +1981,11 @@ list is a warning `message`, in the same form as the member faults above it.
 In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
 (`message_with_actions`): a bordered secondary button whose frame starts at the warning text. Arrivals and the
 Encounters list draw a member fault with its repair (`Campaign → Packages` or `Edit group`) through
-`groups::member_fault_row`: the fault's typed message (`FaultMessage` in a `BodyMessage`), its repair a bordered
-choice on the line under the words, from their first letter, at every width. When every fault of an Arrivals group
-points to packages, its last fault also offers `Edit group`, after `Campaign → Packages` on that line, so the group
-editor stays one click away. The Encounters list does not add it: its row's `Edit` is one click away. A message action without
+`groups::member_fault_row`: a typed `BodyMessage` with a bordered repair. In the Encounters list, the single repair follows the
+fault text after `L` when both fit. Otherwise its border starts under the first letter of the fault text.
+Arrivals places the repairs under the words at every width. When every fault of an Arrivals group points to
+packages, its last fault also offers `Edit group` after `Campaign → Packages`. The Encounters list has its own
+`Edit` on the group row. A message action without
 an icon is never a link.
 
 Join status parts sit on one line with dot separators before the first member, in every group: never beside the group name, so no heading gives a fact of its `Fight after` line to a status and every heading gives way in one order. Use a separate line only when the member slot has no room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`

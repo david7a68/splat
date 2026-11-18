@@ -4497,7 +4497,8 @@ impl Run {
         for (at, fault) in faults.iter().enumerate() {
             let edit_too = packages_only && at + 1 == faults.len();
             // The one member-fault row (Contract B, R): the Encounters list draws it too.
-            match crate::encounters::member_fault_row(ui, fault, edit_too) {
+            let view = crate::encounters::MemberFaultView::Arrivals { edit_too };
+            match crate::encounters::member_fault_row(ui, fault, view) {
                 Some(crate::encounters::MemberRepair::Packages) => self.wants_packages = true,
                 Some(crate::encounters::MemberRepair::EditGroup) => {
                     self.wants_group_editor = Some(group.path.clone());
@@ -13235,7 +13236,11 @@ mod tests {
             let shown = fault.clone();
             let mut harness = egui_kittest::Harness::new(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::encounters::member_fault_row(ui, &shown, false);
+                    crate::encounters::member_fault_row(
+                        ui,
+                        &shown,
+                        crate::encounters::MemberFaultView::Arrivals { edit_too: false },
+                    );
                 });
             });
             design::theme::install(&harness.ctx);
@@ -13283,9 +13288,14 @@ mod tests {
         // M0126 (m-r0-9-edit-too): a missing creature's fault offers `Edit group` too when
         // Arrivals asks (`edit_too`), as a choice of the same typed message: on the line under
         // the words, after `Campaign → Packages`; each press comes back as its repair.
-        use crate::encounters::MemberRepair;
+        use crate::encounters::{MemberFaultView, MemberRepair};
         use egui_kittest::kittest::Queryable;
-        for edit_too in [false, true] {
+        for view in [
+            MemberFaultView::EncounterList,
+            MemberFaultView::Arrivals { edit_too: false },
+            MemberFaultView::Arrivals { edit_too: true },
+        ] {
+            let edit_too = matches!(view, MemberFaultView::Arrivals { edit_too: true });
             let fault = super::super::MemberFault::new(
                 super::super::FaultKind::NotInPackages,
                 "Unknown creature · line 13: Not in this campaign’s packages.".into(),
@@ -13294,8 +13304,7 @@ mod tests {
             let seen = pressed.clone();
             let mut harness = egui_kittest::Harness::new(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    if let Some(repair) = crate::encounters::member_fault_row(ui, &fault, edit_too)
-                    {
+                    if let Some(repair) = crate::encounters::member_fault_row(ui, &fault, view) {
                         seen.set(Some(repair));
                     }
                 });
