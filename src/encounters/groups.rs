@@ -2238,9 +2238,11 @@ fn other_effect_width(ui: &egui::Ui) -> f32 {
 /// change or clear it. A group can arrive anywhere, so its members can name any side.
 /// What a change form's frame did: `done` when the DM closed it, `changed` when it wrote a new
 /// change into the block (its own comparison says so, so a caller copies nothing to find out).
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 pub(super) struct FormEnd {
     pub(super) done: bool,
+    /// The press of `Done`, for its owner's reveal of the row (`design::reveal`).
+    pub(super) done_act: Option<design::reveal::Act>,
     pub(super) changed: bool,
     /// Where the form says its change faults, if any (G122: the text the DM reads).
     pub(super) fault: Option<egui::Rect>,
@@ -2278,6 +2280,7 @@ pub(super) fn overrides_form(
     let linked = entry.fields.contains_key("splat_external");
     design::gap(ui, design::Gap::XS);
     let mut done = false;
+    let mut done_act = None;
     let heading = ui
         .horizontal(|ui| {
             let heading = design::group_label(
@@ -2285,10 +2288,9 @@ pub(super) fn overrides_form(
                 &format!("Changes for {}", shown_name(block, entry.name.clone())),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                done = Action::quiet("Done")
-                    .name("Done with changes")
-                    .show(ui)
-                    .clicked();
+                let response = Action::quiet("Done").name("Done with changes").show(ui);
+                done = response.clicked();
+                done_act = design::reveal::Act::clicked(ui, &response);
             });
             heading
         })
@@ -2473,6 +2475,7 @@ pub(super) fn overrides_form(
     }
     FormEnd {
         done,
+        done_act,
         changed,
         fault,
     }
