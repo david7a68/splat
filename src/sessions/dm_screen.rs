@@ -16,6 +16,7 @@ use std::{borrow::Cow, ops::Range, sync::Arc};
 const HAPPENED: &str = "What happened";
 const THREADS: &str = "Open threads";
 const LIVE_NOTES: design::FieldName = crate::field_id!("dm_screen_what_happened");
+const PLAY_PLAN_WIDTH: f32 = PLAN_WIDTH + 4.0 * design::L;
 const LIVE_NOTES_WIDTH: f32 = 360.0;
 const REFERENCE_WIDTH: f32 = 300.0;
 
@@ -194,17 +195,16 @@ impl Sessions {
                 self.dm_widget(ui, widget, book, plan, note, &sections)
             });
         };
-        if width >= PLAN_WIDTH + LIVE_NOTES_WIDTH + REFERENCE_WIDTH + 2.0 * design::S {
+        if width >= PLAY_PLAN_WIDTH + LIVE_NOTES_WIDTH + REFERENCE_WIDTH + 2.0 * design::S {
             let height = ui.available_height();
             let tile_width = width - 2.0 * design::S;
-            let plan_width = PLAN_WIDTH;
-            let notes_width = (tile_width - plan_width - REFERENCE_WIDTH)
+            let notes_width = (tile_width - PLAY_PLAN_WIDTH - REFERENCE_WIDTH)
                 .min(design::READER_MEASURE + super::NOTE_FRAME_EDGES);
-            let reference_width = tile_width - plan_width - notes_width;
+            let reference_width = tile_width - PLAY_PLAN_WIDTH - notes_width;
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = design::S;
                 for (width, widgets) in [
-                    (plan_width, &[Widget::Plan][..]),
+                    (PLAY_PLAN_WIDTH, &[Widget::Plan][..]),
                     (notes_width, &[Widget::Happened]),
                     (reference_width, &[Widget::Threads, Widget::Note]),
                 ] {
