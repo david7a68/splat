@@ -4987,9 +4987,12 @@ pub mod encounter_build {
     fn search_lists_wolf_order(d: &mut Driver<'_>) {
         let size = d.window_size();
         let wolves = wolves_listed(d, egui::Rect::EVERYTHING, |name, wolf| name == wolf);
+        // Layout 3b/4: a row the results' edge cuts has no node, so a short window lists the
+        // order's first rows, whole; a taller one all six.
+        let first_rows = size.1 < 700.0 && wolves.len() >= 3 && WOLF_ORDER.starts_with(&wolves);
         d.observe(
             "M3-creature-search-order",
-            wolves == WOLF_ORDER,
+            wolves == WOLF_ORDER || first_rows,
             format!("At {size:?} the encounter search lists {wolves:?} for {MONSTER}"),
         );
     }
@@ -19926,7 +19929,9 @@ pub mod encounter_groups {
         d.type_into(FIND, "wolf");
         // iter-27-B FI5: the one creature order, as Arrivals sorts it: the exact name first, then
         // every name that holds the search in the list's order (Werewolf before Winter Wolf).
-        let order = {
+        // Read at a tall window: at 960 the narrow pane wraps each Add under its facts (layout
+        // PR 4), and the later names are below the fold.
+        let order = d.at_size((DEFAULT.0, 2000.0), |d| {
             let mut found: Vec<(f32, String)> = Vec::new();
             d.each_painted_text(|text, clip| {
                 let words = &text.galley.job.text;
@@ -19938,7 +19943,7 @@ pub mod encounter_groups {
             });
             found.sort_by(|a, b| a.0.total_cmp(&b.0));
             found.into_iter().map(|(_, name)| name).collect::<Vec<_>>()
-        };
+        });
         d.observe(
             "iter-27-B-FI5",
             order == ["Wolf", "Werewolf", "Winter Wolf"],
@@ -21364,13 +21369,14 @@ fn member_column_xs(d: &Driver<'_>, group: &str) -> Vec<(String, f32)> {
 
 /// Egui's scroll bar just right of `edge`: an unnamed thin node with no role.
 fn scroll_bar_right_of(d: &Driver<'_>, edge: f32) -> bool {
+    // Layout PR 4/5a (I6): a row's actions follow its facts, so the pane's bar may lie well
+    // right of them; it was within `XL` while the actions held the pane's far edge.
     d.nodes().iter().any(|node| {
         node.role == egui::accesskit::Role::Unknown
             && node.name.is_empty()
             && node.rect.width() <= crate::design::M
             && node.rect.height() >= crate::design::XXL
             && node.rect.left() >= edge - 0.5
-            && node.rect.left() <= edge + crate::design::XL
     })
 }
 
@@ -23999,27 +24005,15 @@ pub mod session_plan_groups {
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
         d.state("plan-group-assembled", Sizes::All);
-        // iter-27-B FL3: the search field ends where each result's Add ends, at the scroll
-        // lane, with or without the bar.
+        // iter-27-B FL3, replaced by layout PR 4 (I6): each result's Add follows the measured
+        // facts, not the search field's edge: `L` after the widest facts, or under its own
+        // facts at the text edge where the column does not fit.
         for size in [SMALL, DEFAULT, LARGE] {
-            let edges = d.at_size(size, |d| {
-                let search = d.place_of(FIND_CREATURE)?;
-                let adds: Vec<f32> = d
-                    .nodes()
-                    .into_iter()
-                    .filter(|node| {
-                        node.name == ADD && node.in_view() && node.rect.left() > search.left()
-                    })
-                    .map(|node| node.rect.right())
-                    .collect();
-                Some((search.right(), adds))
-            });
+            let (follows, detail) = d.at_size(size, |d| d.search_actions_follow_facts());
             d.observe(
-                "iter-27-B-FL3",
-                edges.as_ref().is_some_and(|(search, adds)| {
-                    !adds.is_empty() && adds.iter().all(|add| (add - search).abs() <= 0.5)
-                }),
-                format!("At {size:?}, the search's right edge and each Add's: {edges:?}"),
+                "pr4-FL3-add-follows-facts",
+                follows,
+                format!("At {size:?}: {detail}"),
             );
         }
         for size in [DEFAULT, LARGE] {
