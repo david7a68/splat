@@ -7778,8 +7778,8 @@ impl Encounters {
         summary: &str,
     ) -> Option<(Uuid, bool)> {
         let mut chosen = None;
-        // FL3: the field ends at the results' scroll lane, where each row's Add ends, whether or
-        // not the bar shows.
+        // The field ends at the results' scroll lane even when the bar is hidden.
+        // Each Add follows its row's facts.
         let width = scroll_lane(ui);
         let response = crate::field_id!("encounter_creature_search")
             .once(crate::design::Once::PageSearch)

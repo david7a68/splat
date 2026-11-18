@@ -19903,11 +19903,9 @@ pub mod encounter_groups {
             let lanes = [(DEFAULT.0, 2000.0), (DEFAULT.0, SMALL.1)].map(|size| {
                 d.at_size(size, |d| {
                     let adds = right_edges(d, ADD);
-                    let bar = adds
-                        .iter()
-                        .copied()
-                        .reduce(f32::max)
-                        .is_some_and(|edge| scroll_bar_right_of(d, edge));
+                    // Add follows the facts. The search field still ends at the scroll lane.
+                    let field = d.place_of(FIND).expect("the creature search field");
+                    let bar = scroll_bar_right_of(d, field.right());
                     (adds, bar)
                 })
             });
@@ -21369,14 +21367,13 @@ fn member_column_xs(d: &Driver<'_>, group: &str) -> Vec<(String, f32)> {
 
 /// Egui's scroll bar just right of `edge`: an unnamed thin node with no role.
 fn scroll_bar_right_of(d: &Driver<'_>, edge: f32) -> bool {
-    // Layout PR 4/5a (I6): a row's actions follow its facts, so the pane's bar may lie well
-    // right of them; it was within `XL` while the actions held the pane's far edge.
     d.nodes().iter().any(|node| {
         node.role == egui::accesskit::Role::Unknown
             && node.name.is_empty()
             && node.rect.width() <= crate::design::M
             && node.rect.height() >= crate::design::XXL
             && node.rect.left() >= edge - 0.5
+            && node.rect.left() <= edge + crate::design::XL
     })
 }
 
@@ -27513,6 +27510,35 @@ pub mod package_to_table {
             8,
         );
         d.state("new-package-at-the-table", Sizes::All);
+        // The HP warning makes the CR label take the full control height. Compare its
+        // actual node to the wrapped Add button in the same column.
+        let clearance = d.at_size(SMALL, |d| {
+            let nodes = d.nodes();
+            let add = nodes
+                .iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Button
+                        && node.name == ADD
+                        && node.fully_in_view()
+                })?
+                .rect;
+            let column = egui::Rect::from_min_max(egui::pos2(add.left(), 0.0), add.max);
+            let words = d.painted_word_rect("CR 1", column)?;
+            let cr = nodes
+                .iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.fully_in_view()
+                        && node.rect.contains(words.center())
+                })?
+                .rect;
+            Some((cr, add))
+        });
+        d.observe(
+            "pr4-wrapped-cr-add",
+            clearance.is_some_and(|(cr, add)| cr.bottom() <= add.top()),
+            format!("At 960, Copper Drake's CR label and wrapped Add: {clearance:?}"),
+        );
         // iter-24-B FC1, must stay true: a changed draft Save would write still says Unsaved,
         // and its Save is not blocked.
         d.observe(
