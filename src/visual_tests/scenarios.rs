@@ -98,9 +98,6 @@ fn check_choices_at_text(
     }
 }
 
-/// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
-/// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
-/// words' first line, within 1 px.
 /// R38, R35 (structural B4): an Encounters editor's back line at 960, 1200 and 1920, read from
 /// the painted text after each resize. The link (accessible `name`) paints its destination
 /// `word` whole at the editor's text edge with the return arrow after it, inside the window; the
@@ -120,9 +117,15 @@ fn back_line_faults(
             let mut faults = Vec::new();
             let (width, height) = d.window_size();
             let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
-            let Some(link) = d.place_of(name) else {
+            let nodes = d.nodes();
+            let Some(button) = nodes.iter().find(|node| node.name == name) else {
                 return vec![format!("{size:?}: no {name:?}")];
             };
+            let link = button.rect;
+            let description = d.description_of(name);
+            if button.disabled != reason.is_some() || description.as_deref() != reason {
+                faults.push(format!("{size:?}: {name:?} disabled {}, description {description:?}, expected {reason:?}", button.disabled));
+            }
             let Some(ink) = d.painted_word_rect(word, link) else {
                 return vec![format!("{size:?}: {word:?} is not painted in {link:?}")];
             };
@@ -133,13 +136,15 @@ fn back_line_faults(
             if !arrow.is_some_and(|arrow| arrow.left() > ink.right()) {
                 faults.push(format!("{size:?}: no arrow after {word:?}: {arrow:?}"));
             }
-            let field = d
-                .nodes()
-                .into_iter()
+            let field = nodes
+                .iter()
                 .find(|node| node.name.starts_with(field))
                 .map(|node| node.rect);
             match field {
                 Some(field) if field.top() >= link.bottom() - 0.5 => {
+                    if field.width() < 200.0 {
+                        faults.push(format!("{size:?}: the name field is only {} px wide", field.width()));
+                    }
                     if (field.left() - ink.left()).abs() > 1.5 {
                         faults.push(format!(
                             "{size:?}: {word:?} at x {} and the name field at x {}",
@@ -153,18 +158,11 @@ fn back_line_faults(
                 )),
             }
             let line = egui::Rect::from_x_y_ranges(link.right()..=width, link.y_range());
-            let painted =
-                reason.map(|reason| d.painted_rect_in(reason, line.expand2(egui::vec2(0.0, 8.0))));
-            match (reason, painted.flatten()) {
-                (Some(reason), None) => {
-                    faults.push(format!(
-                        "{size:?}: {reason:?} is not painted beside the link"
-                    ));
-                }
-                (Some(reason), Some(rect)) if !window.contains_rect(rect) => {
-                    faults.push(format!("{size:?}: {reason:?} is cut at {rect:?}"));
-                }
-                _ => {}
+            if let Some(reason) = reason
+                && !(d.painted_whole_in(reason, line)
+                    && d.painted_word_rect(reason, line).is_some_and(|rect| line.contains_rect(rect)))
+            {
+                faults.push(format!("{size:?}: {reason:?} is not painted whole beside the link"));
             }
             faults
         });
@@ -173,6 +171,9 @@ fn back_line_faults(
     faults
 }
 
+/// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
+/// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
+/// words' first line, within 1 px.
 fn check_dismiss_at_message_end(d: &mut Driver<'_>, id: &str, words: &str) {
     let name = crate::design::outcome::DISMISS_NAME;
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
@@ -3211,7 +3212,9 @@ pub mod campaign_content {
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
-        assert!(d.visible_text("Campaign entries"));
+        // M0341: the scope control is one line; in this narrow column its words are cut at a
+        // whole word (`Campaign…`), and its name keeps the whole scope.
+        assert!(d.has("What the Library shows: Campaign entries") && d.visible_text("Campaign"));
         d.state("own-entries-in-library", Sizes::All);
         d.begin_task();
         let in_list = |d: &Driver<'_>, name: &str| {
@@ -5112,7 +5115,19 @@ pub mod encounter_build {
         d.click(NEW_ENCOUNTER);
         d.type_text(NEW_NAME);
         d.expect("5. ");
-        d.state("new-encounter", Sizes::Default);
+        let faults = back_line_faults(
+            d,
+            "Encounters",
+            "Back to encounters",
+            "Encounter name",
+            Some("Save or discard the open encounter first."),
+        );
+        d.observe(
+            "iter-29-B1-back",
+            faults.is_empty(),
+            format!("New encounter: {faults:?}"),
+        );
+        d.state("new-encounter", Sizes::All);
 
         // The party is already there, and Enter goes on to the search.
         d.press(Key::Enter);
@@ -5442,7 +5457,7 @@ pub mod encounter_build {
             clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
             format!("The run state's x, clean {clean_x:?} and after the first edit {edited_x:?}"),
         );
-        d.state("saved-roster-sync-off", Sizes::Default);
+        d.state("saved-roster-sync-off", Sizes::All);
         d.observe(
             "T5.6",
             d.visible_text(LOCAL_ONLY) && !d.visible_text(PARTY_NOW),
@@ -11917,6 +11932,7 @@ pub mod library_scope {
     use super::*;
     const USES: &str = "Can use";
     const EVERYTHING: &str = "Everything";
+    const BUILTIN: &str = "D&D 2024 · SRD 5.2.1";
     const ACTIVE: &str = "The Emberfall Marches";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -11930,6 +11946,42 @@ pub mod library_scope {
         // Round 23 AC1: the menu is checked against the splitter beside its column at 960 and
         // 1200, and every choice ends at the control's right edge, `S` before that splitter.
         d.state("scope-menu", Sizes::Standard);
+        // M0341: the scope list is the shared drop-down in two groups. `Can use` and
+        // `Everything` touch; a rule starts the second group at `D&D 2024`.
+        {
+            let row = |d: &Driver<'_>, name: &str, column: Option<egui::Rect>| {
+                d.nodes()
+                    .into_iter()
+                    .filter(|node| node.name == name && node.in_view())
+                    .map(|node| node.rect)
+                    .find(|rect| {
+                        column.is_none_or(|column| (rect.left() - column.left()).abs() < 1.0)
+                    })
+            };
+            let uses = row(d, USES, None);
+            let everything = row(d, EVERYTHING, uses);
+            let builtin = row(d, BUILTIN, uses);
+            let gap = |above: egui::Rect, below: egui::Rect| {
+                egui::Rect::from_x_y_ranges(
+                    above.x_range(),
+                    above.bottom() - 0.5..=below.top() + 0.5,
+                )
+            };
+            let first = uses
+                .zip(everything)
+                .map(|(above, below)| d.line_segments_in(gap(above, below)));
+            let second = everything
+                .zip(builtin)
+                .map(|(above, below)| d.line_segments_in(gap(above, below)));
+            d.observe(
+                "M0341-scope-groups",
+                first.as_ref().is_some_and(Vec::is_empty)
+                    && second.as_ref().is_some_and(|rules| !rules.is_empty()),
+                format!(
+                    "No rule between {USES} and {EVERYTHING} ({first:?}); a rule above {BUILTIN} ({second:?})"
+                ),
+            );
+        }
         for size in [SMALL, DEFAULT] {
             let (control, choices) = d.at_size(size, |d| {
                 (
@@ -11951,10 +12003,11 @@ pub mod library_scope {
             );
         }
         // Round 24 FA5: the open menu is as wide as its control, so it covers the counts beside
-        // the control. Each choice fills the menu's content width, so the choices' insets from
-        // the control's two edges are equal, and each is the menu's frame (its margin and rule).
-        let frame = f32::from(d.app_style().spacing.menu_margin.left)
-            + d.app_style().visuals.window_stroke.width;
+        // the control. M0341: the shared drop-down's rows start one frame stroke inside the
+        // control's left edge and end its scroll lane (and the stroke) inside its right edge,
+        // so the list is exactly as wide as the control.
+        let stroke = d.app_style().visuals.window_stroke.width;
+        let lane = crate::design::lane_width();
         for size in [SMALL, DEFAULT] {
             let (control, choices) = d.at_size(size, |d| {
                 (
@@ -11969,12 +12022,12 @@ pub mod library_scope {
                         choice.is_some_and(|choice| {
                             let left = choice.left() - control.left();
                             let right = control.right() - choice.right();
-                            (left - right).abs() <= 1.0 && right <= frame + 1.0
+                            (left - stroke).abs() <= 1.0 && (right - lane - stroke).abs() <= 1.0
                         })
                     })
                 }),
                 format!(
-                    "At {size:?} the scope menu's choices {choices:?} sit the menu frame ({frame}) inside both edges of the control {control:?}"
+                    "At {size:?} the scope menu's choices {choices:?} start the frame stroke ({stroke}) inside the control {control:?} and end its lane ({lane}) inside it"
                 ),
             );
         }

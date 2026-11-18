@@ -3269,7 +3269,7 @@ const MEASURE_ROOM: f32 = 100_000.0;
 /// The fonts in effect in `ctx`, as one key: each family's fonts, and each font's name and data
 /// (by its shared data, so new fonts under an old name count). Any `set_fonts` that changes what
 /// a family draws with changes it, not only the theme's. Worked out once a pass.
-fn font_key(ctx: &egui::Context) -> u64 {
+pub(crate) fn font_key(ctx: &egui::Context) -> u64 {
     use std::hash::{Hash, Hasher};
     let pass = ctx.cumulative_pass_nr();
     let id = egui::Id::new("design_footer_font_key");
