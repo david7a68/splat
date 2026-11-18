@@ -1008,6 +1008,15 @@ impl<'a> Driver<'a> {
             .and_then(|node| node.accesskit_node().value())
     }
 
+    /// The accessible description attached to this control.
+    pub fn description_of(&self, name: &str) -> Option<String> {
+        self.harness
+            .root()
+            .children_recursive()
+            .find(|node| node_name(node) == name)
+            .and_then(|node| node.accesskit_node().description())
+    }
+
     /// The accessible description of every node on screen that has one.
     pub fn descriptions(&self) -> Vec<String> {
         let mut found = Vec::new();

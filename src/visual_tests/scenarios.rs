@@ -98,9 +98,6 @@ fn check_choices_at_text(
     }
 }
 
-/// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
-/// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
-/// words' first line, within 1 px.
 /// R38, R35 (structural B4): an Encounters editor's back line at 960, 1200 and 1920, read from
 /// the painted text after each resize. The link (accessible `name`) paints its destination
 /// `word` whole at the editor's text edge with the return arrow after it, inside the window; the
@@ -120,9 +117,15 @@ fn back_line_faults(
             let mut faults = Vec::new();
             let (width, height) = d.window_size();
             let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
-            let Some(link) = d.place_of(name) else {
+            let nodes = d.nodes();
+            let Some(button) = nodes.iter().find(|node| node.name == name) else {
                 return vec![format!("{size:?}: no {name:?}")];
             };
+            let link = button.rect;
+            let description = d.description_of(name);
+            if button.disabled != reason.is_some() || description.as_deref() != reason {
+                faults.push(format!("{size:?}: {name:?} disabled {}, description {description:?}, expected {reason:?}", button.disabled));
+            }
             let Some(ink) = d.painted_word_rect(word, link) else {
                 return vec![format!("{size:?}: {word:?} is not painted in {link:?}")];
             };
@@ -133,13 +136,15 @@ fn back_line_faults(
             if !arrow.is_some_and(|arrow| arrow.left() > ink.right()) {
                 faults.push(format!("{size:?}: no arrow after {word:?}: {arrow:?}"));
             }
-            let field = d
-                .nodes()
-                .into_iter()
+            let field = nodes
+                .iter()
                 .find(|node| node.name.starts_with(field))
                 .map(|node| node.rect);
             match field {
                 Some(field) if field.top() >= link.bottom() - 0.5 => {
+                    if field.width() < 200.0 {
+                        faults.push(format!("{size:?}: the name field is only {} px wide", field.width()));
+                    }
                     if (field.left() - ink.left()).abs() > 1.5 {
                         faults.push(format!(
                             "{size:?}: {word:?} at x {} and the name field at x {}",
@@ -153,18 +158,11 @@ fn back_line_faults(
                 )),
             }
             let line = egui::Rect::from_x_y_ranges(link.right()..=width, link.y_range());
-            let painted =
-                reason.map(|reason| d.painted_rect_in(reason, line.expand2(egui::vec2(0.0, 8.0))));
-            match (reason, painted.flatten()) {
-                (Some(reason), None) => {
-                    faults.push(format!(
-                        "{size:?}: {reason:?} is not painted beside the link"
-                    ));
-                }
-                (Some(reason), Some(rect)) if !window.contains_rect(rect) => {
-                    faults.push(format!("{size:?}: {reason:?} is cut at {rect:?}"));
-                }
-                _ => {}
+            if let Some(reason) = reason
+                && !(d.painted_whole_in(reason, line)
+                    && d.painted_word_rect(reason, line).is_some_and(|rect| line.contains_rect(rect)))
+            {
+                faults.push(format!("{size:?}: {reason:?} is not painted whole beside the link"));
             }
             faults
         });
@@ -173,6 +171,9 @@ fn back_line_faults(
     faults
 }
 
+/// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
+/// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
+/// words' first line, within 1 px.
 fn check_dismiss_at_message_end(d: &mut Driver<'_>, id: &str, words: &str) {
     let name = crate::design::outcome::DISMISS_NAME;
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
@@ -5053,7 +5054,19 @@ pub mod encounter_build {
         d.click(NEW_ENCOUNTER);
         d.type_text(NEW_NAME);
         d.expect("5. ");
-        d.state("new-encounter", Sizes::Default);
+        let faults = back_line_faults(
+            d,
+            "Encounters",
+            "Back to encounters",
+            "Encounter name",
+            Some("Save or discard the open encounter first."),
+        );
+        d.observe(
+            "iter-29-B1-back",
+            faults.is_empty(),
+            format!("New encounter: {faults:?}"),
+        );
+        d.state("new-encounter", Sizes::All);
 
         // The party is already there, and Enter goes on to the search.
         d.press(Key::Enter);
@@ -5383,7 +5396,7 @@ pub mod encounter_build {
             clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
             format!("The run state's x, clean {clean_x:?} and after the first edit {edited_x:?}"),
         );
-        d.state("saved-roster-sync-off", Sizes::Default);
+        d.state("saved-roster-sync-off", Sizes::All);
         d.observe(
             "T5.6",
             d.visible_text(LOCAL_ONLY) && !d.visible_text(PARTY_NOW),

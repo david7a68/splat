@@ -12,10 +12,23 @@ fn corner(value: f32) -> CornerRadius {
 
 /// A quiet menu button with its caret after the word.
 pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
-    let response = Action::quiet(&format!("{word}    "))
-        .name(word)
-        .selected(selected)
-        .show(ui);
+    draw_menu_button(ui, word, selected, false)
+}
+
+/// A menu button whose word starts at the text edge of its own row.
+pub fn menu_button_at_line_start(ui: &mut Ui, word: &str, selected: bool) -> Response {
+    draw_menu_button(ui, word, selected, true)
+}
+
+fn draw_menu_button(ui: &mut Ui, word: &str, selected: bool, line_start: bool) -> Response {
+    let label = format!("{word}    ");
+    let button = Action::quiet(&label).name(word).selected(selected);
+    let button = if line_start {
+        button.line_start()
+    } else {
+        button
+    };
+    let response = button.show(ui);
     let caret = Rect::from_min_max(
         pos2(response.rect.right() - L - XS, response.rect.top()),
         response.rect.right_bottom(),
