@@ -138,11 +138,15 @@ fn apply_type(style: &mut egui::Style) {
         .insert(TextStyle::Monospace, FontId::monospace(Type::Mono.size()));
 }
 
+/// The height egui gives a line of controls (`interact_size.y`): a horizontal row of facts is
+/// this tall at least.
+pub const INTERACT_HEIGHT: f32 = 26.0;
+
 fn apply_spacing(style: &mut egui::Style) {
     let s = &mut style.spacing;
     s.item_spacing = vec2(S, 6.0);
     s.button_padding = vec2(10.0, 4.0);
-    s.interact_size = Vec2::new(40.0, 26.0);
+    s.interact_size = Vec2::new(40.0, INTERACT_HEIGHT);
     s.menu_margin = Margin::same(6);
     s.window_margin = Margin::same(L as i8);
     s.indent = L;

@@ -3136,11 +3136,20 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
 )]
 pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    single_action_message(ui, tone, text, action).inner
+}
+
+/// One bordered repair beside its message when it fits, or under the words when it wraps.
+pub(super) fn single_action_message(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+) -> egui::InnerResponse<bool> {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
         message_with_action_inside(ui, tone, text, action)
     })
-    .inner
 }
 
 fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {

@@ -127,7 +127,7 @@ mod plan;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
 use eframe::egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
-pub use plan::{Block, ENTRY_ROW_HEIGHT, Row};
+pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Row};
 pub use region::{BlockRegion, Navigation, RegionState};
 
 /// What a pane's body is, for the footer's place.
@@ -677,16 +677,7 @@ fn innermost(ui: &Ui) -> Option<OpenPane> {
 /// Debug builds and tests refuse it (a panic, so that its caller is fixed); a release build draws
 /// its content in place (`ScrollColumn::inline`), and the pane scrolls it.
 pub(super) fn column_in_content(ui: &Ui) -> bool {
-    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
-    let inside = ui.ctx().data(|data| {
-        data.get_temp::<Open>(open_id()).is_some_and(|open| {
-            open.pass == pass
-                && open
-                    .panes
-                    .last()
-                    .is_some_and(|pane| pane.layer == layer && pane.content)
-        })
-    });
+    let inside = in_content_pane(ui);
     assert!(
         !(inside && cfg!(debug_assertions)),
         "a ScrollColumn inside a `Body::Content` pane: the pane is the scroll column. Give its \
@@ -694,6 +685,21 @@ pub(super) fn column_in_content(ui: &Ui) -> bool {
          `Body::Fills(Fills::because(FillsReason::Columns))` for columns that each scroll"
     );
     inside
+}
+
+/// Whether `ui` draws in a `Body::Content` pane's body, which scrolls (a region there draws its
+/// blocks in place: `BlockRegion`).
+pub(super) fn in_content_pane(ui: &Ui) -> bool {
+    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
+    ui.ctx().data(|data| {
+        data.get_temp::<Open>(open_id()).is_some_and(|open| {
+            open.pass == pass
+                && open
+                    .panes
+                    .last()
+                    .is_some_and(|pane| pane.layer == layer && pane.content)
+        })
+    })
 }
 
 /// The usable rect of the innermost pane body that `ui` is drawn in, on `ui`'s layer: its room

@@ -4469,32 +4469,23 @@ impl Run {
             .into_iter()
             .map(|line| super::MemberFault::new(super::FaultKind::CannotJoin, line.into()))
             .collect();
-        if !warnings.is_empty() || !own.is_empty() {
-            for fault in warnings.iter().chain(&own) {
-                // The one member-fault row (Contract B, R): the Encounters list draws it too.
-                if crate::encounters::member_fault_row(ui, fault) {
-                    if fault.kind == super::FaultKind::NotInPackages {
-                        self.wants_packages = true;
-                    } else {
-                        self.wants_group_editor = Some(group.path.clone());
-                    }
+        let faults: Vec<&super::MemberFault> = warnings.iter().chain(&own).collect();
+        // Every fault gives one repair; when all point to packages, the last one also offers
+        // the group editor (M0126: a choice of the same typed message), so it stays one click
+        // away.
+        let packages_only = faults
+            .iter()
+            .all(|fault| fault.kind == super::FaultKind::NotInPackages);
+        for (at, fault) in faults.iter().enumerate() {
+            let edit_too = packages_only && at + 1 == faults.len();
+            // The one member-fault row (Contract B, R): the Encounters list draws it too.
+            let view = crate::encounters::MemberFaultView::Arrivals { edit_too };
+            match crate::encounters::member_fault_row(ui, fault, view) {
+                Some(crate::encounters::MemberRepair::Packages) => self.wants_packages = true,
+                Some(crate::encounters::MemberRepair::EditGroup) => {
+                    self.wants_group_editor = Some(group.path.clone());
                 }
-            }
-            // Every fault gives one link; when all point to packages, the group editor
-            // stays one click away.
-            if warnings
-                .iter()
-                .chain(&own)
-                .all(|fault| fault.kind == super::FaultKind::NotInPackages)
-                // The faults' actions start at the message words; this one does too.
-                && design::message_choice_row(ui, Tone::Warning, |ui| {
-                    Action::secondary("Edit group")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                })
-            {
-                self.wants_group_editor = Some(group.path.clone());
+                None => {}
             }
         }
 
@@ -13227,7 +13218,11 @@ mod tests {
             let shown = fault.clone();
             let mut harness = egui_kittest::Harness::new(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::encounters::member_fault_row(ui, &shown);
+                    crate::encounters::member_fault_row(
+                        ui,
+                        &shown,
+                        crate::encounters::MemberFaultView::Arrivals { edit_too: false },
+                    );
                 });
             });
             design::theme::install(&harness.ctx);
@@ -13271,6 +13266,57 @@ mod tests {
             });
             assert!(bordered, "{fault:?}: the repair {repair:?} has a border");
             assert!(!fills.contains(&other), "{fault:?}: {fills:?}");
+        }
+        // M0126 (m-r0-9-edit-too): a missing creature's fault offers `Edit group` too when
+        // Arrivals asks (`edit_too`), as a choice of the same typed message: on the line under
+        // the words, after `Campaign → Packages`; each press comes back as its repair.
+        use crate::encounters::{MemberFaultView, MemberRepair};
+        use egui_kittest::kittest::Queryable;
+        for view in [
+            MemberFaultView::EncounterList,
+            MemberFaultView::Arrivals { edit_too: false },
+            MemberFaultView::Arrivals { edit_too: true },
+        ] {
+            let edit_too = matches!(view, MemberFaultView::Arrivals { edit_too: true });
+            let fault = super::super::MemberFault::new(
+                super::super::FaultKind::NotInPackages,
+                "Unknown creature · line 13: Not in this campaign’s packages.".into(),
+            );
+            let pressed = std::rc::Rc::new(std::cell::Cell::new(None));
+            let seen = pressed.clone();
+            let mut harness = egui_kittest::Harness::new(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if let Some(repair) = crate::encounters::member_fault_row(ui, &fault, view) {
+                        seen.set(Some(repair));
+                    }
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            assert_eq!(
+                harness.query_by_label("Edit group").is_some(),
+                edit_too,
+                "m-r0-9-edit-too: Edit group shows when Arrivals asks, and only then"
+            );
+            harness.get_by_label("Campaign → Packages").click();
+            harness.run_steps(1);
+            assert_eq!(pressed.get(), Some(MemberRepair::Packages));
+            if edit_too {
+                let packages = harness.get_by_label("Campaign → Packages").rect();
+                let edit = harness.get_by_label("Edit group").rect();
+                assert!(
+                    (edit.center().y - packages.center().y).abs() < 1.0
+                        && edit.left() > packages.right(),
+                    "m-r0-9-edit-too: Edit group follows Packages on its line: {packages:?} {edit:?}"
+                );
+                harness.get_by_label("Edit group").click();
+                harness.run_steps(1);
+                assert_eq!(
+                    pressed.get(),
+                    Some(MemberRepair::EditGroup),
+                    "m-r0-9-edit-too: Edit group opens the group editor"
+                );
+            }
         }
     }
 

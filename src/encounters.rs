@@ -205,7 +205,10 @@ mod history;
 mod results_key;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
-pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
+pub(crate) use groups::{
+    ENCOUNTER_DELETED, MemberFaultView, MemberRepair, NO_MAX_HP_CAUSE, member_fault,
+    member_fault_row,
+};
 #[cfg(test)]
 pub(crate) use groups::{change_copies, group_checks, member_comparisons};
 pub(crate) use history::{Template, template_of};
@@ -1549,7 +1552,7 @@ struct Creature {
 const ROSTER_MAX_WIDTH: f32 = design::LIST_MEASURE;
 const ADD_PANE: &str = "encounter_add";
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
-const RESULT_ROW: f32 = design::XL + design::L + design::S;
+const RESULT_ROW: f32 = design::ACTION_ROW;
 /// A result's stats, each in its own place, so that they can be compared down the list. The
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
@@ -2289,88 +2292,121 @@ fn roster_row(index: usize, slot: &Slot, snapshot: &Snapshot) -> String {
     )
 }
 
-fn creature_result_row(
-    ui: &mut egui::Ui,
-    c: &Creature,
-    action: &str,
-    already: bool,
-) -> (bool, bool) {
-    let (mut chosen, mut read) = (false, false);
-    ui.horizontal(|ui| {
-        ui.set_min_height(RESULT_ROW);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            let controls = if c.unavailable.is_some() {
-                Action::secondary(action)
-                    .density(Density::Read)
-                    .natural_width(ui)
-                    + Action::secondary("Open in World")
-                        .density(Density::Read)
-                        .natural_width(ui)
-                    + design::M
-                    // The gaps between the words and both buttons: the results keep the scroll
-                    // bar's lane (FH3), so nothing may spill into it.
-                    + 2.0 * ui.spacing().item_spacing.x
+/// A creature result's facts (layout PR 4): its name, a link that reads it in Lookup, over its
+/// stats, or over its warning when it cannot be added. Returns whether the name was pressed and
+/// the facts' width (`creature_facts_width`).
+fn creature_facts(ui: &mut egui::Ui, c: &Creature) -> (bool, f32) {
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let read = creature_name_link(ui, &c.name)
+        .on_hover_text("Read this entry in Lookup")
+        .clicked();
+    if let Some(reason) = &c.unavailable {
+        // A status is an icon, a word and a colour, like the other warnings here. It wraps,
+        // because a warning must not be cut to an ellipsis at 960.
+        design::wrapped_status(
+            ui,
+            design::Status {
+                icon: icons::WARN,
+                word: reason,
+                color: colors().result.warning,
+            },
+        );
+    } else {
+        detail_columns(ui, &c.detail, c.source.as_deref(), c.hp_missing);
+    }
+    (read, creature_facts_width(ui, c))
+}
+
+/// The width of a creature result's facts, from the tokens they are drawn with: its name, or its
+/// stats' three columns and its package, or its warning.
+fn creature_facts_width(ui: &egui::Ui, c: &Creature) -> f32 {
+    let (body, small) = (Type::Body.font(ui), Type::Small.font(ui));
+    let name = design::number_width(ui, &c.name, &body);
+    let detail = match &c.unavailable {
+        Some(reason) => {
+            design::number_width(ui, icons::WARN, &body)
+                + ui.spacing().item_spacing.x
+                + design::number_width(ui, reason, &body)
+        }
+        None => {
+            let columns: f32 = [
+                ("CR 1/8", design::M),
+                ("HP 999", design::S),
+                ("AC 25", design::S),
+            ]
+            .into_iter()
+            .map(|(widest, gap)| design::number_width(ui, widest, &small) + gap)
+            .sum();
+            // An NPC's `NPC · as …` follows the columns (`detail_columns`).
+            let parts: Vec<&str> = c.detail.split(" · ").collect();
+            let npc = if c.detail.starts_with("NPC · as ") && parts.len() >= 2 {
+                design::XS + design::number_width(ui, &parts[..2].join(" · "), &small)
             } else {
-                design::S * 12.0
+                0.0
             };
-            ui.set_max_width((ui.available_width() - controls).max(design::S * 10.0));
-            read = creature_name_link(ui, &c.name)
-                .on_hover_text("Read this entry in Lookup")
-                .clicked();
-            if let Some(reason) = &c.unavailable {
-                // A status is an icon, a word and a colour, like the other warnings here. It
-                // wraps, because a warning must not be cut to an ellipsis at 960.
-                design::wrapped_status(
-                    ui,
-                    design::Status {
-                        icon: icons::WARN,
-                        word: reason,
-                        color: colors().result.warning,
-                    },
-                );
-            } else {
-                detail_columns(ui, &c.detail, c.source.as_deref(), c.hp_missing);
-            }
+            columns
+                + npc
+                + c.source.as_deref().map_or(0.0, |source| {
+                    design::XS + design::number_width(ui, source, &small)
+                })
+        }
+    };
+    name.max(detail)
+}
+
+/// A creature result's action: `action` (`Add`, `Use`), blocked with its reason and `Open in
+/// World` beside it when the creature cannot be added, or `In roster` when it is there already.
+fn creature_action<'a>(
+    c: &'a Creature,
+    action: &'a str,
+    name: &'a str,
+    already: bool,
+) -> design::RowAction<'a> {
+    if already {
+        // Round 31 SD10, AD11 (in-roster-check-role): the same checked status as `Party in
+        // roster` above the results: its check, its word and its colour.
+        return design::RowAction::Status(Status {
+            icon: icons::OK,
+            word: "In roster",
+            color: colors().muted,
         });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if already {
-                // Round 31 SD10, AD11 (in-roster-check-role): the same checked status as `Party in
-                // roster` above the results: its check, its word and its colour.
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::OK,
-                        word: "In roster",
-                        color: colors().muted,
-                    },
-                );
-            } else {
-                let name = if action == "Add" {
-                    action.into()
-                } else {
-                    format!("{action} {}", c.name)
-                };
-                chosen = Action::secondary(action)
-                    .name(&name)
-                    .density(Density::Read)
-                    .blocked(c.unavailable.as_deref())
-                    .show(ui)
-                    .clicked();
-                if c.unavailable.is_some()
-                    && Action::secondary("Open in World")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                {
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("reveal_encounter_npc"), c.id)
-                    });
-                }
-            }
-        });
-    });
-    (chosen, read)
+    }
+    design::RowAction::Action {
+        words: action,
+        name,
+        blocked: c.unavailable.as_deref(),
+        recovery: c.unavailable.as_ref().map(|_| OPEN_IN_WORLD),
+    }
+}
+
+/// `Open in World`: the recovery beside a creature that cannot be added.
+const OPEN_IN_WORLD: &str = "Open in World";
+
+/// The widest action recipe of a creature list: `action`, blocked with its recovery, and `In
+/// roster`, so a row whose action changes keeps the column where it was.
+fn creature_actions_width(ui: &egui::Ui, action: &str) -> f32 {
+    [
+        design::RowAction::Action {
+            words: action,
+            name: action,
+            blocked: Some(""),
+            recovery: Some(OPEN_IN_WORLD),
+        },
+        design::RowAction::Status(Status {
+            icon: icons::OK,
+            word: "In roster",
+            color: colors().muted,
+        }),
+    ]
+    .iter()
+    .map(|recipe| recipe.width(ui))
+    .fold(0.0, f32::max)
+}
+
+/// A pressed `Open in World`: the World page opens on that creature.
+fn open_in_world(ui: &egui::Ui, c: &Creature) {
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(egui::Id::new("reveal_encounter_npc"), c.id));
 }
 
 /// FF8: the creature search's separation of a copied note (`Rook Ambry copy.md is now a
@@ -2640,10 +2676,37 @@ fn replace_missing_creature(
         }
     };
     let mut replaced = None;
-    for creature in found.iter().filter_map(|&at| snapshot.creatures.get(at)) {
+    // Layout PR 4: the action column starts `L` after the widest facts.
+    let shown: Vec<&Creature> = found
+        .iter()
+        .filter_map(|&at| snapshot.creatures.get(at))
+        .collect();
+    let columns = design::Columns::measure(
+        ui.available_width(),
+        shown.iter().map(|c| creature_facts_width(ui, c)),
+        [creature_actions_width(ui, "Use")],
+    );
+    let height = design::action_rows::row_height(RESULT_ROW, columns);
+    for (row, creature) in shown.into_iter().enumerate() {
         ui.push_id(creature.id, |ui| {
-            let (chosen, read) = creature_result_row(ui, creature, "Use", false);
-            if chosen {
+            let (rect, _) = ui.allocate_exact_size(
+                egui::vec2(columns.width(ui.available_width()), height),
+                egui::Sense::hover(),
+            );
+            let name = format!("Use {}", creature.name);
+            let (read, pressed) = design::action_row(
+                ui,
+                rect,
+                columns,
+                "replacement_picker",
+                row,
+                |ui| creature_facts(ui, creature),
+                creature_action(creature, "Use", &name, false),
+            );
+            if pressed.recovery {
+                open_in_world(ui, creature);
+            }
+            if pressed.action {
                 replaced = Some((creature.id, all));
             }
             if read {
@@ -7722,10 +7785,6 @@ impl Encounters {
         Self::creature_search_with_summary(ui, list, search, focus_search, peek, roster, "")
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn creature_search_with_summary(
         ui: &mut egui::Ui,
         list: SearchList<'_>,
@@ -7736,8 +7795,8 @@ impl Encounters {
         summary: &str,
     ) -> Option<(Uuid, bool)> {
         let mut chosen = None;
-        // FL3: the field ends at the results' scroll lane, where each row's Add ends, whether or
-        // not the bar shows.
+        // The field ends at the results' scroll lane even when the bar is hidden.
+        // Each Add follows its row's facts.
         let width = scroll_lane(ui);
         let response = crate::field_id!("encounter_creature_search")
             .once(crate::design::Once::PageSearch)
@@ -7885,34 +7944,82 @@ impl Encounters {
             );
         }
         ui.spacing_mut().item_spacing.y = 0.0;
-        let row_height = RESULT_ROW
-            + if ranked.unavailable {
-                Type::Small.line()
-            } else {
-                0.0
-            };
-        // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows, so each
-        // `Add` keeps its x as the DM types and the list grows or shrinks.
-        // Still egui's virtual rows: the group editor draws this search inside a `Content` pane,
-        // where a `ScrollColumn` draws every row, so the move waits for that pane (row M0200).
+        // Layout PR 4: the action column starts `L` after the widest facts of every result
+        // (measured once per query and width), so each `Add` keeps its x as the DM scrolls.
+        // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows.
         let lane = scroll_lane(ui);
-        egui::ScrollArea::vertical()
-            .id_salt(("encounter_results", &query))
-            .auto_shrink([false, false])
-            .show_rows(ui, row_height, matches.len(), |ui, range| {
-                ui.set_max_width(lane);
-                for c in matches[range].iter().map(|&at| &creatures[at]) {
-                    ui.push_id(c.id, |ui| {
-                        let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
-                        if read {
-                            *peek = Some(c.id);
-                        }
-                        if add {
-                            chosen = Some((c.id, c.party));
-                            *focus_search = true;
-                        }
-                    });
-                }
+        let columns_id = egui::Id::new(("encounter_results_columns", &query, matches.len()));
+        let key = (lane.to_bits(), ui.ctx().pixels_per_point().to_bits());
+        let columns = match ui
+            .ctx()
+            .data(|data| data.get_temp::<((u32, u32), design::Columns)>(columns_id))
+        {
+            Some((kept, columns)) if kept == key => columns,
+            _ => {
+                let columns = design::Columns::measure(
+                    lane,
+                    matches
+                        .iter()
+                        .map(|&at| creature_facts_width(ui, &creatures[at])),
+                    [creature_actions_width(ui, "Add")],
+                );
+                ui.ctx()
+                    .data_mut(|data| data.insert_temp(columns_id, (key, columns)));
+                columns
+            }
+        };
+        // The results are blocks of a region (layout 3b): whole rows only, one list box.
+        let block = design::Block::Row(design::Row::Action {
+            status: ranked.unavailable,
+            wrapped: columns.wrapped,
+        });
+        let kept = ui.ctx().data_mut(|data| {
+            data.get_temp_mut_or_insert_with(egui::Id::new("encounter_results_region"), || {
+                std::sync::Arc::new(egui::mutex::Mutex::new((
+                    design::RegionState::new("encounter_results"),
+                    design::memo::Revised::new(Vec::<design::Block>::new()),
+                )))
+            })
+            .clone()
+        });
+        let mut kept = kept.lock();
+        let (region, rows) = &mut *kept;
+        if rows.len() != matches.len() || rows.first() != Some(&block) {
+            rows.revise(|rows| {
+                *rows = vec![block; matches.len()];
+                design::memo::Changed::Yes
+            });
+        }
+        let add_width = columns.width(lane);
+        design::BlockRegion::new(("encounter_results", &query), region, rows)
+            .name("Creature results")
+            .show(ui, |ui, row| {
+                let c = &creatures[matches[row]];
+                let rect = egui::Rect::from_min_size(
+                    ui.max_rect().min,
+                    egui::vec2(add_width.min(ui.max_rect().width()), ui.max_rect().height()),
+                );
+                ui.push_id(c.id, |ui| {
+                    let (read, pressed) = design::action_row(
+                        ui,
+                        rect,
+                        columns,
+                        "encounter_results",
+                        row,
+                        |ui| creature_facts(ui, c),
+                        creature_action(c, "Add", "Add", (roster.already)(c)),
+                    );
+                    if read {
+                        *peek = Some(c.id);
+                    }
+                    if pressed.recovery {
+                        open_in_world(ui, c);
+                    }
+                    if pressed.action {
+                        chosen = Some((c.id, c.party));
+                        *focus_search = true;
+                    }
+                });
             });
         chosen
     }
@@ -9397,6 +9504,72 @@ mod tests {
         );
         assert!(harness.query_by_label("Open in World").is_some());
         assert!(harness.get_by_label("Add").accesskit_node().is_disabled());
+
+        // Layout PR 4 (I6, §4.1): each row's action starts exactly `L` after the widest facts,
+        // in one column; a row's facts and action lie in its one block; each action is a 24 pt
+        // target at least; each row's gap is measured (a gap above 4L is a counted residual).
+        // An action that becomes `In roster` keeps the column.
+        let records = design::action_rows::row_records(&harness.ctx);
+        let column = |records: &[design::action_rows::RowRecord]| {
+            let widest = records
+                .iter()
+                .map(|record| record.facts.right())
+                .fold(f32::MIN, f32::max);
+            let lefts: Vec<f32> = records.iter().map(|record| record.action.left()).collect();
+            (widest, lefts)
+        };
+        let (widest, lefts) = column(&records);
+        assert!(
+            !records.is_empty()
+                && records.iter().all(|record| !record.wrapped)
+                && lefts
+                    .iter()
+                    .all(|left| (left - (widest + design::L)).abs() <= 0.5),
+            "pr4-column: every action starts L after the widest facts {widest}: {lefts:?}"
+        );
+        assert!(
+            records.iter().all(|record| {
+                record.action.top() >= record.facts.top() - 0.5
+                    && record.action.bottom() <= record.facts.bottom() + 0.5
+                    && record.action.height() >= 24.0
+            }),
+            "pr4-block: each row's action lies in its block, a 24 pt target: {records:?}"
+        );
+        let residuals = records.iter().filter(|record| record.residual()).count();
+        assert!(
+            records.iter().all(|record| record.gap() >= design::L - 0.5),
+            "pr4-gap: each row's gap is measured from its own facts ({residuals} residual): {records:?}"
+        );
+        let in_roster = {
+            let snapshot = Snapshot::load(&active, &[]).unwrap();
+            let mut harness = egui_kittest::Harness::new(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let _ = Encounters::creature_search(
+                        ui,
+                        snapshot.search_list(false),
+                        &mut "Watchkeeper".to_owned(),
+                        &mut false,
+                        &mut None,
+                        SearchRoster {
+                            already: &|_| true,
+                            on_roster: &[],
+                            separated: &std::cell::Cell::new(None),
+                        },
+                    );
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            column(&design::action_rows::row_records(&harness.ctx)).1
+        };
+        assert!(
+            in_roster.len() == lefts.len()
+                && in_roster
+                    .iter()
+                    .zip(&lefts)
+                    .all(|(roster, add)| (roster - add).abs() <= 0.5),
+            "pr4-alternate: In roster keeps the column of Add: {in_roster:?} {lefts:?}"
+        );
     }
     #[test]
     fn editor_save_row_has_one_height_in_every_state() {

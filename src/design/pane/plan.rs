@@ -48,7 +48,14 @@ pub enum Row {
     TwoLine,
     /// A Library entry: its name over its detail line (layout PR 3b's first host).
     Entry,
+    /// A fact/action row (`action_rows`): its facts, with a status line when the list has one,
+    /// and an action line when its actions wrap under its facts (layout PR 4).
+    Action { status: bool, wrapped: bool },
 }
+
+/// The height of a fact/action row's facts (`Row::Action`): the name's link target (`XL`) and
+/// a line of facts, which egui lays out at its control height.
+pub const ACTION_ROW: f32 = super::super::tokens::XL + super::super::theme::INTERACT_HEIGHT;
 
 /// The height of a Library entry row (`Row::Entry`).
 pub const ENTRY_ROW_HEIGHT: f32 = 44.0;
@@ -60,6 +67,15 @@ impl Row {
             Self::OneLine => Density::Scan.row(),
             Self::TwoLine => XXL + S,
             Self::Entry => ENTRY_ROW_HEIGHT,
+            Self::Action { status, wrapped } => {
+                ACTION_ROW
+                    + if status { Type::Small.line() } else { 0.0 }
+                    + if wrapped {
+                        Density::Read.control()
+                    } else {
+                        0.0
+                    }
+            }
         }
     }
 }
