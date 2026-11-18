@@ -20160,9 +20160,9 @@ pub mod encounter_groups {
             .zip(d.place_of("Undo discard of Lost Patrol"))
             .map(|(removed, discarded)| (removed.top(), discarded.top()));
         d.state_prepared("group-removed", Sizes::All, |d| {
-            // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
             let size = d.window_size();
-            let menu = d.place_of(&format!("More actions for {GROUP_LOST}"))
+            let menu = d
+                .place_of(&format!("More actions for {GROUP_LOST}"))
                 .expect("Lost Patrol remains in the list after removing Goblin Wave");
             let scrolls = scroll_bar_right_of(d, menu.right());
             d.observe(
@@ -20170,6 +20170,7 @@ pub mod encounter_groups {
                 scrolls == (size == SMALL),
                 format!("At {size:?}, the list beside the group menu {menu:?} scrolls: {scrolls}"),
             );
+            // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
             let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
             let discarded = d.painted_rect_in("Lost Patrol draft discarded.", window);
             let removed = d.painted_rect_in(&format!("Removed group {GROUP_GOBLINS}."), window);

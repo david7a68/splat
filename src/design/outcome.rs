@@ -4311,7 +4311,8 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
 /// (the Run's header notice and its setup warnings, a group row's faults): a [`Notice`] or a
 /// [`FaultMessage`], with its choices (a bordered choice, a red one, a link), its close icon
 /// (`Dismiss`) and its file line, drawn as a footer line draws them: the same words, tone,
-/// order and locks, at the cursor in the full form. It gives back the caller's id of the choice
+/// order and locks, at the cursor in the full form. A [list row with one repair](Self::row_repair)
+/// fits the repair beside the fault. Both forms give back the caller's id of the choice
 /// pressed. It holds no Undo and no ticket: a finished change kept in a store goes in its
 /// footer (`Messages::kept`), so a `Said` or a `Done` is not one. A body place: `show` is a
 /// reviewed suppression (`Ban::Body`).

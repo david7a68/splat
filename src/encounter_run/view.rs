@@ -3452,33 +3452,15 @@ impl Run {
         }
     }
 
-    /// The revision of the groups' read: it changes whenever `groups` holds another read than
-    /// the one counted last, whatever page was open when it was replaced.
-    fn groups_revision(&mut self) -> u64 {
-        let same = match (&self.groups, &self.groups_seen) {
-            (Some(now), Some(seen)) => Arc::ptr_eq(now, seen),
-            (None, None) => true,
-            _ => false,
-        };
-        if !same {
-            self.groups_revision += 1;
-            self.groups_seen = self.groups.clone();
-        }
-        self.groups_revision
+    /// The revision of the groups' read (`set_reads`): a new one with each read, whatever page
+    /// was open when it came.
+    fn groups_revision(&self) -> design::memo::Revision {
+        self.groups_read.revision()
     }
 
     /// The revision of the scale's read, as `groups_revision` is for the groups.
-    fn scale_revision(&mut self) -> u64 {
-        let same = match (&self.scale, &self.scale_seen) {
-            (Some(now), Some(seen)) => Arc::ptr_eq(now, seen),
-            (None, None) => true,
-            _ => false,
-        };
-        if !same {
-            self.scale_revision += 1;
-            self.scale_seen = self.scale.clone();
-        }
-        self.scale_revision
+    fn scale_revision(&self) -> design::memo::Revision {
+        self.scale_read.revision()
     }
 
     /// Each offered group whose Add waits for the DM: `<group>: <reason>`, in list order, from
@@ -10188,7 +10170,7 @@ mod tests {
                     })
                 })
                 .collect();
-            run.groups = Some(Arc::new(groups));
+            run.set_groups(Arc::new(groups));
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 800.0))
                 .build(move |ctx| {
@@ -10293,7 +10275,7 @@ mod tests {
             );
             let mut run =
                 super::super::Run::new("Road".into(), participants, String::new()).unwrap();
-            run.scale = Some(Arc::new(crate::difficulty::Scale {
+            run.set_scale(Arc::new(crate::difficulty::Scale {
                 budgets: Some(crate::difficulty::builtin_budgets()),
                 party: heroes.iter().map(|hero| (hero.id, Some(3))).collect(),
             }));
@@ -10318,7 +10300,7 @@ mod tests {
                 problem: None,
                 warnings: vec![],
             });
-            run.groups = Some(Arc::new(vec![group.clone()]));
+            run.set_groups(Arc::new(vec![group.clone()]));
             let run = Rc::new(RefCell::new(run));
             let shown = run.clone();
             let mut harness = egui_kittest::Harness::builder()
@@ -10362,7 +10344,7 @@ mod tests {
                 let mut elsewhere = (*group).clone();
                 elsewhere.encounter = Some(Uuid::new_v4());
                 run.source = Some(Uuid::new_v4());
-                run.groups = Some(Arc::new(vec![Arc::new(elsewhere)]));
+                run.set_groups(Arc::new(vec![Arc::new(elsewhere)]));
             }
             harness.run_steps(2);
             assert!(harness.query_by_label(&label).is_none());
@@ -10409,7 +10391,7 @@ mod tests {
             .clone();
             group.name = long.clone();
             let mut run = run;
-            run.groups = Some(Arc::new(vec![Arc::new(group)]));
+            run.set_groups(Arc::new(vec![Arc::new(group)]));
             let floor = std::rc::Rc::new(std::cell::Cell::new(0.0_f32));
             let measured = floor.clone();
             let floor_words = format!("{} {first}…", icons::DRAG);
@@ -10515,7 +10497,7 @@ mod tests {
             // The whole Arrivals tab, so its footer is drawn too. `clean` has no bad total.
             let edge = std::rc::Rc::new(std::cell::Cell::new(0.0));
             let build = |mut run: Run, bad_total: bool| {
-                run.groups = Some(Arc::new(groups.clone()));
+                run.set_groups(Arc::new(groups.clone()));
                 if bad_total {
                     run.group_totals.insert(bad, "1-2".into());
                     run.group_totals.insert(also_bad, "2-5".into());
@@ -10658,7 +10640,7 @@ mod tests {
             for group in &groups {
                 run.group_totals.insert(group.id, "2-5".into());
             }
-            run.groups = Some(Arc::new(groups));
+            run.set_groups(Arc::new(groups));
             let local = egui::Id::new(("arrival_footer", run.id));
             // Migration-32 L2c: the typed footer's id is scoped to the pane's parent `Ui`
             // (`Footer::rescope`), here the panel's.
@@ -10793,9 +10775,9 @@ mod tests {
         for p in &mut run.state.participants {
             p.definition = creature.clone();
         }
-        run.groups = Some(read(&creature, "Pack A", 2));
+        run.set_groups(read(&creature, "Pack A", 2));
         // A scale, so each read has difficulty words (#262), which must follow the read too.
-        run.scale = Some(Arc::new(crate::difficulty::Scale {
+        run.set_scale(Arc::new(crate::difficulty::Scale {
             budgets: Some(crate::difficulty::builtin_budgets()),
             party: [(Uuid::new_v4(), Some(4))].into_iter().collect(),
         }));
@@ -10843,8 +10825,8 @@ mod tests {
         harness.run_steps(2);
         {
             let (run, _) = &mut *shared.borrow_mut();
-            run.groups = Some(read(&creature, "Pack B", 4));
-            run.groups = Some(read(&creature, "Pack D", 3));
+            run.set_groups(read(&creature, "Pack B", 4));
+            run.set_groups(read(&creature, "Pack D", 3));
         }
         harness.run_steps(2);
         shared.borrow_mut().1 = true;
@@ -10929,7 +10911,7 @@ mod tests {
         };
         let riders = group("Mist Riders", Arc::new(wisp));
         let vanguard = group("Vanguard", run.state.participants[0].definition.clone());
-        run.groups = Some(Arc::new(vec![riders.clone(), vanguard.clone()]));
+        run.set_groups(Arc::new(vec![riders.clone(), vanguard.clone()]));
         run.group_totals.insert(vanguard.id, "2-5".into());
         let run = Rc::new(RefCell::new(run));
         let drawn = run.clone();

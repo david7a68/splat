@@ -770,6 +770,9 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
 }
 
 struct Draft {
+    /// M0205: after `Done` closes a roster row's changes, the least scroll that shows that row
+    /// whole in the roster's column (`design::reveal`): owned by this draft, it ends with it.
+    roster_reveal: design::reveal::Reveal,
     /// The words typed in a field that stores a cleaned value, while it has focus
     /// (`groups::TypedWords`): they end with the draft.
     typed: groups::TypedWords,
@@ -833,6 +836,7 @@ impl Draft {
         Self {
             typed: groups::TypedWords::default(),
             recovery: Default::default(),
+            roster_reveal: Default::default(),
             id,
             path: format!("Encounters/{id}.md"),
             origin: design::save_row::DraftOrigin::New,
@@ -887,6 +891,7 @@ impl Draft {
         Ok(Self {
             typed: groups::TypedWords::default(),
             recovery: Default::default(),
+            roster_reveal: Default::default(),
             id: entry.id,
             path: path.into(),
             origin: design::save_row::DraftOrigin::Saved,
@@ -3438,6 +3443,8 @@ enum EncounterFault {
     /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
+    /// The Encounters page waits for the previous campaign's open encounter (`show_page`).
+    PreviousCampaignDraft,
     /// Start fight was refused (ruling M7): no fight started, why, and the next step, in the
     /// tone of its cause.
     StartRefused(design::results::Refusal),
@@ -3465,7 +3472,8 @@ impl design::outcome::Fault for EncounterFault {
             | Self::FileWarning(_)
             | Self::RunsLeft(_)
             | Self::FileFlag(..)
-            | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
+            | Self::Invalid(_)
+            | Self::PreviousCampaignDraft => design::outcome::Severity::NeedsFixing,
             Self::StartRefused(refusal) => match refusal.tone() {
                 Tone::Error => design::outcome::Severity::CannotRead,
                 _ => design::outcome::Severity::NeedsFixing,
@@ -3493,6 +3501,9 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The encounter’s file has a problem.")),
             Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("Save cannot write this draft yet.")),
+            Self::PreviousCampaignDraft => {
+                crate::sentence!("Save or discard the previous campaign’s encounter first.")
+            }
             Self::StartRefused(refusal) => refusal.words(),
         }
     }
@@ -5611,8 +5622,7 @@ impl Encounters {
         };
         if let Some(snapshot) = &self.snapshot {
             run.set_roster_names(snapshot.revision, &snapshot.known_creature_names);
-            run.groups = Some(snapshot.groups.clone());
-            run.scale = Some(snapshot.scale.clone());
+            run.set_reads(snapshot.revision, &snapshot.groups, &snapshot.scale);
             run.creatures = Some(snapshot.run_creatures.clone());
         }
         run.planned.clone_from(&self.planned_groups);
@@ -5675,6 +5685,10 @@ impl Encounters {
         self.show_page(ui, campaigns, party, story);
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "ruling M20: the page’s placeholder while another campaign’s encounter is open (`Ban::Body`)"
+    )]
     fn show_page(
         &mut self,
         ui: &mut egui::Ui,
@@ -5692,11 +5706,11 @@ impl Encounters {
             .as_ref()
             .is_none_or(|c| c.id != active.id || c.path != active.path)
         {
-            design::message(
-                ui,
-                Tone::Warning,
-                "Save or discard the previous campaign’s encounter first.",
-            );
+            // M0192 (ruling M20): the page cannot show while another campaign's encounter is
+            // open, so its fault stands in place of its body, in the fault's tone.
+            let _: Option<FooterPress> =
+                design::outcome::PagePlaceholder::new(&EncounterFault::PreviousCampaignDraft)
+                    .show(ui);
             self.save_key = false;
             return;
         }
@@ -7935,27 +7949,29 @@ impl Encounters {
         ui.scope_builder(scope, |ui| {
             // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family):
             // the column keeps it.
-            let shown = design::ScrollColumn::new("encounter_editor").show(ui, |ui| {
-                egui::Frame::new()
-                    .inner_margin(egui::Margin {
-                        left: design::S as i8,
-                        ..egui::Margin::ZERO
-                    })
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width().min(design::LIST_MEASURE));
-                        Self::roster_column(
-                            ui,
-                            draft,
-                            snapshot,
-                            focus_search,
-                            expanded,
-                            linked_party,
-                            make_yours,
-                            heading,
-                        )
-                    })
-                    .inner
-            });
+            let shown = design::ScrollColumn::new("encounter_editor")
+                .hosts_reveals()
+                .show(ui, |ui| {
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin {
+                            left: design::S as i8,
+                            ..egui::Margin::ZERO
+                        })
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                            Self::roster_column(
+                                ui,
+                                draft,
+                                snapshot,
+                                focus_search,
+                                expanded,
+                                linked_party,
+                                make_yours,
+                                heading,
+                            )
+                        })
+                        .inner
+                });
             // Test builds keep the column's scroll id by its draft, for the scroll's tests.
             #[cfg(test)]
             ui.data_mut(|data| data.insert_temp(roster_scroll_key(draft.id), shown.id));
@@ -8439,6 +8455,9 @@ impl Encounters {
                     });
                 });
                 let member_row = member_row.response.rect;
+                draft
+                    .roster_reveal
+                    .mark(ui, draft_id, ("roster_row", &slot.key), member_row);
                 if is_open && missing && unreadable.is_none() {
                     if let Some((creature, all)) =
                         replace_missing_creature(ui, snapshot, missing_counts[i], &name)
@@ -8523,7 +8542,7 @@ impl Encounters {
                         },
                     );
                     if let Some(entry) = definition {
-                        let done = groups::overrides_form(
+                        let end = groups::overrides_form(
                             ui,
                             &format!("{}:{}", draft.id, slot.key),
                             &mut slot.overrides,
@@ -8531,11 +8550,15 @@ impl Encounters {
                             &slot.side,
                             Some(&sides),
                             &mut draft.typed,
-                        )
-                        .done;
-                        if done {
+                        );
+                        if end.done {
                             *expanded = None;
-                            ui.scroll_to_rect(member_row, Some(egui::Align::Min));
+                            // The row comes whole into view, by its column's one reveal.
+                            if let Some(act) = end.done_act {
+                                draft
+                                    .roster_reveal
+                                    .ask(act, draft_id, ("roster_row", &slot.key));
+                            }
                         }
                     }
                 }
@@ -8744,21 +8767,10 @@ impl Encounters {
             // leaves saved runs, it waits in its place, and the folder warning's two choices (the
             // footer's, `then` below) commit, so a second press where Save was never moves runs.
             let choose_move = run_files > 0 && !run_open;
-            let blocked = if run_open { Some("Close the open run to save run settings.") }
-                else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
-                else if choose_move { Some(CHOOSE_MOVE) }
-                else if !changed && rule_lines.is_empty() { Some(design::save_row::NO_CHANGES) } else { None };
-            // The word by the one rule (`DraftState`): `Unsaved` while changed, `Saved` while the
-            // last Save's settings hold, else `No changes`. A repair of an unread choice names
-            // its write instead (the save row rule in docs/design-system.md), which `DraftState`
-            // cannot say yet, nor a wait that is not the draft's (an open run, the move choice).
-            let state = design::DraftState::new(
-                design::save_row::DraftOrigin::Saved,
-                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
-                design::save_row::Primary::Draft,
-            );
-            let state = if this.options_saved.is_some() { state.just_saved() } else { state };
-            let repair = (!changed && !rule_lines.is_empty()).then(|| {
+            // One rule for the row (`DraftState`): the word (`Unsaved`, `Saved` while the last
+            // Save's settings hold, `No changes`), the repair of an unread choice, Save's weight
+            // and why it waits, Discard and the campaign lock.
+            let repair = (!rule_lines.is_empty()).then(|| {
                 // Save is the repair here: it writes the shown settings over the unread choice.
                 let lines = match rule_lines.split_last() {
                     Some((last, [])) => format!("line {last}"),
@@ -8767,79 +8779,55 @@ impl Encounters {
                 };
                 format!("Save replaces the unread choice on {lines} with these settings")
             });
+            let mut state = design::DraftState::new(
+                design::save_row::DraftOrigin::Saved,
+                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
+                design::save_row::Primary::Draft,
+            )
+            .locks_campaign();
+            if this.options_saved.is_some() {
+                state = state.just_saved();
+            }
+            if let Some(write) = repair {
+                state = state.repairs(write);
+            }
+            if run_open {
+                state = state.waits("Close the open run to save run settings.");
+            } else if folder_changed && left.is_err() {
+                state = state.waits("Could not read saved runs. Check the old run folder before saving.");
+            } else if choose_move {
+                state = state.commits_elsewhere(CHOOSE_MOVE);
+            }
+            if changed {
+                this.discarded_options = None;
+            }
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
-                // other change too.
-                // Not under a modal (the app's one test) nor the form's lock (review of PR 525).
-                let save_key = blocked.is_none()
+                // other change too. Not under a modal (the app's one test) nor the form's lock
+                // (review of PR 525).
+                let save_key = state.can_save()
                     && !modal
                     && ui.is_enabled()
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                // AF1: the state starts the row and Save ends it, as on every save row; without
-                // room, the state's words and the reasons wrap before Save. One row in every
-                // state (M4), so the commit keeps its place and its job.
-                let pressed = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            // Disabled, the primary loses its fill and keeps its width, so a
-                            // wait moves nothing.
-                            let pressed = Action::primary(SAVE_RUN_SETTINGS)
-                                .key("Ctrl+S")
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked();
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center)
-                                    .with_main_wrap(true),
-                                |ui| {
-                                    if changed {
-                                        this.discarded_options = None;
-                                    }
-                                    let word = match &repair {
-                                        Some(word) => Status {
-                                            icon: icons::WARN,
-                                            word,
-                                            color: colors().result.warning,
-                                        },
-                                        None => state.word().status(),
-                                    };
-                                    if design::save_row_state(ui, word, state.discard_shown(), None) {
-                                        this.discarded_options = Some(std::mem::replace(
-                                            &mut snapshot.options,
-                                            snapshot.saved_options.clone(),
-                                        ));
-                                        Self::record_kept(
-                                            &mut this.kept,
-                                            this.active.as_ref(),
-                                            KeptResult::OptionsDiscarded,
-                                        );
-                                    }
-                                    if snapshot.options != snapshot.saved_options {
-                                        // FB6: while Save is blocked, Discard is the one way
-                                        // out; the move choices also save.
-                                        design::blocked_reason(
-                                            ui,
-                                            Some(if blocked.is_some() && !choose_move {
-                                                blocked_draft_switch_reason()
-                                            } else {
-                                                draft_switch_reason()
-                                            }),
-                                        );
-                                    }
-                                },
-                            );
-                            pressed
-                        },
-                    )
-                    .inner;
-                // Why Save waits, on its own line under the row (as `save_row`'s narrow slot),
-                // while the form has changes: a wrapped label inside the row would cover Discard.
-                if snapshot.options != snapshot.saved_options {
-                    design::blocked_reason(ui, blocked);
+                // The state and Discard start the row, the lock's reason after them, and Save
+                // ends it (`save_row`), in every state (M4).
+                let row = design::save_row(ui, &state, SAVE_RUN_SETTINGS);
+                if row.discard {
+                    this.discarded_options = Some(std::mem::replace(
+                        &mut snapshot.options,
+                        snapshot.saved_options.clone(),
+                    ));
+                    Self::record_kept(
+                        &mut this.kept,
+                        this.active.as_ref(),
+                        KeptResult::OptionsDiscarded,
+                    );
                 }
-                if (pressed || save_key) && blocked.is_none() {
+                // Why Save waits, on its own line under the row, while the form has changes.
+                if snapshot.options != snapshot.saved_options {
+                    design::blocked_reason(ui, state.save_blocked());
+                }
+                if (row.save || save_key) && state.can_save() {
                     commit = Some(commit_options(snapshot, active, OptionsCommit::Save));
                 }
             });
@@ -10085,6 +10073,85 @@ mod tests {
         harness.run_steps(2);
         assert_eq!(drafts.borrow()[1].name, "Beta", "B keeps its own text");
         assert_eq!(drafts.borrow()[0].name, "Alpha12", "A is unchanged");
+    }
+
+    /// M0205: `Done` in a roster row's changes brings that row whole into view, through the
+    /// roster column's one reveal (`design::reveal`), when the DM scrolled its top out of view.
+    #[test]
+    fn roster_done_brings_its_row_whole_into_view() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let wolf = creature(dir.path(), "Wolf", false);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut draft = Draft::new();
+        for _ in 0..12 {
+            draft.add(wolf, false);
+        }
+        // The first row: content stays below it, so closing its form clamps no offset.
+        let first_key = draft.setup.roster.first().unwrap().key.clone();
+        let id = draft.id;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build_state(
+                move |ctx, (draft, expanded): &mut (Draft, Option<String>)| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        Encounters::roster_pane(
+                            ui,
+                            draft,
+                            &snapshot,
+                            &mut false,
+                            expanded,
+                            None,
+                            &mut None,
+                            Some(None),
+                        );
+                    });
+                },
+                (draft, Some(first_key)),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let scroll = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(id)))
+            .expect("the roster column's scroll id");
+        let row = |harness: &egui_kittest::Harness<'_, (Draft, Option<String>)>| {
+            harness
+                .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                    node.value()
+                        .or(node.label())
+                        .is_some_and(|words| words.starts_with("1. Wolf"))
+                }))
+                .map(|node| node.rect())
+                .next()
+        };
+        // The column's top: where its first line (the roster heading) starts before any scroll.
+        let view_top = harness
+            .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                node.value()
+                    .or(node.label())
+                    .is_some_and(|words| words.to_uppercase().starts_with("ROSTER"))
+            }))
+            .map(|node| node.rect().top())
+            .fold(f32::INFINITY, f32::min);
+        // Scroll so the open row's top is cut by the column's top, its Done still in view.
+        let first = row(&harness).expect("the open row");
+        let mut state = egui::scroll_area::State::load(&harness.ctx, scroll).unwrap();
+        state.offset.y += first.top() - view_top + 4.0;
+        state.store(&harness.ctx, scroll);
+        harness.run_steps(2);
+        let cut = row(&harness).is_none_or(|rect| rect.top() < view_top)
+            && harness.query_by_label("Done with changes").is_some();
+        harness.get_by_label("Done with changes").click();
+        harness.run_steps(8);
+        let shown = row(&harness);
+        assert!(
+            cut && harness.state().1.is_none()
+                && shown.is_some_and(|rect| rect.top() >= view_top - 0.5),
+            "Done closed the form ({:?}) and brought row 1 whole into view: cut before {cut}, row {shown:?}, view top {view_top}",
+            harness.state().1
+        );
     }
 
     #[test]
@@ -12333,6 +12400,38 @@ mod tests {
                 && !harness.state().0.dirty(),
             "with the image closed, a fresh Ctrl+S saves"
         );
+        // M0192 (ruling M20): while the page holds another campaign's encounter, its fault is the
+        // page's typed placeholder, in place of the editor.
+        let mut other = campaign.clone();
+        other.id = Uuid::new_v4();
+        harness.state_mut().0.active = Some(other);
+        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight elsewhere".into();
+        harness.step();
+        {
+            use egui_kittest::kittest::Queryable;
+            let placeholder = harness
+                .query_all_by_role_and_label(
+                    egui::accesskit::Role::Label,
+                    "Save or discard the previous campaign’s encounter first.",
+                )
+                .count()
+                + harness
+                    .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                        node.value().is_some_and(|words| {
+                            words.contains(
+                                "Save or discard the previous campaign’s encounter first.",
+                            )
+                        })
+                    }))
+                    .count();
+            let placed = crate::design::outcome::message_rects(&harness.ctx)
+                .into_iter()
+                .any(|(_, place, _)| place == crate::design::outcome::MessagePlace::Page);
+            assert!(
+                placeholder > 0 && placed,
+                "the page's placeholder says why ({placeholder} nodes, typed place {placed})"
+            );
+        }
     }
     #[test]
     fn dm_run_requires_saved_current_template_and_protects_its_memory_state() {
