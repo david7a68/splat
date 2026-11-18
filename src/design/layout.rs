@@ -1505,6 +1505,7 @@ pub struct TitleAction<'a> {
     icon: Option<&'static str>,
     blocked: Option<&'a str>,
     name: Option<&'a str>,
+    key: Option<KeyName>,
 }
 
 impl<'a> TitleAction<'a> {
@@ -1515,6 +1516,7 @@ impl<'a> TitleAction<'a> {
             icon: None,
             blocked: None,
             name: None,
+            key: None,
         }
     }
 
@@ -1541,6 +1543,13 @@ impl<'a> TitleAction<'a> {
         self
     }
 
+    /// Its keyboard command beside its word (`New entry N`), as an action shows one; the line
+    /// measures the action with it.
+    pub fn key(mut self, key: KeyName) -> Self {
+        self.key = Some(key);
+        self
+    }
+
     fn action(&self) -> Action<'a> {
         let mut action = match self.weight {
             TitleWeight::Quiet => Action::quiet(self.word.as_str()),
@@ -1553,6 +1562,9 @@ impl<'a> TitleAction<'a> {
         }
         if let Some(name) = self.name {
             action = action.name(name);
+        }
+        if let Some(key) = self.key {
+            action = action.key(key.as_str());
         }
         action
     }
@@ -1628,7 +1640,14 @@ pub struct TitleLine<'a> {
     context: Option<&'a str>,
     role: TitleType,
     actions: Vec<TitleAction<'a>>,
+    /// A status link after the actions, and the menu it opens.
+    status: Option<StatusMenu<'a>>,
+    /// A close icon at the right end of the title's line, and its accessible name.
+    close: Option<&'a str>,
 }
+
+/// A title line's status link and the menu it opens.
+type StatusMenu<'a> = (Status<'a>, Box<dyn FnOnce(&mut Ui) + 'a>);
 
 /// The type of a title line's title.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1643,6 +1662,8 @@ pub enum TitleType {
 #[derive(Clone, Debug, Default)]
 pub struct TitleLineResponse {
     pressed: Option<Word>,
+    /// The DM pressed the close icon (`TitleLine::close`).
+    pub closed: bool,
     /// The actions sit under the title.
     pub below: bool,
     /// The rows of actions under the title (0 when they follow the title).
@@ -1724,6 +1745,8 @@ impl<'a> TitleLine<'a> {
             context: None,
             role: TitleType::Title,
             actions: Vec::new(),
+            status: None,
+            close: None,
         }
     }
 
@@ -1741,6 +1764,32 @@ impl<'a> TitleLine<'a> {
     pub fn action(mut self, action: TitleAction<'a>) -> Self {
         self.actions.push(action);
         self
+    }
+
+    /// A status link after the actions (`3 files need fixing`, in its tone), placed and kept as
+    /// an action is, that opens `menu` under it (`menu_popup`); the menu draws its own choices.
+    pub fn status(mut self, status: Status<'a>, menu: impl FnOnce(&mut Ui) + 'a) -> Self {
+        self.status = Some((status, Box::new(menu)));
+        self
+    }
+
+    /// A close icon named `name` at the right end of the title's own line (a panel's title), on
+    /// that line however the actions are placed; the title and the actions beside it keep clear
+    /// of it. Its press is [`TitleLineResponse::closed`].
+    pub fn close(mut self, name: &'a str) -> Self {
+        self.close = Some(name);
+        self
+    }
+
+    /// The status link's width on one line.
+    fn status_width(ui: &Ui, status: &Status<'_>) -> f32 {
+        number_width(
+            ui,
+            &format!("{} {}", status.icon, status.word),
+            &Type::Small.font(ui),
+        )
+        .ceil()
+        .max(24.0)
     }
 
     fn font(&self) -> Type {
@@ -1765,31 +1814,68 @@ impl<'a> TitleLine<'a> {
                 .actions
                 .iter()
                 .map(|action| action.action().natural_width(ui).ceil())
+                .chain(
+                    self.status
+                        .as_ref()
+                        .map(|(status, _)| Self::status_width(ui, status)),
+                )
                 .collect(),
         }
     }
 
-    /// Draw one action in exactly its measured target.
-    fn action_at(&self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+    /// Draw one action in exactly its measured target; past the actions, the status link and
+    /// its menu.
+    fn action_at(&mut self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+        let status = (at >= self.actions.len())
+            .then(|| self.status.take())
+            .flatten();
         ui.scope_builder(
             UiBuilder::new()
                 .max_rect(rect)
                 .layout(Layout::left_to_right(Align::Center)),
-            |ui| self.actions[at].action().show(ui).clicked(),
+            |ui| match status {
+                Some((status, menu)) => {
+                    let link = super::status_link(ui, status);
+                    super::menu_popup(&*ui, &link).show(menu);
+                    false
+                }
+                None => self.actions[at].action().show(ui).clicked(),
+            },
         )
         .inner
     }
 
-    pub fn show(self, ui: &mut Ui) -> TitleLineResponse {
+    /// The close icon at the right end of the line from `top`, `line_height` high.
+    fn close_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) -> bool {
+        let Some(name) = self.close else {
+            return false;
+        };
+        let size = Density::Read.control();
+        let rect = Rect::from_min_size(
+            egui::pos2(right - size, top + (line_height - size) / 2.0),
+            vec2(size, size),
+        );
+        let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
+        super::icon_button(&mut child, super::icons::CLOSE, name).clicked()
+    }
+
+    pub fn show(mut self, ui: &mut Ui) -> TitleLineResponse {
         let metrics = self.metrics(ui);
         let room = ui.available_width();
+        // The close icon keeps its target and a gap at the title line's right end.
+        let close = if self.close.is_some() {
+            Density::Read.control() + ACTION_GAP
+        } else {
+            0.0
+        };
         let placement = title_placement(
             metrics.beside(),
             metrics.lead_in,
             &metrics.widths,
-            room,
+            room - close,
             room,
         );
+        let closed;
         let height = Density::Read.control();
         let mut pressed = None;
         let font = self.font();
@@ -1833,11 +1919,14 @@ impl<'a> TitleLine<'a> {
                         pressed = Some(self.actions[at].word);
                     }
                 }
+                closed = self.close_at(ui, line.right(), line.top(), line_height);
                 0
             }
             TitlePlacement::Under(rows) => {
+                let (line_left, line_top) = (ui.cursor().left(), ui.cursor().top());
                 let title_rect = ui
                     .horizontal_wrapped(|ui| {
+                        ui.set_max_width(room - close);
                         ui.spacing_mut().item_spacing.x = XS;
                         ui.add(title.wrap());
                         if let Some((words, context)) = context {
@@ -1846,6 +1935,8 @@ impl<'a> TitleLine<'a> {
                     })
                     .response
                     .rect;
+                let right = line_left + room;
+                closed = self.close_at(ui, right, line_top, font.line());
                 for row in &rows {
                     let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
                     let mut row_ui = ui.new_child(
@@ -1880,6 +1971,7 @@ impl<'a> TitleLine<'a> {
         };
         TitleLineResponse {
             pressed,
+            closed,
             below: rows > 0,
             rows,
         }
