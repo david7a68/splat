@@ -556,12 +556,13 @@ drop-down (`design::Dropdown`): like the category rows, it chooses no section wh
 the whole scope, so choosing any section ends the search. The category rows sit in a `ScrollColumn`, and the column is
 one scroll lane wider than its rows, so a lane never takes a label's room. The package's About row follows search as the first list row.
 All entries stays in its place in every state; with an empty search it paints no count (the header has it; its
-accessible name keeps it), and with a search it shows the count as the other rows do. Empty categories and their headings stay hidden. Fixed scope names
-wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
-or without its mark, so a fault moves no row below it. The row always keeps `About`, the word that says what it opens; a
-name that does not fit after it shortens by whole words (`⚠ About Ashen…`). Both the scope menu and
-selected button say `Campaign entries`. An open package About row uses selected fill with no selected
-category; choosing a category restores it. About is followed by the manifest name. A manifest is never
+accessible name keeps it), and with a search it shows the count as the other rows do. Empty categories and their headings stay hidden.
+The closed scope control keeps its label on one line and shortens it by whole words when needed.
+The menu, hover text and accessible name keep the full label. The picker reuses its choices and fitted
+labels while the registered packages, available scopes, control width, fonts and display scale stay the same.
+The About row stays one line, with or without its mark, so a fault moves no row below it. The row always keeps `About`, the word that says what it opens; a
+name that does not fit after it shortens by whole words (`⚠ About Ashen…`). The scope menu says `Campaign entries`.
+The closed control may show `Campaign…`. An open package About row uses selected fill with no selected category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
 count: About marks any problem the header counts in the manifest, such as a first heading that differs from the
 name, not only when the manifest cannot be read. The mark has the fault's tone: the error icon for a manifest

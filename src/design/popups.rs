@@ -348,6 +348,32 @@ fn list_frame(ui: &Ui) -> egui::Frame {
 
 impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
     pub fn show(self, ui: &mut Ui, current: &mut T) -> DropdownResponse {
+        let index_key = self.id.id().with("chosen_index");
+        let kept = ui.ctx().data(|data| data.get_temp::<usize>(index_key));
+        let chosen_index = kept
+            .filter(|&at| {
+                self.choices
+                    .get(at)
+                    .is_some_and(|entry| entry.value == *current)
+            })
+            .or_else(|| {
+                self.choices
+                    .iter()
+                    .position(|entry| entry.value == *current)
+            });
+        if let Some(at) = chosen_index {
+            ui.ctx().data_mut(|data| data.insert_temp(index_key, at));
+        }
+        self.show_at(ui, current, chosen_index)
+    }
+
+    /// Draw a retained list whose owner already knows the current row. A missing value has no row.
+    pub(crate) fn show_at(
+        &self,
+        ui: &mut Ui,
+        current: &mut T,
+        chosen_index: Option<usize>,
+    ) -> DropdownResponse {
         let c = colors();
         let width = self
             .width
@@ -364,22 +390,6 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             Sense::hover()
         };
         let mut response = ui.interact(rect, control, sense);
-        let index_key = control.with("chosen_index");
-        let kept = ui.ctx().data(|data| data.get_temp::<usize>(index_key));
-        let chosen_index = kept
-            .filter(|&at| {
-                self.choices
-                    .get(at)
-                    .is_some_and(|entry| entry.value == *current)
-            })
-            .or_else(|| {
-                self.choices
-                    .iter()
-                    .position(|entry| entry.value == *current)
-            });
-        if let Some(at) = chosen_index {
-            ui.ctx().data_mut(|data| data.insert_temp(index_key, at));
-        }
         let chosen_entry = chosen_index.and_then(|at| self.choices.get(at));
         let chosen = chosen_entry.map(|entry| entry.label.as_ref());
         // A blocked or disabled drop-down has no open list: it takes no selection or command.
@@ -597,6 +607,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let font = Type::Body.font(ui);
         let small = Type::Small.font(ui);
         let scale = ui.ctx().pixels_per_point();
+        let fonts = super::outcome::font_key(ui.ctx());
         let kept = ui
             .ctx()
             .data(|data| data.get_temp::<std::sync::Arc<RowMetrics>>(key));
@@ -607,6 +618,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     && kept.bounded == self.room.is_some()
                     && kept.font == font
                     && kept.small == small
+                    && kept.fonts == fonts
                     && kept.scale == scale
                     && kept.command == self.command.is_some()
                     && kept.groups == groups
@@ -666,6 +678,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     menu_width,
                     font,
                     small,
+                    fonts,
                     scale,
                     command: self.command.is_some(),
                     groups: groups.clone(),
@@ -794,6 +807,7 @@ struct RowMetrics {
     menu_width: f32,
     font: egui::FontId,
     small: egui::FontId,
+    fonts: u64,
     scale: f32,
     command: bool,
     /// The choices that start a group, under a rule.

@@ -1952,6 +1952,19 @@ fn closed_dropdowns_measure_no_choice_rows_and_open_metrics_follow_inputs() {
         first + 2000,
         "the explicit room width policy invalidates the cache"
     );
+    let mut fonts = ctx.fonts(|view| view.definitions().clone());
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Proportional)
+        .unwrap()
+        .reverse();
+    ctx.set_fonts(fonts);
+    draw(Vec::new());
+    assert_eq!(
+        ROW_METRICS_MADE.with(Cell::get),
+        first + 2500,
+        "replacing a family under the same font id remeasures the open choices"
+    );
     draw(key(Key::Escape));
     draw(Vec::new());
     let closed = ROW_METRICS_MADE.with(Cell::get);

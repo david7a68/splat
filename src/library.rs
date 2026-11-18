@@ -923,9 +923,9 @@ fn scope_name(campaigns: &Campaigns, scope: Scope) -> String {
         Scope::All => "Everything".to_owned(),
         Scope::Builtin => BUILTIN_NAME.to_owned(),
         Scope::Package(id) => campaigns
-            .modules()
-            .iter()
-            .find(|m| m.id == id)
+            .module_positions()
+            .get(&id)
+            .map(|&at| &campaigns.modules()[at])
             .map_or_else(|| "A package".to_owned(), |m| m.name.clone()),
         Scope::Campaign => "Campaign entries".to_owned(),
     }
@@ -934,7 +934,14 @@ fn scope_name(campaigns: &Campaigns, scope: Scope) -> String {
 /// The action after an empty search or filter that keeps the words in the widest scope.
 pub(crate) const SEARCH_EVERYTHING: &str = "Search Everything";
 
+#[cfg(test)]
+thread_local! {
+    static SCOPE_LABEL_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn scope_label(ui: &egui::Ui, selected: &str, budget: f32) -> String {
+    #[cfg(test)]
+    SCOPE_LABEL_FITS.with(|fits| fits.set(fits.get() + 1));
     let font = Type::Strong.font(ui);
     let fitted = design::words_that_fit(ui, selected, &font, budget);
     if design::number_width(ui, &fitted, &font) <= budget {
@@ -1052,6 +1059,22 @@ enum Scope {
     Builtin,
     Package(Uuid),
     Campaign,
+}
+
+/// The ordered choices and their fitted labels for one catalogue and layout.
+struct ScopeMenu {
+    layout: ScopeMenuLayout,
+    dropdown: design::Dropdown<'static, Scope, design::popups::HasChoices>,
+}
+
+#[derive(PartialEq)]
+struct ScopeMenuLayout {
+    catalogue: design::memo::Revision,
+    campaign: bool,
+    width: f32,
+    font: egui::FontId,
+    fonts: u64,
+    scale: f32,
 }
 
 /// The place of the open entry, for Back and Forward. A free function, so a list closure that
@@ -3660,7 +3683,7 @@ type LoadKey = (Option<Uuid>, Vec<Uuid>);
 
 fn load_key(campaigns: &Campaigns) -> LoadKey {
     (
-        campaigns.active_campaign().map(|c| c.id),
+        campaigns.active_id(),
         campaigns.modules().iter().map(|m| m.id).collect(),
     )
 }
@@ -3855,6 +3878,7 @@ pub struct Library {
     just_saved: bool,
     overwrite_disk: bool,
     scope: Scope,
+    scope_menu: Option<ScopeMenu>,
     load_key: Option<LoadKey>,
     stale: bool,
     matches_scope: Option<Scope>,
@@ -5662,7 +5686,7 @@ impl Library {
                     campaigns,
                     &mut self.scope,
                     &mut self.section,
-                    &mut self.search,
+                    &mut self.scope_menu,
                 );
             });
             // Round 26 review: the page's results and error sit in this pane's footer too, below
@@ -5730,7 +5754,7 @@ impl Library {
                         campaigns,
                         &mut self.scope,
                         &mut self.section,
-                        &mut self.search,
+                        &mut self.scope_menu,
                     );
                     if let Scope::Package(package) = scope
                         && let Some((index, note)) = loaded
@@ -5982,7 +6006,7 @@ impl Library {
                     let half = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
                     ui.horizontal_top(|ui| {
                         ui.allocate_ui_with_layout(egui::vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
-                            Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.search);
+                            Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.scope_menu);
                         });
                         // M0334: the shared drop-down. As the section rows of a wider window do,
                         // it shows no chosen section while About is open or a search lists the
@@ -6533,58 +6557,67 @@ impl Library {
         campaigns: &Campaigns,
         current: &mut Scope,
         section: &mut Section,
-        _search: &mut String,
+        cache: &mut Option<ScopeMenu>,
     ) {
-        let active = campaigns.active_campaign();
-        let label = |scope: Scope| scope_name(campaigns, scope);
-        let mut scope = if active.is_none() && matches!(*current, Scope::Uses | Scope::Campaign) {
+        let campaign = campaigns.active_id().is_some();
+        let mut scope = if !campaign && matches!(*current, Scope::Uses | Scope::Campaign) {
             Scope::All
         } else {
             *current
         };
         let before = scope;
-        let width = ui.available_width().min(if compact {
+        let width = if compact {
             ui.available_width()
         } else {
-            166.0 + design::lane_width()
-        });
-        // The control is one line: its words keep whole words of a long name (`Ashen…`,
-        // `Campaign…` in a narrow column); the list, the hover and the accessible name keep the
-        // whole name.
-        let budget = width - design::XXL - design::L;
-        let fitted = |words: &str| scope_label(ui, words, budget);
-        let first = if active.is_some() {
-            Scope::Uses
-        } else {
-            Scope::All
+            ui.available_width().min(166.0 + design::lane_width())
         };
-        let mut dropdown = design::Dropdown::new(LIBRARY_SCOPE, "What the Library shows")
-            .choice_with_short_label(first, label(first), fitted(&label(first)));
-        if active.is_some() {
-            dropdown = dropdown.choice_with_short_label(
-                Scope::All,
-                label(Scope::All),
-                fitted(&label(Scope::All)),
-            );
-        }
-        dropdown = dropdown.group().choice_with_short_label(
-            Scope::Builtin,
-            label(Scope::Builtin),
-            fitted("D&D 2024"),
-        );
-        for module in campaigns.modules() {
-            let package = Scope::Package(module.id);
-            dropdown =
-                dropdown.choice_with_short_label(package, label(package), fitted(&module.name));
-        }
-        if active.is_some() {
-            dropdown = dropdown.choice_with_short_label(
-                Scope::Campaign,
-                label(Scope::Campaign),
-                fitted(&label(Scope::Campaign)),
-            );
-        }
-        let _ = dropdown.width(width).show(ui, &mut scope);
+        let positions = campaigns.module_positions();
+        let layout = ScopeMenuLayout {
+            catalogue: positions.revision(),
+            campaign,
+            width,
+            font: Type::Strong.font(ui),
+            fonts: design::outcome::font_key(ui.ctx()),
+            scale: ui.ctx().pixels_per_point(),
+        };
+        cache.take_if(|menu| menu.layout != layout);
+        let menu = cache.get_or_insert_with(|| {
+            let fit = |words: &str| scope_label(ui, words, width - design::XXL - design::L);
+            let menu = design::Dropdown::new(LIBRARY_SCOPE, "What the Library shows").width(width);
+            let mut dropdown = if campaign {
+                menu.choice_with_short_label(Scope::Uses, "Can use", fit("Can use"))
+                    .choice_with_short_label(Scope::All, "Everything", fit("Everything"))
+            } else {
+                menu.choice_with_short_label(Scope::All, "Everything", fit("Everything"))
+            }
+            .group()
+            .choice_with_short_label(Scope::Builtin, BUILTIN_NAME, fit("D&D 2024"));
+            for module in campaigns.modules() {
+                dropdown = dropdown.choice_with_short_label(
+                    Scope::Package(module.id),
+                    module.name.clone(),
+                    fit(&module.name),
+                );
+            }
+            if campaign {
+                dropdown = dropdown.choice_with_short_label(
+                    Scope::Campaign,
+                    "Campaign entries",
+                    fit("Campaign entries"),
+                );
+            }
+            ScopeMenu { layout, dropdown }
+        });
+        let all = usize::from(campaign);
+        let first_package = all + 2;
+        let row = match scope {
+            Scope::Uses => Some(0),
+            Scope::All => Some(all),
+            Scope::Builtin => Some(all + 1),
+            Scope::Package(id) => positions.get(&id).map(|at| first_package + at),
+            Scope::Campaign => Some(first_package + positions.len()),
+        };
+        menu.dropdown.show_at(ui, &mut scope, row);
         *current = scope;
         if scope != before {
             // The selected entry can stay if it is in this scope. A draft always stays.
@@ -10653,7 +10686,7 @@ mod tests {
     }
 
     #[test]
-    fn scope_picker_cuts_two_words_with_one_ellipsis() {
+    fn scope_picker_fits_whole_words_and_reuses_unchanged_choices() {
         let ctx = egui::Context::default();
         let _ = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
@@ -10667,6 +10700,126 @@ mod tests {
                 );
             });
         });
+
+        let temp = tempfile::tempdir().unwrap();
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        let package = |folder: &str, name: &str| Module {
+            id: Uuid::new_v4(),
+            name: name.into(),
+            path: temp.path().join(folder),
+        };
+        let first = package("first", "First package");
+        let second = package("second", "Ashen Marches");
+        campaigns.register_module(first.clone()).unwrap();
+        campaigns.register_module(second.clone()).unwrap();
+
+        ctx.enable_accesskit();
+        let scale = std::cell::Cell::new(1.0);
+        let mut cache = None;
+        let mut draw = |campaigns: &Campaigns, current: Scope, width: f32, expected: &str| {
+            use crate::campaigns::MODULE_READS;
+            MODULE_READS.set(0);
+            SCOPE_LABEL_FITS.set(0);
+            let mut scope = current;
+            let mut section = Section::All;
+            let mut input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(width, 480.0),
+                )),
+                ..Default::default()
+            };
+            input
+                .viewports
+                .get_mut(&egui::ViewportId::ROOT)
+                .unwrap()
+                .native_pixels_per_point = Some(scale.get());
+            let output = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    Library::scope_menu(ui, true, campaigns, &mut scope, &mut section, &mut cache);
+                });
+            });
+            let name = output
+                .platform_output
+                .accesskit_update
+                .unwrap()
+                .nodes
+                .into_iter()
+                .find(|(_, node)| node.role() == egui::accesskit::Role::ComboBox)
+                .and_then(|(_, node)| node.label().map(str::to_owned));
+            assert_eq!(name.as_deref(), Some(expected), "closed scope name");
+            assert!(
+                MODULE_READS.get() <= 1,
+                "the picker reads the catalogue at most once per rebuild, got {}",
+                MODULE_READS.get()
+            );
+            (MODULE_READS.get(), SCOPE_LABEL_FITS.get())
+        };
+        let selected = Scope::Package(second.id);
+        let ashen = "What the Library shows: Ashen Marches";
+        let renamed = "What the Library shows: Renamed package";
+        assert_eq!(draw(&campaigns, selected, 100.0, ashen).1, 4);
+        for _ in 0..3 {
+            assert_eq!(
+                draw(&campaigns, selected, 100.0, ashen),
+                (0, 0),
+                "steady closed frame"
+            );
+        }
+        campaigns
+            .rename_module(second.id, "Renamed package".into())
+            .unwrap();
+        assert_eq!(draw(&campaigns, selected, 100.0, renamed).1, 4);
+        // Restoring the first package moves it behind the selected package.
+        campaigns.restore_module(first).unwrap();
+        assert_eq!(draw(&campaigns, selected, 100.0, renamed).1, 4);
+        assert_eq!(draw(&campaigns, selected, 200.0, renamed).1, 4, "new width");
+        ctx.style_mut(|style| {
+            style
+                .text_styles
+                .insert(Type::Strong.style(), egui::FontId::proportional(21.0));
+        });
+        assert_eq!(draw(&campaigns, selected, 200.0, renamed).1, 4, "new font");
+        scale.set(2.0);
+        assert_eq!(
+            draw(&campaigns, selected, 200.0, renamed).1,
+            4,
+            "new display scale"
+        );
+        let mut fonts = egui::FontDefinitions::default();
+        fonts
+            .families
+            .get_mut(&egui::FontFamily::Proportional)
+            .unwrap()
+            .reverse();
+        ctx.set_fonts(fonts);
+        assert_eq!(
+            draw(&campaigns, selected, 200.0, renamed).1,
+            4,
+            "replaced font family"
+        );
+        campaigns.open_for_test(&sd1_campaign(temp.path()));
+        assert_eq!(
+            draw(
+                &campaigns,
+                Scope::Campaign,
+                200.0,
+                "What the Library shows: Campaign entries"
+            )
+            .1,
+            6
+        );
+        assert_eq!(draw(&campaigns, selected, 200.0, renamed), (0, 0));
+        campaigns.unregister_module(second.id).unwrap();
+        assert_eq!(
+            draw(&campaigns, selected, 200.0, "What the Library shows").1,
+            5
+        );
+        assert_eq!(
+            draw(&campaigns, selected, 200.0, "What the Library shows"),
+            (0, 0),
+            "missing selection"
+        );
     }
 
     #[test]
