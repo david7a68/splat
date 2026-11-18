@@ -1384,13 +1384,20 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
 fn a_menu_of_long_choices_stays_beside_its_splitter() {
     const COLUMN: f32 = 316.0;
     const LONG: &str = "Roll initiative for every creature that has not rolled yet, then sort";
-    // The last case: the control's layout gives the menu a smaller room (`within`), as a
-    // header above two panes does; the menu keeps inside that room, clear of its edge.
+    // The last cases: the control's layout gives the menu a smaller room (`within`), as a
+    // header above two panes does; the menu keeps inside that room, clear of its edge, also
+    // when the room is narrower than a control (issue #549), and a room with no space for the
+    // menu's frame shows none.
+    let clear = lane_width().max(crate::design::S);
+    // The room is narrower than the opener, so the menu anchors inside it, and leaves 20 px.
+    let narrow = 2.0 * clear + 20.0;
     for (right, label, within) in [
         (false, LONG, None),
         (true, LONG, None),
         (false, "All", None),
         (false, LONG, Some(200.0)),
+        (false, LONG, Some(narrow)),
+        (false, LONG, Some(clear)),
     ] {
         let ctx = context();
         let size = vec2(960.0, 640.0);
@@ -1431,6 +1438,13 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
         draw(Vec::new());
         let output = draw(Vec::new());
         let id = egui::Popup::default_response_id(&opener);
+        if within == Some(clear) {
+            assert!(
+                rows.borrow().is_empty() && texts(&output).iter().all(|text| text.words != LONG),
+                "a room with no space for the menu shows none"
+            );
+            continue;
+        }
         assert!(egui::Popup::is_id_open(&ctx, id), "open (right: {right})");
         let menu = ctx
             .memory(|memory| memory.area_rect(id))
@@ -1454,6 +1468,10 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
                 menu.width() < (COLUMN - lane_width()) / 2.0,
                 "short choices make a narrow menu: {menu:?}"
             );
+            continue;
+        }
+        if within == Some(narrow) {
+            // Its words are cut to the narrow room; the checks above hold it.
             continue;
         }
         let words: Vec<Text> = texts(&output)

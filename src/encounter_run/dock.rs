@@ -22,6 +22,9 @@ enum EffectFit {
 const DICE_RESULT_WIDTH: f32 = 32.0;
 const DICE_FIELD: design::FieldName = crate::field_id!("dock_dice");
 
+/// The dock's line-two Effect field of one participant (keys only).
+const EFFECT_LINE: design::FieldName = crate::field_id!("run_effect_line");
+
 impl Run {
     /// The entry controls have one fixed home, labelled with the row they act on, so
     /// no row moves when the selection changes. Typing needs no pointer travel at all.
@@ -288,19 +291,16 @@ impl Run {
             p.key.clone(),
             format!("Effect on {}, such as Bless 10 rounds", p.name),
         );
+        // The participant's field in this run (M0079): keyed by its owner, so a rename keeps
+        // its words, cursor and Undo, and another run's row of the same slot shares none.
+        let id = EFFECT_LINE.of(design::ParticipantKey::of(self.id, p));
         let field = self.effect_fields.entry(key.clone()).or_default();
         let result = ui
             .horizontal(|ui| {
                 ui.set_min_height(Density::Read.control());
-                design::add_field_keys(
-                    ui,
-                    field,
-                    "Effect",
-                    &hint,
-                    0.0,
-                    |_| None::<()>,
-                    |_| Vec::new(),
-                )
+                design::add_field::<()>(id, "Effect", &hint)
+                    .keys_only(0.0, |_| None)
+                    .show(ui, field)
             })
             .inner;
         let escape = ui.input(|i| i.key_pressed(Key::Escape));
@@ -847,5 +847,36 @@ mod tests {
         run.borrow_mut().forget_removed_participants();
         assert!(!run.borrow().effect_fields.contains_key("gone"));
         assert!(run.borrow().effect_fields.contains_key(&key));
+        // M-R0.7 (m-r0-7-effect-owner): the field is its participant's (`EFFECT_LINE` keyed by
+        // `ParticipantKey`), not its place's. Words typed and erased on A's line do not come
+        // back with Ctrl+Z on B's line, which the dock draws at the same place.
+        run.borrow_mut().effect_fields.clear();
+        run.borrow_mut().select(0);
+        harness.run_steps(2);
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        harness.get_by_label(field).type_text("Bane");
+        harness.run_steps(16);
+        harness.get_by_label(field).type_text("!");
+        harness.run_steps(1);
+        for _ in 0.."Bane!".len() {
+            harness.key_press(egui::Key::Backspace);
+        }
+        harness.run_steps(1);
+        let other = run.borrow().state.participants[1].key.clone();
+        run.borrow_mut().select(1);
+        harness.run_steps(2);
+        harness.get_by_label("Effect: words for this row").click();
+        harness.run_steps(3);
+        assert!(harness.get_by_label(field).is_focused());
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        harness.run_steps(2);
+        assert!(
+            run.borrow()
+                .effect_fields
+                .get(&other)
+                .is_none_or(|field| field.words.is_empty()),
+            "m-r0-7-effect-owner: Ctrl+Z on B's line gave B the words of A"
+        );
     }
 }

@@ -2709,10 +2709,10 @@ pub mod library_navigation {
 
         // M0330: a long issues menu stops at six controls and scrolls, and still ends at the
         // count. Read without a capture: the gate cannot yet tell a scrolling popup's
-        // background from a control (its rows reach below its frame). Known fault, not this
-        // check's claim: lines wider than the room between the reader's splitter and the count
-        // make the menu reach over the list at 960 and 1200 (`menu_popup` has no room inside
-        // the reader yet); the detail names each lane it crosses.
+        // background from a control (its rows reach below its frame). Issue #504: the menu
+        // keeps to the reader's room (`MenuPopup::within`), so lines wider than the room
+        // between the reader's splitter and the count no longer reach over the list's scroll
+        // bar (960) or the splitter (1200); and its last link comes into view by scrolling.
         for n in 1..=BROKEN_FILES {
             let name = format!("Broken Watch {n}");
             std::fs::write(
@@ -2729,7 +2729,7 @@ pub mod library_navigation {
         d.wait_for_text("Broken Watch 1");
         let count = issues_count(d);
         for size in [SMALL, DEFAULT, LARGE] {
-            let (control, frame, margins, stroke, lanes) = d.act_at_size(size, |d| {
+            let (control, frame, margins, stroke, lanes, last) = d.act_at_size(size, |d| {
                 if !d.has_containing("Broken Watch 1.md: ") {
                     d.click(&count);
                 }
@@ -2740,7 +2740,38 @@ pub mod library_navigation {
                     .map(|node| node.rect);
                 let frame = first.and_then(|first| d.painted_frame_around(first));
                 let (_, margins, stroke) = issues_menu_frame(d);
-                (d.place_of(&count), frame, margins, stroke, d.chrome_lanes())
+                let lanes = d.chrome_lanes();
+                // The menu's last link, scrolled out of view at first: the wheel over the
+                // menu brings it into view, whole and inside the frame.
+                let links = |d: &Driver<'_>| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.is_link() && node.name.contains(".md: "))
+                        .collect::<Vec<_>>()
+                };
+                let last = links(d)
+                    .into_iter()
+                    .max_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))
+                    .map(|node| node.name);
+                let hidden = last.as_ref().is_some_and(|last| !d.in_view(last));
+                if let Some(frame) = frame {
+                    d.scroll_at(frame.center(), 10);
+                }
+                let reached = last
+                    .as_ref()
+                    .and_then(|last| links(d).into_iter().find(|node| &node.name == last));
+                let reached = reached.zip(frame).map(|(node, frame)| {
+                    (
+                        node.name.clone(),
+                        hidden,
+                        node.fully_in_view() && frame.contains_rect(node.shown),
+                    )
+                });
+                // Back to the top, so the menu that stays open starts there at the next size.
+                if let Some(frame) = frame {
+                    d.scroll_up_at(frame.center(), 10);
+                }
+                (d.place_of(&count), frame, margins, stroke, lanes, reached)
             });
             // The lanes outside the menu that it reaches over (its own scroll bar is inside).
             let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
@@ -2760,15 +2791,40 @@ pub mod library_navigation {
                 control.zip(frame).is_some_and(|(control, frame)| {
                     (frame.height() - most).abs() <= 1.0
                         && (frame.right() - control.right()).abs() <= crate::design::S
-                }),
+                }) && crossed.is_empty()
+                    && last
+                        .as_ref()
+                        .is_some_and(|(_, hidden, reached)| *hidden && *reached),
                 format!(
-                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}) and ends at the count {control:?}; known fault, lanes it reaches over: {crossed:?}"
+                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), ends at the count {control:?}, reaches over no scroll bar or splitter (crossed: {crossed:?}), and its last link (name, out of view at first, then whole in view inside the frame after scrolling) comes into view: {last:?}"
                 ),
             );
         }
         if d.has_containing("Broken Watch 1.md: ") {
             d.press(Key::Escape);
         }
+        // M0331: while a draft holds the open entry, no other entry opens from the menu: it
+        // says why, and lists the files as text, not links.
+        d.click_starting("Broken Watch 1 · ");
+        d.click(EDIT_MARKDOWN);
+        d.type_into_editor("A draft that holds this entry. ");
+        d.click(&count);
+        let files: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.contains("Broken Watch 2.md: "))
+            .collect();
+        d.observe(
+            "M0331-issues-menu-locked",
+            d.has_label("Save or discard this entry first.")
+                && !files.is_empty()
+                && files.iter().all(|node| !node.is_link()),
+            format!(
+                "With a draft, the menu says why no entry opens and lists the files as text (link: {:?})",
+                files.iter().map(crate::visual_tests::driver::Found::is_link).collect::<Vec<_>>()
+            ),
+        );
+        d.press(Key::Escape);
     }
 
     /// Files that M0330's long issues menu lists, more than its six controls hold.
@@ -4989,9 +5045,12 @@ pub mod encounter_build {
     fn search_lists_wolf_order(d: &mut Driver<'_>) {
         let size = d.window_size();
         let wolves = wolves_listed(d, egui::Rect::EVERYTHING, |name, wolf| name == wolf);
+        // Layout 3b/4: a row the results' edge cuts has no node, so a short window lists the
+        // order's first rows, whole; a taller one all six.
+        let first_rows = size.1 < 700.0 && wolves.len() >= 3 && WOLF_ORDER.starts_with(&wolves);
         d.observe(
             "M3-creature-search-order",
-            wolves == WOLF_ORDER,
+            wolves == WOLF_ORDER || first_rows,
             format!("At {size:?} the encounter search lists {wolves:?} for {MONSTER}"),
         );
     }
@@ -19940,11 +19999,9 @@ pub mod encounter_groups {
             let lanes = [(DEFAULT.0, 2000.0), (DEFAULT.0, SMALL.1)].map(|size| {
                 d.at_size(size, |d| {
                     let adds = right_edges(d, ADD);
-                    let bar = adds
-                        .iter()
-                        .copied()
-                        .reduce(f32::max)
-                        .is_some_and(|edge| scroll_bar_right_of(d, edge));
+                    // Add follows the facts. The search field still ends at the scroll lane.
+                    let field = d.place_of(FIND).expect("the creature search field");
+                    let bar = scroll_bar_right_of(d, field.right());
                     (adds, bar)
                 })
             });
@@ -19966,7 +20023,9 @@ pub mod encounter_groups {
         d.type_into(FIND, "wolf");
         // iter-27-B FI5: the one creature order, as Arrivals sorts it: the exact name first, then
         // every name that holds the search in the list's order (Werewolf before Winter Wolf).
-        let order = {
+        // Read at a tall window: at 960 the narrow pane wraps each Add under its facts (layout
+        // PR 4), and the later names are below the fold.
+        let order = d.at_size((DEFAULT.0, 2000.0), |d| {
             let mut found: Vec<(f32, String)> = Vec::new();
             d.each_painted_text(|text, clip| {
                 let words = &text.galley.job.text;
@@ -19978,7 +20037,7 @@ pub mod encounter_groups {
             });
             found.sort_by(|a, b| a.0.total_cmp(&b.0));
             found.into_iter().map(|(_, name)| name).collect::<Vec<_>>()
-        };
+        });
         d.observe(
             "iter-27-B-FI5",
             order == ["Wolf", "Werewolf", "Winter Wolf"],
@@ -20200,8 +20259,17 @@ pub mod encounter_groups {
             .zip(d.place_of("Undo discard of Lost Patrol"))
             .map(|(removed, discarded)| (removed.top(), discarded.top()));
         d.state_prepared("group-removed", Sizes::All, |d| {
-            // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
             let size = d.window_size();
+            let menu = d
+                .place_of(&format!("More actions for {GROUP_LOST}"))
+                .expect("Lost Patrol remains in the list after removing Goblin Wave");
+            let scrolls = scroll_bar_right_of(d, menu.right());
+            d.observe(
+                "iter-26-B-FI1",
+                scrolls == (size == SMALL),
+                format!("At {size:?}, the list beside the group menu {menu:?} scrolls: {scrolls}"),
+            );
+            // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
             let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
             let discarded = d.painted_rect_in("Lost Patrol draft discarded.", window);
             let removed = d.painted_rect_in(&format!("Removed group {GROUP_GOBLINS}."), window);
@@ -22300,9 +22368,9 @@ pub mod encounter_owned_groups {
             .place_of(&add_group(NEW_NAME))
             .expect("the list shows the group that joined");
         d.scroll_until(list.center(), "Edit group", 5);
-        // iter-25-R FB5: a member fault's repair is a bordered secondary button. Below its
-        // fault, its border starts at the warning text; in a wide panel, it stays beside the
-        // fault on its line, after an `L` gap.
+        // iter-25-R FB5: a member fault's repair is a bordered secondary button. M0126 (M-R0.9):
+        // it is a choice of the fault's typed message, so at every size it stands on the line
+        // under the fault, its border starting at the warning text.
         for size in [SMALL, DEFAULT, LARGE] {
             let (placed, detail) = d.at_size(size, |d| {
                 let mut placed = true;
@@ -22329,11 +22397,6 @@ pub mod encounter_owned_groups {
                             .is_some_and(|frame| frame.stroke.width > 0.0)
                     };
                     placed &= match (text, buttons.as_slice()) {
-                        (Some(text), [button]) if size == LARGE => {
-                            bordered(button)
-                                && button.center().y < text.bottom()
-                                && button.left() >= text.right() + crate::design::L - 0.5
-                        }
                         (Some(text), [button]) => {
                             bordered(button)
                                 && button.top() >= text.bottom() - 0.5
@@ -24039,27 +24102,15 @@ pub mod session_plan_groups {
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
         d.state("plan-group-assembled", Sizes::All);
-        // iter-27-B FL3: the search field ends where each result's Add ends, at the scroll
-        // lane, with or without the bar.
+        // iter-27-B FL3, replaced by layout PR 4 (I6): each result's Add follows the measured
+        // facts, not the search field's edge: `L` after the widest facts, or under its own
+        // facts at the text edge where the column does not fit.
         for size in [SMALL, DEFAULT, LARGE] {
-            let edges = d.at_size(size, |d| {
-                let search = d.place_of(FIND_CREATURE)?;
-                let adds: Vec<f32> = d
-                    .nodes()
-                    .into_iter()
-                    .filter(|node| {
-                        node.name == ADD && node.in_view() && node.rect.left() > search.left()
-                    })
-                    .map(|node| node.rect.right())
-                    .collect();
-                Some((search.right(), adds))
-            });
+            let (follows, detail) = d.at_size(size, |d| d.search_actions_follow_facts());
             d.observe(
-                "iter-27-B-FL3",
-                edges.as_ref().is_some_and(|(search, adds)| {
-                    !adds.is_empty() && adds.iter().all(|add| (add - search).abs() <= 0.5)
-                }),
-                format!("At {size:?}, the search's right edge and each Add's: {edges:?}"),
+                "pr4-FL3-add-follows-facts",
+                follows,
+                format!("At {size:?}: {detail}"),
             );
         }
         for size in [DEFAULT, LARGE] {
@@ -27559,6 +27610,35 @@ pub mod package_to_table {
             8,
         );
         d.state("new-package-at-the-table", Sizes::All);
+        // The HP warning makes the CR label take the full control height. Compare its
+        // actual node to the wrapped Add button in the same column.
+        let clearance = d.at_size(SMALL, |d| {
+            let nodes = d.nodes();
+            let add = nodes
+                .iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Button
+                        && node.name == ADD
+                        && node.fully_in_view()
+                })?
+                .rect;
+            let column = egui::Rect::from_min_max(egui::pos2(add.left(), 0.0), add.max);
+            let words = d.painted_word_rect("CR 1", column)?;
+            let cr = nodes
+                .iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.fully_in_view()
+                        && node.rect.contains(words.center())
+                })?
+                .rect;
+            Some((cr, add))
+        });
+        d.observe(
+            "pr4-wrapped-cr-add",
+            clearance.is_some_and(|(cr, add)| cr.bottom() <= add.top()),
+            format!("At 960, Copper Drake's CR label and wrapped Add: {clearance:?}"),
+        );
         // iter-24-B FC1, must stay true: a changed draft Save would write still says Unsaved,
         // and its Save is not blocked.
         d.observe(

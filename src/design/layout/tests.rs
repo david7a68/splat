@@ -433,6 +433,98 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         }
     }
 
+    // M-P0.14 (Library's page header, M0327): an action with its key hint, a status link with
+    // its menu, and a close icon at the right end of the title's line. Wide, all on one line;
+    // narrow, the actions go under the title and the close icon stays on the title's line.
+    // The status link opens its menu; the close icon's press comes back as `closed`.
+    const NEW_ENTRY: Word = crate::word!("New entry");
+    const KEY: KeyName = crate::key!("N");
+    fn header(opened: &std::cell::Cell<bool>) -> TitleLine<'_> {
+        TitleLine::new("Library")
+            .action(TitleAction::secondary(NEW_ENTRY).key(KEY))
+            .status(
+                Status {
+                    icon: crate::design::icons::WARN,
+                    word: "3 files need fixing",
+                    color: colors().result.warning,
+                },
+                |ui| {
+                    opened.set(true);
+                    let _ = ui.label("Rules/Watch.md: 2 broken links");
+                },
+            )
+            .close("Close Library")
+    }
+    for (width, beside) in [(900.0, true), (260.0, false)] {
+        let ctx = context();
+        let opened = std::cell::Cell::new(false);
+        let closed = std::cell::Cell::new(false);
+        let left = std::cell::Cell::new(0.0);
+        let draw = |events: Vec<egui::Event>| {
+            frame_with(&ctx, vec2(width + 40.0, 400.0), events, |ui| {
+                let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
+                left.set(rect.left());
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    if header(&opened).show(ui).closed {
+                        closed.set(true);
+                    }
+                });
+            })
+        };
+        let (nodes, painted) = draw(Vec::new());
+        let (title, new, status, close) = (
+            painted
+                .iter()
+                .find(|text| text.text == "Library")
+                .map(|text| text.rect)
+                .expect("the title"),
+            bounds(&nodes, "New entry"),
+            bounds(&nodes, "3 files need fixing"),
+            bounds(&nodes, "Close Library"),
+        );
+        assert!(
+            painted_whole(&painted, "N"),
+            "{width}: New entry shows its key"
+        );
+        assert!(
+            (close.right() - (left.get() + width)).abs() <= 0.5
+                // On the title's line (its ink box sits a little low), not the row under it.
+                && (close.center().y - title.center().y).abs() <= 4.0,
+            "{width}: the close icon at the right end of the title's line: {close:?}, title {title:?}"
+        );
+        assert!(
+            new.right() <= close.left() && status.right() <= close.left() || !beside,
+            "{width}: the actions keep clear of the close icon: {new:?} {status:?} {close:?}"
+        );
+        assert_eq!(
+            (new.center().y - title.center().y).abs() < 4.0,
+            beside,
+            "{width}: the actions beside the title only when they fit: {new:?}, title {title:?}"
+        );
+        let click = |at: egui::Pos2| {
+            vec![
+                egui::Event::PointerMoved(at),
+                egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+                egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]
+        };
+        draw(click(status.center()));
+        draw(Vec::new());
+        assert!(opened.get(), "{width}: the status link opens its menu");
+        draw(click(close.center()));
+        assert!(closed.get(), "{width}: the close icon's press comes back");
+    }
+
     // R38, R35: an Encounters editor's head, as both editors draw it. The back line is one row
     // of 28 px in every state: its destination word starts at the text edge with the arrow after
     // it; the name row starts at the same edge exactly one item gap below (34 px from the line's
