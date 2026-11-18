@@ -1,8 +1,8 @@
 # Library results onto the typed footer (M-L0.4 design note, rulings M14, M14a)
 
-Lane M-L0. Revised after Astra's REJECTs of e7ccab77 and ab9f6987. Base `origin/main` f21f2473 (line numbers below are
-from it). Built against PR 452's typed footer (head c8921177). Code starts after PR 452 lands and this note
-is accepted. PR 463 no longer holds the three M9 Undo labels: they move here (PR 4b).
+This note records the accepted Library footer design. PR 452 supplied the shared footer. PR 477 added the
+mark store and file identity. PRs 483 and 521 migrated the Library footers and their Undo actions.
+The plan and proof cases below use the names and line numbers from the design base, `f21f2473`.
 
 ## 1. What must hold
 
