@@ -717,8 +717,8 @@ pub struct Sessions {
     updated_links: Option<Vec<LinkWrite>>,
     link_undo_state: Option<LinkUndoState>,
     link_problem: Option<String>,
-    /// A link update that could not be put back whole: some notes hold the new links. Its Undo
-    /// and its error stay through the usual expiry until Undo puts them back or a new update.
+    /// A partial update or refused Undo keeps its result and remaining writes through the usual
+    /// expiry so the DM can retry.
     link_partial: bool,
     removed_fight: Option<(Option<Uuid>, usize, String, NoteUndo)>,
     /// A journey's encounter checks in the plan.
@@ -3076,7 +3076,11 @@ impl Sessions {
     /// first note Undo left as it was (M7, lane N0): what was not put back, where, why, and the
     /// next step.
     pub fn undo_event_link_update(&mut self, ticket: design::results::Ticket) {
-        if self.link_updates.get(&self.page()).is_none() {
+        if self
+            .link_updates
+            .get_by(&ticket)
+            .is_none_or(|shown| shown.value().page != self.page())
+        {
             return;
         }
         let refused = self.undo_event_link_notes();
@@ -3137,8 +3141,8 @@ impl Sessions {
     }
 
     pub fn expire_event_link_undo(&mut self, on_timeline: bool, book: &Book) {
-        // A partial update keeps its result, its error and its Undo until Undo or a new update,
-        // and reads no note meanwhile: Undo checks its notes when the DM presses it.
+        // A partial update or refused Undo keeps its result while notes still need Undo.
+        // Check those notes when the DM presses Undo.
         if self.link_partial && self.updated_links.is_some() {
             return;
         }
@@ -3370,16 +3374,13 @@ impl Sessions {
                 remaining.push(write);
             }
         }
-        if refused.is_none() {
-            if self.link_partial {
-                self.link_problem = None;
-            }
-            self.link_partial = false;
-        } else {
-            // The refusal on the result answers this Undo; the update's own warning ends.
+        let still_written = !remaining.is_empty();
+        if self.link_partial || still_written {
+            // The Undo ends the update's warning. Any refusal is on the result itself.
             self.link_problem = None;
         }
-        self.updated_links = (!remaining.is_empty()).then_some(remaining);
+        self.link_partial = still_written;
+        self.updated_links = still_written.then_some(remaining);
         self.last_time = None;
         refused
     }
@@ -9216,7 +9217,7 @@ mod tests {
         let refused = sessions.undo_event_link_notes();
         assert_eq!(fs::read_to_string(&note_a).unwrap(), replaced);
         // Lane N0: the typed cause of each refusal, which also gives its tone (R41).
-        use design::results::{Cause, File};
+        use design::results::{Cause, File, Name, Recovery, Step};
         let replaced_in_a = |refused: Option<LinkUndoRefused>| {
             refused.is_some_and(|refused| {
                 refused.cause == Cause::Replaced(File::SessionNote)
@@ -9288,14 +9289,35 @@ mod tests {
         // `Cause::NotSaved(File::SessionNote)`, an error, never `Cause::EditedSince` (lane N0).
         fs::write(&note_a, &original[0]).unwrap();
         fs::write(&note_b, &original[1]).unwrap();
-        let mut sessions = Sessions::default();
-        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        let mut sessions = Sessions {
+            folder: Some(dir.path().to_path_buf()),
+            notes: vec![
+                notes[0].clone(),
+                Note {
+                    path: note_b.clone(),
+                    ..notes[1].clone()
+                },
+            ],
+            ..Default::default()
+        };
+        let offer = sessions.event_link_offer(&book, &id).expect("link offer");
+        sessions.accept_event_link_offer(offer, &book);
+        sessions.expire_event_link_undo(true, &book);
         assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(2));
+        let owner = sessions.page();
+        let result = sessions.link_updates.get(&owner).unwrap();
+        let ticket = result.ticket_for_caller_test();
+        let stale_ticket = result.ticket_for_caller_test();
         let b_written = fs::read(&note_b).unwrap();
         assert_ne!(b_written, original[1], "the update wrote B");
         fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o555)).unwrap();
-        let refused = sessions.undo_event_link_notes();
+        sessions.undo_event_link_update(ticket);
         let left = temporary_files();
+        let refusal = sessions
+            .link_updates
+            .get(&owner)
+            .and_then(|shown| shown.refusal().cloned());
+        sessions.expire_event_link_undo(true, &book);
         fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(left, Vec::<String>::new());
         assert_eq!(fs::read(&note_a).unwrap(), original[0], "A is put back");
@@ -9310,12 +9332,21 @@ mod tests {
                 .map(|write| write.before.path.clone())
                 .collect()
         });
-        assert_eq!(waiting, Some(vec![note_b.clone()]), "only B's Undo waits");
+        assert_eq!(
+            waiting,
+            Some(vec![note_b.clone()]),
+            "only B's Undo waits after the next expiry check"
+        );
         // Lane N0 (n0-link-undo-cause): B's folder took no file, an error with its own cause,
         // words and tone, never `EditedSince`.
-        let refused = refused.expect("B's Undo is refused");
-        assert_eq!(refused.cause, Cause::NotSaved(File::SessionNote));
-        let refusal = refused.refusal("Rest at the mill");
+        let refusal = refusal.expect("B's Undo is refused");
+        let expected = LinkUndoRefused {
+            within: Name::new("Session 2").unwrap(),
+            cause: Cause::NotSaved(File::SessionNote),
+            recovery: Recovery::First(Step::Check(File::SessionNote)),
+        }
+        .refusal("Rest at the mill");
+        assert_eq!(refusal, expected);
         assert_eq!(
             (refusal.words().as_str(), refusal.tone()),
             (
@@ -9325,6 +9356,25 @@ mod tests {
             ),
             "n0-link-undo-cause: a locked folder"
         );
+        let result = sessions.link_updates.get(&owner).unwrap();
+        assert_eq!(result.refusal(), Some(&refusal));
+        sessions.undo_event_link_update(result.ticket_for_caller_test());
+        assert_eq!(fs::read(&note_a).unwrap(), original[0]);
+        assert_eq!(fs::read(&note_b).unwrap(), original[1], "retry restores B");
+        assert!(sessions.updated_links.is_none());
+        assert!(sessions.link_updates.get(&owner).is_none());
+
+        let offer = sessions
+            .event_link_offer(&book, &id)
+            .expect("new link offer");
+        sessions.accept_event_link_offer(offer, &book);
+        sessions.undo_event_link_update(stale_ticket);
+        assert_eq!(
+            fs::read(&note_b).unwrap(),
+            b_written,
+            "stale Undo leaves B alone"
+        );
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(2));
         // (g) Lane N0: B is the open note, and its file changes outside Splat after the update.
         // Undo puts A back; B's save finds the outside change and keeps it: a conflict, a
         // warning, never `EditedSince`.

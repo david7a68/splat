@@ -213,8 +213,8 @@ pub(super) struct LinkUpdate {
 impl Kept for LinkUpdate {
     type Owner = Page;
     const ENDS: Ends = Ends {
-        // A new update, an edit of the notes or the Timeline since, or leaving the Timeline
-        // ends it (`expire_event_link_undo`, `update_event_link_notes`).
+        // A new update ends it. Note or Timeline edits and leaving Timeline also end it
+        // unless a partial update or refused Undo still needs a retry.
         owner_changed: OwnerChanged::Ends,
         disk_changed: DiskChanged::Stays,
         press: Press::Undo,

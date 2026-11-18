@@ -2475,10 +2475,11 @@ hover, and in the open form the same warning takes the place of Ends, so the fie
 and checks every note first: if one is changed on disk or needs a choice, no note is written. Each note is then
 saved on its own, after one more check of its file. If a save fails part way, nothing is rolled back: one result
 names every note already written and the error, and `Undo link update` puts back exactly those; the result stays
-until Undo or a new update. Undo writes only into the same file it wrote (same bytes, same session id), else it
-names the note and changes nothing; custom
-aliases remain. Undo stays only in the list column's footer until a note/event edit or leaving Timeline, never in
-conflict. Completed link updates use success.
+until Undo or a new update. Undo writes only into the file the update wrote, with the same bytes and session ID.
+If Undo fails on any note, the result names the first such note, gives the reason and the next step, and keeps
+Undo for the remaining notes. The refusal and retry stay through ordinary expiry.
+Custom aliases remain. An ordinary Undo stays in the list column's footer until a note or event edit, a draft
+fault, or leaving Timeline. Completed link updates use the success tone.
 
 A Travel event's checks are lines of the event: `- Checks table: road` (no key while none is chosen) and
 `- Check at 24h: "16 · …"`, one for each result, its words in quotes so that the reader of the format before
