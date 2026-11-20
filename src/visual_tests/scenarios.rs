@@ -28666,7 +28666,7 @@ pub mod run_rolls {
         d.press(Key::Escape);
 
         d.aside(|d| d.act_at_size(LARGE, |d| {
-            const SPELLS: &str = "\n\nInnate Spellcasting. The cultist casts (spell save DC 12):\n\nAt Will: Thunderwave\n\n1/Day: Thunderwave";
+            const SPELLS: &str = "\n\nInnate Spellcasting. The cultist casts (spell save DC 12):\n\nAt Will: Review Wave, Thunderwave\n\n1/Day: Thunderwave";
             d.app_mut().encounters.run_mut().unwrap().simulate_stat_block_edit(CASTER, |body| body.push_str(SPELLS));
             d.settle();
             for (key, hint) in [(Key::Num4, "Ctrl+4."), (Key::Num5, "Ctrl+5.")] {
@@ -28677,6 +28677,21 @@ pub mod run_rolls {
                 d.observe("repeated-spell-shortcut", matches.count() == 1 && stops.count() == 1,
                     format!("One Thunderwave tile says {hint} and one tile is armed"));
             }
+            let root = d.app_mut().campaigns.active_campaign().unwrap().path;
+            let file = "Review Wave.md";
+            let text = splat::content::formats::fixture(file, &format!(
+                "splat_id: {}\nsplat_kind: spell\nsplat_name: Review Wave\nsplat_spell: {{level: 1}}\n",
+                splat::character::stable_id("visual:rolls:review-wave")
+            ), "\nEach creature makes a Constitution saving throw. On a failed save, a creature takes 2d8 Thunder damage.\n").unwrap();
+            crate::library::write_note(&root, file, None, &text).unwrap();
+            d.app_mut().lookup.refresh();
+            d.settle();
+            let last = d.nodes().into_iter().find(|n| n.name.starts_with("Thunderwave ·") && n.name.ends_with("Ctrl+6."));
+            d.observe("armed-spell-after-reload", last.zip(d.place_of("Stop")).is_some_and(|(tile, stop)| tile.rect.bottom() <= stop.top()),
+                "Adding an earlier spell changes the shortcuts and keeps Stop below the second Thunderwave");
+            std::fs::remove_file(root.join(file)).unwrap();
+            d.app_mut().lookup.refresh();
+            d.settle();
             d.press(Key::Escape);
             d.act_at_size(SMALL, |d| {
                 d.press_ctrl(Key::K);

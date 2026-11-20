@@ -3,7 +3,7 @@
 //! spell with neither opens its description.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{presentation, reader, view::Links};
-use crate::rolls::Chip;
+use crate::rolls::{Chip, SpellOccurrence};
 use splat::content::{
     Entry, Reference,
     spell_rolls::{Caster, spell_roll},
@@ -25,6 +25,8 @@ pub(crate) struct SpellTile {
     pub chip: Option<Chip>,
     /// Its place in the creature's complete action order, when it was resolved from the body.
     pub place: Option<usize>,
+    /// The printed item, including any preceding items that could not be resolved.
+    item: usize,
 }
 
 /// One line of a Spellcasting list: its label and its spells.
@@ -264,7 +266,14 @@ fn facts(spell: &Entry, cast: Option<u32>, chip: Option<&Chip>, text: &str) -> S
 
 /// One spell's tile: its facts, its rules text, and what it rolls when this caster casts it
 /// at `cast`. Built only when an entry is resolved, which its links' cache keeps.
-fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caster) -> SpellTile {
+fn tile(
+    name: &str,
+    open: usize,
+    spell: &Entry,
+    cast: Option<u32>,
+    caster: Caster,
+    item: usize,
+) -> SpellTile {
     let text = rules_text(spell);
     let level = spell_level(spell);
     let cast = cast.or(level);
@@ -284,6 +293,7 @@ fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caste
         text,
         chip,
         place: None,
+        item,
     }
 }
 
@@ -295,6 +305,7 @@ fn without_concentration(facts: &str) -> String {
 /// One list item's spell tile, found by the entry's own references first, then by name:
 /// `Err` with the name when no spell has it, `None` for an empty item.
 fn item_tile(
+    position: usize,
     item: &str,
     caster: Caster,
     references: &[Option<(usize, String)>],
@@ -327,7 +338,7 @@ fn item_tile(
     let Some((open, spell)) = found.and_then(|(open, _)| Some((open, links.entry(open)?))) else {
         return Some(Err(name.to_owned()));
     };
-    let mut spell = tile(name, open, spell, cast, caster);
+    let mut spell = tile(name, open, spell, cast, caster, position);
     // The list may waive it: `Shapechange (... no Concentration ... required)`.
     if item.to_lowercase().contains("no concentration") {
         spell.facts = without_concentration(&spell.facts);
@@ -349,8 +360,8 @@ pub(crate) fn line(
     let (label, spells) = line.split_once(':')?;
     let mut tiles = Vec::new();
     let mut missing = Vec::new();
-    for item in list_items(spells) {
-        match item_tile(item, caster, references, links) {
+    for (position, item) in list_items(spells).into_iter().enumerate() {
+        match item_tile(position, item, caster, references, links) {
             Some(Ok(spell)) => tiles.push(spell),
             Some(Err(name)) => missing.push(name),
             None => {}
@@ -434,7 +445,8 @@ pub(crate) fn cast_line(
     };
     let tiles: Vec<SpellTile> = names
         .into_iter()
-        .filter_map(|item| item_tile(item, caster, references, links)?.ok())
+        .enumerate()
+        .filter_map(|(position, item)| item_tile(position, item, caster, references, links)?.ok())
         .collect();
     (!tiles.is_empty()).then(|| SpellLine {
         label: String::new(),
@@ -539,10 +551,15 @@ impl Resolved {
         Some(self.casts[at].1.as_ref())
     }
 
-    fn number(&mut self, line: &mut SpellLine) {
-        for tile in &mut line.tiles {
-            if let Some(chip) = &tile.chip {
+    fn number(&mut self, spells: &mut SpellLine, paragraph: usize, line: usize) {
+        for tile in &mut spells.tiles {
+            if let Some(chip) = &mut tile.chip {
                 tile.place = Some(self.rolls.len());
+                chip.spell_occurrence = Some(SpellOccurrence {
+                    paragraph,
+                    line,
+                    item: tile.item,
+                });
                 self.rolls.push(chip.clone());
             }
         }
@@ -643,12 +660,10 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
             group.clear();
         }
     };
-    for paragraph in entry
-        .body
-        .split("\n\n")
-        .map(str::trim)
-        .filter(|p| !p.is_empty())
-    {
+    for (at, paragraph) in entry.body.split("\n\n").map(str::trim).enumerate() {
+        if paragraph.is_empty() {
+            continue;
+        }
         if spellcasting(paragraph) {
             end_group(&mut group, &mut resolved);
             lists = Some(caster(entry, paragraph));
@@ -660,9 +675,9 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
                 continue;
             }
             if paragraph.lines().all(list_line) {
-                for text in paragraph.lines() {
+                for (row, text) in paragraph.lines().enumerate() {
                     if let Some(mut found) = line(text, caster, &resolved.references, links) {
-                        resolved.number(&mut found);
+                        resolved.number(&mut found, at, row);
                         resolved.lines.push((words(text), caster, found));
                     }
                 }
@@ -678,7 +693,7 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
         if cast_names(paragraph).is_some() {
             let mut found = cast_line(entry, paragraph, &resolved.references, links);
             if let Some(found) = &mut found {
-                resolved.number(found);
+                resolved.number(found, at, 0);
             }
             resolved.casts.push((words(paragraph), found));
         }

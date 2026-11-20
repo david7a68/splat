@@ -6,7 +6,9 @@
 //! adds each clicked row as a target and rolls its save, shown where the row's AC is. A roll
 //! changes no participant by itself: it goes to the Log, and Undo keeps it.
 use super::{Command, Run};
-use crate::rolls::{self, ArmedAction, ArmedView, Ask, Chip, Mode, Outcome, Rolled};
+use crate::rolls::{
+    self, ArmedAction, ArmedView, Ask, Chip, Mode, Outcome, Rolled, SpellOccurrence,
+};
 use eframe::egui;
 use splat::content::Entry;
 use splat::content::dice_text::{self, D20, DamagePart, RollLink, When};
@@ -19,7 +21,7 @@ use std::collections::BTreeMap;
 pub(super) struct Armed {
     pub actor: usize,
     pub link: RollLink,
-    place: Option<usize>,
+    occurrence: Option<SpellOccurrence>,
     pub mode: Mode,
     /// The actor expends inspiration for advantage on the roll made for them.
     pub inspired: bool,
@@ -212,7 +214,7 @@ impl Run {
             }
             | RollLink::SaveDc { .. }
             | RollLink::Damage { .. } => {
-                self.arm(actor, ask.link, ask.place, mode, inspired);
+                self.arm(actor, ask.link, ask.occurrence, mode, inspired);
                 Ok(())
             }
             RollLink::D20 { .. } | RollLink::Dice { .. } => {
@@ -234,7 +236,7 @@ impl Run {
         &mut self,
         actor: usize,
         link: RollLink,
-        place: Option<usize>,
+        occurrence: Option<SpellOccurrence>,
         mode: Mode,
         inspired: bool,
     ) {
@@ -249,7 +251,7 @@ impl Run {
         self.armed = Some(Armed {
             actor,
             link,
-            place,
+            occurrence,
             mode,
             inspired,
             damage: None,
@@ -1016,7 +1018,7 @@ impl Run {
         actions.push(("Stop", ArmedAction::Stop));
         Some(ArmedView {
             link: armed.link.clone(),
-            place: armed.place,
+            occurrence: armed.occurrence,
             status,
             reserve: longest_hint(),
             actions,
@@ -1418,9 +1420,8 @@ impl Run {
     /// Ctrl+1 to Ctrl+9 arm the panel's participant's actions, in tile order.
     pub(super) fn arm_by_number(&mut self, number: usize) {
         let row = self.panel_row();
-        let place = number.saturating_sub(1);
-        if let Some(chip) = self.chips(row).into_iter().nth(place) {
-            self.arm(row, chip.link, Some(place), Mode::Normal, false);
+        if let Some(chip) = self.chips(row).into_iter().nth(number.saturating_sub(1)) {
+            self.arm(row, chip.link, chip.spell_occurrence, Mode::Normal, false);
         }
     }
 
@@ -1555,7 +1556,7 @@ mod tests {
     fn ask(link: RollLink, roller: usize) -> Ask {
         Ask {
             link,
-            place: None,
+            occurrence: None,
             mode: Mode::Normal,
             roller: Some(roller),
             entry: "Guard".into(),
@@ -2419,7 +2420,8 @@ mod tests {
         run.content = Some(std::sync::Arc::new(
             crate::lookup::ContentIndex::load(&[], None).unwrap(),
         ));
-        let labels: Vec<_> = run.chips(row).into_iter().map(|chip| chip.label).collect();
+        let actions = run.chips(row);
+        let labels: Vec<_> = actions.iter().map(|chip| chip.label.as_str()).collect();
         assert_eq!(
             labels,
             [
@@ -2449,10 +2451,16 @@ mod tests {
         );
 
         let thunderwave = run.armed.as_ref().unwrap().link.clone();
-        assert_eq!(run.armed.as_ref().unwrap().place, Some(3));
+        let first = actions[3].spell_occurrence.unwrap();
+        let last = actions[4].spell_occurrence.unwrap();
+        assert_ne!(first, last);
+        assert_eq!(run.armed.as_ref().unwrap().occurrence, Some(first));
         run.arm_by_number(5);
         let second = run.armed.as_ref().unwrap();
-        assert_eq!((&second.link, second.place), (&thunderwave, Some(4)));
+        assert_eq!(
+            (&second.link, second.occurrence),
+            (&thunderwave, Some(last))
+        );
     }
 
     fn fire_breath() -> RollLink {

@@ -38,8 +38,7 @@ impl Mode {
 #[derive(Clone, Debug)]
 pub(crate) struct Ask {
     pub link: RollLink,
-    /// The tile's place in the Run action order, if pressed from that order.
-    pub place: Option<usize>,
+    pub occurrence: Option<SpellOccurrence>,
     pub mode: Mode,
     /// The run row whose stat block or sheet was drawn, if any.
     pub roller: Option<usize>,
@@ -97,7 +96,13 @@ pub(crate) fn set_entry(ctx: &egui::Context, name: &str) {
 }
 
 /// Ask for `link`, from the roller and entry set for what is drawn now.
-fn ask(ctx: &egui::Context, link: RollLink, place: Option<usize>, mode: Mode, inspired: bool) {
+fn ask(
+    ctx: &egui::Context,
+    link: RollLink,
+    occurrence: Option<SpellOccurrence>,
+    mode: Mode,
+    inspired: bool,
+) {
     let roller = ctx.data(|data| data.get_temp::<usize>(roller_id()));
     let entry = ctx
         .data(|data| data.get_temp::<String>(entry_id()))
@@ -107,7 +112,7 @@ fn ask(ctx: &egui::Context, link: RollLink, place: Option<usize>, mode: Mode, in
             ask_id(),
             Ask {
                 link,
-                place,
+                occurrence,
                 mode,
                 roller,
                 entry,
@@ -536,20 +541,20 @@ fn press(
     ui: &egui::Ui,
     response: &egui::Response,
     link: &RollLink,
-    place: Option<usize>,
+    occurrence: Option<SpellOccurrence>,
     read: Option<&str>,
 ) -> bool {
     if response.clicked() {
         ask(
             ui.ctx(),
             link.clone(),
-            place,
+            occurrence,
             Mode::from_keys(ui, link),
             false,
         );
     }
     match mode_menu(response, link, ui.clip_rect().right(), read) {
-        Some(Pick::Roll(mode, inspired)) => ask(ui.ctx(), link.clone(), place, mode, inspired),
+        Some(Pick::Roll(mode, inspired)) => ask(ui.ctx(), link.clone(), occurrence, mode, inspired),
         Some(Pick::Read) => return true,
         None => {}
     }
@@ -868,6 +873,14 @@ pub(crate) fn roll_with(
     Ok(rolled)
 }
 
+/// A spell's printed position stays the same when a reload shifts its shortcut.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SpellOccurrence {
+    pub paragraph: usize,
+    pub line: usize,
+    pub item: usize,
+}
+
 /// One action of a creature or a character: a feature with an attack, a save or damage.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Chip {
@@ -879,6 +892,7 @@ pub(crate) struct Chip {
     /// A tile's last line when the rules text does not give it: a spell's level, casting time
     /// and range, which come from its entry, not from the words of the stat block.
     pub facts: Option<String>,
+    pub spell_occurrence: Option<SpellOccurrence>,
 }
 
 impl Chip {
@@ -899,6 +913,7 @@ impl Chip {
             link,
             text,
             facts: None,
+            spell_occurrence: None,
         })
     }
 }
@@ -1227,7 +1242,7 @@ fn preview_outcome(ctx: &egui::Context, entry: &str) -> Option<Outcome> {
 #[derive(Clone, Debug)]
 pub(crate) struct ArmedView {
     pub link: RollLink,
-    pub place: Option<usize>,
+    pub occurrence: Option<SpellOccurrence>,
     /// What to do next, such as `Click a target. Escape stops.`
     pub status: String,
     /// The longest words `status` can say for any armed action and roll mode. The hint keeps
@@ -1237,8 +1252,11 @@ pub(crate) struct ArmedView {
 }
 
 impl ArmedView {
-    fn marks(&self, chip: &Chip, place: Option<usize>) -> bool {
-        self.link == chip.link && self.place.is_none_or(|armed| place == Some(armed))
+    fn marks(&self, chip: &Chip) -> bool {
+        self.link == chip.link
+            && self
+                .occurrence
+                .is_none_or(|armed| chip.spell_occurrence == Some(armed))
     }
 }
 
@@ -1936,13 +1954,13 @@ pub(crate) fn tile_row(ui: &mut egui::Ui, entry: &str, tiles: &[Tile]) -> Option
     let in_run = roller(&ctx).is_some();
     let rolled = || {
         tiles.iter().filter_map(|tile| match tile {
-            Tile::Roll { chip, place, .. } => Some((chip, *place)),
+            Tile::Roll { chip, .. } => Some(chip),
             Tile::Open(_) => None,
         })
     };
     let armed = ctx
         .data(|data| data.get_temp::<ArmedView>(armed_id()))
-        .filter(|view| in_run && rolled().any(|(chip, place)| view.marks(chip, place)));
+        .filter(|view| in_run && rolled().any(|chip| view.marks(chip)));
     let changes = if in_run { roller_changes(&ctx) } else { (0, 0) };
     // A tile's number is its place in the entry's whole list, which Ctrl+number arms from.
     let number = |place: &Option<usize>| {
@@ -1986,10 +2004,16 @@ pub(crate) fn tile_row(ui: &mut egui::Ui, entry: &str, tiles: &[Tile]) -> Option
                 let size = egui::vec2(width, height);
                 match (&tiles[at], &shown[at]) {
                     (Tile::Roll { place, chip, read }, Some(shown)) => {
-                        let lit = armed.as_ref().is_some_and(|view| view.marks(chip, *place));
+                        let lit = armed.as_ref().is_some_and(|view| view.marks(chip));
                         let response =
                             tile(ui, chip, shown, size, number(place), lit, read.as_deref());
-                        if press(ui, &response, &chip.link, *place, read.as_deref()) {
+                        if press(
+                            ui,
+                            &response,
+                            &chip.link,
+                            chip.spell_occurrence,
+                            read.as_deref(),
+                        ) {
                             opened = Some(at);
                         }
                     }
@@ -2012,7 +2036,7 @@ pub(crate) fn tile_row(ui: &mut egui::Ui, entry: &str, tiles: &[Tile]) -> Option
         }
     } else if !in_run
         && let Some(outcome) =
-            preview_outcome(&ctx, entry).filter(|o| rolled().any(|(chip, _)| chip.link == o.link))
+            preview_outcome(&ctx, entry).filter(|o| rolled().any(|chip| chip.link == o.link))
     {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = design::S;
@@ -2076,9 +2100,7 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
         ui.spacing_mut().item_spacing.x = design::XS;
         design::gap(ui, design::Gap::S);
         for (at, chip) in chips.iter().enumerate() {
-            let lit = armed
-                .as_ref()
-                .is_some_and(|view| view.marks(chip, Some(at)));
+            let lit = armed.as_ref().is_some_and(|view| view.marks(chip));
             let shown = with_changes(&chip.link, changes);
             let label = Chip::new(shown.clone(), chip.text.clone())
                 .map_or_else(|| chip.label.clone(), |shown| shown.label);
@@ -2099,7 +2121,7 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
             }
             let response = action.show(ui);
             let response = rules_on_hover_and_focus(response, chip, &shown, "", None);
-            press(ui, &response, &chip.link, Some(at), None);
+            press(ui, &response, &chip.link, chip.spell_occurrence, None);
         }
     });
 }
@@ -2149,7 +2171,7 @@ fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, chan
                 ask(
                     ui.ctx(),
                     chip.link.clone(),
-                    Some(place),
+                    chip.spell_occurrence,
                     Mode::from_keys(ui, &chip.link),
                     false,
                 );
