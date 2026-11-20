@@ -19,7 +19,7 @@ use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
     Entry,
     encounter_group::{EncounterGroup, MAX_COUNT},
-    overrides::{Base, Change, MAX_NAME, Overrides, same_condition},
+    overrides::{Base, Change, MAX_NAME, Overrides, Resolved, same_condition},
 };
 use std::{fs, sync::Arc};
 use uuid::Uuid;
@@ -323,6 +323,74 @@ fn member_ref(reference: &splat::content::Reference) -> EntryRef {
             key: Some(key.clone()),
             link: None,
         },
+    }
+}
+
+#[derive(Clone, Copy)]
+enum MemberIssue<'a> {
+    Reference(FaultKind, &'static str),
+    InvalidChange(&'a str),
+    CannotJoin(&'static str),
+}
+
+/// Shared facts for the editor, Save and Arrivals. The callers decide where to put the
+/// fault and whether a fault on one member blocks the whole group.
+struct MemberAssessment<'a> {
+    entry: Option<&'a Entry>,
+    creature: Option<&'a Creature>,
+    missing: Option<(FaultKind, &'static str)>,
+    changed: Result<Option<Resolved>, String>,
+}
+
+impl MemberAssessment<'_> {
+    fn eligible(&self) -> Result<&Entry, MemberIssue<'_>> {
+        if let Some((kind, cause)) = self.missing {
+            return Err(MemberIssue::Reference(kind, cause));
+        }
+        let entry = self.entry.expect("a member with a creature has an entry");
+        if self.creature.is_some_and(|creature| creature.linked) {
+            return Err(MemberIssue::CannotJoin(LINKED_CAUSE));
+        }
+        let changed = self
+            .changed
+            .as_ref()
+            .map_err(|error| MemberIssue::InvalidChange(error))?;
+        if super::max_hp(entry, changed.as_ref()).is_none_or(|hp| hp <= 0) {
+            return Err(MemberIssue::CannotJoin(NO_MAX_HP_CAUSE));
+        }
+        Ok(entry)
+    }
+}
+
+fn assess_member<'a>(
+    catalogue: &'a Catalogue,
+    creatures: &'a [Creature],
+    reference: &EntryRef,
+    side: &str,
+    overrides: Result<&Overrides, &str>,
+) -> MemberAssessment<'a> {
+    let entry = catalogue
+        .resolve_ref(reference)
+        .ok()
+        .and_then(|id| catalogue.entries.get(&id))
+        .map(|item| &item.entry);
+    let creature =
+        entry.and_then(|entry| creatures.iter().find(|creature| creature.id == entry.id));
+    let missing = creature
+        .is_none()
+        .then(|| unresolved_member(catalogue, reference));
+    let changed = match (entry, overrides) {
+        (Some(entry), Ok(overrides)) if !overrides.is_empty() => {
+            overrides.resolve_for(entry, side).map(Some)
+        }
+        (Some(_), Err(error)) => Err(error.to_owned()),
+        _ => Ok(None),
+    };
+    MemberAssessment {
+        entry,
+        creature,
+        missing,
+        changed,
     }
 }
 
@@ -837,53 +905,43 @@ impl GroupDraft {
         // error (`FaultKind::InvalidChange`).
         // FA1: Save's check names a member as every view does. A draft's lines may have
         // moved since the note was read, so it names no line.
-        let changed = member
-            .overrides
-            .get("name")
-            .and_then(Value::as_str)
-            .map(str::to_owned);
-        let resolved_id = snapshot.catalogue.resolve_ref(&member.creature);
-        let base = resolved_id
-            .as_ref()
-            .ok()
-            .and_then(|id| snapshot.catalogue.entries.get(id))
-            .map(|entry| entry.entry.name.clone());
-        let shown = match (&changed, &base) {
+        let changed = member.overrides.get("name").and_then(Value::as_str);
+        let overrides = Overrides::parse(&member.overrides);
+        let assessed = assess_member(
+            &snapshot.catalogue,
+            &snapshot.creatures,
+            &member.creature,
+            &self.setup.side,
+            overrides.as_ref().map_err(String::as_str),
+        );
+        let base = assessed.entry.map(|entry| entry.name.as_str());
+        let shown = match (changed, base) {
             (Some(changed), _) if !changed.trim().is_empty() => changed.trim().to_owned(),
-            (_, Some(base)) => base.clone(),
+            (_, Some(base)) => base.to_owned(),
             _ => missing_member_name(None, member.creature.link.as_deref()),
         };
         let in_place =
             |text: String, kind: FaultKind| Refusal::in_row(text, kind, member.id.0, &shown);
-        let fault = |cause: &str| member_fault(&shown, base.as_deref(), None, cause);
+        let fault = |cause: &str| member_fault(&shown, base, None, cause);
         let not_in_place = |cause: &str| Refusal::refused(fault(cause), RefusalPlace::Footer);
         if !(1..=MAX_COUNT).contains(&member.count) {
             return Err(not_in_place(&format!(
                 "count must be from 1 to {MAX_COUNT}"
             )));
         }
-        let id = resolved_id.map_err(|_| {
-            let (kind, cause) = unresolved_member(&snapshot.catalogue, &member.creature);
-            in_place(fault(cause), kind)
-        })?;
-        let creature = snapshot
-            .creatures
-            .iter()
-            .find(|c| c.id == id)
-            .ok_or_else(|| not_in_place("this creature is unavailable in campaign content"))?;
-        if creature.linked {
-            return Err(not_in_place(LINKED_CAUSE));
-        }
-        let invalid = FaultKind::InvalidChange;
-        let overrides =
-            Overrides::parse(&member.overrides).map_err(|e| in_place(fault(&e), invalid))?;
-        let resolved = overrides
-            .resolve_for(&snapshot.catalogue.entries[&id].entry, &self.setup.side)
-            .map_err(|e| in_place(fault(&e), invalid))?;
-        if resolved.max_hp.is_none() {
-            return Err(not_in_place(NO_MAX_HP_CAUSE));
-        }
-        Ok(())
+        assessed
+            .eligible()
+            .map(|_| ())
+            .map_err(|issue| match issue {
+                MemberIssue::Reference(_, _) if base.is_some() => {
+                    not_in_place("this creature is unavailable in campaign content")
+                }
+                MemberIssue::Reference(kind, cause) => in_place(fault(cause), kind),
+                MemberIssue::InvalidChange(cause) => {
+                    in_place(fault(cause), FaultKind::InvalidChange)
+                }
+                MemberIssue::CannotJoin(cause) => not_in_place(cause),
+            })
     }
     /// The group's own fields, before its members.
     /// `Err` for a change that cannot stand; `Ok(Some(..))` for the first missing part, which the
@@ -1199,71 +1257,59 @@ fn resolve_group(
     });
     for (index, member) in group.members.iter().enumerate() {
         let line = lines.get(index).copied();
-        let Some((id, creature)) = catalogue
-            .resolve(&member.creature)
-            .ok()
-            .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
-        else {
-            let link = entry
-                .fields
-                .get("splat_encounter_group")
-                .and_then(|group| group.get("members"))
-                .and_then(|members| members.get(index))
-                .and_then(|member| member.get("creature"))
-                .and_then(|creature| creature.get("link"))
-                .and_then(Value::as_str);
-            let name = missing_member_name(member.overrides.name.as_deref(), link);
-            // The base is the name the note links, when it gives one.
-            let base = missing_member_name(None, link);
-            let (kind, cause) = unresolved_member(catalogue, &member_ref(&member.creature));
-            warnings.push(MemberFault::new(
-                kind,
-                member_fault(&name, link.is_some().then_some(base.as_str()), line, cause),
-            ));
-            unavailable_members.push((index, member.count, name.to_owned()));
-            unavailable = unavailable.saturating_add(member.count);
-            continue;
-        };
-        let entry = &catalogue.entries[&id].entry;
-        let resolved = member.overrides.resolve_for(entry, &group.side);
-        let shown = member.overrides.name.as_deref().unwrap_or(&entry.name);
-        let member_name = if shown == entry.name {
-            shown.to_owned()
-        } else {
-            format!("{shown} (as {})", entry.name)
-        };
-        let fault = |cause: &str| member_fault(shown, Some(&entry.name), line, cause);
-        // The kind is decided here, where the fault is found; every view takes its tone.
-        let issue = if creature.linked {
-            Some(MemberFault::new(FaultKind::CannotJoin, fault(LINKED_CAUSE)))
-        } else {
-            match &resolved {
-                Err(error) => Some(MemberFault::new(
-                    FaultKind::InvalidChange,
-                    fault(&override_error(error)),
-                )),
-                Ok(resolved) if resolved.max_hp.is_none() => Some(MemberFault::new(
-                    FaultKind::CannotJoin,
-                    fault(NO_MAX_HP_CAUSE),
-                )),
-                Ok(_) => None,
+        let assessed = assess_member(
+            catalogue,
+            creatures,
+            &member_ref(&member.creature),
+            &group.side,
+            Ok(&member.overrides),
+        );
+        match assessed.eligible() {
+            Ok(creature) => {
+                match creature_xp(creature) {
+                    Some(each) => xp = xp.saturating_add(each.saturating_mul(member.count)),
+                    None => xp_unknown.push(creature.name.clone()),
+                }
+                members.push(GroupMember {
+                    entry: Arc::new(catalogue.run_entry(creature.id)),
+                    count: member.count,
+                    overrides: member.overrides.clone(),
+                });
             }
-        };
-        if let Some(issue) = issue {
-            warnings.push(issue);
-            unavailable = unavailable.saturating_add(member.count);
-            unavailable_members.push((index, member.count, member_name));
-            continue;
+            Err(issue) => {
+                let (kind, cause) = match issue {
+                    MemberIssue::Reference(kind, cause) => (kind, cause.to_owned()),
+                    MemberIssue::InvalidChange(error) => {
+                        (FaultKind::InvalidChange, override_error(error))
+                    }
+                    MemberIssue::CannotJoin(cause) => (FaultKind::CannotJoin, cause.to_owned()),
+                };
+                let changed = member.overrides.name.as_deref();
+                let (shown, base, name) = if matches!(issue, MemberIssue::Reference(..)) {
+                    let link = entry.fields["splat_encounter_group"]["members"]
+                        .get(index)
+                        .and_then(|member| member["creature"]["link"].as_str());
+                    let shown = missing_member_name(changed, link);
+                    let base = link.map(|link| missing_member_name(None, Some(link)));
+                    (shown.clone(), base, shown)
+                } else {
+                    let base = &assessed.entry.expect("the member has a creature").name;
+                    let shown = changed.unwrap_or(base);
+                    let name = if shown == base {
+                        shown.to_owned()
+                    } else {
+                        format!("{shown} (as {base})")
+                    };
+                    (shown.to_owned(), Some(base.clone()), name)
+                };
+                warnings.push(MemberFault::new(
+                    kind,
+                    member_fault(&shown, base.as_deref(), line, &cause),
+                ));
+                unavailable_members.push((index, member.count, name));
+                unavailable = unavailable.saturating_add(member.count);
+            }
         }
-        match creature_xp(entry) {
-            Some(each) => xp = u64::saturating_add(xp, each.saturating_mul(member.count)),
-            None => xp_unknown.push(entry.name.clone()),
-        }
-        members.push(GroupMember {
-            entry: Arc::new(catalogue.run_entry(id)),
-            count: member.count,
-            overrides: member.overrides.clone(),
-        });
     }
     for member in unread {
         let name = member
@@ -1916,20 +1962,10 @@ pub(super) fn change_words(
     }
 }
 
-/// A member's change words (`Changed`, `Loot`…) for the end of its detail line, when its
-/// changes read.
-pub(super) fn change_word(
-    ui: &egui::Ui,
-    block: &Mapping,
-    entry: &Entry,
-    side: &str,
-) -> Option<String> {
-    if block.is_empty() {
-        return None;
-    }
-    let overrides = Overrides::parse(block).ok()?;
+/// A member's change words (`Changed`, `Loot`…) for the end of its detail line.
+fn change_word(ui: &egui::Ui, overrides: &Overrides, entry: &Entry, side: &str) -> String {
     let missing = crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref());
-    Some(change_words(&overrides, entry, side, &missing))
+    change_words(overrides, entry, side, &missing)
 }
 
 /// The muted pencil and the change words before it opens the form (FC9): `✎ Changed`, as the
@@ -1970,43 +2006,25 @@ pub(super) fn change_link(ui: &mut egui::Ui, word: &str) -> bool {
     .inner
 }
 
-/// A member's change faults, below its row. `fault` puts a cause into the member-fault form
-/// (name and line), so the editor says a member's fault as the Encounters list and Arrivals do
-/// (FJ6). The change words themselves are on the detail line ([`change_link`]).
-pub(super) fn change_faults(
+/// Draw the member fault (FJ6) and the changes that caused it.
+fn show_change_fault(
     ui: &mut egui::Ui,
-    block: &Mapping,
+    overrides: Option<&Overrides>,
     entry: &Entry,
     side: &str,
-    form_open: bool,
+    error: &str,
     fault: &dyn Fn(&str) -> String,
-) -> Option<egui::Rect> {
-    if block.is_empty() || form_open {
-        return None;
+) -> egui::Rect {
+    let said = design::message(
+        ui,
+        FaultKind::InvalidChange.tone(),
+        &fault(&override_error(error)),
+    );
+    if let Some(overrides) = overrides {
+        change_rows(ui, &overrides.rows(&Base::of(entry, side)));
     }
-    // The rect of the fault's own words (G122), not the change rows under it.
-    match Overrides::parse(block) {
-        Ok(overrides) => {
-            let rows = overrides.rows(&Base::of(entry, side));
-            let error = overrides.resolve_for(entry, side).err()?;
-            let said = design::message(
-                ui,
-                FaultKind::InvalidChange.tone(),
-                &fault(&override_error(&error)),
-            );
-            // The failed change stays visible beside its fault.
-            change_rows(ui, &rows);
-            Some(said.rect)
-        }
-        Err(error) => Some(
-            design::message(
-                ui,
-                FaultKind::InvalidChange.tone(),
-                &fault(&override_error(&error)),
-            )
-            .rect,
-        ),
-    }
+    // G122 asks whether the fault itself is on screen.
+    said.rect
 }
 
 const FORM_OPENED: &str = "override_form_opened";
@@ -3642,12 +3660,16 @@ fn members(
         let mut fault_said: Option<egui::Rect> = None;
         // The row's widgets key by the member's identity, not its place.
         ui.push_id(member.id.0, |ui| {
-            let entry = snapshot
-                .catalogue
-                .resolve_ref(&member.creature)
-                .ok()
-                .and_then(|id| snapshot.catalogue.entries.get(&id))
-                .map(|e| &e.entry);
+            let parsed = Overrides::parse(&member.overrides);
+            let assessed = assess_member(
+                &snapshot.catalogue,
+                &snapshot.creatures,
+                &member.creature,
+                &side,
+                parsed.as_ref().map_err(String::as_str),
+            );
+            let entry = assessed.entry;
+            let overrides = entry.and(parsed.as_ref().ok());
             let name = entry.map_or_else(
                 || missing_member_name(None, member.creature.link.as_deref()),
                 |entry| entry.name.clone(),
@@ -3657,22 +3679,26 @@ fn members(
             } else {
                 format!("Changes for {name}")
             };
-            let name = if entry.is_some() {
-                shown_name(&member.overrides, name)
-            } else {
-                name
-            };
+            let name = overrides
+                .and_then(|overrides| overrides.name.as_deref())
+                .map_or(name, |changed| changed.trim().to_owned());
             let (detail, hp_missing) = entry
-                .and_then(|entry| {
-                    let creature = snapshot.creatures.iter().find(|c| c.id == entry.id)?;
-                    let mut detail = shown_detail(&member.overrides, entry, &side, creature);
+                .zip(assessed.creature)
+                .map(|(entry, creature)| {
+                    let changed = assessed.changed.as_ref().ok().and_then(Option::as_ref);
+                    let (mut detail, hp_missing) = changed.map_or_else(
+                        || (creature.detail.clone(), creature.hp_missing),
+                        |changed| {
+                            (
+                                super::creature_detail(entry, creature.party, Some(changed)),
+                                changed.max_hp.is_none(),
+                            )
+                        },
+                    );
                     if member.overrides.contains_key("name") {
                         detail.push_str(&format!(" · as {}", entry.name));
                     }
-                    Some((
-                        detail,
-                        shown_hp_missing(&member.overrides, entry, &side, creature),
-                    ))
+                    (detail, hp_missing)
                 })
                 .unwrap_or_default();
             let key = member_key(&path, member);
@@ -3688,8 +3714,9 @@ fn members(
             // FC9: the change words end the detail line, after the muted pencil, as in the
             // encounter editor; a closed form only.
             let word = entry
-                .filter(|_| !is_open)
-                .and_then(|entry| change_word(ui, &member.overrides, entry, &side));
+                .zip(overrides)
+                .filter(|_| !is_open && !member.overrides.is_empty())
+                .map(|(entry, overrides)| change_word(ui, overrides, entry, &side));
             if word.is_none() && !detail.is_empty() {
                 let response = ui.add(
                     egui::Label::new(super::detail_text(
@@ -3803,7 +3830,7 @@ fn members(
             let line = saved_members
                 .then(|| draft.member_lines.get(index).copied())
                 .flatten();
-            if entry.is_none() {
+            if let (None, Some((kind, cause))) = (entry, assessed.missing) {
                 // The reference is on hover: it is what a repair needs, and not a word to read.
                 // The repair link is a notice action, so its words start at the warning text.
                 // The fault, then its help, then the repair at the words.
@@ -3814,7 +3841,6 @@ fn members(
                     .map(str::trim)
                     .filter(|changed| !changed.is_empty());
                 // R41: the kind Save's check and the list give this member, its tone and words.
-                let (kind, cause) = unresolved_member(&snapshot.catalogue, &member.creature);
                 let words = member_fault(
                     changed.unwrap_or(&name),
                     member.creature.link.is_some().then_some(name.as_str()),
@@ -3860,10 +3886,10 @@ fn members(
             }
             if let Some(entry) = entry {
                 let fault = |cause: &str| member_fault(&name, Some(&entry.name), line, cause);
-                if let Some(said) =
-                    change_faults(ui, &member.overrides, entry, &side, is_open, &fault)
-                {
-                    fault_said = Some(said);
+                if !is_open && let Err(error) = &assessed.changed {
+                    fault_said = Some(show_change_fault(
+                        ui, overrides, entry, &side, error, &fault,
+                    ));
                 }
                 // The open form edits one member's changes: a change it writes is an edit. The form
                 // says so itself; nothing here copies the changes (review of PR 299).
@@ -5647,7 +5673,7 @@ mod tests {
             "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Patrol\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[Scout]] | | | |\n| 1 | [[Missing]] | Lookout | | |\n| 1 | [[Scout]] | Weak scout | HP -100 | |\n",
             Uuid::new_v4()
         );
-        fs::write(dir.path().join("Patrol.md"), source).unwrap();
+        fs::write(dir.path().join("Patrol.md"), &source).unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let group = &snapshot.groups[0];
         assert!(group.problem.is_none(), "{:?}", group.problem);
@@ -5682,6 +5708,59 @@ mod tests {
             ],
             "{:?}",
             group.warnings
+        );
+
+        // The same invalid member that Arrivals leaves behind stops the editor's Save.
+        let mut draft = GroupDraft::open(dir.path(), "Patrol.md").unwrap();
+        let refusal = draft.check(&snapshot, Some(draft.id)).unwrap_err();
+        let invalid = draft.setup.members[2].id.0;
+        assert_eq!(refusal.place(), RefusalPlace::Member(invalid));
+        assert!(
+            refusal
+                .text()
+                .starts_with("Weak scout (as Scout): Maximum HP")
+        );
+        assert!(draft.save(&campaign, &[]).is_err());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Patrol.md")).unwrap(),
+            source
+        );
+
+        use crate::encounter_run::{Participant, Run};
+        let mut starter = (*group.members[0].entry).clone();
+        starter.name = "Sentry".into();
+        let starter = Participant::new(
+            "sentry".into(),
+            "enemies".into(),
+            starter,
+            &Mapping::new(),
+            true,
+        )
+        .unwrap();
+        let mut run = Run::new("Arrival".into(), vec![starter], String::new()).unwrap();
+        run.add_group(Arc::clone(group), Some(10));
+        assert_eq!(run.arrivals_in_run().get(&group.id), Some(&(1, Some(10))));
+        assert_eq!(run.participant_stats(1).0, "Scout");
+
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 800.0))
+            .build_state(
+                move |ctx, draft| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        assert!(members(ui, draft, &snapshot, &mut None, Some(invalid)));
+                    });
+                },
+                draft,
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .query_all_by_label_contains("Weak scout (as Scout) · line")
+                .count(),
+            1,
+            "the editor says which row needs repair"
         );
     }
 

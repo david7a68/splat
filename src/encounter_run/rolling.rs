@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 pub(super) struct Armed {
     pub actor: usize,
     pub link: RollLink,
+    place: Option<usize>,
     pub mode: Mode,
     /// The actor expends inspiration for advantage on the roll made for them.
     pub inspired: bool,
@@ -211,7 +212,7 @@ impl Run {
             }
             | RollLink::SaveDc { .. }
             | RollLink::Damage { .. } => {
-                self.arm(actor, ask.link, mode, inspired);
+                self.arm(actor, ask.link, ask.place, mode, inspired);
                 Ok(())
             }
             RollLink::D20 { .. } | RollLink::Dice { .. } => {
@@ -229,7 +230,14 @@ impl Run {
     }
 
     /// Arm an action. Its rows' results from before go.
-    fn arm(&mut self, actor: usize, link: RollLink, mode: Mode, inspired: bool) {
+    fn arm(
+        &mut self,
+        actor: usize,
+        link: RollLink,
+        place: Option<usize>,
+        mode: Mode,
+        inspired: bool,
+    ) {
         self.badges.clear();
         self.state.roll_results.clear();
         self.saves.clear();
@@ -241,6 +249,7 @@ impl Run {
         self.armed = Some(Armed {
             actor,
             link,
+            place,
             mode,
             inspired,
             damage: None,
@@ -1007,6 +1016,7 @@ impl Run {
         actions.push(("Stop", ArmedAction::Stop));
         Some(ArmedView {
             link: armed.link.clone(),
+            place: armed.place,
             status,
             reserve: longest_hint(),
             actions,
@@ -1357,11 +1367,11 @@ impl Run {
             return crate::party::sheet_chips(record);
         }
         let definition = &self.state.participants[row].definition;
-        let mut chips = rolls::chips(&definition.body);
-        if let Some(content) = &self.content {
-            chips.extend(crate::library::spells::rolls(definition, content.as_ref()));
-        }
-        chips
+        let links = self
+            .content
+            .as_deref()
+            .map(|index| index as &dyn crate::library::view::Links);
+        crate::library::spells::ordered_actions(definition, links)
     }
 
     /// The room above the dock for the action bar: only while the panel is hidden.
@@ -1408,8 +1418,9 @@ impl Run {
     /// Ctrl+1 to Ctrl+9 arm the panel's participant's actions, in tile order.
     pub(super) fn arm_by_number(&mut self, number: usize) {
         let row = self.panel_row();
-        if let Some(chip) = self.chips(row).into_iter().nth(number.saturating_sub(1)) {
-            self.arm(row, chip.link, Mode::Normal, false);
+        let place = number.saturating_sub(1);
+        if let Some(chip) = self.chips(row).into_iter().nth(place) {
+            self.arm(row, chip.link, Some(place), Mode::Normal, false);
         }
     }
 
@@ -1544,6 +1555,7 @@ mod tests {
     fn ask(link: RollLink, roller: usize) -> Ask {
         Ask {
             link,
+            place: None,
             mode: Mode::Normal,
             roller: Some(roller),
             entry: "Guard".into(),
@@ -2396,13 +2408,14 @@ mod tests {
         run.disarm();
         let row = run.panel_row();
         let druid = "definitions/creatures/druid.md";
-        run.state.participants[row].definition = std::sync::Arc::new(
-            Entry::parse(
-                druid,
-                splat::content::definitions::source_file(druid).unwrap(),
-            )
-            .unwrap(),
+        let source = splat::content::definitions::source_file(druid).unwrap();
+        let source = source.replacen(
+            "1/Day Each: Animal Messenger",
+            "1/Day Each: Thunderwave, Animal Messenger",
+            1,
         );
+        run.state.participants[row].definition =
+            std::sync::Arc::new(Entry::parse(druid, &source).unwrap());
         run.content = Some(std::sync::Arc::new(
             crate::lookup::ContentIndex::load(&[], None).unwrap(),
         ));
@@ -2413,6 +2426,7 @@ mod tests {
                 "Vine Staff +5",
                 "Verdant Wisp +5",
                 "Entangle DC 13",
+                "Thunderwave DC 13",
                 "Thunderwave DC 13",
                 "Animal Messenger DC 13",
                 "Moonbeam DC 13"
@@ -2433,6 +2447,66 @@ mod tests {
                 }],
             })
         );
+
+        use crate::library::view::{Origin, RunValues, show_run};
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1500.0, 1500.0))
+            .build_state(
+                |ctx, run: &mut Run| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        run.compact_actions(ui);
+                        let row = run.panel_row();
+                        let entry = &run.state.participants[row].definition;
+                        rolls::set_roller(ctx, Some(row));
+                        show_run(
+                            ui,
+                            entry,
+                            &Origin {
+                                path: &entry.path,
+                                owner: "Starting snapshot, saved with this run",
+                                builtin: false,
+                            },
+                            run.content.as_deref().unwrap(),
+                            &RunValues {
+                                armor_class: None,
+                                hp: None,
+                                current_hp: None,
+                                initiative: None,
+                                speed: None,
+                            },
+                        );
+                        rolls::set_roller(ctx, None);
+                    });
+                },
+                run,
+            );
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert_eq!(harness.query_all_by_label("Thunderwave DC 13").count(), 2);
+        for number in [4, 5] {
+            let keys = format!("Ctrl+{number}.");
+            assert_eq!(
+                harness
+                    .query_all_by_label_contains("Thunderwave ·")
+                    .filter(|tile| {
+                        tile.accesskit_node()
+                            .label()
+                            .is_some_and(|label| label.ends_with(&keys))
+                    })
+                    .count(),
+                1,
+                "one Thunderwave tile has {keys}"
+            );
+            let run = harness.state_mut();
+            let link = run.chips(run.panel_row())[number - 1].link.clone();
+            run.arm_by_number(number);
+            let armed = run.armed.as_ref().unwrap();
+            assert_eq!(armed.link, link);
+            assert_eq!(armed.place, Some(number - 1));
+            harness.step();
+            assert_eq!(harness.query_all_by_label("Stop").count(), 1);
+        }
     }
 
     fn fire_breath() -> RollLink {
