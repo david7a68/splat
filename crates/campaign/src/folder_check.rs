@@ -1,6 +1,6 @@
 //! `splat check`: report every note, timeline and saved run in a folder that Splat cannot
 //! read, and every flag on the ones it can.
-use splat::content::{self, Entry};
+use crate::content::{self, Entry};
 use std::{
     fs,
     path::{Path, PathBuf},

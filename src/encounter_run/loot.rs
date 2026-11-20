@@ -3,20 +3,13 @@
 //! of it until the creature drops to 0 HP, then the whole list. The ended view lists the
 //! encounter's loot and each downed creature's. A roll's result takes the place of its button,
 //! the saved run keeps it, and Undo takes it back.
-use super::{Command, Participant, Run, State};
+use super::{Command, Run, State};
 use crate::design::{self, Action, Density, Type, colors, icons};
 use crate::roll_table::TableRoll;
 use eframe::egui;
-use serde::{Deserialize, Serialize};
 use splat::content::loot::{self, Loot};
 
-/// What one roll found.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub(crate) struct Found {
-    pub value: i64,
-    pub dice: String,
-    pub text: String,
-}
+use splat_core::encounter_run::Found;
 
 /// One loot line to roll, with the table it rolls on.
 #[derive(Clone, Debug)]
@@ -147,26 +140,6 @@ fn plain_roll(times: u32, key: &str) -> String {
         key.to_owned()
     } else {
         format!("{times} × {key}")
-    }
-}
-
-impl Participant {
-    /// What this creature carries, one line each.
-    pub(super) fn loot_lines(&self) -> Vec<String> {
-        self.changes
-            .as_ref()
-            .and_then(|changes| changes.overrides.loot.as_deref())
-            .map(loot::parts)
-            .unwrap_or_default()
-    }
-
-    /// The creature is down and has loot to take.
-    pub(super) fn loot_ready(&self) -> bool {
-        self.hp == Some(0)
-            && self
-                .changes
-                .as_ref()
-                .is_some_and(|changes| changes.overrides.loot.is_some())
     }
 }
 

@@ -1,7 +1,7 @@
 //! A journey's encounter checks: one roll on a marked table for each day or watch of a Travel
 //! event, kept in that event's lines of `Timeline.md` by its offset from the journey's start.
 //! The plan's Travel row and Timeline's detail column draw the same block from here.
-use super::{Book, Check, DAY, Event, HOUR, Kind, clock_words, read_duration};
+use super::{Book, Check, DAY, Event, HOUR, Kind, clock_words, covers, read_duration};
 use crate::design::outcome::{Fault, Sentence, Severity};
 use crate::design::{self, Action, Density, Status, Type, colors, icons};
 use crate::roll_table::{Per, Table};
@@ -221,13 +221,6 @@ fn words_sum(words: &str) -> String {
     format!("{:x}", Sha256::digest(words.as_bytes()))[..16].to_owned()
 }
 
-/// Whether the journey covers a check at this offset, in hours: before its end, or the one
-/// check of a journey whose length the clock cannot read. The checks block, Begin combat and
-/// the clock all ask this.
-pub fn covers(journey: &Event, at: u64) -> bool {
-    fits(at, 1, minutes(&journey.duration))
-}
-
 /// Whether this journey shows its checks: the DM chose `Roll for encounters` on it.
 pub fn shown(event: &Event) -> bool {
     event.kind == Kind::Travel && (event.checks_table.is_some() || !event.checks.is_empty())
@@ -268,12 +261,6 @@ fn chosen<'a>(event: &Event, tables: &'a [Table]) -> Option<&'a Table> {
 /// The length in minutes, when the clock can read it. Zero is a length.
 fn minutes(length: &str) -> Option<u64> {
     read_duration(length.trim())
-}
-
-/// Whether a check at this offset is one of the journey's: a whole interval from the start,
-/// and before the end.
-fn fits(at: u64, every: u64, length: Option<u64>) -> bool {
-    at.is_multiple_of(every) && length.map_or(at == 0, |minutes| at * HOUR < minutes)
 }
 
 /// The offsets of a journey's checks, in hours: one at each whole interval from the start, and
@@ -616,7 +603,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
     let placed = |check: &Check| {
         check.at.is_some_and(|at| match &schedule {
             Ok(listed) => listed.contains(&at),
-            Err(_) => fits(at, every, length),
+            Err(_) => super::check_fits(at, every, length),
         })
     };
     // Each result on its line, or a line to roll, in the journey's order.

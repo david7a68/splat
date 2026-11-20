@@ -18,7 +18,7 @@ use crate::{
         insert_in_note, insert_in_plan, linked_names, plain_links, plan_lines, ticked,
     },
     timeline::{
-        self, Book, Kind, checks,
+        self, Book, EventDisplay, Kind, checks,
         page::{
             PlanNames, added_message, file_act, file_messages, long_rest_status, problems,
             quick_add_with, rest_ruling,

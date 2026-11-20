@@ -2,7 +2,9 @@
 pub use splat_character::{character, memo};
 pub use splat_execution::execution;
 
-pub use splat_campaign::{file_batch, loot, note, roll_table, trackers};
+pub use splat_campaign::{
+    encounter_run, file_batch, folder_check, loot, note, roll_table, timeline, trackers,
+};
 
 pub mod matching;
 

@@ -4,7 +4,6 @@ use crate::{
     library::note_path,
     persistence::Campaign,
 };
-use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
 use splat::content::Entry;
 use splat::content::inspiration::{self, Inspiration};
@@ -15,61 +14,7 @@ use std::{
 use uuid::Uuid;
 
 const MECHANIC: &str = "dnd2024:rules/combat_initiative";
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Grouping {
-    #[default]
-    Identical,
-    Individual,
-    BySide,
-    Explicit,
-}
-impl Grouping {
-    pub const ALL: [Self; 4] = [
-        Self::Identical,
-        Self::Individual,
-        Self::BySide,
-        Self::Explicit,
-    ];
-    /// Reads on from "Roll NPC initiative".
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Identical => "In groups of identical NPCs (D&D default)",
-            Self::Individual => "Individually",
-            Self::BySide => "In one group per side",
-            Self::Explicit => "In the encounter’s initiative groups",
-        }
-    }
-    /// How an encounter group takes its initiative under this rule. A typed total is the
-    /// DM's ruling, and it applies to every member under any rule.
-    pub fn arrival_rule(self) -> &'static str {
-        match self {
-            Self::Identical => {
-                "A group rolls once, with the first member’s bonus, even with different creatures."
-            }
-            Self::Individual => "Each member of a group rolls alone, by the campaign’s rule.",
-            Self::BySide => {
-                "A group takes the initiative its side already has. A side with none rolls once."
-            }
-            Self::Explicit => {
-                "A group rolls once, with the first member’s bonus, as its own initiative group."
-            }
-        }
-    }
-}
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Initiative {
-    pub grouping: Grouping,
-    pub roster_ties: bool,
-}
-impl Default for Initiative {
-    fn default() -> Self {
-        Self {
-            grouping: Grouping::Identical,
-            roster_ties: false,
-        }
-    }
-}
+pub use splat_core::encounter_run::{Grouping, Initiative};
 /// An inspiration rule the campaign can use, from its packages or its own notes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspirationRule {

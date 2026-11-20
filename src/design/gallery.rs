@@ -425,7 +425,7 @@ pub fn components(ui: &mut egui::Ui) {
         .iter()
         .map(|kind| {
             Action::quiet(kind.word())
-                .icon(kind.icon())
+                .icon(crate::timeline::kind_icon(*kind))
                 .density(Density::Read)
         })
         .collect(),

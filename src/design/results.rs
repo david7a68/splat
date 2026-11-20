@@ -1621,7 +1621,7 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/content_workspace.rs", 1),
             ("src/design/comparison.rs", 1),
-            ("src/encounter_run/undo.rs", 2),
+            ("crates/campaign/src/encounter_run/undo.rs", 2),
             ("src/library.rs", 2),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
@@ -2482,6 +2482,7 @@ mod tests {
     fn staged_calls_only_shrink() {
         let mut files = Vec::new();
         collect(std::path::Path::new("src"), &mut files);
+        collect(std::path::Path::new("crates/campaign/src"), &mut files);
         let mut faults = Vec::new();
         for (pattern, instead, allowed) in STAGED {
             for (path, text) in &files {

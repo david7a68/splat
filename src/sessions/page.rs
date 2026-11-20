@@ -25,7 +25,7 @@ use crate::{
     persistence::Campaign,
     processing::{self, Job, Request, settings::ProcessingSettings},
     recording::{Health, Recorder},
-    timeline::{self, Book, page::SessionLink},
+    timeline::{self, Book, EventDisplay, kind_icon, page::SessionLink},
 };
 use eframe::egui::{self, Color32};
 use std::{
@@ -6153,7 +6153,7 @@ impl Sessions {
                 } else {
                     0.0
                 };
-                measure(marker.kind.icon(), Type::Body)
+                measure(kind_icon(marker.kind), Type::Body)
                     + design::S
                     + measure(title, Type::Body).max(time + measure(facts, Type::Small))
             })
@@ -6172,7 +6172,9 @@ impl Sessions {
                         ui.spacing_mut().item_spacing.x = design::S;
                         if cell == 0 {
                             ui.horizontal_top(|ui| {
-                                ui.label(Type::Body.rich(ui, marker.kind.icon()).color(c.muted));
+                                ui.label(
+                                    Type::Body.rich(ui, kind_icon(marker.kind)).color(c.muted),
+                                );
                                 ui.vertical(|ui| {
                                     ui.add(
                                         egui::Label::new(Type::Body.rich(ui, *title).color(c.text))

@@ -2,20 +2,20 @@
 //! it, with the time, uses or recharge the DM gave. One entry holds a condition and its count,
 //! so a count cannot outlive its condition. Every reader of a run's conditions takes this type
 //! and reads it through these functions.
+use crate::content::overrides::same_condition;
 use serde::{Deserialize, Serialize};
-use splat::content::overrides::same_condition;
 
 /// A plain condition or label is a string in the run file, as before effects. An effect with a
 /// time, uses or a recharge is one object in the same list.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
-pub(crate) enum Condition {
+pub enum Condition {
     Label(String),
     Effect(Effect),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub(crate) struct Effect {
+pub struct Effect {
     pub name: String,
     #[serde(flatten)]
     pub time: Time,
@@ -23,7 +23,7 @@ pub(crate) struct Effect {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
-pub(crate) enum Time {
+pub enum Time {
     /// `left` is the number of this participant's turns that it still covers, with the
     /// current one. It goes down when that participant's turn ends, and stops at 0.
     Rounds {
@@ -50,14 +50,14 @@ const MOST: u32 = 14_400;
 
 impl Condition {
     /// The condition's name: the official name, or the DM's words without their time.
-    pub(crate) fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         match self {
             Self::Label(name) => name,
             Self::Effect(effect) => &effect.name,
         }
     }
 
-    pub(crate) fn time(&self) -> Option<Time> {
+    pub fn time(&self) -> Option<Time> {
         match self {
             Self::Label(_) => None,
             Self::Effect(effect) => Some(effect.time),
@@ -66,7 +66,7 @@ impl Condition {
 
     /// Words the DM typed, as one entry. A time, a count of uses or a recharge at their end is
     /// read; anything else stays words: `Mage Armor 8 hours` is a label.
-    pub(crate) fn read(text: &str) -> Self {
+    pub fn read(text: &str) -> Self {
         let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
         match split_time(&text) {
             Some((name, time)) => Self::Effect(Effect {
@@ -79,7 +79,7 @@ impl Condition {
 
     /// Two entries for one condition: `poisoned` and `Poisoned` are one, and so are
     /// `Exhaustion (2)` and `Exhaustion (3)`, which differ only by level.
-    pub(crate) fn same(&self, other: &str) -> bool {
+    pub fn same(&self, other: &str) -> bool {
         let identity = |name: &str| {
             let exhaustion = name.trim().to_lowercase().starts_with("exhaustion");
             if exhaustion { "exhaustion" } else { name }.to_owned()
@@ -88,7 +88,7 @@ impl Condition {
     }
 
     /// The same entry under other words, such as Exhaustion at another level: its time stays.
-    pub(crate) fn renamed(self, name: String) -> Self {
+    pub fn renamed(self, name: String) -> Self {
         match self {
             Self::Label(_) => Self::Label(name),
             Self::Effect(effect) => Self::Effect(Effect { name, ..effect }),
@@ -97,7 +97,7 @@ impl Condition {
 
     /// The whole words, for the hover, the accessible name, the notice line and every reader
     /// outside the run: `Bless 9`, `Bless · last round`, `Legendary actions 2 of 3`.
-    pub(crate) fn words(&self) -> String {
+    pub fn words(&self) -> String {
         match self.count() {
             Some(count) if self.rounds() && !count.starts_with(|c: char| c.is_ascii_digit()) => {
                 format!("{} · {count}", self.name())
@@ -113,7 +113,7 @@ impl Condition {
 
     /// The part after the name that changes: `9`, `last round`, `time is up`, `2 of 3`,
     /// `ready`, `spent`. None for a label and for words shown on each turn.
-    pub(crate) fn count(&self) -> Option<String> {
+    pub fn count(&self) -> Option<String> {
         Some(match self.time()? {
             Time::Rounds { left: 0, .. } => "time is up".to_owned(),
             Time::Rounds { left: 1, .. } => "last round".to_owned(),
@@ -127,7 +127,7 @@ impl Condition {
 
     /// Every form the count can take, so that its place is as wide as the widest one and a
     /// change of count moves no word.
-    pub(crate) fn count_forms(&self) -> Vec<String> {
+    pub fn count_forms(&self) -> Vec<String> {
         match self.time() {
             Some(Time::Rounds { rounds, .. }) => vec![
                 rounds.to_string(),
@@ -142,50 +142,37 @@ impl Condition {
 
     /// The words of the notice line on the participant's turn. Only an effect with a time
     /// reminds: a count of rounds, or `on its turn`.
-    pub(crate) fn reminder(&self) -> Option<String> {
+    pub fn reminder(&self) -> Option<String> {
         matches!(self.time()?, Time::Rounds { .. } | Time::OnTurn { .. }).then(|| self.words())
     }
 
     /// True for words that show on each of the participant's turns, such as a save to make:
     /// on its turn they lead its row (W1-D1).
-    pub(crate) fn due(&self) -> bool {
+    pub fn due(&self) -> bool {
         matches!(self.time(), Some(Time::OnTurn { .. }))
     }
 
     /// True for an entry with a time, uses or a recharge: it takes the effects' place on its
     /// row, before plain conditions.
-    pub(crate) fn is_effect(&self) -> bool {
+    pub fn is_effect(&self) -> bool {
         matches!(self, Self::Effect(_))
-    }
-
-    /// What a sheet's removal of this condition names: `Frightened, 7 rounds left`.
-    pub(crate) fn what_went(&self) -> String {
-        match self.time() {
-            Some(Time::Rounds { left: 0, .. }) => format!("{}, time was up", self.name()),
-            Some(Time::Rounds { left, .. }) => format!(
-                "{}, {}",
-                self.name(),
-                crate::design::count(left as usize, "round left", "rounds left")
-            ),
-            _ => self.name().to_owned(),
-        }
     }
 }
 
 /// Tests compare a row's conditions with the words it shows.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl PartialEq<str> for Condition {
     fn eq(&self, other: &str) -> bool {
         self.words() == other
     }
 }
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl PartialEq<&str> for Condition {
     fn eq(&self, other: &&str) -> bool {
         self.words() == *other
     }
 }
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl PartialEq<String> for Condition {
     fn eq(&self, other: &String) -> bool {
         self.words() == *other
@@ -207,7 +194,7 @@ impl From<&str> for Condition {
 /// The end of a participant's turn: each count of rounds goes down by one, and stops at 0.
 /// Splat removes nothing. An absent participant's count does not go down. Returns the Log's
 /// line for each count that reached 0.
-pub(super) fn count_down(p: &mut super::Participant) -> Vec<String> {
+pub fn count_down(p: &mut super::Participant) -> Vec<String> {
     if !p.present {
         return Vec::new();
     }
@@ -229,14 +216,14 @@ pub(super) fn count_down(p: &mut super::Participant) -> Vec<String> {
 }
 
 /// A recharge click's Log line and, for a roll, its result (X4).
-pub(super) struct Recharged {
+pub struct Recharged {
     pub line: String,
     pub roll: Option<RechargeRoll>,
 }
 
 /// A recharge roll's die, the accessible name of the dock's total, `Rolled 3 for Cinder
 /// Drake: Fire Breath`, and the footer's words, which end with the result.
-pub(super) struct RechargeRoll {
+pub struct RechargeRoll {
     pub die: u32,
     pub name: String,
     pub words: String,
@@ -244,8 +231,8 @@ pub(super) struct RechargeRoll {
 
 /// The click on a recharge's words: a ready one is spent; a spent one rolls a d6 on the run's
 /// dice, and is ready again on a roll in its range.
-pub(super) fn recharge(
-    state: &mut super::State,
+pub fn recharge<C>(
+    state: &mut super::State<C>,
     index: usize,
     at: usize,
 ) -> Result<Recharged, String> {
@@ -283,10 +270,27 @@ pub(super) fn recharge(
 }
 
 /// The official name for these words, when they are one: `frightened` is `Frightened`.
+pub const CONDITION_NAMES: [&str; 15] = [
+    "Blinded",
+    "Charmed",
+    "Deafened",
+    "Exhaustion",
+    "Frightened",
+    "Grappled",
+    "Incapacitated",
+    "Invisible",
+    "Paralyzed",
+    "Petrified",
+    "Poisoned",
+    "Prone",
+    "Restrained",
+    "Stunned",
+    "Unconscious",
+];
+
 fn official_name(name: &str) -> Option<&'static str> {
-    crate::combat_sync::CONDITIONS
-        .iter()
-        .map(|(_, official)| *official)
+    CONDITION_NAMES
+        .into_iter()
         .find(|official| same_condition(official, name))
 }
 

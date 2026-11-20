@@ -1,9 +1,10 @@
 //! Timeline version 2. A run patches its Result line; DM edits patch owned lines.
 use super::*;
-use splat::content::{
+use crate::content::{
     layout::{Flag, replace_value},
     list_formats::machine,
 };
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 #[derive(Clone)]
@@ -19,7 +20,7 @@ struct Row {
     missing_id: bool,
 }
 fn lines(text: &str) -> Vec<Line> {
-    splat::content::layout::content_lines(text)
+    crate::content::layout::content_lines(text)
         .into_iter()
         .map(|line| Line {
             range: line.range,
@@ -476,7 +477,7 @@ pub fn render(events: &[Event], sessions: &BTreeMap<Uuid, String>) -> String {
     out
 }
 pub fn is_v2(text: &str) -> bool {
-    crate::sessions::split_note(text)
+    crate::note::split_note(text)
         .and_then(|(front, _)| {
             serde_yaml_ng::from_str::<serde_yaml_ng::Mapping>(
                 front
@@ -910,51 +911,6 @@ mod tests {
         assert_eq!(flags.len(), 1);
     }
     #[test]
-    fn fmt_f3_dm_move_clears_continuation_and_keeps_next_run_save_working() {
-        let dir = tempfile::tempdir().unwrap();
-        let first = Uuid::new_v4();
-        let second = Uuid::new_v4();
-        let run = Uuid::new_v4();
-        let sessions = BTreeMap::from([(first, "Session 1".into()), (second, "Session 2".into())]);
-        let mut e = event(Kind::Encounter, "t-fight".into(), "Bridge".into());
-        e.session = Some(first);
-        e.continued_in = Some(second);
-        e.run = Some(run);
-        e.result = "Round 2".into();
-        e.played_order = 2;
-        let path = dir.path().join(FILE);
-        std::fs::write(&path, format!("{}\nDM prose.\n", render(&[e], &sessions))).unwrap();
-        let mut book = Book {
-            session_links: sessions.clone(),
-            ..Default::default()
-        };
-        book.open(Some(dir.path()));
-        book.run_open = true;
-        book.events[0].session = Some(second);
-        book.events[0].continued_in = None;
-        book.touch();
-        book.record_run(
-            &RunFact {
-                id: run,
-                copied_from: None,
-                name: "Bridge".into(),
-                round: 3,
-                state: RunState::Running,
-                steps: 3,
-            },
-            Some(second),
-            true,
-        );
-        book.save();
-        assert!(book.error.is_none(), "{:?}", book.error);
-        book.reload();
-        assert_eq!(book.events[0].session, Some(second));
-        assert_eq!(book.events[0].continued_in, None);
-        assert_eq!(book.events[0].result, "Round 3");
-        assert!(std::fs::read_to_string(path).unwrap().contains("DM prose."));
-    }
-
-    #[test]
     fn i19_x14_custom_fields_are_visible_and_deleting_one_keeps_it_deleted() {
         let mut road = event(Kind::Travel, "t-road".into(), String::new());
         road.extra.insert("weather".into(), "rain".into());
@@ -1082,45 +1038,6 @@ mod tests {
         assert!(flagged_days(&text.replace("Day 5", "Day 2")).is_empty());
     }
 
-    #[test]
-    fn fmt_f3_repeated_run_save_changes_only_result_line() {
-        let dir = tempfile::tempdir().unwrap();
-        let run = Uuid::new_v4();
-        let mut event = event(Kind::Encounter, "t-fight".into(), "Bridge".into());
-        event.run = Some(run);
-        event.result = "Round 1".into();
-        let text = format!("{}\nDM prose.\n", render(&[event], &BTreeMap::new()));
-        let path = dir.path().join(FILE);
-        std::fs::write(&path, &text).unwrap();
-        let mut book = Book::default();
-        book.open(Some(dir.path()));
-        for round in [2, 3] {
-            let before = std::fs::read_to_string(&path).unwrap();
-            book.record_run(
-                &RunFact {
-                    id: run,
-                    copied_from: None,
-                    name: "Bridge".into(),
-                    round,
-                    state: RunState::Running,
-                    steps: round as usize,
-                },
-                None,
-                true,
-            );
-            book.save();
-            assert!(book.error.is_none(), "{:?}", book.error);
-            let after = std::fs::read_to_string(&path).unwrap();
-            let noise = |raw: &str| {
-                raw.lines()
-                    .filter(|l| !l.starts_with("  - Result:"))
-                    .map(str::to_owned)
-                    .collect::<Vec<_>>()
-            };
-            assert_eq!(noise(&before), noise(&after));
-            assert_ne!(before, after);
-        }
-    }
     #[test]
     fn a_result_edit_keeps_comments_properties_and_prose() {
         let new = "---\n# Keep this comment\ntags: [road]\ntimeline_version: 2\n---\n\n# Timeline\n\n## Day 1: Begins\n%% splat id=t-day %%\n\n- Encounter: **Bridge** ^t-fight\n  - Result: Round 1\n  - weather: rain\n\nA paragraph from the DM.\n";

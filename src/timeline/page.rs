@@ -1,6 +1,9 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
-use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_numbers, reference};
+use super::{
+    Book, Event, EventDisplay, Kind, checks, clock, clock_now, clock_words, day_numbers, kind_icon,
+    reference,
+};
 use crate::design::{
     self, Action, Density, Status, Tone, Type, colors, icons,
     outcome::{
@@ -272,7 +275,7 @@ pub fn quick_add_with(
         .zip(&names)
         .map(|(kind, name)| {
             Action::quiet(kind.word())
-                .icon(kind.icon())
+                .icon(kind_icon(*kind))
                 .name(name)
                 .density(Density::Read)
                 .blocked_if(blocked, "The timeline file must be repaired first.")
@@ -915,7 +918,7 @@ impl TimelinePage {
             painter.text(
                 egui::pos2(spine, icon_y),
                 egui::Align2::CENTER_CENTER,
-                event.kind.icon(),
+                kind_icon(event.kind),
                 Type::Name.font(ui),
                 if event.kind == Kind::Day {
                     c.text
@@ -2087,9 +2090,9 @@ fn second_line(
 
 fn header_kind(event: &Event) -> String {
     if event.kind == Kind::Day || event.own_title().is_none() {
-        event.kind.icon().to_owned()
+        kind_icon(event.kind).to_owned()
     } else {
-        format!("{} {}", event.kind.icon(), event.kind.word())
+        format!("{} {}", kind_icon(event.kind), event.kind.word())
     }
 }
 

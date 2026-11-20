@@ -56,7 +56,6 @@ mod encounter_run;
 mod encounter_settings;
 mod encounters;
 mod file_batch;
-mod folder_check;
 mod frame_clock;
 mod hermetic;
 mod history;

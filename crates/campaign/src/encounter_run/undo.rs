@@ -4,35 +4,24 @@
 //! log for each step, so the file keeps each state as its differences from the state after the
 //! step: the rows that differ and the log lines that differ. The rest of a state is small, and
 //! is kept whole.
-use super::{Participant, Phase, State, loot};
+use super::{Found, Participant, Phase, State};
+use crate::content::{Entry, Fields};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use splat::{
-    content::{Entry, Fields},
-    execution::dice::Random,
-};
+use splat_content::dice::Random;
 use std::{
     collections::{BTreeMap, VecDeque},
     sync::{Arc, LazyLock},
 };
 
 /// The most steps a run keeps, in memory and in its file.
-pub(super) const LIMIT: usize = 100;
+pub const LIMIT: usize = 100;
 const VERSION: u32 = 1;
 /// The most bytes the steps may take in the run file. A run file above 64 MiB does not open
 /// again, so the steps must leave room for the run itself.
-const SAVED_BYTES: usize = if cfg!(test) {
-    1024 * 1024
-} else {
-    16 * 1024 * 1024
-};
-/// The most memory the steps read from a file may take, as `Step::weight` counts it. Tests
-/// use smaller budgets for both, so that they can reach them with small files.
-pub(super) const MEMORY_BYTES: usize = if cfg!(test) {
-    32 * 1024 * 1024
-} else {
-    256 * 1024 * 1024
-};
+pub const SAVED_BYTES: usize = 16 * 1024 * 1024;
+/// The most memory the steps read from a file may take, as `Step::weight` counts it.
+pub const MEMORY_BYTES: usize = 256 * 1024 * 1024;
 /// One slot of a collection: a value in a list or a map, with the spare room that a
 /// collection can hold. A list of a million empty strings is small as text and large in memory.
 const SLOT: usize = 2 * (std::mem::size_of::<serde_yaml_ng::Value>() + 16);
@@ -41,7 +30,7 @@ const DECODED: usize = 64;
 
 /// The state before each step, oldest first, with each step's name, whether a sheet made it,
 /// and the words in its name that name the row it acted on (`Step::target`).
-pub(super) type History = (Vec<State>, Vec<String>, Vec<bool>, Vec<Option<String>>);
+pub type History<C> = (Vec<State<C>>, Vec<String>, Vec<bool>, Vec<Option<String>>);
 
 /// The file's form. It is written from steps that are already text, and read as the newest
 /// steps, still as text.
@@ -70,7 +59,7 @@ struct Step {
     last_change: Option<String>,
     random: Random,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    loot: BTreeMap<String, Vec<loot::Found>>,
+    loot: BTreeMap<String, Vec<Found>>,
 }
 
 /// A log as its difference from the log after the step: the same first `keep` lines, then
@@ -200,7 +189,7 @@ impl Step {
     /// place, named as the run names that row (what a row is stays the run's, as in `before`),
     /// when the step's name names it at its start or end (`7 damage to Guard 1`, `Guard 1
     /// absent`). The file keeps no more; a step on no row, or on several, has none.
-    fn target(&self, after: &State) -> Option<String> {
+    fn target<C>(&self, after: &State<C>) -> Option<String> {
         let [at] = self.rows.keys().collect::<Vec<_>>()[..] else {
             return None;
         };
@@ -208,7 +197,7 @@ impl Step {
         (self.label.ends_with(name.as_str()) || self.label.starts_with(name.as_str()))
             .then(|| name.clone())
     }
-    fn of(before: &State, after: &State, label: &str, from_sheet: bool) -> Self {
+    fn of<C>(before: &State<C>, after: &State<C>, label: &str, from_sheet: bool) -> Self {
         // Every field is named, so that a new field of a state is a decision here. The two
         // left out are never saved: the run file does not keep them for its own state either.
         let State {
@@ -260,7 +249,7 @@ impl Step {
     /// of its rows is a row the state after it has, in the same place, with the same key. A
     /// row the state before it lacks is one that arrived later. Anything else is not a step
     /// this version wrote.
-    fn row_weights(&self, after: &State, after_weights: &[usize]) -> Option<Vec<usize>> {
+    fn row_weights<C>(&self, after: &State<C>, after_weights: &[usize]) -> Option<Vec<usize>> {
         let arrived = after.participants.get(self.count..)?;
         if !arrived.iter().all(|row| row.added_from.is_some()) {
             return None;
@@ -279,7 +268,7 @@ impl Step {
     /// What the state before this step weighs when it is kept: its rows, as `row_weights`
     /// gives them, and everything else it owns. This is the one count that the memory budget
     /// uses, and it is made before the state is built.
-    fn weight(&self, after: &State, rows: &[usize]) -> usize {
+    fn weight<C>(&self, after: &State<C>, rows: &[usize]) -> usize {
         // The log is the log after the step, less the lines the step added, with its own.
         let lines = after
             .log
@@ -304,7 +293,7 @@ impl Step {
     /// A step can change what a row has now. What a row is stays the run's: its name, side,
     /// AC, definition, starting values, changes and arrival come from the row after the step,
     /// whatever the file says.
-    fn before(self, after: &State) -> Option<State> {
+    fn before<C>(self, after: &State<C>) -> Option<State<C>> {
         let mut rows = self.rows;
         let participants = after
             .participants
@@ -346,11 +335,12 @@ impl Step {
 
 /// The steps for the run file, oldest first. `now` is the run's current state, which the file
 /// holds whole. When the steps are more than the file may hold, the oldest stay out of it.
-pub(super) fn save(
-    history: &[State],
+pub fn save<C>(
+    history: &[State<C>],
     labels: &[String],
     from_sheet: &[bool],
-    now: &State,
+    now: &State<C>,
+    saved_bytes: usize,
 ) -> Result<Box<RawValue>, String> {
     let mut steps = Vec::new();
     let mut bytes = 0;
@@ -360,7 +350,7 @@ pub(super) fn save(
         let step = Step::of(&history[at], after, &labels[at], from_sheet[at]);
         let step = serde_json::value::to_raw_value(&step).map_err(|e| e.to_string())?;
         bytes += step.get().len();
-        if bytes > SAVED_BYTES {
+        if bytes > saved_bytes {
             break;
         }
         steps.push(step);
@@ -408,7 +398,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for Newest<'a> {
 /// keeps, or states that would take too much memory: then the newest steps that fit are read.
 /// One step is decoded at a time, and only while its text can fit. Its state is built only
 /// after its weight is known to fit.
-pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
+pub fn read<C>(saved: &RawValue, now: &State<C>, memory_bytes: usize) -> Option<History<C>> {
     let saved: Saved<Newest<'_>> = serde_json::from_str(saved.get()).ok()?;
     if saved.version != VERSION {
         return None;
@@ -423,14 +413,14 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     // The newest step is next to the current state, so the states are rebuilt from the end.
     for text in saved.steps.0.iter().rev() {
         let decoded = text.get().len().saturating_mul(DECODED);
-        if memory.saturating_add(decoded) > MEMORY_BYTES {
+        if memory.saturating_add(decoded) > memory_bytes {
             break;
         }
         let mut step: Step = serde_json::from_str(text.get()).ok()?;
         let after = history.0.last().unwrap_or(now);
         let rows = step.row_weights(after, &weights)?;
         memory = memory.saturating_add(step.weight(after, &rows));
-        if memory > MEMORY_BYTES {
+        if memory > memory_bytes {
             break;
         }
         history.3.push(step.target(after));

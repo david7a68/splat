@@ -428,7 +428,7 @@ these steps, before and apart from the derive of the pin or the route that holds
 1. A key with no value is absent.
 2. YAML reads an unquoted `[[Ixdoash]]` as a list in a list. Splat replaces a list of one list of one text
    with the text `[[Ixdoash]]`, as it does for `splat_part_of` today. It reports nothing.
-3. Splat replaces a text value with `formats::model_reference(value)` (`crates/core/src/content/formats.rs`),
+3. Splat replaces a text value with `formats::model_reference(value)` (`crates/content/src/content/formats.rs`),
    as it does for `splat_in` today. So text that is a UUID becomes a mapping with `id`, text that is a
    resource key becomes a mapping with `key`, and the flat text of the last row becomes a mapping with `id`
    or `key` and `link`. The flat text is legal because that one function reads each of these fields. Splat does
@@ -1063,7 +1063,7 @@ it does not make the route unusable.
   at the pin. See [Identity and change](#identity-and-change).
 - **Inside `splat_map_pins` or `splat_map_routes`,** Splat writes the whole value of the property again when
   one item changes, with the writer that the property patch has today (`patch_fields` in
-  `crates/core/src/content/mod.rs`, which uses `serde_yaml_ng::to_string`). Each other item keeps its values
+  `crates/content/src/content/mod.rs`, which uses `serde_yaml_ng::to_string`). Each other item keeps its values
   as YAML values: a number stays the same number, and a text stays the same text, so `060.00 ft` stays. The
   layout of the whole property can change: quotes, the spelling of a number (`0.50` can become `0.5`), and
   flow style, so `at: [0.5, 0.2]` and `{id: …, link: …}` become block style on several lines. An inline
@@ -1728,7 +1728,7 @@ Each step is useful alone. No step needs a later step.
    for `splat_map_of` and `shows`. Splat registers `splat_map_width` and `splat_map_routes` as known
    properties, keeps them, and does not read them yet. It keeps `opens` and shows it as a plain link.
    *Changes:* `WORLD_FIELDS`, the World note reader and the reach of `model_reference` in
-   `crates/core/src/content/formats.rs`, a new `src/world/maps.rs`, `src/world/page.rs`, a way to make a Line
+   `crates/content/src/content/formats.rs`, a new `src/world/maps.rs`, `src/world/page.rs`, a way to make a Line
    that is not from the note's text in `src/world/lines.rs`, `ContentIndex` in `src/lookup.rs`,
    `src/folder_check.rs`. *Done when:* the eight examples in this document open with no fault of this step,
    each invalid example of invariants 1 to 5, 8, 9, 27, 28 and 32 gives its fault, the invalid example of
