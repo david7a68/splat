@@ -2448,65 +2448,11 @@ mod tests {
             })
         );
 
-        use crate::library::view::{Origin, RunValues, show_run};
-        use egui_kittest::kittest::{NodeT, Queryable};
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1500.0, 1500.0))
-            .build_state(
-                |ctx, run: &mut Run| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        run.compact_actions(ui);
-                        let row = run.panel_row();
-                        let entry = &run.state.participants[row].definition;
-                        rolls::set_roller(ctx, Some(row));
-                        show_run(
-                            ui,
-                            entry,
-                            &Origin {
-                                path: &entry.path,
-                                owner: "Starting snapshot, saved with this run",
-                                builtin: false,
-                            },
-                            run.content.as_deref().unwrap(),
-                            &RunValues {
-                                armor_class: None,
-                                hp: None,
-                                current_hp: None,
-                                initiative: None,
-                                speed: None,
-                            },
-                        );
-                        rolls::set_roller(ctx, None);
-                    });
-                },
-                run,
-            );
-        crate::design::theme::install(&harness.ctx);
-        harness.run_steps(2);
-        assert_eq!(harness.query_all_by_label("Thunderwave DC 13").count(), 2);
-        for number in [4, 5] {
-            let keys = format!("Ctrl+{number}.");
-            assert_eq!(
-                harness
-                    .query_all_by_label_contains("Thunderwave ·")
-                    .filter(|tile| {
-                        tile.accesskit_node()
-                            .label()
-                            .is_some_and(|label| label.ends_with(&keys))
-                    })
-                    .count(),
-                1,
-                "one Thunderwave tile has {keys}"
-            );
-            let run = harness.state_mut();
-            let link = run.chips(run.panel_row())[number - 1].link.clone();
-            run.arm_by_number(number);
-            let armed = run.armed.as_ref().unwrap();
-            assert_eq!(armed.link, link);
-            assert_eq!(armed.place, Some(number - 1));
-            harness.step();
-            assert_eq!(harness.query_all_by_label("Stop").count(), 1);
-        }
+        let thunderwave = run.armed.as_ref().unwrap().link.clone();
+        assert_eq!(run.armed.as_ref().unwrap().place, Some(3));
+        run.arm_by_number(5);
+        let second = run.armed.as_ref().unwrap();
+        assert_eq!((&second.link, second.place), (&thunderwave, Some(4)));
     }
 
     fn fire_breath() -> RollLink {

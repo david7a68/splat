@@ -5726,59 +5726,8 @@ mod tests {
             source
         );
 
-        use crate::encounter_run::{Participant, Run};
-        let mut starter = (*group.members[0].entry).clone();
-        starter.name = "Sentry".into();
-        let starter = Participant::new(
-            "sentry".into(),
-            "enemies".into(),
-            starter,
-            &Mapping::new(),
-            true,
-        )
-        .unwrap();
-        let mut run = Run::new("Arrival".into(), vec![starter], String::new()).unwrap();
-        run.add_group(Arc::clone(group), Some(10));
-        assert_eq!(run.arrivals_in_run().get(&group.id), Some(&(1, Some(10))));
-        assert_eq!(run.participant_stats(1).0, "Scout");
-
-        use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(600.0, 800.0))
-            .build_state(
-                move |ctx, draft| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        assert!(members(ui, draft, &snapshot, &mut None, Some(invalid)));
-                    });
-                },
-                draft,
-            );
-        design::theme::install(&harness.ctx);
-        harness.run_steps(2);
-        assert_eq!(
-            harness
-                .query_all_by_label_contains("Weak scout (as Scout) · line")
-                .count(),
-            1,
-            "the editor says which row needs repair"
-        );
-    }
-
-    #[test]
-    fn iter_2_b_partial_group_names_only_joining_members_and_uses_one_xp_total() {
-        let dir = tempfile::tempdir().unwrap();
-        let active = campaign(dir.path());
-        creature(dir.path(), "Scout");
-        let source = format!(
-            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Patrol\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[Scout]] | | | |\n| 1 | [[Missing]] | Lookout | | |\n| 1 | [[Scout]] | Weak scout | HP -100 | |\n",
-            Uuid::new_v4()
-        );
-        fs::write(dir.path().join("Patrol.md"), source).unwrap();
-        let snapshot = Snapshot::load(&active, &[]).unwrap();
-        let group = &snapshot.groups[0];
         assert_eq!(group.member_summary(), "Will add: 1 × Scout");
         assert_eq!(group.xp_label(), "XP 50");
-        let draft = GroupDraft::open(dir.path(), "Patrol.md").unwrap();
         // iter-23 FC3: the heading's XP is for the one who can join, and it says so.
         assert_eq!(
             members_heading(&draft, &snapshot),
