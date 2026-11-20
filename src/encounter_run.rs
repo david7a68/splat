@@ -5501,6 +5501,15 @@ impl Run {
     pub fn hp_of(&self, index: usize) -> Option<i64> {
         self.state.participants[index].hp
     }
+    pub(crate) fn simulate_stat_block_edit(&mut self, name: &str, edit: impl FnOnce(&mut String)) {
+        let participant = self
+            .state
+            .participants
+            .iter_mut()
+            .find(|p| p.name == name)
+            .unwrap();
+        edit(&mut Arc::make_mut(&mut participant.definition).body);
+    }
     /// Undo, then roll the first loot line that has no result, with no frame between them.
     pub fn simulate_undo_and_roll_first_loot(&mut self) {
         self.undo();

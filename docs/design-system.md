@@ -1871,9 +1871,11 @@ changes in them; its hover adds the printed numbers. The Spellcasting paragraph 
 spell, in printed order. A spell with an attack or a save is an action tile: the caster's attack bonus
 (`+6 to hit with spell attacks`) or spell save DC, the damage of a hit or a failed save at the level the list casts it
 (`Guiding Bolt (level 2 version)`), then the spell's level, casting time, range, `Concentration` and
-`half on a success`. It arms and rolls as any action tile does, and its number follows the stat block's own actions. Its
-right-click menu ends with `Read <spell>`, which opens the spell. A spell with neither shows a magic wand icon, its
-level, casting time and range, and opens the spell on a click. A tile's hover is the spell's rules text. A list name
+`half on a success`. It arms and rolls as any action tile does, and its number follows the stat block's own actions.
+If two lists name the same spell, their tiles have separate numbers. A reload that shifts the numbers keeps an armed
+spell on its own tile. Its right-click menu ends with `Read <spell>`,
+which opens the spell. A spell with neither shows a magic wand icon, its level, casting time and range, and opens
+the spell on a click. A tile's hover is the spell's rules text. A list name
 that no entry matches is on a muted `Not found in this content:` line under its row. A spell that the entry gives or
 its words name, but that no list shows, goes on a muted `Spell descriptions:` line after the lists. A paragraph of its
 own that casts spells by name (`Dread Shout. The wight casts Fear, using ...`) keeps its words, with a row of the same

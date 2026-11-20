@@ -20651,9 +20651,14 @@ pub mod encounter_groups {
         d.clear_text_in(TOTAL_FOR_RIVALS);
         let before = roster_places(d).len();
         d.click(&add_group(GROUP_LOST));
+        let run = d.app_mut().encounters.run().unwrap();
+        let joined = run
+            .arrivals_in_run()
+            .get(&splat::character::stable_id("visual:group:lost"))
+            .map(|(at, _)| run.participant_stats(*at).0);
         d.observe(
             "AT2",
-            roster_places(d).len() == before + 1,
+            roster_places(d).len() == before + 1 && joined.as_deref() == Some("Goblin Warrior"),
             "The valid member joins while the two unavailable members stay out",
         );
         // R3f X43, X44: the footer's Move button starts at the message's words and is whole.
@@ -28659,6 +28664,48 @@ pub mod run_rolls {
             "Ctrl+3 arms the tile that says Ctrl+3, the attack after the prose",
         );
         d.press(Key::Escape);
+
+        d.aside(|d| d.act_at_size(LARGE, |d| {
+            const SPELLS: &str = "\n\nInnate Spellcasting. The cultist casts (spell save DC 12):\n\nAt Will: Review Wave, Thunderwave\n\n1/Day: Thunderwave";
+            d.app_mut().encounters.run_mut().unwrap().simulate_stat_block_edit(CASTER, |body| body.push_str(SPELLS));
+            d.settle();
+            for (key, hint) in [(Key::Num4, "Ctrl+4."), (Key::Num5, "Ctrl+5.")] {
+                d.press_ctrl(key);
+                let nodes = d.nodes();
+                let matches = nodes.iter().filter(|n| n.name.starts_with("Thunderwave ·") && n.name.ends_with(hint));
+                let stops = nodes.iter().filter(|n| n.name == "Stop" && n.role == Role::Button);
+                d.observe("repeated-spell-shortcut", matches.count() == 1 && stops.count() == 1,
+                    format!("One Thunderwave tile says {hint} and one tile is armed"));
+            }
+            let root = d.app_mut().campaigns.active_campaign().unwrap().path;
+            let file = "Review Wave.md";
+            let text = splat::content::formats::fixture(file, &format!(
+                "splat_id: {}\nsplat_kind: spell\nsplat_name: Review Wave\nsplat_spell: {{level: 1}}\n",
+                splat::character::stable_id("visual:rolls:review-wave")
+            ), "\nEach creature makes a Constitution saving throw. On a failed save, a creature takes 2d8 Thunder damage.\n").unwrap();
+            crate::library::write_note(&root, file, None, &text).unwrap();
+            d.app_mut().lookup.refresh();
+            d.settle();
+            let last = d.nodes().into_iter().find(|n| n.name.starts_with("Thunderwave ·") && n.name.ends_with("Ctrl+6."));
+            d.observe("armed-spell-after-reload", last.zip(d.place_of("Stop")).is_some_and(|(tile, stop)| tile.rect.bottom() <= stop.top()),
+                "Adding an earlier spell changes the shortcuts and keeps Stop below the second Thunderwave");
+            std::fs::remove_file(root.join(file)).unwrap();
+            d.app_mut().lookup.refresh();
+            d.settle();
+            d.press(Key::Escape);
+            d.act_at_size(SMALL, |d| {
+                d.press_ctrl(Key::K);
+                if let Some(more) = d.nodes().into_iter().find(|n| n.name.ends_with(" more") && n.role == Role::Button) {
+                    d.click(&more.name);
+                }
+                d.observe("repeated-spell-shortcut", d.nodes().iter().filter(|n| n.name == "Thunderwave DC 12" && n.role == Role::Button).count() == 2,
+                    "The compact action bar's menu lists both Thunderwave actions");
+                d.press(Key::Escape);
+                d.press_ctrl(Key::K);
+            });
+            d.app_mut().encounters.run_mut().unwrap().simulate_stat_block_edit(CASTER, |body| body.truncate(body.len() - SPELLS.len()));
+            d.settle();
+        }));
 
         // A save: each clicked row is a target, and its save stands where its AC is.
         d.click_row(CASTER);
