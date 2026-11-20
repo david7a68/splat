@@ -115,32 +115,7 @@ fn write_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// The frontmatter block with its fences, and the body after it.
-pub(crate) fn split_note(text: &str) -> Option<(&str, &str)> {
-    let start = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let newline = if start.starts_with("---\r\n") {
-        "\r\n"
-    } else if start.starts_with("---\n") {
-        "\n"
-    } else {
-        return None;
-    };
-    let offset = text.len() - start.len();
-    let close = format!("{newline}---");
-    let mut from = offset + 3 + newline.len();
-    loop {
-        let found = text[from..].find(&close)? + from;
-        let after = found + close.len();
-        let rest = &text[after..];
-        if rest.is_empty() {
-            return Some((&text[..after], ""));
-        }
-        if let Some(body) = rest.strip_prefix(newline) {
-            return Some((&text[..after + newline.len()], body));
-        }
-        from = after;
-    }
-}
+pub(crate) use splat_core::note::split_note;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Note {
@@ -1045,13 +1020,7 @@ pub(crate) fn sync_folder(path: &Path) -> Result<(), String> {
     sync_folder_io(path).map_err(|e| e.to_string())
 }
 
-fn sync_folder_io(path: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
-    fs::File::open(path).and_then(|file| file.sync_all())?;
-    #[cfg(not(unix))]
-    let _ = path;
-    Ok(())
-}
+use splat_core::file_batch::sync_folder as sync_folder_io;
 
 /// Round 30 B7d: a note's failed save in plain words from the error's KIND, never the system's
 /// words: `Not saved.`, the cause and the recovery of the World page's file faults

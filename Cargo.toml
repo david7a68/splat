@@ -71,6 +71,9 @@ opt-level = 2
 [profile.test.package.splat-core]
 opt-level = 2
 
+[profile.test.package.splat-campaign]
+opt-level = 2
+
 [profile.test.package.splat-character]
 opt-level = 2
 

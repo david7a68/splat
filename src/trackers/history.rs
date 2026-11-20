@@ -8,7 +8,7 @@
 //! work, and an open one draws only the rows in view.
 use super::TrackerFault;
 use super::{
-    NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, place_name, replay,
+    NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, orphaned, place_name,
     result_words, with_dependents,
 };
 use crate::design::outcome::PagePlaceholder;
@@ -91,7 +91,7 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         rows.entry(key).or_default().push(Row {
             entry: entry.clone(),
             words,
-            value: state.after.get(&entry.id).copied(),
+            value: state.value_after(&entry.id),
         });
     }
     rows
@@ -190,30 +190,6 @@ fn in_play(rules: &Rules, note: Uuid) -> bool {
     rules.trackers.iter().any(|t| t.note == note)
         || rules.day_marks.iter().any(|m| m.note == note)
         || rules.problems.iter().any(|(owner, _)| *owner == Some(note))
-}
-
-/// The act whose entries about a notice would be left with nothing to name, when the ledger
-/// becomes `next`: a notice that a change raised in `ledger` and raises no more in `next`.
-pub(super) fn orphaned(
-    rules: &Rules,
-    today: &Today,
-    ledger: &Ledger,
-    next: &Ledger,
-) -> Option<String> {
-    let (before, after) = (replay(rules, ledger, today), replay(rules, next, today));
-    let orphan = next.changes.iter().find(|entry| {
-        entry
-            .notice
-            .as_ref()
-            .is_some_and(|notice| before.raised(notice) && !after.raised(notice))
-    })?;
-    let press: Vec<Entry> = next
-        .changes
-        .iter()
-        .filter(|entry| entry.same_press(orphan))
-        .cloned()
-        .collect();
-    Some(label(rules, next, &press))
 }
 
 /// The entries that `Remove` takes for the entry the DM clicked, as the file holds them now,

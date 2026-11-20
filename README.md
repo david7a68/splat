@@ -56,10 +56,11 @@ valid. `--only` is for local feedback.
 
 The workspace separates bundled assets (`crates/assets`), verification tools
 (`crates/cli`), and desktop code (`src`). The shared `splat-core` library re-exports
-content, character, and execution. Character and execution compile in parallel
-once the content crate's metadata is ready. The desktop library can start
-compiling when core metadata is ready, while code generation continues. The
-verification tools depend on core and do not compile the GUI.
+content, character, execution, and campaign logic. Character, execution, and
+campaign logic compile in parallel once the content crate's metadata is ready.
+The desktop library can start compiling when core metadata is ready, while code
+generation continues. The verification tools depend on core and do not compile
+the GUI.
 `cargo test --locked` runs tests in all workspace crates.
 
 Development and test builds use 16 code-generation units, disable incremental

@@ -1,0 +1,14 @@
+[package]
+name = "splat-campaign"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+pulldown-cmark = "0.13"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_yaml_ng = "0.10"
+splat-content = { path = "../content" }
+tempfile = "3"
+uuid = { version = "1", features = ["v4", "serde"] }

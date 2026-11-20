@@ -9,6 +9,7 @@ publish = false
 test-support = []
 
 [dependencies]
+splat-campaign = { path = "../campaign" }
 splat-character = { path = "../character" }
 splat-content = { path = "../content" }
 splat-execution = { path = "../execution" }

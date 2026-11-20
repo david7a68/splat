@@ -798,7 +798,7 @@ fn tracker_lines(
         }
         if let Some(repeat) = repeat.filter(|_| leaves_out && !said) {
             said = true;
-            design::outcome::row_fault(ui, &TrackerFault::Problem(repeat.words()));
+            design::outcome::row_fault(ui, &TrackerFault::Problem(super::repeat_words(repeat)));
         }
         register_block(ui, line_top);
     }

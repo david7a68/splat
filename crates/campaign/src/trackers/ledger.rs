@@ -137,8 +137,8 @@ impl Entry {
 }
 
 /// A new entry ID: `c-` and eight hex digits.
-pub fn new_id(prefix: &str) -> String {
-    let id = crate::hermetic::new_uuid().simple().to_string();
+pub(super) fn new_id(prefix: &str, id: Uuid) -> String {
+    let id = id.simple().to_string();
     format!("{prefix}-{}", &id[id.len() - 8..])
 }
 
@@ -162,7 +162,7 @@ impl Ledger {
         if text.trim().is_empty() {
             return Ok(Self::default());
         }
-        let (front, _) = crate::sessions::split_note(text)
+        let (front, _) = crate::note::split_note(text)
             .ok_or("Trackers.md has no properties block at its top.")?;
         let value = properties(front)?;
         let ledger: Self = serde_yaml_ng::from_value(value).map_err(|error| error.to_string())?;
@@ -177,7 +177,7 @@ impl Ledger {
 
     /// The text to write, with the body of `old` kept below the properties.
     pub fn render(&self, old: &str) -> Result<String, String> {
-        let body = crate::sessions::split_note(old).map_or("", |(_, body)| body);
+        let body = crate::note::split_note(old).map_or("", |(_, body)| body);
         let yaml = serde_yaml_ng::to_string(self).map_err(|error| error.to_string())?;
         Ok(format!("---\n{yaml}---\n{body}"))
     }

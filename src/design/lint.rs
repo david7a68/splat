@@ -934,6 +934,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
     // The logic crates write many UI words too, such as a note's warnings.
     for folder in [
         "/src",
+        "/crates/campaign/src",
         "/crates/core/src",
         "/crates/character/src",
         "/crates/content/src",
