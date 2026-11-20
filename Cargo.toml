@@ -40,6 +40,7 @@ unicode-segmentation = "1.13"
 
 [dev-dependencies]
 rayon = "1.11"
+splat-core = { path = "crates/core", features = ["test-support"] }
 # The source checks read Rust with a real parser (`design::attributes`), never by hand.
 syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }

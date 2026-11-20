@@ -2,6 +2,8 @@
 pub use splat_character::{character, memo};
 pub use splat_execution::execution;
 
+pub mod matching;
+
 pub mod content {
     pub use splat_content::content::*;
 

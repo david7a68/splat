@@ -9285,7 +9285,7 @@ mod tests {
         // words it stops at the fifth it can offer.
         use egui_kittest::kittest::Queryable;
         let visited = || REPLACEMENT_NAMES.with(std::cell::Cell::get);
-        let typos = || crate::matching::TYPO_CHECKS.with(std::cell::Cell::get);
+        let typos = crate::matching::typo_checks;
         let offered = snapshot.creatures.iter().filter(|c| !c.linked).count();
         assert!(offered > 5, "fixture: more creatures than the five");
         let mut harness = egui_kittest::Harness::builder()

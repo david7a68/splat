@@ -4810,7 +4810,7 @@ mod tests {
         // as typed only (no typo compared); another load of the index ranks again.
         use egui_kittest::kittest::Queryable;
         let names = || UNUSED_NAMES.with(std::cell::Cell::get);
-        let typos = || crate::matching::TYPO_CHECKS.with(std::cell::Cell::get);
+        let typos = crate::matching::typo_checks;
         let index = Arc::new(index);
         type State = (Arc<ContentIndex>, String);
         let mut harness = egui_kittest::Harness::builder().build_ui_state(
