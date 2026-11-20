@@ -9,10 +9,7 @@ mod content;
 mod presentation;
 pub mod profile;
 mod rules;
-use crate::{
-    content::Entry,
-    execution::model::{Creature, Health, Pool, Stat},
-};
+use crate::content::Entry;
 pub use cache::Cache;
 pub use campaign::CampaignCopyError;
 pub use content::ContentNote;
@@ -20,6 +17,7 @@ pub use presentation::description_text;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use splat_content::combat::{Creature, Health, Pool, Stat};
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 

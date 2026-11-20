@@ -368,66 +368,6 @@ fn allows_missing_optional_dependencies_and_ignores_non_splat_metadata() {
 }
 
 #[test]
-fn body_tables_and_blocks_reconstruct_data_independent_of_headings_and_order() {
-    let body = r#"
-# My layout
-<!-- splat:yaml path=splat_rule/parameters/rows/1/effect -->
-
-```yaml
-on_hit: {damage: 8d6, type: fire}
-```
-
-<!-- splat:rows path=splat_rule/parameters/rows -->
-
-| Row | level | label |
-| --- | --- | --- |
-| 1 | 2 | `"two\|three"` |
-| 0 | 1 | `"true"` |
-
-## Renamed
-<!-- splat:values path=splat_rule -->
-
-| Field | Value |
-| --- | --- |
-| mechanic | test:rule |
-| implementation | test:adapter |
-
-<!-- splat:abilities path=splat_stats -->
-
-| Ability | Score | Save override |
-| --- | --- | --- |
-| Intelligence | 6 | +2 |
-| Strength | 18 | |
-"#;
-    let entry = parse("body", "rule", "", body);
-    let expected: Value = serde_yaml_ng::from_str(
-        r#"
-splat_rule:
-  mechanic: test:rule
-  implementation: test:adapter
-  parameters:
-    rows:
-    - {level: 1, label: 'true'}
-    - {level: 2, label: 'two|three', effect: {on_hit: {damage: 8d6, type: fire}}}
-splat_stats:
-  intelligence: {value: 6}
-  save_intelligence: {value: 2}
-  strength: {value: 18}
-"#,
-    )
-    .unwrap();
-    for (key, value) in expected.as_mapping().unwrap() {
-        assert_eq!(entry.fields.get(key), Some(value));
-    }
-    assert!(
-        crate::execution::model::compile(&entry)
-            .unwrap_err()
-            .contains("test:adapter")
-    );
-    assert_eq!(entry.body, body);
-}
-
-#[test]
 fn body_data_rejects_conflicts_malformed_tables_and_dangling_markers() {
     for body in [
         "<!-- splat:yaml path=splat_item -->\n\n```yaml\n{}\n```",

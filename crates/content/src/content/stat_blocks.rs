@@ -1080,7 +1080,7 @@ fn owned_keys(root: &str) -> Vec<&'static str> {
 
 /// The execution adapter ignores known reader text, while retaining unknown
 /// keys for its strict mechanics validator to reject.
-pub(crate) fn creature_mechanics(fields: &Mapping) -> Mapping {
+pub fn creature_mechanics(fields: &Mapping) -> Mapping {
     let display = owned_keys("splat_creature");
     fields
         .iter()

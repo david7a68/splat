@@ -931,8 +931,14 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
     let mut counts = BTreeMap::new();
     let mut levels = BTreeMap::new();
     let mut files = Vec::new();
-    // The core crate writes many UI words too, such as a note's warnings.
-    for folder in ["/src", "/crates/core/src"] {
+    // The logic crates write many UI words too, such as a note's warnings.
+    for folder in [
+        "/src",
+        "/crates/core/src",
+        "/crates/character/src",
+        "/crates/content/src",
+        "/crates/execution/src",
+    ] {
         scan(
             Path::new(&format!("{}{folder}", env!("CARGO_MANIFEST_DIR"))),
             &mut counts,

@@ -54,11 +54,12 @@ It avoids running the scenarios once without captures and again with captures.
 The separate `cargo test --locked`, `check`, and full `visual-test` commands remain
 valid. `--only` is for local feedback.
 
-The workspace separates bundled assets (`crates/assets`), content and rules
-(`crates/core`), verification tools (`crates/cli`), and desktop code (`src`).
-The desktop library can start compiling when core metadata is ready, while core
-code generation continues. The tools depend on core and do not compile the GUI.
-The `splat` library keeps its content, character, and execution APIs.
+The workspace separates bundled assets (`crates/assets`), verification tools
+(`crates/cli`), and desktop code (`src`). The shared `splat-core` library re-exports
+content, character, and execution. Character and execution compile in parallel
+once the content crate's metadata is ready. The desktop library can start
+compiling when core metadata is ready, while code generation continues. The
+verification tools depend on core and do not compile the GUI.
 `cargo test --locked` runs tests in all workspace crates.
 
 Development and test builds use 16 code-generation units, disable incremental

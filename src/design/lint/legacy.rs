@@ -541,7 +541,7 @@ fn base_commit() -> Result<String, String> {
     git(&["merge-base", "HEAD", &named])
 }
 
-/// The Rust files of `src/` and `crates/core/src/` at `commit`.
+/// The app and logic crates' Rust files at `commit`.
 fn files_at(commit: &str) -> Result<Vec<(String, String)>, String> {
     let listed = git(&[
         "ls-tree",
@@ -551,6 +551,9 @@ fn files_at(commit: &str) -> Result<Vec<(String, String)>, String> {
         "--",
         "src",
         "crates/core/src",
+        "crates/character/src",
+        "crates/content/src",
+        "crates/execution/src",
     ])?;
     listed
         .lines()

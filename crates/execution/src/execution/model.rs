@@ -3,48 +3,15 @@ use super::dice::Dice;
 use crate::content::Entry;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
+pub use splat_content::combat::{Creature, Health, Pool, Stat};
 use std::collections::BTreeMap;
 
 pub type Map<T> = BTreeMap<String, T>;
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Stat {
-    pub value: i64,
-    pub unit: Option<String>,
-    #[serde(default)]
-    pub includes: Vec<String>,
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Creature {
-    pub size: String,
-    #[serde(rename = "type")]
-    pub creature_type: String,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Health {
-    pub zero_hp: String,
-}
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Trait {
     pub rule: String,
     pub parameters: Value,
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Pool {
-    pub name: String,
-    pub max: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub initial: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub kind: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub level: Option<i64>,
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -3863,6 +3863,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "splat-character"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "image",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-content",
+ "splat-execution",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "splat-cli"
 version = "0.1.0"
 dependencies = [
@@ -3873,10 +3890,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "splat-core"
+name = "splat-content"
 version = "0.1.0"
 dependencies = [
- "directories",
  "image",
  "include_dir",
  "pulldown-cmark",
@@ -3887,6 +3903,30 @@ dependencies = [
  "sha2",
  "splat-assets",
  "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-core"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "splat-character",
+ "splat-content",
+ "splat-execution",
+]
+
+[[package]]
+name = "splat-execution"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-assets",
+ "splat-content",
  "uuid",
 ]
 

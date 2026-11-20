@@ -1,7 +1,8 @@
 //! A bounded execution proof for attacks, saves, healing and consumables.
 //! No package code is executed. Unsupported fields fail compilation.
 pub mod builtin;
-pub mod dice;
+pub use splat_content::dice;
+pub mod catalogue;
 pub mod model;
 #[cfg(test)]
 mod tests;

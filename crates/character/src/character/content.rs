@@ -821,7 +821,7 @@ fn attack_action(a: &Value) -> Option<Value> {
         let modifier = damage["fixedValue"].as_i64().unwrap_or(0);
         let expression = format!("{dice}{modifier:+}");
         // Parsing is a syntax check only; it does not establish rule coverage.
-        if crate::execution::dice::Dice::parse(&expression).is_err() {
+        if splat_content::dice::Dice::parse(&expression).is_err() {
             return None;
         }
         rolls["damage"] = json!({"expression":expression,"scope":"attack"});

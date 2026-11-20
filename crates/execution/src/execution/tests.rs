@@ -517,3 +517,76 @@ fn supplied_save_is_used_instead_of_ability_calculation() {
     assert_eq!(save["natural"], 10);
     assert_eq!(save["total"], 13);
 }
+
+#[test]
+fn body_tables_and_blocks_reconstruct_data_independent_of_headings_and_order() {
+    let body = r#"
+# My layout
+<!-- splat:yaml path=splat_rule/parameters/rows/1/effect -->
+
+```yaml
+on_hit: {damage: 8d6, type: fire}
+```
+
+<!-- splat:rows path=splat_rule/parameters/rows -->
+
+| Row | level | label |
+| --- | --- | --- |
+| 1 | 2 | `"two\|three"` |
+| 0 | 1 | `"true"` |
+
+## Renamed
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| mechanic | test:rule |
+| implementation | test:adapter |
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| Intelligence | 6 | +2 |
+| Strength | 18 | |
+"#;
+    let fields = "splat_id: 00000000-0000-0000-0000-000000000001
+splat_kind: rule
+splat_key: 'test:body'
+splat_name: Example
+";
+    let text = crate::content::formats::fixture("Fixture.md", fields, body).unwrap_or_else(|_| {
+        format!(
+            "---
+splat_schema: 2
+{fields}---
+{body}"
+        )
+    });
+    let entry = crate::content::Entry::parse("body", &text).unwrap();
+    let expected: Value = serde_yaml_ng::from_str(
+        r#"
+splat_rule:
+  mechanic: test:rule
+  implementation: test:adapter
+  parameters:
+    rows:
+    - {level: 1, label: 'true'}
+    - {level: 2, label: 'two|three', effect: {on_hit: {damage: 8d6, type: fire}}}
+splat_stats:
+  intelligence: {value: 6}
+  save_intelligence: {value: 2}
+  strength: {value: 18}
+"#,
+    )
+    .unwrap();
+    for (key, value) in expected.as_mapping().unwrap() {
+        assert_eq!(entry.fields.get(key), Some(value));
+    }
+    assert!(
+        crate::execution::model::compile(&entry)
+            .unwrap_err()
+            .contains("test:adapter")
+    );
+    assert_eq!(entry.body, body);
+}
