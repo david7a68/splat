@@ -437,35 +437,68 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     // its menu, and a close icon at the right end of the title's line. Wide, all on one line;
     // narrow, the actions go under the title and the close icon stays on the title's line.
     // The status link opens its menu; the close icon's press comes back as `closed`.
+    // M-L0.10 (ruling M21): a menu action (`Packages`) opens its menu, and a blocked one does
+    // not; the status menu keeps inside the room the caller gives from the link's rect (the
+    // column under it, issue #504), one lane clear of its edges.
     const NEW_ENTRY: Word = crate::word!("New entry");
+    const PACKAGES: Word = crate::word!("Packages");
     const KEY: KeyName = crate::key!("N");
-    fn header(opened: &std::cell::Cell<bool>) -> TitleLine<'_> {
+    const MENU_LINE: &str = "Rules/Watch.md: 2 broken links";
+    fn header<'a>(
+        opened: &'a std::cell::Cell<bool>,
+        packages: &'a std::cell::Cell<bool>,
+        blocked: bool,
+        room: Rect,
+    ) -> TitleLine<'a> {
         TitleLine::new("Library")
             .action(TitleAction::secondary(NEW_ENTRY).key(KEY))
+            .menu(
+                TitleAction::quiet(PACKAGES).blocked(blocked.then_some("Wait for the Library.")),
+                move |ui| {
+                    packages.set(true);
+                    let _ = ui.label("Reload from disk");
+                },
+            )
             .status(
                 Status {
                     icon: crate::design::icons::WARN,
                     word: "3 files need fixing",
                     color: colors().result.warning,
                 },
-                |ui| {
+                move |ui| {
                     opened.set(true);
-                    let _ = ui.label("Rules/Watch.md: 2 broken links");
+                    let _ = ui.label(MENU_LINE);
                 },
             )
+            .menu_room(move |_| room)
             .close("Close Library")
     }
-    for (width, beside) in [(900.0, true), (260.0, false)] {
+    for (width, beside, blocked) in [
+        (900.0, true, false),
+        (260.0, false, false),
+        (900.0, true, true),
+    ] {
         let ctx = context();
         let opened = std::cell::Cell::new(false);
+        let packages = std::cell::Cell::new(false);
+        let lock = std::cell::Cell::new(blocked);
         let closed = std::cell::Cell::new(false);
         let left = std::cell::Cell::new(0.0);
+        // The column under the link: the line's right half, as a reader beside a list.
+        let room = std::cell::Cell::new(Rect::NOTHING);
         let draw = |events: Vec<egui::Event>| {
             frame_with(&ctx, vec2(width + 40.0, 400.0), events, |ui| {
                 let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
                 left.set(rect.left());
+                room.set(Rect::from_min_max(
+                    pos2(rect.center().x, rect.top()),
+                    rect.right_bottom(),
+                ));
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                    if header(&opened).show(ui).closed {
+                    if header(&opened, &packages, lock.get(), room.get())
+                        .show(ui)
+                        .closed
+                    {
                         closed.set(true);
                     }
                 });
@@ -519,10 +552,93 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             ]
         };
         draw(click(status.center()));
-        draw(Vec::new());
+        let (_, painted) = draw(Vec::new());
         assert!(opened.get(), "{width}: the status link opens its menu");
+        let lane = lane_width().max(S);
+        let line = painted
+            .iter()
+            .find(|text| text.text == MENU_LINE)
+            .map(|text| text.rect.intersect(text.clip))
+            .expect("the status menu's line");
+        assert!(
+            line.left() >= room.get().left() + lane - 0.5
+                && line.right() <= room.get().right() - lane + 0.5,
+            "{width}: the status menu {line:?} keeps inside its room {:?}, a lane from its edges",
+            room.get()
+        );
+        draw(vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]);
+        let (nodes, _) = draw(Vec::new());
+        let menu = bounds(&nodes, "Packages");
+        assert!(
+            (menu.center().y - new.center().y).abs() < 1.0,
+            "{width}: the menu action is placed as an action: {menu:?}, New entry {new:?}"
+        );
+        draw(click(menu.center()));
+        let (_, painted) = draw(Vec::new());
+        assert_eq!(
+            packages.get(),
+            !blocked,
+            "{width}: the menu action opens its menu unless it is blocked"
+        );
+        if let Some(choice) = painted
+            .iter()
+            .find(|text| text.text == "Reload from disk")
+            .map(|text| text.rect.intersect(text.clip))
+        {
+            assert!(
+                choice.left() >= room.get().left() + lane - 0.5
+                    && choice.right() <= room.get().right() - lane + 0.5,
+                "{width}: the menu action's menu {choice:?} keeps inside the room {:?} too",
+                room.get()
+            );
+        }
+        assert_eq!(
+            painted.iter().any(|text| text.text == "Reload from disk"),
+            !blocked,
+            "{width}: the menu's choice is drawn exactly when the menu opens"
+        );
+        // A menu that is open when its action becomes blocked is not drawn, so its choices
+        // cannot pass the lock.
+        lock.set(true);
+        packages.set(false);
+        draw(Vec::new());
+        assert!(
+            !packages.get(),
+            "{width}: an open menu is not drawn while its action is blocked"
+        );
+        lock.set(blocked);
         draw(click(close.center()));
         assert!(closed.get(), "{width}: the close icon's press comes back");
+    }
+
+    // Issue #567: a close icon and no actions: a title wider than its line wraps clear of the
+    // close icon, never under it.
+    {
+        let ctx = context();
+        let (nodes, painted) = frame_with(&ctx, vec2(240.0, 300.0), Vec::new(), |ui| {
+            let rect = Rect::from_min_size(ui.cursor().min, vec2(200.0, 200.0));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                let _ = TitleLine::new("The Lantern Market below the old harbour wall")
+                    .close("Close panel")
+                    .show(ui);
+            });
+        });
+        let close = bounds(&nodes, "Close panel");
+        let title: Vec<_> = painted
+            .iter()
+            .filter(|text| text.text.contains("Lantern"))
+            .map(|text| text.rect)
+            .collect();
+        assert!(
+            !title.is_empty() && title.iter().all(|rect| rect.right() <= close.left() + 0.5),
+            "the long title {title:?} keeps clear of the close icon {close:?}"
+        );
     }
 
     // R38, R35: an Encounters editor's head, as both editors draw it. The back line is one row
@@ -1646,6 +1762,168 @@ fn inline_create_moves_nothing_while_the_dm_types() {
             );
         }
     }
+
+    // M-P0 item 5 (Library's New entry, M0349, M0352): a name field, two drop-downs, a choice,
+    // then the last field with its suggestions; Create follows that last field on its line.
+    // The field's suggestions open when it takes the keyboard, narrow to its words, and a press
+    // fills the field.
+    const CREATE_ENTRY: Word = crate::word!("Create entry");
+    const FOLDER: FieldId = crate::field_id!("test_create_entry_folder").once(Once::Example);
+    let suggestions: Vec<String> = ["Creatures", "Creatures/Undead", "Spells"]
+        .map(String::from)
+        .to_vec();
+    let folder = std::cell::RefCell::new(String::new());
+    // What the form gave back in the last frame: Cancel, and Escape closing the layer above.
+    let answered = std::cell::Cell::new((false, false));
+    let entry_form = |events: Vec<egui::Event>| {
+        let mut name = String::from("Barrow Wight");
+        let (mut kind, mut place, mut used) = (0_u8, 0_u8, false);
+        let mut words = folder.borrow().clone();
+        let drawn = frame_with(&ctx, vec2(800.0, 700.0), events, |ui| {
+            let out = InlineCreate::new()
+                .field(CreateField::new(
+                    crate::field_id!("test_create_entry_name").once(Once::Example),
+                    "Entry name",
+                    &mut name,
+                ))
+                .dropdown(CreateDropdown::new(
+                    "Kind",
+                    Selection::new(
+                        crate::field_id!("test_create_kind").once(Once::Example),
+                        "Kind of entry",
+                        0,
+                        "Creature",
+                    ),
+                    &mut kind,
+                ))
+                .dropdown(CreateDropdown::new(
+                    "Destination",
+                    Selection::new(
+                        crate::field_id!("test_create_place").once(Once::Example),
+                        "Destination",
+                        0,
+                        "Ashen Marches",
+                    ),
+                    &mut place,
+                ))
+                .choice(CreateChoice::new("Use in this campaign", &mut used))
+                .field(CreateField::new(FOLDER, "Folder", &mut words).suggestions(&suggestions))
+                .create(Create::primary(CREATE_ENTRY).blocked(None::<TestReason>))
+                .kept_line(KeptLine::new().cancel(CANCEL, true))
+                .show(ui);
+            answered.set((out.cancel, out.closed_above));
+        });
+        *folder.borrow_mut() = words;
+        drawn
+    };
+    let (nodes, _) = entry_form(Vec::new());
+    // A drop-down's node is named with its name and its chosen value.
+    let starting = |name: &str| {
+        nodes
+            .iter()
+            .filter(|(_, node)| {
+                node.label().is_some_and(|label| label.starts_with(name))
+                    && node.role() != egui::accesskit::Role::Label
+            })
+            .find_map(|(_, node)| node.bounds())
+            .map(|b| {
+                Rect::from_min_max(
+                    pos2(b.x0 as f32, b.y0 as f32),
+                    pos2(b.x1 as f32, b.y1 as f32),
+                )
+            })
+            .unwrap_or_else(|| panic!("a control named {name:?}…"))
+    };
+    let (kind, place, create) = (
+        starting("Kind of entry"),
+        starting("Destination"),
+        bounds(&nodes, CREATE_ENTRY.as_str()),
+    );
+    let field = nodes
+        .iter()
+        .filter(|(_, node)| {
+            node.label() == Some("Folder") && node.role() == egui::accesskit::Role::TextInput
+        })
+        .find_map(|(_, node)| node.bounds())
+        .map(|b| {
+            Rect::from_min_max(
+                pos2(b.x0 as f32, b.y0 as f32),
+                pos2(b.x1 as f32, b.y1 as f32),
+            )
+        })
+        .expect("the folder field");
+    assert!(
+        kind.bottom() <= place.top() + 0.5 && place.bottom() <= field.top() + 0.5,
+        "in order: Kind {kind:?}, Destination {place:?}, Folder {field:?}"
+    );
+    assert!(
+        (create.center().y - field.center().y).abs() < 2.0 && create.left() >= field.right(),
+        "Create follows the last field on its line: {field:?} {create:?}"
+    );
+    // The DM clicks into the field.
+    let click = |at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        vec![egui::Event::PointerMoved(at), press(true), press(false)]
+    };
+    let _ = entry_form(click(field.center()));
+    let (_, painted) = entry_form(Vec::new());
+    let shown = |painted: &[Painted], words: &str| painted.iter().any(|text| text.text == words);
+    assert!(
+        ["Creatures", "Creatures/Undead", "Spells"]
+            .iter()
+            .all(|words| shown(&painted, words)),
+        "the field takes the keyboard: every suggestion shows"
+    );
+    let _ = entry_form(vec![egui::Event::Text("und".into())]);
+    let (_, painted) = entry_form(Vec::new());
+    assert!(
+        shown(&painted, "Creatures/Undead") && !shown(&painted, "Spells"),
+        "the suggestions narrow to the field's words"
+    );
+    // Review of PR 602 (P1): Escape closes the open suggestions first, not the form; a second
+    // Escape cancels.
+    let escape = || {
+        vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]
+    };
+    let _ = entry_form(escape());
+    assert_eq!(
+        answered.get(),
+        (false, true),
+        "the first Escape closes only the suggestions (no Cancel)"
+    );
+    let (_, painted) = entry_form(Vec::new());
+    assert!(
+        !shown(&painted, "Creatures/Undead") && *folder.borrow() == "und",
+        "the suggestions are closed and the words stay"
+    );
+    let _ = entry_form(escape());
+    assert_eq!(answered.get(), (true, false), "a second Escape cancels");
+    // Into the field again: its suggestions narrow to its words, and a press fills it.
+    let _ = entry_form(click(field.center()));
+    let (_, painted) = entry_form(Vec::new());
+    let at = painted
+        .iter()
+        .find(|text| text.text == "Creatures/Undead")
+        .map(|text| text.rect.center())
+        .expect("the suggestion's words");
+    let _ = entry_form(click(at));
+    let _ = entry_form(Vec::new());
+    assert_eq!(
+        *folder.borrow(),
+        "Creatures/Undead",
+        "a press fills the field with the suggestion"
+    );
 }
 
 /// Whether `after` is `before` with `letter` inserted at one place: every letter of `before`
@@ -1786,6 +2064,24 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     );
     edit(&mut other, vec![ctrl_z()]);
     assert_eq!(other, "Brine", "k3-own: Ctrl+Z undoes the DM's own typing");
+    // The field edits its own text (a command takes its words out, words go in at the caret):
+    // the history stays, and Ctrl+Z goes back through the edit to what came before.
+    super::edit_in_place(&ctx, second_id, &mut other, |text| text.push_str(" sea"));
+    edit(&mut other, Vec::new());
+    edit(&mut other, vec![ctrl_z()]);
+    assert_eq!(
+        other, "Brine",
+        "k3-in-place: the field's own edit keeps its history"
+    );
+    // Another object's text came first: the edit after it does not hide it, and the history goes.
+    other = String::from("Kelp");
+    super::edit_in_place(&ctx, second_id, &mut other, |text| text.push('s'));
+    edit(&mut other, Vec::new());
+    edit(&mut other, vec![ctrl_z()]);
+    assert_eq!(
+        other, "Kelps",
+        "k3-in-place: an edit after another object's text keeps no old history"
+    );
 
     // Cost: a field with no focus hashes nothing, whatever its length.
     ctx.memory_mut(|memory| memory.surrender_focus(second_id));

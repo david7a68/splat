@@ -24,10 +24,6 @@ fn range_words((low, high): (Option<f64>, Option<f64>)) -> String {
 
 /// The Filter menu and the chips. `creatures` gives the creatures that the menu counts;
 /// it runs only while the menu is open. Returns true when the filter changed.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub fn filter_bar<'a>(
     ui: &mut egui::Ui,
     filter: &mut Filter,
@@ -43,7 +39,7 @@ pub fn filter_bar<'a>(
         };
         let response = design::menu_button_at_line_start(ui, &word, count > 0);
         design::named(ui, &response, "Filter creatures");
-        egui::Popup::menu(&response)
+        design::menu_popup(&*ui, &response)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| menu(ui, filter, &choices(creatures())));
         let chosen: Vec<(Facet, String)> = filter
@@ -77,6 +73,8 @@ fn chip(ui: &mut egui::Ui, label: &str) -> bool {
         .clicked()
 }
 
+/// Each fact is egui's submenu: `design::menu_submenu` opens below its own row in a narrow pane,
+/// over the next fact's row, so it does not fit a menu of several submenus yet.
 #[allow(
     clippy::disallowed_methods,
     reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
@@ -109,8 +107,11 @@ fn menu(
             facet.label().to_owned()
         };
         ui.menu_button(label, |ui| {
-            egui::ScrollArea::vertical()
+            // As wide as its widest choice and the scroll lane, which the column always keeps.
+            ui.set_width(facet_width(ui, facet, values) + design::lane_width());
+            design::ScrollColumn::new(("creature filter facet", facet.label()))
                 .max_height(ui.ctx().content_rect().height() * 0.6)
+                .fit_height()
                 .show(ui, |ui| {
                     if facet == Facet::Challenge {
                         challenge_menu(ui, filter, values);
@@ -133,10 +134,29 @@ fn menu(
     }
 }
 
+/// The width of a fact's choices: the challenge rows (`challenge_menu`), or the widest checkbox
+/// with its words.
+fn facet_width(ui: &egui::Ui, facet: Facet, values: &[(String, usize)]) -> f32 {
+    if facet == Facet::Challenge {
+        return challenge_width(ui);
+    }
+    let font = Type::Body.font(ui);
+    let words = values
+        .iter()
+        .map(|(value, count)| design::number_width(ui, &format!("{value} ({count})"), &font))
+        .fold(0.0, f32::max);
+    ui.spacing().icon_width + ui.spacing().icon_spacing + words.ceil()
+}
+
+/// The width of the challenge rows: nine of the widest rating.
+fn challenge_width(ui: &egui::Ui) -> f32 {
+    design::number_width(ui, "1/8", &Type::Body.font(ui)) * 9.0
+}
+
 /// Two rows of challenge ratings: the lowest and the highest. A second click on a bound
 /// removes it.
 fn challenge_menu(ui: &mut egui::Ui, filter: &mut Filter, values: &[(String, usize)]) {
-    ui.set_max_width(design::number_width(ui, "1/8", &Type::Body.font(ui)) * 9.0);
+    ui.set_max_width(challenge_width(ui));
     for (title, high) in [("Lowest", false), ("Highest", true)] {
         ui.label(Type::Small.rich(ui, title).color(colors().muted));
         ui.horizontal_wrapped(|ui| {

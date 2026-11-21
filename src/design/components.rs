@@ -12,17 +12,35 @@ fn corner(value: f32) -> CornerRadius {
 
 /// A quiet menu button with its caret after the word.
 pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
-    draw_menu_button(ui, word, selected, false)
+    draw_menu_button(ui, word, selected, false, None, Density::Scan)
+}
+
+/// A title line's menu action (`TitleLine::menu`): [`menu_button`] at the `Read` height of the
+/// line's other actions; while `blocked`, it is disabled with the reason on hover and as its
+/// accessible description.
+pub(super) fn title_menu_button(ui: &mut Ui, word: &str, blocked: Option<&str>) -> Response {
+    draw_menu_button(ui, word, false, false, blocked, Density::Read)
 }
 
 /// A menu button whose word starts at the text edge of its own row.
 pub fn menu_button_at_line_start(ui: &mut Ui, word: &str, selected: bool) -> Response {
-    draw_menu_button(ui, word, selected, true)
+    draw_menu_button(ui, word, selected, true, None, Density::Scan)
 }
 
-fn draw_menu_button(ui: &mut Ui, word: &str, selected: bool, line_start: bool) -> Response {
+fn draw_menu_button(
+    ui: &mut Ui,
+    word: &str,
+    selected: bool,
+    line_start: bool,
+    blocked: Option<&str>,
+    density: Density,
+) -> Response {
     let label = format!("{word}    ");
-    let button = Action::quiet(&label).name(word).selected(selected);
+    let button = Action::quiet(&label)
+        .name(word)
+        .selected(selected)
+        .blocked(blocked)
+        .density(density);
     let button = if line_start {
         button.line_start()
     } else {
@@ -225,7 +243,7 @@ pub struct ReaderToolbar<'a, A> {
     wider_label: &'a str,
     mode: ModeLock,
     /// `Back`'s hint and icon, while there is history.
-    back: Option<(&'a str, &'a str)>,
+    back: Option<&'a str>,
     actions: Vec<GroupAction<'a, A>>,
 }
 
@@ -243,9 +261,21 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
         }
     }
 
-    /// `Back`, with `icon` and `hint` on hover, while there is history to go back to.
-    pub fn back(mut self, history: bool, icon: &'a str, hint: &'a str) -> Self {
-        self.back = history.then_some((icon, hint));
+    /// `Back` ([`Action::history_back`]), with `hint` on hover, while there is history to go
+    /// back to. The part draws its arrow; a caller gives none.
+    ///
+    /// ```
+    /// use splat_design::layout::doc_parts::{ModeLock, ReaderToolbar};
+    /// let _ = ReaderToolbar::<u8>::new(false, "Markdown", "Markdown", ModeLock::Open)
+    ///     .back(true, "Return to the entry before this link.");
+    /// ```
+    /// ```compile_fail,E0061
+    /// use splat_design::layout::doc_parts::{ModeLock, ReaderToolbar};
+    /// let _ = ReaderToolbar::<u8>::new(false, "Markdown", "Markdown", ModeLock::Open)
+    ///     .back(true, "←", "Return to the entry before this link.");
+    /// ```
+    pub fn back(mut self, history: bool, hint: &'a str) -> Self {
+        self.back = history.then_some(hint);
         self
     }
 
@@ -273,12 +303,8 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
     }
 
     /// The `Back` control, with or without its key.
-    fn back_action(icon: &'a str, hint: &'a str, key: bool) -> Action<'a> {
-        let back = Action::quiet("Back")
-            .icon(icon)
-            .density(Density::Read)
-            .hint(hint);
-        if key { back.key("Alt+Left") } else { back }
+    fn back_action(hint: &'a str, key: bool) -> Action<'a> {
+        Action::history_back(key).hint(hint)
     }
 
     /// Everything from the toolbar to the save row, in `ui`: the toolbar row and each steady
@@ -340,18 +366,18 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
                 ui.available_width()
                     - more_width
                     - gap
-                    - self.back.map_or(0.0, |(icon, hint)| {
-                        Self::back_action(icon, hint, false).natural_width(ui) + gap
+                    - self.back.map_or(0.0, |hint| {
+                        Self::back_action(hint, false).natural_width(ui) + gap
                     }),
             );
             if reserve > 0.0 {
                 space(ui, reserve);
             }
-            if let Some((icon, hint)) = self.back {
+            if let Some(hint) = self.back {
                 let prefix = ui.cursor().left() - left;
-                let with_key = Self::back_action(icon, hint, true).natural_width(ui);
+                let with_key = Self::back_action(hint, true).natural_width(ui);
                 let key = prefix + gap + with_key + gap + more_width <= room;
-                if Self::back_action(icon, hint, key).show(ui).clicked() {
+                if Self::back_action(hint, key).show(ui).clicked() {
                     pressed = Some(ToolbarPress::Back);
                 }
             }
@@ -943,8 +969,10 @@ impl<'a> Action<'a> {
         }
     }
 
-    /// Its words wrap in the room it has, and it grows taller, instead of being cut.
-    pub(in crate::design) fn wraps(mut self) -> Self {
+    /// Its words wrap in the room it has, and it grows taller, instead of being cut: an action
+    /// whose words must all show (a repair that names a file). It keeps its padding, border and
+    /// target; words that fit stay on one line.
+    pub fn wraps(mut self) -> Self {
         self.wraps = true;
         self
     }
@@ -963,6 +991,30 @@ impl<'a> Action<'a> {
 
     pub fn quiet(label: &'a str) -> Self {
         Self::new(Kind::Quiet, label)
+    }
+
+    /// The step back through a reader's history: `Back`, quiet at `Read`, its arrow before the
+    /// word, and its key `Alt+Left` after it when `key`. One form for every reader (the
+    /// Library's toolbar, Lookup's title line); the arrow never stands alone.
+    ///
+    /// ```
+    /// let _ = splat_design::layout::doc_parts::Action::history_back(true);
+    /// ```
+    ///
+    /// The arrow is the design system's: a caller cannot place it, and the old bare back arrow
+    /// is gone.
+    ///
+    /// ```compile_fail,E0603
+    /// let _ = splat_design::layout::doc_parts::icons::HISTORY_BACK;
+    /// ```
+    /// ```compile_fail,E0425
+    /// let _ = splat_design::layout::doc_parts::icons::LEGACY_BACK;
+    /// ```
+    pub fn history_back(key: bool) -> Self {
+        let back = Self::quiet("Back")
+            .icon(super::icons::HISTORY_BACK)
+            .density(Density::Read);
+        if key { back.key("Alt+Left") } else { back }
     }
     /// Align a quiet action's words with the text above it. Its padding, and any icon, hang left
     /// of that edge. Only an action inside a message has an icon when it starts a line: the icon
@@ -7502,6 +7554,10 @@ mod tests {
             SideColumn,
             Nested,
             Editor,
+            /// Two unequal columns of one task (`PaneColumns::shared_task`, layout step 7): a
+            /// resizable column of `count` rows that scrolls on its own, and a column of four
+            /// rows and the last action.
+            Composite,
         }
         const REASON: &str = "Line 1 opens a list.";
         let rows = |ui: &mut Ui, count: usize| {
@@ -7551,6 +7607,7 @@ mod tests {
                 Shape::SideColumn,
                 Shape::Nested,
                 Shape::Editor,
+                Shape::Composite,
             ] {
                 for count in [2, 200] {
                     let pressed = Rc::new(Cell::new(None::<&'static str>));
@@ -7646,6 +7703,36 @@ mod tests {
                                             press(ui, "Last action");
                                         });
                                     }
+                                    Shape::Composite => {
+                                        super::super::pane::PaneColumns::shared_task(
+                                            "shape_columns",
+                                        )
+                                        .resizable(
+                                            0.0,
+                                            super::super::Column::left(
+                                                "shape_left",
+                                                200.0,
+                                                150.0..=300.0,
+                                            ),
+                                        )
+                                        .rest(S)
+                                        .edges(ui)
+                                        .show_children(
+                                            ui,
+                                            |ui, index| {
+                                                if index == 0 {
+                                                    ScrollColumn::new("shape_left_rows")
+                                                        .fit_height()
+                                                        .show(ui, |ui| rows(ui, count));
+                                                } else {
+                                                    for line in 0..4 {
+                                                        ui.label(format!("Line R{line}"));
+                                                    }
+                                                    press(ui, "Last action");
+                                                }
+                                            },
+                                        );
+                                    }
                                     Shape::Editor => {
                                         let mut text = (0..count)
                                             .map(|line| format!("Line {line}"))
@@ -7724,8 +7811,13 @@ mod tests {
                         }
                     }
                     assert!(words_seen > 0, "{case}: body words are painted");
+                    // The composite follows its taller column (the four rows and the last
+                    // action) while its 2 rows are shorter.
                     let follows = count == 2
-                        && matches!(shape, Shape::Rows | Shape::InScope | Shape::InFrame);
+                        && matches!(
+                            shape,
+                            Shape::Rows | Shape::InScope | Shape::InFrame | Shape::Composite
+                        );
                     if follows {
                         // The frame's 4 px margin is under its last rect.
                         let margin = if shape == Shape::InFrame { 4.0 } else { 0.0 };
@@ -7753,11 +7845,51 @@ mod tests {
                             room.bottom()
                         );
                     }
+                    // Layout step 7: the composite is as tall as its taller column, measured by
+                    // its content, not by the room its columns were given. With 2 rows the
+                    // footer starts `S` below the last action of the taller column, and the
+                    // splitter's rule ends at that action; with 200 the left column scrolls in
+                    // the whole room and the rule ends above the footer.
+                    if shape == Shape::Composite {
+                        let last = nodes
+                            .iter()
+                            .find(|(label, _)| label == "Last action")
+                            .map(|(_, rect)| *rect)
+                            .unwrap_or_else(|| panic!("{case}: Last action shows"));
+                        let rule = harness
+                            .output()
+                            .shapes
+                            .iter()
+                            .filter_map(|shape| match &shape.shape {
+                                egui::Shape::LineSegment { points, .. }
+                                    if (points[0].x - points[1].x).abs() < 0.5
+                                        && points[0].x > room.left() + 100.0
+                                        && points[0].x < room.left() + 400.0 =>
+                                {
+                                    Some(points[0].y.max(points[1].y))
+                                }
+                                _ => None,
+                            })
+                            .reduce(f32::max);
+                        let ends = if count == 2 {
+                            (footer.top() - (last.bottom() + S)).abs() <= 1.0
+                                && rule.is_some_and(|rule| (rule - last.bottom()).abs() <= 1.0)
+                        } else {
+                            rule.is_some_and(|rule| {
+                                rule <= footer.top() - S + 1.0 && rule > last.bottom()
+                            })
+                        };
+                        assert!(
+                            ends,
+                            "{case}: the footer {footer:?} follows the taller column's Last action {last:?} by `S` (2 rows), and the splitter's rule ends at it: {rule:?}"
+                        );
+                    }
                     // The body control next to the footer takes its press.
                     let target = match shape {
                         Shape::TallColumn => Some("Tall action"),
                         Shape::SideColumn => Some("Left action"),
                         Shape::Editor => None,
+                        Shape::Composite => Some("Last action"),
                         _ if count == 2 => Some("Last action"),
                         _ => None,
                     };

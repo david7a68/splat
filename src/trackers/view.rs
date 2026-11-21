@@ -510,7 +510,7 @@ fn notice_row(
         };
         let amount = match (&change.add, change.set) {
             (_, Some(set)) => format!("set to {set}"),
-            (Some(super::Amount::Number(n)), None) => format!("{n:+}"),
+            (Some(super::Amount::Number(n)), None) => crate::design::signed(*n),
             (Some(super::Amount::Words(words)), None) => format!("+{words}"),
             (None, None) => String::new(),
         };
@@ -1011,10 +1011,12 @@ fn messages<'f>(
         Some(added) => match &added.not_saved {
             Some(words) => KeptOutcome::Fault(
                 FaultMessage::new(&TrackerFault::TimelineNotSaved(words.clone())),
-                UndoStep::verb(Verb::Add).pressed_as(TrackerPress::UndoAdd),
+                UndoStep::of(Verb::Add, added.title.clone()).pressed_as(TrackerPress::UndoAdd),
             ),
             None => Said::new(crate::sentence!("Added to the Timeline."))
-                .undo(UndoStep::verb(Verb::Add).pressed_as(TrackerPress::UndoAdd))
+                .undo(
+                    UndoStep::of(Verb::Add, added.title.clone()).pressed_as(TrackerPress::UndoAdd),
+                )
                 .into(),
         },
         None => Said::new(words.clone())
