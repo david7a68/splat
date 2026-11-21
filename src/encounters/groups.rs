@@ -2866,8 +2866,20 @@ impl Encounters {
             let widest = word_width(design::save_row::SaveWord::Unsaved).max(word_width(
                 design::save_row::SaveWord::Invalid(design::save_row::InvalidCause::Refused),
             ));
-            let mut room =
-                reasons_right - ui.cursor().left() - (widest - word_width(state.word())).max(0.0);
+            // Layout PR 6 (SL4): and as if `Discard` were shown, which a dirty draft shows and
+            // a clean one does not, so the first edit moves no reason and no field.
+            let discard = if state.discard_shown() {
+                0.0
+            } else {
+                Action::quiet("Discard")
+                    .density(Density::Read)
+                    .natural_width(ui)
+                    + gap
+            };
+            let mut room = reasons_right
+                - ui.cursor().left()
+                - (widest - word_width(state.word())).max(0.0)
+                - discard;
             // Save's own reason first: it stays at the row's end, under Save, while there is
             // room. A dirty group blocks the campaign switch wherever it is open, so it says so,
             // as the encounter editor does.

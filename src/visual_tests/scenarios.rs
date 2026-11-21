@@ -24414,12 +24414,23 @@ pub mod session_plan_groups {
         // moves. A proof aside: Discard puts the clean group back.
         d.aside(|d| {
             let sizes = [SMALL, DEFAULT, LARGE];
-            // The first member's menu: in the members column, or on the Members tab at 960.
+            // Layout PR 6 (SL4): the name, Default side, Belongs to, the creature search and the
+            // first member's menu (in the members column, or on the Members tab at 960), each
+            // found, keep their tops when the first edit shows Discard and the switch reason.
             let member = |d: &Driver<'_>| {
-                d.nodes()
-                    .into_iter()
-                    .find(|node| node.name.starts_with("More actions for ") && node.in_view())
-                    .map(|node| node.rect.top())
+                [
+                    "Group name",
+                    "Default side",
+                    "Belongs to",
+                    FIND_CREATURE,
+                    "More actions for ",
+                ]
+                .map(|start| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with(start) && node.in_view())
+                        .map(|node| node.rect.top())
+                })
             };
             let clean = sizes.map(|size| d.at_size(size, member));
             d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
@@ -24427,9 +24438,11 @@ pub mod session_plan_groups {
             d.observe(
                 "iter-25-B-FK1",
                 d.has_containing("Save or discard to switch campaign.")
-                    && clean.iter().all(Option::is_some)
+                    && clean.iter().flatten().all(Option::is_some)
                     && clean == changed,
-                format!("First member menu top, clean {clean:?}, changed {changed:?}"),
+                format!(
+                    "Tops of the name, Default side, Belongs to, search and first member menu, clean {clean:?}, changed {changed:?}"
+                ),
             );
             d.click("Discard");
             d.expect(&format!("Group name: {GROUP_RIVALS}"));
