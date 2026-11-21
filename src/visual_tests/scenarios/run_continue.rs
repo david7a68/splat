@@ -1484,6 +1484,11 @@ pub fn run(d: &mut Driver<'_>) {
     history_line_gaps(d, LATER_GONE);
     d.state("history-not-the-last-fight", Sizes::All);
     open_lookup(d);
+    // Layout PR 5a: Lookup narrows the ledger below its columns, so its actions leave the
+    // measured column for the far edge (22 px at 960 here, which G1c reads as the bar's lane).
+    d.expect_moves(
+        "Lookup narrows the ledger: its actions move from the measured column to the far edge.",
+    );
     whole_at_every_size(
         d,
         "T17.6",
