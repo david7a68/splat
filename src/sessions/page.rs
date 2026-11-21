@@ -2122,12 +2122,11 @@ impl Sessions {
                 // window. The banner is at most a third of it, and scrolls; the recording alerts
                 // stay first, at its top.
                 let most = ui.ctx().content_rect().height() / 3.0;
-                egui::ScrollArea::vertical()
-                    .id_salt("session_banner_scroll")
+                design::ScrollColumn::new("session_banner_scroll")
                     .max_height(most)
                     // Short content takes its own height; long content takes the whole third.
                     .min_scrolled_height(most)
-                    .auto_shrink([false, true])
+                    .fit_height()
                     .show(ui, |ui| {
                         if let Some(words) = &stalled {
                             let session = self.live.as_ref().map(|live| live.session);
@@ -4541,17 +4540,12 @@ impl Sessions {
         Ok(note.id)
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn list_pane(&mut self, ui: &mut egui::Ui) {
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut choose = None;
         let live = self.live.as_ref().map(|live| live.session);
-        egui::ScrollArea::vertical()
-            .id_salt("session_list")
-            .auto_shrink([false, false])
+        design::ScrollColumn::new("session_list")
+            .full_width()
             .show(ui, |ui| {
                 ui.add_enabled_ui(!locked, |ui| {
                     for note in &self.notes {
@@ -5137,10 +5131,6 @@ impl Sessions {
         )
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
         if self.draft.is_none() {
             return;
@@ -5154,9 +5144,7 @@ impl Sessions {
         // Beside the plan, the reader is a column with its own scroll; alone, it is the pane's
         // content, and the pane scrolls it (review of PR 335: a read view is content).
         if beside {
-            egui::ScrollArea::vertical()
-                .id_salt(("session_reader", self.selected))
-                .auto_shrink([false, false])
+            design::ScrollColumn::new(("session_reader", self.selected))
                 .show(ui, |ui| self.read_body(ui, &prepared));
         } else {
             self.read_body(ui, &prepared);
@@ -7229,10 +7217,6 @@ impl Sessions {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn notes_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -7266,10 +7250,7 @@ impl Sessions {
         }
         // The first session's form has no list to stand beside.
         if self.notes.is_empty() && !holding {
-            egui::ScrollArea::vertical()
-                .id_salt("session_form")
-                .auto_shrink([false, false])
-                .show(ui, |ui| self.show_form(ui));
+            design::ScrollColumn::new("session_form").show(ui, |ui| self.show_form(ui));
             return;
         }
         // Beside Lookup at a small window, two columns would crush the session.
@@ -7286,10 +7267,7 @@ impl Sessions {
                     self.list_only = true;
                 }
                 if self.form.is_some() {
-                    egui::ScrollArea::vertical()
-                        .id_salt("session_form")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| self.show_form(ui));
+                    design::ScrollColumn::new("session_form").show(ui, |ui| self.show_form(ui));
                 } else {
                     self.session_pane(ui, settings, book, plan);
                 }
@@ -7314,10 +7292,7 @@ impl Sessions {
             }))
             .show_inside(ui, |ui| {
                 if self.form.is_some() {
-                    egui::ScrollArea::vertical()
-                        .id_salt("session_form")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| self.show_form(ui));
+                    design::ScrollColumn::new("session_form").show(ui, |ui| self.show_form(ui));
                 } else {
                     self.session_pane(ui, settings, book, plan);
                 }
