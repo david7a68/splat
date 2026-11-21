@@ -18185,9 +18185,45 @@ pub mod session_recording {
                         .all(|reason| saves.iter().any(|save| reason.top() >= save.bottom())),
                 format!("Save key {saves:?} ends at {edge:?}; reasons {reasons:?} sit below"),
             );
+            // Layout PR 10 (SR2/AR3): the focused Service field comes whole above the tab's
+            // footer after the choice: its caption, and the control with its value and border.
+            let service = nodes
+                .iter()
+                .find(|node| node.name.starts_with("Transcript and summary service: "))
+                .map(|node| node.rect);
+            let caption = service.and_then(|service| {
+                nodes
+                    .iter()
+                    .filter(|node| node.name == "Service" && node.rect.bottom() <= service.top() + 1.0)
+                    .map(|node| node.rect)
+                    .reduce(|a, b| if a.bottom() > b.bottom() { a } else { b })
+            });
+            let scale = d.pixels_per_point();
+            let pane = service.and_then(|service| {
+                d.pane_records().into_iter().find(|record| {
+                    record
+                        .room()
+                        .contains(service.center() / scale)
+                })
+            });
+            let limit = pane.map(|record| {
+                let room = record.viewport().unwrap_or(record.room());
+                let bottom = record.footer().map_or(room.bottom(), |footer| footer.top());
+                (room.top() * scale, bottom * scale)
+            });
+            d.observe(
+                "layout-10-SR2-service-whole",
+                service.zip(caption).zip(limit).is_some_and(|((service, caption), (top, bottom))| {
+                    caption.top() >= top - 1.0 && service.bottom() <= bottom + 1.0
+                }),
+                format!(
+                    "The focused Service field (caption {caption:?}, control {service:?}) is whole \
+                     in the body above the footer {limit:?}"
+                ),
+            );
         });
-        // At 960 px the Service control is cut by the tab's footer after the choice
-        // (`processing-settings-anthropic` at 960), so the DM scrolls once to reach it. The
+        // The DM scrolls once here (the Service field is whole above the tab's footer after the
+        // choice since layout PR 10; the scroll stays so the task's acts do not change). The
         // state's window resizes can leave the page at another place (the drop-down keeps focus
         // on its control), so the step scrolls whatever that place is: the task's cost does not
         // depend on the capture's resizes. Then the page goes back to where it was, so the later

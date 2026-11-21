@@ -912,33 +912,23 @@ fn widget_count(ui: &Ui) -> usize {
 }
 
 /// A body control that gained keyboard focus in this pass comes whole into the pane's view, with
-/// the words that belong to it (`components::reveal_with`), above the footer: Tab never reaches
-/// a control hidden under it. So does the focused control when the visible room changes under it
-/// (the footer came or grew, the session banner came, the whole-row cut came with it; review of
-/// PR 306): a key press then never reaches a hidden control. Only a control that the body added
-/// (`widgets`, on the pane's layer) is scrolled to; a change of focus with a pointer press, hold
-/// or release is not, as `scroll_part` does for the footer.
+/// the words that belong to it (`components::reveal_with`: its field's caption, help and error,
+/// and a reason its act brought, [`reveal_with_focus`]), above the footer: Tab never reaches a
+/// control hidden under it. The pane is the one arbiter of this focus clearance (I9). It checks
+/// again when the visible room changes under the focused control (the footer came or grew, the
+/// session banner came, the whole-row cut came with it; review of PR 306), and when the focused
+/// field itself changes with the same focus (layout PR 10: a provider change adds or removes its
+/// help, a reason comes, the content above it moves it): it then scrolls only when the field is
+/// not whole in view. The DM's own wheel moves neither the room nor the field's place in the
+/// content, so it is never pulled back. Only a control that the body added (`widgets`, on the
+/// pane's layer) is scrolled to; a change of focus with a pointer press, hold or release is not,
+/// as `scroll_part` does for the footer.
 fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
     let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
-    // The room, not the clip: a wheel scroll moves the whole-row cut, and must not pull the
-    // focused control back into view.
-    let before = ui
-        .ctx()
-        .data(|data| data.get_temp::<(Option<Id>, Rect)>(seen));
-    if before == Some((focused, room)) {
-        return;
-    }
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(seen, (focused, room)));
-    // The same control, a new room: scroll only when it is not whole in view.
-    let moved_room = before.is_some_and(|(was, _)| was == focused);
-    let pointer = ui.input(|input| {
-        let pointer = &input.pointer;
-        pointer.any_down() || pointer.any_pressed() || pointer.any_released()
-    });
     let layer = ui.layer_id();
-    let rect = focused.filter(|_| !pointer).and_then(|focused| {
+    // The focused field's whole block, in this pass.
+    let block = focused.and_then(|focused| {
         ui.ctx()
             .viewport(|viewport| {
                 let widgets_now = &viewport.this_pass.widgets;
@@ -947,15 +937,53 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
                     .then(|| widgets_now.get(focused).map(|widget| widget.rect))
                     .flatten()
             })
-            // With the words that belong to it (a repair's help line), as `scroll_part` does.
             .map(|rect| super::components::reveal_rect(ui.ctx(), focused, rect))
     });
+    // Where the block is in the content (the content's origin is the column's top less its
+    // offset, so a wheel does not move it) and how tall it is, to whole points.
+    let origin = ui.max_rect().top();
+    let place = block.map(|block| {
+        [
+            (block.top() - origin).round() as i32,
+            block.height().round() as i32,
+        ]
+    });
+    // The room, not the clip: a wheel scroll moves the whole-row cut, and must not pull the
+    // focused control back into view.
+    let before = ui
+        .ctx()
+        .data(|data| data.get_temp::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen));
+    if before == Some((focused, room, place)) {
+        return;
+    }
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(seen, (focused, room, place)));
+    // The same control, a new room or a changed field: scroll only when it is not whole in view.
+    // A field taller than the view that changed in the same room (an editor that grows as the DM
+    // types) keeps its own caret follow: its top is not pulled into view.
+    let same = before.is_some_and(|(was, _, _)| was == focused);
+    let same_room = before.is_some_and(|(_, was, _)| was == room);
+    let pointer = ui.input(|input| {
+        let pointer = &input.pointer;
+        pointer.any_down() || pointer.any_pressed() || pointer.any_released()
+    });
     // A reveal that runs in this column owns its scroll (`design::reveal`).
-    if let Some(rect) = rect
-        && !(moved_room && visible.contains_rect(rect))
+    if let Some(rect) = block.filter(|_| !pointer)
+        && !(same
+            && (visible.contains_rect(rect) || (same_room && rect.height() > visible.height())))
         && !super::reveal::holds(ui)
     {
         ui.scroll_to_rect(rect, None);
+    }
+}
+
+/// Words that belong to the focused control now (a reason that its act brought, at another
+/// field): the pane's one focus arbiter ([`Footer::pane`]'s body) brings them into view with the
+/// focused field, above the footer, in the pass they come. It asks no scroll of its own, so it
+/// never competes with the arbiter or with the DM's wheel. With no focus it does nothing.
+pub fn reveal_with_focus(ui: &Ui, words: Rect) {
+    if let Some(focused) = ui.ctx().memory(|memory| memory.focused()) {
+        super::components::reveal_with(ui, focused, words);
     }
 }
 
@@ -2307,6 +2335,8 @@ mod hold_tests {
         hidden: bool,
         /// The pressed control is gone.
         gone: bool,
+        /// The far control's field shows its help (the same control, a changed field).
+        help: bool,
     }
 
     impl State {
@@ -2320,6 +2350,7 @@ mod hold_tests {
                 message: false,
                 hidden: false,
                 gone: false,
+                help: false,
             }
         }
     }
@@ -2361,7 +2392,13 @@ mod hold_tests {
             for row in 0..state.below {
                 ui.label(format!("Row below {row}"));
             }
-            let _ = ui.button("Far control");
+            // A field block: its caption, the control and (when shown) its help.
+            let help = state
+                .help
+                .then_some("The far control's help, which comes with no change of focus.");
+            crate::design::small_field(ui, "Far caption", help, None, |ui| {
+                let _ = ui.button("Far control");
+            });
         });
     }
 
@@ -2418,6 +2455,43 @@ mod hold_tests {
         assert!(
             far.top() >= viewport.top() - 0.5 && far.bottom() <= footer.top() + 0.5,
             "the focused control is whole above the footer: {far:?}, footer {footer:?}"
+        );
+        // Layout PR 10 (I9): its whole field block, caption first, not the control alone.
+        let caption = h.get_by_label("Far caption").rect();
+        assert!(
+            caption.top() >= viewport.top() - 0.5 && caption.bottom() <= footer.top() + 0.5,
+            "i9-caption: the focused field's caption {caption:?} is whole above the footer {footer:?}"
+        );
+        // The same control, a changed field (its help comes, as a provider change brings one):
+        // the arbiter checks again, and the whole block comes above the footer.
+        h.state_mut().help = true;
+        h.run_steps(4);
+        assert_eq!(h.ctx.memory(|memory| memory.focused()), focused);
+        let help = h
+            .get_by_label("The far control's help, which comes with no change of focus.")
+            .rect();
+        let record = pane_records(&h.ctx).into_iter().next().unwrap();
+        let (viewport, footer) = (record.viewport().unwrap(), record.footer().unwrap());
+        let caption = h.get_by_label("Far caption").rect();
+        assert!(
+            caption.top() >= viewport.top() - 0.5 && help.bottom() <= footer.top() + 0.5,
+            "i9-same-id: with the same focus, the changed field from {caption:?} to {help:?} is \
+             whole above the footer {footer:?}"
+        );
+        // The DM's own wheel is not pulled back: the field's place in the content and the room
+        // did not change.
+        let before = h.get_by_label("Far caption").rect().top();
+        h.hover_at(viewport.center());
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, 120.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(4);
+        let after = h.get_by_label("Far caption").rect().top();
+        assert!(
+            after > before + 60.0,
+            "i9-wheel: the wheel moved the field down from {before} to {after}, and it stays"
         );
     }
 

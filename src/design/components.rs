@@ -1706,6 +1706,9 @@ pub fn small_field<R>(
     field_label(ui, label, Type::Small, help, error, add)
 }
 
+/// A field block (layout PR 10): its caption, its control, its help and its error. A focused
+/// control of the block is brought into view with the whole block (`reveal_with`), so the pane's
+/// focus arbiter never leaves the caption or the help cut by the footer or the view's edge.
 fn field_label<R>(
     ui: &mut Ui,
     label: &str,
@@ -1714,9 +1717,34 @@ fn field_label<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
+    let top = ui.cursor().top();
+    let layer = ui.layer_id();
+    let count = |ui: &Ui| {
+        ui.ctx()
+            .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
+    };
+    let first = count(ui);
     field_caption(ui, label, role);
     let inner = add(ui);
-    field_feedback(ui, help, error);
+    let last = count(ui);
+    let bottom = field_feedback(ui, help, error);
+    // Only a focused control of this block: one lookup, nothing that grows with the form.
+    if let Some(focused) = ui.memory(|memory| memory.focused())
+        && ui.ctx().viewport(|viewport| {
+            viewport
+                .this_pass
+                .widgets
+                .order(focused)
+                .is_some_and(|(at_layer, at)| at_layer == layer && (first..last).contains(&at))
+        })
+    {
+        let span = ui.max_rect();
+        reveal_with(
+            ui,
+            focused,
+            Rect::from_min_max(pos2(span.left(), top), pos2(span.right(), bottom)),
+        );
+    }
     inner
 }
 
@@ -1734,7 +1762,9 @@ fn field_caption(ui: &mut Ui, label: &str, role: Type) {
 /// The field's help and error, then its own space: `L` from the last line of help or error to the
 /// next thing, so help never reads as the next field's (N3); `XS` more when it has neither. A
 /// caller adds no space after a field.
-fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) {
+///
+/// Returns the block's bottom: its last line of help or error, else its control's.
+fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) -> f32 {
     let mut last = None;
     if let Some(text) = help {
         last = Some(self::help(ui, text).rect.bottom());
@@ -1743,8 +1773,15 @@ fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) {
         last = Some(tone_message(ui, Tone::Error, error).rect.bottom());
     }
     match last {
-        Some(bottom) => space(ui, bottom + L - ui.cursor().top()),
-        None => space(ui, XS),
+        Some(bottom) => {
+            space(ui, bottom + L - ui.cursor().top());
+            bottom
+        }
+        None => {
+            let bottom = ui.min_rect().bottom();
+            space(ui, XS);
+            bottom
+        }
     }
 }
 
@@ -3607,8 +3644,16 @@ const REVEAL_WITH: &str = "reveal_with";
 /// after its words; a rect from an earlier pass is not used.
 pub(super) fn reveal_with(ui: &Ui, control: Id, rect: Rect) {
     let pass = ui.ctx().cumulative_pass_nr();
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(control.with(REVEAL_WITH), (pass, rect)));
+    // Words set for the control earlier in this pass (its field's caption and help) stay: the
+    // rect is their union.
+    ui.ctx().data_mut(|data| {
+        let key = control.with(REVEAL_WITH);
+        let rect = match data.get_temp::<(u64, Rect)>(key) {
+            Some((set, before)) if set == pass => before.union(rect),
+            _ => rect,
+        };
+        data.insert_temp(key, (pass, rect));
+    });
 }
 
 /// What to bring into view for the focused control `id`, whose own rect is `own`: with the
