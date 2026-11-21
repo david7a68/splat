@@ -2310,7 +2310,7 @@ mod tests {
         const SAVED: &str = "Campaign link saved.";
         let shows =
             |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
-             words: &str| harness.query_by_label_contains(words).is_some();
+             words: &str| harness.query_all_by_label_contains(words).next().is_some();
         let pick =
             |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
              choice: &str| {
