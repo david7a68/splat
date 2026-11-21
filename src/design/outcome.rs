@@ -4720,6 +4720,115 @@ fn action_help(
     line.rect
 }
 
+/// A message whose one choice opens an inline creation form in its place (Library's "This folder
+/// is a copy of …" with `Register as a new package`, then `Register a copy`). Closed, the fault
+/// and its choice, drawn as a [`BodyFault`] with one [`Repair`]; a press opens it. Open, the fault
+/// stays, the title (if any) and the form follow under it, in place, and the form's Cancel closes
+/// it. The caller keeps `open` and gives the form as a typed
+/// [`InlineCreate`](super::layout::InlineCreate), never a closure that draws. A body place: `show`
+/// is a reviewed suppression (`Ban::Body`).
+#[must_use = "call show"]
+pub struct FormOpener<'o> {
+    tone: Tone,
+    words: Sentence,
+    choice: ChoiceWords,
+    lock: Lock,
+    title: Option<&'static str>,
+    open: &'o mut bool,
+}
+
+/// What the DM did with a [`FormOpener`] this frame.
+#[derive(Debug, Default)]
+pub struct Opened {
+    /// The choice opened the form (it draws from the next frame).
+    pub opened: bool,
+    /// The open form's response; `None` while it is closed.
+    pub form: Option<super::layout::InlineCreateResponse>,
+}
+
+impl<'o> FormOpener<'o> {
+    /// The fault, the choice's words that open the form, and the caller's open state.
+    pub fn new(fault: &dyn Fault, choice: impl Into<ChoiceWords>, open: &'o mut bool) -> Self {
+        Self {
+            tone: fault.severity().tone(),
+            words: fault_words(fault),
+            choice: choice.into(),
+            lock: None,
+            title: None,
+            open,
+        }
+    }
+
+    /// The open form's title, a group heading above it (`Register a copy`).
+    pub fn title(mut self, title: &'static str) -> Self {
+        self.title = Some(title);
+        self
+    }
+
+    /// The choice is locked for as long as it is drawn, for `reason`.
+    pub fn blocked(mut self, reason: Sentence) -> Self {
+        self.lock = Some((reason, true));
+        self
+    }
+
+    /// The choice is locked while `locked`, for `reason`; the reason's line is kept while open.
+    pub fn locked_when(mut self, locked: bool, reason: Sentence) -> Self {
+        self.lock = Some((reason, locked));
+        self
+    }
+
+    /// Draw it at the cursor: closed, the fault and its choice; open, the fault, the title and
+    /// `form`.
+    pub fn show<R: super::layout::CreateReasons>(
+        self,
+        ui: &mut Ui,
+        form: super::layout::InlineCreate<'_, super::layout::Complete, R>,
+    ) -> Opened {
+        let Self {
+            tone,
+            words,
+            choice,
+            lock,
+            title,
+            open,
+        } = self;
+        if !*open {
+            let repair = Repair {
+                words: choice,
+                help: None,
+                lock,
+                id: (),
+            };
+            let opened = BodyFault {
+                tone,
+                words,
+                repairs: vec![repair],
+            }
+            .draw(ui)
+            .is_some();
+            *open = opened;
+            return Opened { opened, form: None };
+        }
+        let _ = BodyFault::<()> {
+            tone,
+            words,
+            repairs: Vec::new(),
+        }
+        .draw(ui);
+        if let Some(title) = title {
+            super::heading(ui, super::Heading::Group { title, count: 0 });
+        }
+        let response = form.show(ui);
+        if response.cancel {
+            *open = false;
+        }
+        Opened {
+            opened: false,
+            form: Some(response),
+        }
+    }
+}
+
 /// A fault in a page's body that the DM can repair from where it is (Campaign content's package
 /// and dependency faults): the fault's words and tone, then each [`Repair`] on its own line from
 /// the words, with its lock's reason and its help line under it. Its tone and words come from the
@@ -4750,6 +4859,11 @@ impl<A> BodyFault<A> {
 
     /// Draw it at the cursor, capped at `LIST_MEASURE`; the caller's id of the repair pressed.
     pub fn show(self, ui: &mut Ui) -> Option<A> {
+        self.draw(ui)
+    }
+
+    /// `show`'s drawing, for the design's own body places (`FormOpener`).
+    fn draw(self, ui: &mut Ui) -> Option<A> {
         let Self {
             tone,
             words,
@@ -6300,6 +6414,90 @@ mod tests {
         });
         assert!(wrapped, "the whole words, wrapped, nothing cut");
         assert!(node.right() <= *h.state() + 0.5, "inside the row: {node:?}");
+
+        // M-P0 item 6 (Library's `Register a copy`, M0346): a fault whose one choice opens an
+        // inline creation form in its place. Closed, its choice and no form; the choice opens
+        // the form under the fault and its title; the form's Cancel closes it; locked, the
+        // choice opens nothing.
+        #[derive(Default)]
+        struct Form {
+            open: bool,
+            locked: bool,
+            name: String,
+            opened: usize,
+        }
+        const REGISTER: crate::design::layout::Word = crate::word!("Register");
+        const CANCEL: crate::design::layout::Word = crate::word!("Cancel");
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(960.0, 600.0))
+            .build_ui_state(
+                |ui, form: &mut Form| {
+                    let fault = Hp(Severity::NeedsFixing, None);
+                    let mut opener =
+                        FormOpener::new(&fault, "Register as a new package", &mut form.open)
+                            .title("Register a copy");
+                    if form.locked {
+                        opener = opener.blocked(LOCK);
+                    }
+                    let shown = opener.show(
+                        ui,
+                        crate::design::layout::InlineCreate::new()
+                            .field(crate::design::layout::CreateField::new(
+                                crate::field_id!("test_opener_name")
+                                    .once(crate::design::layout::Once::Example),
+                                "New package name",
+                                &mut form.name,
+                            ))
+                            .create(
+                                crate::design::layout::Create::primary(REGISTER)
+                                    .blocked(None::<crate::design::layout::NoReason>),
+                            )
+                            .kept_line(crate::design::layout::KeptLine::new().cancel(CANCEL, true)),
+                    );
+                    form.opened += usize::from(shown.opened);
+                },
+                Form::default(),
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(3);
+        // A caption and its field share a name: any node with it.
+        let has = |h: &Harness<'_, Form>, name: &str| h.query_all_by_label(name).next().is_some();
+        assert!(
+            has(&h, "Register as a new package") && !has(&h, "New package name"),
+            "closed: the choice, no form"
+        );
+        h.get_by_label("Register as a new package").click();
+        h.run_steps(3);
+        assert!(
+            h.state().open
+                && h.state().opened == 1
+                && has(&h, "New package name")
+                && has(&h, "Register")
+                && !has(&h, "Register as a new package"),
+            "the choice opens the form in its place"
+        );
+        assert!(
+            h.query_by_role_and_label(
+                egui::accesskit::Role::Label,
+                "Cinder Wolf: The HP is missing."
+            )
+            .is_some(),
+            "the fault stays above the open form"
+        );
+        h.get_by_label("Cancel").click();
+        h.run_steps(3);
+        assert!(
+            !h.state().open && has(&h, "Register as a new package") && !has(&h, "New package name"),
+            "Cancel closes the form"
+        );
+        h.state_mut().locked = true;
+        h.run_steps(2);
+        h.get_by_label("Register as a new package").click();
+        h.run_steps(3);
+        assert!(
+            !h.state().open && h.state().opened == 1,
+            "locked, the choice opens nothing"
+        );
     }
 
     /// The pane's one press: the first in the footer's drawing order wins, and a second press
