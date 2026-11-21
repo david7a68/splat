@@ -1567,7 +1567,8 @@ the list, the editor, the plan and Arrivals. Save's own check names the member t
 draft's lines can move. The example (`Use a number,
 such as HP +5.`) belongs to the group editor's warning, not to these summaries.
 In the plan, each
-such member is a warning `small_message` below the row's summary, with Edit group in the row's action column. Readable members can
+such member is its typed fault in a compact `BodyMessage` (the size of a row's message, its tone from the
+fault) below the row's summary, with Edit group in the row's action column. Readable members can
 still join. While a fight is open, a group that some members can join keeps `Add to fight…` in its action column and
 puts `Edit group` in its row menu; a group none of whose members can join keeps `Edit group` there, because Arrivals
 could add nothing. Changed summaries also name the base creature. Wrap between members, never inside names; a member
