@@ -8296,6 +8296,9 @@ impl Encounters {
                     // them. Where they do not fit, the actions keep the far edge and the facts
                     // give way, as before. Every slot is reserved, so columns line up.
                     let list = egui::Id::new("roster_row_columns");
+                    // The facts' whole width, from their words: they give way in the room they
+                    // get, so the width they are drawn at cannot measure the column.
+                    let mut change_extra = 0.0_f32;
                     let (kept_facts, kept_actions) = design::action_rows::columns(ui, list);
                     let room = ui.available_width();
                     let column =
@@ -8453,6 +8456,11 @@ impl Encounters {
                                                     &marked,
                                                     &Type::Small.font(ui),
                                                 );
+                                                change_extra = design::number_width(
+                                                    ui,
+                                                    " · ",
+                                                    &Type::Small.font(ui),
+                                                ) + change_width;
                                                 let (fitted, fault_kept) = changed_detail_parts(
                                                     ui,
                                                     &detail,
@@ -8533,7 +8541,16 @@ impl Encounters {
                                 })
                                 .response
                                 .rect;
-                            design::action_rows::measured(ui, list, facts.width(), actions.width());
+                            let natural = design::number_width(
+                                ui,
+                                &format!("{}. {name}", i + 1),
+                                &Type::Strong.font(ui),
+                            )
+                            .max(
+                                design::number_width(ui, &detail, &Type::Small.font(ui))
+                                    + change_extra,
+                            );
+                            design::action_rows::measured(ui, list, natural, actions.width());
                             #[cfg(any(test, feature = "test-support"))]
                             design::action_rows::keep(
                                 ui,
@@ -8542,7 +8559,7 @@ impl Encounters {
                                     row: i,
                                     facts: egui::Rect::from_min_size(
                                         egui::pos2(left, facts.top()),
-                                        egui::vec2(facts.width(), facts.height()),
+                                        egui::vec2(natural, facts.height()),
                                     ),
                                     action: actions,
                                     column: if column {
