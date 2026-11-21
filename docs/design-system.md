@@ -2530,7 +2530,8 @@ is only for a note with no new place; Discard says `Draft discarded.` with `Undo
 
 A session notice that arrives on its own, not as the result of the DM's action on this page, sits in the bottom
 banner where the recording banners sit, never above the tabs or the note: processing finished (`“<session>” is
-processed. …`, with the close icon named `Dismiss`), a copy that claims the session, notes whose properties cannot
+processed. …`, with the close icon named `Dismiss`: work that finished by itself is a success notice,
+`Notice::finished`, which holds no Undo and no order, as no act of the DM made it), a copy that claims the session, notes whose properties cannot
 be read, and a note or template draft whose file changed on disk, went, moved or could not be saved, with their
 choices. The session note's warning and its choices stand in the banner on every page, not only beside the note,
 and they name the note, with each cause and its tone: `The note of <session> changed on disk. …`, `… is gone from

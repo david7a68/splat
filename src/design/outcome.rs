@@ -1536,6 +1536,8 @@ enum NoticeTone {
     /// What an act the DM can take next will cost (`The current folder keeps … Splat no longer
     /// shows these files.`): nothing is wrong yet, so it is no fault.
     Warning,
+    /// Work that finished by itself, not an act of the DM (`“Session 3” is processed. …`).
+    Finished,
 }
 
 impl NoticeTone {
@@ -1543,22 +1545,25 @@ impl NoticeTone {
         match self {
             Self::Info => Tone::Info,
             Self::Warning => Tone::Warning,
+            Self::Finished => Tone::Success,
         }
     }
 }
 
-/// A notice: guidance or why other actions wait (`new`, the info tone), or a warning before an
-/// act (`warning`: what the act will cost, in the warning tone with its bar and icon). A notice
+/// A notice: guidance or why other actions wait (`new`, the info tone), a warning before an
+/// act (`warning`: what the act will cost, in the warning tone with its bar and icon), or work
+/// that finished by itself (`finished`: the success tone, no Undo, no order). A notice
 /// with an Undo (a result that wrote nothing, `Draft discarded.`) is a kept result:
 /// `KeptOutcome::Notice`.
 ///
-/// Its tone is one of the two its constructors name; no notice takes a `Tone`, and none is an
+/// Its tone is one of the three its constructors name; no notice takes a `Tone`, and none is an
 /// error, which is a fault ([`FaultMessage`]):
 ///
 /// ```
 /// use splat_design::outcome::{Notice, NoPress};
 /// let _ = Notice::<NoPress>::new(splat_design::sentence!("Sync is off."));
 /// let _ = Notice::<NoPress>::warning(splat_design::sentence!("Splat no longer shows these files."));
+/// let _ = Notice::<NoPress>::finished(splat_design::sentence!("“Session 3” is processed."));
 /// ```
 /// ```compile_fail,E0599
 /// use splat_design::outcome::{Notice, NoPress};
@@ -1584,6 +1589,17 @@ impl<A> Notice<A> {
             words,
             choices: Vec::new(),
             file: None,
+        }
+    }
+
+    /// Work that finished by itself while the DM did something else (a recording processed in
+    /// the background): the success tone. It is not the result of an act of the DM, so it holds
+    /// no Undo and no order, and it may stand in a body place (`BodyMessage`, the bottom
+    /// banner); a result of the DM's act is a `Said` in its store, in the footer.
+    pub fn finished(words: Sentence) -> Self {
+        Self {
+            tone: NoticeTone::Finished,
+            ..Self::new(words)
         }
     }
 
@@ -4855,6 +4871,12 @@ mod tests {
                 row_fault(ui, &fault);
                 let _ = PagePlaceholder::<NoPress>::new(&fault).show(ui);
                 let _ = BodyFault::<NoPress>::new(&fault).show(ui);
+                // N0 (ruling M21): work that finished by itself is a success notice, in a body
+                // place (the bottom banner) and in a footer alike.
+                let _ = BodyMessage::<NoPress>::from(Notice::finished(crate::sentence!(
+                    "“Session 3” is processed."
+                )))
+                .show(ui);
                 let frame = PaneFrame::new(ui);
                 let mut messages =
                     Messages::<NoPress>::new(&frame, "one_fault", ui.available_width());
@@ -4865,6 +4887,9 @@ mod tests {
                     "Splat no longer shows these files."
                 )));
                 messages.outcome(Notice::new(crate::sentence!("Sync is off.")));
+                messages.outcome(Notice::finished(crate::sentence!(
+                    "“Session 4” is processed."
+                )));
                 let _ = messages.pane(ui, crate::design::Body::Content, |_| ());
             });
         crate::design::theme::install(&h.ctx);
@@ -4878,16 +4903,24 @@ mod tests {
                 MessagePlace::Row,
                 MessagePlace::Page,
                 MessagePlace::Page,
+                MessagePlace::Page,
+                MessagePlace::Footer,
                 MessagePlace::Footer,
                 MessagePlace::Footer,
                 MessagePlace::Footer
             ]
         );
         let tones: Vec<_> = rects.iter().map(|(_, _, tone)| *tone).collect();
+        let warnings = [Tone::Warning; 4];
         assert_eq!(
             tones,
-            [[Tone::Warning; 6].as_slice(), &[Tone::Info]].concat(),
-            "{rects:?}"
+            [
+                warnings.as_slice(),
+                &[Tone::Success],
+                &[Tone::Warning, Tone::Warning, Tone::Info, Tone::Success]
+            ]
+            .concat(),
+            "n0-finished-notice: {rects:?}"
         );
         // The warning notice paints the warning's bar and icon before its words, as the gate's
         // tone checks (`has_tone_bar`, the icon check) see them.
