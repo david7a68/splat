@@ -18217,17 +18217,17 @@ pub mod session_recording {
             let caption = service.and_then(|service| {
                 nodes
                     .iter()
-                    .filter(|node| node.name == "Service" && node.rect.bottom() <= service.top() + 1.0)
+                    .filter(|node| {
+                        node.name == "Service" && node.rect.bottom() <= service.top() + 1.0
+                    })
                     .map(|node| node.rect)
                     .reduce(|a, b| if a.bottom() > b.bottom() { a } else { b })
             });
             let scale = d.pixels_per_point();
             let pane = service.and_then(|service| {
-                d.pane_records().into_iter().find(|record| {
-                    record
-                        .room()
-                        .contains(service.center() / scale)
-                })
+                d.pane_records()
+                    .into_iter()
+                    .find(|record| record.room().contains(service.center() / scale))
             });
             let limit = pane.map(|record| {
                 let room = record.viewport().unwrap_or(record.room());
@@ -18236,9 +18236,11 @@ pub mod session_recording {
             });
             d.observe(
                 "layout-10-SR2-service-whole",
-                service.zip(caption).zip(limit).is_some_and(|((service, caption), (top, bottom))| {
-                    caption.top() >= top - 1.0 && service.bottom() <= bottom + 1.0
-                }),
+                service.zip(caption).zip(limit).is_some_and(
+                    |((service, caption), (top, bottom))| {
+                        caption.top() >= top - 1.0 && service.bottom() <= bottom + 1.0
+                    },
+                ),
                 format!(
                     "The focused Service field (caption {caption:?}, control {service:?}) is whole \
                      in the body above the footer {limit:?}"

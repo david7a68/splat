@@ -2348,6 +2348,8 @@ mod hold_tests {
         gone: bool,
         /// The far control's field shows its help (the same control, a changed field).
         help: bool,
+        /// A field near the top, under `Next control`.
+        near: bool,
     }
 
     impl State {
@@ -2362,6 +2364,7 @@ mod hold_tests {
                 hidden: false,
                 gone: false,
                 help: false,
+                near: false,
             }
         }
     }
@@ -2400,6 +2403,11 @@ mod hold_tests {
                 }
             }
             let _ = ui.button("Next control");
+            if state.near {
+                crate::design::small_field(ui, "Near caption", None, None, |ui| {
+                    let _ = ui.button("Near control");
+                });
+            }
             for row in 0..state.below {
                 ui.label(format!("Row below {row}"));
             }
@@ -2503,6 +2511,23 @@ mod hold_tests {
         assert!(
             after > before + 60.0,
             "i9-wheel: the wheel moved the field down from {before} to {after}, and it stays"
+        );
+        // Focus goes up to a field above the view: its caption comes into view with it, not
+        // only the control at the view's top edge.
+        h.state_mut().near = true;
+        h.run_steps(2);
+        h.get_by_label("Near control").focus();
+        h.run_steps(4);
+        let record = pane_records(&h.ctx).into_iter().next().unwrap();
+        let viewport = record.viewport().unwrap();
+        let (caption, control) = (
+            h.get_by_label("Near caption").rect(),
+            h.get_by_label("Near control").rect(),
+        );
+        assert!(
+            caption.top() >= viewport.top() - 0.5 && control.bottom() <= viewport.bottom() + 0.5,
+            "i9-caption-up: the field above the view comes whole, caption {caption:?} and control \
+             {control:?}, into the view {viewport:?}"
         );
     }
 
