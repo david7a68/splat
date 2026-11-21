@@ -297,6 +297,12 @@ bar and a World entry's Log line follow it.
 The fights, groups and scenes a session's note lists under its plan, with what has happened so far. The note
 holds the plan, so that Obsidian sees it too.
 
+**DM screen**:
+A Session view for use at the table. Its Play screen puts the live plan and sections of the open note in widgets.
+
+**Widget**:
+A tile on the DM screen. A note widget reads or edits the open session's draft.
+
 **Rewards**:
 What the party received in a fight: its loot results and, where the notes use XP, its XP, as one block in the
 session note that starts with the fight's Timeline reference. The note owns it; Splat writes it once and never

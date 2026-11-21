@@ -38,6 +38,8 @@ use uuid::Uuid;
 
 #[path = "carry.rs"]
 mod carry;
+#[path = "dm_screen.rs"]
+mod dm_screen;
 #[path = "kept.rs"]
 mod kept;
 #[path = "plan.rs"]
@@ -381,7 +383,7 @@ impl SessionView {
                 beside: false,
                 ..
             } => PageFooter::Plan,
-            Self::Tab { .. } | Self::Conflict => PageFooter::Session,
+            Self::Tab { .. } | Self::Conflict | Self::DmScreen => PageFooter::Session,
         }
     }
 }
@@ -390,6 +392,7 @@ impl SessionView {
 enum SessionView {
     /// The note's editor, to choose between the draft and the file.
     Conflict,
+    DmScreen,
     Tab {
         shown: Tab,
         beside: bool,
@@ -662,6 +665,7 @@ fn new_notice(
 
 #[derive(Default)]
 pub struct Sessions {
+    dm_screen: dm_screen::Preview,
     /// G118: the plan's kept lines, one per planned fight (`plan::PlanLines`), and the
     /// planned fights they were last trimmed to. Ended by `forget_plan_lines` (plan change,
     /// session change, campaign change); a new content key replaces an entry.
@@ -2958,7 +2962,7 @@ impl Sessions {
             SessionView::Tab {
                 shown: Tab::Note, ..
             } => fills_body(FillsReason::NoteEditor),
-            SessionView::Tab { .. } => fills_body(FillsReason::Columns),
+            SessionView::Tab { .. } | SessionView::DmScreen => fills_body(FillsReason::Columns),
         }
     }
 
@@ -5322,6 +5326,7 @@ impl Sessions {
 
     /// Show the note, ready for words.
     fn write_in_note(&mut self) {
+        self.dm_screen.show_notes();
         self.tab = Tab::Note;
         self.reading_note = false;
         self.caret_to_show = None;
@@ -7084,24 +7089,35 @@ impl Sessions {
             });
         });
         self.record_line(ui, settings);
-        // The body (Last time, the tabs and their pane) is the pane's; the part places the
-        // footer below it.
-        let view = self.session_header(ui, book, plan, &note, title_on_own_line);
-        // The narrow Plan tab: the plan's pane holds the page's messages too, in its one footer,
-        // which follows the plan's rows (`SessionView::page_footer`).
-        if view.page_footer() == PageFooter::Plan {
-            self.session_content(ui, settings, book, plan, view, &note);
-            return;
+        let preview = self.dm_screen.is_open();
+        if preview {
+            self.dm_screen.page_keys(ui);
         }
-        let frame = PaneFrame::new(ui);
-        let messages =
-            self.session_messages(&frame, settings, book, plan, &note, ui.available_width());
-        let body = self.session_body_kind(&view);
-        let paned = messages.pane(ui, body, |ui| {
-            self.session_content(ui, settings, book, plan, view, &note);
-        });
-        if let Some(press) = paned.pressed {
-            self.session_press(press, book, plan);
+        let mut content = |ui: &mut egui::Ui| {
+            // The narrow Plan tab owns the page's messages. The other views use the session
+            // pane's footer, below all their columns.
+            let view = self.session_header(ui, book, plan, &note, title_on_own_line);
+            if view.page_footer() == PageFooter::Plan {
+                self.session_content(ui, settings, book, plan, view, &note);
+                return;
+            }
+            let frame = PaneFrame::new(ui);
+            let messages =
+                self.session_messages(&frame, settings, book, plan, &note, ui.available_width());
+            let body = self.session_body_kind(&view);
+            let paned = messages.pane(ui, body, |ui| {
+                self.session_content(ui, settings, book, plan, view, &note);
+            });
+            if let Some(press) = paned.pressed {
+                self.session_press(press, book, plan);
+            }
+        };
+        if preview {
+            let height = (ui.available_height() - dm_screen::pager_height(ui)).max(0.0);
+            page_column(ui, ui.available_width(), height, content);
+            self.dm_screen.pager(ui);
+        } else {
+            content(ui);
         }
     }
 
@@ -7115,8 +7131,25 @@ impl Sessions {
         note: &Note,
         title_on_own_line: bool,
     ) -> SessionView {
+        let editing_group_here = plan.group_open && self.group_session == self.selected;
+        if self.dm_screen.is_play()
+            && !editing_group_here
+            && self
+                .draft
+                .as_ref()
+                .is_some_and(|draft| !draft.needs_attention())
+        {
+            if title_on_own_line {
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        self.session_details_action(ui, note);
+                    });
+                });
+            }
+            return SessionView::DmScreen;
+        }
         // A group being assembled needs the height, and last time can wait for it.
-        if !(plan.group_open && self.group_session == self.selected) {
+        if !editing_group_here {
             self.last_time_block(ui, book, plan);
         }
         if self
@@ -7126,7 +7159,6 @@ impl Sessions {
         {
             return SessionView::Conflict;
         }
-        let editing_group_here = plan.group_open && self.group_session == self.selected;
         let beside_from = if editing_group_here {
             design::LIST_MEASURE + design::L + design::READER_MEASURE
         } else {
@@ -7230,6 +7262,10 @@ impl Sessions {
         view: SessionView,
         note: &Note,
     ) {
+        if matches!(view, SessionView::DmScreen) {
+            self.dm_play(ui, book, plan, note);
+            return;
+        }
         // The page's messages go to the plan's footer only where `page_footer` says so; beside
         // the note, the plan's column keeps the plan's own results alone.
         let page = (view.page_footer() == PageFooter::Plan).then_some((settings, note));
@@ -8231,6 +8267,9 @@ impl Sessions {
             }
             if self.view == View::Notes && Action::quiet("Templates").show(ui).clicked() {
                 self.view = View::Templates;
+            }
+            if self.view == View::Notes && !in_form && !folder_missing && self.session_open() {
+                self.dm_screen.toggle_button(ui);
             }
             if self.party_hidden
                 && Action::quiet("Show party")
