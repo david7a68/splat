@@ -586,24 +586,6 @@ fn index_campaign(index: &ContentIndex) -> Uuid {
         .map_or(Uuid::nil(), |campaign| campaign.id)
 }
 
-/// In a narrow form (Lookup beside a run) the campaign-switch reason does not fit between
-/// Discard and Save, and takes its own line below the save row.
-fn switch_reason_below(ui: &egui::Ui, switch: &str) -> bool {
-    ui.available_width().min(design::FORM_WIDTH)
-        < Action::primary("Save changes")
-            .density(Density::Read)
-            .key("Ctrl+S")
-            .natural_width(ui)
-            + Action::quiet("Discard").natural_width(ui)
-            + design::number_width(
-                ui,
-                &format!("{} Unsaved", design::icons::DRAFT),
-                &Type::Body.font(ui),
-            )
-            + design::number_width(ui, switch, &Type::Small.font(ui))
-            + ui.spacing().item_spacing.x * 4.0
-}
-
 /// The edit form's text in the reader's face, unframed inside the form's well.
 fn edit_text_style(edit: egui::TextEdit<'_>, font: egui::FontId, width: f32) -> egui::TextEdit<'_> {
     edit.font(font)
@@ -611,11 +593,6 @@ fn edit_text_style(edit: egui::TextEdit<'_>, font: egui::FontId, width: f32) -> 
         .desired_rows(8)
         .frame(false)
         .margin(egui::Vec2::ZERO)
-}
-
-/// The reason's own line below the save row, kept while the form has no changes.
-fn reason_line(ui: &egui::Ui) -> f32 {
-    Type::Small.line() + ui.spacing().item_spacing.y
 }
 
 /// A gone Log line's notice: the entry's name and the DM's words, as they typed them.
@@ -1187,13 +1164,7 @@ impl Reader {
         // fields alone: it is the form (review of 1f560778).
         let log_waits = super::takes_log(item, index) && self.log_waits((campaign.id, id));
         self.form_drawn = Some((id, ui.ctx().cumulative_pass_nr()));
-        let switch = if log_waits {
-            super::LOG_WAITS_FOR_SAVE
-        } else {
-            crate::content_actions::draft_switch_reason()
-        };
         let clean_reason = log_waits.then_some(super::LOG_WAITS_FOR_CANCEL);
-        let narrow = switch_reason_below(ui, switch);
         let text = design::field(ui, "Text", None, None, |ui| {
             let font = style::prose_type(ui).font(ui);
             ui.scope(|ui| {
@@ -1250,73 +1221,44 @@ impl Reader {
             self.end(super::Slot::Reloaded);
         }
         let dirty = draft.dirty();
-        let reason = (!dirty).then_some("No changes to save.");
-        let mut save = overwrite
-            || (dirty
+        // M0600: the shared save row decides the word, Save's weight and why it waits,
+        // `Discard` or (a clean form) `Cancel`, and where the reasons stand: on the row when
+        // they fit, else on a line under it that keeps its room, so the first edit moves
+        // nothing. Save is primary unless a live run owns Next turn on this screen.
+        let state = design::DraftState::new(
+            // The form edits a note that is on disk.
+            design::save_row::DraftOrigin::Saved,
+            if dirty {
+                design::save_row::Changed::Yes
+            } else {
+                design::save_row::Changed::No
+            },
+            if self.live {
+                design::save_row::Primary::Elsewhere
+            } else {
+                design::save_row::Primary::Draft
+            },
+        )
+        .locks_campaign()
+        .cancels(clean_reason);
+        let state = if log_waits {
+            state.holds(super::LOG_WAITS_FOR_SAVE)
+        } else {
+            state
+        };
+        design::gap(ui, design::Gap::S);
+        let row = ui
+            .scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+                design::save_row(ui, &state, "Save changes")
+            })
+            .inner;
+        let save = overwrite
+            || row.save
+            || (state.can_save()
                 && focused
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
-        let mut cancel = false;
-        design::gap(ui, design::Gap::S);
-        // The campaign-switch reason sits between Discard and Save where it fits. In a narrow
-        // form (Lookup beside a run) it takes its own line below the row, reserved while the
-        // form has no changes, so the first edit moves nothing.
-        ui.horizontal(|ui| {
-            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // Save is primary unless a live run owns Next turn on this screen.
-                save |= (if self.live {
-                    Action::secondary("Save changes")
-                } else {
-                    Action::primary("Save changes")
-                })
-                .density(Density::Read)
-                .key("Ctrl+S")
-                .blocked(reason)
-                .show(ui)
-                .clicked();
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    let state = if dirty {
-                        design::Status {
-                            icon: design::icons::DRAFT,
-                            word: "Unsaved",
-                            color: colors().document.unsaved,
-                        }
-                    } else {
-                        design::Status {
-                            icon: design::icons::OK,
-                            word: "No changes",
-                            color: colors().muted,
-                        }
-                    };
-                    // A dirty draft says Discard. A clean form loses nothing, so it says Cancel.
-                    // A changed form locks the campaign switcher; the save row states why, as
-                    // every other draft's does.
-                    cancel = if dirty {
-                        let discard = design::save_row_state(ui, state, true, None);
-                        if !narrow {
-                            design::blocked_reason(ui, Some(switch));
-                        }
-                        discard
-                    } else {
-                        design::status(ui, state);
-                        let cancel = Action::quiet("Cancel").show(ui).clicked();
-                        if !narrow {
-                            design::blocked_reason(ui, clean_reason);
-                        }
-                        cancel
-                    };
-                });
-            });
-        });
-        if narrow {
-            if dirty {
-                design::blocked_reason(ui, Some(switch));
-            } else if clean_reason.is_some() {
-                design::blocked_reason(ui, clean_reason);
-            } else {
-                ui.add_space(reason_line(ui));
-            }
-        }
+        let cancel = row.discard || row.cancel;
         if cancel {
             self.error = None;
             self.picker = None;
