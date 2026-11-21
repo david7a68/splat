@@ -523,6 +523,51 @@ fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
     );
 }
 
+/// Layout step 7 (`session-header-measure`: SH11, AH8, AP4, SO9, AO10, SQ6, AQ4, SR6, AR5): the
+/// session's title line and its toolbar end at the session's content edge, never at the window's.
+/// That edge, read from the frame and not from the part: beside the plan, the note column's
+/// splitter; else the note editor's painted frame; else the plan rows' rules. Record (`Record
+/// this session`) ends there (±1 px), and so does the toolbar's Read while the note is written.
+/// At a scale of 1 (the HiDpi capture repeats the 1200 layout in physical pixels).
+fn session_header_edge(d: &mut Driver<'_>, id: &str) {
+    if d.pixels_per_point() != 1.0 {
+        return;
+    }
+    let size = d.window_size();
+    let record = d.place_of("Record this session");
+    let edge = session_content_edge(d);
+    let toolbar = d.place_of("Read").map(|rect| rect.right());
+    let near = |a: f32| edge.is_some_and(|edge| (a - edge).abs() <= 1.0);
+    d.observe(
+        id,
+        record.is_some_and(|record| near(record.right())) && toolbar.is_none_or(near),
+        format!(
+            "At {size:?}, Record {record:?} and the toolbar's Read {toolbar:?} end at the session's content edge {edge:?}"
+        ),
+    );
+}
+
+/// The session's content edge, read from the frame (`session_header_edge`).
+fn session_content_edge(d: &Driver<'_>) -> Option<f32> {
+    let size = d.window_size();
+    let record = d.place_of("Record this session");
+    let rules = record.and_then(|record| {
+        d.line_segments_in(egui::Rect::from_min_max(
+            egui::pos2(
+                record.left() - 2.0 * crate::design::XXL,
+                record.bottom() + crate::design::XL,
+            ),
+            egui::pos2(size.0, size.1),
+        ))
+        .into_iter()
+        .map(|rule| rule.right())
+        .reduce(f32::max)
+    });
+    d.column_edge_if_shown("session_note_frame")
+        .or_else(|| d.input_frame("Note text").map(|(frame, _)| frame.right()))
+        .or(rules)
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -3979,6 +4024,7 @@ pub mod campaign_content {
         d.expect_same("the footer's one new line, a lone Undo");
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
+            package_footer_follows(d, "Campaign.md was written again.", "l7-SA4-AA2");
         });
         // Round 25 review: a failed Undo keeps the write and its Undo; once the fault is gone,
         // the same Undo works. The test namespace runs as root, so permission bits do not stop
@@ -3986,20 +4032,37 @@ pub mod campaign_content {
         let written = std::fs::read(&manifest).unwrap();
         std::fs::remove_file(&manifest).unwrap();
         std::fs::create_dir(&manifest).unwrap();
+        // Layout step 7 (Astra's P1 and its re-check on PR 619): the footer follows the page, so
+        // each failure answers its press under the pressed line, and the Undo stays under the
+        // pointer through a first and a second failed press, with the fault left in place.
+        let undo_at = |d: &Driver<'_>| d.place_of("Undo write Campaign.md");
+        let before = undo_at(d);
         d.click("Undo write Campaign.md");
         d.settle();
         let kept =
             d.has("Undo write Campaign.md") && d.visible_text("Campaign.md was written again.");
+        let first = undo_at(d);
+        d.click("Undo write Campaign.md");
+        d.settle();
+        let second = undo_at(d);
+        let kept = kept
+            && d.has("Undo write Campaign.md")
+            && d.visible_text("Campaign.md was written again.");
         std::fs::remove_dir(&manifest).unwrap();
         std::fs::write(&manifest, &written).unwrap();
         d.observe(
             "iter-25-C-undo-failed",
             kept,
             format!(
-                "After a failed Undo: Undo kept {}, result kept {}",
+                "After two failed Undos: Undo kept {}, result kept {}",
                 d.has("Undo write Campaign.md"),
                 d.visible_text("Campaign.md was written again.")
             ),
+        );
+        d.observe(
+            "l7-P1-undo-still",
+            before.is_some() && before == first && first == second,
+            format!("Undo write Campaign.md before {before:?}, after one failed press {first:?}, after two {second:?}"),
         );
         d.click("Undo write Campaign.md");
         d.wait_for_text("Write Campaign.md again");
@@ -4029,6 +4092,55 @@ pub mod campaign_content {
         d.click("Write a new Campaign.md");
         d.wait_for_control("Undo write Campaign.md");
         assert!(manifest.exists());
+    }
+
+    /// Layout step 7 (SA4, AA2): the package list and the chosen package are one task, as tall as
+    /// the taller list. Its footer (the one that holds `words`) starts `S` below the taller
+    /// list's last row (the lowest control or words in either column, never a container), and
+    /// the splitter's rule ends at that row. Only when the lists are taller than the room is the
+    /// footer pinned: then the rule ends `S` above it. At 1920 the lists are short and the footer
+    /// follows them.
+    fn package_footer_follows(d: &mut Driver<'_>, words: &str, id: &str) {
+        let size = d.window_size();
+        let tab = d.place_of(TAB_PACKAGES);
+        let footer = footer_with(d, words);
+        let end = footer.zip(tab).and_then(|(footer, tab)| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role != egui::accesskit::Role::GenericContainer
+                        && node.shown.is_positive()
+                        && node.shown.top() > tab.bottom()
+                        && node.shown.bottom() < footer.top()
+                })
+                .map(|node| node.shown.bottom())
+                .reduce(f32::max)
+        });
+        let rule = footer.zip(tab).and_then(|(footer, tab)| {
+            d.vertical_lines_in(egui::Rect::from_min_max(
+                egui::pos2(footer.left(), tab.bottom() + crate::design::S),
+                egui::pos2(footer.right(), footer.top()),
+            ))
+            .into_iter()
+            .filter(|line| line.height() > crate::design::XXL)
+            .map(|line| line.bottom())
+            .reduce(f32::max)
+        });
+        let (follows, pinned) = match (footer, end, rule) {
+            (Some(footer), Some(end), Some(rule)) => (
+                (footer.top() - (end + crate::design::S)).abs() <= 1.0 && (rule - end).abs() <= 1.0,
+                end >= footer.top() - crate::design::S - 1.0
+                    && (rule - (footer.top() - crate::design::S)).abs() <= 1.0,
+            ),
+            _ => (false, false),
+        };
+        d.observe(
+            id,
+            follows || (pinned && size.0 < 1900.0),
+            format!(
+                "At {size:?}, the footer {footer:?} follows the taller list's last row {end:?} by `S` and the splitter's rule ends there {rule:?} (follows {follows}, pinned under lists taller than the room {pinned})"
+            ),
+        );
     }
 
     /// Round 25 review, round 26: a repair whose discard result and cause are long. They sit in
@@ -10562,12 +10674,18 @@ pub mod column_resize {
     fn the_session_fills_its_column(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, "Room to spare");
+        // Layout step 7 (`session-header-measure`, SH11 and AP4): the session's actions end at
+        // its content's edge (the note's frame, or the plan and the note's column beside it),
+        // not at the page's; the room the note leaves is the DM's to drag into.
         let page = right_of(d, HIDE_LIST);
+        let note = session_content_edge(d);
         d.observe(
             CHECK,
-            (right_of(d, "Record this session") - page).abs() <= S,
+            note.is_some_and(|note| {
+                (right_of(d, "Record this session") - note).abs() <= 1.0 && note < page - S
+            }),
             format!(
-                "A session's actions reach the edge of its column: {} of {page}",
+                "A session's actions end at its content's edge {note:?}, inside the page's {page}: {}",
                 right_of(d, "Record this session")
             ),
         );
@@ -14129,7 +14247,9 @@ pub mod session_notes {
         d.click("Create session");
         d.expect(&format!("Session 1: {TITLE}"));
         d.goal_within("T11.1", "start a titled session from a template", 4);
-        d.state("session-write", Sizes::AllAndHiDpi);
+        d.state_prepared("session-write", Sizes::AllAndHiDpi, |d| {
+            session_header_edge(d, "l7-AP4-SH11-session-header");
+        });
         let filled = d
             .editor_text()
             .is_some_and(|text| text.contains("Recap of last time") && text.contains(TITLE));
@@ -14702,7 +14822,7 @@ pub mod session_notes {
         d.state("event-link-update-offered", Sizes::All);
         d.click("Update 1 link");
         d.expect("Links now say “Rest at the mill”.");
-        d.expect("Undo change to links");
+        d.expect("Undo link update");
         assert!(!d.has(LINK_OFFER));
         let without_offer = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, kind_top));
         d.observe(
@@ -14718,7 +14838,7 @@ pub mod session_notes {
             ),
         );
         d.state("event-links-updated", Sizes::Default);
-        d.click("Undo change to links");
+        d.click("Undo link update");
         d.expect("Update 1 link");
         d.click("Update 1 link");
         d.click_starting("Rest at the mill ·");
@@ -14726,7 +14846,7 @@ pub mod session_notes {
         d.settle();
         d.observe(
             "iter-4-S2",
-            !d.has("Undo change to links"),
+            !d.has("Undo link update"),
             "Leaving Timeline clears the link-update Undo",
         );
         read_note(d);
@@ -17131,8 +17251,10 @@ pub mod session_recording {
                 d.is_disabled("Continue processing"),
                 "A banner retry with removed audio is blocked",
             );
-            // iter-23-S FE1: the reason stands beside the blocked action, and the words no
-            // longer tell the DM to select it.
+            // iter-23-S FE1: the reason is painted, and the words no longer tell the DM to select
+            // the blocked action. M-N0.10: the alert is a typed message, so the reason stands on
+            // its lock line under the choices, from the words' first letter (where the first
+            // choice, Continue processing, starts), as every locked choice's reason does.
             const GONE: &str = "Audio removed. Restore the WAV file to process it.";
             // A wrapped label in a wrapped row starts its first line after the controls before
             // it; measure that line.
@@ -17152,10 +17274,10 @@ pub mod session_recording {
                 !d.visible_text("Wait, then select Continue processing")
                     && d.visible_text("The transcript and summary service is busy.")
                     && reason.zip(button).is_some_and(|(reason, button)| {
-                        reason.left() >= button.right() && reason.center().y > button.top()
-                            && reason.center().y < button.bottom()
+                        reason.top() >= button.bottom() - 0.5
+                            && (reason.left() - button.left()).abs() <= 1.0
                     }),
-                format!("The blocked reason follows Continue processing on its line: {reason:?}, {button:?}"),
+                format!("The blocked reason stands under the choices, at the words: {reason:?}, {button:?}"),
             );
             let process = d
                 .nodes()
@@ -26866,7 +26988,9 @@ pub mod session_plan {
             !d.has(&format!("Resume: {SECOND}")) && d.has("Undo delete run"),
             "Deleting the saved run offers one step of undo",
         );
-        d.state("plan-saved-run-deleted", Sizes::Default);
+        d.state_prepared("plan-saved-run-deleted", Sizes::Default, |d| {
+            session_header_edge(d, "l7-SQ6-AQ4-session-header");
+        });
         d.click("Undo delete run");
         d.expect(&format!("Resume: {SECOND}"));
         d.click(&format!("Resume: {SECOND}"));

@@ -315,6 +315,7 @@ fn closure_follows_a_selection_change() {
             document,
             subtitles: crate::library::catalogue_subtitles(&catalogue),
             catalogue,
+            issues: None,
         }),
         ..Default::default()
     };
