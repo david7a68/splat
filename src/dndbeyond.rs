@@ -184,6 +184,12 @@ pub struct DndBeyond {
 }
 
 impl DndBeyond {
+    /// The list's or the link's error, as the footer says it (tests).
+    #[cfg(test)]
+    pub(crate) fn error_for_test(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
     /// A list as a refresh would bring it: `(id, name)` per remote campaign (tests).
     #[cfg(test)]
     pub(crate) fn listed_for_test(list: &[(&str, &str)]) -> Self {

@@ -2350,9 +2350,9 @@ mod tests {
         mode(&settings, 0o755);
         mode(&path, 0o644);
         assert!(
-            harness.state().1.error.is_some() && !shows(&harness, SAVED),
+            harness.state().1.error_for_test().is_some() && !shows(&harness, SAVED),
             "a failed link left its older success beside the error ({:?})",
-            harness.state().1.error
+            harness.state().1.error_for_test()
         );
         // A's details: an edit and Discard keep A's draft, with its Undo, in A's own form.
         let edit_name =
