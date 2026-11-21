@@ -8305,7 +8305,7 @@ impl Sessions {
             } else {
                 (HIDE_LIST, "Hide the session list (Ctrl+\\)")
             };
-            line = line.toggle(icons::SESSION_LIST, name, hint);
+            line = line.toggle(icons::SESSION_LIST, name, hint, !self.list_hidden);
         }
         if self.view == View::Notes && !in_form && !empty && !folder_missing {
             line = line.action(
