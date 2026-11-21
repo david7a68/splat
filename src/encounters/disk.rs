@@ -1,7 +1,11 @@
 //! The same disk comparison for encounter, group and creature drafts.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
-    design::{self, Action, Density, Tone, Type, colors},
+    design::{
+        self, Type, colors,
+        outcome::{
+            BodyMessage, Choice, ChoiceKind, Fault, FaultMessage, MessageChoice, Sentence, Severity,
+        },
+    },
     library::note_path,
 };
 use eframe::egui;
@@ -28,12 +32,31 @@ pub(super) fn removed_with_draft(name: &str) -> String {
 /// The one sentence for a draft whose file changed on disk. It names the thing by its name, never
 /// the file (R10): `Bridge Ambush changed on disk.` Only a draft with no name yet says
 /// `This <what>`.
-pub(super) fn changed_on_disk(what: &str, name: &str) -> String {
+pub(super) fn changed_on_disk(what: &str, name: &str) -> Sentence {
     let name = name.trim();
     if name.is_empty() {
-        format!("This {what} changed on disk. Your draft is safe until you choose.")
+        crate::sentence!(
+            "This {} changed on disk. Your draft is safe until you choose.",
+            what
+        )
     } else {
-        format!("{name} changed on disk. Your draft is safe until you choose.")
+        crate::sentence!(
+            "{} changed on disk. Your draft is safe until you choose.",
+            name
+        )
+    }
+}
+
+/// What the disk did under a draft: its file changed or went, or another file uses its
+/// identity. The draft is safe and Save waits until the DM chooses: the warning tone.
+struct DiskFault(Sentence);
+
+impl Fault for DiskFault {
+    fn severity(&self) -> Severity {
+        Severity::NeedsFixing
+    }
+    fn cause(&self) -> Sentence {
+        self.0.clone()
     }
 }
 
@@ -78,7 +101,7 @@ impl Recovery {
                 text: current,
                 copies: peers.into_iter().map(|(path, _)| path).collect(),
             });
-            return Err(changed_on_disk(what, name));
+            return Err(changed_on_disk(what, name).to_string());
         }
         self.change = None;
         Ok(())
@@ -97,49 +120,47 @@ impl Recovery {
         self.change.take()
     }
 
+    /// The conflict in place of the editor, its choices after the last fact, then what differs.
+    /// `Some(true)` keeps the draft; `Some(false)` lets it go.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "ruling M20: a draft’s disk conflict in its editor’s place, typed (`Ban::Body`)"
+    )]
     pub fn show(&self, ui: &mut egui::Ui, draft: &str, (what, name): (&str, &str)) -> Option<bool> {
         let change = self.change.as_ref()?;
-        let mut messages = vec![changed_on_disk(what, name)];
-        messages.extend(
-            change
-                .copies
-                .iter()
-                .map(|path| format!("Another file uses this identity: {path}. Both files stay.")),
-        );
-        let last = messages.pop().unwrap_or_default();
-        for message in &messages {
-            design::message(ui, Tone::Warning, message);
+        let mut faults = vec![DiskFault(changed_on_disk(what, name))];
+        faults.extend(change.copies.iter().map(|path| {
+            DiskFault(crate::sentence!(
+                "Another file claims to be this {}: {}. Both files stay.",
+                what,
+                path
+            ))
+        }));
+        let last = faults.pop()?;
+        for fault in &faults {
+            let _ = BodyMessage::<()>::from(FaultMessage::new(fault)).show(ui);
         }
-        // The choices follow the last fact the DM reads, at the message text: safe first, then
-        // an `L` gap before the red one.
-        let mut choice = None;
-        design::message_with_actions(ui, Tone::Warning, &last, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                // The same Read density as every other disk-conflict choice row.
-                if Action::secondary("Overwrite with my draft")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    choice = Some(true);
-                }
-                // egui adds its item spacing (`S`, the theme's) too, so the whole gap is `L`.
-                design::gap(ui, design::Gap::S);
-                // FF7: the file is gone, so the choice says what it removes and loses.
-                let lose = if change.text.is_some() {
-                    "Reload and lose my draft".to_owned()
-                } else {
-                    format!("Remove {what} and lose draft")
-                };
-                if Action::destructive(&lose)
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    choice = Some(false);
-                }
-            });
-        });
+        // The choices follow the last fact the DM reads, at its words: safe first, then the red
+        // one `L` after it (the part's). FF7: a file that is gone says what the red one removes
+        // and loses.
+        let lose = if change.text.is_some() {
+            Choice::new(MessageChoice::Lose("Reload and lose my draft"), false)
+        } else {
+            Choice::named_as(
+                ChoiceKind::Lose,
+                crate::choice!("Remove {} and lose draft", what),
+                false,
+            )
+        };
+        let choice = BodyMessage::from(
+            FaultMessage::new(&last)
+                .choice(Choice::new(
+                    MessageChoice::Choice("Overwrite with my draft"),
+                    true,
+                ))
+                .choice(lose),
+        )
+        .show(ui);
         if let Some(text) = &change.text {
             // One line for each part that differs, in the DM's words, above the raw lines.
             let key = egui::Id::new(("disk_differences", draft, text.as_str()));

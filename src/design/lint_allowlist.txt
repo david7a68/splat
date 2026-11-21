@@ -13,7 +13,6 @@ src/dndbeyond.rs allow-deprecated 1
 src/encounter_run/notice.rs allow-deprecated 1
 src/encounter_run/view.rs allow-deprecated 1
 src/encounters.rs allow-deprecated 1
-src/encounters/disk.rs allow-deprecated 1
 src/encounters/groups.rs allow-deprecated 1
 src/lib.rs allow-deprecated 1
 src/library/view.rs allow-deprecated 1
