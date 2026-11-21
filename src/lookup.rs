@@ -2469,13 +2469,7 @@ impl Lookup {
             ui.horizontal(|ui| {
                 // The count belongs to the `DUE N` heading below; the title says nothing more (FH8).
                 ui.label(Type::Heading.rich(ui, "Trackers"));
-                back = self.holds_something()
-                    && Action::quiet("Back")
-                        .icon(icons::LEGACY_BACK)
-                        .key("Alt+Left")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked();
+                back = self.holds_something() && Action::history_back(true).show(ui).clicked();
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
                 });
@@ -2489,12 +2483,7 @@ impl Lookup {
                 if self.trail.peek(Step::Back).is_some()
                 // The icon buttons' density, so the title line keeps one height with or without
                 // Back, and the search field below never moves.
-                && Action::quiet("Back")
-                    .icon(icons::LEGACY_BACK)
-                    .key("Alt+Left")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
+                && Action::history_back(true).show(ui).clicked()
                 {
                     self.step(Step::Back);
                 }

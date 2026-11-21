@@ -76,6 +76,7 @@ const SESSION_TEMPLATE: design::FieldName = crate::field_id!("session_template")
 const CREATE_SESSION: design::Word = crate::word!("Create session");
 const SAVE_DETAILS: design::Word = crate::word!("Save details");
 const CANCEL: design::Word = crate::word!("Cancel");
+const CREATE_TEMPLATE: design::Word = crate::word!("Create template");
 
 crate::create_reasons! {
     /// Why the New session form's Create (or the details form's Save details) waits.
@@ -83,6 +84,13 @@ crate::create_reasons! {
         Number => "Enter the session number as a whole number.",
         Date => "Enter the date as YYYY-MM-DD.",
         TemplateGone => "The chosen template is gone from the folder. Choose another.",
+    }
+}
+
+crate::create_reasons! {
+    /// Why the New template form's Create waits.
+    enum TemplateReason {
+        NoName => "Type a name first.",
     }
 }
 
@@ -2180,12 +2188,11 @@ impl Sessions {
                 // window. The banner is at most a third of it, and scrolls; the recording alerts
                 // stay first, at its top.
                 let most = ui.ctx().content_rect().height() / 3.0;
-                egui::ScrollArea::vertical()
-                    .id_salt("session_banner_scroll")
+                design::ScrollColumn::new("session_banner_scroll")
                     .max_height(most)
                     // Short content takes its own height; long content takes the whole third.
                     .min_scrolled_height(most)
-                    .auto_shrink([false, true])
+                    .fit_height()
                     .show(ui, |ui| {
                         if let Some(words) = &stalled {
                             let session = self.live.as_ref().map(|live| live.session);
@@ -4593,17 +4600,12 @@ impl Sessions {
         Ok(note.id)
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn list_pane(&mut self, ui: &mut egui::Ui) {
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut choose = None;
         let live = self.live.as_ref().map(|live| live.session);
-        egui::ScrollArea::vertical()
-            .id_salt("session_list")
-            .auto_shrink([false, false])
+        design::ScrollColumn::new("session_list")
+            .full_width()
             .show(ui, |ui| {
                 ui.add_enabled_ui(!locked, |ui| {
                     for note in &self.notes {
@@ -5193,10 +5195,6 @@ impl Sessions {
         )
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
         if self.draft.is_none() {
             return;
@@ -5210,9 +5208,7 @@ impl Sessions {
         // Beside the plan, the reader is a column with its own scroll; alone, it is the pane's
         // content, and the pane scrolls it (review of PR 335: a read view is content).
         if beside {
-            egui::ScrollArea::vertical()
-                .id_salt(("session_reader", self.selected))
-                .auto_shrink([false, false])
+            design::ScrollColumn::new(("session_reader", self.selected))
                 .show(ui, |ui| self.read_body(ui, &prepared));
         } else {
             self.read_body(ui, &prepared);
@@ -7287,10 +7283,6 @@ impl Sessions {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn notes_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -7324,10 +7316,7 @@ impl Sessions {
         }
         // The first session's form has no list to stand beside.
         if self.notes.is_empty() && !holding {
-            egui::ScrollArea::vertical()
-                .id_salt("session_form")
-                .auto_shrink([false, false])
-                .show(ui, |ui| self.show_form(ui));
+            design::ScrollColumn::new("session_form").show(ui, |ui| self.show_form(ui));
             return;
         }
         // Beside Lookup at a small window, two columns would crush the session.
@@ -7344,10 +7333,7 @@ impl Sessions {
                     self.list_only = true;
                 }
                 if self.form.is_some() {
-                    egui::ScrollArea::vertical()
-                        .id_salt("session_form")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| self.show_form(ui));
+                    design::ScrollColumn::new("session_form").show(ui, |ui| self.show_form(ui));
                 } else {
                     self.session_pane(ui, settings, book, plan);
                 }
@@ -7372,10 +7358,7 @@ impl Sessions {
             }))
             .show_inside(ui, |ui| {
                 if self.form.is_some() {
-                    egui::ScrollArea::vertical()
-                        .id_salt("session_form")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| self.show_form(ui));
+                    design::ScrollColumn::new("session_form").show(ui, |ui| self.show_form(ui));
                 } else {
                     self.session_pane(ui, settings, book, plan);
                 }
@@ -7568,65 +7551,37 @@ impl Sessions {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn new_template_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut name) = self.new_template.take() else {
             return;
         };
         design::heading(ui, design::Heading::Label("New template"));
-        // Round 27 FL2, SL1: the one inline creation layout. `Create template` follows the name
-        // field on its line, the help stays under the field, and the kept line below holds quiet
-        // `Cancel` at its start and the reason after it, so typing moves nothing.
-        let create_action = || {
-            if self.open_run.is_some() {
-                Action::secondary("Create template")
-            } else {
-                Action::primary("Create template")
-            }
-        };
-        let reason = name.trim().is_empty().then_some("Type a name first.");
-        let create_width = create_action().natural_width(ui);
-        let mut create = false;
-        ui.horizontal_top(|ui| {
-            let width = ui.available_width() - create_width - ui.spacing().item_spacing.x;
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, 0.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    design::labelled_field(
-                        ui,
-                        TEMPLATE_NAME,
-                        "Template name",
-                        &mut name,
-                        Some("Starts with the title line only."),
-                        None,
-                    );
-                },
-            );
-            ui.vertical(|ui| {
-                ui.add_space(design::L + design::XS);
-                create = create_action().blocked(reason).show(ui).clicked();
-            });
-        });
-        let mut keep = true;
-        ui.horizontal(|ui| {
-            // As tall as Cancel, so the reason coming or going moves nothing.
-            ui.set_min_height(Density::Read.control());
-            if Action::quiet("Cancel")
-                .density(Density::Read)
-                .line_start()
-                .show(ui)
-                .clicked()
-            {
-                keep = false;
-                self.template_error = None;
-            }
-            ui.add_space(design::L - ui.spacing().item_spacing.x);
-            design::blocked_reason(ui, reason);
-        });
+        // The one inline creation form (round 31, `inline-create-action-order`, N0 M0490): the
+        // name and its help, then `Create template` and quiet `Cancel` together on the action
+        // line under the field, then the kept line with the reason. Enter in the field creates,
+        // Escape cancels.
+        let reason = name.trim().is_empty().then_some(TemplateReason::NoName);
+        let create = if self.open_run.is_some() {
+            design::Create::secondary(CREATE_TEMPLATE)
+        } else {
+            design::Create::primary(CREATE_TEMPLATE)
+        }
+        .blocked(reason);
+        let shown = design::InlineCreate::new()
+            .field(
+                design::CreateField::new(TEMPLATE_NAME, "Template name", &mut name)
+                    .help("Starts with the title line only."),
+            )
+            .create(create)
+            .kept_line(design::KeptLine::new().cancel(CANCEL, true))
+            .actions_under()
+            .show(ui);
+        let mut keep = !shown.cancel;
+        if shown.cancel {
+            self.template_error = None;
+        }
+        // A press is judged on the name after this frame's typing.
+        let create = shown.create && !name.trim().is_empty();
         if create && let Some(folder) = &self.folder {
             let body = "# Session {{number}}: {{title}}\n\n";
             match create_template(folder, &name, body) {
