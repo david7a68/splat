@@ -3314,6 +3314,9 @@ struct FieldLine {
     response: Response,
     side: bool,
     create: bool,
+    /// The field's suggestions were open when the frame began: a layer above the form that
+    /// Escape closes first.
+    suggestions_open: bool,
 }
 
 /// One text field with its side action and, when Create follows it, Create: beside the field
@@ -3332,6 +3335,7 @@ fn field_line<R: CreateReasons>(
         response: ui.response(),
         side: false,
         create: false,
+        suggestions_open: false,
     };
     // The actions in order: the side action, then Create (true for the side action).
     let mut actions_in_order: Vec<bool> = Vec::new();
@@ -3410,15 +3414,32 @@ fn field_line<R: CreateReasons>(
         line.response.request_focus();
     }
     if let Some(suggestions) = part.suggestions {
-        suggestion_list(ui, &line.response, part.text, suggestions);
+        line.suggestions_open = suggestion_list(ui, &line.response, part.text, suggestions);
     }
     line
 }
 
 /// A create field's suggestions (`CreateField::suggestions`): a menu under the field of those
 /// that contain its words, opened when the field takes the keyboard or its words change, closed
-/// by a choice or a press outside it. A choice fills the field.
-fn suggestion_list(ui: &mut Ui, field: &Response, text: &mut String, suggestions: &[String]) {
+/// by a choice, a press outside it, or Escape (which the form then gives as `closed_above`, not
+/// Cancel). A choice fills the field. Only an open or opening menu reads the suggestions. Whether
+/// the menu was open when the frame began.
+fn suggestion_list(
+    ui: &mut Ui,
+    field: &Response,
+    text: &mut String,
+    suggestions: &[String],
+) -> bool {
+    let id = egui::Popup::default_response_id(field);
+    let was_open = egui::Popup::is_id_open(ui.ctx(), id);
+    let opening = field.gained_focus() || field.changed();
+    if !was_open && !opening {
+        return false;
+    }
+    if was_open && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+        egui::Popup::close_id(ui.ctx(), id);
+        return true;
+    }
     let typed = text.trim().to_lowercase();
     // Owned: the menu's content outlives this frame's borrows.
     let matching: Vec<String> = suggestions
@@ -3427,8 +3448,7 @@ fn suggestion_list(ui: &mut Ui, field: &Response, text: &mut String, suggestions
         .cloned()
         .collect();
     let current = text.clone();
-    let command = (field.gained_focus() || field.changed())
-        .then_some(egui::SetOpenCommand::Bool(!matching.is_empty()));
+    let command = opening.then_some(egui::SetOpenCommand::Bool(!matching.is_empty()));
     let mut picked = None;
     super::menu_popup(&*ui, field)
         .open_memory(command)
@@ -3446,6 +3466,7 @@ fn suggestion_list(ui: &mut Ui, field: &Response, text: &mut String, suggestions
     if let Some(picked) = picked {
         *text = picked;
     }
+    was_open
 }
 
 impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
@@ -3557,6 +3578,8 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         }
         let keys_for_the_form = !was_composing && !ime_event;
         let mut last_help = None;
+        // A field's open suggestions are a layer above the form, as a chosen one is.
+        let mut suggestions_open = false;
         for (at, part) in self.parts.into_iter().enumerate() {
             let last = at + 1 == count;
             match part {
@@ -3573,6 +3596,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                     let help = part.help;
                     let line = field_line::<R>(ui, part, help, room, None);
                     out.side |= line.side;
+                    suggestions_open |= line.suggestions_open;
                     out.fields.push(line.response);
                 }
                 CreatePart::Text(part) => {
@@ -3581,6 +3605,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                     let line = field_line(ui, part, None, room, beside);
                     out.side |= line.side;
                     out.create |= line.create;
+                    suggestions_open |= line.suggestions_open;
                     out.fields.push(line.response);
                 }
                 CreatePart::Dropdown(dropdown) => {
@@ -3637,7 +3662,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         }
         // Escape closes the top layer first: a layer above the form (a chosen suggestion), after
         // the input method's guard, so a composition keeps it too.
-        if left && escape && self.above {
+        if left && escape && (self.above || suggestions_open) {
             out.closed_above = true;
             if let Some(field) = out.fields.iter().find(|field| field.lost_focus()) {
                 field.request_focus();

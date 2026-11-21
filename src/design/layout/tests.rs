@@ -1657,12 +1657,14 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         .map(String::from)
         .to_vec();
     let folder = std::cell::RefCell::new(String::new());
+    // What the form gave back in the last frame: Cancel, and Escape closing the layer above.
+    let answered = std::cell::Cell::new((false, false));
     let entry_form = |events: Vec<egui::Event>| {
         let mut name = String::from("Barrow Wight");
         let (mut kind, mut place, mut used) = (0_u8, 0_u8, false);
         let mut words = folder.borrow().clone();
         let drawn = frame_with(&ctx, vec2(800.0, 700.0), events, |ui| {
-            let _ = InlineCreate::new()
+            let out = InlineCreate::new()
                 .field(CreateField::new(
                     crate::field_id!("test_create_entry_name").once(Once::Example),
                     "Entry name",
@@ -1693,6 +1695,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                 .create(Create::primary(CREATE_ENTRY).blocked(None::<TestReason>))
                 .kept_line(KeptLine::new().cancel(CANCEL, true))
                 .show(ui);
+            answered.set((out.cancel, out.closed_above));
         });
         *folder.borrow_mut() = words;
         drawn
@@ -1766,6 +1769,33 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         shown(&painted, "Creatures/Undead") && !shown(&painted, "Spells"),
         "the suggestions narrow to the field's words"
     );
+    // Review of PR 602 (P1): Escape closes the open suggestions first, not the form; a second
+    // Escape cancels.
+    let escape = || {
+        vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]
+    };
+    let _ = entry_form(escape());
+    assert_eq!(
+        answered.get(),
+        (false, true),
+        "the first Escape closes only the suggestions (no Cancel)"
+    );
+    let (_, painted) = entry_form(Vec::new());
+    assert!(
+        !shown(&painted, "Creatures/Undead") && *folder.borrow() == "und",
+        "the suggestions are closed and the words stay"
+    );
+    let _ = entry_form(escape());
+    assert_eq!(answered.get(), (true, false), "a second Escape cancels");
+    // Into the field again: its suggestions narrow to its words, and a press fills it.
+    let _ = entry_form(click(field.center()));
+    let (_, painted) = entry_form(Vec::new());
     let at = painted
         .iter()
         .find(|text| text.text == "Creatures/Undead")
