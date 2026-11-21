@@ -1684,8 +1684,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/sessions/plan.rs", 4),
             ("src/timeline/page.rs", 3),
             ("src/timeline/test_support.rs", 2),
-            ("src/trackers/history.rs", 1),
-            ("src/trackers/view.rs", 2),
             ("src/world.rs", 1),
             ("src/world/repair.rs", 1),
         ],

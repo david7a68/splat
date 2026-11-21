@@ -1541,11 +1541,12 @@ impl Splat {
                 .timeline
                 .add(timeline::Kind::Event, self.trackers.played);
             if let Some(added) = self.timeline.event_mut(&event) {
-                added.title = title;
+                added.title = title.clone();
             }
             self.trackers.added = Some(trackers::Added {
                 entry,
                 event,
+                title,
                 at: std::time::Instant::now(),
                 not_saved: None,
             });

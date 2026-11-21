@@ -947,7 +947,8 @@ pub fn run(d: &mut Driver<'_>) {
         added(d) && ledger(d).matches("why: Take seal").count() == 1,
         "Add to Timeline makes a Major event with the act's label and its line, and writes no ledger entry",
     );
-    d.click("Undo add");
+    // M-S0.1 (M0577, M0578): the Undo names the event it takes back.
+    d.click("Undo add Take seal: Old Guard");
     d.observe(
         "T19.2",
         !added(d) && d.has("Undo: Take seal"),
@@ -1039,7 +1040,8 @@ pub fn run(d: &mut Driver<'_>) {
     d.observe(
         "T19.6",
         !ledger(d).contains("c-01de5ea1")
-            && d.has("Undo remove")
+            // M-S0.1 (M0570): the Undo names the act it puts back.
+            && d.has("Undo remove Take seal: Keyring +1")
             && !d.has(keyring)
             && d.has_containing("2 notices are due"),
         "Remove takes the entry and the notice it raised out of Trackers.md; the reader's footer offers Undo remove",
@@ -1051,7 +1053,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Crowd loves it");
     d.expect("Crowd Favor changed to 2.");
     d.press_ctrl(Key::T);
-    d.click("Undo remove");
+    d.click("Undo remove Take seal: Keyring +1");
     let text = ledger(d);
     d.observe(
         "T19.6",
