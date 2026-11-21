@@ -1,7 +1,7 @@
 //! `/` in a session note opens a short menu of commands. Each command ends with a link
 //! where the `/` was typed, so the DM keeps writing and never leaves the note.
 use crate::{
-    design::{self, Density, Tone, Type, colors, icons},
+    design::{self, Density, Type, colors, icons},
     lookup::{self, ContentIndex},
     npc_generator::{self, Generated},
     persistence::Campaign,
