@@ -2007,7 +2007,7 @@ impl Splat {
                                     // The campaigns: their results and the list's error.
                                     let messages =
                                         Footer::new(&frame, "settings_campaign_footer", width);
-                                    let (campaigns, dndbeyond) = (&mut *campaigns, &mut *dndbeyond);
+                                    let (list, link) = (&mut *campaigns, &mut *dndbeyond);
                                     let paned = messages.pane_content_then(
                                         ui,
                                         scroll,
@@ -2016,18 +2016,13 @@ impl Splat {
                                             // themselves (`set_max_width`): the pane's column holds
                                             // its content at the column's width (gap sent to K).
                                             ui.vertical(|ui| {
-                                                campaigns.show(
-                                                    ui,
-                                                    session.clone(),
-                                                    dndbeyond,
-                                                    blocked,
-                                                );
+                                                list.show(ui, session.clone(), link, blocked);
                                             });
-                                            (campaigns, dndbeyond)
+                                            (list, link)
                                         },
-                                        |(campaigns, dndbeyond), messages| {
-                                            feed_campaigns(messages, campaigns);
-                                            feed_list(messages, dndbeyond);
+                                        |(list, link), messages| {
+                                            feed_campaigns(messages, list);
+                                            feed_list(messages, link);
                                         },
                                     );
                                     if let Some(press) = paned.pressed {
