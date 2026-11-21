@@ -6,7 +6,9 @@
 //! adds each clicked row as a target and rolls its save, shown where the row's AC is. A roll
 //! changes no participant by itself: it goes to the Log, and Undo keeps it.
 use super::{Command, Run};
-use crate::rolls::{self, ArmedAction, ArmedView, Ask, Chip, Mode, Outcome, Rolled};
+use crate::rolls::{
+    self, ArmedAction, ArmedView, Ask, Chip, Mode, Outcome, Rolled, SpellOccurrence,
+};
 use eframe::egui;
 use splat::content::Entry;
 use splat::content::dice_text::{self, D20, DamagePart, RollLink, When};
@@ -19,6 +21,7 @@ use std::collections::BTreeMap;
 pub(super) struct Armed {
     pub actor: usize,
     pub link: RollLink,
+    occurrence: Option<SpellOccurrence>,
     pub mode: Mode,
     /// The actor expends inspiration for advantage on the roll made for them.
     pub inspired: bool,
@@ -211,7 +214,7 @@ impl Run {
             }
             | RollLink::SaveDc { .. }
             | RollLink::Damage { .. } => {
-                self.arm(actor, ask.link, mode, inspired);
+                self.arm(actor, ask.link, ask.occurrence, mode, inspired);
                 Ok(())
             }
             RollLink::D20 { .. } | RollLink::Dice { .. } => {
@@ -229,7 +232,14 @@ impl Run {
     }
 
     /// Arm an action. Its rows' results from before go.
-    fn arm(&mut self, actor: usize, link: RollLink, mode: Mode, inspired: bool) {
+    fn arm(
+        &mut self,
+        actor: usize,
+        link: RollLink,
+        occurrence: Option<SpellOccurrence>,
+        mode: Mode,
+        inspired: bool,
+    ) {
         self.badges.clear();
         self.state.roll_results.clear();
         self.saves.clear();
@@ -241,6 +251,7 @@ impl Run {
         self.armed = Some(Armed {
             actor,
             link,
+            occurrence,
             mode,
             inspired,
             damage: None,
@@ -1007,6 +1018,7 @@ impl Run {
         actions.push(("Stop", ArmedAction::Stop));
         Some(ArmedView {
             link: armed.link.clone(),
+            occurrence: armed.occurrence,
             status,
             reserve: longest_hint(),
             actions,
@@ -1357,11 +1369,11 @@ impl Run {
             return crate::party::sheet_chips(record);
         }
         let definition = &self.state.participants[row].definition;
-        let mut chips = rolls::chips(&definition.body);
-        if let Some(content) = &self.content {
-            chips.extend(crate::library::spells::rolls(definition, content.as_ref()));
-        }
-        chips
+        let links = self
+            .content
+            .as_deref()
+            .map(|index| index as &dyn crate::library::view::Links);
+        crate::library::spells::ordered_actions(definition, links)
     }
 
     /// The room above the dock for the action bar: only while the panel is hidden.
@@ -1409,7 +1421,7 @@ impl Run {
     pub(super) fn arm_by_number(&mut self, number: usize) {
         let row = self.panel_row();
         if let Some(chip) = self.chips(row).into_iter().nth(number.saturating_sub(1)) {
-            self.arm(row, chip.link, Mode::Normal, false);
+            self.arm(row, chip.link, chip.spell_occurrence, Mode::Normal, false);
         }
     }
 
@@ -1544,6 +1556,7 @@ mod tests {
     fn ask(link: RollLink, roller: usize) -> Ask {
         Ask {
             link,
+            occurrence: None,
             mode: Mode::Normal,
             roller: Some(roller),
             entry: "Guard".into(),
@@ -2396,23 +2409,26 @@ mod tests {
         run.disarm();
         let row = run.panel_row();
         let druid = "definitions/creatures/druid.md";
-        run.state.participants[row].definition = std::sync::Arc::new(
-            Entry::parse(
-                druid,
-                splat::content::definitions::source_file(druid).unwrap(),
-            )
-            .unwrap(),
+        let source = splat::content::definitions::source_file(druid).unwrap();
+        let source = source.replacen(
+            "1/Day Each: Animal Messenger",
+            "1/Day Each: Thunderwave, Animal Messenger",
+            1,
         );
+        run.state.participants[row].definition =
+            std::sync::Arc::new(Entry::parse(druid, &source).unwrap());
         run.content = Some(std::sync::Arc::new(
             crate::lookup::ContentIndex::load(&[], None).unwrap(),
         ));
-        let labels: Vec<_> = run.chips(row).into_iter().map(|chip| chip.label).collect();
+        let actions = run.chips(row);
+        let labels: Vec<_> = actions.iter().map(|chip| chip.label.as_str()).collect();
         assert_eq!(
             labels,
             [
                 "Vine Staff +5",
                 "Verdant Wisp +5",
                 "Entangle DC 13",
+                "Thunderwave DC 13",
                 "Thunderwave DC 13",
                 "Animal Messenger DC 13",
                 "Moonbeam DC 13"
@@ -2432,6 +2448,18 @@ mod tests {
                     when: None,
                 }],
             })
+        );
+
+        let thunderwave = run.armed.as_ref().unwrap().link.clone();
+        let first = actions[3].spell_occurrence.unwrap();
+        let last = actions[4].spell_occurrence.unwrap();
+        assert_ne!(first, last);
+        assert_eq!(run.armed.as_ref().unwrap().occurrence, Some(first));
+        run.arm_by_number(5);
+        let second = run.armed.as_ref().unwrap();
+        assert_eq!(
+            (&second.link, second.occurrence),
+            (&thunderwave, Some(last))
         );
     }
 

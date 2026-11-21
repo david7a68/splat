@@ -1919,7 +1919,7 @@ the reference of G7.
   For each new write it tests the path of section 4.1: an edit on disk a moment before, unsaved words with a
   changed file, a failed save, and a restart.
 - It runs G6 and G7, with its mutation of G7. It adds its own lines to `docs/design-system.md`,
-  `docs/ux-intent.md`, `CONTEXT.md` and `README.md` from section 5, and its task to
+  `docs/ux-intent.md`, `CONTEXT.md` and the [user guide](../user-guide.md) from section 5, and its task to
   `src/visual_tests/dm_audit.rs` as a **new** task.
 
 | PR | Scope | Files and modules | Depends on | Scenarios |

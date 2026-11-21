@@ -1417,7 +1417,8 @@ pub fn status_slot<K: Copy>(
 #[doc(hidden)]
 pub mod doc_parts {
     pub use crate::design::{
-        Action, AddField, Density, FolderGroup, add_field, folder_group_heading, icons,
+        Action, AddField, Availability, Density, FolderGroup, ModeLock, ReaderToolbar, add_field,
+        folder_group_heading, icons,
     };
 }
 
@@ -1504,6 +1505,7 @@ pub struct TitleAction<'a> {
     icon: Option<&'static str>,
     blocked: Option<&'a str>,
     name: Option<&'a str>,
+    key: Option<KeyName>,
 }
 
 impl<'a> TitleAction<'a> {
@@ -1514,6 +1516,7 @@ impl<'a> TitleAction<'a> {
             icon: None,
             blocked: None,
             name: None,
+            key: None,
         }
     }
 
@@ -1540,6 +1543,13 @@ impl<'a> TitleAction<'a> {
         self
     }
 
+    /// Its keyboard command beside its word (`New entry N`), as an action shows one; the line
+    /// measures the action with it.
+    pub fn key(mut self, key: KeyName) -> Self {
+        self.key = Some(key);
+        self
+    }
+
     fn action(&self) -> Action<'a> {
         let mut action = match self.weight {
             TitleWeight::Quiet => Action::quiet(self.word.as_str()),
@@ -1552,6 +1562,9 @@ impl<'a> TitleAction<'a> {
         }
         if let Some(name) = self.name {
             action = action.name(name);
+        }
+        if let Some(key) = self.key {
+            action = action.key(key.as_str());
         }
         action
     }
@@ -1627,7 +1640,14 @@ pub struct TitleLine<'a> {
     context: Option<&'a str>,
     role: TitleType,
     actions: Vec<TitleAction<'a>>,
+    /// A status link after the actions, and the menu it opens.
+    status: Option<StatusMenu<'a>>,
+    /// A close icon at the right end of the title's line, and its accessible name.
+    close: Option<&'a str>,
 }
+
+/// A title line's status link and the menu it opens.
+type StatusMenu<'a> = (Status<'a>, Box<dyn FnOnce(&mut Ui) + 'a>);
 
 /// The type of a title line's title.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1642,6 +1662,8 @@ pub enum TitleType {
 #[derive(Clone, Debug, Default)]
 pub struct TitleLineResponse {
     pressed: Option<Word>,
+    /// The DM pressed the close icon (`TitleLine::close`).
+    pub closed: bool,
     /// The actions sit under the title.
     pub below: bool,
     /// The rows of actions under the title (0 when they follow the title).
@@ -1723,6 +1745,8 @@ impl<'a> TitleLine<'a> {
             context: None,
             role: TitleType::Title,
             actions: Vec::new(),
+            status: None,
+            close: None,
         }
     }
 
@@ -1740,6 +1764,32 @@ impl<'a> TitleLine<'a> {
     pub fn action(mut self, action: TitleAction<'a>) -> Self {
         self.actions.push(action);
         self
+    }
+
+    /// A status link after the actions (`3 files need fixing`, in its tone), placed and kept as
+    /// an action is, that opens `menu` under it (`menu_popup`); the menu draws its own choices.
+    pub fn status(mut self, status: Status<'a>, menu: impl FnOnce(&mut Ui) + 'a) -> Self {
+        self.status = Some((status, Box::new(menu)));
+        self
+    }
+
+    /// A close icon named `name` at the right end of the title's own line (a panel's title), on
+    /// that line however the actions are placed; the title and the actions beside it keep clear
+    /// of it. Its press is [`TitleLineResponse::closed`].
+    pub fn close(mut self, name: &'a str) -> Self {
+        self.close = Some(name);
+        self
+    }
+
+    /// The status link's width on one line.
+    fn status_width(ui: &Ui, status: &Status<'_>) -> f32 {
+        number_width(
+            ui,
+            &format!("{} {}", status.icon, status.word),
+            &Type::Small.font(ui),
+        )
+        .ceil()
+        .max(24.0)
     }
 
     fn font(&self) -> Type {
@@ -1764,31 +1814,68 @@ impl<'a> TitleLine<'a> {
                 .actions
                 .iter()
                 .map(|action| action.action().natural_width(ui).ceil())
+                .chain(
+                    self.status
+                        .as_ref()
+                        .map(|(status, _)| Self::status_width(ui, status)),
+                )
                 .collect(),
         }
     }
 
-    /// Draw one action in exactly its measured target.
-    fn action_at(&self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+    /// Draw one action in exactly its measured target; past the actions, the status link and
+    /// its menu.
+    fn action_at(&mut self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+        let status = (at >= self.actions.len())
+            .then(|| self.status.take())
+            .flatten();
         ui.scope_builder(
             UiBuilder::new()
                 .max_rect(rect)
                 .layout(Layout::left_to_right(Align::Center)),
-            |ui| self.actions[at].action().show(ui).clicked(),
+            |ui| match status {
+                Some((status, menu)) => {
+                    let link = super::status_link(ui, status);
+                    super::menu_popup(&*ui, &link).show(menu);
+                    false
+                }
+                None => self.actions[at].action().show(ui).clicked(),
+            },
         )
         .inner
     }
 
-    pub fn show(self, ui: &mut Ui) -> TitleLineResponse {
+    /// The close icon at the right end of the line from `top`, `line_height` high.
+    fn close_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) -> bool {
+        let Some(name) = self.close else {
+            return false;
+        };
+        let size = Density::Read.control();
+        let rect = Rect::from_min_size(
+            egui::pos2(right - size, top + (line_height - size) / 2.0),
+            vec2(size, size),
+        );
+        let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
+        super::icon_button(&mut child, super::icons::CLOSE, name).clicked()
+    }
+
+    pub fn show(mut self, ui: &mut Ui) -> TitleLineResponse {
         let metrics = self.metrics(ui);
         let room = ui.available_width();
+        // The close icon keeps its target and a gap at the title line's right end.
+        let close = if self.close.is_some() {
+            Density::Read.control() + ACTION_GAP
+        } else {
+            0.0
+        };
         let placement = title_placement(
             metrics.beside(),
             metrics.lead_in,
             &metrics.widths,
-            room,
+            room - close,
             room,
         );
+        let closed;
         let height = Density::Read.control();
         let mut pressed = None;
         let font = self.font();
@@ -1832,11 +1919,14 @@ impl<'a> TitleLine<'a> {
                         pressed = Some(self.actions[at].word);
                     }
                 }
+                closed = self.close_at(ui, line.right(), line.top(), line_height);
                 0
             }
             TitlePlacement::Under(rows) => {
+                let (line_left, line_top) = (ui.cursor().left(), ui.cursor().top());
                 let title_rect = ui
                     .horizontal_wrapped(|ui| {
+                        ui.set_max_width(room - close);
                         ui.spacing_mut().item_spacing.x = XS;
                         ui.add(title.wrap());
                         if let Some((words, context)) = context {
@@ -1845,6 +1935,8 @@ impl<'a> TitleLine<'a> {
                     })
                     .response
                     .rect;
+                let right = line_left + room;
+                closed = self.close_at(ui, right, line_top, font.line());
                 for row in &rows {
                     let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
                     let mut row_ui = ui.new_child(
@@ -1879,6 +1971,7 @@ impl<'a> TitleLine<'a> {
         };
         TitleLineResponse {
             pressed,
+            closed,
             below: rows > 0,
             rows,
         }
@@ -3702,13 +3795,7 @@ impl PathLine {
 /// keep the same `choice`/`choice_wrapped` rows inside, and remove the row's `Ban::Layout` count.
 pub fn menu_popup<'a, P: MenuPane + ?Sized>(pane: &P, response: &'a Response) -> MenuPopup<'a> {
     let pane = pane.pane();
-    let rightward = menu_room(pane, response.rect, egui::RectAlign::BOTTOM_START);
-    let leftward = menu_room(pane, response.rect, egui::RectAlign::BOTTOM_END);
-    let (align, room) = if rightward >= leftward {
-        (egui::RectAlign::BOTTOM_START, rightward)
-    } else {
-        (egui::RectAlign::BOTTOM_END, leftward)
-    };
+    let (align, room) = menu_side(pane, response.rect);
     MenuPopup {
         id: egui::Popup::default_response_id(response),
         popup: menu_popup_raw(response).align(align).width(room),
@@ -3742,8 +3829,22 @@ impl MenuPane for egui::Context {
     }
 }
 
+/// The side a menu opens on beside `control` in `pane`, and its room there: rightward from the
+/// control's left edge, unless its right edge leaves more room leftward.
+fn menu_side(pane: Rect, control: Rect) -> (egui::RectAlign, f32) {
+    let rightward = menu_room(pane, control, egui::RectAlign::BOTTOM_START);
+    let leftward = menu_room(pane, control, egui::RectAlign::BOTTOM_END);
+    if rightward >= leftward {
+        (egui::RectAlign::BOTTOM_START, rightward)
+    } else {
+        (egui::RectAlign::BOTTOM_END, leftward)
+    }
+}
+
 /// A menu's room in `pane` beside `control` for `align`: from the control's left edge to the
-/// pane's inner right edge (or from its right edge leftward), one lane clear of the edges.
+/// pane's inner right edge (or from its right edge leftward), one lane clear of the edges. It is
+/// never wider than that, also when that is narrower than a control (issue #549): a narrow
+/// room makes a narrow menu, and a room with no space for the menu's frame shows none.
 fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
     let clear = lane_width().max(S);
     let room = if align.parent().x() == egui::Align::Max {
@@ -3751,7 +3852,7 @@ fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
     } else {
         pane.right() - clear - control.left()
     };
-    room.max(Density::Read.control())
+    room.max(0.0)
 }
 
 #[allow(
@@ -3778,6 +3879,27 @@ impl MenuPopup<'_> {
     pub fn align(mut self, align: egui::RectAlign) -> Self {
         self.room = menu_room(self.pane, self.control, align);
         self.popup = self.popup.align(align).width(self.room);
+        self
+    }
+
+    /// A smaller room owned by the control's layout (as [`Dropdown::within`](super::popups::Dropdown::within)):
+    /// a column of a header that spans two panes, the list beside a splitter. The part
+    /// intersects it with the pane, then chooses the menu's side and width inside it again, one
+    /// lane clear of its edges. It cannot widen the pane's room. A control that reaches past
+    /// the room's inner edges anchors the menu at those edges, so that the menu never starts
+    /// past the room (issue #549); a room too narrow for the menu's frame shows none.
+    pub fn within(mut self, room: Rect) -> Self {
+        self.pane = self.pane.intersect(room);
+        let clear = lane_width().max(S);
+        let (left, right) = (self.pane.left() + clear, self.pane.right() - clear);
+        self.control.min.x = self.control.min.x.max(left).min(right);
+        self.control.max.x = self.control.max.x.min(right).max(left);
+        self.popup = self
+            .popup
+            .anchor(egui::PopupAnchor::ParentRect(self.control));
+        let (align, width) = menu_side(self.pane, self.control);
+        self.room = width;
+        self.popup = self.popup.align(align).width(width);
         self
     }
 
@@ -3818,9 +3940,15 @@ impl MenuPopup<'_> {
         } = self;
         let ctx = popup.ctx().clone();
         let key = id.with("splat_menu_width");
+        let style = ctx.style();
+        let frame = style.spacing.menu_margin.sum().x + 2.0 * style.visuals.window_stroke.width;
+        // A room that cannot hold the frame and anything in it shows no menu, rather than one
+        // drawn past the room (issue #549). It opens when the room is there again.
+        if room <= frame {
+            ctx.data_mut(|data| data.remove_temp::<f32>(key));
+            return None;
+        }
         let shown = popup.show(|ui| {
-            let frame = ui.style().spacing.menu_margin.sum().x
-                + 2.0 * ui.style().visuals.window_stroke.width;
             let inner_room = (room - frame).max(0.0);
             let decided = ui.data(|data| data.get_temp::<f32>(key));
             let width = decided.unwrap_or(inner_room).min(inner_room);

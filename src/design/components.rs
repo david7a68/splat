@@ -12,10 +12,23 @@ fn corner(value: f32) -> CornerRadius {
 
 /// A quiet menu button with its caret after the word.
 pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
-    let response = Action::quiet(&format!("{word}    "))
-        .name(word)
-        .selected(selected)
-        .show(ui);
+    draw_menu_button(ui, word, selected, false)
+}
+
+/// A menu button whose word starts at the text edge of its own row.
+pub fn menu_button_at_line_start(ui: &mut Ui, word: &str, selected: bool) -> Response {
+    draw_menu_button(ui, word, selected, true)
+}
+
+fn draw_menu_button(ui: &mut Ui, word: &str, selected: bool, line_start: bool) -> Response {
+    let label = format!("{word}    ");
+    let button = Action::quiet(&label).name(word).selected(selected);
+    let button = if line_start {
+        button.line_start()
+    } else {
+        button
+    };
+    let response = button.show(ui);
     let caret = Rect::from_min_max(
         pos2(response.rect.right() - L - XS, response.rect.top()),
         response.rect.right_bottom(),
@@ -171,7 +184,6 @@ pub struct ToolbarShown<A> {
 /// One action of the toolbar: its words, its icon, the caller's id, and its availability.
 struct GroupAction<'a, A> {
     label: &'a str,
-    icon: Option<&'a str>,
     id: A,
     availability: Availability,
 }
@@ -182,13 +194,9 @@ impl<A> GroupAction<'_, A> {
             Availability::Waits(reason) => Some(reason.as_str()),
             Availability::Draft => draft,
         };
-        let action = Action::quiet(self.label)
+        Action::quiet(self.label)
             .density(Density::Read)
-            .blocked(reason);
-        match self.icon {
-            Some(icon) => action.icon(icon),
-            None => action,
-        }
+            .blocked(reason)
     }
 }
 
@@ -241,17 +249,23 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
         self
     }
 
-    /// An extra, quiet at `Density::Read`, that gives `id` back when pressed.
-    pub fn action(
-        mut self,
-        label: &'a str,
-        icon: Option<&'a str>,
-        id: A,
-        availability: Availability,
-    ) -> Self {
+    /// An extra, quiet at `Density::Read`, in its words only, that gives `id` back when pressed
+    /// (round 31 reader-toolbar-icon-form, M0355: every toolbar action has one form; `Back` is
+    /// navigation and keeps its arrow). It takes no icon.
+    ///
+    /// ```
+    /// use splat::layout::doc_parts::{Availability, ModeLock, ReaderToolbar};
+    /// let _ = ReaderToolbar::new(false, "Markdown", "Markdown", ModeLock::Open)
+    ///     .action("Copy to…", 1, Availability::Draft);
+    /// ```
+    /// ```compile_fail,E0061
+    /// use splat::layout::doc_parts::{Availability, ModeLock, ReaderToolbar};
+    /// let _ = ReaderToolbar::new(false, "Markdown", "Markdown", ModeLock::Open)
+    ///     .action("Copy to…", Some("c"), 1, Availability::Draft);
+    /// ```
+    pub fn action(mut self, label: &'a str, id: A, availability: Availability) -> Self {
         self.actions.push(GroupAction {
             label,
-            icon,
             id,
             availability,
         });
@@ -2142,7 +2156,7 @@ impl<'a, T> AddFieldForm<'a, T, NoActions> {
     /// Keys only, no actions: Enter adds; Escape lets go of a chosen suggestion, then clears
     /// the words. The field is keyed by its owner (`id`), and its line keeps one `Read` row's
     /// height, empty or not. `beside` draws a control right of the field, `beside_width` wide,
-    /// and can choose a value too. Staged, as [`add_field_keys`] is: Clippy refuses it outside
+    /// and can choose a value too. Staged: Clippy refuses it outside
     /// `src/design/` (`Ban::Extras`), and each use is a row of `design::results::STAGED_ALLOWS`
     /// with its reason (the run's `Effect` line, the loot list's own field).
     pub fn keys_only(
@@ -2316,7 +2330,7 @@ fn reveal_least(ui: &Ui, block: std::ops::RangeInclusive<f32>) {
 }
 
 /// The suggestions under an add field, and the arrow keys that choose one: Enter takes the
-/// chosen one, as does a click. Shared by [`AddFieldForm`] and [`add_field_keys`].
+/// chosen one, as does a click. Shared by both forms of [`AddFieldForm`].
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
@@ -2364,39 +2378,8 @@ fn suggestion_rows<T>(
     chosen
 }
 
-/// An add field with keys only and no actions: Enter adds, Escape clears the highlight, then
-/// the words. Staged: Clippy refuses it outside `src/design/` (`Ban::Extras`), and each use is a
-/// row of `design::results::STAGED_ALLOWS` with its reason. Two flows keep it as the design
-/// system describes them: the loot list's own field, which stays open, and the run's `Effect`
-/// field in a row's line two. Every other add field is [`add_field`], with its actions.
-/// `beside` draws a control right of the field, `beside_width` wide, and can choose a value too.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-)]
-pub fn add_field_keys<T>(
-    ui: &mut Ui,
-    state: &mut AddField,
-    name: &str,
-    hint: &str,
-    beside_width: f32,
-    beside: impl FnOnce(&mut Ui) -> Option<T>,
-    suggest: impl FnOnce(&str) -> Vec<Suggestions<T>>,
-) -> AddFieldResult<T> {
-    let suggest: Suggest<'_, T> = Box::new(suggest);
-    keys_field(
-        ui,
-        state,
-        beside_width,
-        beside,
-        Some(suggest),
-        |ui, words, width| text_input(ui, name, words, hint, width),
-    )
-}
-
-/// The keys-only add field's line and keys, with its text field drawn by `field` in the width
-/// it is given: [`add_field_keys`] (staged, its field by place) and `AddFieldForm::keys_only`
-/// (its field by its owner's `FieldId`).
+/// The keys-only add field's line and keys (`AddFieldForm::keys_only`), with its text field,
+/// keyed by its owner's `FieldId`, drawn by `field` in the width it is given.
 fn keys_field<T>(
     ui: &mut Ui,
     state: &mut AddField,
@@ -3102,37 +3085,6 @@ pub(super) fn small_tone_message(ui: &mut Ui, tone: Tone, text: &str) -> Respons
     .inner
 }
 
-/// A message whose marked fragments use the code font.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-pub fn message_with_code(ui: &mut Ui, tone: Tone, text: &str) -> Response {
-    let (icon, color) = tone.parts();
-    let mut job = LayoutJob::default();
-    for (i, part) in text.split('`').enumerate() {
-        job.append(
-            part,
-            0.0,
-            egui::TextFormat {
-                font_id: if i % 2 == 0 { Type::Body } else { Type::Mono }.font(ui),
-                color: colors().text,
-                ..Default::default()
-            },
-        );
-    }
-    ui.horizontal_top(|ui| {
-        let start = ui.cursor().min;
-        space(ui, S + 1.0);
-        ui.label(Type::Body.rich(ui, icon).color(color));
-        space(ui, -XS);
-        let response = ui.add(egui::Label::new(job).wrap());
-        let bar = Rect::from_min_max(start, pos2(start.x + 3.0, response.rect.bottom()));
-        ui.painter().rect_filled(bar, 0.0, color);
-        response
-    })
-    .inner
-}
-
 /// Work in progress. Test builds draw a still mark: the moving one is drawn from the clock,
 /// so two captures of the same state would differ.
 pub fn spinner(ui: &mut Ui) {
@@ -3184,11 +3136,20 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
 )]
 pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    single_action_message(ui, tone, text, action).inner
+}
+
+/// One bordered repair beside its message when it fits, or under the words when it wraps.
+pub(super) fn single_action_message(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+) -> egui::InnerResponse<bool> {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
         message_with_action_inside(ui, tone, text, action)
     })
-    .inner
 }
 
 fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
@@ -5557,7 +5518,7 @@ mod tests {
                             "Markdown source",
                             ModeLock::Open,
                         )
-                        .action("Copy to…", None, 1, Availability::Draft);
+                        .action("Copy to…", 1, Availability::Draft);
                         let _ =
                             toolbar.show(ui, state, DraftBlocks::EntryInPackage, |_| row, |_| {});
                     });

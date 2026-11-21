@@ -3452,33 +3452,15 @@ impl Run {
         }
     }
 
-    /// The revision of the groups' read: it changes whenever `groups` holds another read than
-    /// the one counted last, whatever page was open when it was replaced.
-    fn groups_revision(&mut self) -> u64 {
-        let same = match (&self.groups, &self.groups_seen) {
-            (Some(now), Some(seen)) => Arc::ptr_eq(now, seen),
-            (None, None) => true,
-            _ => false,
-        };
-        if !same {
-            self.groups_revision += 1;
-            self.groups_seen = self.groups.clone();
-        }
-        self.groups_revision
+    /// The revision of the groups' read (`set_reads`): a new one with each read, whatever page
+    /// was open when it came.
+    fn groups_revision(&self) -> design::memo::Revision {
+        self.groups_read.revision()
     }
 
     /// The revision of the scale's read, as `groups_revision` is for the groups.
-    fn scale_revision(&mut self) -> u64 {
-        let same = match (&self.scale, &self.scale_seen) {
-            (Some(now), Some(seen)) => Arc::ptr_eq(now, seen),
-            (None, None) => true,
-            _ => false,
-        };
-        if !same {
-            self.scale_revision += 1;
-            self.scale_seen = self.scale.clone();
-        }
-        self.scale_revision
+    fn scale_revision(&self) -> design::memo::Revision {
+        self.scale_read.revision()
     }
 
     /// Each offered group whose Add waits for the DM: `<group>: <reason>`, in list order, from
@@ -4487,32 +4469,23 @@ impl Run {
             .into_iter()
             .map(|line| super::MemberFault::new(super::FaultKind::CannotJoin, line.into()))
             .collect();
-        if !warnings.is_empty() || !own.is_empty() {
-            for fault in warnings.iter().chain(&own) {
-                // The one member-fault row (Contract B, R): the Encounters list draws it too.
-                if crate::encounters::member_fault_row(ui, fault) {
-                    if fault.kind == super::FaultKind::NotInPackages {
-                        self.wants_packages = true;
-                    } else {
-                        self.wants_group_editor = Some(group.path.clone());
-                    }
+        let faults: Vec<&super::MemberFault> = warnings.iter().chain(&own).collect();
+        // Every fault gives one repair; when all point to packages, the last one also offers
+        // the group editor (M0126: a choice of the same typed message), so it stays one click
+        // away.
+        let packages_only = faults
+            .iter()
+            .all(|fault| fault.kind == super::FaultKind::NotInPackages);
+        for (at, fault) in faults.iter().enumerate() {
+            let edit_too = packages_only && at + 1 == faults.len();
+            // The one member-fault row (Contract B, R): the Encounters list draws it too.
+            let view = crate::encounters::MemberFaultView::Arrivals { edit_too };
+            match crate::encounters::member_fault_row(ui, fault, view) {
+                Some(crate::encounters::MemberRepair::Packages) => self.wants_packages = true,
+                Some(crate::encounters::MemberRepair::EditGroup) => {
+                    self.wants_group_editor = Some(group.path.clone());
                 }
-            }
-            // Every fault gives one link; when all point to packages, the group editor
-            // stays one click away.
-            if warnings
-                .iter()
-                .chain(&own)
-                .all(|fault| fault.kind == super::FaultKind::NotInPackages)
-                // The faults' actions start at the message words; this one does too.
-                && design::message_choice_row(ui, Tone::Warning, |ui| {
-                    Action::secondary("Edit group")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                })
-            {
-                self.wants_group_editor = Some(group.path.clone());
+                None => {}
             }
         }
 
@@ -10197,7 +10170,7 @@ mod tests {
                     })
                 })
                 .collect();
-            run.groups = Some(Arc::new(groups));
+            run.set_groups(Arc::new(groups));
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 800.0))
                 .build(move |ctx| {
@@ -10302,7 +10275,7 @@ mod tests {
             );
             let mut run =
                 super::super::Run::new("Road".into(), participants, String::new()).unwrap();
-            run.scale = Some(Arc::new(crate::difficulty::Scale {
+            run.set_scale(Arc::new(crate::difficulty::Scale {
                 budgets: Some(crate::difficulty::builtin_budgets()),
                 party: heroes.iter().map(|hero| (hero.id, Some(3))).collect(),
             }));
@@ -10327,7 +10300,7 @@ mod tests {
                 problem: None,
                 warnings: vec![],
             });
-            run.groups = Some(Arc::new(vec![group.clone()]));
+            run.set_groups(Arc::new(vec![group.clone()]));
             let run = Rc::new(RefCell::new(run));
             let shown = run.clone();
             let mut harness = egui_kittest::Harness::builder()
@@ -10371,7 +10344,7 @@ mod tests {
                 let mut elsewhere = (*group).clone();
                 elsewhere.encounter = Some(Uuid::new_v4());
                 run.source = Some(Uuid::new_v4());
-                run.groups = Some(Arc::new(vec![Arc::new(elsewhere)]));
+                run.set_groups(Arc::new(vec![Arc::new(elsewhere)]));
             }
             harness.run_steps(2);
             assert!(harness.query_by_label(&label).is_none());
@@ -10418,7 +10391,7 @@ mod tests {
             .clone();
             group.name = long.clone();
             let mut run = run;
-            run.groups = Some(Arc::new(vec![Arc::new(group)]));
+            run.set_groups(Arc::new(vec![Arc::new(group)]));
             let floor = std::rc::Rc::new(std::cell::Cell::new(0.0_f32));
             let measured = floor.clone();
             let floor_words = format!("{} {first}…", icons::DRAG);
@@ -10524,7 +10497,7 @@ mod tests {
             // The whole Arrivals tab, so its footer is drawn too. `clean` has no bad total.
             let edge = std::rc::Rc::new(std::cell::Cell::new(0.0));
             let build = |mut run: Run, bad_total: bool| {
-                run.groups = Some(Arc::new(groups.clone()));
+                run.set_groups(Arc::new(groups.clone()));
                 if bad_total {
                     run.group_totals.insert(bad, "1-2".into());
                     run.group_totals.insert(also_bad, "2-5".into());
@@ -10667,7 +10640,7 @@ mod tests {
             for group in &groups {
                 run.group_totals.insert(group.id, "2-5".into());
             }
-            run.groups = Some(Arc::new(groups));
+            run.set_groups(Arc::new(groups));
             let local = egui::Id::new(("arrival_footer", run.id));
             // Migration-32 L2c: the typed footer's id is scoped to the pane's parent `Ui`
             // (`Footer::rescope`), here the panel's.
@@ -10802,9 +10775,9 @@ mod tests {
         for p in &mut run.state.participants {
             p.definition = creature.clone();
         }
-        run.groups = Some(read(&creature, "Pack A", 2));
+        run.set_groups(read(&creature, "Pack A", 2));
         // A scale, so each read has difficulty words (#262), which must follow the read too.
-        run.scale = Some(Arc::new(crate::difficulty::Scale {
+        run.set_scale(Arc::new(crate::difficulty::Scale {
             budgets: Some(crate::difficulty::builtin_budgets()),
             party: [(Uuid::new_v4(), Some(4))].into_iter().collect(),
         }));
@@ -10852,8 +10825,8 @@ mod tests {
         harness.run_steps(2);
         {
             let (run, _) = &mut *shared.borrow_mut();
-            run.groups = Some(read(&creature, "Pack B", 4));
-            run.groups = Some(read(&creature, "Pack D", 3));
+            run.set_groups(read(&creature, "Pack B", 4));
+            run.set_groups(read(&creature, "Pack D", 3));
         }
         harness.run_steps(2);
         shared.borrow_mut().1 = true;
@@ -10938,7 +10911,7 @@ mod tests {
         };
         let riders = group("Mist Riders", Arc::new(wisp));
         let vanguard = group("Vanguard", run.state.participants[0].definition.clone());
-        run.groups = Some(Arc::new(vec![riders.clone(), vanguard.clone()]));
+        run.set_groups(Arc::new(vec![riders.clone(), vanguard.clone()]));
         run.group_totals.insert(vanguard.id, "2-5".into());
         let run = Rc::new(RefCell::new(run));
         let drawn = run.clone();
@@ -13245,7 +13218,11 @@ mod tests {
             let shown = fault.clone();
             let mut harness = egui_kittest::Harness::new(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::encounters::member_fault_row(ui, &shown);
+                    crate::encounters::member_fault_row(
+                        ui,
+                        &shown,
+                        crate::encounters::MemberFaultView::Arrivals { edit_too: false },
+                    );
                 });
             });
             design::theme::install(&harness.ctx);
@@ -13289,6 +13266,57 @@ mod tests {
             });
             assert!(bordered, "{fault:?}: the repair {repair:?} has a border");
             assert!(!fills.contains(&other), "{fault:?}: {fills:?}");
+        }
+        // M0126 (m-r0-9-edit-too): a missing creature's fault offers `Edit group` too when
+        // Arrivals asks (`edit_too`), as a choice of the same typed message: on the line under
+        // the words, after `Campaign → Packages`; each press comes back as its repair.
+        use crate::encounters::{MemberFaultView, MemberRepair};
+        use egui_kittest::kittest::Queryable;
+        for view in [
+            MemberFaultView::EncounterList,
+            MemberFaultView::Arrivals { edit_too: false },
+            MemberFaultView::Arrivals { edit_too: true },
+        ] {
+            let edit_too = matches!(view, MemberFaultView::Arrivals { edit_too: true });
+            let fault = super::super::MemberFault::new(
+                super::super::FaultKind::NotInPackages,
+                "Unknown creature · line 13: Not in this campaign’s packages.".into(),
+            );
+            let pressed = std::rc::Rc::new(std::cell::Cell::new(None));
+            let seen = pressed.clone();
+            let mut harness = egui_kittest::Harness::new(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if let Some(repair) = crate::encounters::member_fault_row(ui, &fault, view) {
+                        seen.set(Some(repair));
+                    }
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            assert_eq!(
+                harness.query_by_label("Edit group").is_some(),
+                edit_too,
+                "m-r0-9-edit-too: Edit group shows when Arrivals asks, and only then"
+            );
+            harness.get_by_label("Campaign → Packages").click();
+            harness.run_steps(1);
+            assert_eq!(pressed.get(), Some(MemberRepair::Packages));
+            if edit_too {
+                let packages = harness.get_by_label("Campaign → Packages").rect();
+                let edit = harness.get_by_label("Edit group").rect();
+                assert!(
+                    (edit.center().y - packages.center().y).abs() < 1.0
+                        && edit.left() > packages.right(),
+                    "m-r0-9-edit-too: Edit group follows Packages on its line: {packages:?} {edit:?}"
+                );
+                harness.get_by_label("Edit group").click();
+                harness.run_steps(1);
+                assert_eq!(
+                    pressed.get(),
+                    Some(MemberRepair::EditGroup),
+                    "m-r0-9-edit-too: Edit group opens the group editor"
+                );
+            }
         }
     }
 

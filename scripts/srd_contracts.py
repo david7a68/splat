@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-RESEARCH = Path('docs/research/srd-conversion')
+RESEARCH = Path('scripts/srd_inputs/specifications')
 INPUT_TYPES = {
     'participant', 'participant_list', 'item_instance', 'item_list', 'object',
     'object_list', 'location', 'location_list', 'integer', 'number', 'boolean',

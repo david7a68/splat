@@ -138,6 +138,8 @@ struct Setup {
     disabled: bool,
     /// A choice that cannot be chosen now, at this place.
     blocked_choice: Option<usize>,
+    /// A new group, under a rule, from this choice (`Dropdown::group`).
+    group: Option<usize>,
 }
 
 fn dropdown(ui: &mut Ui, current: &Cell<usize>, setup: Setup) -> DropdownResponse {
@@ -147,6 +149,9 @@ fn dropdown(ui: &mut Ui, current: &Cell<usize>, setup: Setup) -> DropdownRespons
     };
     let mut dropdown = Dropdown::new(SIDE, "Side").choice(0, words[0].clone());
     for (at, word) in words.iter().enumerate().skip(1) {
+        if setup.group == Some(at) {
+            dropdown = dropdown.group();
+        }
         dropdown = if setup.blocked_choice == Some(at) {
             dropdown.blocked_choice(at, word.clone(), "Linked to Salt Road.")
         } else {
@@ -812,6 +817,7 @@ fn a_press_reaches_exactly_its_row() {
                 Setup {
                     command: true,
                     blocked_choice: Some(1),
+                    group: Some(3),
                     ..Setup::default()
                 },
             );
@@ -871,6 +877,37 @@ fn a_press_reaches_exactly_its_row() {
     draw(click(control.get().center()));
     draw(Vec::new());
     let at = rows_now();
+    // A group (M-P0.12): `Lair` starts one, one hairline below `Neutral` with the rule painted
+    // between them; the rows of one group touch, with no rule.
+    let out = output.take().expect("a frame");
+    let rule_between = |above: Rect, below: Rect| {
+        out.shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::LineSegment { points, .. }
+                if points[0].y > above.bottom() - 0.5 && points[0].y < below.top() + 0.5)
+        })
+    };
+    assert!(
+        (at[3].top() - at[2].bottom() - crate::design::HAIRLINE_WIDTH).abs() < 0.5
+            && rule_between(at[2], at[3]),
+        "a rule starts the group: {:?} {:?}",
+        at[2],
+        at[3]
+    );
+    assert!(
+        (at[2].top() - at[1].bottom()).abs() < 0.5 && !rule_between(at[1], at[2]),
+        "one group's rows touch: {:?} {:?}",
+        at[1],
+        at[2]
+    );
+    let shown_list = list_rect(&ctx);
+    let stroke = ctx.style().visuals.window_stroke.width;
+    assert!(
+        shown_list.height() - (at[4].bottom() - at[0].top()) >= 2.0 * stroke - 0.25,
+        "the list is as tall as its rows and rules, with no scroll: {shown_list:?}, rows {:?} to {:?}",
+        at[0],
+        at[4]
+    );
+    output.set(Some(out));
     draw(click(at[4].center()));
     draw(Vec::new());
     assert!(command.get(), "the command is reported");
@@ -1347,7 +1384,21 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
 fn a_menu_of_long_choices_stays_beside_its_splitter() {
     const COLUMN: f32 = 316.0;
     const LONG: &str = "Roll initiative for every creature that has not rolled yet, then sort";
-    for (right, label) in [(false, LONG), (true, LONG), (false, "All")] {
+    // The last cases: the control's layout gives the menu a smaller room (`within`), as a
+    // header above two panes does; the menu keeps inside that room, clear of its edge, also
+    // when the room is narrower than a control (issue #549), and a room with no space for the
+    // menu's frame shows none.
+    let clear = lane_width().max(crate::design::S);
+    // The room is narrower than the opener, so the menu anchors inside it, and leaves 20 px.
+    let narrow = 2.0 * clear + 20.0;
+    for (right, label, within) in [
+        (false, LONG, None),
+        (true, LONG, None),
+        (false, "All", None),
+        (false, LONG, Some(200.0)),
+        (false, LONG, Some(narrow)),
+        (false, LONG, Some(clear)),
+    ] {
         let ctx = context();
         let size = vec2(960.0, 640.0);
         let pane = Rect::from_min_size(Pos2::ZERO, vec2(COLUMN, 640.0));
@@ -1366,7 +1417,11 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
                         };
                         let opener = ui.with_layout(layout, |ui| ui.button("Roll")).inner;
                         rows.borrow_mut().clear();
-                        crate::design::menu_popup(ui, &opener).show(|ui| {
+                        let mut menu = crate::design::menu_popup(ui, &opener);
+                        if let Some(width) = within {
+                            menu = menu.within(Rect::from_min_size(Pos2::ZERO, vec2(width, 640.0)));
+                        }
+                        menu.show(|ui| {
                             rows.borrow_mut()
                                 .push(crate::design::choice(ui, true, label).rect);
                             rows.borrow_mut()
@@ -1383,14 +1438,22 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
         draw(Vec::new());
         let output = draw(Vec::new());
         let id = egui::Popup::default_response_id(&opener);
+        if within == Some(clear) {
+            assert!(
+                rows.borrow().is_empty() && texts(&output).iter().all(|text| text.words != LONG),
+                "a room with no space for the menu shows none"
+            );
+            continue;
+        }
         assert!(egui::Popup::is_id_open(&ctx, id), "open (right: {right})");
         let menu = ctx
             .memory(|memory| memory.area_rect(id))
             .expect("the menu's rect");
+        let edge = within.map_or(pane.right(), |width| width);
         assert!(
-            menu.left() >= pane.left() - 0.5 && menu.right() <= pane.right() - lane_width() + 0.5,
-            "the menu {menu:?} is inside the column, clear of the splitter and the lane \
-             (right: {right})"
+            menu.left() >= pane.left() - 0.5 && menu.right() <= edge - lane_width() + 0.5,
+            "the menu {menu:?} is inside the column (or its room {within:?}), clear of the \
+             splitter and the lane (right: {right})"
         );
         let rows = rows.borrow();
         assert_eq!(rows.len(), 2, "both choices drawn");
@@ -1405,6 +1468,10 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
                 menu.width() < (COLUMN - lane_width()) / 2.0,
                 "short choices make a narrow menu: {menu:?}"
             );
+            continue;
+        }
+        if within == Some(narrow) {
+            // Its words are cut to the narrow room; the checks above hold it.
             continue;
         }
         let words: Vec<Text> = texts(&output)
@@ -1902,6 +1969,19 @@ fn closed_dropdowns_measure_no_choice_rows_and_open_metrics_follow_inputs() {
         ROW_METRICS_MADE.with(Cell::get),
         first + 2000,
         "the explicit room width policy invalidates the cache"
+    );
+    let mut fonts = ctx.fonts(|view| view.definitions().clone());
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Proportional)
+        .unwrap()
+        .reverse();
+    ctx.set_fonts(fonts);
+    draw(Vec::new());
+    assert_eq!(
+        ROW_METRICS_MADE.with(Cell::get),
+        first + 2500,
+        "replacing a family under the same font id remeasures the open choices"
     );
     draw(key(Key::Escape));
     draw(Vec::new());

@@ -1008,6 +1008,15 @@ impl<'a> Driver<'a> {
             .and_then(|node| node.accesskit_node().value())
     }
 
+    /// The accessible description attached to this control.
+    pub fn description_of(&self, name: &str) -> Option<String> {
+        self.harness
+            .root()
+            .children_recursive()
+            .find(|node| node_name(node) == name)
+            .and_then(|node| node.accesskit_node().description())
+    }
+
     /// The accessible description of every node on screen that has one.
     pub fn descriptions(&self) -> Vec<String> {
         let mut found = Vec::new();
@@ -2236,6 +2245,47 @@ impl<'a> Driver<'a> {
             .into_iter()
             .find(|record| record.facts.contains(text.center()))
             .map_or(text, |record| record.facts.union(record.action))
+    }
+
+    /// Layout PR 4 (I6): the creature search's rows, from the part's records. Each row's action
+    /// starts `L` after the widest facts, or, where the column does not fit, under its own
+    /// facts at their text edge.
+    pub fn search_actions_follow_facts(&self) -> (bool, String) {
+        const L: f32 = crate::design::L;
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == "encounter_results")
+            .collect();
+        let widest = records
+            .iter()
+            .map(|record| record.facts.right())
+            .fold(f32::MIN, f32::max);
+        let follows = !records.is_empty()
+            && records.iter().all(|record| {
+                if record.wrapped {
+                    (record.action.left() - record.facts.left()).abs() <= 0.5
+                        && record.action.top() >= record.facts.bottom() - 0.5
+                } else {
+                    (record.action.left() - (widest + L)).abs() <= 0.5
+                }
+            });
+        let rows: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.facts.left().round(),
+                    record.facts.right().round(),
+                    record.action.left().round(),
+                    record.wrapped,
+                )
+            })
+            .collect();
+        (
+            follows,
+            format!(
+                "the widest facts end at {widest:.1}; rows (facts start, facts end, action start, wrapped): {rows:?}"
+            ),
+        )
     }
 
     /// Layout PR 5a (I6, §4.1): the encounter ledger's rows, from the part's records. All its
