@@ -6613,16 +6613,6 @@ impl Encounters {
         page.runs_unread = snapshot.runs_unread.as_ref();
         let start_blocked = self.start_blocked();
         let mut action = None;
-        // The list is the pane's scroll column, which keeps the scroll bar's lane (FB2).
-        in_progress_list(
-            ui,
-            &page,
-            &snapshot.templates,
-            live.as_ref(),
-            (start_blocked, loading),
-            story,
-            &mut action,
-        );
         if self.ready_lines_seen != Some(snapshot.revision) {
             let ids: std::collections::HashSet<Uuid> = snapshot
                 .templates
@@ -6632,16 +6622,37 @@ impl Encounters {
             self.ready_lines.retain(|id| ids.contains(id));
             self.ready_lines_seen = Some(snapshot.revision);
         }
+        // Layout PR 5a: one facts column across the ledger's lists, measured before the first.
+        let ledger = list::ledger(
+            ui,
+            &page,
+            snapshot,
+            live.as_ref(),
+            story,
+            &mut self.ready_lines,
+        );
+        // The list is the pane's scroll column, which keeps the scroll bar's lane (FB2).
+        in_progress_list(
+            ui,
+            &page,
+            &snapshot.templates,
+            live.as_ref(),
+            (start_blocked, loading),
+            story,
+            ledger.in_progress,
+            &mut action,
+        );
         ready_list(
             ui,
             &page,
             live.as_ref(),
             start_blocked,
             &mut self.ready_lines,
+            ledger.ready,
             &mut action,
         );
         design::gap(ui, design::Gap::L);
-        group_list(ui, snapshot, group_blocked, &mut action);
+        group_list(ui, snapshot, group_blocked, ledger.groups, &mut action);
         let opened = history_list(
             ui,
             &page,
@@ -6654,6 +6665,7 @@ impl Encounters {
                     summary,
                     not_last: self.history_blocked,
                 }),
+            ledger.history,
             &mut action,
         );
         // R2 (FJ2): when a run opens in History, the list scrolls once, by the least distance

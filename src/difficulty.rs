@@ -980,6 +980,7 @@ impl<'a> Line<'a> {
 pub(crate) struct Kept<K, V = Option<Fitted>> {
     fits: std::collections::HashMap<K, (u64, V)>,
     shortest: std::collections::HashMap<K, (u64, f32)>,
+    widest: std::collections::HashMap<K, (u64, Option<f32>)>,
 }
 
 impl<K, V> Default for Kept<K, V> {
@@ -987,6 +988,7 @@ impl<K, V> Default for Kept<K, V> {
         Self {
             fits: std::collections::HashMap::new(),
             shortest: std::collections::HashMap::new(),
+            widest: std::collections::HashMap::new(),
         }
     }
 }
@@ -1030,6 +1032,30 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         width
     }
 
+    /// The width of the line with nothing given way (its whole first form) in `font`; `None`
+    /// when the line has nothing to say. Layout PR 5a: the ledger's facts column is its widest
+    /// row's whole line, so a frame with an unchanged key measures nothing here either.
+    pub(crate) fn widest<'a>(
+        &mut self,
+        ui: &egui::Ui,
+        id: &K,
+        content: impl std::hash::Hash,
+        font: &egui::FontId,
+        line: impl FnOnce() -> Line<'a>,
+    ) -> Option<f32> {
+        let key = key(ui, (content, font));
+        if let Some((kept, width)) = self.widest.get(id)
+            && *kept == key
+        {
+            return *width;
+        }
+        let width = line()
+            .fit(|_| true)
+            .map(|fitted| crate::design::number_width(ui, &fitted.text(), font));
+        self.widest.insert(id.clone(), (key, width));
+        width
+    }
+
     #[cfg(test)]
     pub(crate) fn seed(&mut self, id: K) {
         self.fits.insert(id.clone(), (0, None));
@@ -1063,13 +1089,14 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> Kept<K, V> {
     /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
     #[cfg(test)]
     pub(crate) fn holds(&self, id: &K) -> bool {
-        self.fits.contains_key(id) || self.shortest.contains_key(id)
+        self.fits.contains_key(id) || self.shortest.contains_key(id) || self.widest.contains_key(id)
     }
 
     /// Drop the lines whose owner no longer shows them (a group no longer offered).
     pub(crate) fn retain(&mut self, keep: impl Fn(&K) -> bool) {
         self.fits.retain(|id, _| keep(id));
         self.shortest.retain(|id, _| keep(id));
+        self.widest.retain(|id, _| keep(id));
     }
 }
 
