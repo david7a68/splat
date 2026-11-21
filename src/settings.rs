@@ -1,8 +1,7 @@
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     auth::Session,
     credentials::{Action, Worker},
-    design::{self, Density, Status, Tone, Type, colors, icons},
+    design::{self, Density, Status, Type, colors, icons},
 };
 use eframe::egui;
 use std::{
@@ -10,6 +9,28 @@ use std::{
     time::{Duration, Instant},
 };
 use zeroize::{Zeroize, Zeroizing};
+
+/// The account's warning, a typed notice in the account column: a sign-in the desktop keyring
+/// did not save asks to connect again (true when the DM chooses it); any other is the keyring's
+/// own words.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a body place: the account's warning stands in the account column, in the keyring's words (Ban::Body, Ban::Words)"
+)]
+fn account_warning(ui: &mut egui::Ui, keyring: bool, warning: &str) -> bool {
+    use design::outcome::{BodyMessage, Choice, MessageChoice, Notice, Sentence};
+    let notice = if keyring {
+        Notice::warning(crate::sentence!(
+            "This computer did not save your sign-in. Unlock your password manager, then connect again."
+        ))
+        .choice(Choice::new(MessageChoice::Choice("Connect again"), ()))
+    } else if let Some(words) = Sentence::outside(warning) {
+        Notice::warning(words)
+    } else {
+        return false;
+    };
+    BodyMessage::from(notice).show(ui).is_some()
+}
 
 pub struct Settings {
     cookie_input: String,
@@ -542,19 +563,10 @@ impl Settings {
         {
             small(ui, error);
         }
-        if let Some(warning) = &self.warning {
-            if account == Account::KeyringWarning {
-                if design::message_with_action(
-                    ui,
-                    Tone::Warning,
-                    "Your desktop keyring did not save your sign-in. Unlock the keyring, then connect again.",
-                    "Connect again",
-                ) {
-                    self.focus_sign_in();
-                }
-            } else {
-                design::message(ui, Tone::Warning, warning);
-            }
+        if let Some(warning) = &self.warning
+            && account_warning(ui, account == Account::KeyringWarning, warning)
+        {
+            self.focus_sign_in();
         }
         if account == Account::RefreshFailing
             && design::Action::secondary("Connect again")
@@ -807,7 +819,9 @@ mod tests {
         );
         design::theme::install(&harness.ctx);
         harness.run();
-        harness.get_by_label("Your desktop keyring did not save your sign-in. Unlock the keyring, then connect again.");
+        harness.get_by_label(
+            "This computer did not save your sign-in. Unlock your password manager, then connect again.",
+        );
         harness.get_by_label("Connect again");
     }
 
