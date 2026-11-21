@@ -686,7 +686,7 @@ pub fn run(d: &mut Driver<'_>) {
         .nodes()
         .into_iter()
         .find(|node| {
-            node.name == "Add"
+            (node.name == "Add" || node.name == "Maximum HP: Add")
                 && node.in_view()
                 && node.rect.top() >= control.bottom() - 1.0
                 && node.rect.left() >= control.left() - 1.0
