@@ -24596,11 +24596,13 @@ pub mod session_plan_groups {
         d.begin_task();
         d.click(&format!("More actions for {GROUP_RIVALS}"));
         d.click(&format!("Remove group {GROUP_RIVALS} from the plan"));
-        d.expect("Undo remove");
+        // M-N1.1: the Undo names the group it puts back (`UndoStep::of`).
+        let undo_group = format!("Undo remove {GROUP_RIVALS}");
+        d.expect(&undo_group);
         d.state("group-removed-from-plan", Sizes::Default);
         d.observe(
             "P1",
-            d.in_view("Undo remove")
+            d.in_view(&undo_group)
                 && d.visible_text(&format!("Removed “{GROUP_RIVALS}” from tonight.")),
             "Remove group keeps its message and Undo in view after capture resize",
         );
@@ -24636,7 +24638,7 @@ pub mod session_plan_groups {
             !d.has(&format!("Edit group {GROUP_RIVALS}")),
             "The row menu removes a group from this plan",
         );
-        d.click("Undo remove");
+        d.click(&undo_group);
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
         d.begin_task();
 
@@ -26183,7 +26185,8 @@ pub mod session_plan {
             "Removing a planned fight says so in the success tone",
         );
         d.state("planned-fight-removed", Sizes::All);
-        d.click("Undo remove");
+        // M-N1.1: the Undo at the removed row's place names the fight it puts back.
+        d.click(&format!("Undo remove {SECOND}"));
         d.expect(&format!("Start fight: {SECOND}"));
         // P1c: both plan acts go through the note's one act path, `Draft::apply`, with today's
         // behaviour: the change joins the draft as typed words do, and the note saves after its
@@ -26208,7 +26211,7 @@ pub mod session_plan {
         d.click("Remove from tonight");
         d.expect(&format!("Removed “{SECOND}” from tonight."));
         d.state("planned-fight-removed-beside-lookup", Sizes::Default);
-        d.click("Undo remove");
+        d.click(&format!("Undo remove {SECOND}"));
         d.expect(&format!("Start fight: {SECOND}"));
         let after = std::fs::read_to_string(&note).unwrap();
         d.observe(

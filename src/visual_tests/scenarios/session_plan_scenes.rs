@@ -666,7 +666,8 @@ pub fn run(d: &mut Driver<'_>) {
         kept,
         format!("At 960x520, the DM's wheel scroll stays with the Scene field open: {detail}"),
     );
-    d.click("Undo remove");
+    // M-N1.1: the removal's Undo names the scene it puts back (`UndoStep::of`).
+    d.click(&format!("Undo remove {MILLER}"));
     d.expect(&format!("Done: {MILLER}"));
     d.observe(
         "T12.10",
