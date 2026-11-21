@@ -28208,7 +28208,7 @@ pub mod remove_package_in_use {
         let package = module.id;
         // P2 of the review of PR 623: the search results before any change, for the Undo of
         // the removal at the end.
-        let before = readers(d);
+        let searched = readers(d);
         go_library(d);
         d.click("Packages");
         d.click("Manage packages…");
@@ -28455,12 +28455,12 @@ pub mod remove_package_in_use {
         let undone = readers(d);
         d.observe(
             "m32-C0-509-removal-undo-readers",
-            before == (false, true)
+            searched == (false, true)
                 && removed.0
-                && undone == before
+                && undone == searched
                 && d.app().encounters.snapshot_revision() != read,
             format!(
-                "{CREATURE} offered as unused, listed by Encounters: before {before:?}, removed and registered again {removed:?}, after Undo {undone:?}"
+                "{CREATURE} offered as unused, listed by Encounters: before {searched:?}, removed and registered again {removed:?}, after Undo {undone:?}"
             ),
         );
     }
