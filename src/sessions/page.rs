@@ -7244,7 +7244,7 @@ impl Sessions {
         // that the title line has them too.
         let edges = if changed_tab {
             ui.ctx()
-                .request_discard("the session's tab changed the pane's edges");
+                .request_discard("the session tab changed the pane edges");
             self.session_layout(ui, plan).edges
         } else {
             edges

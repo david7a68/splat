@@ -218,6 +218,7 @@ that hosts reveals (R34, R44, R46); the Settings pane's column (the import form)
 | Per-change cache | `Memo`, `Revised`, `Revision` (`design::memo`) | A cache keyed only by revisions. A revision advances only on a stated change: `Revised::revise` when its closure returns `Changed::Yes`, `Revised::set` when the new value differs (it needs `Eq`). A pointer address, a frame count or an input epoch is not a key: the type does not take one. A `Revised` or `Memo` value is `Sync`, so it holds no `Cell` or `RefCell`. `ptr_eq` calls are counted and can only go down |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
+| Composite columns | `PaneColumns` (`shared_task`, `independent`; `fixed`, `resizable`, `rest`, `least_height`; `edges`), `PaneEdges` (`header`, `child_header`, `show_children`, `outer`, `child`) | Children side by side in one pane (layout step 7). `edges` resolves every child's edges once, before anything of the pane paints, from the room and this pass's splitter drag or key; the header (`header`, the composite's outer edge: its children and gutters, never the window), a child's toolbar (`child_header`) and the children (`show_children`) all use those edges, so they share one right edge in every pass of a drag. Edges kept to a later pass or used in another room are refused and resolved again. A shared task in a `Body::Content` pane is as tall as its tallest child's whole content (each child's scroll columns add what they hide), up to the room left and at least its `least_height` while taller, so the footer follows the taller child by `S` and a resizable child's rule ends there; in any other body it fills the room left. Independent children are whole-height hosts of their own panes and footers. Children are still drawn by a closure: each host is a counted `composite-child` row of the legacy freeze until its children are closed blocks |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
@@ -858,10 +859,15 @@ Campaign's header counts chosen entries only. Flags appear once in the content i
 the warning icon and colour before its words (`⚠ 1 content issue to repair`), and it keeps its collapse. Encounters'
 count uses the same helper, words and size. Each flag's
 repair choice and file line start at its words. Packages keeps its save row directly below the tabs, before notices.
-The Packages page scrolls as one page and keeps the scroll bar's lane whether or not the bar shows; the package list
-fills the rest of the window and keeps room for a few rows, so tall repairs make the page scroll. A control that
+The Packages page scrolls as one page and keeps the scroll bar's lane whether or not the bar shows. The package list
+and the chosen package beside it are one task (`PaneColumns::shared_task`): the two columns are as tall as the taller
+list, up to the room left, each list scrolls on its own when it is taller, and they keep room for a few rows, so tall
+content above them makes the page scroll. The splitter's rule ends where the taller list ends. A control that
 gains focus (Tab or a screen reader) scrolls into view, and a repair editor brings its whole viewport into view.
-The page's messages sit in its one footer, pinned below the page's scroll area: every live result with an Undo (a
+The page's messages sit in its one footer, `S` below the taller list while the page fits its room, and pinned at the
+pane's bottom when the content fills it or scrolls. While a repair's editor, the changes to review or the issue list
+stands above the columns (each scrolls inside the page), the page keeps its own scroll in a `Fills` body and the
+footer is pinned, until those have closed blocks (layout steps 9 and 10). The footer holds every live result with an Undo (a
 discard, a written Campaign.md or manifest, a found folder, a removed package, each repair's discarded draft),
 newest first, then the reasons (each repair's failed Save, and an open repair's refusal, named by its path, then
 the page's errors: Save's or a load's, the change check's), then the latest plain result (`Campaign selections saved.`, applied
@@ -2114,7 +2120,12 @@ with warning status in header and rail, the tone of their banner: the draft is s
 A failed write stays an error. Rail conflicts say Notes changed, with Notes changed on disk on hover
 and for accessibility.
 
-Session title and muted date wrap together, with Record on the title line. Below 640 px, save state and
+Session title and muted date wrap together, with Record on the title line. The title line and the tab row end at the
+session's content edge, never at the window's: beside the plan, at the note column's right edge (the plan, an `L`
+gutter and the note's column, whose edge the DM drags); otherwise at the note frame's edge (the narrow Plan and Note
+tabs, a conflict) or the whole room (Recordings, a group being edited in the narrow Plan tab). One `PaneEdges`, made
+before the title line paints, gives the title line, the tab row and the plan and note columns the same edges, a
+dragged edge included. When that edge leaves less than 640 px, save state and
 Details sit beside Read on the content tab row. Read and Write sit there while notes are visible. An empty
 Read view keeps only its inline Write link; hide tab-row Write until the note has content. Notes saved
 centres on the title action row. A saved note is the calm, usual state: `✓ Notes saved` is muted
