@@ -1402,29 +1402,36 @@ fn resolve_group(
     }))
 }
 
-/// Group actions use the encounter ledger's right-hand columns.
+/// A group row's second line: its summary, after a warning when no fight offers it.
+pub(super) fn row_detail(group: &RunGroup) -> String {
+    format!(
+        "{}{}",
+        if group.encounter.is_some() && group.encounter_name.is_none() {
+            "Offered in no fight · "
+        } else {
+            ""
+        },
+        group.summary()
+    )
+}
+
+/// Group actions use the encounter ledger's columns (layout PR 5a).
 fn list_row(
     ui: &mut egui::Ui,
     group: &RunGroup,
     blocked: Option<&'static str>,
+    column: super::list::Column,
     action: &mut Option<super::ListAction>,
 ) {
-    let summary = group.summary();
     super::list::list_row(
         ui,
         group.id,
         &group.name,
-        &format!(
-            "{}{}",
-            if group.encounter.is_some() && group.encounter_name.is_none() {
-                "Offered in no fight · "
-            } else {
-                ""
-            },
-            summary
-        ),
+        &row_detail(group),
         false,
         None,
+        column,
+        super::list::group_actions(ui),
         |ui| {
             super::row_menu(ui, &group.name, |ui| {
                 if super::menu_action(ui, "Remove", blocked) {
@@ -1469,6 +1476,7 @@ pub(super) fn list(
     ui: &mut egui::Ui,
     snapshot: &Snapshot,
     blocked: Option<&'static str>,
+    column: super::list::Column,
     action: &mut Option<super::ListAction>,
 ) {
     // FB8: a sub-heading after a group has its heading's space above it, so it reads as the
@@ -1485,7 +1493,7 @@ pub(super) fn list(
     if !any.is_empty() {
         sub_heading(ui, "For any encounter", any.len());
         for group in any {
-            list_row(ui, group, blocked, action);
+            list_row(ui, group, blocked, column, action);
         }
     }
     for (id, name) in snapshot.encounter_choices() {
@@ -1497,7 +1505,7 @@ pub(super) fn list(
         if !own.is_empty() {
             sub_heading(ui, &format!("For {name}"), own.len());
             for group in own {
-                list_row(ui, group, blocked, action);
+                list_row(ui, group, blocked, column, action);
             }
         }
     }
@@ -1509,7 +1517,7 @@ pub(super) fn list(
     if !orphans.is_empty() {
         sub_heading(ui, ENCOUNTER_DELETED, orphans.len());
         for group in orphans {
-            list_row(ui, group, blocked, action);
+            list_row(ui, group, blocked, column, action);
         }
     }
 }

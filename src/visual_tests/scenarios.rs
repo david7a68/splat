@@ -20291,7 +20291,8 @@ pub mod encounter_groups {
             let menu = d
                 .place_of(&format!("More actions for {GROUP_LOST}"))
                 .expect("Lost Patrol remains in the list after removing Goblin Wave");
-            let scrolls = scroll_bar_right_of(d, menu.right());
+            // Layout PR 5a: the menu follows the row's facts; its row ends at the scroll lane.
+            let scrolls = scroll_bar_right_of(d, d.row_right_of(menu).unwrap_or(menu.right()));
             d.observe(
                 "iter-26-B-FI1",
                 scrolls == (size == SMALL),
@@ -21586,17 +21587,19 @@ pub mod encounter_owned_groups {
         d.expect("GROUPS");
         // FB2: opening Groups makes the page scroll at 960, and no row action moves.
         let actions = |d: &Driver<'_>| {
-            let menus: Vec<f32> = d
+            let menus: Vec<egui::Rect> = d
                 .nodes()
                 .into_iter()
                 .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
-                .map(|node| node.rect.right())
+                .map(|node| node.rect)
                 .collect();
+            // Layout PR 5a: the menus follow the rows' facts; their rows end at the scroll lane.
             let bar = menus
                 .iter()
-                .copied()
+                .map(|menu| d.row_right_of(*menu).unwrap_or(menu.right()))
                 .reduce(f32::max)
                 .is_some_and(|edge| scroll_bar_right_of(d, edge));
+            let menus: Vec<f32> = menus.iter().map(|menu| menu.right()).collect();
             (right_edges(d, "Resume"), menus, bar)
         };
         let closed = d.at_size(SMALL, actions);
