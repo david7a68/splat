@@ -47,6 +47,13 @@ pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
 const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
 const OVERRIDE_NAME: design::FieldName = crate::field_id!("override_name");
+/// The change rows' drop-downs, each keyed by its form (`overrides_form`).
+const CHANGE_MAX_HP: design::FieldName = crate::field_id!("override_change_max_hp");
+const CHANGE_AC: design::FieldName = crate::field_id!("override_change_ac");
+const CHANGE_INITIATIVE: design::FieldName = crate::field_id!("override_change_initiative");
+const CHANGE_ATTACK: design::FieldName = crate::field_id!("override_change_attack");
+const CHANGE_DAMAGE: design::FieldName = crate::field_id!("override_change_damage");
+const CHANGE_SPEED: design::FieldName = crate::field_id!("override_change_speed");
 const OVERRIDE_NOTE: design::FieldName = crate::field_id!("override_note");
 const GROUP_NAME: design::FieldName = crate::field_id!("group_name");
 const ENCOUNTER_GROUP_NAME: design::FieldName = crate::field_id!("encounter_group_name");
@@ -2034,6 +2041,24 @@ pub(super) fn show_form_when_it_opens(ui: &egui::Ui) {
     ui.data_mut(|data| data.insert_temp(egui::Id::new(FORM_OPENED), true));
 }
 
+/// How a change row's value changes, as its drop-down offers it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ChangeKind {
+    Same,
+    Set,
+    Add,
+}
+
+impl ChangeKind {
+    fn of(value: Option<Change>) -> Self {
+        match value {
+            None => Self::Same,
+            Some(Change::Set(_)) => Self::Set,
+            Some(Change::Add(_)) => Self::Add,
+        }
+    }
+}
+
 /// A number that can stay the same, be set, or change by an amount. Each control keeps the
 /// override valid on its own, so that the form never holds a block that it cannot read.
 #[allow(
@@ -2042,6 +2067,7 @@ pub(super) fn show_form_when_it_opens(ui: &egui::Ui) {
 )]
 fn change_row(
     ui: &mut egui::Ui,
+    field: design::FieldId,
     label: &str,
     value: &mut Option<Change>,
     set: Option<std::ops::RangeInclusive<i64>>,
@@ -2061,42 +2087,36 @@ fn change_row(
             Type::Small.font(ui),
             colors().muted,
         );
-        let word = match value {
-            None => "Same",
-            Some(Change::Set(_)) => "Set to",
-            Some(Change::Add(_)) => "Add",
-        };
         let low = set.as_ref().map_or(1, |range| *range.start().max(&1));
-        let combo = egui::ComboBox::from_id_salt(label)
-            .icon(design::combo_icon)
+        // The pressure caller of lane E1 (round 31 SD11, chosen-value-weight): the `Dropdown`
+        // part, whose closed value is regular `Body` weight, as every closed drop-down's.
+        let mut kind = ChangeKind::of(*value);
+        let name = format!("{label}: how it changes");
+        let mut dropdown = design::Dropdown::new(field, &name)
             .width(86.0)
-            .selected_text(word)
-            .show_ui(ui, |ui| {
-                if design::choice(ui, value.is_none(), "Same").clicked() {
-                    *value = None;
-                }
-                if set.is_some()
-                    && design::choice(ui, matches!(value, Some(Change::Set(_))), "Set to").clicked()
-                {
-                    *value = Some(Change::Set(low));
-                }
-                let add_option = design::choice(ui, matches!(value, Some(Change::Add(_))), "Add");
-                design::named(ui, &add_option, &format!("{label}: Add"));
-                if add_option.clicked() {
-                    *value = Some(Change::Add(1));
-                }
-            });
-        design::named(ui, &combo.response, &format!("{label}: how it changes"));
+            .choice(ChangeKind::Same, "Same");
+        if set.is_some() {
+            dropdown = dropdown.choices([(ChangeKind::Set, "Set to")]);
+        }
+        if dropdown
+            .choices([(ChangeKind::Add, "Add")])
+            .show(ui, &mut kind)
+            .changed
+        {
+            *value = match kind {
+                ChangeKind::Same => None,
+                ChangeKind::Set => Some(Change::Set(low)),
+                ChangeKind::Add => Some(Change::Add(1)),
+            };
+        }
         match value {
             Some(Change::Set(number)) => {
                 let range = set.clone().unwrap_or(0..=0);
-                let response = ui.add(egui::DragValue::new(number).range(range));
-                design::named(ui, &response, &format!("{label}: value"));
+                design::stepper(ui, &format!("{label}: value"), number, range);
             }
             Some(Change::Add(number)) => {
                 let mut amount = *number;
-                let response = ui.add(egui::DragValue::new(&mut amount).range(add));
-                design::named(ui, &response, &format!("{label}: amount"));
+                design::signed_stepper(ui, &format!("{label}: amount"), &mut amount, add);
                 // Zero changes nothing, so the choice for that is Same.
                 if amount != 0 {
                     *number = amount;
@@ -2282,6 +2302,8 @@ pub(super) fn overrides_form(
     sides: Option<&[String]>,
     typed: &mut TypedWords,
 ) -> FormEnd {
+    // The form's fields, keyed by its row (`id`).
+    let key = design::TextKey::from_data(id);
     let mut overrides = match Overrides::parse(block) {
         Ok(overrides) => overrides,
         Err(error) => {
@@ -2351,7 +2373,7 @@ pub(super) fn overrides_form(
     }
     text_row(
         ui,
-        OVERRIDE_NAME.of(design::TextKey::from_data(id)),
+        OVERRIDE_NAME.of(&key),
         "Display name",
         &mut overrides.name,
         &entry.name,
@@ -2368,6 +2390,7 @@ pub(super) fn overrides_form(
     if !linked || overrides.max_hp.is_some() {
         said(change_row(
             ui,
+            CHANGE_MAX_HP.of(&key),
             "Maximum HP",
             &mut overrides.max_hp,
             Some(1..=1_000_000),
@@ -2377,6 +2400,7 @@ pub(super) fn overrides_form(
     }
     said(change_row(
         ui,
+        CHANGE_AC.of(&key),
         "AC",
         &mut overrides.armor_class,
         Some(0..=1000),
@@ -2385,18 +2409,27 @@ pub(super) fn overrides_form(
     ));
     said(change_row(
         ui,
+        CHANGE_INITIATIVE.of(&key),
         "Initiative bonus",
         &mut overrides.initiative_bonus,
         Some(-1000..=1000),
         -1000..=1000,
         &base,
     ));
-    for (label, bonus) in [
-        ("Attack bonus", &mut overrides.attack_bonus),
-        ("Damage bonus", &mut overrides.damage_bonus),
+    for (field, label, bonus) in [
+        (CHANGE_ATTACK, "Attack bonus", &mut overrides.attack_bonus),
+        (CHANGE_DAMAGE, "Damage bonus", &mut overrides.damage_bonus),
     ] {
         let mut value = bonus.map(Change::Add);
-        said(change_row(ui, label, &mut value, None, -1000..=1000, &base));
+        said(change_row(
+            ui,
+            field.of(&key),
+            label,
+            &mut value,
+            None,
+            -1000..=1000,
+            &base,
+        ));
         *bonus = match value {
             Some(Change::Add(amount)) => Some(amount),
             _ => None,
@@ -2404,6 +2437,7 @@ pub(super) fn overrides_form(
     }
     said(change_row(
         ui,
+        CHANGE_SPEED.of(&key),
         "Speed",
         &mut overrides.speed,
         Some(0..=1000),
@@ -2581,10 +2615,6 @@ impl Encounters {
             .and_then(|(_, refusal)| refusal.clone())
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn save_group_draft(
         &mut self,
         ctx: &egui::Context,
@@ -4911,7 +4941,7 @@ mod tests {
             harness.get_by_label("Note").value().as_deref(),
             Some("Keep this row")
         );
-        harness.get_by_label("Maximum HP: how it changes");
+        harness.get_by_label_contains("Maximum HP: how it changes");
         harness.get_by_label("AC: amount");
         harness.get_by_label("Done with changes").click();
         harness.run_steps(2);
