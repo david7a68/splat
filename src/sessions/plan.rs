@@ -1245,10 +1245,6 @@ enum MenuChoice {
 }
 
 /// A button whose menu offers a new thing, then the campaign's, with a search when they are many.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn plan_menu(
     ui: &mut egui::Ui,
     menu: &PlanMenu<'_>,
@@ -1291,12 +1287,12 @@ fn plan_menu(
                     field.request_focus();
                 }
             }
-            ui.separator();
+            design::rule(ui);
             let query = search.trim().to_lowercase();
             let mut chosen = None;
-            egui::ScrollArea::vertical()
-                .id_salt(menu.word)
+            design::ScrollColumn::new(menu.word)
                 .max_height(FIGHT_MENU_HEIGHT)
+                .fit_height()
                 .show(ui, |ui| {
                     for name in names {
                         if name.to_lowercase().contains(&query) {
@@ -4746,11 +4742,12 @@ impl Sessions {
                             // in its own fault's tone; then the group's own reason, as a warning.
                             for warning in &group.warnings {
                                 design::gap(ui, design::Gap::XS);
-                                design::small_message(ui, warning.tone(), warning);
+                                let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(warning)).compact().show(ui);
                             }
                             for reason in group.own_problems() {
                                 design::gap(ui, design::Gap::XS);
-                                design::small_message(ui, Tone::Warning, reason);
+                                let fault = PlanFault::Check(as_sentence(reason));
+                                let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).compact().show(ui);
                             }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {
@@ -5679,7 +5676,7 @@ impl Sessions {
     /// link is then `Add rewards`, or the words `In notes`. Returns whether the DM pressed it.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "the open played fight’s fault in its details (Ban::Body)"
     )]
     fn fight_block(
         &mut self,
@@ -5732,14 +5729,12 @@ impl Sessions {
         match result {
             // R41: the folder's cause in Encounters' words and tone.
             Err(FightFault::Folder(folder)) => {
-                design::message(ui, folder.tone(), &folder.message());
+                let fault = PlanFault::Toned(as_sentence(&folder.message()), folder.severity());
+                let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
             }
             Err(FightFault::Other(error)) => {
-                design::message(
-                    ui,
-                    Tone::Info,
-                    &format!("This fight’s run cannot be read. {error}"),
-                );
+                let words = as_sentence(&format!("This fight’s run cannot be read. {error}"));
+                let _ = design::outcome::BodyMessage::<()>::from(Notice::new(words)).show(ui);
             }
             Ok(summary) => {
                 let known = |n: Option<i64>| n.map_or_else(|| "?".to_owned(), |n| n.to_string());
@@ -5827,9 +5822,9 @@ impl Sessions {
                     }
                 });
                 if self.show_fight_log {
-                    egui::ScrollArea::vertical()
-                        .id_salt(("fight_log", run))
+                    design::ScrollColumn::new(("fight_log", run))
                         .max_height(design::READER_MEASURE / 3.0)
+                        .fit_height()
                         .show(ui, |ui| {
                             for line in &summary.log {
                                 wrapped_words(ui, Type::Small, line, colors().muted);

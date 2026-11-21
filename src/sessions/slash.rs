@@ -1,6 +1,5 @@
 //! `/` in a session note opens a short menu of commands. Each command ends with a link
 //! where the `/` was typed, so the DM keeps writing and never leaves the note.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     design::{self, Density, Tone, Type, colors, icons},
     lookup::{self, ContentIndex},
@@ -176,6 +175,10 @@ impl Slash {
     }
 
     /// After the note's editor shows: open the menu on a new `/`, and show what is open.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "why `/npc` made or saved nothing, in its menu (Ban::Body)"
+    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -344,7 +347,14 @@ impl Slash {
                                         ui.allocate_ui_with_layout(
                                             egui::vec2(room, 0.0),
                                             egui::Layout::top_down(egui::Align::Min),
-                                            |ui| design::message(ui, Tone::Error, problem),
+                                            |ui| {
+                                                design::outcome::BodyMessage::<()>::from(
+                                                    design::outcome::FaultMessage::new(&NpcFault(
+                                                        problem,
+                                                    )),
+                                                )
+                                                .show(ui)
+                                            },
                                         );
                                         design::icon_button(ui, icons::CLOSE, "Close").clicked()
                                     })
@@ -367,7 +377,10 @@ impl Slash {
                     );
                     let save = save || keys.choose;
                     if let Some(error) = error.as_deref() {
-                        design::message(ui, Tone::Error, error);
+                        let _ = design::outcome::BodyMessage::<()>::from(
+                            design::outcome::FaultMessage::new(&NpcFault(error)),
+                        )
+                        .show(ui);
                     }
                     if save {
                         match place
@@ -697,6 +710,25 @@ fn search(
     chosen.map_or(Outcome::Stay, |position| {
         Outcome::Link(index.link_to(position))
     })
+}
+
+
+/// Why `/npc` made or saved no NPC: the generator's or the system's words, or that no campaign
+/// is open. An error, as it always was.
+struct NpcFault<'a>(&'a str);
+
+impl design::outcome::Fault for NpcFault<'_> {
+    fn severity(&self) -> design::outcome::Severity {
+        design::outcome::Severity::CannotRead
+    }
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the generator’s and the system’s words, as they came (M17)"
+    )]
+    fn cause(&self) -> design::outcome::Sentence {
+        design::outcome::Sentence::outside(self.0)
+            .unwrap_or(crate::sentence!("No NPC was made."))
+    }
 }
 
 #[cfg(test)]
