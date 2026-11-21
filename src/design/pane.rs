@@ -606,6 +606,13 @@ pub fn held_seen(ui: &Ui, control: impl std::hash::Hash, top: f32) {
     });
 }
 
+/// Whether the footer `id` followed its content in the last pass (`Footer::pane`): its top
+/// stays and it grows down, so an answer to a press of one of its lines stands under that line.
+pub(super) fn footer_follows(ctx: &egui::Context, id: Id) -> bool {
+    ctx.data(|data| data.get_temp::<bool>(id.with("follows")))
+        .unwrap_or(false)
+}
+
 /// Where a pane's footer stands.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Placement {
@@ -2113,6 +2120,11 @@ impl Footer<'_> {
             let held = hold_place(ui, held, facts);
             ui.ctx().data_mut(|data| data.insert_temp(held_key, held));
         }
+        // Where the footer stood, for the next pass's order of its lines: an answer to a pressed
+        // line stands under it while the footer follows (`Messages::answer`).
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(id.with("follows"), placement == Placement::Follows);
+        });
         ui.advance_cursor_after_rect(room);
         #[cfg(any(test, feature = "test-support"))]
         keep(

@@ -249,14 +249,15 @@ impl PaneEdges {
         std::borrow::Cow::Owned(self.spec.resolve(ui.ctx(), room))
     }
 
-    /// The composite's outer edges: from its first child's left to its last child's right.
-    pub fn outer(&self) -> Rangef {
-        outer(&self.children, self.room)
+    /// The composite's outer edges in `ui`'s pass and room: from its first child's left to its
+    /// last child's right. Kept edges are refused and resolved again, as for `header`.
+    pub fn outer(&self, ui: &Ui) -> Rangef {
+        outer(&self.current(ui), self.room)
     }
 
-    /// Child `index`'s edges.
-    pub fn child(&self, index: usize) -> Rangef {
-        self.children[index]
+    /// Child `index`'s edges in `ui`'s pass and room (kept edges are resolved again).
+    pub fn child(&self, ui: &Ui, index: usize) -> Rangef {
+        self.current(ui)[index]
     }
 
     /// A header line of the whole composite (a title with its actions, tabs), drawn by `add` with
@@ -422,6 +423,9 @@ mod tests {
     fn a_composite_header_and_its_children_share_their_edges() {
         let stale = Rc::new(Cell::new(false));
         let stale_in = stale.clone();
+        // What `outer` and `child` say in the pass, from the edges the pass uses.
+        let said = Rc::new(Cell::new((0.0_f32, 0.0_f32)));
+        let said_in = said.clone();
         let mut kept: Option<PaneEdges> = None;
         let mut harness = Harness::builder()
             .with_size(vec2(1920.0, 640.0))
@@ -439,6 +443,7 @@ mod tests {
                     fresh
                 };
                 kept = Some(spec.edges(ui));
+                said_in.set((edges.outer(ui).max, edges.child(ui, 1).max));
                 edges.header(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                         let _ = ui.button("Record");
@@ -521,6 +526,11 @@ mod tests {
         harness.step();
         let narrow = check(&harness, "kept edges after a resize to 420");
         assert!(narrow <= 420.0 + 0.5, "the note fits the room: {narrow}");
+        assert!(
+            (said.get().0 - narrow).abs() <= 1.0 && (said.get().1 - narrow).abs() <= 1.0,
+            "kept edges: outer and child say {:?}, the note child ends at {narrow}",
+            said.get()
+        );
         assert!(
             rejected_edges(&harness.ctx) > rejected,
             "the kept edges were refused"

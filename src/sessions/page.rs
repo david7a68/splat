@@ -7063,7 +7063,7 @@ impl Sessions {
         // toolbar and the body share one set of edges, decided now, before anything paints. The
         // title's actions end at the session's content edge, never at the window's.
         let layout = self.session_layout(ui, plan);
-        let title_on_own_line = layout.edges.outer().span() < TWO_COLUMNS_FROM;
+        let title_on_own_line = layout.edges.outer(ui).span() < TWO_COLUMNS_FROM;
         layout.edges.header(ui, |ui| {
             ui.horizontal(|ui| {
                 // One height whether Record, Stop recording or nothing stands beside the title,
@@ -7300,7 +7300,7 @@ impl Sessions {
             Tab::Plan => {
                 ui.scope(|ui| {
                     if !editing_group_here {
-                        let width = edges.child(0).span();
+                        let width = edges.child(ui, 0).span();
                         ui.set_max_width(width + ui.spacing().scroll.allocated_width());
                     }
                     fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {

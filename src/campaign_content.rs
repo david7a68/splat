@@ -29,6 +29,27 @@ pub struct Snapshot {
     /// The closure of these selections. It is too slow to calculate on every frame.
     closure: (Vec<PackageSelection>, Closure),
     subtitles: std::collections::HashMap<Uuid, String>,
+    /// The issue list's error lines (`issue_errors`), worked out once for this catalogue and
+    /// closure: a reload makes a new snapshot, and a new closure drops them (`selection_bar`).
+    issues: Option<Vec<String>>,
+}
+
+impl Snapshot {
+    /// The issue list's error lines for `campaign`, from the kept ones while they stand.
+    fn issue_lines(&mut self, campaign: Uuid) -> &[String] {
+        let (catalogue, closure) = (&self.catalogue, &self.closure.1);
+        self.issues.get_or_insert_with(|| {
+            let flags = catalogue
+                .entries
+                .get(&campaign)
+                .map(|entry| entry.entry.flags.as_slice())
+                .unwrap_or_default();
+            issue_errors(catalogue, closure, flags)
+                .into_iter()
+                .cloned()
+                .collect()
+        })
+    }
 }
 /// An invalid note in repair: its path, its text on disk and its draft, with Save's check of the
 /// draft. The check runs only where the draft changes (a load, an edit, Discard, Undo discard), so
@@ -550,6 +571,9 @@ struct Answer {
     campaign: Uuid,
     cause: Cause,
     words: String,
+    /// The footer line whose press this answers (a failed Undo): the answer stands under it
+    /// while the footer follows the page, so that line keeps its place (`Messages::answer`).
+    under: Option<design::outcome::PressedLine>,
 }
 
 /// The newest failed answer of an act in the `active` campaign.
@@ -558,6 +582,7 @@ fn answer_in(active: &Option<Campaign>, cause: Cause, words: String) -> Option<A
         campaign: active.as_ref().map_or(Uuid::nil(), |active| active.id),
         cause,
         words,
+        under: None,
     })
 }
 
@@ -1045,6 +1070,7 @@ impl CampaignContent {
                     campaign: owner.unwrap_or(Uuid::nil()),
                     cause: Cause::Failed,
                     words: error,
+                    under: None,
                 });
             }
             None => {}
@@ -1335,21 +1361,21 @@ impl CampaignContent {
     /// it: a repair's editor, the changes to review, or the issue list. The pane's scroll column
     /// refuses a scroll inside it, so until those have closed blocks (layout steps 9 and 10) such
     /// a page keeps its own scroll in a `Fills` body, with its footer pinned (counted).
-    fn inner_scrolls(&self, active: &Campaign) -> bool {
+    fn inner_scrolls(&mut self, active: &Campaign) -> bool {
         if !self.repairs.is_empty() || !self.reconcile.proposals.is_empty() {
             return true;
         }
-        let Some(snapshot) = &self.snapshot else {
+        let Some(snapshot) = &mut self.snapshot else {
             return false;
         };
+        let errors = !snapshot.issue_lines(active.id).is_empty();
         let (catalogue, document) = (&snapshot.catalogue, &snapshot.document);
         let campaign_flags = catalogue
             .entries
             .get(&active.id)
             .map(|entry| entry.entry.flags.as_slice())
             .unwrap_or_default();
-        (!campaign_flags.is_empty()
-            || !issue_errors(catalogue, &snapshot.closure.1, campaign_flags).is_empty())
+        (!campaign_flags.is_empty() || errors)
             && !missing_package(catalogue, document)
             && removal_of(&self.results, active.id).is_none_or(|removed| removed.users.is_empty())
     }
@@ -1508,7 +1534,7 @@ impl CampaignContent {
                 }
             };
             // The one counted use (`Ban::Answer`, exactly one call).
-            messages.answer(fault);
+            messages.answer(fault, answer.under);
         }
         for shown in self.results.newest_first(&active.id) {
             let line = shown.outcome(frame, |kept| outcome_of(&kept.payload, locked));
@@ -1627,14 +1653,23 @@ impl CampaignContent {
         campaigns: &Campaigns,
         pressed: Option<design::outcome::Press<ContentPress>>,
     ) {
-        let Some(design::outcome::Press { id, ticket }) = pressed else {
+        let Some(press) = pressed else {
             return;
         };
+        let line = press.line();
+        let design::outcome::Press { id, ticket } = press;
         match (id, ticket) {
             (ContentPress::Undo, Some(ticket)) => {
                 let mut results = std::mem::take(&mut self.results);
-                let _ = results.undo_by(ticket, |kept| self.undo_result(&kept.payload));
+                let undone = results.undo_by(ticket, |kept| self.undo_result(&kept.payload));
                 self.results = results;
+                // A failed Undo keeps its result and its Undo; the failure answers that press,
+                // under its line.
+                if undone.is_err()
+                    && let Some(answer) = &mut self.answer
+                {
+                    answer.under = line;
+                }
             }
             // An encounter opens in Lookup by its id, whatever the page holds now.
             (ContentPress::OpenEntry(id), _) => self.open_lookup = Some(id),
@@ -2050,6 +2085,7 @@ impl CampaignContent {
                 document.selections.clone(),
                 catalogue.closure(&document.selections, document.campaign.id),
             );
+            snapshot.issues = None;
         }
         let mut reload = false;
         let c = colors();
@@ -2577,6 +2613,8 @@ impl CampaignContent {
     )]
     fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let snapshot = self.snapshot.as_mut().unwrap();
+        snapshot.issue_lines(active.id);
+        let errors: &[String] = snapshot.issues.as_deref().unwrap_or_default();
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
         let closure = &snapshot.closure.1;
@@ -2598,7 +2636,6 @@ impl CampaignContent {
             .get(&active.id)
             .map(|entry| entry.entry.flags.as_slice())
             .unwrap_or_default();
-        let errors = issue_errors(catalogue, closure, campaign_flags);
         let issues_shown = self.repairs.is_empty()
             && !missing_package(catalogue, document)
             && removal_of(&self.results, active.id).is_none_or(|removed| removed.users.is_empty());
@@ -3295,6 +3332,7 @@ pub fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
             document,
             subtitles: crate::library::catalogue_subtitles(&catalogue),
             catalogue,
+            issues: None,
         })
     });
     (repairs, result)
