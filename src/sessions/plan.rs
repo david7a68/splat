@@ -8728,7 +8728,10 @@ mod tests {
         assert_eq!(read(), obsidian, "the outside edit stays");
         assert!(
             harness
-                .query_all_by_label("That line changed on disk.")
+                .query_all_by_label(
+                    "The scene “Wait for the tide” was not removed from Session 2: The Crossing. \
+                     The session note changed after the act. Check the session note first."
+                )
                 .next()
                 .is_some(),
             "a refused Undo scene says why after the field closed"
@@ -8750,7 +8753,11 @@ mod tests {
         assert_eq!(read(), changed);
         assert!(
             harness
-                .query_by_label("The note changed on disk. Choose in the note first.")
+                .query_by_label(
+                    "The scene “Pay the toll” was not ticked in Session 2: The Crossing. The \
+                     session note has unsaved words, and its file changed on disk. Choose which \
+                     words to keep in the session note first."
+                )
                 .is_some()
         );
 
@@ -8768,7 +8775,7 @@ mod tests {
         std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
         fs::set_permissions(dir.path(), permissions).unwrap();
         assert_eq!(read(), changed);
-        assert!(harness.query_by_label("Notes not saved").is_some());
+        assert!(harness.query_by_label("Notes not saved.").is_some());
         assert!(
             harness
                 .state()
