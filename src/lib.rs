@@ -24,7 +24,12 @@ extern crate self as splat;
 static TEST_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 use splat_content_ui::art;
-pub use splat_content_ui::auth;
+pub mod auth {
+    #[cfg(test)]
+    pub use splat_content_ui::auth::connect_live;
+    pub use splat_content_ui::auth::{Session, connect};
+    pub(crate) use splat_content_ui::auth::{stream_request, website_request};
+}
 use splat_content_ui::campaign_content;
 use splat_content_ui::campaigns;
 mod combat_sync;

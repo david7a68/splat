@@ -48,6 +48,8 @@ fn iter14_e_changed_files_end_every_undo_result() {
     .unwrap();
     let mut app = world.app();
     let mut campaigns = std::mem::take(&mut app.campaigns);
+    let frame_context = eframe::egui::Context::default();
+    design::theme::install(&frame_context);
     library::iter14_e_changed_files_end_every_undo_result(
         &temp,
         &mut campaigns,
@@ -57,6 +59,11 @@ fn iter14_e_changed_files_end_every_undo_result() {
             app.route(ctx);
             *campaigns = std::mem::take(&mut app.campaigns);
             std::mem::take(&mut app.library)
+        },
+        |library, campaigns| {
+            let _ = frame_context.run(eframe::egui::RawInput::default(), |ctx| {
+                eframe::egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
+            });
         },
     );
 }

@@ -1242,7 +1242,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M0126 (M-R0.9): a group row's member faults are typed messages in the row they are
         // about, with their repairs (`BodyMessage`); their words are the loader's, with the
         // DM's names in them (`Sentence::outside`).
-        ("src/encounters/groups.rs", "cause", &[Ban::Words]),
+        ("src/content_ui/src/roster.rs", "cause", &[Ban::Words]),
         ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
         (
             "src/design/outcome.rs",
@@ -1268,7 +1268,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Package T (PR 328 review): a repeated amount field's problem stands at its line.
         ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
         ("src/trackers/view.rs", "messages", &[Ban::Words]),
-        ("src/sessions/page.rs", "notice_sentence", &[Ban::Words]),
+        (
+            "src/content_ui/src/session_notes.rs",
+            "notice_sentence",
+            &[Ban::Words],
+        ),
         (
             "src/encounter_run/notice.rs",
             "live_header",

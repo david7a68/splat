@@ -1,3 +1,4 @@
+//! Reader and roll widgets shared by the content screens and desktop.
 pub use splat_design::design::*;
 
 pub mod reader {

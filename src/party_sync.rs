@@ -107,7 +107,7 @@ fn client() -> Result<Client, Failure> {
 fn get(client: &Client, session: &Session, url: &str, website: bool) -> Result<Vec<u8>, Failure> {
     let request = client.get(url).header("Accept", "application/json");
     let request = if website {
-        session.website_request(request)?
+        crate::auth::website_request(session, request)?
     } else {
         session.authorize(request)
     };

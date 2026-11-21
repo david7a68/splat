@@ -14920,6 +14920,7 @@ pub fn iter14_e_changed_files_end_every_undo_result(
     temp: &tempfile::TempDir,
     campaigns: &mut Campaigns,
     mut route: impl FnMut(&mut Campaigns, Library, &egui::Context) -> Library,
+    mut frame: impl FnMut(&mut Library, &mut Campaigns),
 ) {
     use crate::content_workspace::ContentEdits;
     let original = campaigns.modules()[0].clone();
@@ -15799,13 +15800,6 @@ pub fn iter14_e_changed_files_end_every_undo_result(
         library.rosters.get(&i).is_some(),
         "fixture: the work's state is there"
     );
-    let ctx = egui::Context::default();
-    crate::design::theme::install(&ctx);
-    let frame = |library: &mut Library, campaigns: &mut Campaigns| {
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
-        });
-    };
     for _ in 0..400 {
         frame(&mut library, campaigns);
         if library.loaded.is_some() && library.pending.is_none() && !library.stale {

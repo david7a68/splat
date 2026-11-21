@@ -1346,6 +1346,7 @@ fn no_lint_level_frees_raw_calls_outside_the_source() {
         "crates/character/Cargo.toml",
         "crates/content/Cargo.toml",
         "crates/execution/Cargo.toml",
+        "src/content_ui/Cargo.toml",
         "src/design/Cargo.toml",
         "src/trackers/Cargo.toml",
         ".cargo/config.toml",

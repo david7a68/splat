@@ -3386,6 +3386,21 @@ pub(crate) fn generator_card(
     choice
 }
 
+impl splat_campaign::trackers::RuleSource for ContentIndex {
+    fn manifest(&self, campaign: &Campaign) -> Result<String, String> {
+        crate::content_workspace::CampaignDocument::load(campaign).map(|document| document.path)
+    }
+
+    fn note(&self, id: Uuid) -> Option<(&splat_content::content::Entry, bool)> {
+        let item = self.items.iter().find(|item| item.entry.id == id)?;
+        Some((&item.entry, item.is_campaign_note()))
+    }
+
+    fn loot_sources(&self) -> Arc<splat_campaign::loot::Sources> {
+        ContentIndex::loot_sources(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5137,20 +5152,5 @@ mod tests {
                 }
             }
         }
-    }
-}
-
-impl splat_campaign::trackers::RuleSource for ContentIndex {
-    fn manifest(&self, campaign: &Campaign) -> Result<String, String> {
-        crate::content_workspace::CampaignDocument::load(campaign).map(|document| document.path)
-    }
-
-    fn note(&self, id: Uuid) -> Option<(&splat_content::content::Entry, bool)> {
-        let item = self.items.iter().find(|item| item.entry.id == id)?;
-        Some((&item.entry, item.is_campaign_note()))
-    }
-
-    fn loot_sources(&self) -> Arc<splat_campaign::loot::Sources> {
-        ContentIndex::loot_sources(self)
     }
 }

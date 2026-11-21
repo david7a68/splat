@@ -62,7 +62,7 @@ fn parse(bytes: &[u8]) -> Result<Vec<RemoteCampaign>, String> {
 
 fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
     // Test builds have no route to D&D Beyond. A signed-in test sees this list.
-    if cfg!(test) {
+    if cfg!(any(test, feature = "test-support")) {
         return Ok(vec![
             RemoteCampaign {
                 id: "7700001".into(),
@@ -90,10 +90,12 @@ fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
         .user_agent("Splat/0.1")
         .build()
         .map_err(|_| "Could not start the campaign request.")?;
-    let response = session
-        .website_request(client.get(URL).header("Accept", "application/json"))?
-        .send()
-        .map_err(|_| "Could not reach D&D Beyond. Check your connection.")?;
+    let response = crate::auth::website_request(
+        &session,
+        client.get(URL).header("Accept", "application/json"),
+    )?
+    .send()
+    .map_err(|_| "Could not reach D&D Beyond. Check your connection.")?;
     match response.status().as_u16() {
         200..=299 => {},
         401 | 403 => return Err("D&D Beyond rejected the request. Reconnect in Settings, or try again later if the site is blocking access.".into()),

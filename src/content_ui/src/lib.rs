@@ -51,6 +51,7 @@ pub mod sheet_writer;
 pub mod world;
 
 pub mod content_actions;
+#[path = "../../design/content.rs"]
 pub mod design;
 pub mod roster;
 pub mod session_notes;
