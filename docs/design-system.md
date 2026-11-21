@@ -2037,8 +2037,9 @@ the ended view; that line is as tall as the tallest reason at its room, so no re
 target there too (`Undo: end encounter`). A target too long for Undo's room shortens by the rule of the run's Undo
 labels (`Undo: 2 loot rolls`), with the full action in hover and its accessible name. A closed, ended run read in History has the same
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
-run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
-as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
+run is open. Continue fight is offered only for the fight that was played last
+([Running an encounter as DM](encounters-and-runs.md#running-an-encounter-as-dm)). For any other ended fight the
+control is absent, and one muted `Small` sentence stands in its place and says
 why, the result first (R23): `This fight cannot go on: a later fight or rest was played. Start a new run to play it again.` It is a sentence and not a blocked
 button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
 `15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second

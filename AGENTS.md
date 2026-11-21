@@ -4,7 +4,7 @@ Splat is a Rust and egui desktop app for D&D DMs. These notes hold only what you
 
 ## Where things are
 
-- Commands and the visual gate: `README.md`, sections Development and Visual tests. Run them through
+- Commands and the visual gate: [Development and visual tests](docs/development.md#visual-tests). Run them through
   `devenv shell -- <command>`. `check` is formatting and Clippy; `visual-test <label> --only a,b` is fast
   feedback; `audit-gate <label>` is the full gate.
 - UI rules: `docs/design-system.md` is the source of truth. When your change alters what it says, change it in
