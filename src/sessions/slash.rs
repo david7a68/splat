@@ -179,19 +179,15 @@ impl Slash {
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
-        output: &impl crate::markdown_source::Laid,
+        output: &crate::design::Editor,
         body: &mut String,
         place: &Place<'_>,
     ) -> Done {
         let mut done = Done::default();
-        let editor = output.response().id;
+        let editor = output.response.id;
         // `take_keys` finds the popup by this id, too.
         let popup = editor.with("slash");
-        let caret = output
-            .state
-            .cursor
-            .char_range()
-            .map(|range| range.primary.index);
+        let caret = output.cursor_range.map(|range| range.primary.index);
         if self
             .open
             .as_ref()
@@ -200,8 +196,8 @@ impl Slash {
             self.open = None;
         }
         if self.open.is_none() {
-            if output.response().changed()
-                && output.response().has_focus()
+            if output.response.changed()
+                && output.response.has_focus()
                 && typed_slash(ui)
                 && let Some(caret) = caret
                 && starts_command(body, caret)
@@ -234,9 +230,9 @@ impl Slash {
             return done;
         }
         let anchor = output
-            .galley()
+            .galley
             .pos_from_cursor(egui::text::CCursor::new(open.at))
-            .translate(output.galley_pos().to_vec2());
+            .translate(output.galley_pos.to_vec2());
         let words = open.at + 1;
         let mut result = Outcome::Stay;
         match &mut open.stage {
@@ -704,7 +700,8 @@ mod tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
 
-    const EDITOR: &str = "slash_test_note";
+    const EDITOR: crate::design::FieldId =
+        crate::field_id!("slash_test_note").once(crate::design::Once::Example);
 
     struct Note {
         body: String,
@@ -716,10 +713,6 @@ mod tests {
         _dir: tempfile::TempDir,
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn note(body: &str) -> Harness<'static, Note> {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("Powers")).unwrap();
@@ -740,12 +733,12 @@ mod tests {
             .with_size(egui::vec2(800.0, 600.0))
             .build_ui_state(
                 |ui, note: &mut Note| {
-                    let id = egui::Id::new(EDITOR);
+                    let id = EDITOR.id();
                     if std::mem::take(&mut note.focus) {
                         ui.memory_mut(|memory| memory.request_focus(id));
                     }
                     note.slash.take_keys(ui, Some(id));
-                    let output = egui::TextEdit::multiline(&mut note.body).id(id).show(ui);
+                    let output = EDITOR.editor(ui, &mut note.body, |edit| edit);
                     let place = Place {
                         session: None,
                         campaign: Some(&note.campaign),

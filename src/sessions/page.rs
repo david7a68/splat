@@ -4818,7 +4818,6 @@ impl Sessions {
                         .show(ui, |ui| {
                             // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
                             // space would press it. Escape still leaves the panel.
-                            let mut layouter = crate::markdown_source::layouter;
                             // The note's text field is its session's (M0468), one on the page
                             // and one in the panel beside another page.
                             let field = if in_panel {
@@ -4831,12 +4830,17 @@ impl Sessions {
                             } else {
                                 ui.available_width()
                             };
+                            let font = design::reader::prose_type(ui).font(ui);
                             let output =
                                 field.of(self.selected).editor(ui, &mut draft.body, |edit| {
+                                    // The layouter is a function item: leaking its box
+                                    // allocates nothing.
                                     edit.lock_focus(in_panel)
                                         .frame(false)
-                                        .font(design::reader::prose_type(ui).font(ui))
-                                        .layouter(&mut layouter)
+                                        .font(font)
+                                        .layouter(Box::leak(Box::new(
+                                            crate::markdown_source::layouter,
+                                        )))
                                         .margin(egui::Vec2::ZERO)
                                         .desired_width(width)
                                         .min_size(egui::vec2(0.0, visible_height + heading_offset))
@@ -7709,11 +7713,12 @@ impl Sessions {
                     .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
             ));
             if let Some(draft) = &mut self.template_draft {
-                let mut layouter = crate::markdown_source::layouter;
                 let (width, height) = (ui.available_width(), ui.available_height());
+                let font = design::reader::prose_type(ui).font(ui);
                 let output = field.editor(ui, &mut draft.body, |edit| {
-                    edit.font(design::reader::prose_type(ui).font(ui))
-                        .layouter(&mut layouter)
+                    // The layouter is a function item: leaking its box allocates nothing.
+                    edit.font(font)
+                        .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
                         .margin(egui::vec2(design::S, design::S))
                         .desired_width(width)
                         .min_size(egui::vec2(0.0, height))
@@ -7730,11 +7735,12 @@ impl Sessions {
                 }
             } else {
                 let mut body = template.body.clone();
-                let mut layouter = crate::markdown_source::layouter;
                 let (width, height) = (ui.available_width(), ui.available_height());
+                let font = design::reader::prose_type(ui).font(ui);
                 let output = field.editor(ui, &mut body, |edit| {
-                    edit.font(design::reader::prose_type(ui).font(ui))
-                        .layouter(&mut layouter)
+                    // The layouter is a function item: leaking its box allocates nothing.
+                    edit.font(font)
+                        .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
                         .desired_width(width)
                         .min_size(egui::vec2(0.0, height))
                         .frame(false)
