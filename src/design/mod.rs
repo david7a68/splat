@@ -7,7 +7,7 @@ mod comparison;
 pub mod components;
 pub mod extras;
 pub mod fact;
-pub(crate) mod fitting;
+pub mod fitting;
 pub mod icons;
 pub mod layout;
 pub mod memo;
@@ -26,8 +26,6 @@ pub mod value_block;
 
 #[cfg(test)]
 pub(crate) mod attributes;
-#[cfg(test)]
-pub mod gallery;
 #[cfg(test)]
 mod lint;
 

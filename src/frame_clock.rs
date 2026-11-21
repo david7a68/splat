@@ -5,7 +5,7 @@
 //! harness each frame moves it by the harness's fixed step, so the frames a test runs, not the
 //! machine's speed, decide when such a word ends, and two runs of one scenario show the same
 //! words. A timer that reads `Instant` instead shows different words in different captures.
-use eframe::egui;
+use egui;
 use std::{cell::Cell, time::Duration};
 
 thread_local! {
@@ -29,7 +29,7 @@ pub fn passed(at: f64, duration: Duration) -> bool {
 }
 
 /// Set the frame clock, for a unit test that steps it past a timer's end.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn set(seconds: f64) {
     NOW.with(|now| now.set(seconds));
 }
@@ -62,12 +62,18 @@ mod tests {
                     collect(&path, files);
                 } else if path.extension().is_some_and(|ext| ext == "rs") {
                     let text = std::fs::read_to_string(&path).expect("read source file");
-                    files.push((path.to_string_lossy().replace('\\', "/"), text));
+                    files.push((
+                        path.strip_prefix(crate::workspace())
+                            .expect("path in workspace")
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                        text,
+                    ));
                 }
             }
         }
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
         let mut found: Vec<(String, usize)> = files
             .iter()
             .filter(|(path, _)| path != "src/frame_clock.rs")

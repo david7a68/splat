@@ -11,14 +11,14 @@ use std::collections::BTreeMap;
 pub const CONTRACT: &str = "dnd2024:rules_combat_encounters_step_2_determine_your_xp_budget";
 
 /// Explicit XP wins; a bare CR supplies its standard reward. `None` when the entry has neither.
-pub(crate) fn creature_xp(entry: &Entry) -> Option<u64> {
+pub fn creature_xp(entry: &Entry) -> Option<u64> {
     crate::library::presentation::challenge_text(entry)
         .and_then(splat::content::stat_blocks::challenge_xp)
 }
 
 /// A player character's level, from its saved sheet. `None` for a creature that is not a
 /// character, or a sheet with no level.
-pub(crate) fn character_level(entry: &Entry) -> Option<Option<u64>> {
+pub fn character_level(entry: &Entry) -> Option<Option<u64>> {
     let sheet = entry.fields.get("splat_character")?;
     Some(sheet.get("level").and_then(Value::as_u64))
 }
@@ -464,7 +464,7 @@ pub enum Fact {
     /// A creature of the roster is changed from its entry.
     Changed,
     /// Built words, for this module's tests of opaque text (`Summary::from_built`).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     Built(String),
 }
 
@@ -472,7 +472,7 @@ impl Fact {
     pub fn words(&self) -> &str {
         match self {
             Self::Changed => "Changed",
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             Self::Built(words) => words,
         }
     }
@@ -511,7 +511,7 @@ impl Summary {
     /// It is shown as it came; after the XP number (Q-s) it shortens from its end where a
     /// separator stands (`, `, ` · `) with `…`, as the line did before typed parts, and goes last. A name such as
     /// `Ghost, 02 × Echo` keeps its words: never reformatted, only cut from the end.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn from_built(text: &str) -> Self {
         let (party, rest) = match text.split_once(" · ") {
             Some((first, rest)) => (first, rest),
@@ -546,27 +546,7 @@ fn party_words(party: usize) -> String {
     crate::design::count(party, "party", "party")
 }
 
-/// Arrivals' heading line of a group, after its name (the name is the heading's own and never
-/// part of this line, so no form of the line can paint it twice; SB1): its side, its member
-/// count, and its own XP (`XP 150`). The group's own XP shows only where the fight has no form:
-/// a heading that says `Fight after: XP 450` never says a second XP number (FJ3).
-pub struct FightAfter<'a> {
-    pub side: &'a str,
-    pub members: &'a str,
-    pub worth: &'a str,
-}
-
-impl FightAfter<'_> {
-    /// The group's own facts in the line's one order: `Enemies · 3 members · XP 150`. The
-    /// Encounters list, the plan (`RunGroup::summary`) and Arrivals start a group with them.
-    pub fn facts(&self) -> String {
-        [self.side, self.members, self.worth]
-            .into_iter()
-            .filter(|words| !words.is_empty())
-            .collect::<Vec<_>>()
-            .join(" · ")
-    }
-}
+pub use splat_content_ui::roster::FightAfter;
 
 /// When a part gives way: its rank among every part of the line. A lower rank goes first.
 const PARTY_GOES: usize = 0;
@@ -651,15 +631,15 @@ fn cut_at_words(text: &str, fits: &impl Fn(&str) -> bool) -> String {
         .unwrap_or_else(|| "…".to_owned())
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Test builds: how many lines were built and how many candidate forms were measured, so
     /// a test can see that an unchanged frame does neither (point 3 of the round 29 review).
-    pub(crate) static WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    pub static WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
 
 fn count_work(built: usize, measured: usize) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     WORK.with(|work| {
         let (b, m) = work.get();
         work.set((b + built, m + measured));
@@ -977,7 +957,7 @@ impl<'a> Line<'a> {
 ///
 /// The kept answer is a fitted line (`V`'s default), or an owner's own answer for a line it
 /// lays out itself (the session plan's row keeps its laid-out line).
-pub(crate) struct Kept<K, V = Option<Fitted>> {
+pub struct Kept<K, V = Option<Fitted>> {
     fits: std::collections::HashMap<K, (u64, V)>,
     shortest: std::collections::HashMap<K, (u64, f32)>,
     widest: std::collections::HashMap<K, (u64, Option<f32>)>,
@@ -995,7 +975,7 @@ impl<K, V> Default for Kept<K, V> {
 
 impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
     /// A line fitted to `room` in `font`. `content` must change whenever the line's parts do.
-    pub(crate) fn fit<'a>(
+    pub fn fit<'a>(
         &mut self,
         ui: &egui::Ui,
         id: &K,
@@ -1010,7 +990,7 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
     }
 
     /// The width of [`Line::shortest`] in `font` (0 with no line).
-    pub(crate) fn shortest<'a>(
+    pub fn shortest<'a>(
         &mut self,
         ui: &egui::Ui,
         id: &K,
@@ -1035,7 +1015,7 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
     /// The width of the line with nothing given way (its whole first form) in `font`; `None`
     /// when the line has nothing to say. Layout PR 5a: the ledger's facts column is its widest
     /// row's whole line, so a frame with an unchanged key measures nothing here either.
-    pub(crate) fn widest<'a>(
+    pub fn widest<'a>(
         &mut self,
         ui: &egui::Ui,
         id: &K,
@@ -1056,8 +1036,8 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         width
     }
 
-    #[cfg(test)]
-    pub(crate) fn seed(&mut self, id: K) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn seed(&mut self, id: K) {
         self.fits.insert(id.clone(), (0, None));
         self.shortest.insert(id, (0, 0.0));
     }
@@ -1066,7 +1046,7 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
 impl<K: std::hash::Hash + Eq + Clone, V: Clone> Kept<K, V> {
     /// As `fit`, for an owner whose answer is more than the line (G118: the Ready row's
     /// words where the fight has no form). `answer` runs only when the key changes.
-    pub(crate) fn answer(
+    pub fn answer(
         &mut self,
         ui: &egui::Ui,
         id: &K,
@@ -1087,13 +1067,13 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> Kept<K, V> {
     }
 
     /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
-    #[cfg(test)]
-    pub(crate) fn holds(&self, id: &K) -> bool {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn holds(&self, id: &K) -> bool {
         self.fits.contains_key(id) || self.shortest.contains_key(id) || self.widest.contains_key(id)
     }
 
     /// Drop the lines whose owner no longer shows them (a group no longer offered).
-    pub(crate) fn retain(&mut self, keep: impl Fn(&K) -> bool) {
+    pub fn retain(&mut self, keep: impl Fn(&K) -> bool) {
         self.fits.retain(|id, _| keep(id));
         self.shortest.retain(|id, _| keep(id));
         self.widest.retain(|id, _| keep(id));
@@ -1112,7 +1092,7 @@ fn key(ui: &egui::Ui, parts: impl std::hash::Hash) -> u64 {
 
 /// One part of a line in the line's own type: the word in `text`, its separators and numbers
 /// in `muted`.
-pub(crate) fn append(
+pub fn append(
     job: &mut egui::text::LayoutJob,
     ui: &egui::Ui,
     kind: crate::design::Type,
@@ -1133,7 +1113,7 @@ pub(crate) fn append(
 
 /// The difficulty form's parts at the end of `job`, in `kind`: the word in the text colour, the
 /// rest muted. Every line that shows a fight's difficulty draws it with this.
-pub(crate) fn append_form(
+pub fn append_form(
     job: &mut egui::text::LayoutJob,
     ui: &egui::Ui,
     kind: crate::design::Type,
@@ -1146,24 +1126,24 @@ pub(crate) fn append_form(
 }
 
 /// The width of a job on one line.
-pub(crate) fn width(ui: &egui::Ui, job: &egui::text::LayoutJob) -> f32 {
+pub fn width(ui: &egui::Ui, job: &egui::text::LayoutJob) -> f32 {
     ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x)
 }
 
 /// The word's hover and accessible description: the party's budgets.
-pub(crate) fn describe(ui: &egui::Ui, response: egui::Response, rating: &Rating) -> egui::Response {
+pub fn describe(ui: &egui::Ui, response: egui::Response, rating: &Rating) -> egui::Response {
     let line = rating.budget_line();
     ui.ctx()
         .accesskit_node_builder(response.id, |node| node.set_description(line.clone()));
     response.on_hover_text(line)
 }
 
-#[cfg(test)]
 /// The rule as the campaign's packages hold it, read through the same path the app uses.
-pub(crate) fn builtin_budgets() -> Budgets {
+#[cfg(any(test, feature = "test-support"))]
+pub fn builtin_budgets() -> Budgets {
     let text = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/builtin/dnd2024-definitions/rules/combat_encounters_step_2_determine_your_xp_budget.md"
+        "/../../builtin/dnd2024-definitions/rules/combat_encounters_step_2_determine_your_xp_budget.md"
     ))
     .unwrap();
     let entry = Entry::parse("rule.md", &text).unwrap();
@@ -1171,8 +1151,8 @@ pub(crate) fn builtin_budgets() -> Budgets {
 }
 
 /// Mill Road's answer in the scenario's numbers: Above High for 5 at level 3, XP 6,300.
-#[cfg(test)]
-pub(crate) fn above_high() -> Rating {
+#[cfg(any(test, feature = "test-support"))]
+pub fn above_high() -> Rating {
     Rating {
         word: Word::AboveHigh,
         budgets: [750, 1125, 2000],
@@ -1183,8 +1163,8 @@ pub(crate) fn above_high() -> Rating {
     }
 }
 
-#[cfg(test)]
-pub(crate) fn party_of(levels: &[u64]) -> BTreeMap<uuid::Uuid, Option<u64>> {
+#[cfg(any(test, feature = "test-support"))]
+pub fn party_of(levels: &[u64]) -> BTreeMap<uuid::Uuid, Option<u64>> {
     levels
         .iter()
         .map(|level| (uuid::Uuid::new_v4(), Some(*level)))

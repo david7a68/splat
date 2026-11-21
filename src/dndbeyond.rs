@@ -24,9 +24,7 @@ struct RemoteCampaign {
     player_count: Option<u64>,
 }
 
-pub(crate) fn campaign_id<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<String, D::Error> {
+pub fn campaign_id<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
     let value = serde_json::Value::deserialize(deserializer)?;
     let id = match value {
         serde_json::Value::String(value) => value.parse::<u64>().ok(),
@@ -64,7 +62,7 @@ fn parse(bytes: &[u8]) -> Result<Vec<RemoteCampaign>, String> {
 
 fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
     // Test builds have no route to D&D Beyond. A signed-in test sees this list.
-    if cfg!(test) {
+    if cfg!(any(test, feature = "test-support")) {
         return Ok(vec![
             RemoteCampaign {
                 id: "7700001".into(),
@@ -92,10 +90,12 @@ fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
         .user_agent("Splat/0.1")
         .build()
         .map_err(|_| "Could not start the campaign request.")?;
-    let response = session
-        .website_request(client.get(URL).header("Accept", "application/json"))?
-        .send()
-        .map_err(|_| "Could not reach D&D Beyond. Check your connection.")?;
+    let response = crate::auth::website_request(
+        &session,
+        client.get(URL).header("Accept", "application/json"),
+    )?
+    .send()
+    .map_err(|_| "Could not reach D&D Beyond. Check your connection.")?;
     match response.status().as_u16() {
         200..=299 => {},
         401 | 403 => return Err("D&D Beyond rejected the request. Reconnect in Settings, or try again later if the site is blocking access.".into()),
@@ -158,7 +158,7 @@ pub struct DndBeyond {
 impl DndBeyond {
     /// Give one remote campaign another name, as a new list from D&D Beyond would. Tests only:
     /// the test list is fixed (`fetch`).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn rename_remote(&mut self, id: &str, name: &str) {
         for remote in self.campaigns.iter_mut().filter(|remote| remote.id == id) {
             remote.name = name.to_owned();
@@ -167,7 +167,7 @@ impl DndBeyond {
     }
 
     /// A list is on its way, so what is on screen is due to change.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
     }

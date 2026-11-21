@@ -40,7 +40,7 @@ impl CopyDialog {
     pub fn prefer_package(&mut self, package: Uuid) {
         self.destination = Some((false, package));
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
     }

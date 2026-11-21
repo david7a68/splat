@@ -1,0 +1,16 @@
+[package]
+name = "splat-execution"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+include_dir = "0.7"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+serde_yaml_ng = "0.10"
+sha2 = "0.10"
+splat-assets = { path = "../assets" }
+splat-content = { path = "../content" }
+uuid = { version = "1", features = ["v4", "serde"] }

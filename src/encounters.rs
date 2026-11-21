@@ -2,6 +2,7 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[cfg(test)]
 use crate::content_workspace::patch_fields;
+use crate::encounter_settings::GroupingWords;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
@@ -199,9 +200,13 @@ fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<S
     Err("Choose another name for this file.".into())
 }
 
+#[path = "encounters/disk.rs"]
 mod disk;
+#[path = "encounters/groups.rs"]
 mod groups;
+#[path = "encounters/history.rs"]
 mod history;
+#[path = "encounters/results_key.rs"]
 mod results_key;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
@@ -209,9 +214,9 @@ pub(crate) use groups::{
     ENCOUNTER_DELETED, MemberFaultView, MemberRepair, NO_MAX_HP_CAUSE, member_fault,
     member_fault_row,
 };
-#[cfg(test)]
-pub(crate) use groups::{change_copies, group_checks, member_comparisons};
-pub(crate) use history::{Template, template_of};
+#[cfg(any(test, feature = "test-support"))]
+pub use groups::{change_copies, group_checks, member_comparisons};
+pub use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Slot {
@@ -278,7 +283,7 @@ pub(crate) struct RosterFault {
 impl RosterFault {
     /// `<name> · line <n>: <problem>`: the one form that the encounter editor, the run setup and
     /// Save's reason give an unread roster row.
-    pub(crate) fn words(&self) -> String {
+    pub fn words(&self) -> String {
         row_fault_words(&self.name, self.line, &self.problem)
     }
 }
@@ -385,14 +390,14 @@ fn owned_groups_key(snapshot: &Snapshot, draft: &Draft) -> (Uuid, Uuid, usize, u
     )
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// (frames that asked for the owned-group check, groups that the check or its key read)
     static OWNED_GROUP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
 /// The counts of the owned-group check, for `CachedWork` (F5).
-#[cfg(test)]
-pub(crate) fn owned_group_work() -> (usize, usize) {
+#[cfg(any(test, feature = "test-support"))]
+pub fn owned_group_work() -> (usize, usize) {
     OWNED_GROUP_WORK.with(std::cell::Cell::get)
 }
 
@@ -413,15 +418,15 @@ fn group_words(name: &str) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// The error the next encounter write gives instead of writing (`fail_next_encounter_write`).
     static FAIL_NEXT_WRITE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 /// A test makes the next Save of an encounter fail at its write, as a full disk would.
-#[cfg(test)]
-pub(crate) fn fail_next_encounter_write(error: &str) {
+#[cfg(any(test, feature = "test-support"))]
+pub fn fail_next_encounter_write(error: &str) {
     FAIL_NEXT_WRITE.with(|next| *next.borrow_mut() = Some(error.to_owned()));
 }
 
@@ -649,42 +654,11 @@ fn unread_note(
     }
 }
 
-/// `N content issues to repair`: the words of a page's collapsing content issue count.
-pub(crate) fn content_issue_count(count: usize) -> String {
-    design::count(count, "content issue to repair", "content issues to repair")
-}
+pub use splat_content_ui::content_actions::content_issue_count;
 
-/// A collapsing content issue count is a status, in one look on every page: the warning icon
-/// and colour, then the count, at the size of a section title.
-pub(crate) fn issue_count_title(ui: &egui::Ui, heading: &str) -> egui::text::LayoutJob {
-    let format = egui::TextFormat {
-        font_id: egui::TextStyle::Button.resolve(ui.style()),
-        color: colors().result.warning,
-        ..Default::default()
-    };
-    let mut job = egui::text::LayoutJob::default();
-    job.append(icons::WARN, 0.0, format.clone());
-    job.append(" ", 0.0, format.clone());
-    job.append(heading, 0.0, format);
-    job
-}
+pub use splat_content_ui::content_actions::issue_count_title;
 
-/// A warning's file line: the path, whole, then `Edit in Obsidian` and `Show file`. A path too
-/// long to share the line with its links wraps on lines of its own above them; it is never cut.
-pub(crate) fn file_line(ui: &mut egui::Ui, root: &std::path::Path, relative: &str) {
-    let links = crate::world::entry_file_links_width(ui, true);
-    let budget = ui.available_width() - links - design::L;
-    if design::number_width(ui, relative, &Type::Small.font(ui)) <= budget {
-        crate::world::entry_file_actions(ui, root, relative, true);
-        return;
-    }
-    let path = root.join(relative);
-    let response =
-        ui.add(egui::Label::new(Type::Small.rich(ui, relative).color(colors().muted)).wrap());
-    design::named(ui, &response, &path.display().to_string());
-    response.on_hover_text(path.display().to_string());
-    ui.horizontal_wrapped(|ui| crate::world::entry_file_links(ui, &path, true));
-}
+pub use splat_content_ui::content_actions::file_line;
 
 /// The encounter file's flags (`unread_notes`), the unread roster rows among them (`faults`) and
 /// the file's path in the campaign.
@@ -1170,7 +1144,7 @@ impl Draft {
                 changes.push(group.change(campaign, None)?);
             }
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(error) = FAIL_NEXT_WRITE.with(std::cell::RefCell::take) {
             // A test's failed write: the real save path, refused at its write, before the
             // baseline moves.
@@ -1202,7 +1176,7 @@ impl Draft {
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), Invalid> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         VALIDATIONS.with(|count| count.set(count.get() + 1));
         let entry = Entry::parse(&self.path, &self.source)?;
         if let Some(reason) = roster_fault_reason(
@@ -1519,7 +1493,7 @@ impl CreatureEditor {
     }
 }
 /// Where test builds keep the roster column's scroll id for a draft (`roster_pane`).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn roster_scroll_key(draft: Uuid) -> egui::Id {
     egui::Id::new(("encounter_roster_scroll", draft))
 }
@@ -1557,12 +1531,7 @@ const RESULT_ROW: f32 = design::ACTION_ROW;
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
 /// `hp_missing` comes from the creature's stats: the HP fault is data, never found in the words.
-pub(crate) fn detail_columns(
-    ui: &mut egui::Ui,
-    detail: &str,
-    source: Option<&str>,
-    hp_missing: bool,
-) {
+pub fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>, hp_missing: bool) {
     if hp_missing {
         ui.horizontal_wrapped(|ui| {
             for part in detail_parts(detail, hp_missing) {
@@ -1692,41 +1661,11 @@ fn grouped(value: u64) -> String {
     design::count(value as usize, "", "").trim().to_owned()
 }
 
-pub(crate) fn creature_name_link(ui: &mut egui::Ui, name: &str) -> egui::Response {
-    let galley = design::one_line(
-        ui,
-        name,
-        Type::Body.font(ui),
-        colors().text,
-        ui.available_width(),
-    );
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(galley.size().x, Density::Read.control() - design::XS),
-        egui::Sense::click(),
-    );
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), name));
-    if ui.is_rect_visible(rect) {
-        let y = rect.center().y - galley.size().y / 2.0;
-        if response.hovered() {
-            ui.painter().hline(
-                rect.x_range(),
-                y + galley.size().y - design::HAIRLINE_WIDTH,
-                egui::Stroke::new(design::HAIRLINE_WIDTH, colors().text),
-            );
-        }
-        ui.painter()
-            .galley(egui::pos2(rect.left(), y), galley, colors().text);
-        if response.has_focus() {
-            design::focus_ring(ui, rect);
-        }
-    }
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
-}
+pub use splat_content_ui::content_actions::creature_name_link;
 
 /// `changed` holds this creature's values when a slot or member changes them.
 /// The creature's hit points, after its changes. None is the `HP not set` fault.
-pub(crate) fn max_hp(entry: &Entry, changed: Option<&Resolved>) -> Option<i64> {
+pub fn max_hp(entry: &Entry, changed: Option<&Resolved>) -> Option<i64> {
     changed.map_or_else(
         || {
             entry
@@ -2088,13 +2027,13 @@ const HP_NOT_SET: &str = "HP not set";
 
 /// One part of a creature's detail line, and whether it is the `HP not set` fault.
 pub(crate) struct DetailPart<'a> {
-    pub(crate) words: &'a str,
+    pub words: &'a str,
     pub(crate) hp_fault: bool,
 }
 
 impl DetailPart<'_> {
     /// The fault has the warning status colour, icon and words; every other part is muted.
-    pub(crate) fn color(&self) -> egui::Color32 {
+    pub fn color(&self) -> egui::Color32 {
         if self.hp_fault {
             colors().result.warning
         } else {
@@ -2456,7 +2395,7 @@ impl Separation {
     /// another identity (another program changed it). A note that cannot be read now (moved
     /// away for a moment, locked) keeps its result, so its Undo can be tried again.
     fn holds(&self) -> bool {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         SEPARATION_READS.with(|reads| reads.set(reads.get() + 1));
         match fs::read_to_string(self.owner.root.join(&self.path)) {
             Ok(text) => crate::content_workspace::note_id(&text) == Some(self.owner.note),
@@ -2484,7 +2423,7 @@ struct SeparationFailure {
     words: String,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often the separations' disk check read a note.
     static SEPARATION_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -2513,13 +2452,13 @@ struct IdentityChange(crate::world::Change);
 
 impl Clone for IdentityChange {
     fn clone(&self) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         IDENTITY_COPIES.with(|copies| copies.set(copies.get() + 1));
         Self(self.0.clone())
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often a separation's change, with its note text, was copied.
     static IDENTITY_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -2748,7 +2687,7 @@ fn replacement_indices(creatures: &[Creature], query: &str) -> Vec<usize> {
         .enumerate()
         .filter(|(_, c)| !c.linked)
         .inspect(|_| {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             REPLACEMENT_NAMES.with(|names| names.set(names.get() + 1));
         });
     if query.is_empty() {
@@ -2795,7 +2734,7 @@ impl ReplacementPickers {
             return;
         }
         self.swept = Some(frame);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         REPLACEMENT_SWEPT.with(|visits| visits.set(visits.get() + self.kept.len()));
         self.kept.retain(|_, kept| kept.drawn + 1 >= frame);
     }
@@ -2817,14 +2756,14 @@ fn kept_replacement_pickers(ctx: &egui::Context) -> usize {
 
 // Creatures the replacement picker visited on this thread, for a test that a repaint visits
 // none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static REPLACEMENT_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // Kept pickers the replacement pickers' sweep visited on this thread, for a test that it runs
 // once per frame (review of PR 473, P3).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static REPLACEMENT_SWEPT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -2924,7 +2863,7 @@ impl SearchRanked {
             .enumerate()
             .filter(|(_, c)| !list.unlinked || !c.linked)
             .filter(|(_, c)| {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 SEARCH_RANKED.with(|ranked| ranked.set(ranked.get() + 1));
                 let facets = c.facets.as_ref();
                 (!parsed.names_facts() || facets.is_some_and(|f| parsed.matches_facts(f)))
@@ -2966,7 +2905,7 @@ impl SearchRanked {
 
 // Creatures the encounter search's ranking visited on this thread, for a test that a repaint
 // visits none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static SEARCH_RANKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -2998,8 +2937,8 @@ struct Snapshot {
     scale: Arc<crate::difficulty::Scale>,
 }
 /// Load what the Encounters page shows, for the load benchmark.
-#[cfg(test)]
-pub(crate) fn load_for_bench(campaign: &Campaign, modules: &[Module]) -> Result<(), String> {
+#[cfg(any(test, feature = "test-support"))]
+pub fn load_for_bench(campaign: &Campaign, modules: &[Module]) -> Result<(), String> {
     Snapshot::load(campaign, modules).map(drop)
 }
 
@@ -3710,8 +3649,8 @@ pub struct Encounters {
     plan_edited_last_frame: bool,
     /// Test only: while set, `poll` takes no new read of the campaign (a load in flight waits),
     /// so a proof's window of unchanged frames keeps one snapshot revision.
-    #[cfg(test)]
-    pub(crate) hold_reads: bool,
+    #[cfg(any(test, feature = "test-support"))]
+    pub hold_reads: bool,
     /// Bumped on each frame that can change a draft (an editing input) and the frame after it,
     /// because a click's change lands late in its frame.
     edit_epoch: u64,
@@ -3720,7 +3659,7 @@ pub struct Encounters {
     /// with the same key does not check the draft again.
     validated: Option<(Uuid, u64, bool)>,
     /// How often frames reached that key's guard.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     validation_reached: usize,
     /// Save's check of the open group draft (FN5, AI2), with the snapshot revision and the
     /// draft's own revision it was made for. A frame with no change does not check again.
@@ -3733,7 +3672,7 @@ pub struct Encounters {
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
     /// How often frames asked for the draft's difficulty, and how often it was worked out.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     difficulty_counts: (usize, usize),
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
@@ -3829,24 +3768,11 @@ pub struct Encounters {
     /// Each encounter draft's own results (a removed group, a replacement), for its editor.
     editor_results: design::Results<EditorOwner, EditorMark>,
 }
-/// One encounter, as a session's plan offers it.
-pub struct PlanFight {
-    pub saved: Option<crate::encounter_run::SavedRunInfo>,
-    /// The encounter's ID, which `Edit encounter` opens it by.
-    pub id: uuid::Uuid,
-    pub name: String,
-    pub path: String,
-    /// Its roster's typed parts (G118), so the plan's row names a member once.
-    pub summary: crate::difficulty::Summary,
-    /// The roster's line key (`Roster::key`: its parts and its difficulty), for the plan's
-    /// kept line.
-    pub key: u64,
-    pub difficulty: crate::difficulty::Difficulty,
-}
+pub use splat_session_records::encounters::PlanFight;
 /// What the page needs from the story: where each run's event is, and which sessions exist.
 pub struct Story<'a> {
     pub events: &'a [crate::timeline::Event],
-    pub sessions: &'a [crate::timeline::page::SessionLink],
+    pub sessions: &'a [crate::timeline::SessionLink],
 }
 /// What the DM asked for from a row of the list. One press in a frame, so one of these.
 enum ListAction {
@@ -3901,7 +3827,7 @@ const REPEATABLE_HELP: &str = "Lists this encounter under Ready to run while a f
 const LOOT_FIELD: &str = "Loot";
 const ENCOUNTER_LOOT_HELP: &str =
     "What the party finds when this fight ends. A creature’s own loot is in its Changes.";
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often this thread ran an encounter draft's full check.
     static VALIDATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -3944,11 +3870,11 @@ const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
 /// the refused group's id.
 type PlanRefusalKey = (Option<Uuid>, u64, Uuid);
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// B4b N1, B4c F1: how often a draft was compared for being unsaved (`DraftOwner::unsaved`),
     /// on this thread.
-    pub(crate) static PLAN_BLOCK_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub static PLAN_BLOCK_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// What a plan or run route that opens a draft got (B4 review F1): the caller gives the draft
@@ -3966,7 +3892,7 @@ pub enum PlanOpen {
 /// and the replacement guards read.
 impl design::DraftOwner for Encounters {
     fn unsaved(&self, draft: design::Unsaved) -> bool {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         match draft {
             design::Unsaved::Group => self.group_draft.as_ref().is_some_and(GroupDraft::dirty),
@@ -4005,7 +3931,7 @@ impl Encounters {
         let Some(snapshot) = &self.snapshot else {
             return;
         };
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.validation_reached += 1;
         }
@@ -4072,8 +3998,8 @@ impl Encounters {
     /// changed group's own revision changes.
     /// F5 (B3b): the owned-group check's key inputs now, and whether a campaign read is still
     /// pending: a test holds them fixed and names the input that changed.
-    #[cfg(test)]
-    pub(crate) fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
         let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
         Some((
             snapshot.revision,
@@ -4091,7 +4017,7 @@ impl Encounters {
                 cause: None,
             };
         };
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         OWNED_GROUP_WORK.with(|work| work.set((work.get().0 + 1, work.get().1)));
         let key = owned_groups_key(snapshot, draft);
         if let Some((cached, found)) = &self.owned_group_check
@@ -4099,7 +4025,7 @@ impl Encounters {
         {
             return found.clone();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         OWNED_GROUP_WORK.with(|work| work.set((work.get().0, work.get().1 + draft.groups.len())));
         let found = owned_groups_found(&draft.groups, snapshot, draft.id);
         self.owned_group_check = Some((key, found.clone()));
@@ -4122,12 +4048,12 @@ impl Encounters {
             Tone::Error
         }
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sync_conflict(&mut self, name: &str) {
         self.run
             .as_mut()
@@ -4135,7 +4061,7 @@ impl Encounters {
             .simulate_sync_conflict(name);
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_connection(&mut self) {
         self.run
             .as_mut()
@@ -4143,7 +4069,7 @@ impl Encounters {
             .simulate_connection();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sync_state(&mut self, name: &str, state: crate::combat_sync::SyncState) {
         self.run
             .as_mut()
@@ -4153,17 +4079,14 @@ impl Encounters {
 
     /// Every row with each time taken away, each effect as its plain words (rule P, X5).
     /// Returns the conditions as they were, for `simulate_conditions`.
-    #[cfg(test)]
-    pub(crate) fn simulate_untimed(&mut self) -> Vec<Vec<crate::encounter_run::Condition>> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn simulate_untimed(&mut self) -> Vec<Vec<crate::encounter_run::Condition>> {
         self.run.as_mut().expect("an open run").simulate_untimed()
     }
 
     /// Give each row back the conditions that `simulate_untimed` returned.
-    #[cfg(test)]
-    pub(crate) fn simulate_conditions(
-        &mut self,
-        conditions: Vec<Vec<crate::encounter_run::Condition>>,
-    ) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn simulate_conditions(&mut self, conditions: Vec<Vec<crate::encounter_run::Condition>>) {
         self.run
             .as_mut()
             .expect("an open run")
@@ -4171,7 +4094,7 @@ impl Encounters {
     }
 
     /// A participant under another name. No fixture has a name this long.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_rename(&mut self, name: &str, to: &str) {
         self.run
             .as_mut()
@@ -4180,7 +4103,7 @@ impl Encounters {
     }
 
     /// A read of this participant's sheet, holding its last matched damage plus `more_damage`.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
         self.run
             .as_mut()
@@ -4189,7 +4112,7 @@ impl Encounters {
     }
 
     /// Running syncs react to the session from now on, as real ones do.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_session_end(&mut self) {
         self.run
             .as_mut()
@@ -4198,7 +4121,7 @@ impl Encounters {
     }
 
     /// Show an error line. An empty message clears it.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_run_error(&mut self, message: &str) {
         self.run
             .as_mut()
@@ -4206,7 +4129,7 @@ impl Encounters {
             .simulate_error(message);
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sheet_update(&mut self, name: &str) {
         self.run
             .as_mut()
@@ -4270,12 +4193,12 @@ impl Encounters {
     fn draft_difficulty(&mut self) -> Option<Arc<crate::difficulty::Difficulty>> {
         let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
         let key = (snapshot.revision, self.edit_epoch, draft.id);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.difficulty_counts.0 += 1;
         }
         if self.difficulty.as_ref().map(|(at, _)| *at) != Some(key) {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             {
                 self.difficulty_counts.1 += 1;
             }
@@ -4292,8 +4215,8 @@ impl Encounters {
             .map(|(_, difficulty)| Arc::clone(difficulty))
     }
     /// How often frames asked for the open draft's difficulty, and how often it was worked out.
-    #[cfg(test)]
-    pub(crate) fn difficulty_counts(&self) -> (usize, usize) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn difficulty_counts(&self) -> (usize, usize) {
         self.difficulty_counts
     }
     /// The encounter editor is what the Encounters page shows.
@@ -4641,8 +4564,8 @@ impl Encounters {
         stands
     }
     /// Test only: the campaign read's revision, which keys the plan refusal's check.
-    #[cfg(test)]
-    pub(crate) fn snapshot_revision(&self) -> Option<Uuid> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn snapshot_revision(&self) -> Option<Uuid> {
         self.snapshot.as_ref().map(|snapshot| snapshot.revision)
     }
     /// No plan refusal is stored: its check is forgotten, so a new one compares afresh.
@@ -4662,7 +4585,7 @@ impl Encounters {
     /// The unsaved draft that refuses it says which it is, from the back lines' recipe (R38):
     /// the encounter, its group or a creature, each with its own reason.
     pub fn plan_group_blocked(&self) -> Option<&'static str> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         design::first_unsaved(self)
             .map(design::Unsaved::reason)
@@ -4754,7 +4677,7 @@ impl Encounters {
     }
 
     /// The file the editor holds, for the visual tests.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn draft_path(&self) -> Option<&str> {
         self.draft.as_ref().map(|draft| draft.path.as_str())
     }
@@ -5029,7 +4952,7 @@ impl Encounters {
     }
 
     fn poll_reads(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if self.hold_reads {
             return;
         }
@@ -5095,7 +5018,7 @@ impl Encounters {
     /// after the fields it writes have taken this frame's input (`save_key`): the creature's
     /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
     /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
-    /// `modal`: the app's one test (`crate::modal_open`: its dialogs, the full-window image, any
+    /// `modal`: the app's one test (`crate::art::modal_open`: its dialogs, the full-window image, any
     /// egui modal). While a modal is open the key is left alone, so nothing saves beneath it
     /// (reviews of PR 499 and PR 525).
     pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool, campaigns: &Campaigns) {
@@ -5716,8 +5639,8 @@ impl Encounters {
     }
     /// The synchronous refresh that Make it yours, a creature save and a group removal run,
     /// for the scenarios.
-    #[cfg(test)]
-    pub(crate) fn refresh_now(&mut self, active: &Campaign, modules: &[Module]) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn refresh_now(&mut self, active: &Campaign, modules: &[Module]) {
         self.reload_snapshot(active, modules);
     }
     pub fn read_runs_again(&mut self, active: &Campaign) {
@@ -8089,7 +8012,7 @@ impl Encounters {
                         .inner
                 });
             // Test builds keep the column's scroll id by its draft, for the scroll's tests.
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             ui.data_mut(|data| data.insert_temp(roster_scroll_key(draft.id), shown.id));
             shown.inner
         })
@@ -8738,7 +8661,7 @@ impl Encounters {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
-    /// `modal`: the app's one test of an open modal (`crate::modal_open`); Ctrl+S waits for it.
+    /// `modal`: the app's one test of an open modal (`crate::art::modal_open`); Ctrl+S waits for it.
     pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, modal: bool) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
@@ -9187,24 +9110,15 @@ fn options_discarded() -> design::outcome::KeptOutcome<FooterPress> {
 
 /// The widest a list row grows, so that its actions stay near the name they belong to.
 use crate::design::LIST_MEASURE;
+#[path = "encounters/list.rs"]
 mod list;
-pub(crate) use list::run_state_word;
-#[cfg(test)]
-pub(crate) use list::{FIGHT_OPEN, GO_TO_RUN};
+pub use list::run_state_word;
+#[cfg(any(test, feature = "test-support"))]
+pub use list::{FIGHT_OPEN, GO_TO_RUN};
 use list::{
     blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
     ready_list, row_menu, side_control,
 };
-
-pub(crate) fn draft_switch_reason() -> &'static str {
-    "Save or discard to switch campaign."
-}
-
-/// The campaign switch lock of a draft whose Save is blocked: Discard is the one way out, so
-/// the reason does not name Save (round 25 FB6).
-pub(crate) fn blocked_draft_switch_reason() -> &'static str {
-    "Discard to switch campaign."
-}
 
 fn roster_detail(detail: &str) -> String {
     let parts: Vec<_> = detail.split(" · ").collect();
@@ -9235,6 +9149,9 @@ fn roster_detail(detail: &str) -> String {
     );
     result.join(" · ")
 }
+
+#[cfg(any(test, feature = "test-support"))]
+pub use splat_content_ui::content_actions::{blocked_draft_switch_reason, draft_switch_reason};
 
 #[cfg(test)]
 mod tests {
@@ -9297,7 +9214,7 @@ mod tests {
         // words it stops at the fifth it can offer.
         use egui_kittest::kittest::Queryable;
         let visited = || REPLACEMENT_NAMES.with(std::cell::Cell::get);
-        let typos = || crate::matching::TYPO_CHECKS.with(std::cell::Cell::get);
+        let typos = crate::matching::typo_checks;
         let offered = snapshot.creatures.iter().filter(|c| !c.linked).count();
         assert!(offered > 5, "fixture: more creatures than the five");
         let mut harness = egui_kittest::Harness::builder()
@@ -12442,7 +12359,7 @@ mod tests {
         image::DynamicImage::new_rgb8(40, 20).save(&image).unwrap();
         // The app's frame: the close confirmation (`close`) disables the page (`lib.rs`), the
         // reader's image opens the full-window viewer, and the page's Ctrl+S asks the app's one
-        // modal test (`crate::modal_open`).
+        // modal test (`crate::art::modal_open`).
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
             .build_state(
@@ -12454,7 +12371,7 @@ mod tests {
                         if *close {
                             ui.disable();
                         }
-                        let modal = crate::modal_open(ui.ctx(), *close);
+                        let modal = crate::art::modal_open(ui.ctx(), *close);
                         editor.save_shortcut(ui.ctx(), modal, &campaigns);
                         editor.show(
                             ui,

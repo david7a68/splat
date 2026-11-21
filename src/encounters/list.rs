@@ -5,8 +5,8 @@ use crate::encounter_run::{FightSummary, SavedRunInfo};
 use std::path::Path;
 
 /// Why a Ready row's Start fight is blocked while its run is open (FJ7), and the link to it.
-pub(crate) const FIGHT_OPEN: &str = "This fight is open.";
-pub(crate) const GO_TO_RUN: &str = "Go to the run";
+pub const FIGHT_OPEN: &str = "This fight is open.";
+pub const GO_TO_RUN: &str = "Go to the run";
 
 pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
     if let Some(reason) = reason {
@@ -265,7 +265,7 @@ pub(super) struct Column {
     pub facts: f32,
     pub actions: f32,
     /// The list, as the gate's record of its rows names it.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(any(test, feature = "test-support")), allow(dead_code))]
     pub owner: &'static str,
 }
 
@@ -292,7 +292,7 @@ fn facts_width(ui: &egui::Ui, name: &str, detail: &str, status: bool, line: Opti
 }
 
 /// A Ready row's whole line, kept with its roster: the facts column measures it.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn ready_line_width(ui: &egui::Ui, line: &mut ReadyLine<'_>) -> Option<f32> {
     let (difficulty, roster) = (line.difficulty, line.roster);
     line.kept
@@ -539,7 +539,7 @@ pub(super) fn list_row(
     ui.push_id(id, |ui| {
         let height = Density::Scan.row() + design::S;
         // The gate's record names the row's own facts width (its gap is measured from them).
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         let (whole, line) = {
             let mut line = line;
             let line_width = line.as_mut().and_then(|line| ready_line_width(ui, line));
@@ -586,7 +586,7 @@ pub(super) fn list_row(
                         .layout(egui::Layout::top_down(egui::Align::Min)),
                 );
                 row_facts(&mut facts_ui, name, detail, status, line, facts);
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 design::action_rows::keep(
                     ui,
                     design::action_rows::RowRecord {
@@ -773,31 +773,7 @@ fn fit_detail(ui: &egui::Ui, detail: &str, font: &egui::FontId, width: f32) -> S
     design::words_that_fit(ui, &others.join(" · "), font, width)
 }
 
-/// Read the state from old and current run labels without exposing round zero.
-pub(crate) fn run_state_word(run: &SavedRunInfo, paused: bool) -> String {
-    let round = run
-        .label
-        .split(" · ")
-        .find_map(|part| part.strip_prefix("Round "))
-        .and_then(|part| part.parse::<u32>().ok())
-        .unwrap_or(0);
-    let state = if run.standing == crate::encounter_run::Standing::Ended {
-        if round == 0 {
-            "Ended · Setup".to_owned()
-        } else {
-            format!("Ended · Round {round}")
-        }
-    } else if round == 0 {
-        "Setup".to_owned()
-    } else {
-        format!("Round {round}")
-    };
-    if paused && run.standing == crate::encounter_run::Standing::Unfinished {
-        format!("{state} · Paused")
-    } else {
-        state
-    }
-}
+pub use splat_session_records::encounters::run_state_word;
 
 fn row_menu_for_run(
     ui: &mut egui::Ui,
@@ -879,7 +855,7 @@ fn paused_run_detail(
                             .is_some_and(|other| other / 86_400 == at / 86_400)
                 });
                 if same_day {
-                    crate::encounter_run::calendar_time(at)
+                    splat_party::party::calendar_time(at)
                 } else {
                     crate::encounter_run::calendar_date(at)
                 }
@@ -1456,7 +1432,7 @@ fn final_state_rest(
 #[cfg(test)]
 mod iter_2_c_tests {
     use super::*;
-    use crate::timeline::{Book, Kind, page::SessionLink};
+    use crate::timeline::{Book, Kind, SessionLink};
     use std::path::PathBuf;
 
     /// F1, FB2, FB6: a Ready row's line ends with the difficulty in its one form at every width;

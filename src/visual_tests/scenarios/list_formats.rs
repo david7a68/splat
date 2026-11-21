@@ -1209,7 +1209,7 @@ pub fn run(d: &mut Driver<'_>) {
                 && d.visible_text(&format!("{warn} Written as Day 5"))
                 && {
                     let painted = d.painted_in(rows[0].rect);
-                    painted.contains(crate::timeline::Kind::Day.icon())
+                    painted.contains(crate::timeline::kind_icon(crate::timeline::Kind::Day))
                         && painted.matches(warn).count() == 1
                 }
         },

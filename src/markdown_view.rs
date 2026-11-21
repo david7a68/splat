@@ -7,7 +7,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::{borrow::Cow, sync::Arc};
 
 /// A link to a note, as `world::with_links` writes one.
-pub const NOTE_LINK: &str = "splat-note:";
+pub use splat_campaign::note::NOTE_LINK;
 /// An embedded image, as `world::with_links` writes one.
 pub const FILE_LINK: &str = "splat-file:";
 
@@ -47,7 +47,7 @@ pub fn wanted_heading(ctx: &egui::Context, heading: &str) -> bool {
     false
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
     show_with_density(ui, markdown, false, ShortLinks::Prose, None);
 }

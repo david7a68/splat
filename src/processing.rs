@@ -7,6 +7,7 @@
 //!
 //! Test builds have no route to a service from the app (`start`). The HTTP code is tested
 //! against a server on the loopback address.
+#[path = "processing/settings.rs"]
 pub mod settings;
 
 use crate::recording::Layout;
@@ -385,7 +386,7 @@ struct Transcript {
 }
 
 impl Transcript {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn write(&self, path: &Path, model: &str) -> Result<(), String> {
         self.write_checked(path, model, fs::read(path).ok().as_deref())
             .map(|_| ())
@@ -1173,11 +1174,11 @@ pub struct Job {
     cancel: Arc<AtomicBool>,
     messages: mpsc::Receiver<Message>,
     /// A test job that stays in progress, for a capture of that state.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     held: Option<mpsc::Sender<Message>>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl Job {
     pub fn held(recording: PathBuf, progress: Progress) -> Self {
         let (tx, messages) = mpsc::channel();
@@ -1225,12 +1226,16 @@ impl Job {
     }
 }
 
-#[cfg(not(test))]
 pub fn start(
     ctx: &eframe::egui::Context,
     mut request: Request,
     load_keys: impl FnOnce(&mut Request) -> Result<(), String> + Send + 'static,
 ) -> Job {
+    #[cfg(any(test, feature = "test-support"))]
+    if cfg!(any(test, feature = "test-support")) {
+        return start_simulated(request);
+    }
+
     let (tx, messages) = mpsc::channel();
     let cancel = Arc::new(AtomicBool::new(false));
     let recording = request.recording.clone();
@@ -1253,28 +1258,26 @@ pub fn start(
         progress: Progress::Reading,
         cancel,
         messages,
+        #[cfg(any(test, feature = "test-support"))]
+        held: None,
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static LAST_CONTEXT: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 /// The context words of the last job started on this thread in a test build: what the real
 /// build sends to the model with the transcript.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn last_context() -> Option<String> {
     LAST_CONTEXT.with(|last| last.borrow().clone())
 }
 
 /// No service in a test build: fixed words, written where the real ones go.
-#[cfg(test)]
-pub fn start(
-    _: &eframe::egui::Context,
-    request: Request,
-    _: impl FnOnce(&mut Request) -> Result<(), String> + Send + 'static,
-) -> Job {
+#[cfg(any(test, feature = "test-support"))]
+fn start_simulated(request: Request) -> Job {
     LAST_CONTEXT.with(|last| *last.borrow_mut() = Some(request.context.clone()));
     let (tx, messages) = mpsc::channel();
     let write = || -> Result<(), String> {

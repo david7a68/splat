@@ -151,7 +151,7 @@ struct Store {
 }
 
 impl Store {
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     fn user() -> Self {
         Self {
             path: directories::ProjectDirs::from("", "", "splat")
@@ -159,7 +159,7 @@ impl Store {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn user() -> Self {
         Self::default()
     }
@@ -284,7 +284,7 @@ impl ProcessingSettings {
         }
         self.probing = Some(recording::probe());
         // Test builds behave the same on every computer.
-        self.codex_found = cfg!(test) || recording::on_path("codex");
+        self.codex_found = cfg!(any(test, feature = "test-support")) || recording::on_path("codex");
         let (tx, rx) = mpsc::channel();
         for slot in [KeySlot::Speech, KeySlot::Llm] {
             let (tx, ctx) = (tx.clone(), ctx.clone());
@@ -380,7 +380,7 @@ impl ProcessingSettings {
         chosen.is_some_and(|name| !inputs.iter().any(|input| input.name == name))
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_input(&mut self, name: &str) {
         self.config.input = Some(name.to_owned());
     }
@@ -429,14 +429,14 @@ impl ProcessingSettings {
 
     /// Faults to show, for a test of their places: the keyring's words for each key, and the
     /// settings file's reader's words. `None` clears one.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_faults(&mut self, speech: Option<&str>, llm: Option<&str>, file: Option<&str>) {
         self.speech_key.error = speech.map(str::to_owned);
         self.llm_key.error = llm.map(str::to_owned);
         self.load_error = file.map(str::to_owned);
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_keys(&mut self) {
         self.speech_key.saved = true;
         self.llm_key.saved = true;

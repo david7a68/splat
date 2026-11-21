@@ -367,14 +367,14 @@ fn format(ui: &egui::Ui, prose: Type, look: Look) -> TextFormat {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// The layouter's and the paint's steps over runs, sections and folds (a test reads it).
     static FOLD_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn count_fold_step() {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     FOLD_STEPS.with(|steps| steps.set(steps.get() + 1));
 }
 

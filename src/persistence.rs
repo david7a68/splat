@@ -10,17 +10,7 @@ pub struct Module {
     pub path: PathBuf,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct Campaign {
-    pub id: Uuid,
-    pub name: String,
-    pub path: PathBuf,
-    #[serde(default)]
-    pub dndbeyond_campaign_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub dndbeyond_campaign_name: Option<String>,
-}
+pub use splat_campaign::campaign::Campaign;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -192,7 +182,7 @@ pub struct Store {
 }
 
 impl Store {
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     pub fn user() -> Result<Self, String> {
         let dirs = directories::ProjectDirs::from("", "", "splat")
             .ok_or("Could not find your user settings directory.")?;
@@ -200,12 +190,12 @@ impl Store {
     }
 
     // Test builds must name a temporary file. They cannot open the user's settings.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn user() -> Result<Self, String> {
         Err("Test builds have no user settings.".into())
     }
 
-    pub(crate) fn at(path: PathBuf) -> Self {
+    pub fn at(path: PathBuf) -> Self {
         Self {
             path,
             baseline: None,
@@ -245,7 +235,7 @@ impl Store {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn save(&mut self, data: &UserData) -> Result<(), String> {
         self.save_with(data, Vec::new())
     }

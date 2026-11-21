@@ -34,7 +34,7 @@ pub enum Tool {
     Parecord,
     Arecord,
     /// Test builds only: a fixed file, and no process.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     Simulated,
 }
 
@@ -44,7 +44,7 @@ impl Tool {
             Self::PwRecord => "pw-record",
             Self::Parecord => "parecord",
             Self::Arecord => "arecord",
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             Self::Simulated => "test recorder",
         }
     }
@@ -84,7 +84,7 @@ impl Tool {
                 command.args(["-q", "-f", "S16_LE", "-r", "16000", "-c", "1", "-t", "wav"]);
                 command
             }
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             Self::Simulated => unreachable!("the simulated recorder starts no process"),
         };
         command.arg(path);
@@ -92,7 +92,7 @@ impl Tool {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 fn host_command(program: &str) -> Command {
     let mut command = Command::new(program);
     // The development shell points this at Nix libraries, which host tools must not load.
@@ -113,6 +113,7 @@ pub struct Input {
 }
 
 /// `pactl list sources`, without anything that only captures what the computer plays.
+#[cfg(any(test, not(feature = "test-support")))]
 fn parse_sources(text: &str) -> Vec<Input> {
     let mut inputs: Vec<Input> = Vec::new();
     for line in text.lines() {
@@ -139,7 +140,7 @@ pub struct Probe {
     pub inputs: Vec<Input>,
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn probe() -> mpsc::Receiver<Probe> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
@@ -164,7 +165,7 @@ pub fn probe() -> mpsc::Receiver<Probe> {
     rx
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn probe() -> mpsc::Receiver<Probe> {
     let (tx, rx) = mpsc::channel();
     let _ = tx.send(Probe {
@@ -199,7 +200,7 @@ enum Capture {
     },
     /// `stop` took the child away.
     Done,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     Simulated,
 }
 
@@ -240,7 +241,7 @@ impl Recorder {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|e| format!("Could not create the folder: {e}"))?;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if tool == Tool::Simulated {
             fs::write(&path, wav_bytes(&vec![1000_i16; SAMPLE_RATE as usize]))
                 .map_err(|e| e.to_string())?;
@@ -313,7 +314,7 @@ impl Recorder {
         &self.health
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_health(&mut self, health: Health) {
         self.heard = Instant::now();
         self.heard_at = crate::frame_clock::now();
@@ -465,7 +466,7 @@ fn wav_header(data_length: u32, rate: u32, channels: u16, bits: u16) -> [u8; WAV
     header
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn wav_bytes(samples: &[i16]) -> Vec<u8> {
     let data: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
     let mut bytes = wav_header(data.len() as u32, SAMPLE_RATE, 1, 16).to_vec();

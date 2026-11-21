@@ -1,5 +1,6 @@
 //! Build-time bridge for Python generators. Uses the same checked note writer and reader as Splat.
 //! Each input line is `{"write": {path, fields, body}}` or `{"read": {path, text}}`.
+use splat_content::content::{Entry, formats};
 use std::io::{self, BufRead, Write};
 
 #[derive(serde::Deserialize)]
@@ -18,11 +19,9 @@ enum Request {
 
 fn answer(line: &str) -> Result<String, String> {
     match serde_json::from_str(line).map_err(|e| e.to_string())? {
-        Request::Write { path, fields, body } => {
-            splat::content::formats::write(&path, &fields, &body)
-        }
+        Request::Write { path, fields, body } => formats::write(&path, &fields, &body),
         Request::Read { path, text } => {
-            let entry = splat::content::Entry::parse(&path, &text)?;
+            let entry = Entry::parse(&path, &text)?;
             let mut fields = (*entry.fields).clone();
             fields.remove("splat_schema");
             serde_json::to_string(&serde_json::json!({

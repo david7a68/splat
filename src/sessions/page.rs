@@ -25,7 +25,7 @@ use crate::{
     persistence::Campaign,
     processing::{self, Job, Request, settings::ProcessingSettings},
     recording::{Health, Recorder},
-    timeline::{self, Book, page::SessionLink},
+    timeline::{self, Book, EventDisplay, kind_icon, page::SessionLink},
 };
 use eframe::egui::{self, Color32};
 use std::{
@@ -42,8 +42,8 @@ mod carry;
 mod kept;
 #[path = "plan.rs"]
 mod plan;
-#[cfg(test)]
-pub(crate) use plan::scene_fit_counts;
+#[cfg(any(test, feature = "test-support"))]
+pub use plan::scene_fit_counts;
 
 const MOVE_FILES: &str = "Move files and save";
 const SAVED_WORD_FOR: Duration = Duration::from_secs(8);
@@ -135,85 +135,23 @@ struct FolderScan {
     listed: FolderFiles,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// The session folder listing's end events (`refresh`) on this thread.
     static FOLDER_SCAN_ENDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How often `refresh` ended the session folder's listing on this thread.
-#[cfg(test)]
-pub(crate) fn folder_scan_ends() -> usize {
+#[cfg(any(test, feature = "test-support"))]
+pub fn folder_scan_ends() -> usize {
     FOLDER_SCAN_ENDS.with(std::cell::Cell::get)
 }
 
-/// Why the session folder cannot be used, or why a write to it failed. The kind gives the tone,
-/// in the page's own place and in the footer of the Session folder form.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FolderFault {
-    /// The folder the campaign names is gone: the DM chooses it again (routing row 136).
-    Missing(PathBuf),
-    /// The campaign's note or the folder cannot be read, in the system's own words.
-    CannotRead(String),
-    /// A write failed: the folder setting, the move, or the notes' list.
-    NotSaved(String),
-    /// A folder save waited, because the open note could not be saved first.
-    NoteNotSaved,
-    /// Save folder found files in the current folder that the form did not show yet.
-    FilesCame,
-    /// Save without moving found other files in the current folder than its warning named.
-    FilesChanged,
-    /// Save without moving found no file left in the current folder: Save folder is the way on.
-    FilesGone,
-}
-
-impl From<String> for FolderFault {
-    fn from(error: String) -> Self {
-        Self::CannotRead(error)
-    }
-}
-
-impl From<FolderFault> for String {
-    fn from(fault: FolderFault) -> Self {
-        design::outcome::fault_words(&fault).as_str().to_owned()
-    }
-}
-
-impl Fault for FolderFault {
-    fn severity(&self) -> Severity {
-        match self {
-            Self::Missing(_) => Severity::NeedsFixing,
-            Self::CannotRead(_) => Severity::CannotRead,
-            Self::NotSaved(_) | Self::NoteNotSaved => Severity::NotSaved,
-            Self::FilesCame | Self::FilesChanged | Self::FilesGone => Severity::NeedsFixing,
-        }
-    }
-    fn cause(&self) -> Sentence {
-        match self {
-            Self::Missing(folder) => crate::sentence!(
-                "Splat cannot find the session folder {}. It may have been moved or renamed.",
-                folder.display()
-            ),
-            Self::CannotRead(words) | Self::NotSaved(words) => notice_sentence(words),
-            Self::NoteNotSaved => crate::sentence!(
-                "Not changed. Your note could not be saved. Choose what to do with it first."
-            ),
-            Self::FilesCame => crate::sentence!(
-                "Not changed. The current folder now keeps session files. Choose to move them or not."
-            ),
-            Self::FilesChanged => crate::sentence!(
-                "Not changed. The files in the current folder changed. Check the new counts, then choose again."
-            ),
-            Self::FilesGone => crate::sentence!(
-                "Not changed. The current folder has no files now. Use Save folder."
-            ),
-        }
-    }
-}
+pub use splat_content_ui::session_notes::FolderFault;
 
 /// The Session folder's acts: `Save folder` in its save row, and the warning's two choices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FolderAct {
+pub enum FolderAct {
     Save,
     Move,
     WithoutMoving,
@@ -602,10 +540,10 @@ impl LinkUndoRefused {
 }
 
 /// Tests: what runs after a link update writes a note.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 type LinkWriteHook = Box<dyn FnMut(&Path)>;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Tests: runs after a link update writes a note, to change the next one under it.
     static AFTER_LINK_WRITE: std::cell::RefCell<Option<LinkWriteHook>> =
@@ -728,7 +666,7 @@ pub struct Sessions {
     /// What the removal's owner note looked like; a later edit of it ends the removal.
     removal_note: Option<RemovalNote>,
     /// How often the owner's note was looked for, which only a change may cause.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     removal_scans: usize,
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The plan's scenes: the Scene field and the results of scene acts.
@@ -917,15 +855,7 @@ impl Fault for PageFault {
     }
 }
 
-/// The page's notice slot holds its words as a sentence; an error of the system comes as its
-/// own text and is made a sentence here, the one place the page takes words from outside.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "an error of the system or of a file keeps its own words (design::results::STAGED_ALLOWS)"
-)]
-fn notice_sentence(words: &str) -> Sentence {
-    Sentence::outside(words).unwrap_or(crate::sentence!("Something went wrong."))
-}
+use splat_content_ui::session_notes::notice_sentence;
 
 /// A pane body that manages its own room, for one of the pane's closed reasons.
 #[allow(
@@ -1401,7 +1331,7 @@ fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
 /// system's "the warning that this is not the session being played or that its date has
 /// passed"). This is the one value that the Session footer, the Notes panel's footer, the Record
 /// step and the rail's `Old session` read.
-pub(crate) struct NotTonight;
+pub struct NotTonight;
 
 impl NotTonight {
     /// The tone of every place that says it.
@@ -1416,7 +1346,7 @@ impl NotTonight {
     }
 
     /// The rail's mark while a run files itself under a session dated before today.
-    pub(crate) fn rail() -> Status<'static> {
+    pub fn rail() -> Status<'static> {
         let (icon, color) = match Self::TONE {
             Tone::Warning => (icons::WARN, colors().result.warning),
             _ => (icons::INFO, colors().result.info),
@@ -1735,7 +1665,7 @@ impl Sessions {
         {
             return;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.removal_scans += 1;
         }
@@ -1827,7 +1757,7 @@ impl Sessions {
             .flatten()
         {
             if draft.state == DraftState::Unsaved {
-                #[cfg(not(test))]
+                #[cfg(not(any(test, feature = "test-support")))]
                 if draft.due_at(Instant::now()) {
                     draft.save();
                 }
@@ -2617,7 +2547,7 @@ impl Sessions {
 
     /// The end event of the folder's listing (`FolderScan`): the next draw lists the folder again.
     fn end_folder_listing(&mut self) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         FOLDER_SCAN_ENDS.with(|ends| ends.set(ends.get() + 1));
         self.folder_scan = None;
     }
@@ -3108,7 +3038,7 @@ impl Sessions {
     }
 
     /// A reveal that waits for its next draw, as one does just after an add or a travel act.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_pending_reveal(&mut self, row: &str, pass: u64) {
         self.row_reveal = Some((row.to_owned(), 0, pass));
     }
@@ -3122,7 +3052,7 @@ impl Sessions {
         self.notes
             .iter()
             .filter_map(|note| {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 NOTE_READS.with(|reads| reads.set(reads.get() + 1));
                 let body = self
                     .draft
@@ -3234,7 +3164,7 @@ impl Sessions {
             {
                 self.draft = Some(next.clone());
             }
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             AFTER_LINK_WRITE.with(|hook| {
                 if let Some(hook) = hook.borrow_mut().as_mut() {
                     hook(&next.path);
@@ -3279,7 +3209,7 @@ impl Sessions {
             // Undo writes only into the file it wrote: the draft it saves through must hold the
             // same bytes and the same session, and `save` checks the file against them again
             // right before writing.
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             BEFORE_UNDO_READ.with(|hook| {
                 if let Some(hook) = hook.borrow_mut().as_mut() {
                     hook(&write.before.path);
@@ -5019,7 +4949,7 @@ impl Sessions {
                     ui.data_mut(|data| {
                         data.insert_temp(view_id, (visible_height, at_end, output.content_size.y));
                     });
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "test-support"))]
                     ui.data_mut(|data| {
                         data.insert_temp(
                             egui::Id::new("session_editor_proof"),
@@ -6153,7 +6083,7 @@ impl Sessions {
                 } else {
                     0.0
                 };
-                measure(marker.kind.icon(), Type::Body)
+                measure(kind_icon(marker.kind), Type::Body)
                     + design::S
                     + measure(title, Type::Body).max(time + measure(facts, Type::Small))
             })
@@ -6172,7 +6102,9 @@ impl Sessions {
                         ui.spacing_mut().item_spacing.x = design::S;
                         if cell == 0 {
                             ui.horizontal_top(|ui| {
-                                ui.label(Type::Body.rich(ui, marker.kind.icon()).color(c.muted));
+                                ui.label(
+                                    Type::Body.rich(ui, kind_icon(marker.kind)).color(c.muted),
+                                );
                                 ui.vertical(|ui| {
                                     ui.add(
                                         egui::Label::new(Type::Body.rich(ui, *title).color(c.text))
@@ -8267,7 +8199,7 @@ impl Sessions {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl Sessions {
     pub fn busy(&self) -> bool {
         self.job.as_ref().is_some_and(|(job, _)| !job.is_held())
