@@ -27689,6 +27689,7 @@ pub mod session_plan {
                     d.place_of("Save creature"),
                 )
             });
+            let save = d.at_size(size, |d| d.place_of("Save encounter"));
             d.observe(
                 "iter-26-B-FA9",
                 // Layout PR 6 (I7, replacing "the name ends at the roster's rule" and "Start
@@ -27696,7 +27697,7 @@ pub mod session_plan {
                 // rule, and Save encounter begins `L` after it.
                 name.zip(rule)
                     .is_some_and(|(name, rule)| name.right() <= rule + 1.0)
-                    && name.zip(d.at_size(size, |d| d.place_of("Save encounter"))).is_some_and(
+                    && name.zip(save).is_some_and(
                         |(name, save)| (save.left() - (name.right() + crate::design::L)).abs() <= 0.5,
                     )
                     && start.is_some()
