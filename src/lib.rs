@@ -1966,17 +1966,19 @@ impl Splat {
                     // The footer's lines by owner. The wide tab feeds the campaigns' footer with the
                     // first two and the account's with the third; the narrow tab's one footer takes
                     // all three, in this order.
-                    type Footer<'f> = design::outcome::Messages<'f, campaigns::CampaignAct>;
                     let feed_campaigns =
-                        |messages: &mut Footer<'_>, campaigns: &campaigns::Campaigns| {
+                        |messages: &mut design::outcome::Messages<'_, campaigns::CampaignAct>,
+                         campaigns: &campaigns::Campaigns| {
                             campaigns.footer_messages(messages, true, blocked);
                         };
                     let feed_account =
-                        |messages: &mut Footer<'_>, settings: &settings::Settings| {
+                        |messages: &mut design::outcome::Messages<'_, campaigns::CampaignAct>,
+                         settings: &settings::Settings| {
                             settings.footer_messages(messages);
                         };
                     let feed_list =
-                        |messages: &mut Footer<'_>, dndbeyond: &dndbeyond::DndBeyond| {
+                        |messages: &mut design::outcome::Messages<'_, campaigns::CampaignAct>,
+                         dndbeyond: &dndbeyond::DndBeyond| {
                             dndbeyond.footer_messages(messages, false);
                         };
                     // After a failed Connect, Connect comes into view above the footer.
@@ -2005,8 +2007,11 @@ impl Splat {
                                 let frame = design::outcome::PaneFrame::new(ui);
                                 if place == 0 {
                                     // The campaigns: their results and the list's error.
-                                    let messages =
-                                        Footer::new(&frame, "settings_campaign_footer", width);
+                                    let messages = design::outcome::Messages::<
+                                        campaigns::CampaignAct,
+                                    >::new(
+                                        &frame, "settings_campaign_footer", width
+                                    );
                                     let (list, link) = (&mut *campaigns, &mut *dndbeyond);
                                     let paned = messages.pane_content_then(
                                         ui,
@@ -2031,8 +2036,11 @@ impl Splat {
                                 } else {
                                     // The account: its errors that are not a failed Connect. It
                                     // has no press of its own.
-                                    let messages =
-                                        Footer::new(&frame, "settings_account_footer", width);
+                                    let messages = design::outcome::Messages::<
+                                        campaigns::CampaignAct,
+                                    >::new(
+                                        &frame, "settings_account_footer", width
+                                    );
                                     let campaigns = &*campaigns;
                                     let settings = &mut *settings;
                                     let _ = messages.pane_content_then(
@@ -2055,7 +2063,11 @@ impl Splat {
                         // in the middle of the page. It keeps the page's order and owners.
                         let width = ui.available_width().min(design::LIST_MEASURE);
                         let frame = design::outcome::PaneFrame::new(ui);
-                        let messages = Footer::new(&frame, "settings_footer", width);
+                        let messages = design::outcome::Messages::<campaigns::CampaignAct>::new(
+                            &frame,
+                            "settings_footer",
+                            width,
+                        );
                         let has_run = self.encounters.has_run();
                         let paned = messages.pane_content_then(
                             ui,
