@@ -45,7 +45,7 @@ pub use layout::{
     InlineCreate, KeptLine, KeyName, MAX_WORD_CHARS, NARROWEST_PANE, NoReason, Once,
     ParticipantKey, RowIndex, RowKey, ScrollColumn, Selection, SideAction, Slot, SlotType, TextKey,
     TextOwner, TitleAction, TitleActionRow, TitleLine, TitlePlacement, TitleType, Unsaved, Word,
-    first_unsaved, labelled_field, lane_width, line_field, menu_popup, path_help,
+    edit_in_place, first_unsaved, labelled_field, lane_width, line_field, menu_popup, path_help,
     register_title_row, search_min_row, sideways_scroll, status_slot, title_lead_in,
     title_placement,
 };
@@ -53,7 +53,7 @@ pub use layout::{
 #[allow(unused_imports)]
 pub use pane::{
     ACTION_ROW, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills, FillsReason,
-    Navigation, Placement, RegionState, Row,
+    Navigation, PaneColumns, PaneEdges, Placement, RegionState, Row,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]

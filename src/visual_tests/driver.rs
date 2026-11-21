@@ -574,6 +574,32 @@ impl<'a> Driver<'a> {
 
     /// Every horizontal line segment painted across an area, whatever its colour, such as an
     /// underline that a link paints apart from its text.
+    /// Each painted vertical line segment that meets `area` (a splitter's rule), as a rect.
+    pub fn vertical_lines_in(&self, area: egui::Rect) -> Vec<egui::Rect> {
+        fn visit(shape: &egui::Shape, area: egui::Rect, found: &mut Vec<egui::Rect>) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().for_each(|shape| visit(shape, area, found));
+                }
+                egui::Shape::LineSegment { points, .. }
+                    if (points[0].x - points[1].x).abs() < 0.5 =>
+                {
+                    let rect = egui::Rect::from_two_pos(points[0], points[1])
+                        .expand2(egui::vec2(0.5, 0.0));
+                    if area.intersects(rect) {
+                        found.push(rect);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for shape in &self.harness.output().shapes {
+            visit(&shape.shape, area, &mut found);
+        }
+        found
+    }
+
     pub fn line_segments_in(&self, area: egui::Rect) -> Vec<egui::Rect> {
         fn visit(shape: &egui::Shape, area: egui::Rect, found: &mut Vec<egui::Rect>) {
             match shape {
@@ -3096,6 +3122,14 @@ impl<'a> Driver<'a> {
     /// The app's style, for sizes that egui derives from it.
     pub fn app_style(&self) -> egui::Style {
         (*self.harness.ctx.style()).clone()
+    }
+
+    /// The centre of a `Column`'s splitter (its edge), if that column draws in this frame.
+    pub fn column_edge_if_shown(&self, name: &str) -> Option<f32> {
+        self.harness
+            .ctx
+            .read_response(egui::Id::new(name).with("__resize"))
+            .map(|response| response.rect.center().x)
     }
 
     pub fn column_edge(&self, name: &str) -> f32 {
