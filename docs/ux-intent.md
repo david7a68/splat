@@ -547,11 +547,11 @@ screens and is not reused for decoration.
 | Document | Clean; unsaved; saved; invalid; external change; read-only |
 | Result | Error; warning; success, each with a word as well as a colour |
 
-**Data scale.** Design with real volumes: 2,065 Library rows (`artifacts/list-scrolling/README.md:5`),
+**Data scale.** Design with real volumes: 2,065 Library rows,
 including 339 spells, 415 items, 336 creatures, and 975 rule entries (counted from
 `builtin/dnd2024-definitions`). 51 search results for "dragon". Note bodies across `builtin/` have a median of
 about 270 words and a maximum near 5,600 words. Lists
-must stay virtualised (debug median 2.3 ms per frame today). Encounter creature results must join them.
+must stay virtualised. Encounter creature results must join them.
 Expect a run log of hundreds of lines and an unbounded list of saved runs.
 
 **Long text in tight places.** Handle long names ("Rohan of Unc"), numbered copies ("Goblin 12"), 5 or more
