@@ -570,17 +570,27 @@ pub fn broken(d: &mut Driver<'_>) {
         design::colors().result.success,
     );
     let repaired = title_rect(d, "Repaired watchkeeper");
-    // Round 24 FD5: two safe choices start at the warning's words, `L` apart.
+    // Round 24 FD5: two safe choices start at the warning's words. M23 (M-W0.5): round 24's
+    // `L` apart on one line gives way to the typed repairs, one per line, the second under the
+    // first, both at the words.
     let choices = d
         .place_of("Rename the note to Broken")
         .zip(d.place_of("Rename the file to Repaired watchkeeper.md"));
+    // The warning's own text edge: both repairs start there, not only at each other.
+    let edge = d
+        .painted_rect_in(
+            "The file is Broken.md, but the name is",
+            egui::Rect::EVERYTHING,
+        )
+        .map(|words| words.left());
     d.observe(
         "iter-24-D-FD5-choices",
-        choices.is_some_and(|(note, file)| {
-            (note.top() - file.top()).abs() < 0.5
-                && (file.left() - note.right() - design::L).abs() <= 0.5
+        choices.zip(edge).is_some_and(|((note, file), edge)| {
+            (note.left() - edge).abs() <= 0.5
+                && (file.left() - edge).abs() <= 0.5
+                && file.top() >= note.bottom()
         }),
-        format!("The rename choices are {choices:?}"),
+        format!("The rename choices are {choices:?}, the warning's text edge {edge:?}"),
     );
     d.state("broken-note-repaired", Sizes::Default);
     d.click("Setting · ");
@@ -913,11 +923,18 @@ pub fn broken(d: &mut Driver<'_>) {
     // Round 24 FG6: the title and the file line name the file, so the error does not.
     let headline = "Splat cannot read this note as text.";
     d.expect(headline);
+    // M23 (M-W0.5): the headline and its recovery steps are one fault's words
+    // (`PagePlaceholder`), so the headline starts that label, not a label of its own.
+    let fault_label = |d: &Driver<'_>| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.role == Role::Label && node.name.starts_with(headline))
+    };
     d.observe(
         "iter-24-D-FG6",
         !d.has_containing("Splat cannot read Notes/Broken.md")
             && d.visible_text("Broken.md")
-            && d.has_label(headline),
+            && fault_label(d).is_some(),
         "The unreadable pane's error says this note; its title and file line name the file",
     );
     // Round 24 AG2: the recovery is prose at the reader measure, at every captured size.
@@ -935,7 +952,7 @@ pub fn broken(d: &mut Driver<'_>) {
     }
     d.observe(
         "iter-18-D-AD2-headline",
-        d.has_label(headline)
+        fault_label(d).is_some()
             && !d.has_containing("stream did not contain")
             && !d.has_containing("valid UTF-8 ·"),
         "The pane leads with the file; the system's words wait in Technical details",
@@ -956,7 +973,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "iter-18-D-AD1-file-line",
         d.has("Show file")
             && d.place_of("Show file")
-                .zip(d.place_of(headline))
+                .zip(fault_label(d).map(|node| node.rect))
                 .is_some_and(|(show, words)| show.bottom() <= words.top()),
         "The file line with Show file sits above the message",
     );
@@ -1006,10 +1023,12 @@ pub fn broken(d: &mut Driver<'_>) {
         d.observe(
             "iter-18-D-cancel-follows",
             again.zip(cancel).is_some_and(|(again, cancel)| {
+                // M23 (M-W0.5): round 18's `L` gives way to the typed choices' shared gap.
                 (again.top() - cancel.top()).abs() < 0.5
-                    && (cancel.left() - again.right() - design::L).abs() <= 1.0
+                    && (cancel.left() - again.right() - d.app_style().spacing.item_spacing.x).abs()
+                        <= 1.0
             }),
-            format!("At {size:?}, Close note {cancel:?} follows Try again {again:?}, L apart"),
+            format!("At {size:?}, Close note {cancel:?} follows Try again {again:?}, the shared gap apart"),
         );
     }
     // Round 24 FG1, FE1, AG1 (L, D contract): a row marks every fault the header counts. The two
@@ -1099,7 +1118,7 @@ pub fn broken(d: &mut Driver<'_>) {
     let fits = d.at_size(SMALL, |d| {
         d.nodes()
             .iter()
-            .any(|node| node.name == long_headline && node.fully_in_view())
+            .any(|node| node.name.starts_with(&long_headline) && node.fully_in_view())
             && d.in_view("Try again")
             && d.in_view("Close note")
     });
@@ -2881,6 +2900,58 @@ pub fn places(d: &mut Driver<'_>) {
             }),
         "Both loop notes show Place loop on their rows, and the header counts 2 notes",
     );
+    // M-W0.6 (Astra P1): the header's `2 notes need fixing` menu keeps to the column under
+    // the count (`TitleLine::menu_room`): at every size its frame crosses no scroll bar or
+    // splitter outside it, and its last link is whole in view.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (frame, lanes, last) = d.act_at_size(size, |d| {
+            // The menu's links are the ones the click adds (the reader's warning links the
+            // same notes).
+            let links = |d: &Driver<'_>| {
+                d.nodes()
+                    .into_iter()
+                    .filter(|node| {
+                        node.role == Role::Link
+                            && (node.name == "Loop One" || node.name == "Loop Two")
+                    })
+                    .map(|node| (node.rect, node.fully_in_view(), node.name))
+                    .collect::<Vec<_>>()
+            };
+            let before = links(d);
+            d.click("2 notes need fixing");
+            let menu: Vec<_> = links(d)
+                .into_iter()
+                .filter(|link| !before.iter().any(|old| old.0 == link.0))
+                .collect();
+            let frame = menu
+                .first()
+                .and_then(|first| d.painted_frame_around(first.0));
+            let last = menu
+                .iter()
+                .max_by(|a, b| a.0.top().total_cmp(&b.0.top()))
+                .map(|link| (link.2.clone(), link.1));
+            let lanes = d.chrome_lanes();
+            d.press(Key::Escape);
+            (frame, lanes, last)
+        });
+        let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+            lanes
+                .into_iter()
+                .filter(|lane| {
+                    !frame.expand(0.5).contains_rect(*lane)
+                        && lane.y_range().intersects(frame.y_range())
+                        && lane.x_range().intersects(frame.x_range())
+                })
+                .collect()
+        });
+        d.observe(
+            "M0603-needs-fixing-menu-clear",
+            frame.is_some() && crossed.is_empty() && last.as_ref().is_some_and(|(_, whole)| *whole),
+            format!(
+                "At {size:?} the needs-fixing menu {frame:?} crosses no scroll bar or splitter ({crossed:?}); its last link {last:?} is whole in view"
+            ),
+        );
+    }
     // Round 23 FG5: the loop warning wraps at the reader measure, the right edge of the rows.
     let loop_warning = "Loop One is in Loop Two, and Loop Two is in Loop One. Change one of them.";
     for size in [SMALL, DEFAULT, LARGE] {
@@ -3315,12 +3386,12 @@ pub fn round_trip(d: &mut Driver<'_>) {
     );
     d.observe_both(
         "iter-9-D-FD4-link",
-        "The unread Edit field keeps its source line and quiet Obsidian repair link",
+        "The unread Edit field keeps its source line and its Obsidian repair (M23: was a link)",
         |d| {
             d.expect(&reason);
             d.has("Edit in Obsidian")
                 && d.nodes().iter().any(|node| {
-                    node.name == "Edit in Obsidian" && node.role == Role::Link && node.in_view()
+                    node.name == "Edit in Obsidian" && node.role == Role::Button && node.in_view()
                 })
         },
     );
@@ -3353,6 +3424,8 @@ pub fn round_trip(d: &mut Driver<'_>) {
             ),
         );
         // FD6 (round 20): the warning's action starts at its words, on the line below them.
+        // M23 (M-W0.5): the action is the warning's repair, a bordered button whose border
+        // starts at the words (round 20's link started its own words there).
         let (starts, detail) = d.at_size(size, |d| {
             d.expect(&reason);
             let message = d.painted_rect_in(&reason, egui::Rect::EVERYTHING);
@@ -3362,7 +3435,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
                         .into_iter()
                         .filter(|node| {
                             node.name == "Edit in Obsidian"
-                                && node.role == Role::Link
+                                && node.role == Role::Button
                                 && node.in_view()
                                 && node.rect.top() >= message.bottom() - 1.0
                                 && node.rect.top() <= message.bottom() + design::XL
@@ -3371,7 +3444,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
                         .collect()
                 })
                 .unwrap_or_default();
-            let start = links.first().and_then(|link| words_left_in(d, *link));
+            let start = links.first().map(|link| link.left());
             (
                 links.len() == 1
                     && start
@@ -12709,7 +12782,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     whole_value_kept(d, reason, whole, "World edit form");
     d.observe_both(
         "iter-9-D-FD4",
-        "Unread groups name the source line and put a quiet repair link beside it",
+        "Unread groups name the source line and put its repair, Edit in Obsidian, under it",
         |d| {
             for name in [
                 reason,
@@ -12720,10 +12793,11 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             ] {
                 d.expect(name);
             }
+            // M23 (M-W0.5): round 9's quiet link is the warning's repair, a bordered button.
             let links: Vec<_> = d
                 .nodes()
                 .into_iter()
-                .filter(|node| node.name == "Edit in Obsidian" && node.role == Role::Link)
+                .filter(|node| node.name == "Edit in Obsidian" && node.role == Role::Button)
                 .collect();
             d.is_disabled("Change Part of")
                 && !d.is_disabled("Change Place")
