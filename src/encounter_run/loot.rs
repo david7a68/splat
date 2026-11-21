@@ -8,9 +8,9 @@ use crate::design::{self, Action, Density, Type, colors, icons};
 use crate::roll_table::TableRoll;
 use eframe::egui;
 use splat::content::loot::Loot;
-#[cfg(test)]
-pub(super) use splat_session_records::rewards::rewards;
 pub(super) use splat_session_records::rewards::{Holder, place};
+#[cfg(test)]
+pub(super) use splat_session_records::rewards::{Rewards, rewards};
 use splat_session_records::rewards::{and_list, holders, note_lines, plain_roll};
 
 use splat_campaign::encounter_run::Found;

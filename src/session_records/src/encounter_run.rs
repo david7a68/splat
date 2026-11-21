@@ -262,4 +262,5 @@ pub fn state_words(round: u64, paused: bool, ended: bool) -> String {
     }
 }
 
+/// Where a run's own text ends. Saved runs hold both parts in one string.
 pub const SETUP_HEADING: &str = "## Setup (DM reference)";

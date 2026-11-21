@@ -1501,6 +1501,16 @@ pub fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: 
     }
 }
 
+/// A UTC date and time, so two runs saved on one day can be told apart.
+pub fn calendar_time(seconds: u64) -> String {
+    format!(
+        "{} {:02}:{:02}",
+        splat_content_ui::roster::calendar_date(seconds),
+        (seconds / 3600) % 24,
+        (seconds / 60) % 60
+    )
+}
+
 #[cfg(test)]
 mod sheet_now_tests {
     use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line, sheet_label};
@@ -1771,14 +1781,4 @@ mod tests {
             assert!(text.starts_with("Dagger · "), "{text}");
         }
     }
-}
-
-/// A UTC date and time, so two runs saved on one day can be told apart.
-pub fn calendar_time(seconds: u64) -> String {
-    format!(
-        "{} {:02}:{:02}",
-        splat_content_ui::roster::calendar_date(seconds),
-        (seconds / 3600) % 24,
-        (seconds / 60) % 60
-    )
 }

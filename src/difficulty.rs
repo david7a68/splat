@@ -1111,9 +1111,9 @@ pub fn describe(ui: &egui::Ui, response: egui::Response, rating: &Rating) -> egu
     response.on_hover_text(line)
 }
 
-#[cfg(test)]
 /// The rule as the campaign's packages hold it, read through the same path the app uses.
-pub(crate) fn builtin_budgets() -> Budgets {
+#[cfg(any(test, feature = "test-support"))]
+pub fn builtin_budgets() -> Budgets {
     let text = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../builtin/dnd2024-definitions/rules/combat_encounters_step_2_determine_your_xp_budget.md"

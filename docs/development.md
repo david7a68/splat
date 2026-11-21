@@ -74,7 +74,8 @@ The UI crates keep their sources under `src/` so the design checks follow the sa
 A World page, Campaign Packages, Library page, or Trackers edit rebuilds that feature and the desktop.
 An edit to the catalogue, Lookup, or a shared reader rebuilds Content UI and the crates that use it.
 Encounters UI and Sessions UI share the saved fight records and the Timeline book.
-Edits to either UI crate rebuild that crate and the desktop.
+In an app build, edits to either UI crate rebuild that crate and the desktop.
+The Sessions tests use the Encounters crate to create saved-run fixtures.
 Party page edits rebuild that page and the desktop. Edits to the shared sheets or
 sync also rebuild the Encounters UI that uses them.
 

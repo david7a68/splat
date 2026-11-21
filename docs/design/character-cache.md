@@ -101,12 +101,12 @@ covers missed events. When the stream is down and Party is open, Splat
 polls every 15 seconds. Provider errors can delay these reads.
 
 The Rust tests use synthetic data for cache round trips and event routing.
-The ignored `live_parity_cache_and_stream` test checks the live transport
-and normalization. It uses the desktop keyring and the active campaign and
-writes the local character cache.
+The ignored `live_parity_cache_and_stream` test checks normalization and cache
+round trips using live HTTP reads and a simulated stream notification. It uses
+the desktop keyring and the active campaign and writes the local character cache.
 
 ```sh
-devenv shell -- cargo test --locked -p splat --lib live_parity_cache_and_stream -- --ignored --nocapture
+devenv shell -- cargo test --locked -p splat-party --lib live_parity_cache_and_stream -- --ignored --nocapture
 ```
 
 [Party transport](../../src/party_sync.rs) · [Combat sync transport](../../src/combat_sync.rs)

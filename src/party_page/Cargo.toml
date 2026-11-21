@@ -17,5 +17,6 @@ serde_yaml_ng = "0.10"
 uuid = "1"
 
 [dev-dependencies]
+splat-party = { path = "../party_support", features = ["test-support"] }
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
 egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
