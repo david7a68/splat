@@ -676,9 +676,25 @@ pub fn run(d: &mut Driver<'_>) {
     }
     // The change's kind is the `Dropdown` part (named with its chosen value); its `Add` is the
     // menu's, under it.
+    let control = d
+        .place_of(&d.name_starting("Maximum HP: how it changes"))
+        .expect("the change kind's drop-down");
     d.click_starting("Maximum HP: how it changes");
-    let menu = d.name_starting("Maximum HP: how it changes");
-    d.click_below(&menu, "Add");
+    // The menu's `Add`: under the drop-down, in its own column (the Add creatures column has
+    // `Add` buttons too).
+    let add = d
+        .nodes()
+        .into_iter()
+        .find(|node| {
+            node.name == "Add"
+                && node.in_view()
+                && node.rect.top() >= control.bottom() - 1.0
+                && node.rect.left() >= control.left() - 1.0
+                && node.rect.left() < control.right()
+        })
+        .map(|node| node.rect)
+        .expect("the menu's Add");
+    d.click_rect(add, "Click: Maximum HP: Add");
     d.click("Maximum HP: amount");
     d.press_ctrl(Key::A);
     d.type_text("5");
