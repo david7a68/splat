@@ -338,6 +338,17 @@ fn the_tournament_note_is_read_as_written_and_a_race_runs_between_fights() {
         result_words(&t.rules, &t.ledger, &t.state, t.newest()),
         "Seals for Old Guard changed to 0. First seal for Old Guard is no longer due."
     );
+    // M-S0.1 (M0565): the history says the lowering with a true minus (`signed`).
+    let lowered_row = t.test_history()["seals"]
+        .iter()
+        .map(|row| row.words.clone())
+        .find(|words| words.starts_with("Lose seal"));
+    assert!(
+        lowered_row
+            .as_deref()
+            .is_some_and(|words| words.ends_with("\u{2212}1")),
+        "m-s0-1-history-minus: {lowered_row:?}"
+    );
     let lowered = t.newest().to_vec();
     t.undo(&lowered);
     assert_eq!(
