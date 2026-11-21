@@ -21754,8 +21754,6 @@ pub mod encounter_owned_groups {
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
     const SAVE_ENCOUNTER: &str = "Save encounter";
-    /// The gap from the save row's `Invalid` to `Default side` in a group editor, on main
-    /// (318bde49) at 960, 1200 and 1920.
 
     fn edit_group(name: &str) -> String {
         format!("Edit group {name}")
