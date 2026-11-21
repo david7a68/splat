@@ -1091,6 +1091,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1), Ban::Extras(2)],
         ),
         ("src/copy_dialog.rs", "show", &[Ban::Layout(2)]),
+        ("src/creature_filter.rs", "menu", &[Ban::Layout(1)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
