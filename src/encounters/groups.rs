@@ -2499,7 +2499,16 @@ pub(super) fn overrides_form(
                     colors().muted,
                 );
                 let mut changed = overrides.side.clone().unwrap_or_else(|| side.to_owned());
-                super::side_control(ui, "Changed side", &mut changed, sides);
+                super::side_control(
+                    ui,
+                    (
+                        super::list::SIDE_CHOICE.of(&key),
+                        super::list::SIDE_OTHER.of(&key),
+                    ),
+                    "Changed side",
+                    &mut changed,
+                    sides,
+                );
                 overrides.side = Some(changed);
                 if Action::quiet("Same as row").show(ui).clicked() {
                     overrides.side = None;
@@ -2520,7 +2529,16 @@ pub(super) fn overrides_form(
                     colors().muted,
                 );
                 let mut changed = overrides.side.clone().unwrap_or_else(|| side.to_owned());
-                super::side_control(ui, "Changed side", &mut changed, &[]);
+                super::side_control(
+                    ui,
+                    (
+                        super::list::SIDE_CHOICE.of(&key),
+                        super::list::SIDE_OTHER.of(&key),
+                    ),
+                    "Changed side",
+                    &mut changed,
+                    &[],
+                );
                 if changed != overrides.side.as_deref().unwrap_or(side) {
                     overrides.side = Some(changed);
                 }
@@ -3530,7 +3548,16 @@ fn group_fields(
         choice_label(ui, SIDE_FIELD);
         let name = format!("{SIDE_FIELD} for {}", draft.name);
         let side = draft.setup.side.clone();
-        super::side_control(ui, &name, &mut draft.setup.side, &[]);
+        super::side_control(
+            ui,
+            (
+                super::list::SIDE_CHOICE.of(draft.id),
+                super::list::SIDE_OTHER.of(draft.id),
+            ),
+            &name,
+            &mut draft.setup.side,
+            &[],
+        );
         if draft.setup.side != side {
             draft.touch();
         }
