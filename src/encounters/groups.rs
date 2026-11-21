@@ -41,6 +41,21 @@ const GONE_BESIDE_SAVE: &str = "Its encounter was deleted. See Belongs to.";
 /// A member's fault beside Save, while its row is not on screen: fixed words with no name, so
 /// the place's width is known; the row keeps the full cause with the name.
 const MEMBER_BESIDE_SAVE: &str = "A creature here cannot be saved. See its row.";
+
+/// Layout step 6: the group head's two reason slots (`save_row::head_plan`): Save's own reason,
+/// then the campaign-switch reason in both its forms, whose place G122's short words for a fault
+/// said elsewhere can take. Each slot's room and line are measured by all of them, so neither a
+/// state nor a refusal moves a field.
+const HEAD_REASONS: [design::save_row::ReasonSlot<'static>; 2] = [
+    design::save_row::ReasonSlot::of(&[EMPTY_REASON]),
+    design::save_row::ReasonSlot {
+        forms: &[
+            design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
+            design::save_row::DISCARD_TO_SWITCH,
+        ],
+        substitutes: &[GONE_BESIDE_SAVE, MEMBER_BESIDE_SAVE],
+    },
+];
 /// The Groups list's heading for groups whose encounter is gone; Arrivals says the same words
 /// beside such a group's name (FB10).
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
@@ -2863,7 +2878,7 @@ impl Encounters {
                 line: ui.max_rect().right() - left,
                 actions: save_width,
                 row: members_right - left,
-                reasons: &[EMPTY_REASON, design::save_row::SAVE_OR_DISCARD_TO_SWITCH],
+                reasons: &HEAD_REASONS,
             },
         );
         let button = || {
@@ -2969,34 +2984,16 @@ impl Encounters {
                 |ui| super::blocked_reason(ui, empty_reason),
             );
         });
-        for (reason, shown, switch) in below {
+        for (_, shown, switch) in below {
             let top = ui.cursor().top();
-            let height = ui
-                .painter()
-                .layout(
-                    reason.to_owned(),
-                    Type::Small.font(ui),
-                    colors().muted,
-                    ui.available_width(),
-                )
-                .size()
-                .y;
-            // A layout too narrow for the switch reason on the row (narrower than 960, beside
-            // Lookup): its own line, as on main, is the place, as tall as the taller of the two.
-            let height = match elsewhere {
-                Some((_, words)) if switch => height.max(
-                    ui.painter()
-                        .layout(
-                            words.to_owned(),
-                            Type::Small.font(ui),
-                            colors().muted,
-                            (ui.available_width() - design::ICON_SLOT - design::S).max(0.0),
-                        )
-                        .size()
-                        .y,
-                ),
-                _ => height,
-            };
+            // A layout too narrow for the reason on the row (narrower than 960, beside Lookup):
+            // its own line, as tall as the tallest of its forms and of the words that can take
+            // its place, whether or not any shows or a refusal stands (layout step 6, Astra's P2).
+            let height = design::save_row::slot_height(
+                ui,
+                &HEAD_REASONS[usize::from(switch)],
+                ui.available_width(),
+            );
             let shown = if gone && switch {
                 gone_place = Some(egui::Rect::from_min_size(
                     egui::pos2(ui.cursor().left(), top),

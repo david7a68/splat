@@ -21924,17 +21924,22 @@ pub mod encounter_owned_groups {
         // old check held the gap from the save row's word to Default side at main's 28 px; the
         // shared draft head plans the row for every state, and at 960 that plan keeps the switch
         // reason's line below the row in every state. So the check is now that no state change
-        // moves a field: the clean, refused group and the same group with an edit (Unsaved,
-        // Discard, the switch reason or the cause in its place) keep the name, Default side,
-        // Belongs to, the search and the first member at one top, at 960, 1200 and 1920. The
-        // cause is said once (`iter-29-BC5-G122`, `-off-screen`).
+        // moves a field: the clean, refused group, the same group with an edit (Unsaved,
+        // Discard, the switch reason or the cause in its place) and that edited group once the
+        // refusal ends (Any encounter) keep the name, Default side, Belongs to, the search and
+        // the first member at one top, at 960, 1200 and 1920, so a band that only the refusal
+        // brings fails (Astra's P1 on PR 643; `l6-G122-no-band-plan` follows one group before,
+        // during and after its refusal). The cause is said once (`iter-29-BC5-G122`,
+        // `-off-screen`).
         let refused_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
-        let (once, detail, member, member_detail, edited_head) = d.aside(|d| {
+        let (once, detail, member, member_detail, edited_head, cleared_head) = d.aside(|d| {
             d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
             let edited_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
             let (once, detail) = gone_encounter_said_once(d);
             d.click("Belongs to: Deleted encounter");
             d.click("Any encounter");
+            // The same edited group with the refusal ended: nothing of the head moves.
+            let cleared_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
             let wolf = d
                 .root
                 .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
@@ -21958,7 +21963,14 @@ pub mod encounter_owned_groups {
             d.focus_window(true);
             d.click("Discard");
             d.expect("Deleted encounter");
-            (once, detail, member, member_detail, edited_head)
+            (
+                once,
+                detail,
+                member,
+                member_detail,
+                edited_head,
+                cleared_head,
+            )
         });
         d.observe(
             "iter-29-BC5-G122-no-band",
@@ -21966,8 +21978,13 @@ pub mod encounter_owned_groups {
                 && refused_head
                     .iter()
                     .zip(&edited_head)
-                    .all(|(refused, edited)| group_head_still(refused, edited)),
-            format!("The head's tops, refused {refused_head:?}, edited {edited_head:?}"),
+                    .zip(&cleared_head)
+                    .all(|((refused, edited), cleared)| {
+                        group_head_still(refused, edited) && group_head_still(edited, cleared)
+                    }),
+            format!(
+                "The head's tops, refused {refused_head:?}, edited {edited_head:?}, the refusal ended {cleared_head:?}"
+            ),
         );
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
         d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
@@ -24583,7 +24600,11 @@ pub mod session_plan_groups {
         // iter-29 G122 on the Sessions page: the plan's group comes to belong to an encounter
         // that is then deleted. With Belongs to off screen, the save row says the cause once,
         // by the mouse and the keyboard. The file and the group are put back after.
-        let (once, detail) = d.aside(|d| {
+        // Layout step 6 (Astra's P1 on PR 643): the same group before the refusal (its encounter
+        // chosen), during it (the encounter deleted) and after it (the file back) keeps its head's
+        // tops at 960, 1200 and 1920: a refusal adds no band, here or anywhere in the head.
+        let ((once, detail), (before, during, after)) = d.aside(|d| {
+            let sizes = [SMALL, DEFAULT, LARGE];
             let arena = d.root.join(format!(
                 "campaigns/emberfall/Encounters/{}.md",
                 crate::visual_tests::fixture::RUN_ARENA
@@ -24591,19 +24612,38 @@ pub mod session_plan_groups {
             let text = std::fs::read_to_string(&arena).unwrap();
             d.click("Belongs to: Any encounter");
             d.click(crate::visual_tests::fixture::RUN_ARENA);
+            let before = sizes.map(|size| d.at_size(size, group_head_tops));
             std::fs::remove_file(&arena).unwrap();
             d.focus_window(false);
             d.focus_window(true);
             d.wait_for_text("Deleted encounter");
+            let during = sizes.map(|size| d.at_size(size, group_head_tops));
             let once = gone_encounter_said_once(d);
             std::fs::write(&arena, text).unwrap();
             d.focus_window(false);
             d.focus_window(true);
+            d.wait_for_control(&format!(
+                "Belongs to: {}",
+                crate::visual_tests::fixture::RUN_ARENA
+            ));
+            let after = sizes.map(|size| d.at_size(size, group_head_tops));
             d.click("Discard");
             d.expect("Belongs to: Any encounter");
-            once
+            (once, (before, during, after))
         });
         d.observe("iter-29-BC5-G122-off-screen-plan", once, detail);
+        d.observe(
+            "l6-G122-no-band-plan",
+            before.iter().all(|tops| tops[1].1.is_some())
+                && before
+                    .iter()
+                    .zip(&during)
+                    .zip(&after)
+                    .all(|((before, during), after)| {
+                        group_head_still(before, during) && group_head_still(during, after)
+                    }),
+            format!("The head's tops before the refusal {before:?}, during it {during:?}, after it {after:?}"),
+        );
         let (member, member_detail) = d.aside(|d| {
             // A member whose creature is gone, with a changed name: its Cinder Wolf's package
             // entry is deleted, then put back.

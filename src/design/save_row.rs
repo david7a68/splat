@@ -648,9 +648,74 @@ pub struct HeadSpec<'a> {
     /// The save row's room, from its start to its reasons' edge, less anything that stands at its
     /// end (a run's state).
     pub row: f32,
-    /// Each reason the save row can show, in its longest form, in row order (Save's own reason
-    /// first, then the campaign-switch reason).
-    pub reasons: &'a [&'a str],
+    /// Each reason slot of the save row, in row order (Save's own reason first, then the
+    /// campaign-switch reason).
+    pub reasons: &'a [ReasonSlot<'a>],
+}
+
+/// One reason's place on a draft head's save row (layout step 6): every form the reason can take
+/// in any state, and the words that can take its place after an icon (G122's substitution of a
+/// fault said in its own place). Its room on the row, and its line below the row when it has no
+/// room there, are measured by the widest and tallest of all of them, so the place is the same
+/// whatever the draft holds.
+#[derive(Clone, Copy, Debug)]
+pub struct ReasonSlot<'a> {
+    pub forms: &'a [&'a str],
+    pub substitutes: &'a [&'a str],
+}
+
+impl<'a> ReasonSlot<'a> {
+    /// A reason with these forms and nothing in its place.
+    pub const fn of(forms: &'a [&'a str]) -> Self {
+        Self {
+            forms,
+            substitutes: &[],
+        }
+    }
+
+    /// The widest the slot needs on one line.
+    fn width(&self, ui: &Ui) -> f32 {
+        let small = super::Type::Small.font(ui);
+        let forms = self
+            .forms
+            .iter()
+            .map(|words| super::number_width(ui, words, &small))
+            .fold(0.0, f32::max);
+        let substitutes = self
+            .substitutes
+            .iter()
+            .map(|words| {
+                super::number_width(ui, words, &small) + super::tokens::ICON_SLOT + super::tokens::S
+            })
+            .fold(0.0, f32::max);
+        forms.max(substitutes)
+    }
+}
+
+/// The height of `slot`'s own line under the save row, `width` wide: the tallest of its forms
+/// and of its substitutes after their icon, so it is the same in every state (layout step 6).
+pub fn slot_height(ui: &Ui, slot: &ReasonSlot<'_>, width: f32) -> f32 {
+    let small = super::Type::Small.font(ui);
+    let tall = |words: &str, width: f32| {
+        ui.painter()
+            .layout(
+                words.to_owned(),
+                small.clone(),
+                colors().muted,
+                width.max(0.0),
+            )
+            .size()
+            .y
+    };
+    let forms = slot
+        .forms
+        .iter()
+        .map(|words| tall(words, width))
+        .fold(0.0, f32::max);
+    slot.substitutes
+        .iter()
+        .map(|words| tall(words, width - super::tokens::ICON_SLOT - super::tokens::S))
+        .fold(forms, f32::max)
 }
 
 /// Where a draft editor's head puts its parts (layout step 6, I7 and I8), from [`head_plan`].
@@ -723,14 +788,13 @@ pub fn head_plan(ui: &Ui, spec: &HeadSpec<'_>) -> HeadPlan {
     } else {
         (full, false)
     };
-    let small = super::Type::Small.font(ui);
     let mut room =
         spec.row - widest_word(ui) - Action::quiet("Discard").natural_width(ui) - 2.0 * gap;
     let on_row = spec
         .reasons
         .iter()
-        .map(|words| {
-            let width = super::number_width(ui, words, &small) + gap;
+        .map(|slot| {
+            let width = slot.width(ui) + gap;
             let fits = width <= room;
             if fits {
                 room -= width;
@@ -1016,7 +1080,17 @@ mod tests {
         // on the row in its longest form, and the row keeps one height in every state (a reason
         // with no room would wrap and grow it) and stays inside its room: so a state change never
         // pushes a reason off the row, and nothing under it moves.
-        let reasons = ["Add a creature first.", SAVE_OR_DISCARD_TO_SWITCH];
+        // The group editor's two slots, with G122's substitutions in the switch reason's place.
+        let reasons = [
+            ReasonSlot::of(&["Add a creature first."]),
+            ReasonSlot {
+                forms: &[SAVE_OR_DISCARD_TO_SWITCH, DISCARD_TO_SWITCH],
+                substitutes: &[
+                    "Its encounter was deleted. See Belongs to.",
+                    "A creature here cannot be saved. See its row.",
+                ],
+            },
+        ];
         let head_states = [
             DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft).locks_campaign(),
             DraftState::new(DraftOrigin::New, Changed::Yes, Primary::Draft)
@@ -1060,14 +1134,46 @@ mod tests {
                                 if state.discard_shown() {
                                     let _ = Action::quiet("Discard").show(ui);
                                 }
-                                for (words, on_row) in reasons.iter().zip(&head.on_row) {
+                                for (slot, on_row) in reasons.iter().zip(&head.on_row) {
                                     if *on_row {
-                                        super::super::blocked_reason(ui, Some(words));
+                                        super::super::blocked_reason(ui, Some(slot.forms[0]));
                                     }
                                 }
                             });
                             right = row.response.rect.right() - rect.left();
                             height = row.response.rect.height();
+                            // Each slot under the row is reserved `slot_height` high; every form
+                            // and every substitute (after its icon) fits in it, at this width.
+                            for (slot, on_row) in reasons.iter().zip(&head.on_row) {
+                                if *on_row {
+                                    continue;
+                                }
+                                let kept = slot_height(ui, slot, width);
+                                let drawn = slot
+                                    .forms
+                                    .iter()
+                                    .map(|words| (*words, 0.0))
+                                    .chain(slot.substitutes.iter().map(|words| {
+                                        (*words, super::super::tokens::ICON_SLOT + super::super::tokens::S)
+                                    }))
+                                    .map(|(words, icon)| {
+                                        let rect = egui::Rect::from_min_size(
+                                            ui.cursor().min + egui::vec2(icon, 0.0),
+                                            egui::vec2(width - icon, 1_000.0),
+                                        );
+                                        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                            super::super::blocked_reason(ui, Some(words));
+                                        })
+                                        .response
+                                        .rect
+                                        .height()
+                                    })
+                                    .fold(0.0, f32::max);
+                                assert!(
+                                    drawn <= kept + 0.5,
+                                    "at {width} a form of {slot:?} is {drawn} tall in its slot of {kept}"
+                                );
+                            }
                             plan = Some(head);
                         });
                     });
