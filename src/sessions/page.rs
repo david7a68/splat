@@ -341,8 +341,22 @@ enum SessionView {
         shown: Tab,
         beside: bool,
         editing_group_here: bool,
-        toolbar_width: f32,
+        /// The edges the header was drawn in, for the body (`SessionLayout`).
+        edges: design::PaneEdges,
     },
+}
+
+/// Layout step 7: what the session pane shows and the edges that its title line, its toolbar and
+/// its body share, decided before the title line paints (`Sessions::session_layout`).
+struct SessionLayout {
+    conflict: bool,
+    beside: bool,
+    editing_group_here: bool,
+    shown: Tab,
+    /// Beside the note: the plan, a gutter and the note's column, whose edge the DM drags. Else
+    /// one column as wide as the note's frame (also for the narrow Plan tab and a conflict), or
+    /// the whole room (Recordings, and a group being edited in the narrow Plan tab).
+    edges: design::PaneEdges,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -1123,18 +1137,6 @@ fn note_column() -> design::Column {
 /// and Read share it, in both layouts, so a switch moves no line end.
 fn note_frame_width(ctx: &egui::Context) -> f32 {
     design::column_width(ctx, NOTE_COLUMN).unwrap_or(design::READER_MEASURE + NOTE_FRAME_EDGES)
-}
-
-fn page_column(ui: &mut egui::Ui, width: f32, height: f32, add: impl FnOnce(&mut egui::Ui)) {
-    ui.allocate_ui_with_layout(
-        egui::vec2(width, height),
-        egui::Layout::top_down(egui::Align::Min),
-        |ui| {
-            ui.set_width(width);
-            ui.set_min_height(height);
-            add(ui);
-        },
-    );
 }
 
 /// A note's words as a reader sees them: links as words, and no empty headings.
@@ -7015,20 +7017,28 @@ impl Sessions {
             .cloned()
         else {
             // Its file went from the folder, and the words are still here. The same
-            // header as a note, so that the page does not jump at the next scan.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                self.record_control(ui, settings);
-                if let Some(draft) = &self.draft {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(STATUS_WIDTH, Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| Self::note_status(ui, draft),
-                    );
-                    let name = draft.path.file_stem().unwrap_or_default().to_string_lossy();
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                        ui.add(egui::Label::new(Type::Title.rich(ui, name).color(c.text)).wrap());
-                    });
-                }
+            // header as a note, so that the page does not jump at the next scan: it ends at the
+            // note frame's edge, as the editor below does (layout step 7).
+            let edges = design::PaneColumns::shared_task("session_gone_columns")
+                .fixed(0.0, note_frame_width(ui.ctx()))
+                .edges(ui);
+            edges.header(ui, |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                    self.record_control(ui, settings);
+                    if let Some(draft) = &self.draft {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(STATUS_WIDTH, Density::Scan.control()),
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| Self::note_status(ui, draft),
+                        );
+                        let name = draft.path.file_stem().unwrap_or_default().to_string_lossy();
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                            ui.add(
+                                egui::Label::new(Type::Title.rich(ui, name).color(c.text)).wrap(),
+                            );
+                        });
+                    }
+                })
             });
             self.record_line(ui, settings);
             if self.draft.is_some() {
@@ -7049,30 +7059,31 @@ impl Sessions {
             }
             return;
         };
-        let title_on_own_line = ui.available_width() < TWO_COLUMNS_FROM;
-        ui.horizontal(|ui| {
-            // One height whether Record, Stop recording or nothing stands beside the title, so
-            // the line and the tabs below keep their y when a recording starts or stops.
-            ui.set_min_height(Density::Scan.control());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                self.record_control(ui, settings);
-                if !title_on_own_line
-                    || self
-                        .draft
-                        .as_ref()
-                        .is_some_and(|draft| draft.state == DraftState::Conflict)
-                {
-                    self.session_details_action(ui, &note);
-                }
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                    note_title(ui, &note.label(), &note.date);
+        // Layout step 7 (SH11, AH8, AP4, SO9, AO10, SQ6, AQ4, SR6, AR5): the title line, the
+        // toolbar and the body share one set of edges, decided now, before anything paints. The
+        // title's actions end at the session's content edge, never at the window's.
+        let layout = self.session_layout(ui, plan);
+        let title_on_own_line = layout.edges.outer().span() < TWO_COLUMNS_FROM;
+        layout.edges.header(ui, |ui| {
+            ui.horizontal(|ui| {
+                // One height whether Record, Stop recording or nothing stands beside the title,
+                // so the line and the tabs below keep their y when a recording starts or stops.
+                ui.set_min_height(Density::Scan.control());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.record_control(ui, settings);
+                    if !title_on_own_line || layout.conflict {
+                        self.session_details_action(ui, &note);
+                    }
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                        note_title(ui, &note.label(), &note.date);
+                    });
                 });
             });
         });
         self.record_line(ui, settings);
         // The body (Last time, the tabs and their pane) is the pane's; the part places the
         // footer below it.
-        let view = self.session_header(ui, book, plan, &note, title_on_own_line);
+        let view = self.session_header(ui, book, plan, &note, layout, title_on_own_line);
         // The narrow Plan tab: the plan's pane holds the page's messages too, in its one footer,
         // which follows the plan's rows (`SessionView::page_footer`).
         if view.page_footer() == PageFooter::Plan {
@@ -7091,27 +7102,14 @@ impl Sessions {
         }
     }
 
-    /// The session page below its title and state line, above its pane: Last time, the tabs
-    /// and the toolbar. They never scroll. Returns what the pane shows.
-    fn session_header(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &mut Book,
-        plan: &Plan<'_>,
-        note: &Note,
-        title_on_own_line: bool,
-    ) -> SessionView {
-        // A group being assembled needs the height, and last time can wait for it.
-        if !(plan.group_open && self.group_session == self.selected) {
-            self.last_time_block(ui, book, plan);
-        }
-        if self
+    /// What the session pane shows, and the edges its title line, toolbar and body share,
+    /// before any of them paints (layout step 7): from the pane's room, the shown tab and this
+    /// pass's drag of the note's edge. Nothing here draws or changes the page.
+    fn session_layout(&self, ui: &egui::Ui, plan: &Plan<'_>) -> SessionLayout {
+        let conflict = self
             .draft
             .as_ref()
-            .is_some_and(|draft| draft.state == DraftState::Conflict)
-        {
-            return SessionView::Conflict;
-        }
+            .is_some_and(|draft| draft.state == DraftState::Conflict);
         let editing_group_here = plan.group_open && self.group_session == self.selected;
         let beside_from = if editing_group_here {
             design::LIST_MEASURE + design::L + design::READER_MEASURE
@@ -7120,89 +7118,142 @@ impl Sessions {
         };
         let beside = ui.available_width() >= beside_from;
         // In a wide page, the note is on the plan's tab, so there is no second one to choose.
-        let mut shown = if beside && self.tab == Tab::Note {
+        let shown = if beside && self.tab == Tab::Note {
             Tab::Plan
         } else {
             self.tab
         };
+        let columns = design::PaneColumns::shared_task("session_columns");
+        let columns = if conflict {
+            columns.fixed(0.0, note_frame_width(ui.ctx()))
+        } else if shown == Tab::Recordings || (shown == Tab::Plan && !beside && editing_group_here)
+        {
+            // Rows and readers of the whole room; a group being edited keeps its own width.
+            columns.rest(0.0)
+        } else if beside {
+            let plan_width = if editing_group_here {
+                design::LIST_MEASURE
+            } else {
+                (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH)
+            };
+            // The DM drags the note's edge into the room beside it.
+            columns
+                .fixed(0.0, plan_width)
+                .resizable(design::L, note_column())
+        } else {
+            columns.fixed(0.0, note_frame_width(ui.ctx()))
+        };
+        SessionLayout {
+            conflict,
+            beside,
+            editing_group_here,
+            shown,
+            edges: columns.edges(ui),
+        }
+    }
+
+    /// The session page below its title and state line, above its pane: Last time, the tabs
+    /// and the toolbar. They never scroll. Returns what the pane shows.
+    fn session_header(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &mut Book,
+        plan: &Plan<'_>,
+        note: &Note,
+        layout: SessionLayout,
+        title_on_own_line: bool,
+    ) -> SessionView {
+        // A group being assembled needs the height, and last time can wait for it.
+        if !(plan.group_open && self.group_session == self.selected) {
+            self.last_time_block(ui, book, plan);
+        }
+        if layout.conflict {
+            return SessionView::Conflict;
+        }
+        let SessionLayout {
+            beside,
+            editing_group_here,
+            mut shown,
+            edges,
+            ..
+        } = layout;
         let tabs: &[(Tab, &str)] = if beside {
             &[(Tab::Plan, "Plan and notes")]
         } else {
             &[(Tab::Plan, "Plan"), (Tab::Note, "Note")]
         };
-        let plan_width = if editing_group_here {
-            design::LIST_MEASURE
+        // The tab row ends where the shown child ends: the note's frame (beside the plan, the
+        // note's column, this pass's drag included), or the whole room for Recordings.
+        let last = if beside && shown != Tab::Recordings {
+            1
         } else {
-            (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH)
+            0
         };
-        let note_start = if beside { plan_width + design::L } else { 0.0 };
-        // The tab row ends where the note frame ends. Beside the plan, the note's column says
-        // where, before it draws, this pass's drag included.
-        let frame_width = if beside {
-            let room = egui::Rect::from_min_size(
-                egui::pos2(ui.max_rect().left() + note_start, ui.max_rect().top()),
-                egui::vec2(ui.available_width() - note_start, 1.0),
-            );
-            note_column().width_within(ui.ctx(), room)
-        } else {
-            note_frame_width(ui.ctx())
-        };
-        let toolbar_width = ui.available_width().min(note_start + frame_width);
-        ui.horizontal(|ui| {
-            if shown != Tab::Recordings {
-                ui.set_max_width(toolbar_width);
-            }
-            let changed = ui
-                .horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    let changed = design::segmented(ui, &mut shown, tabs);
-                    recordings_tab(ui, &mut shown, self.recordings.len()) || changed
-                })
-                .inner;
-            if changed {
-                if self.tab == Tab::Recordings || shown == Tab::Recordings {
-                    self.clear_notice();
-                }
-                self.tab = shown;
-                self.clear_success();
-            }
-            let model = self.plan_model(reader_index(ui).as_deref(), plan);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if (shown == Tab::Note || (shown == Tab::Plan && beside))
-                    && (!self.reading_note
-                        || has_written_text(&compact_plan_for_reading(
-                            &self.note_body(),
-                            plan.fights,
-                            plan.groups,
-                            &model.scene_lines(),
-                            beside,
-                        )))
-                {
-                    let (word, icon) = if self.reading_note {
-                        ("Write", icons::EDIT)
-                    } else {
-                        ("Read", icons::DOCUMENT)
-                    };
-                    if Action::quiet(word)
-                        .icon(icon)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.reading_note = !self.reading_note;
+        let mut changed_tab = false;
+        edges.child_header(last, ui, |ui| {
+            ui.horizontal(|ui| {
+                let changed = ui
+                    .horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        let changed = design::segmented(ui, &mut shown, tabs);
+                        recordings_tab(ui, &mut shown, self.recordings.len()) || changed
+                    })
+                    .inner;
+                if changed {
+                    if self.tab == Tab::Recordings || shown == Tab::Recordings {
+                        self.clear_notice();
                     }
+                    self.tab = shown;
+                    self.clear_success();
+                    changed_tab = true;
                 }
-                if title_on_own_line {
-                    self.session_details_action(ui, note);
-                }
-            });
+                let model = self.plan_model(reader_index(ui).as_deref(), plan);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if (shown == Tab::Note || (shown == Tab::Plan && beside))
+                        && (!self.reading_note
+                            || has_written_text(&compact_plan_for_reading(
+                                &self.note_body(),
+                                plan.fights,
+                                plan.groups,
+                                &model.scene_lines(),
+                                beside,
+                            )))
+                    {
+                        let (word, icon) = if self.reading_note {
+                            ("Write", icons::EDIT)
+                        } else {
+                            ("Read", icons::DOCUMENT)
+                        };
+                        if Action::quiet(word)
+                            .icon(icon)
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            self.reading_note = !self.reading_note;
+                        }
+                    }
+                    if title_on_own_line {
+                        self.session_details_action(ui, note);
+                    }
+                });
+            })
         });
         design::gap(ui, design::Gap::XS);
+        // A new tab has other edges: the body takes them now, and the pass is drawn again so
+        // that the title line has them too.
+        let edges = if changed_tab {
+            ui.ctx()
+                .request_discard("the session's tab changed the pane's edges");
+            self.session_layout(ui, plan).edges
+        } else {
+            edges
+        };
         SessionView::Tab {
             shown,
             beside,
             editing_group_here,
-            toolbar_width,
+            edges,
         }
     }
 
@@ -7223,38 +7274,25 @@ impl Sessions {
             shown,
             beside,
             editing_group_here,
-            toolbar_width,
+            edges,
         } = view
         else {
             self.note_editor(ui, false);
             return;
         };
         match shown {
-            Tab::Plan if beside => {
-                let height = ui.available_height();
-                let plan_width = if editing_group_here {
-                    design::LIST_MEASURE
+            // Layout step 7: the plan and the note's column in the edges the header was drawn in.
+            Tab::Plan if beside => edges.show_children(ui, |ui, index| {
+                if index == 0 {
+                    fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                        self.plan_pane(ui, book, plan, page)
+                    });
                 } else {
-                    (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH)
-                };
-                let note_width = ui.available_width() - plan_width - design::L;
-                ui.horizontal_top(|ui| {
-                    ui.spacing_mut().item_spacing.x = design::L;
-                    page_column(ui, plan_width, height, |ui| {
-                        fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
-                            self.plan_pane(ui, book, plan, page)
-                        });
+                    fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
+                        self.note_pane(ui, book, plan, beside)
                     });
-                    page_column(ui, note_width, height, |ui| {
-                        // The DM drags the note's edge into the room beside it.
-                        note_column().show_inside(ui, |ui| {
-                            fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
-                                self.note_pane(ui, book, plan, beside)
-                            })
-                        });
-                    });
-                });
-            }
+                }
+            }),
             // The same ids in both layouts: crossing the width keeps typed text, focus and scroll.
             // The plan's rows end at the tab row's right edge, as the note's frame does, so the
             // pane has one right edge; the scroll bar's lane lies beyond it. A group being edited
@@ -7262,7 +7300,8 @@ impl Sessions {
             Tab::Plan => {
                 ui.scope(|ui| {
                     if !editing_group_here {
-                        ui.set_max_width(toolbar_width + ui.spacing().scroll.allocated_width());
+                        let width = edges.child(0).span();
+                        ui.set_max_width(width + ui.spacing().scroll.allocated_width());
                     }
                     fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
                         self.plan_pane(ui, book, plan, page)

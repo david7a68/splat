@@ -523,6 +523,28 @@ fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
     );
 }
 
+/// Layout step 7 (`session-header-measure`: SH11, AH8, AP4, SO9, AO10, SQ6, AQ4, SR6, AR5): the
+/// session's title line and its toolbar end at the note frame's right edge, the edge of the
+/// session's content, never at the window's. Record (`Record this session`) and the toolbar's
+/// Read or Write each end there (±1 px), read from the accessibility tree and the painted frame.
+fn session_header_edge(d: &mut Driver<'_>, id: &str) {
+    let size = d.window_size();
+    let frame = d.input_frame("Note text").map(|(frame, _)| frame.right());
+    let record = d.place_of("Record this session").map(|rect| rect.right());
+    let toolbar = d
+        .place_of("Read")
+        .or_else(|| d.place_of("Write"))
+        .map(|rect| rect.right());
+    let near = |a: Option<f32>| a.zip(frame).is_some_and(|(a, b)| (a - b).abs() <= 1.0);
+    d.observe(
+        id,
+        near(record) && near(toolbar),
+        format!(
+            "At {size:?}, Record ends at {record:?} and the toolbar at {toolbar:?}, the note frame at {frame:?}"
+        ),
+    );
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -14145,7 +14167,9 @@ pub mod session_notes {
         d.click("Create session");
         d.expect(&format!("Session 1: {TITLE}"));
         d.goal_within("T11.1", "start a titled session from a template", 4);
-        d.state("session-write", Sizes::AllAndHiDpi);
+        d.state_prepared("session-write", Sizes::AllAndHiDpi, |d| {
+            session_header_edge(d, "l7-AP4-SH11-session-header");
+        });
         let filled = d
             .editor_text()
             .is_some_and(|text| text.contains("Recap of last time") && text.contains(TITLE));
@@ -26851,7 +26875,9 @@ pub mod session_plan {
             !d.has(&format!("Resume: {SECOND}")) && d.has("Undo delete run"),
             "Deleting the saved run offers one step of undo",
         );
-        d.state("plan-saved-run-deleted", Sizes::Default);
+        d.state_prepared("plan-saved-run-deleted", Sizes::Default, |d| {
+            session_header_edge(d, "l7-SQ6-AQ4-session-header");
+        });
         d.click("Undo delete run");
         d.expect(&format!("Resume: {SECOND}"));
         d.click(&format!("Resume: {SECOND}"));
