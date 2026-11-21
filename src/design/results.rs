@@ -916,27 +916,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "selection_bar_content",
             &[Ban::Results],
         ),
-        ("src/campaigns.rs", "at", &[Ban::Results]),
-        ("src/campaigns.rs", "default", &[Ban::Results]),
         (
             "src/campaigns.rs",
             "footer_messages",
-            // Layout PR 2b: typed lines (`outcome_at` keeps the staged orders; `Footer::result`
-            // went); the page's lock words are app-owned `&str`.
-            &[Ban::Order, Ban::Words],
+            // Layout PR 2b: typed lines; the page's lock words are app-owned `&str`.
+            &[Ban::Words],
         ),
         ("src/campaigns.rs", "form", &[Ban::Results]),
-        (
-            "src/campaigns.rs",
-            "one_to_one_links_replace_and_unlink_without_changing_other_campaigns",
-            &[Ban::Results],
-        ),
-        (
-            "src/campaigns.rs",
-            "register_campaign_copy",
-            &[Ban::Results],
-        ),
-        ("src/campaigns.rs", "save_form", &[Ban::Results]),
         // The design system's pane tests with closure lines (the `#[cfg(test)]` `Footer::result`,
         // `legacy_reason`) and a footer placed by hand (migration-32 L2c: no app code can).
         (
@@ -960,11 +946,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(4)],
         ),
         ("src/design/results.rs", "act_order", &[Ban::Results]),
-        // Layout PR 2b: the link's result keeps its staged order through `outcome_at`.
-        ("src/dndbeyond.rs", "footer_messages", &[Ban::Order]),
         // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
-        ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c).
         (
             "src/encounter_run/view.rs",
@@ -1606,9 +1589,7 @@ pub(crate) const STAGED: &[Staged] = &[
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[
-            ("src/campaigns.rs", 9),
             ("src/design/components.rs", 15),
-            ("src/dndbeyond.rs", 1),
             ("src/encounters/groups.rs", 1),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 1),
