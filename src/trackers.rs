@@ -396,6 +396,8 @@ pub enum Unrecorded {
 pub struct Added {
     pub entry: String,
     pub event: String,
+    /// The event's title: what its `Undo add` names.
+    pub title: String,
     pub at: Instant,
     /// The Timeline's words while this event is not saved in `Timeline.md`.
     pub not_saved: Option<String>,
