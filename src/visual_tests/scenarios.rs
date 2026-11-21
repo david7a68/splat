@@ -5178,7 +5178,18 @@ pub mod encounter_build {
         d.type_text(BOSS);
         d.click_first(ADD);
         d.expect("8. ");
-        d.state("creatures-added", Sizes::All);
+        // Layout PR 5b (I6): the roster' actions start `L` after their widest facts; at
+        // 1920 they have room for the column.
+        d.state_prepared("creatures-added", Sizes::All, |d| {
+            let (holds, column, detail) =
+                d.kept_columns_hold("roster", true, Some(crate::design::S));
+            let wide = d.window_size().0 >= LARGE.0;
+            d.observe(
+                "pr5b-roster-columns",
+                holds && (column || !wide),
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
+        });
         d.click(SAVE_ENCOUNTER);
         d.expect(SAVED_NOTE);
         d.state("saved", Sizes::Default);
@@ -19600,7 +19611,17 @@ pub mod encounter_groups {
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("MEMBERS 3");
         d.expect("XP 600");
-        d.state("group-editor", Sizes::All);
+        // Layout PR 5b (I6): the members' actions start `L` after their widest facts; at
+        // 1920 they have room for the column.
+        d.state_prepared("group-editor", Sizes::All, |d| {
+            let (holds, column, detail) = d.kept_columns_hold("members", true, None);
+            let wide = d.window_size().0 >= LARGE.0;
+            d.observe(
+                "pr5b-members-columns",
+                holds && (column || !wide),
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
+        });
         // R38 (structural B4): the back line, its word whole at the text edge, the name below.
         let faults = back_line_faults(d, "Encounters", "Back to encounters", "Group name", None);
         d.observe(

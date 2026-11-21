@@ -245,6 +245,50 @@ pub fn action_row<R>(
     (out, pressed)
 }
 
+/// A list whose facts are laid out in their own room (they wrap or give way there): its columns
+/// from its last pass, its widest drawn facts and its widest drawn actions (layout PR 5a-2, 5b).
+/// `columns` gives them before a row is drawn; `measured` adds the row's own after. When they
+/// change, the list is drawn once more, so its actions settle in their column on the next frame.
+#[derive(Clone, Copy, Default)]
+struct KeptColumns {
+    pass: u64,
+    last: (f32, f32),
+    next: (f32, f32),
+}
+
+fn kept_columns<R>(ui: &Ui, list: Id, update: impl FnOnce(&mut KeptColumns) -> R) -> R {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let (out, changed) = ui.ctx().data_mut(|data| {
+        let kept = data.get_temp_mut_or_default::<KeptColumns>(list);
+        let mut changed = false;
+        if kept.pass != pass {
+            if kept.pass + 1 == pass {
+                changed = kept.next != kept.last;
+                kept.last = kept.next;
+            }
+            kept.next = (0.0, 0.0);
+            kept.pass = pass;
+        }
+        (update(kept), changed)
+    });
+    if changed {
+        ui.ctx().request_repaint();
+    }
+    out
+}
+
+/// The list's columns from its last pass: (widest facts, widest actions); zero until measured.
+pub fn columns(ui: &Ui, list: Id) -> (f32, f32) {
+    kept_columns(ui, list, |kept| kept.last)
+}
+
+/// Add a drawn row's facts and actions widths to this pass's columns.
+pub fn measured(ui: &Ui, list: Id, facts: f32, actions: f32) {
+    kept_columns(ui, list, |kept| {
+        kept.next = (kept.next.0.max(facts), kept.next.1.max(actions));
+    });
+}
+
 /// The height a row needs: `base` (its facts), and an action line when the columns wrap.
 pub fn row_height(base: f32, columns: Columns) -> f32 {
     if columns.wrapped {

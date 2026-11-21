@@ -717,34 +717,12 @@ fn plan_row_with(
     design::register_row(ui, row.response.rect);
 }
 
-/// The plan's columns, from its last pass: its widest title and its widest action recipe. Each
-/// row adds its own to this pass's; when they change, the plan is drawn once more, so its
-/// actions settle in their column on the next frame.
+/// The plan's columns (`design::action_rows::columns`): its widest title and its widest action
+/// recipe, from its last pass.
 fn plan_columns(ui: &egui::Ui, words: f32, actions: f32) -> (f32, f32) {
-    #[derive(Clone, Copy, Default)]
-    struct Kept {
-        pass: u64,
-        last: (f32, f32),
-        next: (f32, f32),
-    }
-    let pass = ui.ctx().cumulative_pass_nr();
-    let (columns, changed) = ui.ctx().data_mut(|data| {
-        let kept = data.get_temp_mut_or_default::<Kept>(egui::Id::new("plan_row_columns"));
-        let mut changed = false;
-        if kept.pass != pass {
-            changed = kept.pass + 1 == pass && kept.next != kept.last;
-            if kept.pass + 1 == pass {
-                kept.last = kept.next;
-            }
-            kept.next = (0.0, 0.0);
-            kept.pass = pass;
-        }
-        kept.next = (kept.next.0.max(words), kept.next.1.max(actions));
-        (kept.last, changed)
-    });
-    if changed {
-        ui.ctx().request_repaint();
-    }
+    let list = egui::Id::new("plan_row_columns");
+    let columns = design::action_rows::columns(ui, list);
+    design::action_rows::measured(ui, list, words, actions);
     columns
 }
 
