@@ -4,7 +4,7 @@
 use crate::design::{self, Action, Density, Tone, Type, colors};
 use eframe::egui;
 use splat::execution::dice::Random;
-pub use splat_core::roll_table::*;
+pub use splat_campaign::roll_table::*;
 
 #[derive(Clone, Default)]
 struct RollState {

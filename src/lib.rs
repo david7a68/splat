@@ -3,7 +3,18 @@
 /// proofs can name the types; screens use them through `design`.
 #[doc(hidden)]
 pub use design::outcome;
-pub use splat_core::{character, content, execution, memo};
+pub use splat_character::{character, memo};
+pub use splat_execution::execution;
+
+pub mod content {
+    pub use splat_content::content::*;
+
+    pub mod definitions {
+        pub use splat_content::content::definitions::*;
+        pub use splat_execution::execution::catalogue::{CatalogueReport, verify};
+    }
+}
+
 extern crate self as splat;
 
 // The visual suite runs many app instances at once. With glibc's malloc it used

@@ -1,5 +1,8 @@
 //! Validate embedded SRD or local authored notes without writing to either.
-use splat::content::{Diagnostic, builtin, read_directory, validate};
+use splat_content::content::{
+    Diagnostic, builtin, read_directory, validate, validate_with_builtin,
+};
+use splat_execution::execution;
 use std::path::Path;
 
 fn main() {
@@ -15,7 +18,7 @@ fn main() {
         return;
     }
     if args == ["--definitions"] || args == ["--definitions", "--require-converted"] {
-        let report = splat::content::definitions::verify();
+        let report = execution::catalogue::verify();
         println!(
             "{}",
             serde_json::to_string_pretty(&report).expect("Report is serializable")
@@ -37,12 +40,12 @@ fn main() {
     }
     let report = if args == ["--executable"] {
         let mut package = builtin::load();
-        match splat::execution::builtin::entries() {
+        match execution::builtin::entries() {
             Ok(entries) => {
                 let count = entries.len();
                 let mut errors = Vec::new();
                 for entry in &entries {
-                    if let Err(message) = splat::execution::model::compile(entry) {
+                    if let Err(message) = execution::model::compile(entry) {
                         errors.push(Diagnostic {
                             path: entry.path.clone(),
                             message,
@@ -81,7 +84,7 @@ fn main() {
             }
         }
         let mut report = if with_builtin {
-            match splat::content::validate_with_builtin(&entries) {
+            match validate_with_builtin(&entries) {
                 Ok(report) => report,
                 Err(message) => {
                     errors.push(Diagnostic {
@@ -115,7 +118,7 @@ fn main() {
 /// Read-only: prints one review per cached character. Character records are `.json` files, so a
 /// `.json` file that cannot be read counts as a failure. A run that checks nothing also fails.
 fn check_characters(directory: &Path) {
-    use splat::character::{EntitySnapshot, check};
+    use splat_character::character::{EntitySnapshot, check};
     let mut failures = 0;
     let mut reviewed = 0;
     let mut stack = vec![directory.to_owned()];

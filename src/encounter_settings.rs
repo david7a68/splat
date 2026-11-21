@@ -14,7 +14,7 @@ use std::{
 use uuid::Uuid;
 
 const MECHANIC: &str = "dnd2024:rules/combat_initiative";
-pub use splat_core::encounter_run::{Grouping, Initiative};
+pub use splat_campaign::encounter_run::{Grouping, Initiative};
 /// The wording shared by Campaign settings and Run.
 pub(crate) trait GroupingWords {
     fn label(self) -> &'static str;

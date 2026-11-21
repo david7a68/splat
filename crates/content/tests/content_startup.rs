@@ -1,4 +1,4 @@
-use splat_core::content::{builtin, definitions};
+use splat_content::content::{builtin, definitions};
 use std::{
     sync::{Arc, Barrier, mpsc},
     thread,

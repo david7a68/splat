@@ -908,7 +908,7 @@ struct FarEnd {
   item that the action changed. So a reference that X1 refused, an item that did not read, a key that Splat
   does not know, and a number that the reader changed to text all stay in the file as the DM's YAML values.
 - `formats::model_reference` is `pub(super)` today. The map module needs it, so step 1 makes it reachable
-  from `src/world/`, or does that step of the reading inside `crates/core`.
+  from `src/world/`, or does that step of the reading inside `crates/content`.
 - After the derive, Splat checks the values by the rules below. The derive gives the shape. It gives no link
   resolution and no check of meaning.
 

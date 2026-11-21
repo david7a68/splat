@@ -13,7 +13,10 @@ resolver = "3"
 
 [dependencies]
 splat-assets = { path = "crates/assets" }
-splat-core = { path = "crates/core" }
+splat-campaign = { path = "crates/campaign" }
+splat-character = { path = "crates/character" }
+splat-content = { path = "crates/content" }
+splat-execution = { path = "crates/execution" }
 eframe = { version = "0.33", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 serde = { version = "1", features = ["derive", "rc"] }
@@ -40,7 +43,8 @@ unicode-segmentation = "1.13"
 
 [dev-dependencies]
 rayon = "1.11"
-splat-core = { path = "crates/core", features = ["test-support"] }
+splat-campaign = { path = "crates/campaign", features = ["test-support"] }
+splat-content = { path = "crates/content", features = ["test-support"] }
 # The source checks read Rust with a real parser (`design::attributes`), never by hand.
 syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
@@ -66,9 +70,6 @@ opt-level = 2
 # debugging. The visual suite runs the app's frames and content work thousands of
 # times, and optimized code cut its CPU time by more than half.
 [profile.test.package.splat]
-opt-level = 2
-
-[profile.test.package.splat-core]
 opt-level = 2
 
 [profile.test.package.splat-campaign]

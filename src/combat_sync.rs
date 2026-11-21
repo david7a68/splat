@@ -18,7 +18,7 @@ use std::{
 
 const BASE: &str = "https://character-service.dndbeyond.com/character/v5";
 const INTERVAL: Duration = Duration::from_secs(15);
-pub use splat_core::encounter_run::effect::CONDITIONS;
+pub use splat_campaign::encounter_run::effect::CONDITIONS;
 /// The character's own purse, as the official sheet names it in a currency write.
 const CHARACTER_ENTITY_TYPE: u64 = 1_581_111_423;
 /// Each coin: its field on the sheet, its route, and its name.

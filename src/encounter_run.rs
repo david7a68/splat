@@ -1,20 +1,20 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 mod ad_hoc;
 mod dock;
-pub(crate) use splat_core::encounter_run::effect;
+pub(crate) use splat_campaign::encounter_run::effect;
 mod loot;
 mod notice;
 mod rolling;
-use splat_core::encounter_run::undo;
+use splat_campaign::encounter_run::undo;
 pub(crate) mod view;
 use crate::encounter_settings::{Grouping, GroupingWords, Initiative};
 #[cfg(test)]
-use splat_core::encounter_run::Changes;
-pub(crate) use splat_core::encounter_run::{
+use splat_campaign::encounter_run::Changes;
+pub(crate) use splat_campaign::encounter_run::{
     AddedFrom, Carry, FightRow, MAX_PARTICIPANTS, NOBODY_PRESENT, Participant, Phase,
 };
-pub(crate) use splat_core::encounter_run::{FightSummary, fight_summary, party_at_end};
-use splat_core::encounter_run::{
+pub(crate) use splat_campaign::encounter_run::{FightSummary, fight_summary, party_at_end};
+use splat_campaign::encounter_run::{
     Recovery, SheetShadow, is_player, read_saved_bytes, roll_initiative,
 };
 
@@ -30,7 +30,7 @@ const UNDO_MEMORY_BYTES: usize = if cfg!(test) {
 };
 
 fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
-    splat_core::encounter_run::read_saved(path, campaign)
+    splat_campaign::encounter_run::read_saved(path, campaign)
 }
 pub(crate) use ad_hoc::RunCreature;
 pub(crate) use effect::Condition;
@@ -460,7 +460,7 @@ fn group_member(
     });
     Ok(participant)
 }
-type State = splat_core::encounter_run::State<rolling::Cast>;
+type State = splat_campaign::encounter_run::State<rolling::Cast>;
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
 /// kept or taken back, and the revisions of the two reads (never an address, which a freed read
 /// can hand to the next one).
@@ -3710,7 +3710,7 @@ impl Run {
         self.note_sync_changes(lines, &[]);
     }
 }
-type SavedRun = splat_core::encounter_run::SavedRun<rolling::Cast>;
+type SavedRun = splat_campaign::encounter_run::SavedRun<rolling::Cast>;
 struct Storage {
     path: PathBuf,
     root: PathBuf,
@@ -6017,7 +6017,7 @@ mod tests {
         fs::write(&path, &broken).unwrap();
         let why = "Saved run state is invalid; its file has not been changed.";
         assert_eq!(Run::open(&path, campaign).err().as_deref(), Some(why));
-        let (problems, count) = splat_core::folder_check::check(dir.path()).unwrap();
+        let (problems, count) = splat_campaign::folder_check::check(dir.path()).unwrap();
         assert_eq!(count, 0);
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert!(problems[0].ends_with(why), "{problems:?}");

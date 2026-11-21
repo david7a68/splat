@@ -1,1 +1,1 @@
-pub use splat_core::file_batch::{Change, apply};
+pub use splat_campaign::file_batch::{Change, apply};

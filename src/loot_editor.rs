@@ -9,7 +9,7 @@ use eframe::egui;
 use splat::content::loot::{Loot, MAX_ROLLS, SEPARATOR};
 use std::sync::Arc;
 
-pub use splat_core::loot::{Item, Sources};
+pub use splat_campaign::loot::{Item, Sources};
 
 /// The most suggestions of each kind under the add field.
 const MOST_TABLES: usize = 4;

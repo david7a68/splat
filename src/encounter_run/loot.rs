@@ -9,7 +9,7 @@ use crate::roll_table::TableRoll;
 use eframe::egui;
 use splat::content::loot::{self, Loot};
 
-use splat_core::encounter_run::Found;
+use splat_campaign::encounter_run::Found;
 
 /// One loot line to roll, with the table it rolls on.
 #[derive(Clone, Debug)]

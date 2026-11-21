@@ -7,7 +7,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::{borrow::Cow, sync::Arc};
 
 /// A link to a note, as `world::with_links` writes one.
-pub use splat_core::note::NOTE_LINK;
+pub use splat_campaign::note::NOTE_LINK;
 /// An embedded image, as `world::with_links` writes one.
 pub const FILE_LINK: &str = "splat-file:";
 

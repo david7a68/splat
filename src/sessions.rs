@@ -115,7 +115,7 @@ fn write_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-pub(crate) use splat_core::note::split_note;
+pub(crate) use splat_campaign::note::split_note;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Note {
@@ -1020,7 +1020,7 @@ pub(crate) fn sync_folder(path: &Path) -> Result<(), String> {
     sync_folder_io(path).map_err(|e| e.to_string())
 }
 
-use splat_core::file_batch::sync_folder as sync_folder_io;
+use splat_campaign::file_batch::sync_folder as sync_folder_io;
 
 /// Round 30 B7d: a note's failed save in plain words from the error's KIND, never the system's
 /// words: `Not saved.`, the cause and the recovery of the World page's file faults

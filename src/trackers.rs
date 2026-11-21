@@ -12,7 +12,7 @@ use crate::{content_workspace::CampaignDocument, lookup::ContentIndex, persisten
 #[cfg(test)]
 use ledger::TableRoll;
 use ledger::{Entry, Fault, Ledger, NoticeRef, Op, Roll};
-pub use splat_core::trackers::*;
+pub use splat_campaign::trackers::*;
 use std::{
     collections::HashMap,
     path::PathBuf,

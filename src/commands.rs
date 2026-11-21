@@ -1,5 +1,5 @@
 //! Dispatch before the instance lock, keyring, or window is opened.
-use splat_core::folder_check;
+use splat_campaign::folder_check;
 use std::{io::Write, path::Path};
 
 pub fn run(args: &[String], out: &mut impl Write) -> i32 {

@@ -937,7 +937,6 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
     for folder in [
         "/src",
         "/crates/campaign/src",
-        "/crates/core/src",
         "/crates/character/src",
         "/crates/content/src",
         "/crates/execution/src",
@@ -1299,7 +1298,6 @@ fn no_lint_level_frees_raw_calls_outside_the_source() {
         "crates/campaign/Cargo.toml",
         "crates/character/Cargo.toml",
         "crates/content/Cargo.toml",
-        "crates/core/Cargo.toml",
         "crates/execution/Cargo.toml",
         ".cargo/config.toml",
     ] {

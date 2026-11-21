@@ -5,6 +5,9 @@ edition = "2024"
 rust-version = "1.95"
 publish = false
 
+[features]
+test-support = []
+
 [dependencies]
 include_dir = "0.7"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }

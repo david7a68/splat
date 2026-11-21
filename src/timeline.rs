@@ -7,7 +7,7 @@ pub mod page;
 
 use crate::design::icons;
 use crate::encounter_run::{SavedRunInfo, Standing};
-pub(crate) use splat_core::timeline::*;
+pub(crate) use splat_campaign::timeline::*;
 use std::{
     collections::BTreeMap,
     fs,

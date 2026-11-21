@@ -551,7 +551,6 @@ fn files_at(commit: &str) -> Result<Vec<(String, String)>, String> {
         "--",
         "src",
         "crates/campaign/src",
-        "crates/core/src",
         "crates/character/src",
         "crates/content/src",
         "crates/execution/src",

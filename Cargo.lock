@@ -3844,7 +3844,10 @@ dependencies = [
  "serde_yaml_ng",
  "sha2",
  "splat-assets",
- "splat-core",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-execution",
  "syn 2.0.119",
  "tempfile",
  "tikv-jemallocator",
@@ -3901,7 +3904,9 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
- "splat-core",
+ "splat-character",
+ "splat-content",
+ "splat-execution",
 ]
 
 [[package]]
@@ -3919,17 +3924,6 @@ dependencies = [
  "splat-assets",
  "tempfile",
  "uuid",
-]
-
-[[package]]
-name = "splat-core"
-version = "0.1.0"
-dependencies = [
- "rayon",
- "splat-campaign",
- "splat-character",
- "splat-content",
- "splat-execution",
 ]
 
 [[package]]
