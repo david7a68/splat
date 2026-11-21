@@ -1,6 +1,5 @@
 //! The Sessions page: notes, templates and recordings, one campaign at a time. The
 //! recorder and the processing job live here, and keep going while the DM uses other pages.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Apply, DEFAULT_FOLDER, Draft, DraftState, Dropped, NewNote, Note, NoteUndo, Recording,
     Template, body_of, create_note, create_template, delete_recording, folder_setting,
@@ -1567,6 +1566,25 @@ fn session_detail(
 /// After Discard, a note with no file left: the editor shows its last saved words.
 const DISCARDED_GONE: &str = "This file is gone from the folder. The editor shows its last saved words. Save them as a new file to keep them.";
 
+/// A choice of the record line's warning (`record_line_body`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RecordAct {
+    PlayThisOne,
+    Start,
+    NotNow,
+}
+
+/// A choice of a recording alert in the bottom banner (`banner`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AlertAct {
+    Input,
+    Retry,
+    Record,
+    Open,
+    Stop,
+    Dismiss,
+}
+
 /// A choice of a draft's warning (`draft_warning`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DraftAct {
@@ -2066,13 +2084,24 @@ impl Sessions {
             && (self.notice_session.is_none() || self.notice_session == self.selected)
             && let Some((tone, words)) = self.notice.clone()
         {
-            // N6: the close icon on the words' first line, placed by the message part. It stays
-            // an untyped message: a body place holds no result, and `is processed` is a success
-            // (part request: a success that arrived on its own, in the bottom banner).
-            let close = design::outcome::dismiss_on_first_line(ui, |ui| {
-                design::message(ui, tone, &words);
-            });
-            if close.clicked() {
+            // N6: the close icon on the words' first line, placed by the message part (M0441).
+            // Work that finished by itself (`is processed`) is a result said where it happened,
+            // with no way back (`BodyMessage::result`); a fault keeps its tone.
+            let sentence = notice_sentence(&words);
+            let dismiss = Choice::new(MessageChoice::Dismiss(Lost::Nothing), ());
+            // In the banner's padding, as every banner message with a close icon.
+            let message = match tone {
+                Tone::Error => BodyMessage::from(
+                    FaultMessage::new(&PageFault::Failed(sentence)).choice(dismiss),
+                ),
+                Tone::Warning => BodyMessage::from(
+                    FaultMessage::new(&PageFault::Check(sentence)).choice(dismiss),
+                ),
+                Tone::Success => BodyMessage::result(sentence, [dismiss]),
+                Tone::Info => BodyMessage::from(Notice::new(sentence).choice(dismiss)),
+            };
+            let closed = message.in_padding().show(ui);
+            if closed.is_some() {
                 self.notice = None;
                 self.notice_session = None;
             }
@@ -2221,32 +2250,32 @@ impl Sessions {
                     .show(ui, |ui| {
                         if let Some(words) = &stalled {
                             let session = self.live.as_ref().map(|live| live.session);
-                            // The choices start at the message text, as every message's choices do.
-                            design::message_with_actions(ui, Tone::Error, words, |ui| {
-                                ui.horizontal_wrapped(|ui| {
-                                    if (if primary_owner == Some(usize::MAX) {
-                                        Action::primary("Record again")
-                                    } else {
-                                        Action::secondary("Record again")
-                                    })
-                                    .show(ui)
-                                    .clicked()
-                                    {
-                                        record_again = session;
-                                    }
-                                    let here = self.on_page && self.selected == session;
-                                    if !here
-                                        && Action::secondary("Open the session").show(ui).clicked()
-                                    {
-                                        open = session;
-                                    }
-                                    ui.add_space(design::L - ui.spacing().item_spacing.x);
-                                    stop = Action::secondary("Stop recording")
-                                        .name("Stop recording")
-                                        .show(ui)
-                                        .clicked();
-                                });
-                            });
+                            let here = self.on_page && self.selected == session;
+                            // The banner's one primary, when it is this alert's (M0445).
+                            let record = if primary_owner == Some(usize::MAX) {
+                                MessageChoice::Primary("Record again")
+                            } else {
+                                MessageChoice::Choice("Record again")
+                            };
+                            let fault = PageFault::Failed(notice_sentence(words));
+                            let mut message = FaultMessage::new(&fault)
+                                .choice(Choice::new(record, AlertAct::Record));
+                            if !here {
+                                message = message.choice(Choice::new(
+                                    MessageChoice::Choice("Open the session"),
+                                    AlertAct::Open,
+                                ));
+                            }
+                            message = message.choice(Choice::new(
+                                MessageChoice::Choice("Stop recording"),
+                                AlertAct::Stop,
+                            ));
+                            match BodyMessage::from(message).in_padding().show(ui) {
+                                Some(AlertAct::Record) => record_again = session,
+                                Some(AlertAct::Open) => open = session,
+                                Some(AlertAct::Stop) => stop = true,
+                                _ => {}
+                            }
                         }
                         let mut dismiss = None;
                         for (index, alert) in self.alerts.iter().enumerate() {
@@ -2270,116 +2299,78 @@ impl Sessions {
                             } else {
                                 words
                             };
-                            let retry_blocked = if audio_gone {
-                                Some("Audio removed. Restore the WAV file to process it.")
-                            } else if self.job.is_some() || self.live.is_some() {
-                                Some("Stop recording or wait for processing to finish.")
-                            } else {
-                                None
-                            };
-                            // The choices start at the message text, and wrap there too. The words keep
-                            // their hover: what the recorder itself said. Dismiss is the close icon at the
-                            // message end, as every dismiss is.
-                            let top = ui.cursor().min;
-                            let mut words_end = top.y;
                             let here = self.on_page
                                 && self.selected == Some(alert.session)
                                 && self.tab == Tab::Recordings;
                             let can_record = alert.can_record && self.live.is_none();
-                            let has_choices =
-                                missing_input || alert.retry.is_some() || can_record || !here;
-                            let message_width = ui.available_width().min(design::LIST_MEASURE);
-                            // N6: the close icon on the words' first line, placed by the message
-                            // part, as a footer's `Dismiss` is.
-                            let close = design::outcome::dismiss_on_first_line(ui, |ui| {
-                                ui.vertical(|ui| {
-                                    if !has_choices {
-                                        design::message(ui, Tone::Error, &words);
-                                        words_end = ui.min_rect().bottom();
-                                        return;
-                                    }
-                                    design::message_with_actions(ui, Tone::Error, &words, |ui| {
-                                        words_end =
-                                            ui.min_rect().top() - ui.spacing().item_spacing.y;
-                                        ui.horizontal_wrapped(|ui| {
-                                            if missing_input
-                                                && (if banner_primary {
-                                                    Action::primary("Choose an input")
-                                                } else {
-                                                    Action::secondary("Choose an input")
-                                                })
-                                                .show(ui)
-                                                .clicked()
-                                            {
-                                                self.wants_recording_input = true;
-                                            }
-                                            if let Some(path) = &alert.retry
-                                                && (if banner_primary {
-                                                    Action::primary("Continue processing")
-                                                } else {
-                                                    Action::secondary("Continue processing")
-                                                })
-                                                .blocked(retry_blocked)
-                                                .show(ui)
-                                                .clicked()
-                                            {
-                                                retry = Some((alert.session, path.clone()));
-                                            }
-                                            // One blocked control says why beside it, then `L` to the next.
-                                            let mut gap = false;
-                                            if alert.retry.is_some() && retry_blocked.is_some() {
-                                                design::blocked_reason(ui, retry_blocked);
-                                                gap = true;
-                                            }
-                                            let mut gap_before = |ui: &mut egui::Ui| {
-                                                if std::mem::take(&mut gap) {
-                                                    ui.add_space(
-                                                        design::L - ui.spacing().item_spacing.x,
-                                                    );
-                                                }
-                                            };
-                                            if can_record {
-                                                gap_before(ui);
-                                                // With no input, Choose an input is the one primary.
-                                                if (if banner_primary && !missing_input {
-                                                    Action::primary("Record again")
-                                                } else {
-                                                    Action::secondary("Record again")
-                                                })
-                                                .show(ui)
-                                                .clicked()
-                                                {
-                                                    record_again = Some(alert.session);
-                                                }
-                                            }
-                                            if !here {
-                                                gap_before(ui);
-                                                if Action::secondary("Open the session")
-                                                    .show(ui)
-                                                    .clicked()
-                                                {
-                                                    open = Some(alert.session);
-                                                }
-                                            }
-                                        });
-                                    });
-                                });
-                            });
-                            if close.clicked() {
-                                dismiss = Some(index);
-                            }
+                            // One primary at most (M0447): with no input, Choose an input; else
+                            // Continue processing; else Record again. The banner gives it to one
+                            // alert (`primary_owner`).
+                            let primary = if !banner_primary {
+                                None
+                            } else if missing_input {
+                                Some(AlertAct::Input)
+                            } else if alert.retry.is_some() {
+                                Some(AlertAct::Retry)
+                            } else if can_record {
+                                Some(AlertAct::Record)
+                            } else {
+                                None
+                            };
+                            let word = |word: &'static str, act: AlertAct| {
+                                let what = if primary == Some(act) {
+                                    MessageChoice::Primary(word)
+                                } else {
+                                    MessageChoice::Choice(word)
+                                };
+                                Choice::new(what, act)
+                            };
+                            // The words keep their hover: what the recorder itself said. The
+                            // choices start at the words; a blocked one says why under the
+                            // message; Dismiss is the close icon on the words' first line.
+                            let fault = PageFault::Failed(notice_sentence(&words));
+                            let mut message = FaultMessage::new(&fault);
                             if let Some(said) = &alert.said {
-                                let width = message_width - Density::Read.control() - design::S;
-                                let words_rect = egui::Rect::from_min_max(
-                                    top,
-                                    egui::pos2(top.x + width, words_end),
-                                );
-                                ui.interact(
-                                    words_rect,
-                                    ui.id().with(("alert_said", index)),
-                                    egui::Sense::hover(),
-                                )
-                                .on_hover_text(said);
+                                message = message.hover(said.clone());
+                            }
+                            if missing_input {
+                                message = message.choice(word("Choose an input", AlertAct::Input));
+                            }
+                            if alert.retry.is_some() {
+                                let retry = word("Continue processing", AlertAct::Retry);
+                                message = message.choice(if audio_gone {
+                                    retry.blocked(crate::sentence!(
+                                        "Audio removed. Restore the WAV file to process it."
+                                    ))
+                                } else if self.job.is_some() || self.live.is_some() {
+                                    retry.blocked(crate::sentence!(
+                                        "Stop recording or wait for processing to finish."
+                                    ))
+                                } else {
+                                    retry
+                                });
+                            }
+                            if can_record {
+                                message = message.choice(word("Record again", AlertAct::Record));
+                            }
+                            if !here {
+                                message = message.choice(word("Open the session", AlertAct::Open));
+                            }
+                            message = message.choice(Choice::new(
+                                MessageChoice::Dismiss(Lost::Nothing),
+                                AlertAct::Dismiss,
+                            ));
+                            match BodyMessage::from(message).in_padding().show(ui) {
+                                Some(AlertAct::Input) => self.wants_recording_input = true,
+                                Some(AlertAct::Retry) => {
+                                    if let Some(path) = &alert.retry {
+                                        retry = Some((alert.session, path.clone()));
+                                    }
+                                }
+                                Some(AlertAct::Record) => record_again = Some(alert.session),
+                                Some(AlertAct::Open) => open = Some(alert.session),
+                                Some(AlertAct::Dismiss) => dismiss = Some(index),
+                                Some(AlertAct::Stop) | None => {}
                             }
                         }
                         if let Some(index) = dismiss {
@@ -3998,6 +3989,10 @@ impl Sessions {
             .on_hover_text(format!("{word}{time}{detail}"));
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the record line’s warning stands where recording starts, with its choices: a typed body message (M20)"
+    )]
     fn record_line_body(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         let c = colors();
         if let Some(live) = self
@@ -4081,36 +4076,45 @@ impl Sessions {
             } else {
                 NotTonight::TONE
             };
-            // The choices start at the message text.
-            design::message_with_actions(ui, tone, &words, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    if dated.is_some()
-                        && self.selected == self.current()
-                        && Action::secondary("Play this one").show(ui).clicked()
+            // The choices start at the message text (M0453): `Start recording` is the screen's
+            // one primary unless a run is open (its `Next turn` is).
+            let sentence = notice_sentence(&words);
+            let notice = if tone == Tone::Info {
+                Notice::new(sentence)
+            } else {
+                NotTonight::notice(sentence)
+            };
+            let mut notice = notice;
+            if dated.is_some() && self.selected == self.current() {
+                notice = notice.choice(Choice::new(
+                    MessageChoice::Choice("Play this one"),
+                    RecordAct::PlayThisOne,
+                ));
+            }
+            let start = if self.run_open {
+                MessageChoice::Choice("Start recording")
+            } else {
+                MessageChoice::Primary("Start recording")
+            };
+            let pressed =
+                BodyMessage::from(notice.choice(Choice::new(start, RecordAct::Start)).choice(
+                    Choice::new(MessageChoice::Choice("Not now"), RecordAct::NotNow),
+                ))
+                .show(ui);
+            match pressed {
+                Some(RecordAct::PlayThisOne) => self.play_this_one(),
+                Some(RecordAct::Start) => {
+                    self.confirm_record = false;
+                    if let Some(session) = self.selected
+                        && let Err(error) = self.start_recording(settings, session)
                     {
-                        self.play_this_one();
+                        self.notice_session = None;
+                        self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
                     }
-                    if (if self.run_open {
-                        Action::secondary("Start recording")
-                    } else {
-                        Action::primary("Start recording")
-                    })
-                    .show(ui)
-                    .clicked()
-                    {
-                        self.confirm_record = false;
-                        if let Some(session) = self.selected
-                            && let Err(error) = self.start_recording(settings, session)
-                        {
-                            self.notice_session = None;
-                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
-                        }
-                    }
-                    if Action::secondary("Not now").show(ui).clicked() {
-                        self.confirm_record = false;
-                    }
-                });
-            });
+                }
+                Some(RecordAct::NotNow) => self.confirm_record = false,
+                None => {}
+            }
         }
     }
 
@@ -5192,9 +5196,14 @@ impl Sessions {
                 design::rule(ui);
                 if close { self.notes_open = false; return; }
                 if self.selected.is_none() {
-                    if design::message_with_actions(ui, Tone::Info, "No session yet.", |ui| {
-                        Action::primary("New session").show(ui).clicked()
-                    }) {
+                    // M0472: in place of the editor, with the panel's one primary.
+                    if BodyMessage::from(
+                        Notice::new(crate::sentence!("No session yet."))
+                            .choice(Choice::new(MessageChoice::Primary("New session"), ())),
+                    )
+                    .show(ui)
+                    .is_some()
+                    {
                         self.start_new_session();
                     }
                     return;
@@ -9021,6 +9030,10 @@ mod tests {
     /// Round 13 FT4: the plan column has wider item spacing than other callers. A message's words
     /// still start `XS` after its icon, and a wrapped Undo still lines up with the words.
     #[test]
+    #[allow(
+        deprecated,
+        reason = "the test of the old Undo message under the plan’s spacing"
+    )]
     fn message_words_and_undo_keep_their_place_whatever_the_spacing() {
         use egui_kittest::kittest::Queryable;
         let words = "Removed “Shrine of Cinders” from tonight.";

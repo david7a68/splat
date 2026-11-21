@@ -1541,11 +1541,12 @@ impl Splat {
                 .timeline
                 .add(timeline::Kind::Event, self.trackers.played);
             if let Some(added) = self.timeline.event_mut(&event) {
-                added.title = title;
+                added.title = title.clone();
             }
             self.trackers.added = Some(trackers::Added {
                 entry,
                 event,
+                title,
                 at: std::time::Instant::now(),
                 not_saved: None,
             });
@@ -1853,7 +1854,7 @@ impl Splat {
 
     fn no_campaign(&mut self, ui: &mut egui::Ui) {
         let no_campaigns = self.campaigns.all().is_empty();
-        design::page_header(ui, self.page.name(), None, |_| {});
+        design::TitleLine::new(self.page.name()).page().show(ui);
         let mut add = false;
         design::empty_state(
             ui,
@@ -1893,7 +1894,7 @@ impl Splat {
         let (_, session) = self.settings.campaign_session();
         match self.page {
             Page::Settings => {
-                design::page_header(ui, "Settings", None, |_| {});
+                design::TitleLine::new("Settings").page().show(ui);
                 let tab_changed = design::segmented(
                     ui,
                     &mut self.settings_tab,

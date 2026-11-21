@@ -726,7 +726,7 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
     a.act(Find, "search: torch rules", |d| d.type_text("Torch Rules"));
     a.click(Find, "TORCHES HISTORY 2");
-    a.click(Find, "More actions for Burn a torch: -1");
+    a.click(Find, "More actions for Burn a torch: \u{2212}1");
     a.click(Do, "Remove");
     a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
     let ledger =
