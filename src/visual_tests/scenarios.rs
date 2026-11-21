@@ -21999,7 +21999,10 @@ pub mod encounter_owned_groups {
                     .zip(&edited_head)
                     .zip(&cleared_head)
                     .all(|((refused, edited), cleared)| {
-                        group_head_still(refused, edited) && group_head_still(edited, cleared)
+                        // The head's fields (the first member is below the cause's own words
+                        // under Belongs to, which a refusal adds in their place).
+                        group_head_still(&refused[..4], &edited[..4])
+                            && group_head_still(&edited[..4], &cleared[..4])
                     }),
             format!(
                 "The head's tops, refused {refused_head:?}, edited {edited_head:?}, the refusal ended {cleared_head:?}"
@@ -24659,7 +24662,10 @@ pub mod session_plan_groups {
                     .zip(&during)
                     .zip(&after)
                     .all(|((before, during), after)| {
-                        group_head_still(before, during) && group_head_still(during, after)
+                        // The head's fields; the first member is below the cause's own words
+                        // under Belongs to, which the refusal adds in their place.
+                        group_head_still(&before[..4], &during[..4])
+                            && group_head_still(&during[..4], &after[..4])
                     }),
             format!("The head's tops before the refusal {before:?}, during it {during:?}, after it {after:?}"),
         );

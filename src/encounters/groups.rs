@@ -2878,6 +2878,8 @@ impl Encounters {
         let plan = design::save_row::head_plan(
             ui,
             &design::save_row::HeadSpec {
+                // The group's state never says changed on disk, not saved or repair.
+                words: &design::save_row::EDIT_WORDS,
                 column: members_right - left,
                 line: ui.max_rect().right() - left,
                 actions: save_width,

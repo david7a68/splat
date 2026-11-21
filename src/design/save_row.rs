@@ -646,10 +646,41 @@ impl<'a> DraftState<'a> {
     }
 }
 
+/// The state words of a draft editor that its `DraftState` can reach when it never says
+/// `changed_on_disk`, `not_saved` or `repairs` (the group editor): new, unsaved, invalid in each
+/// cause, saved and no changes.
+pub const EDIT_WORDS: [SaveWord; 8] = [
+    SaveWord::Invalid(InvalidCause::Incomplete),
+    SaveWord::Invalid(InvalidCause::Refused),
+    SaveWord::Invalid(InvalidCause::Missing),
+    SaveWord::Invalid(InvalidCause::Unreadable),
+    SaveWord::New,
+    SaveWord::Unsaved,
+    SaveWord::Saved,
+    SaveWord::NoChanges,
+];
+
+/// Every state word a save row can show.
+pub const ALL_WORDS: [SaveWord; 10] = [
+    SaveWord::Invalid(InvalidCause::Incomplete),
+    SaveWord::Invalid(InvalidCause::Refused),
+    SaveWord::Invalid(InvalidCause::Missing),
+    SaveWord::Invalid(InvalidCause::Unreadable),
+    SaveWord::New,
+    SaveWord::ChangedOnDisk,
+    SaveWord::NotSaved,
+    SaveWord::Unsaved,
+    SaveWord::Saved,
+    SaveWord::NoChanges,
+];
+
 /// Layout step 6 (`DraftHead`): what a draft editor's head is given to plan from. Widths only,
 /// never the draft's state: the plan is the same in every state the draft can reach.
 #[derive(Clone, Copy, Debug)]
 pub struct HeadSpec<'a> {
+    /// Every state word the draft can reach (`EDIT_WORDS` for a draft that is never changed on
+    /// disk, left unsaved by a failed write or repaired): the row is measured by the widest.
+    pub words: &'a [SaveWord],
     /// The room from the name field's start to its owning column's edge.
     pub column: f32,
     /// The room from the name field's start to the end of the title line.
@@ -754,25 +785,15 @@ pub struct HeadPlan {
 pub const NAME_LEAST: f32 = 160.0;
 
 /// The widest state word the save row can show, with its icon.
-fn widest_word(ui: &Ui) -> f32 {
+fn widest_word(ui: &Ui, words: &[SaveWord]) -> f32 {
     let small = super::Type::Small.font(ui);
-    [
-        SaveWord::Invalid(InvalidCause::Incomplete),
-        SaveWord::Invalid(InvalidCause::Refused),
-        SaveWord::Invalid(InvalidCause::Unreadable),
-        SaveWord::New,
-        SaveWord::ChangedOnDisk,
-        SaveWord::NotSaved,
-        SaveWord::Unsaved,
-        SaveWord::Saved,
-        SaveWord::NoChanges,
-    ]
-    .into_iter()
-    .map(|word| {
-        let status = word.status();
-        super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
-    })
-    .fold(0.0, f32::max)
+    words
+        .iter()
+        .map(|word| {
+            let status = word.status();
+            super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
+        })
+        .fold(0.0, f32::max)
 }
 
 /// How wide a draft's name field may be, given the room to its column's edge (its margins
@@ -806,8 +827,10 @@ pub fn head_plan(ui: &Ui, spec: &HeadSpec<'_>) -> HeadPlan {
     } else {
         (full, false)
     };
-    let mut room =
-        spec.row - widest_word(ui) - Action::quiet("Discard").natural_width(ui) - 2.0 * gap;
+    let mut room = spec.row
+        - widest_word(ui, spec.words)
+        - Action::quiet("Discard").natural_width(ui)
+        - 2.0 * gap;
     let (on_row, short) = spec
         .reasons
         .iter()
@@ -1147,6 +1170,7 @@ mod tests {
                             let head = head_plan(
                                 ui,
                                 &HeadSpec {
+                                    words: &EDIT_WORDS,
                                     column: width,
                                     line: width,
                                     actions: 120.0,
