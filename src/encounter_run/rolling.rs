@@ -200,7 +200,7 @@ pub(super) fn hit_chance(bonus: i64, armor: i64, mode: Mode) -> i64 {
 impl Run {
     /// A tile or a number in a participant's stat block or sheet. An action arms; a check,
     /// a save, a skill or plain dice rolls at once and shows on the actor's row.
-    pub(crate) fn roll_link(&mut self, ask: Ask) {
+    pub fn roll_link(&mut self, ask: Ask) {
         let Some(actor) = self.existing(ask.roller) else {
             return;
         };
@@ -259,7 +259,7 @@ impl Run {
     }
 
     /// Stop the armed action. Its rows' results stay until the next action or turn.
-    pub(crate) fn disarm(&mut self) {
+    pub fn disarm(&mut self) {
         self.armed = None;
         self.asking = None;
     }

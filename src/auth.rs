@@ -19,46 +19,6 @@ impl Session {
         self.cookie.clone()
     }
 
-    /// The official message broker carries the short-term token in the handshake URL.
-    /// Keep this request private and never log the URL or websocket errors.
-    pub(crate) fn stream_request(
-        &self,
-        campaign: &str,
-    ) -> Result<tungstenite::http::Request<()>, String> {
-        use base64::Engine;
-        use tungstenite::client::IntoClientRequest;
-        if campaign.parse::<u64>().ok().is_none_or(|n| n == 0)
-            || !campaign.bytes().all(|b| b.is_ascii_digit())
-        {
-            return Err("Invalid campaign ID.".into());
-        }
-        let payload = self
-            .token
-            .split('.')
-            .nth(1)
-            .ok_or("Invalid sign-in token.")?;
-        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .decode(payload)
-            .map_err(|_| "Invalid sign-in claims.")?;
-        let claims: serde_json::Value =
-            serde_json::from_slice(&bytes).map_err(|_| "Invalid sign-in claims.")?;
-        let user = claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"]
-            .as_str()
-            .ok_or("Sign-in has no account ID.")?;
-        if user.parse::<u64>().ok().is_none_or(|n| n == 0) {
-            return Err("Invalid sign-in account ID.".into());
-        }
-        let mut url = reqwest::Url::parse("wss://game-log-api-live.dndbeyond.com/v1")
-            .map_err(|_| "Invalid event endpoint.")?;
-        url.query_pairs_mut()
-            .append_pair("gameId", campaign)
-            .append_pair("userId", user)
-            .append_pair("stt", self.token.as_str());
-        url.as_str()
-            .into_client_request()
-            .map_err(|_| "Could not build the event connection.".into())
-    }
-
     pub fn needs_refresh(&self) -> bool {
         Instant::now() >= self.refresh_at
     }
@@ -70,7 +30,7 @@ impl Session {
 
     /// A session no request can use: test builds have no route to D&D Beyond. It lets a
     /// test show the signed-in state.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn for_test(refresh_in: Duration, expires_in: Duration) -> Self {
         Self {
             cookie: Zeroizing::new("test-cookie".to_owned()),
@@ -80,15 +40,6 @@ impl Session {
         }
     }
 
-    pub(crate) fn website_request(
-        &self,
-        request: reqwest::blocking::RequestBuilder,
-    ) -> Result<reqwest::blocking::RequestBuilder, String> {
-        Ok(self
-            .authorize(request)
-            .header(header::COOKIE, cookie_header(&self.cookie)?))
-    }
-
     /// Builds an authorized request without exposing the token to callers.
     pub fn authorize(
         &self,
@@ -96,6 +47,55 @@ impl Session {
     ) -> reqwest::blocking::RequestBuilder {
         request.bearer_auth(self.token.as_str())
     }
+}
+
+/// The official message broker carries the short-term token in the handshake URL.
+/// Keep this request private and never log the URL or websocket errors.
+pub fn stream_request(
+    session: &Session,
+    campaign: &str,
+) -> Result<tungstenite::http::Request<()>, String> {
+    use base64::Engine;
+    use tungstenite::client::IntoClientRequest;
+    if campaign.parse::<u64>().ok().is_none_or(|n| n == 0)
+        || !campaign.bytes().all(|b| b.is_ascii_digit())
+    {
+        return Err("Invalid campaign ID.".into());
+    }
+    let payload = session
+        .token
+        .split('.')
+        .nth(1)
+        .ok_or("Invalid sign-in token.")?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .map_err(|_| "Invalid sign-in claims.")?;
+    let claims: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|_| "Invalid sign-in claims.")?;
+    let user = claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"]
+        .as_str()
+        .ok_or("Sign-in has no account ID.")?;
+    if user.parse::<u64>().ok().is_none_or(|n| n == 0) {
+        return Err("Invalid sign-in account ID.".into());
+    }
+    let mut url = reqwest::Url::parse("wss://game-log-api-live.dndbeyond.com/v1")
+        .map_err(|_| "Invalid event endpoint.")?;
+    url.query_pairs_mut()
+        .append_pair("gameId", campaign)
+        .append_pair("userId", user)
+        .append_pair("stt", session.token.as_str());
+    url.as_str()
+        .into_client_request()
+        .map_err(|_| "Could not build the event connection.".into())
+}
+
+pub fn website_request(
+    session: &Session,
+    request: reqwest::blocking::RequestBuilder,
+) -> Result<reqwest::blocking::RequestBuilder, String> {
+    Ok(session
+        .authorize(request)
+        .header(header::COOKIE, cookie_header(&session.cookie)?))
 }
 
 #[derive(Deserialize)]
@@ -124,20 +124,20 @@ fn cookie_header(cookie: &str) -> Result<header::HeaderValue, String> {
     Ok(value)
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn connect(cookie: Zeroizing<String>) -> Result<Session, String> {
     exchange(AUTH_URL, cookie)
 }
 
 // Every D&D Beyond request needs a Session. Test builds cannot sign in, so they
 // cannot reach the network, and the UI shows its ordinary connection failure.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn connect(_: Zeroizing<String>) -> Result<Session, String> {
     Err("Could not reach D&D Beyond. Check your connection.".into())
 }
 
 /// For the `#[ignore]`d live tests only, which a person runs on purpose.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn connect_live(cookie: Zeroizing<String>) -> Result<Session, String> {
     exchange(AUTH_URL, cookie)
 }

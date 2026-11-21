@@ -1,5 +1,5 @@
 //! The layout parts prove their rules here, once. Callers do not repeat these proofs.
-use eframe::egui::{self, Rect, pos2, vec2};
+use egui::{self, Rect, pos2, vec2};
 
 use super::*;
 use crate::design::theme;
@@ -2286,7 +2286,7 @@ fn the_text_guard_keeps_a_bounded_record() {
 /// renamed keeps its field; another participant, or the same key in another run, has another.
 #[test]
 fn a_timeline_event_keys_its_fields() {
-    let event = |id: &str| -> crate::timeline::Event {
+    let event = |id: &str| -> splat_campaign::timeline::Event {
         serde_json::from_value(serde_json::json!({ "id": id, "kind": "day" })).expect("an event")
     };
     const NOTES: FieldName = crate::field_id!("test_event_notes");
@@ -2298,7 +2298,7 @@ fn a_timeline_event_keys_its_fields() {
         NOTES.of(TextKey::of(&event("a"))).id(),
         NOTES.of(TextKey::of(&event("b"))).id()
     );
-    let participant = |key: &str, name: &str| -> crate::encounter_run::Participant {
+    let participant = |key: &str, name: &str| -> splat_campaign::encounter_run::Participant {
         serde_json::from_value(serde_json::json!({
             "key": key, "npc": false, "initiative_group": null, "initiative_mode": 0,
             "name": name, "side": "enemies", "initial": {}, "temporary_hp": 0,

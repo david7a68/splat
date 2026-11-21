@@ -33,7 +33,7 @@ impl Stream {
         let (tx, rx) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         // Test builds have no route to D&D Beyond. A signed-in test has an open stream.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "test-support")) {
             let _ = tx.send(Event::Open);
             return Self { rx, cancel };
         }
@@ -41,7 +41,7 @@ impl Stream {
         let ctx = ctx.clone();
         thread::spawn(move || {
             let _run = (|| -> Result<(), ()> {
-                let request = session.stream_request(&campaign).map_err(|_| ())?;
+                let request = crate::auth::stream_request(&session, &campaign).map_err(|_| ())?;
                 let addr = ("game-log-api-live.dndbeyond.com", 443)
                     .to_socket_addrs()
                     .map_err(|_| ())?

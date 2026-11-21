@@ -3844,7 +3844,20 @@ dependencies = [
  "serde_yaml_ng",
  "sha2",
  "splat-assets",
- "splat-core",
+ "splat-campaign",
+ "splat-campaign-packages",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-encounters-ui",
+ "splat-execution",
+ "splat-library-page",
+ "splat-party",
+ "splat-party-page",
+ "splat-sessions-ui",
+ "splat-trackers",
+ "splat-world-page",
  "syn 2.0.119",
  "tempfile",
  "tikv-jemallocator",
@@ -3863,20 +3876,68 @@ dependencies = [
 ]
 
 [[package]]
+name = "splat-campaign"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-content",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-campaign-packages"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "serde_yaml_ng",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-character"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "image",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-content",
+ "splat-execution",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "splat-cli"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
- "splat-core",
+ "splat-character",
+ "splat-content",
+ "splat-execution",
 ]
 
 [[package]]
-name = "splat-core"
+name = "splat-content"
 version = "0.1.0"
 dependencies = [
- "directories",
  "image",
  "include_dir",
  "pulldown-cmark",
@@ -3886,6 +3947,222 @@ dependencies = [
  "serde_yaml_ng",
  "sha2",
  "splat-assets",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-content-ui"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "directories",
+ "eframe",
+ "egui-phosphor",
+ "egui_extras",
+ "egui_kittest",
+ "image",
+ "libc",
+ "pulldown-cmark",
+ "reqwest",
+ "rfd",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-design",
+ "splat-execution",
+ "splat-trackers",
+ "tempfile",
+ "tungstenite",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "splat-design"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "egui-phosphor",
+ "egui_extras",
+ "egui_kittest",
+ "proc-macro2",
+ "serde_json",
+ "splat-assets",
+ "splat-campaign",
+ "syn 2.0.119",
+ "tempfile",
+ "unicode-segmentation",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "splat-encounters-ui"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "image",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-execution",
+ "splat-party",
+ "splat-session-records",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-execution"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-assets",
+ "splat-content",
+ "uuid",
+]
+
+[[package]]
+name = "splat-library-page"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "rfd",
+ "serde_json",
+ "serde_yaml_ng",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-execution",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-party"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "eframe",
+ "egui_kittest",
+ "keyring",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "tempfile",
+ "tungstenite",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "splat-party-page"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "serde_yaml_ng",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-party",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "splat-session-records"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "serde",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-campaign",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-execution",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-sessions-ui"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "eframe",
+ "egui_kittest",
+ "keyring",
+ "libc",
+ "pulldown-cmark",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-encounters-ui",
+ "splat-execution",
+ "splat-session-records",
+ "tempfile",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "splat-trackers"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "egui_kittest",
+ "splat-campaign",
+ "splat-content",
+ "splat-design",
+ "uuid",
+]
+
+[[package]]
+name = "splat-world-page"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-trackers",
  "tempfile",
  "uuid",
 ]

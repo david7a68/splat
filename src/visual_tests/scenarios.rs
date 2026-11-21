@@ -5976,7 +5976,7 @@ pub mod encounter_run {
         // iter-27-R FJ4: the choice that plain `Roll NPCs` uses has a check, the others keep
         // its slot empty, so each choice's words start at one x. Read in each choice's own row
         // (M-R0.3: the shared `design::choice` paints the check and the words apart).
-        use crate::encounter_settings::Grouping;
+        use crate::encounter_settings::{Grouping, GroupingWords};
         let names = [
             Grouping::Identical,
             Grouping::Individual,

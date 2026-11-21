@@ -1,6 +1,6 @@
 //! The turn heading proves its rules here, once: R22's key release, one complete candidate
 //! inside its room that never hides the name, and one choice per change.
-use eframe::egui::{self, Rect, pos2, vec2};
+use egui::{self, Rect, pos2, vec2};
 
 use super::*;
 use crate::design::{RUN_COMPACT, RUN_LARGE, RUN_LIST_KEEPS, RUN_REGULAR, theme};

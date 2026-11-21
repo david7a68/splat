@@ -636,10 +636,10 @@ impl GroupDraft {
         if edited || edited_before {
             self.members_saved = None;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         MEMBER_COMPARISONS.with(|counts| counts.set((counts.get().0 + 1, counts.get().1)));
         *self.members_saved.get_or_insert_with(|| {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             MEMBER_COMPARISONS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
             self.setup.members == self.saved_setup.members
         })
@@ -872,7 +872,7 @@ impl GroupDraft {
     /// members in their order. So the save row's word, the words beside Save, the footer's next
     /// step and the Session plan's editor all read the one chosen fault.
     pub(super) fn check(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), Refusal> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         GROUP_CHECKS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
         // A refusal in the error tone is a change that cannot stand: nothing a group's check
         // finds outranks it (F4: it never meets unreadable data), so the first one ends the check.
@@ -1152,19 +1152,13 @@ const NONE_CAN_JOIN: &str = "No members can join.";
 /// Why a member with a D&D Beyond sheet cannot join from a group.
 const LINKED_CAUSE: &str = "it has a D&D Beyond sheet, so it joins from the roster";
 /// Why a member with no maximum HP cannot join. Its Edit button sets one.
-pub(crate) const NO_MAX_HP_CAUSE: &str =
-    "it has no maximum HP. Set it with this member’s Edit button";
+pub const NO_MAX_HP_CAUSE: &str = "it has no maximum HP. Set it with this member’s Edit button";
 
 /// One member's fault, in the one form every view uses (FA1, FC5): `<shown name> (as <base>) ·
 /// line N: <cause>.` The Encounters list, the group editor, the session plan, Save's check and
 /// Arrivals all take their words from here. `(as <base>)` is left out when the member keeps its
 /// base name or the base is not known; `line N` when the note gives the member no line.
-pub(crate) fn member_fault(
-    shown: &str,
-    base: Option<&str>,
-    line: Option<usize>,
-    cause: &str,
-) -> String {
+pub fn member_fault(shown: &str, base: Option<&str>, line: Option<usize>, cause: &str) -> String {
     let shown = shown.trim();
     let mut text = shown.to_owned();
     if let Some(base) = base
@@ -2564,7 +2558,7 @@ impl Encounters {
     /// pointer or a scroll (review of PR 299).
     fn group_refusal(&mut self) -> Option<Refusal> {
         let (snapshot, draft) = (self.snapshot.as_ref()?, self.group_draft.as_ref()?);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         GROUP_CHECKS.with(|counts| counts.set((counts.get().0 + 1, counts.get().1)));
         let fresh = self
             .group_check
@@ -3384,42 +3378,42 @@ fn choice_label(ui: &mut egui::Ui, text: &str) {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// (frames that reached `members_are_saved`, comparisons it made)
     static MEMBER_COMPARISONS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// (frames that asked for the open group's check, checks that ran in `GroupDraft::check`)
     static GROUP_CHECKS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
 /// The counts of Save's check of a group, for `CachedWork`.
-#[cfg(test)]
-pub(crate) fn group_checks() -> (usize, usize) {
+#[cfg(any(test, feature = "test-support"))]
+pub fn group_checks() -> (usize, usize) {
     GROUP_CHECKS.with(std::cell::Cell::get)
 }
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often the member loop copied a member's change map (review of PR 299).
     static CHANGE_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 /// A member's change map, copied and counted. The editor makes no such copy on a frame; a test
 /// that puts one back (its mutation proof) goes through here, so the scenario counts it.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[allow(dead_code)]
 fn counted_changes_copy(changes: &Mapping) -> Mapping {
     CHANGE_COPIES.with(|copies| copies.set(copies.get() + 1));
     changes.clone()
 }
 /// How often the member loop copied a member's change map.
-#[cfg(test)]
-pub(crate) fn change_copies() -> usize {
+#[cfg(any(test, feature = "test-support"))]
+pub fn change_copies() -> usize {
     CHANGE_COPIES.with(std::cell::Cell::get)
 }
 /// The counts of `members_are_saved`, for `CachedWork`.
-#[cfg(test)]
-pub(crate) fn member_comparisons() -> (usize, usize) {
+#[cfg(any(test, feature = "test-support"))]
+pub fn member_comparisons() -> (usize, usize) {
     MEMBER_COMPARISONS.with(std::cell::Cell::get)
 }
 
@@ -4166,26 +4160,6 @@ fn packages_repair(ui: &mut egui::Ui) -> bool {
         .clicked()
 }
 
-/// A member's fault is a typed fault: its tone from its kind (an invalid value and unreadable
-/// data are errors, R41; a missing member or one that cannot join is a warning), its words as
-/// the loader wrote them (`Unknown creature · line 13: Not in this campaign’s packages.`).
-impl design::outcome::Fault for MemberFault {
-    fn severity(&self) -> design::outcome::Severity {
-        match self.tone() {
-            Tone::Error => design::outcome::Severity::CannotRead,
-            _ => design::outcome::Severity::NeedsFixing,
-        }
-    }
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "a member fault’s words are the loader’s, with the DM’s names in them"
-    )]
-    fn cause(&self) -> design::outcome::Sentence {
-        design::outcome::Sentence::outside(self.text.as_str())
-            .unwrap_or(crate::sentence!("This member cannot join."))
-    }
-}
-
 /// The repair a member fault's choice asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MemberRepair {
@@ -4207,7 +4181,7 @@ pub(crate) enum MemberFaultView {
     clippy::disallowed_methods,
     reason = "a group row’s member faults stand in the row they are about, with their repairs"
 )]
-pub(crate) fn member_fault_row(
+pub fn member_fault_row(
     ui: &mut egui::Ui,
     fault: &MemberFault,
     view: MemberFaultView,

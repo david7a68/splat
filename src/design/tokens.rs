@@ -1,6 +1,6 @@
 //! Design tokens: colour by role, type roles, spacing, shape and density.
 //! Every raw colour and text size in the app lives in this file.
-use eframe::egui::{Color32, FontFamily, FontId, RichText, TextStyle, Ui};
+use egui::{Color32, FontFamily, FontId, RichText, TextStyle, Ui};
 
 const fn rgb(hex: u32) -> Color32 {
     Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
@@ -597,7 +597,7 @@ mod tests {
     /// What the installed style paints, not only what a token says.
     #[test]
     fn a_resting_field_edge_is_three_to_one_on_every_surface() {
-        let ctx = eframe::egui::Context::default();
+        let ctx = egui::Context::default();
         super::super::theme::install(&ctx);
         let edge = ctx.style().visuals.widgets.inactive.bg_stroke.color;
         let c = colors();

@@ -31,7 +31,7 @@
 //! cause). The setup is shared:
 //!
 //! ```
-//! use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! #[derive(Clone, PartialEq, Eq)]
 //! struct Entry { id: u32, root: String }
 //! impl Owner for Entry {
@@ -63,7 +63,7 @@
 //! A draw gets `&Results`, so it cannot record a result or issue its order:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -76,7 +76,7 @@
 //! Nor change a kept value in place (round 28, M3); the action does, with `&mut`:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -90,7 +90,7 @@
 //! store, so it cannot keep one per kind and give A's result B's order:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -105,14 +105,14 @@
 //! An order is never made by hand:
 //!
 //! ```compile_fail
-//! let order = splat::ownership::ResultOrder(7); // <- an order from a number
+//! let order = splat_design::ownership::ResultOrder(7); // <- an order from a number
 //! ```
 //!
 //! There is no way to take an entry out except its end events and its press, so a failed Undo
 //! cannot drop the change (review of PR 299):
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -125,7 +125,7 @@
 //! An Undo result is not used up by its press, and an offer has no Undo:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -136,7 +136,7 @@
 //! ```
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! struct Offer { entry: Entry }
@@ -150,7 +150,7 @@
 //! so a new end event makes every kind decide:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, OwnerChanged};
+//! # use splat_design::ownership::{DiskChanged, Ends, OwnerChanged};
 //! const ENDS: Ends = Ends {
 //!     owner_changed: OwnerChanged::Ends,
 //!     disk_changed: DiskChanged::Checked,
@@ -160,13 +160,13 @@
 use super::components::ResultOrder;
 use super::memo::Revision;
 use super::outcome::Sentence;
-use eframe::egui;
+use egui;
 use std::time::Duration;
 
 mod projection;
 mod refusal;
-#[cfg(test)]
-pub(crate) use projection::work as projection_work;
+#[cfg(any(test, feature = "test-support"))]
+pub use projection::work as projection_work;
 pub use projection::{Mismatch, Projection, Retained};
 pub use refusal::{
     AtLimit, Cause, Change, FailedAct, Fallback, File, Folder, Kind, Limit, Name, Part, Recovery,
@@ -277,6 +277,12 @@ impl<'a, T> Shown<'a, T> {
     pub(crate) fn order(&self) -> ResultOrder {
         self.order
     }
+
+    /// The order as seen by a caller's tests in another crate.
+    #[cfg(feature = "test-support")]
+    pub fn order_for_caller_test(&self) -> ResultOrder {
+        self.order
+    }
     pub fn value(&self) -> &'a T {
         self.value
     }
@@ -357,8 +363,8 @@ impl<T> Shown<'_, T> {
     }
 
     /// This entry's ticket, for a caller's tests of its press.
-    #[cfg(test)]
-    pub(crate) fn ticket_for_caller_test(&self) -> Ticket {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn ticket_for_caller_test(&self) -> Ticket {
         Ticket { order: self.order }
     }
 }
@@ -1020,14 +1026,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1), Ban::Body],
         ),
         // M20 (M-L0.6): a read fault in the reader's body, with `Try again`.
-        ("src/library.rs", "fault_notice", &[Ban::Body]),
+        ("src/library/catalogue.rs", "fault_notice", &[Ban::Body]),
         // M20 (M-L0.6): a copied package folder's warnings in the form, with its repair.
         ("src/library.rs", "package_form", &[Ban::Body]),
         // M20 (M-L0.6): a failed load where the page has no pane.
         ("src/library.rs", "show statement", &[Ban::Body]),
-        ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
+        ("src/library/catalogue.rs", "field_key", &[Ban::RowKey(1)]),
         // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
-        ("src/library.rs", "cause", &[Ban::Words]),
+        ("src/library/catalogue.rs", "cause", &[Ban::Words]),
         // M17 (M-L0.4b): a manifest write's words, which start with the file's path from disk.
         ("src/library.rs", "outcome_of", &[Ban::Words]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
@@ -1236,7 +1242,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M0126 (M-R0.9): a group row's member faults are typed messages in the row they are
         // about, with their repairs (`BodyMessage`); their words are the loader's, with the
         // DM's names in them (`Sentence::outside`).
-        ("src/encounters/groups.rs", "cause", &[Ban::Words]),
+        ("src/content_ui/src/roster.rs", "cause", &[Ban::Words]),
         ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
         (
             "src/design/outcome.rs",
@@ -1262,7 +1268,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Package T (PR 328 review): a repeated amount field's problem stands at its line.
         ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
         ("src/trackers/view.rs", "messages", &[Ban::Words]),
-        ("src/sessions/page.rs", "notice_sentence", &[Ban::Words]),
+        (
+            "src/content_ui/src/session_notes.rs",
+            "notice_sentence",
+            &[Ban::Words],
+        ),
         (
             "src/encounter_run/notice.rs",
             "live_header",
@@ -1316,8 +1326,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(2)],
         ),
         // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
-        ("src/library.rs", "repair_notice", &[Ban::Body]),
-        ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
+        ("src/library/catalogue.rs", "repair_notice", &[Ban::Body]),
+        (
+            "src/library/catalogue.rs",
+            "use_checkbox",
+            &[Ban::Extras(1)],
+        ),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
@@ -1621,8 +1635,9 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/content_workspace.rs", 1),
             ("src/design/comparison.rs", 1),
-            ("src/encounter_run/undo.rs", 2),
-            ("src/library.rs", 2),
+            ("crates/campaign/src/encounter_run/undo.rs", 2),
+            ("src/library.rs", 1),
+            ("src/library/catalogue.rs", 1),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
             ("src/trackers.rs", 1),
@@ -1665,8 +1680,8 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 6),
             ("src/sessions/plan.rs", 4),
-            ("src/timeline.rs", 2),
             ("src/timeline/page.rs", 3),
+            ("src/timeline/test_support.rs", 2),
             ("src/trackers/history.rs", 1),
             ("src/trackers/view.rs", 2),
             ("src/world.rs", 1),
@@ -2481,7 +2496,8 @@ mod tests {
     #[test]
     fn staged_calls_only_shrink() {
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
+        collect(&crate::workspace().join("crates/campaign/src"), &mut files);
         let mut faults = Vec::new();
         for (pattern, instead, allowed) in STAGED {
             for (path, text) in &files {
@@ -2513,7 +2529,7 @@ mod tests {
     #[test]
     fn legacy_footer_lines_only_shrink() {
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
         let mut found: Vec<(String, usize)> = files
             .iter()
             .map(|(path, text)| (path.clone(), suppressions::footer_line_uses(text)))
@@ -2536,7 +2552,7 @@ mod tests {
     #[test]
     fn staged_allows_only_shrink() {
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
         for (file, item, bans) in OWNED_ALLOWS {
             assert!(
                 (file.starts_with("src/design/") || file.starts_with("src/visual_tests/"))
@@ -2567,7 +2583,7 @@ mod tests {
     #[test]
     fn results_are_never_behind_interior_mutability() {
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
         let wrappers: Vec<String> = ["Cell", "RefCell", "OnceCell", "Mutex", "RwLock"]
             .into_iter()
             .flat_map(|w| {
@@ -2626,7 +2642,13 @@ mod tests {
                 collect(&path, files);
             } else if path.extension().is_some_and(|ext| ext == "rs") {
                 let text = std::fs::read_to_string(&path).expect("read source file");
-                files.push((path.to_string_lossy().replace('\\', "/"), text));
+                files.push((
+                    path.strip_prefix(crate::workspace())
+                        .expect("path in workspace")
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                    text,
+                ));
             }
         }
     }

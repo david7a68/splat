@@ -9,8 +9,8 @@
 //! so two blocks' headings sit at the same distance from their rows' tops.
 //!
 //! ```
-//! use splat::value_block::{HeadingRow, ValueBlock};
-//! fn f(ui: &mut eframe::egui::Ui) {
+//! use splat_design::value_block::{HeadingRow, ValueBlock};
+//! fn f(ui: &mut egui::Ui) {
 //!     let (block, _) = ValueBlock::new(ui, HeadingRow::new("Session folder"));
 //!     let (block, _) = block.field(|ui| ui.label("Sessions"));
 //!     let (block, _) = block.save_row(|ui| ui.label("No changes"));
@@ -21,8 +21,8 @@
 //! A save row before the field does not compile:
 //!
 //! ```compile_fail,E0599
-//! use splat::value_block::{HeadingRow, ValueBlock};
-//! fn f(ui: &mut eframe::egui::Ui) {
+//! use splat_design::value_block::{HeadingRow, ValueBlock};
+//! fn f(ui: &mut egui::Ui) {
 //!     let (block, _) = ValueBlock::new(ui, HeadingRow::new("Session folder"));
 //!     let (block, _) = block.save_row(|ui| ui.label("No changes"));
 //!     block.end();
@@ -32,8 +32,8 @@
 //! Nor a second field after the save row:
 //!
 //! ```compile_fail,E0599
-//! use splat::value_block::{HeadingRow, ValueBlock};
-//! fn f(ui: &mut eframe::egui::Ui) {
+//! use splat_design::value_block::{HeadingRow, ValueBlock};
+//! fn f(ui: &mut egui::Ui) {
 //!     let (block, _) = ValueBlock::new(ui, HeadingRow::new("Session folder"));
 //!     let (block, _) = block.field(|ui| ui.label("Sessions"));
 //!     let (block, _) = block.save_row(|ui| ui.label("No changes"));
@@ -45,7 +45,7 @@ use super::{
     Action, Density, FORM_WIDTH, Heading, Status, Type, components::spinner, components::status,
     extras::space, heading, outcome::RowMessages, tokens::S,
 };
-use eframe::egui::{self, Rect, Response, Ui};
+use egui::{self, Rect, Response, Ui};
 use std::marker::PhantomData;
 
 /// What a heading row says beside its heading, on the same line.
@@ -146,11 +146,11 @@ pub struct BlockRecord {
     pub messages: Option<Rect>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 const BLOCK_RECORDS: &str = "design_value_blocks";
 
 /// Each block drawn in the last pass, in drawing order. Only test builds keep them.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn block_records(ctx: &egui::Context) -> Vec<BlockRecord> {
     let last = ctx.cumulative_pass_nr().saturating_sub(1);
     let now = ctx.cumulative_pass_nr();
@@ -274,9 +274,9 @@ impl<'u, Stage> ValueBlock<'u, Stage> {
     }
 
     fn keep(self) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         super::components::keep_for_pass(self.ui, BLOCK_RECORDS, self.record);
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test-support")))]
         let _ = (self.ui, self.record);
     }
 }

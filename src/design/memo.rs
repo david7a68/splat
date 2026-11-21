@@ -34,7 +34,7 @@
 //! check a `compile_fail` test's error code).
 //!
 //! ```
-//! use splat::ownership::{Changed, Memo, Revised, Revision};
+//! use splat_design::ownership::{Changed, Memo, Revised, Revision};
 //! let mut draft = Revised::new(String::from("# Cinder Wolf"));
 //! let mut lines: Memo<Revision, usize> = Memo::new();
 //! assert_eq!(*lines.get_or(draft.revision(), || draft.lines().count()), 1);
@@ -51,14 +51,14 @@
 //! A frame count or an address is not a key:
 //!
 //! ```compile_fail
-//! # use splat::ownership::Memo;
+//! # use splat_design::ownership::Memo;
 //! let frame: u64 = 41;
 //! let mut lines: Memo<u64, usize> = Memo::new(); // <- keyed by a frame count
 //! lines.get_or(frame, || 1);
 //! ```
 //!
 //! ```compile_fail
-//! # use splat::ownership::{Memo, Revised, Revision};
+//! # use splat_design::ownership::{Memo, Revised, Revision};
 //! let draft = Revised::new(String::from("# Cinder Wolf"));
 //! let mut lines: Memo<(Revision, usize), usize> = Memo::new(); // <- an address in the key
 //! lines.get_or((draft.revision(), draft.as_ptr() as usize), || 1);
@@ -67,7 +67,7 @@
 //! No new key kind can be added outside this module:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{Key, Memo};
+//! # use splat_design::ownership::{Key, Memo};
 //! #[derive(Clone, Copy, PartialEq, Eq)]
 //! struct Frame(u64);
 //! impl Key for Frame {} // <- not sealed for outside kinds
@@ -76,20 +76,20 @@
 //! A revision is never made by hand:
 //!
 //! ```compile_fail
-//! # use splat::ownership::Revision;
+//! # use splat_design::ownership::Revision;
 //! let revision = Revision::default(); // <- no change made it
 //! ```
 //!
 //! A `Cell` or `RefCell` inside a `Revised`, at any depth, changes it through `&`:
 //!
 //! ```compile_fail
-//! # use splat::ownership::Revised;
+//! # use splat_design::ownership::Revised;
 //! let draft = Revised::new(std::cell::RefCell::new(String::new())); // <- not `Sync`
 //! draft.borrow_mut().push_str("# Cinder Wolf");
 //! ```
 //!
 //! ```compile_fail
-//! # use splat::ownership::Revised;
+//! # use splat_design::ownership::Revised;
 //! struct Draft { text: String, cursor: std::cell::Cell<usize> }
 //! let draft = Revised::new(Draft { text: String::new(), cursor: std::cell::Cell::new(0) }); // <-
 //! ```
@@ -97,7 +97,7 @@
 //! The twin of both: the same draft with plain fields.
 //!
 //! ```
-//! # use splat::ownership::Revised;
+//! # use splat_design::ownership::Revised;
 //! struct Draft { text: String, cursor: usize }
 //! let draft = Revised::new(Draft { text: String::new(), cursor: 0 });
 //! assert_eq!((draft.text.len(), draft.cursor), (0, 0));
@@ -107,7 +107,7 @@
 //! advance the revision on every call:
 //!
 //! ```compile_fail
-//! # use splat::ownership::Revised;
+//! # use splat_design::ownership::Revised;
 //! let mut speed = Revised::new(f64::NAN);
 //! speed.set(f64::NAN); // <- `f64` is not `Eq`
 //! ```
@@ -115,7 +115,7 @@
 //! Its twin: a value that is `Eq` uses `set`; one that is not says its change with `revise`.
 //!
 //! ```
-//! # use splat::ownership::{Changed, Revised};
+//! # use splat_design::ownership::{Changed, Revised};
 //! let mut count = Revised::new(3_u32);
 //! let before = count.revision();
 //! count.set(3);
@@ -133,13 +133,13 @@
 //! A `Revised` value changes only through `revise` or `set`. There is no bare `&mut` to it:
 //!
 //! ```compile_fail
-//! # use splat::ownership::Revised;
+//! # use splat_design::ownership::Revised;
 //! let mut draft = Revised::new(String::from("# Cinder Wolf"));
 //! draft.push_str("\nSize: Medium"); // <- a change with no new revision
 //! ```
 //!
 //! ```compile_fail
-//! # use splat::ownership::Revised;
+//! # use splat_design::ownership::Revised;
 //! let mut draft = Revised::new(String::from("# Cinder Wolf"));
 //! draft.edit().push_str("\nSize: Medium"); // <- a new revision whether or not it changed
 //! ```
@@ -147,7 +147,7 @@
 //! A change says whether it changed:
 //!
 //! ```compile_fail
-//! # use splat::ownership::Revised;
+//! # use splat_design::ownership::Revised;
 //! let mut draft = Revised::new(String::from("# Cinder Wolf"));
 //! draft.revise(|text| text.push_str("\nSize: Medium")); // <- no `Changed`
 //! ```

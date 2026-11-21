@@ -4,7 +4,7 @@
 //! its [`StatusKind`] decides both colours and the icon: a closed set, so no caller passes a
 //! free colour. Every status painter (`status`, `wrapped_status`, `rail_status_detail`,
 //! `status_link`, `inline_status_link`) takes either, as a [`Tinted`] look.
-use eframe::egui::Color32;
+use egui::Color32;
 
 use super::{Status, colors, icons};
 
@@ -12,18 +12,18 @@ use super::{Status, colors, icons};
 /// from a `Status` (one colour for both) or a [`KindStatus`] (its kind's colours).
 ///
 /// ```
-/// use splat::layout::{KindStatus, StatusKind, Tinted};
+/// use splat_design::layout::{KindStatus, StatusKind, Tinted};
 /// let _: Tinted = KindStatus::new(StatusKind::Recording, "Recording 12:03").into();
 /// ```
 ///
 /// Free colours are not a look:
 ///
 /// ```compile_fail,E0451
-/// let _ = splat::layout::Tinted {
+/// let _ = splat_design::layout::Tinted {
 ///     icon: "●",
 ///     word: "Recording",
-///     icon_color: eframe::egui::Color32::RED,
-///     word_color: eframe::egui::Color32::WHITE,
+///     icon_color: egui::Color32::RED,
+///     word_color: egui::Color32::WHITE,
 /// };
 /// ```
 #[derive(Clone, Copy, Debug)]
@@ -76,10 +76,10 @@ impl StatusKind {
 /// A status of a [`StatusKind`], with its words (`Recording 12:03`).
 ///
 /// ```compile_fail,E0061
-/// let _ = splat::layout::KindStatus::new(
-///     splat::layout::StatusKind::Recording,
+/// let _ = splat_design::layout::KindStatus::new(
+///     splat_design::layout::StatusKind::Recording,
 ///     "Recording",
-///     eframe::egui::Color32::RED,
+///     egui::Color32::RED,
 /// );
 /// ```
 #[derive(Clone, Copy, Debug)]
@@ -109,8 +109,8 @@ impl<'a> From<KindStatus<'a>> for Tinted<'a> {
 /// (a disabled parent) changes the galley's vertex colours, not its sections' formats, so this
 /// reads the first drawn glyph's vertex in each section. Glyphs follow the job's characters in
 /// order (a line break draws none). A section with no drawn glyph keeps its format's colour.
-#[cfg(test)]
-pub(crate) fn painted_section_colours(text: &eframe::egui::epaint::TextShape) -> Vec<Color32> {
+#[cfg(any(test, feature = "test-support"))]
+pub fn painted_section_colours(text: &egui::epaint::TextShape) -> Vec<Color32> {
     let job = &text.galley.job;
     let mut chars = job.sections.iter().enumerate().flat_map(|(at, section)| {
         job.text[section.byte_range.clone()]
@@ -144,7 +144,7 @@ pub(crate) fn painted_section_colours(text: &eframe::egui::epaint::TextShape) ->
 
 #[cfg(test)]
 mod tests {
-    use eframe::egui::{self, Pos2, Rect, vec2};
+    use egui::{self, Pos2, Rect, vec2};
 
     use super::*;
     use crate::design::{status, status_link, theme};

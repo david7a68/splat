@@ -3,7 +3,18 @@
 /// proofs can name the types; screens use them through `design`.
 #[doc(hidden)]
 pub use design::outcome;
-pub use splat_core::{character, content, execution, memo};
+pub use splat_character::{character, memo};
+pub use splat_execution::execution;
+
+pub mod content {
+    pub use splat_content::content::*;
+
+    pub mod definitions {
+        pub use splat_content::content::definitions::*;
+        pub use splat_execution::execution::catalogue::{CatalogueReport, verify};
+    }
+}
+
 extern crate self as splat;
 
 // The visual suite runs many app instances at once. With glibc's malloc it used
@@ -12,16 +23,23 @@ extern crate self as splat;
 #[global_allocator]
 static TEST_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-mod art;
-pub mod auth;
-mod campaign_content;
-mod campaigns;
-mod combat_sync;
+use splat_content_ui::art;
+pub mod auth {
+    #[cfg(test)]
+    pub use splat_content_ui::auth::connect_live;
+    pub use splat_content_ui::auth::{Session, connect};
+}
+use splat_campaign_packages::campaign_content;
+use splat_content_ui::campaigns;
+#[cfg(test)]
+use splat_party::combat_sync;
 mod commands;
-mod content_workspace;
-mod copy_dialog;
-mod creature_filter;
-mod credentials;
+#[cfg(test)]
+mod content_integration_tests;
+use splat_content_ui::content_workspace;
+use splat_content_ui::copy_dialog;
+use splat_sessions_ui::credentials;
+#[path = "design/app.rs"]
 mod design;
 // The layout parts are public only so that their `compile_fail` doc tests can name them.
 #[doc(hidden)]
@@ -50,49 +68,51 @@ pub mod ownership {
         Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,
     };
 }
-mod difficulty;
-mod dndbeyond;
-mod encounter_run;
-mod encounter_settings;
-mod encounters;
-mod file_batch;
-mod folder_check;
-mod frame_clock;
-mod hermetic;
-mod history;
-mod library;
+use splat_content_ui::dndbeyond;
+use splat_content_ui::hermetic;
+use splat_content_ui::history;
+use splat_design::frame_clock;
+use splat_encounters_ui::encounter_run;
+#[cfg(test)]
+use splat_encounters_ui::encounter_settings;
+use splat_encounters_ui::encounters;
+use splat_library_page::library;
 #[cfg(test)]
 mod load_bench;
-mod lookup;
-mod loot_editor;
-mod markdown_source;
-mod markdown_view;
-mod matching;
-mod npc_generator;
-mod party;
-mod party_bar;
-mod party_stream;
-mod party_sync;
-mod persistence;
-mod processing;
-mod recording;
-mod roll_table;
-mod rolls;
-mod sessions;
-mod settings;
-mod sheet_writer;
+use splat_content_ui::lookup;
 #[cfg(test)]
-mod test_support;
-mod timeline;
+use splat_content_ui::markdown_source;
+use splat_content_ui::markdown_view;
+#[cfg(test)]
+use splat_content_ui::matching;
+use splat_content_ui::persistence;
+use splat_content_ui::roll_table;
+use splat_content_ui::rolls;
+use splat_party::{party, party_bar};
+use splat_sessions_ui::processing;
+#[cfg(test)]
+use splat_sessions_ui::recording;
+use splat_sessions_ui::sessions;
+mod settings;
+#[cfg(test)]
+use splat_content_ui::sheet_writer;
+#[cfg(test)]
+use splat_content_ui::test_support;
+use splat_sessions_ui::timeline;
 mod touchpad;
+#[path = "trackers/app.rs"]
 mod trackers;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
-mod world;
+mod world {
+    pub use splat_content_ui::world::*;
+    pub use splat_world_page::page;
+}
 
 use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
+pub use splat_design::{choice, create_reasons, field_id, key, lead, sentence, word};
 
 pub fn run() -> eframe::Result {
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -149,6 +169,7 @@ struct Splat {
     campaigns: campaigns::Campaigns,
     dndbeyond: dndbeyond::DndBeyond,
     party: party::Party,
+    party_page: splat_party_page::PartyPage,
     encounters: encounters::Encounters,
     lookup: lookup::Lookup,
     /// The house rules' trackers and the ledger; Lookup shows them, and the rail counts them.
@@ -193,9 +214,10 @@ impl Default for Splat {
             campaigns: Default::default(),
             dndbeyond: Default::default(),
             party: Default::default(),
+            party_page: Default::default(),
             encounters: Default::default(),
             lookup: Default::default(),
-            trackers: Default::default(),
+            trackers: trackers::Trackers::with_ids(hermetic::new_uuid),
             sessions: Default::default(),
             timeline: Default::default(),
             timeline_page: Default::default(),
@@ -1506,7 +1528,7 @@ impl Splat {
             // When the file changed or cannot be read under an edit that waits for its pause,
             // the Timeline says so, and the day count is not known: no day act records.
             self.timeline.read_if_changed();
-            self.trackers.follow_clock(&self.timeline);
+            self.trackers.follow_clock(trackers::clock(&self.timeline));
             self.trackers.apply_pressed();
         }
     }
@@ -2171,16 +2193,21 @@ impl Splat {
             Page::World => {
                 if let Some(campaign) = &active {
                     let index = self.lookup.index();
-                    self.world_page
-                        .show(ui, index.as_ref(), campaign, &mut self.trackers);
+                    self.world_page.show(
+                        ui,
+                        index.as_ref(),
+                        campaign,
+                        &mut trackers::Reader(&mut self.trackers),
+                    );
                 } else {
                     self.no_campaign(ui);
                 }
             }
             Page::Party => {
-                self.party.run_open = self.run_fact.is_some();
+                self.party_page.run_open = self.run_fact.is_some();
                 if active.is_some() {
-                    self.party.show(
+                    self.party_page.show(
+                        &mut self.party,
                         ui,
                         session,
                         active.is_some_and(|c| c.dndbeyond_campaign_id.is_some()),
@@ -2706,14 +2733,14 @@ impl Splat {
                 self.page = Page::Encounters;
             }
         }
-        if std::mem::take(&mut self.party.wants_settings) {
+        if std::mem::take(&mut self.party_page.wants_settings) {
             self.settings_tab = SettingsTab::Account;
             self.settings.focus_sign_in();
             self.page = Page::Settings;
             self.settings_tab = SettingsTab::Account;
             self.settings.focus_sign_in();
         }
-        if std::mem::take(&mut self.party.wants_link_page) {
+        if std::mem::take(&mut self.party_page.wants_link_page) {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Link;
         }
@@ -2782,12 +2809,7 @@ impl Splat {
     }
 }
 
-/// Whether a modal is open over the app: one of its own dialogs (`app_dialog`: the copy dialog,
-/// the close confirmation), the full-window image, or any egui modal layer. The one test every
-/// global and page shortcut asks, so no key acts beneath a modal.
-pub(crate) fn modal_open(ctx: &egui::Context, app_dialog: bool) -> bool {
-    app_dialog || art::viewer_open(ctx) || ctx.memory(|memory| memory.top_modal_layer()).is_some()
-}
+use art::modal_open;
 
 impl Splat {
     /// `modal_open` for this app's own dialogs.
@@ -2912,8 +2934,13 @@ impl eframe::App for Splat {
             sessions::page::Played::Session(id) => Some(id),
             _ => None,
         };
-        self.trackers
-            .poll(self.lookup.index(), open.as_ref(), played, &self.timeline);
+        trackers::poll(
+            &mut self.trackers,
+            self.lookup.index(),
+            open.as_ref(),
+            played,
+            &self.timeline,
+        );
         self.old_session = self.sessions.current_dated().is_some();
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
@@ -3054,7 +3081,8 @@ impl eframe::App for Splat {
                 self.lookup
                     .set_written(self.sessions.written(&self.timeline));
             }
-            self.lookup.show(ctx, &mut self.trackers);
+            self.lookup
+                .show(ctx, &mut trackers::Reader(&mut self.trackers));
         }
         self.apply_tracker_act();
         self.add_tracker_act_to_timeline();

@@ -21,7 +21,7 @@
 //! Each case has a twin that compiles and differs only in the marked line. The twin:
 //!
 //! ```
-//! use splat::ownership::{Cause, Change, FailedAct, File, Kind, Name, Recovery, Refusal, Thing};
+//! use splat_design::ownership::{Cause, Change, FailedAct, File, Kind, Name, Recovery, Refusal, Thing};
 //! let fight = Name::new("Shrine of Cinders").unwrap();
 //! let session = Name::new("Session 1: The Crossing").unwrap();
 //! let refusal = Refusal::new(
@@ -39,7 +39,7 @@
 //! A refusal with no recovery:
 //!
 //! ```compile_fail
-//! use splat::ownership::{Cause, FailedAct, File, Kind, Name, Refusal, Thing};
+//! use splat_design::ownership::{Cause, FailedAct, File, Kind, Name, Refusal, Thing};
 //! let fight = Name::new("Shrine of Cinders").unwrap();
 //! let session = Name::new("Session 1: The Crossing").unwrap();
 //! let refusal = Refusal::new( // <- no recovery
@@ -52,35 +52,35 @@
 //! free text:
 //!
 //! ```compile_fail
-//! use splat::ownership::{File, Recovery};
+//! use splat_design::ownership::{File, Recovery};
 //! let next = Recovery::ByHand { file: File::SessionNote, change: "" }; // <- a change from text
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Cause;
+//! use splat_design::ownership::Cause;
 //! let cause = Cause::Changed(""); // <- a file from text
 //! ```
 //! ```compile_fail
-//! use splat::ownership::{Name, Thing};
+//! use splat_design::ownership::{Name, Thing};
 //! let thing = Thing::new("plan line", Name::new("Bell").unwrap()); // <- a kind from text
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Recovery;
+//! use splat_design::ownership::Recovery;
 //! let next: Recovery = "Try again.".into(); // <- a recovery from text
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Name;
+//! use splat_design::ownership::Name;
 //! let name: Name = String::from("").into(); // <- a name from text, unchecked
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Name;
+//! use splat_design::ownership::Name;
 //! let name = Name::fallback("this session"); // <- a fallback from text
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Refusal;
+//! use splat_design::ownership::Refusal;
 //! let refusal = Refusal::default(); // <- a refusal with nothing in it
 //! ```
 //! ```compile_fail
-//! use splat::ownership::{Cause, Change, FailedAct, File, Kind, Name, Recovery, Refusal, Thing};
+//! use splat_design::ownership::{Cause, Change, FailedAct, File, Kind, Name, Recovery, Refusal, Thing};
 //! let session = Name::new("Session 1").unwrap();
 //! let fight = Name::new("Bell").unwrap();
 //! let refusal = Refusal { // <- built by hand, around its constructor
@@ -94,7 +94,7 @@
 //! below:
 //!
 //! ```
-//! use splat::ownership::{Cause, FailedAct, Name, Recovery, Refusal, Rows, Step};
+//! use splat_design::ownership::{Cause, FailedAct, Name, Recovery, Refusal, Rows, Step};
 //! let rows = Rows::new([Name::new("Cinder Wolf").unwrap()]).unwrap();
 //! let refusal = Refusal::new(
 //!     FailedAct::NotStarted { encounter: Name::new("Shrine of Cinders").unwrap() },
@@ -108,19 +108,19 @@
 //! );
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Step;
+//! use splat_design::ownership::Step;
 //! let step: Step = "Check the note".into(); // <- a next step from text
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Rows;
+//! use splat_design::ownership::Rows;
 //! let rows = Rows::new(["Cinder Wolf"]); // <- rows from text, unchecked
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Cause;
+//! use splat_design::ownership::Cause;
 //! let cause = Cause::DependsOn("Wandering roll"); // <- a name from text
 //! ```
 //! ```compile_fail
-//! use splat::ownership::Rows;
+//! use splat_design::ownership::Rows;
 //! let rows = Rows::default(); // <- rows with no row in them
 //! ```
 //!
@@ -128,7 +128,7 @@
 //! `Refusal::at_limit` can end a refusal with no next step. The twin:
 //!
 //! ```
-//! use splat::ownership::{FailedAct, Limit, Name, Refusal};
+//! use splat_design::ownership::{FailedAct, Limit, Name, Refusal};
 //! let refusal = Refusal::at_limit(
 //!     FailedAct::NotRecorded { act: Name::new("Lose favor").unwrap() },
 //!     Limit::Min { tracker: Name::new("Crowd Favor").unwrap(), min: 0 },
@@ -139,7 +139,7 @@
 //! );
 //! ```
 //! ```compile_fail
-//! use splat::ownership::{AtLimit, Cause, FailedAct, File, Name, Recovery, Refusal};
+//! use splat_design::ownership::{AtLimit, Cause, FailedAct, File, Name, Recovery, Refusal};
 //! let refusal = Refusal::new(
 //!     FailedAct::NotRecorded { act: Name::new("Lose favor").unwrap() },
 //!     Cause::Changed(File::Trackers),
@@ -150,7 +150,7 @@
 //! A blank name is no name; the caller gives a typed fallback instead:
 //!
 //! ```
-//! use splat::ownership::{Fallback, Name};
+//! use splat_design::ownership::{Fallback, Name};
 //! assert!(Name::new("  ").is_none());
 //! let name = Name::new("").unwrap_or(Name::fallback(Fallback::ThatSession));
 //! assert_eq!(name.as_str(), "that session");

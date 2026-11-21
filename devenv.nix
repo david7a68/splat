@@ -31,7 +31,9 @@
   );
 
   scripts.dev-run.exec = "cargo run --locked";
-  scripts.check.exec = "cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings";
+  # Test targets unify test-support features from dev dependencies. Lint the normal
+  # build on its own so it also covers the live recording and credentials paths.
+  scripts.check.exec = "cargo fmt --check && cargo clippy --locked --workspace --lib --bins -- -D warnings && cargo clippy --locked --all-targets -- -D warnings";
   # Run once in the seed worktree before copying target/ to implementers.
   scripts.audit-warm.exec = "cargo test --locked --no-run && check";
   # The full merge gate: run visual scenarios once, with captures, among all tests.
