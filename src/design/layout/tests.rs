@@ -1652,7 +1652,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     // The field's suggestions open when it takes the keyboard, narrow to its words, and a press
     // fills the field.
     const CREATE_ENTRY: Word = crate::word!("Create entry");
-    const FOLDER: FieldId = crate::field_id!("test_create_folder").once(Once::Example);
+    const FOLDER: FieldId = crate::field_id!("test_create_entry_folder").once(Once::Example);
     let suggestions: Vec<String> = ["Creatures", "Creatures/Undead", "Spells"]
         .map(String::from)
         .to_vec();
