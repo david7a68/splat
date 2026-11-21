@@ -2149,23 +2149,17 @@ fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, chan
             let shown = with_changes(&chip.link, changes);
             let label = Chip::new(shown.clone(), chip.text.clone())
                 .map_or_else(|| chip.label.clone(), |shown| shown.label);
-            let button = egui::Button::new(
-                Type::Body
-                    .rich(ui, format!("{} {label}", icon(&chip.link)))
-                    .color(colors().text),
-            );
             // Ctrl+1 to Ctrl+9 arm the first nine actions.
-            let button = if place < 9 {
-                button.shortcut_text(
-                    Type::Small
-                        .rich(ui, format!("Ctrl+{}", place + 1))
-                        .color(colors().muted),
-                )
+            let key = if place < 9 {
+                format!("Ctrl+{}", place + 1)
             } else {
-                button
+                String::new()
             };
-            let response = ui.add(button);
-            design::named(ui, &response, &label);
+            let response = Action::quiet(&label)
+                .icon(icon(&chip.link))
+                .density(Density::Read)
+                .key(&key)
+                .show(ui);
             menu_choice_focus(ui, &response);
             if response.clicked() {
                 ask(

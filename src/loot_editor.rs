@@ -343,7 +343,11 @@ fn line_row(
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             design::row_menu(ui, &format!("{name} loot line {}", at + 1), |ui| {
-                if ui.button("Remove").clicked() {
+                if design::Action::quiet("Remove")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
                     remove = true;
                     ui.close();
                 }
@@ -378,8 +382,9 @@ fn table_menu(
             ui.add(egui::Label::new(Type::Small.rich(ui, NO_TABLES).color(colors().muted)).wrap());
         }
         for table in tables {
-            if ui
-                .button(format!("{} · {} · {}", table.key, table.dice, table.path))
+            if design::Action::quiet(&format!("{} · {} · {}", table.key, table.dice, table.path))
+                .density(Density::Read)
+                .show(ui)
                 .clicked()
             {
                 chosen = Some(table.key.clone());
@@ -618,6 +623,25 @@ mod tests {
             );
         crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
+        // M-U0.1 (M0401): the row menu's Remove is a design action, one `Read` control high as
+        // every row menu's actions are (a raw egui button is 26 px), and its Undo brings the
+        // line back.
+        harness
+            .get_by_label("More actions for Goblin loot line 1")
+            .click();
+        harness.run_steps(2);
+        let remove = harness.get_by_label("Remove").rect();
+        assert!(
+            (remove.height() - Density::Read.control()).abs() < 0.5,
+            "m-u0-1-loot-remove: the row menu's Remove is {} px high",
+            remove.height()
+        );
+        harness.get_by_label("Remove").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().2.as_deref(), Some("Roll gems"));
+        harness.get_by_label("Undo remove loot").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().2.as_deref(), Some("Iron; Roll gems"));
         harness.get_by_label("Goblin loot line 1").focus();
         harness.run_steps(1);
         harness.key_press(egui::Key::End);

@@ -471,6 +471,12 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 },
             )
             .menu_room(move |_| room)
+            // M-W0.6: a second status link that acts when pressed (World's unreadable count).
+            .status_press(Status {
+                icon: crate::design::icons::ERROR,
+                word: "1 note cannot be read",
+                color: colors().result.error,
+            })
             .close("Close Library")
     }
     for (width, beside, blocked) in [
@@ -483,6 +489,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         let packages = std::cell::Cell::new(false);
         let lock = std::cell::Cell::new(blocked);
         let closed = std::cell::Cell::new(false);
+        let status_pressed = std::cell::Cell::new(false);
         let left = std::cell::Cell::new(0.0);
         // The column under the link: the line's right half, as a reader beside a list.
         let room = std::cell::Cell::new(Rect::NOTHING);
@@ -495,11 +502,12 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                     rect.right_bottom(),
                 ));
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                    if header(&opened, &packages, lock.get(), room.get())
-                        .show(ui)
-                        .closed
-                    {
+                    let shown = header(&opened, &packages, lock.get(), room.get()).show(ui);
+                    if shown.closed {
                         closed.set(true);
+                    }
+                    if shown.status_pressed {
+                        status_pressed.set(true);
                     }
                 });
             })
@@ -615,6 +623,62 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         lock.set(blocked);
         draw(click(close.center()));
         assert!(closed.get(), "{width}: the close icon's press comes back");
+        let (nodes, _) = draw(Vec::new());
+        let unreadable = bounds(&nodes, "1 note cannot be read");
+        assert!(!status_pressed.get(), "{width}: no press yet");
+        draw(click(unreadable.center()));
+        assert!(
+            status_pressed.get(),
+            "{width}: the pressed status link's press comes back"
+        );
+    }
+
+    // M-W0.6: a menu action keeps its weight, its icon and its name (World's `New ▾`): the
+    // secondary one is wider than the quiet one with the same word and icon (its padding), it
+    // is named as given, and it opens its menu.
+    {
+        const NEW: Word = crate::word!("New");
+        let widths = [TitleAction::quiet(NEW), TitleAction::secondary(NEW)].map(|action| {
+            let ctx = context();
+            let opened = std::cell::Cell::new(false);
+            let draw = |events: Vec<egui::Event>| {
+                frame_with(&ctx, vec2(600.0, 300.0), events, |ui| {
+                    let _ = TitleLine::new("World")
+                        .menu(
+                            action.icon(crate::design::icons::ADD).name("New ▾"),
+                            |ui| {
+                                opened.set(true);
+                                let _ = ui.label("Note…");
+                            },
+                        )
+                        .show(ui);
+                })
+            };
+            let (nodes, _) = draw(Vec::new());
+            let new = bounds(&nodes, "New ▾");
+            draw(vec![
+                egui::Event::PointerMoved(new.center()),
+                egui::Event::PointerButton {
+                    pos: new.center(),
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+                egui::Event::PointerButton {
+                    pos: new.center(),
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]);
+            draw(Vec::new());
+            assert!(opened.get(), "the menu action named New ▾ opens its menu");
+            new.width()
+        });
+        assert!(
+            widths[1] > widths[0] + 1.0,
+            "the secondary menu action keeps its weight (its padding): {widths:?}"
+        );
     }
 
     // Issue #567: a close icon and no actions: a title wider than its line wraps clear of the
@@ -2064,6 +2128,24 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     );
     edit(&mut other, vec![ctrl_z()]);
     assert_eq!(other, "Brine", "k3-own: Ctrl+Z undoes the DM's own typing");
+    // The field edits its own text (a command takes its words out, words go in at the caret):
+    // the history stays, and Ctrl+Z goes back through the edit to what came before.
+    super::edit_in_place(&ctx, second_id, &mut other, |text| text.push_str(" sea"));
+    edit(&mut other, Vec::new());
+    edit(&mut other, vec![ctrl_z()]);
+    assert_eq!(
+        other, "Brine",
+        "k3-in-place: the field's own edit keeps its history"
+    );
+    // Another object's text came first: the edit after it does not hide it, and the history goes.
+    other = String::from("Kelp");
+    super::edit_in_place(&ctx, second_id, &mut other, |text| text.push('s'));
+    edit(&mut other, Vec::new());
+    edit(&mut other, vec![ctrl_z()]);
+    assert_eq!(
+        other, "Kelps",
+        "k3-in-place: an edit after another object's text keeps no old history"
+    );
 
     // Cost: a field with no focus hashes nothing, whatever its length.
     ctx.memory_mut(|memory| memory.surrender_focus(second_id));
