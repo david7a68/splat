@@ -2305,7 +2305,7 @@ impl<'a> Driver<'a> {
             .map(|record| record.facts.right())
             .fold(f32::MIN, f32::max);
         let holds = !records.is_empty()
-            && records.iter().all(|record| record.wrapped == !column)
+            && records.iter().all(|record| record.wrapped != column)
             && records.iter().all(|record| {
                 if column {
                     (record.column - (widest + L)).abs() <= 0.5
