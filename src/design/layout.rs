@@ -1506,6 +1506,8 @@ pub struct TitleAction<'a> {
     blocked: Option<&'a str>,
     name: Option<&'a str>,
     key: Option<KeyName>,
+    /// It opens a menu (`TitleLine::menu`): a quiet menu button, its caret after the word.
+    menu: bool,
 }
 
 impl<'a> TitleAction<'a> {
@@ -1517,6 +1519,7 @@ impl<'a> TitleAction<'a> {
             blocked: None,
             name: None,
             key: None,
+            menu: false,
         }
     }
 
@@ -1548,6 +1551,15 @@ impl<'a> TitleAction<'a> {
     pub fn key(mut self, key: KeyName) -> Self {
         self.key = Some(key);
         self
+    }
+
+    /// Its target's width on one line.
+    fn natural_width(&self, ui: &Ui) -> f32 {
+        if self.menu {
+            super::menu_button_width(ui, self.word.as_str())
+        } else {
+            self.action().natural_width(ui)
+        }
     }
 
     fn action(&self) -> Action<'a> {
@@ -1640,14 +1652,23 @@ pub struct TitleLine<'a> {
     context: Option<&'a str>,
     role: TitleType,
     actions: Vec<TitleAction<'a>>,
+    /// The menus of the menu actions (`menu`), by the action's place.
+    menus: Vec<(usize, Menu<'a>)>,
     /// A status link after the actions, and the menu it opens.
     status: Option<StatusMenu<'a>>,
+    /// Each menu's room, from its control's rect (`menu_room`).
+    menu_room: Option<Box<dyn Fn(Rect) -> Rect + 'a>>,
+    /// The page's header (`page`): a rule under the line and `L` before the page's body.
+    page: bool,
     /// A close icon at the right end of the title's line, and its accessible name.
     close: Option<&'a str>,
 }
 
+/// A menu's content: the caller draws its own choices.
+type Menu<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
+
 /// A title line's status link and the menu it opens.
-type StatusMenu<'a> = (Status<'a>, Box<dyn FnOnce(&mut Ui) + 'a>);
+type StatusMenu<'a> = (Status<'a>, Menu<'a>);
 
 /// The type of a title line's title.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1745,7 +1766,10 @@ impl<'a> TitleLine<'a> {
             context: None,
             role: TitleType::Title,
             actions: Vec::new(),
+            menus: Vec::new(),
             status: None,
+            menu_room: None,
+            page: false,
             close: None,
         }
     }
@@ -1766,11 +1790,49 @@ impl<'a> TitleLine<'a> {
         self
     }
 
+    /// An action that opens `menu` under it (`Packages`), placed and kept as an action is: a
+    /// quiet menu button, its caret after its word. A blocked one (`TitleAction::blocked`) is
+    /// disabled with its reason on hover and does not open.
+    pub fn menu(mut self, action: TitleAction<'a>, menu: impl FnOnce(&mut Ui) + 'a) -> Self {
+        self.menus.push((self.actions.len(), Box::new(menu)));
+        self.actions.push(TitleAction {
+            menu: true,
+            ..action
+        });
+        self
+    }
+
     /// A status link after the actions (`3 files need fixing`, in its tone), placed and kept as
     /// an action is, that opens `menu` under it (`menu_popup`); the menu draws its own choices.
     pub fn status(mut self, status: Status<'a>, menu: impl FnOnce(&mut Ui) + 'a) -> Self {
         self.status = Some((status, Box::new(menu)));
         self
+    }
+
+    /// The room of each menu the line opens (a menu action's, the status link's), from where
+    /// its control lands (its rect): the column of the page under it, when the title line
+    /// spans several panes. The menu keeps inside it, one lane clear of its edges, and chooses
+    /// its side there ([`MenuPopup::within`]), so it lies over no splitter or scroll bar of the
+    /// panes below. Without it, the room is the line's pane.
+    pub fn menu_room(mut self, room: impl Fn(Rect) -> Rect + 'a) -> Self {
+        self.menu_room = Some(Box::new(room));
+        self
+    }
+
+    /// The page's own header, as [`page_header`](super::page_header) draws one: the line at
+    /// least a `Scan` control high, then a rule under it and `L` before the page's body.
+    pub fn page(mut self) -> Self {
+        self.page = true;
+        self
+    }
+
+    /// A menu under `control`, in its room when the line has one (`menu_room`).
+    fn menu_under<'r>(&self, ui: &Ui, control: &'r Response) -> MenuPopup<'r> {
+        let popup = super::menu_popup(ui, control);
+        match &self.menu_room {
+            Some(room) => popup.within(room(control.rect)),
+            None => popup,
+        }
     }
 
     /// A close icon named `name` at the right end of the title's own line (a panel's title), on
@@ -1813,7 +1875,7 @@ impl<'a> TitleLine<'a> {
             widths: self
                 .actions
                 .iter()
-                .map(|action| action.action().natural_width(ui).ceil())
+                .map(|action| action.natural_width(ui).ceil())
                 .chain(
                     self.status
                         .as_ref()
@@ -1836,7 +1898,24 @@ impl<'a> TitleLine<'a> {
             |ui| match status {
                 Some((status, menu)) => {
                     let link = super::status_link(ui, status);
-                    super::menu_popup(&*ui, &link).show(menu);
+                    self.menu_under(ui, &link).show(menu);
+                    false
+                }
+                None if self.actions[at].menu => {
+                    let action = self.actions[at];
+                    let button = super::components::title_menu_button(
+                        ui,
+                        action.word.as_str(),
+                        action.blocked,
+                    );
+                    let menu = self
+                        .menus
+                        .iter()
+                        .position(|(place, _)| *place == at)
+                        .map(|found| self.menus.swap_remove(found).1);
+                    if let Some(menu) = menu.filter(|_| action.blocked.is_none()) {
+                        self.menu_under(ui, &button).show(menu);
+                    }
                     false
                 }
                 None => self.actions[at].action().show(ui).clicked(),
@@ -1868,13 +1947,20 @@ impl<'a> TitleLine<'a> {
         } else {
             0.0
         };
-        let placement = title_placement(
-            metrics.beside(),
-            metrics.lead_in,
-            &metrics.widths,
-            room - close,
-            room,
-        );
+        // Issue #567: a title with no actions that is wider than its line (less the close
+        // icon) wraps under nothing, as the `Under` form wraps it; it never paints past the
+        // line or under the close icon.
+        let placement = if metrics.widths.is_empty() && metrics.beside() > room - close {
+            TitlePlacement::Under(Vec::new())
+        } else {
+            title_placement(
+                metrics.beside(),
+                metrics.lead_in,
+                &metrics.widths,
+                room - close,
+                room,
+            )
+        };
         let closed;
         let height = Density::Read.control();
         let mut pressed = None;
@@ -1888,7 +1974,12 @@ impl<'a> TitleLine<'a> {
         });
         let rows = match placement {
             TitlePlacement::OnTitle => {
-                let line_height = height.max(font.line());
+                // A page's header line is at least a `Scan` control high, as `page_header`'s.
+                let line_height = height.max(font.line()).max(if self.page {
+                    Density::Scan.control()
+                } else {
+                    0.0
+                });
                 let (line, _) = ui.allocate_exact_size(vec2(room, line_height), Sense::hover());
                 // The line's pieces go in a child that does not allocate in `ui` again.
                 let mut ui = ui.new_child(
@@ -1969,6 +2060,10 @@ impl<'a> TitleLine<'a> {
                 rows.len()
             }
         };
+        if self.page {
+            super::rule(ui);
+            super::extras::space(ui, L);
+        }
         TitleLineResponse {
             pressed,
             closed,

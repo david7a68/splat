@@ -2009,24 +2009,13 @@ impl IdentityNoun {
 
 pub const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
 
-/// Long filenames keep the complete repair action inside its secondary border.
+/// The repair that gives a duplicate its own identity. A long filename wraps inside the shared
+/// secondary action (M0583), so the whole filename shows with the action's padding and target.
 pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
-    let label = IdentityNoun::Note.action(filename);
-    if Action::secondary(&label).natural_width(ui) <= ui.available_width() {
-        return Action::secondary(&label).show(ui).clicked();
-    }
-    let response = ui.add(
-        egui::Button::new(Type::Strong.rich(ui, &label))
-            .wrap()
-            .min_size(egui::vec2(0.0, Density::Scan.control()))
-            .fill(egui::Color32::TRANSPARENT)
-            .stroke(egui::Stroke::new(
-                design::HAIRLINE_WIDTH,
-                colors().field_border,
-            )),
-    );
-    design::named(ui, &response, &label);
-    response.clicked()
+    Action::secondary(&IdentityNoun::Note.action(filename))
+        .wraps()
+        .show(ui)
+        .clicked()
 }
 
 pub fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
@@ -5288,14 +5277,23 @@ fn add_form(
 pub const UNSAVED_NPC: &str = "Unsaved NPC";
 
 /// The one row above another view while an unsaved generated NPC is held, on World and in
-/// Lookup: `Unsaved NPC: <name> · Show`. Returns whether the DM chose `Show`.
+/// Lookup: `<name> ✎ Unsaved NPC · Show`, named `Unsaved NPC: <name>`. Returns whether the DM
+/// chose `Show`.
 pub fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
     let mut show = false;
     ui.horizontal_wrapped(|ui| {
-        ui.label(
-            Type::Body
-                .rich(ui, format!("{UNSAVED_NPC}: {name}"))
-                .color(colors().text),
+        // M0602: the held NPC has the shared draft status, as the rail shows it (the draft icon
+        // and the unsaved colour). Its name starts the line at the text edge, as an entry's
+        // name leads its state; the name reads as the row's sentence, `Unsaved NPC: <name>`.
+        let words = ui.label(Type::Body.rich(ui, name).color(colors().text));
+        design::named(ui, &words, &format!("{UNSAVED_NPC}: {name}"));
+        design::status(
+            ui,
+            design::Status {
+                icon: design::icons::DRAFT,
+                word: UNSAVED_NPC,
+                color: colors().document.unsaved,
+            },
         );
         ui.label(Type::Body.rich(ui, "·").color(colors().muted));
         show = design::link(ui, "Show").clicked();

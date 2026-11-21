@@ -131,11 +131,7 @@ scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
 scroll-area	src/markdown_view.rs	reader_table	1	Reader
-scroll-area	src/sessions/page.rs	Sessions::banner	1	Sessions
-scroll-area	src/sessions/page.rs	Sessions::list_pane	1	Sessions
 scroll-area	src/sessions/page.rs	Sessions::note_editor	1	Sessions
-scroll-area	src/sessions/page.rs	Sessions::notes_view	3	Sessions
-scroll-area	src/sessions/page.rs	Sessions::read_tab	1	Sessions
 scroll-area	src/sessions/plan.rs	Sessions::fight_block	1	Sessions
 scroll-area	src/sessions/plan.rs	plan_menu	1	Sessions
 scroll-area	src/timeline/page.rs	TimelinePage::detail	1	Timeline

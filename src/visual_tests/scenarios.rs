@@ -1206,8 +1206,8 @@ fn file_links_at_message_words(
 }
 
 /// The same for a file line still drawn by hand (`encounters::file_line` in
-/// `message_with_actions`: Campaign's flags, run setup), whose links are named only
-/// `Edit in Obsidian` and `Show file`.
+/// `message_with_actions`: Campaign's flags), whose links are named only `Edit in Obsidian` and
+/// `Show file`. Run setup's file line is the typed `FileLine` (M-P0 item 7).
 fn file_links_at_message_words_by_hand(
     d: &Driver<'_>,
     message: &str,
@@ -1759,6 +1759,21 @@ pub mod library_browse {
             "Back returns to the prior entry and its search in one click, with Alt+Left shown",
         );
         d.state("back-after-link", Sizes::Default);
+        // M0387 (round 31 reader-end-section-pitch): the reader's end sections are one group
+        // at the Read row pitch, each header right under the one before.
+        let headers = ["Source text", "Technical details", "Source and identifiers"]
+            .map(|name| d.place_of(name));
+        let pitch = crate::design::Density::Read.control();
+        d.observe(
+            "M0387-end-section-pitch",
+            headers.iter().all(Option::is_some)
+                && headers.windows(2).all(|pair| {
+                    pair[0].zip(pair[1]).is_some_and(|(above, below)| {
+                        (below.center().y - above.center().y - pitch).abs() <= 0.5
+                    })
+                }),
+            format!("The end sections {headers:?} are {pitch} px apart"),
+        );
         d.begin_task();
         d.not_measured(
             "T6.3",
@@ -2420,8 +2435,10 @@ pub mod library_navigation {
             if !d.has("Rules/Ash Exposure.md: 1 broken link") {
                 d.click("1 file needs fixing");
             }
-            // Round 26 FB1: the menu is as wide as its content and ends at the count's right
-            // edge, so its frame and its link keep `S` from every splitter and scroll bar.
+            // Round 26 FB1: the menu is as wide as its content, opens under its count (one of its
+            // edges at the count's), and its frame and its link keep `S` from every splitter
+            // and scroll bar. M-L0.10: the count follows the title now, so the menu keeps to the
+            // column under it (`TitleLine::menu_room`) rather than ending at the page's right.
             // Must stay true: the whole link label fits on one line in the menu.
             let count = d.place_of("1 file needs fixing");
             let link = d.place_of("Rules/Ash Exposure.md: 1 broken link");
@@ -2438,12 +2455,13 @@ pub mod library_navigation {
                 "iter-26-L-FB1",
                 count.zip(frame).zip(words).is_some_and(|((count, frame), words)| {
                     clear(frame)
-                        && (frame.right() - count.right()).abs() <= crate::design::S
+                        && ((frame.right() - count.right()).abs() <= crate::design::S
+                            || (frame.left() - count.left()).abs() <= crate::design::S)
                         && frame.width() <= crate::design::READER_MEASURE + 2.0 * crate::design::M
                         && words.height() <= crate::design::Type::Small.line() + 0.5
                 }),
                 format!(
-                    "The menu {frame:?} ends at the count {count:?}, its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
+                    "The menu {frame:?} opens under the count {count:?} (one edge at the count's), its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
                 ),
             );
             // M0330 (migration-32, the L0 pressure caller): the menu is as tall as its one link,
@@ -2791,19 +2809,96 @@ pub mod library_navigation {
                 "M0330-long-issues-menu",
                 control.zip(frame).is_some_and(|(control, frame)| {
                     (frame.height() - most).abs() <= 1.0
-                        && (frame.right() - control.right()).abs() <= crate::design::S
+                        && ((frame.right() - control.right()).abs() <= crate::design::S
+                            || (frame.left() - control.left()).abs() <= crate::design::S)
                 }) && crossed.is_empty()
                     && last
                         .as_ref()
                         .is_some_and(|(_, hidden, reached)| *hidden && *reached),
                 format!(
-                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), ends at the count {control:?}, reaches over no scroll bar or splitter (crossed: {crossed:?}), and its last link (name, out of view at first, then whole in view inside the frame after scrolling) comes into view: {last:?}"
+                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), opens under the count {control:?} (one edge at the count's), reaches over no scroll bar or splitter (crossed: {crossed:?}), and its last link (name, out of view at first, then whole in view inside the frame after scrolling) comes into view: {last:?}"
                 ),
             );
         }
         if d.has_containing("Broken Watch 1.md: ") {
             d.press(Key::Escape);
         }
+        // M-L0.10: the `Packages` menu follows the title, over the entry list at 960, whose
+        // twelve broken files make it scroll. Its menu keeps inside the list's content, clear
+        // of the list's scroll bar and splitter, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (frame, lanes) = d.act_at_size(size, |d| {
+                d.click("Packages");
+                let choice = d.place_of("Reload from disk");
+                let frame = choice.and_then(|choice| d.painted_frame_around(choice));
+                let lanes = d.chrome_lanes();
+                d.press(Key::Escape);
+                (frame, lanes)
+            });
+            let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+                lanes
+                    .into_iter()
+                    .filter(|lane| {
+                        lane.y_range().intersects(frame.y_range())
+                            && lane.x_range().intersects(frame.x_range())
+                    })
+                    .collect()
+            });
+            d.observe(
+                "M0327-packages-menu-clear",
+                frame.is_some() && crossed.is_empty(),
+                format!(
+                    "At {size:?} the Packages menu {frame:?} reaches over no scroll bar or splitter (crossed: {crossed:?})"
+                ),
+            );
+        }
+        // M-L0.10: a column's room is its content, `S` inside its panel. With the list's
+        // splitter dragged just past the count at 960 (where the twelve broken files make the
+        // list scroll), the count stands over the list's right edge; its menu still keeps
+        // clear of the list's scroll bar.
+        let (frame, lanes, scroll) = d.act_at_size(SMALL, |d| {
+            let edge = d.column_edge("library_entries");
+            let Some(count_rect) = d.place_of(&count) else {
+                return (None, Vec::new(), None);
+            };
+            d.drag_column_edge(edge, count_rect.right() + 6.0);
+            let dragged = d.column_edge("library_entries");
+            d.click(&count);
+            let first = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Broken Watch 1.md: "))
+                .map(|node| node.rect);
+            let frame = first.and_then(|first| d.painted_frame_around(first));
+            let lanes = d.chrome_lanes();
+            // The list's own scroll bar: a lane just left of the splitter, inside the list.
+            let scroll = lanes
+                .iter()
+                .copied()
+                .find(|lane| lane.right() < dragged - 1.0 && lane.right() > dragged - 24.0);
+            d.press(Key::Escape);
+            d.drag_column_edge(dragged, edge);
+            (frame, lanes, scroll)
+        });
+        // The lanes outside the menu that it reaches over (its own scroll bar is inside).
+        let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+            lanes
+                .iter()
+                .copied()
+                .filter(|lane| {
+                    !frame.expand(0.5).contains_rect(*lane)
+                        && lane.y_range().intersects(frame.y_range())
+                        && lane.x_range().intersects(frame.x_range())
+                })
+                .collect()
+        });
+        d.observe(
+            "M0330-menu-at-list-edge",
+            frame.is_some() && scroll.is_some() && crossed.is_empty(),
+            format!(
+                "With the count over the list's right edge, its menu {frame:?} keeps clear of the list's scroll bar {scroll:?} (crossed: {crossed:?}; lanes {lanes:?})"
+            ),
+        );
         // M0331: while a draft holds the open entry, no other entry opens from the menu: it
         // says why, and lists the files as text, not links.
         d.click_starting("Broken Watch 1 · ");
@@ -2884,12 +2979,18 @@ pub mod reader_tables {
         d.state("wide-table-in-library", Sizes::All);
         // Round 23 AE1: at 1920 the table takes the pane past the prose measure and needs no
         // sideways scroll; the prose after it keeps the measure.
-        // The pane's inner edge is the page's right edge, where `New entry` ends.
+        // The pane's inner edge is the right edge of the reader pane's room (M-L0.10: `New
+        // entry` now follows the page's title, so it no longer marks the page's right edge).
         for size in [SMALL, DEFAULT, LARGE] {
             let seen = d.at_size(size, |d| {
                 let read = d.place_of("Read")?;
-                let edge = d.place_of("New entry")?.right();
                 let row = d.place_of("Memorize Spell")?;
+                let edge = d
+                    .pane_records()
+                    .into_iter()
+                    .map(|record| record.room())
+                    .find(|room| room.x_range().contains(row.center().x))?
+                    .right();
                 let last = d.place_of("Ninth-slot")?;
                 // The prose keeps the measure: a paragraph that wraps fills it, and no more.
                 let prose = d.painted_rect_in(
@@ -14912,8 +15013,10 @@ pub mod session_notes {
         d.state("templates-own", Sizes::Default);
         d.type_into_editor("Edited in the template.\n");
         d.click("New template");
-        // Round 27 FL2, SL1: Create template follows the name field on its line, and Cancel
-        // starts the kept line below it at the field's left; typing moves neither.
+        // Round 31 SP6, AP7 (`inline-create-action-order`, N0 M0490), which replaces round 27
+        // FL2's Create beside the field: `Create template` and `Cancel` stand together on the
+        // action line under the field, Create at the field's left and Cancel after it (or under
+        // it, at the text edge, in a narrow column); typing moves neither.
         let form = |d: &Driver<'_>| {
             [
                 d.nodes()
@@ -14931,16 +15034,19 @@ pub mod session_notes {
         d.type_into("Template name", "Downtime");
         let filled = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, form));
         d.observe(
-            "iter-27-S-FL2",
+            "m32-N0-template-actions-under",
             empty == filled
                 && filled.iter().all(|[field, create, cancel]| {
                     matches!((field, create, cancel), (Some(field), Some(create), Some(cancel))
-                        if field.y_range().contains(create.center().y)
-                            && create.left() > field.right()
-                            && cancel.top() > field.bottom()
-                            && cancel.left() <= field.left() + 1.0)
+                        if create.top() > field.bottom()
+                            && (create.left() - field.left()).abs() < 1.0
+                            && (((cancel.center().y - create.center().y).abs() < 1.0
+                                && cancel.left() > create.right())
+                                || cancel.top() >= create.bottom()))
                 }),
-            format!("Create on the field's line, Cancel below at its start, same empty and filled: {filled:?}"),
+            format!(
+                "Create and Cancel together under the field, same empty and filled: {filled:?}"
+            ),
         );
         // The shared heading rule: the heading owns the `XS` below it, so the field's label
         // starts `XS` under the heading, and the form adds no space of its own there.
@@ -19643,7 +19749,7 @@ pub mod encounter_groups {
             };
             d.click("More actions for Rival Captainx");
             d.click(step);
-            let open = d.has("Maximum HP: how it changes");
+            let open = d.has_containing("Maximum HP: how it changes");
             d.type_into("Display name", "");
             d.press_ctrl(Key::Z);
             let undone = d.visible_text("Rival Captain") && !d.visible_text("Rival Captainx");
@@ -19772,7 +19878,7 @@ pub mod encounter_groups {
         d.click("Done with changes");
         d.observe(
             "F5",
-            !d.has("Maximum HP: how it changes")
+            !d.has_containing("Maximum HP: how it changes")
                 && d.in_view_containing("Changes for Ember Cultist"),
             "Done closes the form and returns to its member",
         );
@@ -19915,7 +20021,7 @@ pub mod encounter_groups {
         // beside the field takes the error colour.
         for size in [SMALL, DEFAULT] {
             let (placed, detail) = d.at_size(size, |d| {
-                let field = d.place_of("Maximum HP: how it changes");
+                let field = d.place_of(&d.name_starting("Maximum HP: how it changes"));
                 let mut faults = Vec::new();
                 let mut preview = None;
                 d.each_painted_text(|text, clip| {
@@ -20276,7 +20382,8 @@ pub mod encounter_groups {
             let menu = d
                 .place_of(&format!("More actions for {GROUP_LOST}"))
                 .expect("Lost Patrol remains in the list after removing Goblin Wave");
-            let scrolls = scroll_bar_right_of(d, menu.right());
+            // Layout PR 5a: the menu follows the row's facts; its row ends at the scroll lane.
+            let scrolls = scroll_bar_right_of(d, d.row_right_of(menu).unwrap_or(menu.right()));
             d.observe(
                 "iter-26-B-FI1",
                 scrolls == (size == SMALL),
@@ -21571,17 +21678,19 @@ pub mod encounter_owned_groups {
         d.expect("GROUPS");
         // FB2: opening Groups makes the page scroll at 960, and no row action moves.
         let actions = |d: &Driver<'_>| {
-            let menus: Vec<f32> = d
+            let menus: Vec<egui::Rect> = d
                 .nodes()
                 .into_iter()
                 .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
-                .map(|node| node.rect.right())
+                .map(|node| node.rect)
                 .collect();
+            // Layout PR 5a: the menus follow the rows' facts; their rows end at the scroll lane.
             let bar = menus
                 .iter()
-                .copied()
+                .map(|menu| d.row_right_of(*menu).unwrap_or(menu.right()))
                 .reduce(f32::max)
                 .is_some_and(|edge| scroll_bar_right_of(d, edge));
+            let menus: Vec<f32> = menus.iter().map(|menu| menu.right()).collect();
             (right_edges(d, "Resume"), menus, bar)
         };
         let closed = d.at_size(SMALL, actions);
@@ -22892,7 +23001,7 @@ pub mod run_overrides {
         );
         d.observe(
             "T13.3",
-            d.in_view("Maximum HP: how it changes"),
+            d.in_view_containing("Maximum HP: how it changes"),
             "Opening a slot's overrides brings the form into view, however low the slot is",
         );
         d.state("slot-changes-open", Sizes::All);
