@@ -10698,6 +10698,63 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             format!("An L gap separates the two choices and an M gap ends them at {size:?}"),
         );
     }
+    // M0583 (W0's pressure caller): in Lookup's narrow reader a repair action whose words do
+    // not fit wraps inside the shared action (`Action::wraps`): it grows taller, the whole
+    // filename shows, and its words sit `M` inside its border, as the one-line action's do.
+    look_up(d, "Rook Ambry");
+    const SEPARATE: &str = "Make Rook Ambry copy.md a separate note";
+    d.expect(SEPARATE);
+    // Each shown action with its own words (World's reader behind Lookup shows one too): at
+    // 960 the words wrap; at every size they sit `M` inside the border.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let pairs = d.at_size(size, |d| {
+            let actions: Vec<egui::Rect> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.role == Role::Button && node.name == SEPARATE && node.in_view())
+                .map(|node| node.rect)
+                .collect();
+            let mut words = Vec::new();
+            d.each_painted_text(|text, clip| {
+                let rect = text.visual_bounding_rect();
+                if text.galley.job.text == SEPARATE && clip.intersects(rect) {
+                    words.push((rect, text.galley.elided, text.galley.rows.len()));
+                }
+            });
+            actions
+                .iter()
+                .map(|action| {
+                    let own = words
+                        .iter()
+                        .copied()
+                        .find(|(rect, _, _)| action.contains(rect.center()));
+                    (*action, own)
+                })
+                .collect::<Vec<_>>()
+        });
+        let wrapped = pairs
+            .iter()
+            .filter(|(_, own)| own.is_some_and(|(_, _, rows)| rows > 1))
+            .count();
+        d.observe(
+            "M0583-wrapped-repair",
+            !pairs.is_empty()
+                && (size != SMALL || wrapped > 0)
+                && pairs.iter().all(|(action, own)| {
+                    own.is_some_and(|(words, elided, _)| {
+                        !elided
+                            && action.expand(0.5).contains_rect(words)
+                            && (words.left() - action.left() - design::M).abs() <= 1.0
+                    })
+                }),
+            format!(
+                "At {size:?} the repair action keeps its whole words `M` inside its border, wrapped where they do not fit (at 960 in Lookup): {pairs:?} (action, (words, cut, rows))"
+            ),
+        );
+    }
+    if d.has(SEARCH_LOOKUP) {
+        d.press_ctrl(Key::K);
+    }
     for size in [SMALL, DEFAULT, LARGE] {
         let (aligned, detail) = d.at_size(size, |d| duplicate_choices_at_text(d, 0.0));
         d.observe(
