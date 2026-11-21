@@ -1195,6 +1195,10 @@ impl CampaignContent {
         self.end_plain(PageResult::Saved);
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: the columns of the package list fill the page (`Fills::because`) (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         let scope = (self.module, self.dependencies);
         if self.notice_scope.is_some_and(|previous| previous != scope) {
@@ -1288,10 +1292,31 @@ impl CampaignContent {
             &active,
             width.min(design::LIST_MEASURE),
         );
-        let paned = footer.pane(ui, design::Body::Content, |ui| {
-            self.editor_rects.clear();
-            self.page(ui, campaigns, &active);
-            self.scroll_to_focus(ui);
+        // A page with a list or an editor that scrolls inside it above the package columns
+        // (`inner_scrolls`) keeps its own scroll in a `Fills` body, its footer pinned: egui gives
+        // a scroll's content only the visible height, so a scroll area inside it would shrink
+        // below the fold, and the page's content has all the height it needs instead.
+        let inner = self.inner_scrolls(&active);
+        let body = if inner {
+            design::Body::Fills(design::Fills::because(design::FillsReason::Columns))
+        } else {
+            design::Body::Content
+        };
+        let paned = footer.pane(ui, body, |ui| {
+            if inner {
+                let page_height = ui.available_height();
+                design::ScrollColumn::new("campaign_packages_page").show(ui, |ui| {
+                    ui.allocate_ui(egui::vec2(width, f32::INFINITY), |ui| {
+                        self.editor_rects.clear();
+                        self.page(ui, campaigns, &active, Some(page_height));
+                        self.scroll_to_focus(ui);
+                    });
+                });
+            } else {
+                self.editor_rects.clear();
+                self.page(ui, campaigns, &active, None);
+                self.scroll_to_focus(ui);
+            }
         });
         let write = matches!(
             paned.pressed,
@@ -1304,6 +1329,29 @@ impl CampaignContent {
         if write {
             self.write_campaign(campaigns, &active);
         }
+    }
+
+    /// Whether the page shows, above the package columns, a list or an editor that scrolls inside
+    /// it: a repair's editor, the changes to review, or the issue list. The pane's scroll column
+    /// refuses a scroll inside it, so until those have closed blocks (layout steps 9 and 10) such
+    /// a page keeps its own scroll in a `Fills` body, with its footer pinned (counted).
+    fn inner_scrolls(&self, active: &Campaign) -> bool {
+        if !self.repairs.is_empty() || !self.reconcile.proposals.is_empty() {
+            return true;
+        }
+        let Some(snapshot) = &self.snapshot else {
+            return false;
+        };
+        let (catalogue, document) = (&snapshot.catalogue, &snapshot.document);
+        let campaign_flags = catalogue
+            .entries
+            .get(&active.id)
+            .map(|entry| entry.entry.flags.as_slice())
+            .unwrap_or_default();
+        (!campaign_flags.is_empty()
+            || !issue_errors(catalogue, &snapshot.closure.1, campaign_flags).is_empty())
+            && !missing_package(catalogue, document)
+            && removal_of(&self.results, active.id).is_none_or(|removed| removed.users.is_empty())
     }
 
     /// Keyboard and screen-reader focus bring the focused control into view. egui scrolls to a
@@ -1340,7 +1388,16 @@ impl CampaignContent {
         clippy::disallowed_methods,
         reason = "a missing campaign folder is the page’s fault with its repair, at the top of the body"
     )]
-    fn page(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+    /// `page_height`: the page keeps its own scroll (`inner_scrolls`), and the package columns
+    /// fill the rest of its height, keeping room for a few rows when what is above them is tall.
+    fn page(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        active: &Campaign,
+        page_height: Option<f32>,
+    ) {
+        let top = ui.cursor().top();
         let active = active.clone();
         if self.snapshot.is_some() {
             self.selection_bar(ui, campaigns, &active);
@@ -1378,8 +1435,21 @@ impl CampaignContent {
             return;
         }
         self.reconcile_section(ui, campaigns, &active);
-        if self.snapshot.is_some() {
-            self.packages(ui, campaigns, &active);
+        match (&self.snapshot, page_height) {
+            (None, _) => {}
+            (Some(_), None) => self.packages(ui, campaigns, &active),
+            (Some(_), Some(page_height)) => {
+                let rows = 4.0 * (Density::Glance.row() + design::XS) + design::XXL;
+                let height = (page_height - (ui.cursor().top() - top)).max(rows);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), height),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_min_height(height);
+                        self.packages(ui, campaigns, &active);
+                    },
+                );
+            }
         }
     }
 
@@ -2528,31 +2598,9 @@ impl CampaignContent {
             .get(&active.id)
             .map(|entry| entry.entry.flags.as_slice())
             .unwrap_or_default();
-        let errors: Vec<_> = catalogue
-            .errors
-            .iter()
-            .filter(|error| {
-                !campaign_flags.iter().any(|flag| {
-                    flag.words()
-                        .map_or_else(|| error.contains(&flag.message), |w| error.contains(&w))
-                }) && !catalogue.manifest_problems.iter().any(|(id, problem)| {
-                    error.contains(problem)
-                        || catalogue
-                            .entries
-                            .get(id)
-                            .is_some_and(|entry| error.contains(&entry.entry.path))
-                })
-            })
-            .chain(&closure.errors)
-            .collect();
-        let missing_package = document.selections.iter().any(|selection| {
-            catalogue
-                .resolve_ref(&selection.package)
-                .ok()
-                .is_none_or(|id| !catalogue.modules.iter().any(|module| module.id == id))
-        });
+        let errors = issue_errors(catalogue, closure, campaign_flags);
         let issues_shown = self.repairs.is_empty()
-            && !missing_package
+            && !missing_package(catalogue, document)
             && removal_of(&self.results, active.id).is_none_or(|removed| removed.users.is_empty());
         let flag_lines = |ui: &mut egui::Ui, open_run_settings: &mut bool| {
             for (at, flag) in campaign_flags.iter().enumerate() {
@@ -3183,6 +3231,42 @@ impl CampaignContent {
             }
         });
     }
+}
+
+/// The catalogue's and the closure's errors that the issue list shows: not those that a
+/// Campaign.md flag or a package's manifest fault already says.
+fn issue_errors<'c>(
+    catalogue: &'c Catalogue,
+    closure: &'c Closure,
+    campaign_flags: &[splat::content::layout::Flag],
+) -> Vec<&'c String> {
+    catalogue
+        .errors
+        .iter()
+        .filter(|error| {
+            !campaign_flags.iter().any(|flag| {
+                flag.words()
+                    .map_or_else(|| error.contains(&flag.message), |w| error.contains(&w))
+            }) && !catalogue.manifest_problems.iter().any(|(id, problem)| {
+                error.contains(problem)
+                    || catalogue
+                        .entries
+                        .get(id)
+                        .is_some_and(|entry| error.contains(&entry.entry.path))
+            })
+        })
+        .chain(&closure.errors)
+        .collect()
+}
+
+/// Whether a chosen package is not in the catalogue.
+fn missing_package(catalogue: &Catalogue, document: &CampaignDocument) -> bool {
+    document.selections.iter().any(|selection| {
+        catalogue
+            .resolve_ref(&selection.package)
+            .ok()
+            .is_none_or(|id| !catalogue.modules.iter().any(|module| module.id == id))
+    })
 }
 
 /// Read what the Packages page shows: invalid notes to repair, and the campaign's packages.
