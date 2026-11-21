@@ -1083,7 +1083,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "edit_form",
             &[Ban::Results, Ban::Extras(1)],
         ),
-        ("src/world/page.rs", "creation_body", &[Ban::Extras(1)]),
+        // M20 (M-W0.4): the creation error in place of the page's body (was
+        // `message_with_actions`).
+        (
+            "src/world/page.rs",
+            "creation_body",
+            &[Ban::Extras(1), Ban::Body],
+        ),
         // Package K: raw egui calls that a layout part replaces.
         (
             "src/campaigns.rs",
@@ -1350,7 +1356,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        ("src/world.rs", "draw", &[Ban::Extras(4)]),
+        // M20 (M-W0.4): the index's warnings on this note, in the reader's body (were `message`).
+        ("src/world.rs", "draw", &[Ban::Extras(4), Ban::Body]),
+        // M20 (M-W0.4): an unread value's warning (was `message`).
+        ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),

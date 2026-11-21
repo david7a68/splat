@@ -4732,6 +4732,8 @@ pub struct BodyFault<A> {
     tone: Tone,
     words: Sentence,
     repairs: Vec<Repair<A>>,
+    /// The whole sentence when the words quote a value cut around `…` (`whole`).
+    whole: Option<String>,
 }
 
 impl<A> BodyFault<A> {
@@ -4740,7 +4742,16 @@ impl<A> BodyFault<A> {
             tone: fault.severity().tone(),
             words: fault_words(fault),
             repairs: Vec::new(),
+            whole: None,
         }
+    }
+
+    /// The whole sentence when the fault's words quote a value cut around `…` (World's unread
+    /// values, round 25 FD4): the words' hover and accessible description, so a screen reader
+    /// and the pointer reach the value whole.
+    pub fn whole(mut self, whole: impl Into<String>) -> Self {
+        self.whole = Some(whole.into());
+        self
     }
 
     pub fn repair(mut self, repair: Repair<A>) -> Self {
@@ -4754,13 +4765,20 @@ impl<A> BodyFault<A> {
             tone,
             words,
             repairs,
+            whole,
         } = self;
         let mut pressed = None;
         let response = ui
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
                 let text = words.as_str();
-                tone_message(ui, tone, text);
+                let message = tone_message(ui, tone, text);
+                if let Some(whole) = whole.filter(|whole| whole != text) {
+                    ui.ctx().accesskit_node_builder(message.id, |node| {
+                        node.set_description(whole.clone())
+                    });
+                    let _ = message.on_hover_text(whole);
+                }
                 for (at, repair) in repairs.iter().enumerate() {
                     let lock = holding(&repair.lock);
                     let action = message_choice_row(ui, tone, |ui| {

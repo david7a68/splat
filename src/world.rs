@@ -23,8 +23,8 @@ use crate::{
     design::{
         self, Action, Density, Tone, Type, colors,
         outcome::{
-            Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice, Outcome,
-            PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+            BodyFault, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice,
+            Outcome, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
         },
         reader as style,
     },
@@ -804,10 +804,17 @@ fn whole_value(ui: &egui::Ui, response: &egui::Response, shown: &str, whole: &st
     }
 }
 
-/// An unread-value warning, cut as `whole_value` says.
+/// An unread-value warning in the reader's body (M0582, ruling M20): its words keep the whole
+/// sentence on hover and for a screen reader (round 25 FD4), as `whole_value` does for the
+/// warning with its link.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a body fault in the reader (ruling M20)"
+)]
 fn unread_warning(ui: &mut egui::Ui, shown: &str, whole: &str) {
-    let response = design::message(ui, Tone::Warning, shown);
-    whole_value(ui, &response, shown, whole);
+    let _ = BodyFault::<()>::new(&ReaderFault::Fix(said(shown)))
+        .whole(whole)
+        .show(ui);
 }
 
 fn reference(value: &Value) -> Option<Reference> {
@@ -2813,18 +2820,22 @@ pub enum ReaderFault {
     Action(String),
     /// Typed words that wait: a Log line whose entry is gone, a draft whose note is gone.
     Waiting(String),
+    /// What the DM fixes before it counts, in the reader's body (M20): an unread value, the
+    /// index's warning on this note.
+    Fix(Sentence),
 }
 
 impl Fault for ReaderFault {
     fn severity(&self) -> Severity {
         match self {
             Self::Action(_) => Severity::NotSaved,
-            Self::Waiting(_) => Severity::NeedsFixing,
+            Self::Waiting(_) | Self::Fix(_) => Severity::NeedsFixing,
         }
     }
     fn cause(&self) -> Sentence {
         match self {
             Self::Action(words) | Self::Waiting(words) => said(words),
+            Self::Fix(words) => words.clone(),
         }
     }
 }
@@ -3474,8 +3485,9 @@ impl Reader {
         // Only a warning gets the scope: an empty one would still add an item gap.
         if !warnings.is_empty() {
             design::reader::measure(ui, |ui| {
+                // M0594 (ruling M20): the index's warning on this note, in the reader's body.
                 for warning in warnings {
-                    design::message(ui, Tone::Warning, warning);
+                    let _ = BodyFault::<()>::new(&ReaderFault::Fix(said(warning))).show(ui);
                 }
             });
         }
