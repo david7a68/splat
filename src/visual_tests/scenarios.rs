@@ -1759,6 +1759,21 @@ pub mod library_browse {
             "Back returns to the prior entry and its search in one click, with Alt+Left shown",
         );
         d.state("back-after-link", Sizes::Default);
+        // M0387 (round 31 reader-end-section-pitch): the reader's end sections are one group
+        // at the Read row pitch, each header right under the one before.
+        let headers = ["Source text", "Technical details", "Source and identifiers"]
+            .map(|name| d.place_of(name));
+        let pitch = crate::design::Density::Read.control();
+        d.observe(
+            "M0387-end-section-pitch",
+            headers.iter().all(Option::is_some)
+                && headers.windows(2).all(|pair| {
+                    pair[0].zip(pair[1]).is_some_and(|(above, below)| {
+                        (below.center().y - above.center().y - pitch).abs() <= 0.5
+                    })
+                }),
+            format!("The end sections {headers:?} are {pitch} px apart"),
+        );
         d.begin_task();
         d.not_measured(
             "T6.3",
@@ -19643,7 +19658,7 @@ pub mod encounter_groups {
             };
             d.click("More actions for Rival Captainx");
             d.click(step);
-            let open = d.has("Maximum HP: how it changes");
+            let open = d.has_containing("Maximum HP: how it changes");
             d.type_into("Display name", "");
             d.press_ctrl(Key::Z);
             let undone = d.visible_text("Rival Captain") && !d.visible_text("Rival Captainx");
@@ -19772,7 +19787,7 @@ pub mod encounter_groups {
         d.click("Done with changes");
         d.observe(
             "F5",
-            !d.has("Maximum HP: how it changes")
+            !d.has_containing("Maximum HP: how it changes")
                 && d.in_view_containing("Changes for Ember Cultist"),
             "Done closes the form and returns to its member",
         );
@@ -19915,7 +19930,7 @@ pub mod encounter_groups {
         // beside the field takes the error colour.
         for size in [SMALL, DEFAULT] {
             let (placed, detail) = d.at_size(size, |d| {
-                let field = d.place_of("Maximum HP: how it changes");
+                let field = d.place_of(&d.name_starting("Maximum HP: how it changes"));
                 let mut faults = Vec::new();
                 let mut preview = None;
                 d.each_painted_text(|text, clip| {
@@ -22892,7 +22907,7 @@ pub mod run_overrides {
         );
         d.observe(
             "T13.3",
-            d.in_view("Maximum HP: how it changes"),
+            d.in_view_containing("Maximum HP: how it changes"),
             "Opening a slot's overrides brings the form into view, however low the slot is",
         );
         d.state("slot-changes-open", Sizes::All);

@@ -41,10 +41,6 @@
     ["G3/far-action","10-plan-opened-unknown","1920x1080","Button \"Start fight: Nameless Visitor\"",1]
   ],
   "encounter-groups": [
-    ["G1a/message-moved-content","13-group-member-replaced","960x640","Button \"Filter creatures\"",1],
-    ["G1a/message-moved-content","13-group-member-replaced","960x640","Label \"ADD CREATURES\"",1],
-    ["G1a/message-moved-content","13-group-member-replaced","960x640","Label \"From this campaign and the packages it uses. Party members go on an encounter’s roster.\"",1],
-    ["G1a/message-moved-content","13-group-member-replaced","960x640","TextInput \"Find a creature or party member\"",1],
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Changes for Cinder Wolf\"",1],
     ["G1b/pressed-control-moved","03-group-member-changes","960x640","Button \"Changes for Ember Cultist\"",1],
     ["G1b/pressed-control-moved","06-group-invalid-change","960x640","Button \"Changes for Cinder Wolf\"",1],

@@ -982,11 +982,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
         ),
         (
-            "src/encounters/groups.rs",
-            "save_group_draft",
-            &[Ban::Results],
-        ),
-        (
             "src/encounters.rs",
             "creature_pane",
             &[Ban::Results, Ban::Pane(1), Ban::RowKey(1)],
@@ -1124,11 +1119,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
-        (
-            "src/encounters/groups.rs",
-            "change_row",
-            &[Ban::Layout(3), Ban::Extras(1)],
-        ),
+        ("src/encounters/groups.rs", "change_row", &[Ban::Extras(1)]),
         ("src/encounters/groups.rs", "members", &[Ban::Layout(1)]),
         (
             "src/encounters/groups.rs",
@@ -1244,6 +1235,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // DM's names in them (`Sentence::outside`).
         ("src/content_ui/src/roster.rs", "cause", &[Ban::Words]),
         ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
+        // Ruling M20 (lane E1): the group editor's faults, typed; each replaces an untyped
+        // `design::message` or `small_message`.
+        ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
+        ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
@@ -1307,12 +1302,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "group_fields",
-            &[Ban::Extras(2)],
+            &[Ban::Extras(1)],
         ),
         (
             "src/encounters/groups.rs",
             "overrides_form",
-            &[Ban::Extras(1), Ban::RowKey(2)],
+            &[Ban::RowKey(2)],
         ),
         (
             "src/encounters/groups.rs",
