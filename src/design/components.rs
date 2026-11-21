@@ -15,13 +15,6 @@ pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
     draw_menu_button(ui, word, selected, false, None, Density::Scan)
 }
 
-/// A title line's menu action (`TitleLine::menu`): [`menu_button`] at the `Read` height of the
-/// line's other actions; while `blocked`, it is disabled with the reason on hover and as its
-/// accessible description.
-pub(super) fn title_menu_button(ui: &mut Ui, word: &str, blocked: Option<&str>) -> Response {
-    draw_menu_button(ui, word, false, false, blocked, Density::Read)
-}
-
 /// A menu button whose word starts at the text edge of its own row.
 pub fn menu_button_at_line_start(ui: &mut Ui, word: &str, selected: bool) -> Response {
     draw_menu_button(ui, word, selected, true, None, Density::Scan)
@@ -1364,9 +1357,29 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
 
 /// An `icon_button` whose tooltip says more than its name, such as its keyboard command.
 pub fn icon_button_with_hint(ui: &mut Ui, icon: &str, name: &str, hint: &str) -> Response {
+    hinted_icon_button(ui, icon, name, hint, None)
+}
+
+/// A view toggle (`TitleLine::toggle`): an `icon_button_with_hint` that also tells assistive
+/// tools whether it is on, as a toggle button's pressed state, so they need not read it from the
+/// name.
+pub(crate) fn icon_toggle(ui: &mut Ui, icon: &str, name: &str, hint: &str, on: bool) -> Response {
+    hinted_icon_button(ui, icon, name, hint, Some(on))
+}
+
+fn hinted_icon_button(
+    ui: &mut Ui,
+    icon: &str,
+    name: &str,
+    hint: &str,
+    pressed: Option<bool>,
+) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::splat(Density::Read.control()), Sense::click());
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
+    response.widget_info(|| match pressed {
+        Some(on) => WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), on, name),
+        None => WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name),
+    });
     locked_control(ui, &response);
     if ui.is_rect_visible(rect) {
         let c = colors();

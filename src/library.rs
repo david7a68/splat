@@ -6485,7 +6485,7 @@ mod tests {
                 "src/campaigns.rs",
                 &[
                     ("kept_result", 0),
-                    (".blocked(", 5),
+                    (".blocked(", 4),
                     ("blocked_if(", 0),
                     ("design::locked(", 1),
                     ("undo_message(", 0),
