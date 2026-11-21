@@ -3985,8 +3985,7 @@ impl Sessions {
 
     /// A planned fight's `Edit encounter` that opened nothing: why, on the page where the DM acted.
     pub fn encounter_not_opened(&mut self, why: String) {
-        self.notice = Some((Tone::Warning, why));
-        self.notice_session = None;
+        self.say(Tone::Warning, why, None);
     }
 
     /// Lead ruling, round 26 (one pane, one footer): a plan group's removal result and its Undo
