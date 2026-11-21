@@ -327,13 +327,15 @@ impl PaneEdges {
                     extent: None,
                 }),
             );
-            add(ui, index);
+            // Its own scope: egui's side panel makes the `Ui` it gives as tall as the panel, so
+            // only what the child drew in the scope is its content.
+            let drawn = ui.scope(|ui| add(ui, index)).response.rect;
             open(ui, None);
             let hidden = ctx
                 .data(|data| data.get_temp::<(u64, f32)>(slot))
                 .filter(|(at, _)| *at == pass)
                 .map_or(0.0, |(_, hidden)| hidden);
-            whole = whole.max(ui.min_rect().bottom() - top + hidden);
+            whole = whole.max(drawn.bottom() - top + hidden);
         };
         let layout = egui::Layout::top_down(egui::Align::Min);
         let mut index = 0;

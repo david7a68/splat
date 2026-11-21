@@ -7845,6 +7845,45 @@ mod tests {
                             room.bottom()
                         );
                     }
+                    // Layout step 7: the composite is as tall as its taller column, measured by
+                    // its content, not by the room its columns were given. With 2 rows the
+                    // footer starts `S` below the last action of the taller column, and the
+                    // splitter's rule ends at that action; with 200 the left column scrolls in
+                    // the whole room and the rule ends above the footer.
+                    if shape == Shape::Composite {
+                        let last = nodes
+                            .iter()
+                            .find(|(label, _)| label == "Last action")
+                            .map(|(_, rect)| *rect)
+                            .unwrap_or_else(|| panic!("{case}: Last action shows"));
+                        let rule = harness
+                            .output()
+                            .shapes
+                            .iter()
+                            .filter_map(|shape| match &shape.shape {
+                                egui::Shape::LineSegment { points, .. }
+                                    if (points[0].x - points[1].x).abs() < 0.5
+                                        && points[0].x > room.left() + 100.0
+                                        && points[0].x < room.left() + 400.0 =>
+                                {
+                                    Some(points[0].y.max(points[1].y))
+                                }
+                                _ => None,
+                            })
+                            .reduce(f32::max);
+                        let ends = if count == 2 {
+                            (footer.top() - (last.bottom() + S)).abs() <= 1.0
+                                && rule.is_some_and(|rule| (rule - last.bottom()).abs() <= 1.0)
+                        } else {
+                            rule.is_some_and(|rule| {
+                                rule <= footer.top() - S + 1.0 && rule > last.bottom()
+                            })
+                        };
+                        assert!(
+                            ends,
+                            "{case}: the footer {footer:?} follows the taller column's Last action {last:?} by `S` (2 rows), and the splitter's rule ends at it: {rule:?}"
+                        );
+                    }
                     // The body control next to the footer takes its press.
                     let target = match shape {
                         Shape::TallColumn => Some("Tall action"),
