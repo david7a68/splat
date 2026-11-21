@@ -145,6 +145,8 @@ pub struct RowRecord {
     pub row: usize,
     pub facts: Rect,
     pub action: Rect,
+    /// Where the action column starts, as planned: `L` after the widest facts.
+    pub column: f32,
     pub wrapped: bool,
 }
 
@@ -176,8 +178,9 @@ pub fn row_records(ctx: &egui::Context) -> Vec<RowRecord> {
         .unwrap_or_default()
 }
 
+/// Keep a row's record for this pass (the ledger's rows record theirs too, layout PR 5a).
 #[cfg(any(test, feature = "test-support"))]
-fn keep(ui: &Ui, record: RowRecord) {
+pub fn keep(ui: &Ui, record: RowRecord) {
     let pass = ui.ctx().cumulative_pass_nr();
     ui.ctx().data_mut(|data| {
         let kept = data.get_temp_mut_or_default::<(u64, Vec<RowRecord>)>(Id::new(ROW_RECORDS));
@@ -235,6 +238,7 @@ pub fn action_row<R>(
             row,
             facts: Rect::from_min_size(facts_rect.min, vec2(facts_width, facts_rect.height())),
             action: drawn,
+            column: action_rect.left(),
             wrapped: columns.wrapped,
         },
     );
