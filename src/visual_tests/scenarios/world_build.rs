@@ -10685,17 +10685,25 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
                 Some(field),
             ] = names.map(|name| d.place_of(name))
             else {
-                return false;
+                return None;
             };
-            // Neighbour: each consequence stays close below its own action.
-            first.top() - action.bottom() < design::S
-                && second_action.top() - first.bottom() >= design::L - 0.5
-                && field.top() - second.bottom() >= design::M - 0.5
+            // M0178: the repairs are the shared typed form (`BodyFault`, M8's help line under each
+            // repair, as Library shows them), which owns the space between them.
+            Some((
+                first.top() - action.bottom(),
+                second_action.top() - first.bottom(),
+                field.top() - second.bottom(),
+            ))
+        });
+        // The shared part's help line sits no farther from its own repair than from the next
+        // repair (it belongs to its repair); an `M` gap still ends them.
+        let held = gaps.is_some_and(|(help, between, after)| {
+            help >= 0.0 && help <= between + 0.5 && after >= design::M - 0.5
         });
         d.observe(
             "iter-10-D-FD5",
-            gaps,
-            format!("An L gap separates the two choices and an M gap ends them at {size:?}"),
+            held,
+            format!("Each repair's help is under it, no farther from it than from the next repair, and an M gap ends them at {size:?}: (help, between, after) = {gaps:?}"),
         );
     }
     for size in [SMALL, DEFAULT, LARGE] {

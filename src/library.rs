@@ -263,7 +263,7 @@ impl Owner {
     }
 }
 
-fn name_list(names: &[String]) -> String {
+pub(crate) fn name_list(names: &[String]) -> String {
     let shown = &names[..names.len().min(3)];
     if names.len() > 3 {
         return format!("{} and {} more", shown.join(", "), names.len() - 3);
@@ -429,8 +429,6 @@ enum DiskChoice {
 const HEADING_CHANGE_UNDO: UndoStep = UndoStep::words("Undo heading change");
 /// The stat fix's result: its Undo.
 const STAT_CHANGE_UNDO: UndoStep = UndoStep::words("Undo stat change");
-/// The duplicate warning's words (World's `DUPLICATE_ENTRY`, checked).
-static DUPLICATE_ENTRY: Sentence = crate::sentence!("These two files claim to be the same entry.");
 
 /// A broken manifest's recovery choice, locked while the draft holds it. Replacing a manifest
 /// that is there says what it keeps and replaces, in its help line (M8).
@@ -462,14 +460,9 @@ fn manifest_replace_help(path: &str) -> Sentence {
 }
 
 /// What a duplicate repair choice leaves each encounter that uses the entry with, as its help
-/// line (M8): the first file's choice keeps them on the other file, the others move them.
+/// line (M8): the shared form (`world::duplicate_consequence`, M0178).
 fn duplicate_consequence(users: &[String], remaining: &str, keeps: bool) -> Sentence {
-    let names = name_list(users);
-    match (keeps, users.len()) {
-        (true, 1) => crate::sentence!("{} keeps {}.", names, remaining),
-        (true, _) => crate::sentence!("{} keep {}.", names, remaining),
-        (false, _) => crate::sentence!("{} will then use {}.", names, remaining),
-    }
+    crate::world::duplicate_consequence(crate::world::KeptBy::Encounters(users), remaining, keeps)
 }
 
 /// The duplicate warning and its repair choices: one per file, and one per folder whose files
@@ -487,7 +480,11 @@ fn duplicate_notice(
         Some(reason) => choice.blocked(reason.clone()),
         None => choice,
     };
-    let mut notice = Notice::warning(DUPLICATE_ENTRY.clone());
+    // M0178: the shared fault's words (`world::DuplicateIdentity`), as World and Encounters say
+    // them.
+    let mut notice = Notice::warning(design::outcome::Fault::cause(
+        &crate::world::DuplicateIdentity(crate::world::IdentityNoun::Entry),
+    ));
     let users: Vec<_> = loaded
         .notes
         .iter()
@@ -516,7 +513,7 @@ fn duplicate_notice(
     };
     for (position, &at) in duplicate_indices.iter().enumerate() {
         let choice = locked(Choice::named(
-            crate::choice!("Make {} a separate entry", in_folder(at)),
+            crate::world::separate_choice(crate::world::IdentityNoun::Entry, &in_folder(at)),
             LibraryPress::SeparateEntry(at),
         ));
         let remaining = duplicate_indices.iter().copied().find(|&other| other != at);
@@ -769,27 +766,6 @@ impl design::outcome::Fault for LibraryFault<'_> {
 fn page_faults(messages: &mut Messages<'_, LibraryPress>, errors: &[Option<&PageError>]) {
     for error in errors.iter().flatten() {
         messages.outcome(FaultMessage::new(&LibraryFault::from(*error)));
-    }
-}
-
-/// Shared consequence wording for the two identity-repair choices.
-pub(crate) fn duplicate_repair_consequence(
-    ui: &mut egui::Ui,
-    users: &[String],
-    remaining: &str,
-    keeps: bool,
-) {
-    if !users.is_empty() {
-        let verb = match (keeps, users.len()) {
-            (true, 1) => "keeps",
-            (true, _) => "keep",
-            (false, _) => "will then use",
-        };
-        ui.label(
-            Type::Small
-                .rich(ui, format!("{} {verb} {remaining}.", name_list(users)))
-                .color(colors().muted),
-        );
     }
 }
 
@@ -15836,7 +15812,13 @@ mod tests {
         );
         // M-L0.4b: the typed footer's checked words are the shared words of World and the
         // workspace, which other pages still draw.
-        assert_eq!(DUPLICATE_ENTRY.as_str(), crate::world::DUPLICATE_ENTRY);
+        assert_eq!(
+            design::outcome::Fault::cause(&crate::world::DuplicateIdentity(
+                crate::world::IdentityNoun::Entry
+            ))
+            .as_str(),
+            crate::world::DUPLICATE_ENTRY
+        );
         assert_eq!(
             manifest_replace_help("Package.md").as_str(),
             crate::content_workspace::manifest_replace_consequence("Package.md")

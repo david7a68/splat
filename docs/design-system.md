@@ -803,6 +803,10 @@ duplicate notes and offers file-specific identity repair with Undo.
 
 Library and creature repairs say “These two files claim to be the same entry,” with the file names.
 World note repairs use “note”, including in Encounter search, their actions and Undo.
+The duplicate repair has one form on Library, World and Encounters (`world::DuplicateIdentity`, `separate_choice`,
+`duplicate_consequence`): the warning, then one repair per file, each with what it leaves its users (the encounters
+that use the entry, or the note's existing links) as its help line under it (M8). Library says it in its footer (a
+`Notice` with its choices); World's reader and the encounter search say it in their body (`BodyFault`).
 Sessions use “session” for their repair and Undo actions. World rows say `Same note in two files`, including in Lookup. Other rows say `Same entry in two files`. World repairs say `Make <file> a separate note` and offer `Undo separate note`. Other bordered secondary repairs say `Make <file> a separate entry`. Their result
 names the file and keeps `Undo separate entry` on the message line. In the encounter and group editors, the
 creature search's repair puts its result, its Undo and a failure in the editor's footer, newest first among the
