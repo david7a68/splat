@@ -780,6 +780,22 @@ fn account_column(d: &Driver<'_>) -> Option<Vec<(String, [i32; 4])>> {
     )
 }
 
+/// Layout PR 8: how many Settings footers hold a visible control or text named `name`: a result
+/// belongs to one owner, so it stands in one footer.
+fn footers_holding(d: &Driver<'_>, name: &str) -> usize {
+    let places: Vec<egui::Rect> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.in_view() && node.name.contains(name))
+        .map(|node| node.rect)
+        .collect();
+    d.pane_records()
+        .into_iter()
+        .filter_map(|record| record.footer())
+        .filter(|footer| places.iter().any(|place| footer.contains_rect(*place)))
+        .count()
+}
+
 /// Layout PR 8: in the wide Settings tab (1000 px and wider), the footer that holds `name` is its
 /// column's own: its pane does not reach the account column (so another column's content cannot
 /// set where it stands), it stands `S` below its pane's content, and `S` below the lowest control
@@ -6902,6 +6918,9 @@ pub mod settings {
                     let campaign = settings_footer(d, DISCARDED);
                     let account = settings_footer(d, ACCOUNT_ERROR);
                     let (campaign, account) = (campaign?, account?);
+                    // Each result stands in the footer of its own owner, and in no other.
+                    let once = footers_holding(d, DISCARDED) == 1
+                        && footers_holding(d, ACCOUNT_ERROR) == 1;
                     let own = |a: &SettingsFooter, b: &SettingsFooter| {
                         (a.gap - crate::design::S).abs() <= 1.0 && a.footer != b.footer
                     };
@@ -6909,7 +6928,7 @@ pub mod settings {
                         size,
                         // Wide: two panes side by side, each with its own footer `S` under its
                         // own content. Narrow: one footer holds both.
-                        if size.0 >= 1000.0 {
+                        once && if size.0 >= 1000.0 {
                             own(&campaign, &account)
                                 && own(&account, &campaign)
                                 && campaign.viewport.right() <= account.viewport.left()
