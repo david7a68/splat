@@ -14,8 +14,9 @@ use crate::{
     design::{
         self, Action, CreateReasons, Density, Status, Tone, Type, colors, icons,
         outcome::{
-            Choice, Fault, FaultMessage, KeptOutcome, Lost, MessageChoice, Messages, Notice,
-            PaneFrame, Press, RowMessages, Said, Sentence, Severity, UndoStep, Verb,
+            BodyMessage, Choice, Fault, FaultMessage, KeptOutcome, Lost, MessageChoice, Messages,
+            Notice, PagePlaceholder, PaneFrame, Press, RowMessages, Said, Sentence, Severity,
+            UndoStep, Verb,
         },
         results::ByTicket,
     },
@@ -1511,6 +1512,17 @@ fn session_detail(
 /// After Discard, a note with no file left: the editor shows its last saved words.
 const DISCARDED_GONE: &str = "This file is gone from the folder. The editor shows its last saved words. Save them as a new file to keep them.";
 
+/// A choice of a draft's warning (`draft_warning`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DraftAct {
+    Overwrite,
+    Reload,
+    SaveAgain,
+    SaveMoved,
+    Discard,
+    Save,
+}
+
 /// A missing note's words. A known new place says why it is offered; with none, the file is
 /// only gone.
 fn missing_note_words(moved_to: Option<String>) -> String {
@@ -1978,7 +1990,9 @@ impl Sessions {
             && (self.notice_session.is_none() || self.notice_session == self.selected)
             && let Some((tone, words)) = self.notice.clone()
         {
-            // N6: the close icon on the words' first line, placed by the message part.
+            // N6: the close icon on the words' first line, placed by the message part. It stays
+            // an untyped message: a body place holds no result, and `is processed` is a success
+            // (part request: a success that arrived on its own, in the bottom banner).
             let close = design::outcome::dismiss_on_first_line(ui, |ui| {
                 design::message(ui, tone, &words);
             });
@@ -1995,15 +2009,17 @@ impl Sessions {
         {
             for copy in &note.also {
                 let filename = copy.file_name().unwrap_or_default().to_string_lossy();
-                if design::message_with_action(
-                    ui,
-                    Tone::Warning,
-                    &format!(
-                        "{} and {filename} claim to be the same session.",
-                        note.path.file_name().unwrap_or_default().to_string_lossy()
-                    ),
-                    &format!("Make {filename} a separate session"),
-                ) {
+                let fault = PageFault::Check(notice_sentence(&format!(
+                    "{} and {filename} claim to be the same session.",
+                    note.path.file_name().unwrap_or_default().to_string_lossy()
+                )));
+                if BodyMessage::from(FaultMessage::new(&fault).choice(Choice::named(
+                    crate::choice!("Make {} a separate session", filename),
+                    (),
+                )))
+                .show(ui)
+                .is_some()
+                {
                     match super::new_identity(copy) {
                         Ok(undo) => {
                             self.separate.record(kept::Separate {
@@ -2020,14 +2036,11 @@ impl Sessions {
             }
         }
         if notes && !self.unreadable.is_empty() {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!(
-                    "Splat cannot read the properties of {}, so it is not listed. The file is safe. Repair it to bring it back.",
-                    self.unreadable.join(", ")
-                ),
-            );
+            let fault = PageFault::Check(notice_sentence(&format!(
+                "Splat cannot read the properties of {}, so it is not listed. The file is safe. Repair it to bring it back.",
+                self.unreadable.join(", ")
+            )));
+            let _ = BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
         }
         // Round 30 `note-conflict-cross-page-banner` (SM2): the session note's warning and its
         // choices stand on every page, not only where the note is in view, so the DM can choose
@@ -4133,96 +4146,82 @@ impl Sessions {
     /// A draft's warning and its choices. `name` names a session note (`note_name`); a
     /// template's warning says `This note`.
     fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft, name: Option<&str>) {
+        let words = |text: &str| notice_sentence(&owned_words(name, text));
         // A new file could not be made: why, above the choices that are still open.
         if draft.state == DraftState::Missing
             && let Some(error) = &draft.save_again_error
         {
-            design::message(ui, Tone::Error, &owned_words(name, error));
+            let fault = PageFault::Failed(words(error));
+            let _ = BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
         }
-        // Every choice below starts at its message's text. The red choice keeps an `L` gap.
-        match draft.state.clone() {
+        // Every choice starts at its message's text; a red one keeps `L` before it (the part's).
+        let choice = |word, act| Choice::new(MessageChoice::Choice(word), act);
+        let lose = |word, act| Choice::new(MessageChoice::Lose(word), act);
+        let pressed = match draft.state.clone() {
             DraftState::Conflict => {
-                let words = owned_words(
-                    name,
+                let fault = PageFault::Check(words(
                     "This note changed on disk. Your draft is safe until you choose. Other sessions open after that.",
-                );
-                design::message_with_actions(ui, Tone::Warning, &words, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        if Action::secondary("Overwrite with my draft")
-                            .show(ui)
-                            .clicked()
-                        {
-                            draft.overwrite();
-                        }
-                        ui.add_space(design::L - ui.spacing().item_spacing.x);
-                        if Action::destructive("Reload and lose my draft")
-                            .show(ui)
-                            .clicked()
-                            && draft.reload_keeping_undo().is_err()
-                        {
-                            draft.state = DraftState::Missing;
-                        }
-                    });
-                });
+                ));
+                BodyMessage::from(
+                    FaultMessage::new(&fault)
+                        .choice(choice("Overwrite with my draft", DraftAct::Overwrite))
+                        .choice(lose("Reload and lose my draft", DraftAct::Reload)),
+                )
+                .show(ui)
             }
             // After Discard with no file left, the editor holds the last saved words, not a
             // draft: the one way on is a new file.
             DraftState::Missing if matches!(draft.dropped, Some(Dropped::Discarded(_))) => {
-                let words = owned_words(name, DISCARDED_GONE);
-                let save = design::message_with_actions(ui, Tone::Warning, &words, |ui| {
-                    Action::secondary("Save these words as a new file")
-                        .show(ui)
-                        .clicked()
-                });
-                if save {
-                    draft.save_again();
-                }
+                let fault = PageFault::Check(words(DISCARDED_GONE));
+                BodyMessage::from(FaultMessage::new(&fault).choice(choice(
+                    "Save these words as a new file",
+                    DraftAct::SaveAgain,
+                )))
+                .show(ui)
             }
             DraftState::Missing => {
-                let words = missing_note_words(draft.moved_to.as_ref().map(|path| {
+                let moved = draft.moved_to.as_ref().map(|path| {
                     path.strip_prefix(&draft.search_folder)
                         .unwrap_or(path)
                         .display()
                         .to_string()
-                }));
-                let words = owned_words(name, &words);
-                design::message_with_actions(ui, Tone::Warning, &words, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.y = design::M;
-                        if let Some(path) = &draft.moved_to {
-                            let label = format!(
-                                "Save my draft to {}",
-                                path.strip_prefix(&draft.search_folder)
-                                    .unwrap_or(path)
-                                    .display()
-                            );
-                            if Action::secondary(&label).show(ui).clicked() {
-                                draft.save_moved();
-                            }
-                        }
-                        if Action::secondary("Save my draft as a new file")
-                            .show(ui)
-                            .clicked()
-                        {
-                            draft.save_again();
-                        }
-                        ui.add_space(design::L - ui.spacing().item_spacing.x);
-                        if Action::destructive("Discard").show(ui).clicked() {
-                            draft.discard();
-                        }
-                    });
                 });
+                let fault = PageFault::Check(words(&missing_note_words(moved.clone())));
+                let mut message = FaultMessage::new(&fault);
+                if let Some(moved) = &moved {
+                    message = message.choice(Choice::named(
+                        crate::choice!("Save my draft to {}", moved),
+                        DraftAct::SaveMoved,
+                    ));
+                }
+                BodyMessage::from(
+                    message
+                        .choice(choice("Save my draft as a new file", DraftAct::SaveAgain))
+                        .choice(lose("Discard", DraftAct::Discard)),
+                )
+                .show(ui)
             }
             DraftState::Failed(error) => {
-                let words = owned_words(name, &error);
-                let again = design::message_with_actions(ui, Tone::Error, &words, |ui| {
-                    Action::secondary("Try to save again").show(ui).clicked()
-                });
-                if again {
-                    draft.save();
+                let fault = PageFault::Failed(words(&error));
+                BodyMessage::from(
+                    FaultMessage::new(&fault).choice(choice("Try to save again", DraftAct::Save)),
+                )
+                .show(ui)
+            }
+            _ => None,
+        };
+        match pressed {
+            Some(DraftAct::Overwrite) => draft.overwrite(),
+            Some(DraftAct::Reload) => {
+                if draft.reload_keeping_undo().is_err() {
+                    draft.state = DraftState::Missing;
                 }
             }
-            _ => {}
+            Some(DraftAct::SaveAgain) => draft.save_again(),
+            Some(DraftAct::SaveMoved) => draft.save_moved(),
+            Some(DraftAct::Discard) => draft.discard(),
+            Some(DraftAct::Save) => draft.save(),
+            None => {}
         }
     }
 
@@ -4251,6 +4250,10 @@ impl Sessions {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the New session form’s act fault stands under the form: a typed body message (M20)"
+    )]
     fn show_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut form) = self.form.take() else {
             return;
@@ -4346,7 +4349,8 @@ impl Sessions {
         .show(ui);
         // A fault of the act itself, under the form, so it moves nothing above it.
         if let Some(error) = &form.error {
-            design::message(ui, Tone::Error, error);
+            let fault = PageFault::Failed(notice_sentence(error));
+            let _ = BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
         }
         // A press reads the templates as the folder holds them now: one changed or removed
         // outside Splat since the form opened is never made from the listing's copy. The press
@@ -4680,7 +4684,8 @@ impl Sessions {
     )]
     fn note_editor(&mut self, ui: &mut egui::Ui, in_panel: bool) {
         let Some(draft) = &mut self.draft else {
-            design::message(ui, Tone::Error, "This note could not be opened.");
+            let fault = PageFault::Failed(crate::sentence!("This note could not be opened."));
+            let _ = PagePlaceholder::<()>::new(&fault).show(ui);
             return;
         };
         // Beside a page with its own draft, Ctrl+S goes to where the keyboard is.
@@ -5031,6 +5036,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the Notes panel with no session to write in says so in place of the editor: a typed body message (M20)"
+    )]
     pub fn notes_panel(&mut self, ctx: &egui::Context) {
         let width = design::side_panel_width(ctx.content_rect().width());
         design::Column::panel("session_notes", width)
@@ -5070,11 +5079,10 @@ impl Sessions {
                     return;
                 }
                 if self.current().is_none() {
-                    design::message(
-                        ui,
-                        Tone::Info,
-                        "New events go to no session, so no note is open here. Choose a session on the Timeline page.",
-                    );
+                    let _ = BodyMessage::<()>::from(Notice::new(crate::sentence!(
+                        "New events go to no session, so no note is open here. Choose a session on the Timeline page."
+                    )))
+                    .show(ui);
                     return;
                 }
                 // Round 26: the panel's notice and its draft's result sit in its message footer,
@@ -5884,18 +5892,18 @@ impl Sessions {
                     "This sends the raw transcript, this session’s name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
                     processing_llm(settings)
                 );
-                // The choices start at the message text; the red one keeps an `L` gap.
-                design::message_with_actions(ui, Tone::Info, &words, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        if Action::secondary("Not now").show(ui).clicked() {
-                            self.confirm_again = None;
-                        }
-                        ui.add_space(design::L - ui.spacing().item_spacing.x);
-                        process = Action::destructive("Replace the results")
-                            .show(ui)
-                            .clicked();
-                    });
-                });
+                // The choices start at the message text; the red one keeps an `L` gap (the part's).
+                let pressed = BodyMessage::from(
+                    Notice::new(notice_sentence(&words))
+                        .choice(Choice::new(MessageChoice::Choice("Not now"), false))
+                        .choice(Choice::new(MessageChoice::Lose("Replace the results"), true)),
+                )
+                .show(ui);
+                match pressed {
+                    Some(false) => self.confirm_again = None,
+                    Some(true) => process = true,
+                    None => {}
+                }
             });
         }
         if stop {
@@ -6316,13 +6324,12 @@ impl Sessions {
             return;
         };
         if let Some((done, parts)) = reading.short_of {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!(
-                    "Transcribed so far: {done} of {parts} parts. Continue processing adds the rest."
-                ),
-            );
+            let _ = BodyMessage::<()>::from(Notice::warning(crate::sentence!(
+                "Transcribed so far: {} of {} parts. Continue processing adds the rest.",
+                done,
+                parts
+            )))
+            .show(ui);
         }
         if matches!(reading.made, Made::Summary | Made::Marked | Made::Review) {
             ui.label(
@@ -8086,6 +8093,10 @@ impl Sessions {
         self.markers.owner_changed(&self.of_session(self.selected));
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "with no session folder, the page’s fault and its way out stand in place of the page: a page placeholder (M20)"
+    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -8186,7 +8197,12 @@ impl Sessions {
                 || "The session folder is not available.".to_owned(),
                 |fault| String::from(fault.clone()),
             );
-            if design::message_with_action(ui, Tone::Warning, &words, "Choose folder") {
+            let fault = PageFault::Check(notice_sentence(&words));
+            if PagePlaceholder::new(&fault)
+                .choice(Choice::new(MessageChoice::Choice("Choose folder"), ()))
+                .show(ui)
+                .is_some()
+            {
                 self.wants_campaign_link = true;
             }
             return;

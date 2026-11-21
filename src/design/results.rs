@@ -1034,16 +1034,28 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/party.rs", "sheet_view", &[Ban::Body]),
         // R24: a value block's save row shows its own messages (the Session folder's).
         ("src/sessions/page.rs", "folder_block", &[Ban::Body]),
+        // M-N0.6 (M20): typed body places, each in place of an untyped body message.
+        ("src/sessions/page.rs", "show_form", &[Ban::Body]),
+        ("src/sessions/page.rs", "notes_panel", &[Ban::Body]),
+        ("src/sessions/page.rs", "show", &[Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
-        ("src/sessions/page.rs", "banner_notices", &[Ban::Results]),
+        (
+            "src/sessions/page.rs",
+            "banner_notices",
+            &[Ban::Results, Ban::Body],
+        ),
         (
             "src/sessions/page.rs",
             "markers",
             &[Ban::Results, Ban::Extras(1)],
         ),
         ("src/sessions/page.rs", "new_notice", &[Ban::Results]),
-        ("src/sessions/page.rs", "reading_view", &[Ban::Results]),
+        (
+            "src/sessions/page.rs",
+            "reading_view",
+            &[Ban::Results, Ban::Body],
+        ),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
         ("src/sessions/page.rs", "add_dropped", &[Ban::Order]),
         (
@@ -1162,7 +1174,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "new_template_form",
             &[Ban::Extras(2)],
         ),
-        ("src/sessions/page.rs", "note_editor", &[Ban::Layout(2)]),
+        (
+            "src/sessions/page.rs",
+            "note_editor",
+            &[Ban::Layout(2), Ban::Body],
+        ),
         ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
@@ -1330,9 +1346,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
-        ("src/sessions/page.rs", "draft_warning", &[Ban::Extras(2)]),
+        ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),
-        ("src/sessions/page.rs", "recording_row", &[Ban::Extras(2)]),
+        (
+            "src/sessions/page.rs",
+            "recording_row",
+            &[Ban::Extras(1), Ban::Body],
+        ),
         (
             "src/sessions/plan.rs",
             "gone_scene_words",
