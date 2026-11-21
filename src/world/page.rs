@@ -571,67 +571,66 @@ impl WorldPage {
         let count = faults.map_or(0, |faults| faults.notes() + broken);
         let broken_links = faults.map_or(0, |faults| faults.listed().len());
         let mut create = None;
-        design::page_header(
-            ui,
-            "World",
-            (count > 0)
-                .then(|| design::count(count, "note", "notes"))
-                .as_deref(),
-            |ui| {
-                create = design::locked(
-                    ui,
-                    index
-                        .is_none()
-                        .then_some("Wait for the notes to load before creating a note."),
-                    new_menu,
-                );
-                if broken_links > 0 {
-                    let response = design::status_link(
-                        ui,
-                        design::Status {
-                            icon: icons::WARN,
-                            word: &design::count(
-                                broken_links,
-                                "note needs fixing",
-                                "notes need fixing",
-                            ),
-                            color: colors().result.warning,
-                        },
-                    );
-                    design::layout::menu_popup(ui, &response).show(|ui| {
-                        if let (Some(index), Some(faults)) = (index, faults) {
-                            for &at in faults.listed() {
-                                let item = &index.items[at];
-                                if design::link(ui, &item.entry.name).clicked() {
-                                    self.open_note(item.entry.id);
-                                    ui.close();
-                                }
+        // M0603 (ruling M21): the header is the shared title line: the title and its count,
+        // New with its menu, the count of notes that need fixing with its menu, and the count
+        // that cannot be read, which opens the first one's repair.
+        const NEW: design::Word = crate::word!("New");
+        let context = (count > 0).then(|| design::count(count, "note", "notes"));
+        let fixing = design::count(broken_links, "note needs fixing", "notes need fixing");
+        let unreadable = format!("{} cannot be read", design::count(broken, "note", "notes"));
+        let mut open = None;
+        let mut line = design::TitleLine::new("World")
+            .context(context.as_deref())
+            .menu(
+                design::TitleAction::secondary(NEW)
+                    .icon(icons::ADD)
+                    .name("New ▾")
+                    .blocked(
+                        index
+                            .is_none()
+                            .then_some("Wait for the notes to load before creating a note."),
+                    ),
+                |ui| create = new_choices(ui),
+            );
+        if broken_links > 0 {
+            line = line.status(
+                design::Status {
+                    icon: icons::WARN,
+                    word: &fixing,
+                    color: colors().result.warning,
+                },
+                |ui| {
+                    if let (Some(index), Some(faults)) = (index, faults) {
+                        for &at in faults.listed() {
+                            let item = &index.items[at];
+                            if design::link(ui, &item.entry.name).clicked() {
+                                open = Some(item.entry.id);
+                                ui.close();
                             }
                         }
-                    });
-                }
-                // Every note this count holds cannot be read, which is an error in its row,
-                // this count and its repair alike.
-                if broken > 0
-                    && design::status_link(
-                        ui,
-                        design::Status {
-                            icon: icons::ERROR,
-                            word: &format!(
-                                "{} cannot be read",
-                                design::count(broken, "note", "notes")
-                            ),
-                            color: colors().result.error,
-                        },
-                    )
-                    .clicked()
-                    && let Some((path, _)) = index.and_then(|index| index.broken_world.first())
-                {
-                    self.search.clear();
-                    self.open_repair(campaign, path);
-                }
-            },
-        );
+                    }
+                },
+            );
+        }
+        // Every note this count holds cannot be read, which is an error in its row, this count
+        // and its repair alike.
+        if broken > 0 {
+            line = line.status_press(design::Status {
+                icon: icons::ERROR,
+                word: &unreadable,
+                color: colors().result.error,
+            });
+        }
+        let shown = line.page().show(ui);
+        if let Some(id) = open {
+            self.open_note(id);
+        }
+        if shown.status_pressed
+            && let Some((path, _)) = index.and_then(|index| index.broken_world.first())
+        {
+            self.search.clear();
+            self.open_repair(campaign, path);
+        }
         if let Some(kind) = create.take() {
             self.begin_new(kind, index.map(AsRef::as_ref));
         }
@@ -1801,29 +1800,35 @@ impl WorldPage {
     }
 }
 
-/// The same next step in the header and in an empty reader.
+/// The same next step in the header and in an empty reader: the empty reader's `New ▾` with its
+/// menu (the header's is its title line's menu action, `TitleLine::menu`).
 fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
-    let mut choice = None;
     let label = format!("New {}", icons::DOWN);
     let response = design::Action::secondary(&label)
         .name("New ▾")
         .icon(icons::ADD)
         .show(ui);
-    design::layout::menu_popup(ui, &response).show(|ui| {
-        for (word, kind) in [
-            // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
-            ("Note…", "note"),
-            ("NPC…", "npc"),
-            ("Location…", "location"),
-            ("Generate NPC", "generate"),
-        ] {
-            // M0609: a menu's choices are the shared quiet actions, as in the Library's menus.
-            if design::Action::quiet(word).show(ui).clicked() {
-                choice = Some(kind);
-                ui.close();
-            }
+    design::layout::menu_popup(ui, &response)
+        .show(new_choices)
+        .and_then(|shown| shown.inner)
+}
+
+/// New's choices, in its menu.
+fn new_choices(ui: &mut egui::Ui) -> Option<&'static str> {
+    let mut choice = None;
+    for (word, kind) in [
+        // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
+        ("Note…", "note"),
+        ("NPC…", "npc"),
+        ("Location…", "location"),
+        ("Generate NPC", "generate"),
+    ] {
+        // M0609: a menu's choices are the shared quiet actions, as in the Library's menus.
+        if design::Action::quiet(word).show(ui).clicked() {
+            choice = Some(kind);
+            ui.close();
         }
-    });
+    }
     choice
 }
 

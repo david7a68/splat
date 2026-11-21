@@ -576,12 +576,21 @@ pub fn broken(d: &mut Driver<'_>) {
     let choices = d
         .place_of("Rename the note to Broken")
         .zip(d.place_of("Rename the file to Repaired watchkeeper.md"));
+    // The warning's own text edge: both repairs start there, not only at each other.
+    let edge = d
+        .painted_rect_in(
+            "The file is Broken.md, but the name is",
+            egui::Rect::EVERYTHING,
+        )
+        .map(|words| words.left());
     d.observe(
         "iter-24-D-FD5-choices",
-        choices.is_some_and(|(note, file)| {
-            (note.left() - file.left()).abs() < 0.5 && file.top() >= note.bottom()
+        choices.zip(edge).is_some_and(|((note, file), edge)| {
+            (note.left() - edge).abs() <= 0.5
+                && (file.left() - edge).abs() <= 0.5
+                && file.top() >= note.bottom()
         }),
-        format!("The rename choices are {choices:?}"),
+        format!("The rename choices are {choices:?}, the warning's text edge {edge:?}"),
     );
     d.state("broken-note-repaired", Sizes::Default);
     d.click("Setting · ");
