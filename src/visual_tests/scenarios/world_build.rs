@@ -6911,15 +6911,19 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("package-wrong-folder-picked", Sizes::All);
     crate::hermetic::closed::next_folder(moved.clone());
     d.click("Find the folder…");
-    d.wait_for_control("Undo recover modules/watch-package");
-    d.expect("Ashen Marches found in modules/watch-package/.");
+    d.wait_for_control("Undo recover Ashen Marches in modules/watch-package/");
+    d.expect("Ashen Marches recovered in modules/watch-package/.");
     d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
-        check_undo_icon(d, "Undo recover modules/watch-package", "iter-6-C-AD3");
+        check_undo_icon(
+            d,
+            "Undo recover Ashen Marches in modules/watch-package/",
+            "iter-6-C-AD3",
+        );
     });
-    d.click("Undo recover modules/watch-package");
+    d.click("Undo recover Ashen Marches in modules/watch-package/");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
-    d.wait_for_control("Undo recover modules/watch-package");
+    d.wait_for_control("Undo recover Ashen Marches in modules/watch-package/");
     go_library(d);
     d.click("Packages");
     d.click("Reload from disk");
