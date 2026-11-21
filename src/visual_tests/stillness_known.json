@@ -362,22 +362,9 @@
     ["G3/far-action","01-travel-checks-rolled","1920x1080","Button \"Add to notes: Travel\"",1],
     ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Journey B\"",1],
     ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Travel\"",1],
-    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1],
-    ["N4/quiet-action-line-start","01-travel-checks-rolled","1200x800","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-travel-checks-rolled","1920x1080","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-travel-checks-rolled","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","02-travel-checks-rolled-lookup","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","05-travel-checks-outside","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","06-travel-checks-timeline","1200x800","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","06-travel-checks-timeline","1920x1080","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","06-travel-checks-timeline","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1]
+    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1]
   ],
   "travel-checks-plan": [
-    ["N4/quiet-action-line-start","01-plan-on-timeline","1200x800","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-plan-on-timeline","1920x1080","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-plan-on-timeline","960x640","Button \"On the road\"",1],
     ["G3/far-action","04-plan-answer-in-session-plan","1920x1080","Button \"Add to notes: Ford crossing\"",1],
     ["G3/far-action","04-plan-answer-in-session-plan","1920x1080","Button \"Add to notes: Long road\"",1]
   ],
