@@ -1973,6 +1973,7 @@ impl IdentityNoun {
     }
 }
 
+#[cfg(test)]
 pub(crate) const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
 
 /// The duplicate-identity repair's one form (M0178), on Library, World and Encounters: the
