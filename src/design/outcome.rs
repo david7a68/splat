@@ -1752,6 +1752,17 @@ impl FileLine {
             .filter_map(|(on, word)| (on && self.openable).then_some(word))
     }
 
+    /// The line's width on one line: its path and its links, as `draw` measures them.
+    fn natural_width(&self, ui: &Ui) -> f32 {
+        let gap = ui.spacing().item_spacing.x;
+        let links: f32 = self
+            .links()
+            .map(|word| number_width(ui, word, &Type::Body.font(ui)).max(XL) + gap)
+            .sum();
+        number_width(ui, &self.shown(), &Type::Small.font(ui))
+            + if links > 0.0 { L + links } else { 0.0 }
+    }
+
     /// The line, at the cursor, as wide as `ui` allows.
     fn draw(&self, ui: &mut Ui) {
         let path = self.path();
@@ -3704,6 +3715,150 @@ impl Body {
         pressed
     }
 
+    /// The compact form (`BodyMessage::compact`): the words as a row's message draws them
+    /// (`small_tone_message`), the choices in one band after them on their line, as wide as the
+    /// choices, and the file line after the words when it fits, else under them at the words.
+    fn draw_compact(
+        &self,
+        ui: &mut Ui,
+        place: MessagePlace,
+        detail: Option<&str>,
+    ) -> Option<Pressed> {
+        let gap = ui.spacing().item_spacing.x;
+        let words = self.words.as_str();
+        let choices: Vec<(usize, MessageChoice<'_>)> =
+            self.choices.iter().copied().enumerate().collect();
+        let band: f32 = choices
+            .iter()
+            .map(|(at, choice)| match choice {
+                MessageChoice::Dismiss(_) => Density::Read.control() + gap,
+                MessageChoice::Link { word, .. } => compact_link_width(ui, word) + gap,
+                choice => self.choice_width(ui, *at, *choice) + gap,
+            })
+            .sum();
+        let file = self.file.as_ref().map(|file| file.natural_width(ui));
+        // The words' room on their line; the file line takes room after them only when the
+        // words then still fit on one line.
+        let (icon, _) = self.tone.parts();
+        let inset =
+            S + HAIRLINE_WIDTH + number_width(ui, icon, &Type::Small.font(ui)) + 2.0 * gap - XS;
+        let one_line = inset + number_width(ui, words, &Type::Small.font(ui));
+        // The band follows the words one item gap after them (its sum holds the gaps).
+        let room = ui.available_width() - band;
+        let beside = file.filter(|file| one_line + L + file <= room);
+        let mut pressed = None;
+        let control = Density::Read.control();
+        let text_room = (room - beside.map_or(0.0, |file| file + L)).max(control);
+        // With a band, the row is one control high: one line of words sits on its centre,
+        // wrapped words start at its top (as the close icon does).
+        let pad = if band > 0.0 && one_line <= text_room {
+            ((control - Type::Small.line()) / 2.0).max(0.0)
+        } else {
+            0.0
+        };
+        let row = ui.horizontal_top(|ui| {
+            let message = ui
+                .allocate_ui_with_layout(
+                    egui::vec2(text_room, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        // A row message's own gaps, whatever the caller's spacing.
+                        ui.spacing_mut().item_spacing.x = S;
+                        space(ui, pad);
+                        small_tone_message(ui, self.tone, words)
+                    },
+                )
+                .inner;
+            if let Some(detail) = detail {
+                super::components::named(ui, &message, detail);
+                message.clone().on_hover_text(detail);
+            }
+            if let (Some(width), Some(file)) = (beside, &self.file) {
+                space(ui, (L - gap).max(0.0));
+                // A box of no height of its own: the file line centres itself in what it gets.
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| file.draw(ui),
+                );
+            }
+            for (at, choice) in &choices {
+                let clicked = match choice {
+                    MessageChoice::Dismiss(_) => {
+                        let lock = self.locks.get(*at).and_then(holding);
+                        match lock {
+                            Some(reason) => {
+                                ui.add_enabled_ui(false, |ui| {
+                                    icon_button(ui, icons::CLOSE, DISMISS_NAME)
+                                })
+                                .inner
+                                .on_disabled_hover_text(reason);
+                                false
+                            }
+                            None => icon_button(ui, icons::CLOSE, DISMISS_NAME).clicked(),
+                        }
+                    }
+                    // A link at the words' size, as the row's own words are.
+                    MessageChoice::Link { word, hover } => {
+                        let lock = self.locks.get(*at).and_then(holding);
+                        let owned = self.hovers.get(*at).and_then(Option::as_deref);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(compact_link_width(ui, word), control),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                let response = match lock {
+                                    Some(reason) => ui
+                                        .add_enabled_ui(false, |ui| {
+                                            super::components::small_link(ui, word)
+                                        })
+                                        .inner
+                                        .on_disabled_hover_text(reason),
+                                    None => super::components::small_link(ui, word),
+                                };
+                                match owned.or(*hover) {
+                                    Some(hover) => response.on_hover_text(hover),
+                                    None => response,
+                                }
+                                .clicked()
+                            },
+                        )
+                        .inner
+                    }
+                    choice => {
+                        let width = self.choice_width(ui, *at, *choice);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(width, control),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                self.draw_choice(ui, *at, *choice, f32::INFINITY, None)
+                                    .is_some_and(|response| response.clicked())
+                            },
+                        )
+                        .inner
+                    }
+                };
+                activated(ui, &mut pressed, clicked, words, Pressed::Choice(*at));
+            }
+            message.rect.left()
+        });
+        if beside.is_none()
+            && let Some(file) = &self.file
+        {
+            let inset = row.inner - ui.cursor().left();
+            ui.horizontal_top(|ui| {
+                space(ui, inset);
+                let width = ui.available_width();
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| file.draw(ui),
+                );
+            });
+        }
+        register(ui, row.response.rect, place, self.tone);
+        pressed
+    }
+
     /// The choices that sit on rows under the words: all but `Dismiss`.
     fn row_choices(&self) -> impl Iterator<Item = (usize, MessageChoice<'_>)> {
         self.choices
@@ -4321,10 +4476,17 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
 /// let _ = splat_design::outcome::BodyMessage::<u8>::from(splat_design::outcome::Said::new(splat_design::sentence!("Saved.")));
 /// ```
 #[must_use = "call show"]
-pub struct BodyMessage<A>(BodyForm<A>);
+pub struct BodyMessage<A> {
+    form: BodyForm<A>,
+    compact: bool,
+    /// The whole words behind fitted ones: the words' accessible name and hover.
+    detail: Option<String>,
+}
 
 enum BodyForm<A> {
     Full(Outcome<A>),
+    /// A finished change with no way back (`result`).
+    Result(Typed<A>),
     RowRepair {
         tone: Tone,
         words: Sentence,
@@ -4335,20 +4497,28 @@ enum BodyForm<A> {
 
 impl<A> From<Notice<A>> for BodyMessage<A> {
     fn from(notice: Notice<A>) -> Self {
-        Self(BodyForm::Full(notice.into()))
+        Self::of(BodyForm::Full(notice.into()))
     }
 }
 
 impl<A> From<FaultMessage<A>> for BodyMessage<A> {
     fn from(fault: FaultMessage<A>) -> Self {
-        Self(BodyForm::Full(fault.into()))
+        Self::of(BodyForm::Full(fault.into()))
     }
 }
 
 impl<A> BodyMessage<A> {
+    fn of(form: BodyForm<A>) -> Self {
+        Self {
+            form,
+            compact: false,
+            detail: None,
+        }
+    }
+
     /// A list row with one repair. The button shares the fault's line when both fit.
     pub fn row_repair(fault: &dyn Fault, label: &'static str, id: A) -> Self {
-        Self(BodyForm::RowRepair {
+        Self::of(BodyForm::RowRepair {
             tone: fault.severity().tone(),
             words: fault_words(fault),
             label,
@@ -4356,14 +4526,41 @@ impl<A> BodyMessage<A> {
         })
     }
 
+    /// A finished change said where it happened (the Run's header band says its last result),
+    /// in the success tone, with its choices and no way back: it has no Undo and no ticket, so
+    /// a result whose Undo the DM may press stays a kept line in its footer.
+    pub fn result(words: Sentence, choices: impl IntoIterator<Item = Choice<A>>) -> Self {
+        Self::of(BodyForm::Result(Typed::new(
+            Tone::Success,
+            words,
+            None,
+            choices.into_iter().collect(),
+        )))
+    }
+
+    /// The compact form, at the size of a row's message (`small_message`): `Small` words with
+    /// the tone's icon and bar, at its line height and gap; its choices (a link, a bordered
+    /// choice, the close icon) in one band one item gap after the words on their line, as wide
+    /// as the choices, never under them; its file line after the words on their last row when
+    /// it fits, else under them at the words. For a run's setup rows and its header band. A
+    /// row repair keeps its own form.
+    pub fn compact(mut self) -> Self {
+        self.compact = true;
+        self
+    }
+
+    /// The whole words when the words are fitted ones (a header band's one-line summary): the
+    /// words' accessible name and their hover.
+    pub fn detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
     /// Draw it at the cursor; the caller's id of the choice pressed.
     pub fn show(self, ui: &mut Ui) -> Option<A> {
-        match self.0 {
-            BodyForm::Full(message) => {
-                let (_, typed) = message.parts();
-                let pressed = typed.body.draw(ui, MessagePlace::Page)?;
-                typed.id(pressed)
-            }
+        let typed = match self.form {
+            BodyForm::Full(message) => message.parts().1,
+            BodyForm::Result(typed) => typed,
             BodyForm::RowRepair {
                 tone,
                 words,
@@ -4372,9 +4569,17 @@ impl<A> BodyMessage<A> {
             } => {
                 let row = single_action_message(ui, tone, words.as_str(), label);
                 register(ui, row.response.rect, MessagePlace::Row, tone);
-                row.inner.then_some(id)
+                return row.inner.then_some(id);
             }
-        }
+        };
+        let pressed = if self.compact {
+            typed
+                .body
+                .draw_compact(ui, MessagePlace::Page, self.detail.as_deref())?
+        } else {
+            typed.body.draw(ui, MessagePlace::Page)?
+        };
+        typed.id(pressed)
     }
 }
 
@@ -4484,6 +4689,11 @@ impl<A> Repair<A> {
         self.lock = Some((reason, locked));
         self
     }
+}
+
+/// A compact message's link's width: its `Small` words, at least its `XL` target.
+fn compact_link_width(ui: &Ui, word: &str) -> f32 {
+    number_width(ui, word, &Type::Small.font(ui)).max(XL)
 }
 
 /// The help line under an action (ruling M8): what pressing it does, in the help words, from
@@ -5943,6 +6153,119 @@ mod tests {
             [Fix::Log, Fix::Dismiss],
             "each press once"
         );
+
+        // The compact form (M-P0 item 7: the Run's header band and setup rows), at 900 and in a
+        // 320 px column. A warning with `Log` and its close icon: the words at a row message's
+        // line, `Log` and the icon beside them on that line in a band as wide as they are, the
+        // whole message one control high; each press comes back. A fault with its file line:
+        // on the words' row when it fits (900), under them at the words when not (320).
+        for width in [900.0, 320.0] {
+            let mut h = Harness::builder()
+                .with_size(egui::vec2(960.0, 400.0))
+                .build_ui_state(
+                    move |ui, pressed: &mut Vec<Fix>| {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(width, 400.0),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                let notice = BodyMessage::from(
+                                    Notice::warning(crate::sentence!("Kaya’s sheet changed."))
+                                        .choice(Choice::new(
+                                            MessageChoice::Link {
+                                                word: "Log",
+                                                hover: None,
+                                            },
+                                            Fix::Log,
+                                        ))
+                                        .choice(Choice::new(
+                                            MessageChoice::Dismiss(Lost::Nothing),
+                                            Fix::Dismiss,
+                                        )),
+                                )
+                                .compact()
+                                .show(ui);
+                                pressed.extend(notice);
+                                let fault = BodyMessage::<Fix>::from(
+                                    FaultMessage::new(&Hp(Severity::CannotRead, Some(20)))
+                                        .file(FileLine::new("/vault", "Encounters/Shrine.md")),
+                                )
+                                .compact()
+                                .show(ui);
+                                pressed.extend(fault);
+                            },
+                        );
+                    },
+                    Vec::new(),
+                );
+            crate::design::theme::install(&h.ctx);
+            h.run_steps(4);
+            let words = h
+                .get_by_role_and_label(egui::accesskit::Role::Label, "Kaya’s sheet changed.")
+                .rect();
+            let (log, close) = (
+                h.get_by_label("Log").rect(),
+                h.get_by_label(DISMISS_NAME).rect(),
+            );
+            assert!(
+                (words.height() - Type::Small.line()).abs() < 1.0,
+                "{width}: the words at a row message's line: {words:?}"
+            );
+            assert!(
+                // The band starts one item gap after the words, its choices one item gap apart:
+                // as wide as they are, not stretched to the column.
+                (log.left() - words.right() - h.ctx.style().spacing.item_spacing.x).abs() < 1.5
+                    && (close.left() - log.right() - h.ctx.style().spacing.item_spacing.x).abs()
+                        < 1.5
+                    && (log.center().y - words.center().y).abs() < 2.0
+                    && (close.center().y - words.center().y).abs() < 2.0,
+                "{width}: Log and the close icon beside the words, in a fitted band: {words:?} {log:?} {close:?}"
+            );
+            let row = message_rects(&h.ctx)
+                .into_iter()
+                .find(|(rect, _, _)| rect.contains(words.center()))
+                .map(|(rect, _, _)| rect)
+                .expect("the notice is registered");
+            assert!(
+                row.height() <= Density::Read.control() + 0.5,
+                "{width}: the band is one control high: {row:?}"
+            );
+            let cause = h
+                .get_by_role_and_label(
+                    egui::accesskit::Role::Label,
+                    "Cinder Wolf · line 20: The HP is missing.",
+                )
+                .rect();
+            // The path's node by the name the part gave it (`named`).
+            let path = h
+                .query_all(
+                    egui_kittest::kittest::By::new().predicate(|node| {
+                        node.data().label() == Some("/vault/Encounters/Shrine.md")
+                    }),
+                )
+                .next()
+                .expect("the file line's path")
+                .rect();
+            assert_eq!(
+                (path.center().y - cause.center().y).abs() < 2.0,
+                width > 600.0,
+                "{width}: the file line on the words' row only where it fits: {cause:?} {path:?}"
+            );
+            if width < 600.0 {
+                assert!(
+                    path.top() >= cause.bottom() - 0.5 && (path.left() - cause.left()).abs() < 1.0,
+                    "{width}: under the words, at the words: {cause:?} {path:?}"
+                );
+            }
+            h.get_by_label("Log").click();
+            h.run_steps(2);
+            h.get_by_label(DISMISS_NAME).click();
+            h.run_steps(2);
+            assert_eq!(
+                h.state(),
+                &[Fix::Log, Fix::Dismiss],
+                "{width}: each press once"
+            );
+        }
 
         // Review of PR 332, 4: narrower than the shortest cut, the words wrap inside the row;
         // every fixed word is painted, none is cut.
