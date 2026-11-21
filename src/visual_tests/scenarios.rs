@@ -21725,7 +21725,6 @@ pub mod encounter_owned_groups {
     const SAVE_ENCOUNTER: &str = "Save encounter";
     /// The gap from the save row's `Invalid` to `Default side` in a group editor, on main
     /// (318bde49) at 960, 1200 and 1920.
-    const SAVE_ROW_TO_FIELDS: f32 = 28.0;
 
     fn edit_group(name: &str) -> String {
         format!("Edit group {name}")
@@ -21846,24 +21845,6 @@ pub mod encounter_owned_groups {
                     d.window_size()
                 ),
             );
-            // Lead, round 29 (the band at 960): the cause's place is on the save row, so the
-            // gap from the save row's word to the first field is main's at every size.
-            let band = d
-                .painted_rect_in("Invalid", egui::Rect::EVERYTHING)
-                .zip(
-                    d.nodes()
-                        .into_iter()
-                        .find(|node| node.name.starts_with("Default side for "))
-                        .map(|node| node.rect),
-                )
-                .map(|(word, side)| side.top() - word.bottom());
-            d.observe(
-                "iter-29-BC5-G122-no-band",
-                band.is_some_and(|band| (band - SAVE_ROW_TO_FIELDS).abs() <= 0.5),
-                format!(
-                    "From the save row's word to Default side: {band:?}, main {SAVE_ROW_TO_FIELDS}"
-                ),
-            );
             let edges = group_field_edges(d, GROUP_ORPHAN);
             // As before this state took all sizes: FD3 holds at 960 and 1200 (at 1920 the
             // fields end at FORM_WIDTH, `iter-19-B-FD3-wide`).
@@ -21909,8 +21890,19 @@ pub mod encounter_owned_groups {
         // mouse and the keyboard (Encounters page).
         // The same for a member whose creature is gone: the group goes to Any encounter, and
         // its Cinder Wolf's package entry is deleted, then put back; Discard ends the edit.
-        let (once, detail, member, member_detail) = d.aside(|d| {
+        // Lead, round 29 (the band at 960), as ruled again for layout step 6 (L4): the gone
+        // encounter's cause takes the planned place of the switch reason, so it adds no band. The
+        // old check held the gap from the save row's word to Default side at main's 28 px; the
+        // shared draft head plans the row for every state, and at 960 that plan keeps the switch
+        // reason's line below the row in every state. So the check is now that no state change
+        // moves a field: the clean, refused group and the same group with an edit (Unsaved,
+        // Discard, the switch reason or the cause in its place) keep the name, Default side,
+        // Belongs to, the search and the first member at one top, at 960, 1200 and 1920. The
+        // cause is said once (`iter-29-BC5-G122`, `-off-screen`).
+        let refused_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
+        let (once, detail, member, member_detail, edited_head) = d.aside(|d| {
             d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
+            let edited_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
             let (once, detail) = gone_encounter_said_once(d);
             d.click("Belongs to: Deleted encounter");
             d.click("Any encounter");
@@ -21937,8 +21929,17 @@ pub mod encounter_owned_groups {
             d.focus_window(true);
             d.click("Discard");
             d.expect("Deleted encounter");
-            (once, detail, member, member_detail)
+            (once, detail, member, member_detail, edited_head)
         });
+        d.observe(
+            "iter-29-BC5-G122-no-band",
+            refused_head.iter().all(|tops| tops[1].1.is_some())
+                && refused_head
+                    .iter()
+                    .zip(&edited_head)
+                    .all(|(refused, edited)| group_head_still(refused, edited)),
+            format!("The head's tops, refused {refused_head:?}, edited {edited_head:?}"),
+        );
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
         d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
         // s30 B11 F3 (R41, lead ruling): a member whose creature file is there and cannot be

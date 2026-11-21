@@ -7122,9 +7122,11 @@ impl Encounters {
                         .max(Action::secondary(word).natural_width(ui))
                         .ceil()
                 };
-                let actions = button("Save encounter")
+                let save_width = button("Save encounter");
+                let start_width = button(start_word);
+                let actions = save_width
                     + gap
-                    + button(start_word)
+                    + start_width
                     + if unfinished.is_some() {
                         Action::quiet(icons::EXPAND)
                             .density(Density::Read)
@@ -7184,6 +7186,7 @@ impl Encounters {
                             } else {
                                 Action::primary(word)
                             }
+                            .min_width(start_width)
                             .blocked(if unfinished.is_some() {
                                 has_run
                                     .then_some(BLOCKED_BY_RUN)
@@ -7211,6 +7214,7 @@ impl Encounters {
                                     Action::secondary("Save encounter")
                                 }
                             }
+                            .min_width(save_width)
                             .blocked(state.save_blocked())
                             .show(ui)
                             .clicked();
