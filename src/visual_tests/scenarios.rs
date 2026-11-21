@@ -10611,7 +10611,9 @@ pub mod column_resize {
         d.state_prepared("session-events-fill-their-column", Sizes::All, |d| {
             show_plan(d);
             d.wait_for_text("Add to notes");
-            // iter-25-S FB7: in the tab layout, the plan rows end at the tab row's right edge.
+            // iter-25-S FB7: in the tab layout, no plan row ends past the tab row's right edge.
+            // Layout PR 5a-2 (I6): the rows' actions follow their titles in one column, so one
+            // of them ending at that edge is no longer the rule; the plan's column check is.
             let tabs_end = d.place_of("Edit session details").map(|rect| rect.right());
             let rows_end: Vec<f32> = d
                 .nodes()
@@ -10624,15 +10626,18 @@ pub mod column_resize {
                 .map(|node| node.rect.right())
                 .collect();
             let tabbed = d.has("Note");
+            let (columns, _, detail) = d.plan_columns_hold();
             d.observe(
                 "iter-25-S-FB7",
                 !tabbed
                     || (!rows_end.is_empty()
+                        && columns
                         && tabs_end.is_some_and(|end| {
-                            rows_end.iter().any(|right| (right - end).abs() < 1.0)
-                                && rows_end.iter().all(|right| *right <= end + 1.0)
+                            rows_end.iter().all(|right| *right <= end + 1.0)
                         })),
-                format!("Plan row actions {rows_end:?} end at the tab row's edge {tabs_end:?}"),
+                format!(
+                    "Plan row actions {rows_end:?} end within the tab row's edge {tabs_end:?}; {detail}"
+                ),
             );
             d.observe(
                 "H1 one plan Undo",
@@ -24122,17 +24127,7 @@ pub mod session_plan_groups {
                 && d.visible_text(crate::encounters::draft_switch_reason()),
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
-        // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest title, in one
-        // column; at 1920 the plan has room for it.
-        d.state_prepared("plan-group-assembled", Sizes::All, |d| {
-            let (holds, column, detail) = d.plan_columns_hold();
-            let wide = d.window_size().0 >= LARGE.0;
-            d.observe(
-                "pr5a2-plan-columns",
-                holds && (column || !wide),
-                format!("At {:?}, column {column}: {detail}", d.window_size()),
-            );
-        });
+        d.state("plan-group-assembled", Sizes::All);
         // iter-27-B FL3, replaced by layout PR 4 (I6): each result's Add follows the measured
         // facts, not the search field's edge: `L` after the widest facts, or under its own
         // facts at the text edge where the column does not fit.
@@ -26578,6 +26573,15 @@ pub mod session_plan {
             !d.has_containing(&format!("Removed “{FIRST}”")) && !d.has("Undo remove")
         };
         d.state_prepared("plan-after-a-fight", Sizes::All, |d| {
+            // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest title, in one
+            // column; at 1920 the plan has room for it.
+            let (holds, column, detail) = d.plan_columns_hold();
+            let wide = d.window_size().0 >= LARGE.0;
+            d.observe(
+                "pr5a2-plan-columns",
+                holds && (column || !wide),
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
             d.observe(
                 "iter-23-S-FK2-plan",
                 removal_gone(d),

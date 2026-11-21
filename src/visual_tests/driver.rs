@@ -2289,8 +2289,8 @@ impl<'a> Driver<'a> {
     }
 
     /// Layout PR 5a-2 (I6): the Session plan's rows, from their records. In column mode every
-    /// row's actions start at one column exactly `L` after the widest title, lie inside it, and
-    /// end at one edge; otherwise (the plan too narrow for the column) each row keeps its actions
+    /// row's actions start at one column exactly `L` after the widest title (a row whose drawn
+    /// action is narrower than its recipe's widest alternate starts up to `L` in); otherwise (the plan too narrow for the column) each row keeps its actions
     /// at the far edge, `L` or more after its title's room. Returns whether it holds, whether the
     /// plan is in column mode, and the rows.
     pub fn plan_columns_hold(&self) -> (bool, bool, String) {
@@ -2304,14 +2304,13 @@ impl<'a> Driver<'a> {
             .iter()
             .map(|record| record.facts.right())
             .fold(f32::MIN, f32::max);
-        let end = records.first().map_or(0.0, |record| record.action.right());
         let holds = !records.is_empty()
             && records.iter().all(|record| record.wrapped == !column)
             && records.iter().all(|record| {
                 if column {
                     (record.column - (widest + L)).abs() <= 0.5
                         && record.action.left() >= record.column - 0.5
-                        && (record.action.right() - end).abs() <= 0.5
+                        && record.action.left() <= record.column + L
                 } else {
                     record.action.left() >= record.facts.right() + crate::design::S - 0.5
                 }

@@ -646,10 +646,10 @@ fn plan_row_with(
                     words(ui);
                 },
             );
-            // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest title, and end
-            // at its widest action recipe; the spare width lies after them. Each title keeps the
-            // room and the lines it had, so where the column does not fit the actions keep the
-            // far edge.
+            // Layout PR 5a-2 (I6): each row's actions start `L` after the plan's widest title, in
+            // its own recipe's width (with its alternates); the spare width lies after them. The
+            // column fits beside the plan's widest recipe. Each title keeps the room and the lines
+            // it had, so where the column does not fit the actions keep the far edge.
             let words_width = title.response.rect.width();
             let (kept, actions) = plan_columns(ui, words_width, widths[1]);
             // Until a pass has measured the plan (or a row's own recipe grew), the far edge.
@@ -661,7 +661,7 @@ fn plan_row_with(
             let action_rect = if column {
                 egui::Rect::from_min_size(
                     egui::pos2(left.x + facts + design::L, left.y),
-                    egui::vec2(actions, Density::Read.control()),
+                    egui::vec2(widths[1], Density::Read.control()),
                 )
             } else {
                 egui::Rect::from_min_size(
