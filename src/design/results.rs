@@ -1259,6 +1259,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_body_fault_gives_its_repairs_back_by_id",
             &[Ban::Body],
         ),
+        // N0 (ruling M21): a message holds at most one primary choice.
+        (
+            "src/design/outcome.rs",
+            "a_message_has_at_most_one_primary_choice",
+            &[Ban::Body],
+        ),
         ("src/processing/settings.rs", "cause", &[Ban::Words]),
         ("src/processing/settings.rs", "key_fault", &[Ban::Body]),
         ("src/timeline/checks.rs", "cause", &[Ban::Words]),

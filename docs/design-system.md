@@ -348,7 +348,11 @@ forms has `L` before the next field's label. Settings' Add campaign, Manage pack
 Register a copy) and New entry have this one order; save rows keep their commit at the right edge. Creation and copy fields share one right edge.
 
 Several safe choices after a message share one line when they fit. Put a destructive choice at the end
-after an `L` gap, or on its own line below after an `M` gap.
+after an `L` gap, or on its own line below after an `M` gap. A message may hold one primary choice
+(`MessageChoice::Primary`, filled), the act the DM most likely takes next, where nothing else on the screen is
+primary: a recording alert's `Record again` or `Choose an input`, the record line's `Start recording`, an empty
+Notes panel's `New session`. It stands among the safe choices in their order; the place gives the primary to one
+message, and the others say the same act bordered.
 
 Library, Lookup and encounter search rank equal names in this order: campaign entries, book and package
 entries, then character sheet copies. The creature searches (Lookup, Library's entry search, World's creature
