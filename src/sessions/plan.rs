@@ -2998,9 +2998,9 @@ impl Sessions {
                                 }
                             })
                             .and_then(|path| {
-                                crate::encounter_run::rewards(&path, campaign.id).map_err(|_| {
-                                    (REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing)
-                                })
+                                splat_session_records::rewards::rewards(&path, campaign.id).map_err(
+                                    |_| (REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing),
+                                )
                             })
                     }
                     _ => Err((REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing)),
@@ -8800,9 +8800,10 @@ mod tests {
     /// path, with its own Undo kept by the note and the fight.
     #[test]
     fn rewards_are_a_note_act_with_their_own_undo() {
-        use crate::encounter_run::{Participant, write_ended_run_with};
         use crate::sessions::{NewNote, create_note};
         use egui_kittest::kittest::Queryable;
+        use splat_campaign::encounter_run::Participant;
+        use splat_encounters_ui::encounter_run::write_ended_run_with;
         let root = tempfile::tempdir().unwrap();
         let (sessions, runs) = (root.path().join("Sessions"), root.path().join("Runs"));
         fs::create_dir_all(&sessions).unwrap();

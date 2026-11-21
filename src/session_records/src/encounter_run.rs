@@ -1,6 +1,5 @@
-pub use crate::rewards::rewards;
 use splat_campaign::encounter_run::read_saved;
-pub use splat_campaign::encounter_run::{FightRow, FightSummary, Participant, fight_summary};
+pub use splat_campaign::encounter_run::{FightRow, FightSummary, fight_summary};
 pub use splat_content_ui::roster::{RunGroup, grouped_number};
 use std::{
     fs,

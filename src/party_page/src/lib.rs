@@ -1,7 +1,4 @@
 //! Party page for the desktop app.
-extern crate self as splat;
-use splat_character::character;
-use splat_content::content;
 pub use splat_design::{field_id, sentence};
 
 use splat_content_ui::{art, auth, design, hermetic};

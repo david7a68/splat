@@ -32,7 +32,7 @@ pub mod auth {
 use splat_campaign_packages::campaign_content;
 use splat_content_ui::campaigns;
 #[cfg(test)]
-use splat_encounters_ui::combat_sync;
+use splat_party::combat_sync;
 mod commands;
 #[cfg(test)]
 mod content_integration_tests;
@@ -88,8 +88,7 @@ use splat_content_ui::matching;
 use splat_content_ui::persistence;
 use splat_content_ui::roll_table;
 use splat_content_ui::rolls;
-use splat_encounters_ui::party;
-use splat_encounters_ui::party_bar;
+use splat_party::{party, party_bar};
 use splat_sessions_ui::processing;
 #[cfg(test)]
 use splat_sessions_ui::recording;

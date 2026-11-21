@@ -3,6 +3,7 @@
 //! click opens the sheet.
 use crate::design::{self, Density, Type, colors, icons};
 use eframe::egui::{self, Color32, pos2, vec2};
+use splat_campaign::encounter_run::effect::Condition;
 use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
@@ -21,7 +22,7 @@ pub struct Glance {
     /// The highest spell save DC, for a caster.
     pub spell_dc: Option<i64>,
     /// A run's entries while the member is in one, or the sheet's names as labels.
-    pub conditions: Vec<crate::encounter_run::Condition>,
+    pub conditions: Vec<Condition>,
 }
 
 /// Where the numbers come from, as a status: an icon, a word and a colour. `short` names the
@@ -97,7 +98,7 @@ impl Glance {
             } else {
                 self.conditions
                     .iter()
-                    .map(crate::encounter_run::Condition::words)
+                    .map(Condition::words)
                     .collect::<Vec<_>>()
                     .join(", ")
             },

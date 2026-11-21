@@ -527,7 +527,7 @@ fn paused_run_detail(
                             .is_some_and(|other| other / 86_400 == at / 86_400)
                 });
                 if same_day {
-                    crate::encounter_run::calendar_time(at)
+                    splat_party::party::calendar_time(at)
                 } else {
                     crate::encounter_run::calendar_date(at)
                 }

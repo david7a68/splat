@@ -9,11 +9,12 @@ use eframe::egui;
 use serde_json::Value;
 use splat::character::{ABILITIES, EntitySnapshot};
 use splat::content::dice_text::{D20, DamagePart, RollLink};
+use splat_campaign::encounter_run::{Carry, FightRow, effect::Condition};
 use std::time::Duration;
 #[derive(Default)]
 pub struct Party {
     /// HP from the fights of the session being played, when there are any.
-    pub tonight: Option<crate::encounter_run::Carry>,
+    pub tonight: Option<Carry>,
     pub reader: Reader,
     pub combat: crate::combat_sync::CombatSync,
     epoch: u64,
@@ -209,7 +210,7 @@ impl Party {
     /// then the sheet.
     pub fn glances(
         &self,
-        run: &std::collections::BTreeMap<uuid::Uuid, crate::encounter_run::FightRow>,
+        run: &std::collections::BTreeMap<uuid::Uuid, FightRow>,
     ) -> Vec<crate::party_bar::Glance> {
         self.reader
             .members
@@ -319,7 +320,7 @@ pub struct LiveValues {
     pub hp: Option<i64>,
     pub max_hp: Option<i64>,
     pub temporary_hp: i64,
-    pub conditions: Vec<crate::encounter_run::Condition>,
+    pub conditions: Vec<Condition>,
     pub death_saves: splat::character::DeathSaves,
     /// The run already drew its editable block above this page.
     pub death_saves_shown: bool,
@@ -493,10 +494,10 @@ pub fn record_age(record: &EntitySnapshot) -> String {
 pub const SHEET_PORTRAIT: f32 = 56.0;
 
 /// The conditions a sheet names, as a run's entries: labels, with no count.
-pub fn sheet_labels(record: &EntitySnapshot) -> Vec<crate::encounter_run::Condition> {
+pub fn sheet_labels(record: &EntitySnapshot) -> Vec<Condition> {
     sheet_conditions(record)
         .into_iter()
-        .map(crate::encounter_run::Condition::Label)
+        .map(Condition::Label)
         .collect()
 }
 
@@ -1026,12 +1027,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
                     })
                     .collect()
             },
-            |live| {
-                live.conditions
-                    .iter()
-                    .map(crate::encounter_run::Condition::words)
-                    .collect()
-            },
+            |live| live.conditions.iter().map(Condition::words).collect(),
         );
         if names.is_empty() {
             ui.label("None");

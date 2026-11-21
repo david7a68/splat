@@ -3853,6 +3853,7 @@ dependencies = [
  "splat-encounters-ui",
  "splat-execution",
  "splat-library-page",
+ "splat-party",
  "splat-party-page",
  "splat-sessions-ui",
  "splat-trackers",

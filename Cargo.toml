@@ -39,6 +39,7 @@ default-members = [
 resolver = "3"
 
 [dependencies]
+splat-party = { path = "src/party_support" }
 splat-party-page = { path = "src/party_page" }
 splat-library-page = { path = "src/library_page" }
 splat-campaign-packages = { path = "src/campaign_packages" }

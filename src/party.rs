@@ -2,10 +2,11 @@
 use crate::auth::Session;
 use crate::design::{self, Action, Status, Type, colors, icons};
 use eframe::egui;
-use splat::character::EntitySnapshot;
+use splat_character::character::{self, EntitySnapshot};
+use splat_content::content;
 use splat_party::party::{
-    LiveValues, Party as PartyState, SHEET_PAGES, SHEET_PORTRAIT, SyncStopped, record_age,
-    sheet_conditions, sheet_entries, sheet_labels, sheet_page, spell_dc, text, val,
+    LiveValues, Party as PartyState, SHEET_PAGES, SHEET_PORTRAIT, SyncStopped, calendar_time,
+    record_age, sheet_conditions, sheet_entries, sheet_labels, sheet_page, spell_dc, text, val,
 };
 use std::time::Duration;
 
@@ -13,9 +14,9 @@ use std::time::Duration;
 pub struct PartyPage {
     page: usize,
     search: String,
-    content_entry: Option<(String, Result<splat::content::Entry, String>)>,
+    content_entry: Option<(String, Result<content::Entry, String>)>,
     /// Compared once for each content version, because this page redraws every frame.
-    character_review: Option<Result<splat::character::check::Review, String>>,
+    character_review: Option<Result<character::check::Review, String>>,
     pub wants_link_page: bool,
     pub wants_settings: bool,
     pub run_open: bool,
@@ -41,14 +42,13 @@ struct Party<'a> {
 impl Party<'_> {
     #[allow(clippy::disallowed_methods)]
     fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
-        let c = colors();
-        let fetched = self
-            .party
-            .reader
+        let reader = &self.party.reader;
+        let ready = self.party.combat.ready();
+        let fetched = reader
             .selected
             .as_ref()
-            .and_then(|id| self.party.reader.sheets.get(id))
-            .filter(|_| !self.party.combat.ready())
+            .and_then(|id| reader.sheets.get(id))
+            .filter(|_| !ready)
             .map(|record| format!(" · Fetched {}", record_age(record)))
             .unwrap_or_default();
         let connect_reason = format!("Not connected{fetched} · Connect to refresh");
@@ -56,39 +56,29 @@ impl Party<'_> {
             Some(connect_reason.as_str())
         } else if !linked {
             Some("Link this campaign to D&D Beyond first.")
-        } else if self.party.reader.loading() {
+        } else if reader.loading() {
             Some("Already refreshing.")
         } else {
             None
         };
-        let checked = self.party.reader.selected.as_ref().is_some_and(|id| {
-            self.party.reader.online_ids.contains(id) && !self.party.reader.errors.contains_key(id)
-        }) && self.party.reader.error.is_none();
-        let (status_icon, status_word, _status_color) = if session.is_none() {
-            (icons::OFFLINE, "Not connected", c.connection.offline)
-        } else if self.party.combat.ready() {
-            (
-                icons::ONLINE,
-                "Connected · Sync reads this sheet",
-                c.connection.connected,
-            )
+        let checked =
+            reader.selected.as_ref().is_some_and(|id| {
+                reader.online_ids.contains(id) && !reader.errors.contains_key(id)
+            }) && reader.error.is_none();
+        let (status_icon, status_word) = if session.is_none() {
+            (icons::OFFLINE, "Not connected")
+        } else if ready {
+            (icons::ONLINE, "Connected · Sync reads this sheet")
         } else if !checked {
-            // Round 24 FK2: `Fetched 3 h ago` after it says the sheet is the one Splat saved.
-            (icons::ONLINE, "Connected", c.connection.busy)
-        } else if self.party.reader.stream_open {
-            (icons::ONLINE, "Live updates", c.connection.connected)
+            (icons::ONLINE, "Connected")
+        } else if reader.stream_open {
+            (icons::ONLINE, "Live updates")
         } else {
-            (
-                icons::ONLINE,
-                "Connected · Checking for updates",
-                c.connection.connected,
-            )
+            (icons::ONLINE, "Connected · Checking for updates")
         };
         // Another computer saves the sheets from automatic reads. Say so, because this
         // computer's notes change only through that computer and Obsidian Sync.
-        let writer = self
-            .party
-            .reader
+        let writer = reader
             .writer_elsewhere
             .as_ref()
             .map(|name| format!(" · Sheets save on {name}"))
@@ -96,7 +86,7 @@ impl Party<'_> {
         let context = format!("{status_icon} {status_word}{fetched}{writer}");
         let mut refresh = false;
         design::page_header(ui, "Party", Some(&context), |ui| {
-            if linked && !self.party.reader.members.is_empty() {
+            if linked && !reader.members.is_empty() {
                 refresh = Action::quiet("Refresh party")
                     .icon(icons::REFRESH)
                     .blocked(can_refresh)
@@ -105,8 +95,7 @@ impl Party<'_> {
                 // A signed-out local-edit notice has its own Connect D&D Beyond, so the
                 // header then shows only the state: one action, one name.
                 if session.is_none()
-                    && !self.party.reader.members.is_empty()
-                    && self.party.reader.conflicts.is_empty()
+                    && reader.conflicts.is_empty()
                     && design::link(ui, "Connect to refresh").clicked()
                 {
                     self.view.wants_settings = true;
@@ -498,7 +487,7 @@ impl Party<'_> {
             // footer names the others').
             design::outcome::banner(ui, design::outcome::Banner::Fault(&PartyFault::Read(error)));
         }
-        if let Some(record) = newer(self.party.combat.record(), self.party.reader.sheets.get(id)) {
+        if let Some(record) = most_recent_sheet(self.party, id) {
             let portrait = self.portrait(Some(record));
             ui.horizontal(|ui| {
                 if let Some(path) = &portrait {
@@ -545,8 +534,7 @@ impl Party<'_> {
             }
             messages
         };
-        let Some(record) = newer(self.party.combat.record(), self.party.reader.sheets.get(id))
-        else {
+        let Some(record) = most_recent_sheet(self.party, id) else {
             // The panel scrolls above the footer when it needs more room.
             let paned =
                 sheet_footer(None, &self.party.combat).pane(ui, design::Body::Content, |ui| {
@@ -593,7 +581,7 @@ impl Party<'_> {
             self.view.character_review = entry
                 .as_ref()
                 .ok()
-                .map(|entry| splat::character::check::review(record, entry));
+                .map(|entry| character::check::review(record, entry));
             self.view.content_entry = Some((record.source.content_hash.clone(), entry));
         }
         // The sheet pane starts below the tabs.
@@ -601,44 +589,40 @@ impl Party<'_> {
             ui,
             design::Body::Content,
             |ui| {
-                {
-                    // The heading and its body are one block, below the tabs: the tabs never sit
-                    // between them. Both scroll with the sheet, as one scroll is easier at the table
-                    // than a scroll inside a scroll.
-                    if session.is_some() && self.sync_heading(ui) {
-                        self.sync_panel(ui);
-                    }
-                    let Some(record) =
-                        newer(self.party.combat.record(), self.party.reader.sheets.get(id))
-                    else {
-                        return;
-                    };
-                    // One person has one HP on this page: the list's, while tonight's fights count.
-                    let live =
-                        self.party
-                            .tonight_values(record)
-                            .map(|(hp, temporary_hp)| LiveValues {
-                                hp: Some(hp),
-                                max_hp: record.stat("max_hp"),
-                                temporary_hp,
-                                death_saves: record.initial.death_saves.clone(),
-                                death_saves_shown: false,
-                                conditions: sheet_labels(record),
-                            });
-                    sheet_page(ui, record, self.view.page, &self.view.search, live.as_ref());
-                    if self.view.page == 0 {
-                        design::gap(ui, design::Gap::M);
-                        design::quiet_section(ui, "Technical details", |ui| {
-                            source_and_parity(
-                                ui,
-                                record,
-                                self.view.content_entry.as_ref().map(|(_, entry)| entry),
-                                self.view.character_review.as_ref(),
-                                self.party.reader.campaign_path(),
-                                self.party.reader.local_scope(),
-                            );
-                        });
-                    }
+                // The heading and its body are one block, below the tabs: the tabs never sit
+                // between them. Both scroll with the sheet, as one scroll is easier at the table
+                // than a scroll inside a scroll.
+                if session.is_some() && self.sync_heading(ui) {
+                    self.sync_panel(ui);
+                }
+                let Some(record) = most_recent_sheet(self.party, id) else {
+                    return;
+                };
+                // One person has one HP on this page: the list's, while tonight's fights count.
+                let live = self
+                    .party
+                    .tonight_values(record)
+                    .map(|(hp, temporary_hp)| LiveValues {
+                        hp: Some(hp),
+                        max_hp: record.stat("max_hp"),
+                        temporary_hp,
+                        death_saves: record.initial.death_saves.clone(),
+                        death_saves_shown: false,
+                        conditions: sheet_labels(record),
+                    });
+                sheet_page(ui, record, self.view.page, &self.view.search, live.as_ref());
+                if self.view.page == 0 {
+                    design::gap(ui, design::Gap::M);
+                    design::quiet_section(ui, "Technical details", |ui| {
+                        source_and_parity(
+                            ui,
+                            record,
+                            self.view.content_entry.as_ref().map(|(_, entry)| entry),
+                            self.view.character_review.as_ref(),
+                            self.party.reader.campaign_path(),
+                            self.party.reader.local_scope(),
+                        );
+                    });
                 }
             },
         );
@@ -718,13 +702,12 @@ impl design::outcome::Fault for PartyFault<'_> {
     }
 }
 
-fn newer<'a>(
-    a: Option<&'a EntitySnapshot>,
-    b: Option<&'a EntitySnapshot>,
-) -> Option<&'a EntitySnapshot> {
-    match (a, b) {
-        (Some(a), Some(b)) if b.source.fetched_at > a.source.fetched_at => Some(b),
-        _ => a.or(b),
+fn most_recent_sheet<'a>(party: &'a PartyState, id: &str) -> Option<&'a EntitySnapshot> {
+    match (party.combat.record(), party.reader.sheets.get(id)) {
+        (Some(live), Some(saved)) if saved.source.fetched_at > live.source.fetched_at => {
+            Some(saved)
+        }
+        (live, saved) => live.or(saved),
     }
 }
 
@@ -1022,8 +1005,8 @@ fn member_row(
 fn source_and_parity(
     ui: &mut egui::Ui,
     record: &EntitySnapshot,
-    content_entry: Option<&Result<splat::content::Entry, String>>,
-    character_review: Option<&Result<splat::character::check::Review, String>>,
+    content_entry: Option<&Result<content::Entry, String>>,
+    character_review: Option<&Result<character::check::Review, String>>,
     campaign_path: Option<&std::path::Path>,
     local_scope: Option<uuid::Uuid>,
 ) {
@@ -1069,7 +1052,7 @@ fn source_and_parity(
                     list("engine_gaps")
                         .iter()
                         .filter_map(serde_yaml_ng::Value::as_str)
-                        .filter(|gap| !splat::content::adapters::is_implemented(gap))
+                        .filter(|gap| !content::adapters::is_implemented(gap))
                         .count()
                 ),
             );
@@ -1093,8 +1076,8 @@ fn source_and_parity(
         ui,
         format!(
             "Fetched {} UTC. Source details {} UTC.",
-            splat_party::party::calendar_time(record.source.fetched_at),
-            splat_party::party::calendar_time(record.source.raw_fetched_at),
+            calendar_time(record.source.fetched_at),
+            calendar_time(record.source.raw_fetched_at),
         ),
     );
     if let Some(modified) = &record.source.source_modified {
@@ -1143,8 +1126,8 @@ fn source_and_parity(
     });
 }
 
-fn character_check(ui: &mut egui::Ui, review: &Result<splat::character::check::Review, String>) {
-    use splat::character::check::FindingKind;
+fn character_check(ui: &mut egui::Ui, review: &Result<character::check::Review, String>) {
+    use character::check::FindingKind;
     design::quiet_section(ui, "Character check", |ui| match review {
         Ok(review) => {
             ui.add(
@@ -1175,8 +1158,8 @@ fn character_check(ui: &mut egui::Ui, review: &Result<splat::character::check::R
     });
 }
 
-fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
-    use splat::content::character::{CampaignOptionState, Sheet};
+fn campaign_option_status(ui: &mut egui::Ui, entry: &content::Entry) {
+    use content::character::{CampaignOptionState, Sheet};
     let Some(value) = entry.fields.get("splat_character") else {
         return;
     };

@@ -223,7 +223,7 @@ pub struct TimelinePage {
     /// The DM asked to read this location.
     pub open_place: Option<Uuid>,
     /// The campaign's marked tables, for a journey's encounter checks.
-    pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
+    pub tables: Option<std::sync::Arc<splat_campaign::loot::Sources>>,
     /// Row 123: the campaign's fights and groups by name, for a check result's plan offer.
     pub plan_names: PlanNames,
     focus_length: bool,
