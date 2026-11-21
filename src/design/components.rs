@@ -243,7 +243,7 @@ pub struct ReaderToolbar<'a, A> {
     wider_label: &'a str,
     mode: ModeLock,
     /// `Back`'s hint and icon, while there is history.
-    back: Option<(&'a str, &'a str)>,
+    back: Option<&'a str>,
     actions: Vec<GroupAction<'a, A>>,
 }
 
@@ -261,9 +261,21 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
         }
     }
 
-    /// `Back`, with `icon` and `hint` on hover, while there is history to go back to.
-    pub fn back(mut self, history: bool, icon: &'a str, hint: &'a str) -> Self {
-        self.back = history.then_some((icon, hint));
+    /// `Back` ([`Action::history_back`]), with `hint` on hover, while there is history to go
+    /// back to. The part draws its arrow; a caller gives none.
+    ///
+    /// ```
+    /// use splat_design::layout::doc_parts::{ModeLock, ReaderToolbar};
+    /// let _ = ReaderToolbar::<u8>::new(false, "Markdown", "Markdown", ModeLock::Open)
+    ///     .back(true, "Return to the entry before this link.");
+    /// ```
+    /// ```compile_fail,E0061
+    /// use splat_design::layout::doc_parts::{ModeLock, ReaderToolbar};
+    /// let _ = ReaderToolbar::<u8>::new(false, "Markdown", "Markdown", ModeLock::Open)
+    ///     .back(true, "←", "Return to the entry before this link.");
+    /// ```
+    pub fn back(mut self, history: bool, hint: &'a str) -> Self {
+        self.back = history.then_some(hint);
         self
     }
 
@@ -291,12 +303,8 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
     }
 
     /// The `Back` control, with or without its key.
-    fn back_action(icon: &'a str, hint: &'a str, key: bool) -> Action<'a> {
-        let back = Action::quiet("Back")
-            .icon(icon)
-            .density(Density::Read)
-            .hint(hint);
-        if key { back.key("Alt+Left") } else { back }
+    fn back_action(hint: &'a str, key: bool) -> Action<'a> {
+        Action::history_back(key).hint(hint)
     }
 
     /// Everything from the toolbar to the save row, in `ui`: the toolbar row and each steady
@@ -358,18 +366,18 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
                 ui.available_width()
                     - more_width
                     - gap
-                    - self.back.map_or(0.0, |(icon, hint)| {
-                        Self::back_action(icon, hint, false).natural_width(ui) + gap
+                    - self.back.map_or(0.0, |hint| {
+                        Self::back_action(hint, false).natural_width(ui) + gap
                     }),
             );
             if reserve > 0.0 {
                 space(ui, reserve);
             }
-            if let Some((icon, hint)) = self.back {
+            if let Some(hint) = self.back {
                 let prefix = ui.cursor().left() - left;
-                let with_key = Self::back_action(icon, hint, true).natural_width(ui);
+                let with_key = Self::back_action(hint, true).natural_width(ui);
                 let key = prefix + gap + with_key + gap + more_width <= room;
-                if Self::back_action(icon, hint, key).show(ui).clicked() {
+                if Self::back_action(hint, key).show(ui).clicked() {
                     pressed = Some(ToolbarPress::Back);
                 }
             }
@@ -983,6 +991,30 @@ impl<'a> Action<'a> {
 
     pub fn quiet(label: &'a str) -> Self {
         Self::new(Kind::Quiet, label)
+    }
+
+    /// The step back through a reader's history: `Back`, quiet at `Read`, its arrow before the
+    /// word, and its key `Alt+Left` after it when `key`. One form for every reader (the
+    /// Library's toolbar, Lookup's title line); the arrow never stands alone.
+    ///
+    /// ```
+    /// let _ = splat_design::layout::doc_parts::Action::history_back(true);
+    /// ```
+    ///
+    /// The arrow is the design system's: a caller cannot place it, and the old bare back arrow
+    /// is gone.
+    ///
+    /// ```compile_fail,E0603
+    /// let _ = splat_design::layout::doc_parts::icons::HISTORY_BACK;
+    /// ```
+    /// ```compile_fail,E0425
+    /// let _ = splat_design::layout::doc_parts::icons::LEGACY_BACK;
+    /// ```
+    pub fn history_back(key: bool) -> Self {
+        let back = Self::quiet("Back")
+            .icon(super::icons::HISTORY_BACK)
+            .density(Density::Read);
+        if key { back.key("Alt+Left") } else { back }
     }
     /// Align a quiet action's words with the text above it. Its padding, and any icon, hang left
     /// of that edge. Only an action inside a message has an icon when it starts a line: the icon
