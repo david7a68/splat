@@ -21,9 +21,11 @@ pub enum CampaignAct {
 /// result's order when its act is done, so the footer puts them newest first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum FormResult {
-    /// The details draft Discard dropped. It ends with an edit, Save, Cancel, another campaign's
-    /// form, the next Discard (a new result), and its Undo.
-    Discarded,
+    /// The details draft Discard dropped, of this campaign: its Undo puts it back only into that
+    /// campaign's form. It ends with an edit, Save, Cancel, an Edit details press (any
+    /// campaign's form, from either page), a change of the open campaign, the next Discard (a
+    /// new result), and its Undo.
+    Discarded(Uuid),
     /// The campaign just added or the copy just registered. It ends with the next add, the
     /// registered campaign's removal, and the copy's Undo.
     Added,
@@ -38,7 +40,11 @@ impl crate::design::results::Owner for FormResult {
 
 /// What a kept result's act left: the dropped draft, or the add's words.
 enum FormKept {
-    Discarded { name: String, path: String },
+    Discarded {
+        campaign: Uuid,
+        name: String,
+        path: String,
+    },
     Added(String),
 }
 
@@ -53,7 +59,7 @@ impl crate::design::results::Kept for FormKept {
     };
     fn owner(&self) -> FormResult {
         match self {
-            Self::Discarded { .. } => FormResult::Discarded,
+            Self::Discarded { campaign, .. } => FormResult::Discarded(*campaign),
             Self::Added(_) => FormResult::Added,
         }
     }
@@ -726,8 +732,14 @@ impl Campaigns {
             .any(|c| Some(c.id) != self.data.active_campaign_id && links_to(c, remote_id))
     }
 
+    /// The discarded details draft ends (see `FormResult::Discarded`), whichever campaign's.
+    fn end_discard(&mut self) {
+        self.results
+            .end_unreachable(|kept| !matches!(kept, FormKept::Discarded { .. }));
+    }
+
     fn clear_form(&mut self) {
-        self.results.owner_changed(&FormResult::Discarded);
+        self.end_discard();
         let editing = self.editing.take().is_some();
         self.name = if editing {
             std::mem::take(&mut self.add_name)
@@ -868,9 +880,13 @@ impl Campaigns {
     }
 
     fn select(&mut self, id: Option<Uuid>) {
-        // Another campaign: the open import form's reveal was for the one before.
+        // Another campaign: the open import form's reveal was for the one before, and a
+        // discarded details draft was the other campaign's.
         if let Some(form) = &mut self.remote {
             form.reveal.end();
+        }
+        if id != self.data.active_campaign_id {
+            self.end_discard();
         }
         let mut data = self.data.clone();
         data.active_campaign_id = id;
@@ -929,6 +945,7 @@ impl Campaigns {
             }
             self.remote = None;
             self.editing = Some(campaign.id);
+            self.end_discard();
             self.reveal_details = true;
             self.name = campaign.name.clone();
             self.path = campaign.path.to_string_lossy().into_owned();
@@ -1245,7 +1262,7 @@ impl Campaigns {
                                     }
                                     self.remote = None;
                                     self.editing = Some(campaign.id);
-                                    self.results.owner_changed(&FormResult::Discarded);
+                                    self.end_discard();
                                     self.name = campaign.name.clone();
                                     self.path = campaign.path.to_string_lossy().into_owned();
                                 }
@@ -1331,8 +1348,8 @@ impl Campaigns {
         };
         let locked =
             blocked.or((!self.writable).then_some("Reload valid campaign settings first."));
-        if self.editing.is_some()
-            && let Some(shown) = self.results.get(&FormResult::Discarded)
+        if let Some(editing) = self.editing
+            && let Some(shown) = self.results.get(&FormResult::Discarded(editing))
         {
             messages.kept(shown.outcome(frame, |_| {
                 KeptOutcome::Notice(
@@ -1403,9 +1420,15 @@ impl Campaigns {
     pub fn footer_act(&mut self, press: design::outcome::Press<CampaignAct>) {
         match (press.id, press.ticket) {
             (CampaignAct::UndoDiscard, Some(ticket)) => {
+                // Only into its own campaign's open form.
+                let editing = self.editing;
                 let undone = self.results.undo_by(ticket, |kept| match kept {
-                    FormKept::Discarded { name, path } => Ok((name.clone(), path.clone())),
-                    FormKept::Added(_) => Err(()),
+                    FormKept::Discarded {
+                        campaign,
+                        name,
+                        path,
+                    } if Some(*campaign) == editing => Ok((name.clone(), path.clone())),
+                    FormKept::Discarded { .. } | FormKept::Added(_) => Err(()),
                 });
                 if let Ok((_, (name, path))) = undone {
                     self.name = name;
@@ -1685,7 +1708,7 @@ impl Campaigns {
                             None,
                         );
                         if !unchanged {
-                            self.results.owner_changed(&FormResult::Discarded);
+                            self.end_discard();
                             if Action::quiet("Discard").show(ui).clicked()
                                 && let Some(saved) = self
                                     .data
@@ -1694,6 +1717,7 @@ impl Campaigns {
                                     .find(|c| Some(c.id) == self.editing)
                             {
                                 self.results.record(FormKept::Discarded {
+                                    campaign: saved.id,
                                     name: self.name.clone(),
                                     path: self.path.clone(),
                                 });
@@ -2248,11 +2272,128 @@ mod tests {
         campaigns.select(Some(second));
         campaigns.link(Some("12".into())).unwrap();
         assert_eq!(
-            Store::at(path).load().unwrap().campaigns[1]
+            Store::at(path.clone()).load().unwrap().campaigns[1]
                 .dndbeyond_campaign_id
                 .as_deref(),
             Some("12")
         );
+        // Review of PR 642: each result belongs to its campaign. The Link and folder page as
+        // the app draws it: the link's field and the details form, then the pane's footer, and
+        // a press done after it.
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(900.0, 900.0))
+            .build_ui_state(
+                |ui, (campaigns, dndbeyond): &mut (Campaigns, crate::dndbeyond::DndBeyond)| {
+                    dndbeyond.poll(ui.ctx(), 0, true, campaigns);
+                    campaigns.show_active(ui, None, dndbeyond, None);
+                    campaigns.show_form_if_editing(ui);
+                    let frame = design::outcome::PaneFrame::new(ui);
+                    let mut messages =
+                        design::outcome::Messages::<CampaignAct>::new(&frame, "link_footer", 600.0);
+                    campaigns.footer_messages(&frame, &mut messages, false, None);
+                    dndbeyond.footer_messages(&frame, &mut messages, true);
+                    let paned = messages.pane(ui, design::Body::Content, |_| ());
+                    if let Some(press) = paned.pressed {
+                        campaigns.footer_act(press);
+                    }
+                },
+                (
+                    campaigns,
+                    crate::dndbeyond::DndBeyond::listed_for_test(&[
+                        ("12", "Watchtower"),
+                        ("34", "Harbor"),
+                    ]),
+                ),
+            );
+        harness.run_steps(3);
+        const SAVED: &str = "Campaign link saved.";
+        let shows =
+            |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
+             words: &str| harness.query_by_label_contains(words).is_some();
+        let pick =
+            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
+             choice: &str| {
+                harness
+                    .get_by_label_contains("D&D Beyond campaign link")
+                    .click();
+                harness.run_steps(2);
+                harness.get_by_label(choice).click();
+                harness.run_steps(3);
+            };
+        let open =
+            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
+             id: Uuid| {
+                harness.state_mut().0.select(Some(id));
+                harness.run_steps(3);
+            };
+        // A (the second campaign) unlinks: its result. B (the first, unlinked) opens: A's
+        // result ends with the change, and it does not come back with A.
+        pick(&mut harness, "Not linked");
+        assert!(shows(&harness, SAVED), "unlinking A says its result");
+        open(&mut harness, first);
+        assert!(!shows(&harness, SAVED), "A's link result followed into B");
+        open(&mut harness, second);
+        assert!(!shows(&harness, SAVED), "A's ended link result came back");
+        // A links, then a link attempt fails (the settings cannot be written): the failure is
+        // the newest answer, and the older success ends.
+        pick(&mut harness, "Harbor");
+        assert!(shows(&harness, SAVED));
+        use std::os::unix::fs::PermissionsExt;
+        let settings = path.parent().unwrap().to_path_buf();
+        let mode = |path: &std::path::Path, mode| {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap()
+        };
+        mode(&path, 0o444);
+        mode(&settings, 0o555);
+        pick(&mut harness, "Watchtower");
+        mode(&settings, 0o755);
+        mode(&path, 0o644);
+        assert!(
+            harness.state().1.error.is_some() && !shows(&harness, SAVED),
+            "a failed link left its older success beside the error ({:?})",
+            harness.state().1.error
+        );
+        // A's details: an edit and Discard keep A's draft, with its Undo, in A's own form.
+        let edit_name =
+            |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>| {
+                harness.get_by_label("Edit details").click();
+                harness.run_steps(3);
+                harness.get_by_label("Campaign name").focus();
+                harness.run_steps(1);
+                harness.event(egui::Event::Text(" A".into()));
+                harness.run_steps(3);
+                harness.get_by_label("Discard").click();
+                harness.run_steps(3);
+            };
+        const UNDO: &str = "Undo discard of Campaign details";
+        edit_name(&mut harness);
+        harness.get_by_label(UNDO).click();
+        harness.run_steps(3);
+        assert_eq!(
+            harness.state().0.name,
+            "Campaign A",
+            "Undo of A in A's form"
+        );
+        harness.get_by_label("Discard").click();
+        harness.run_steps(3);
+        assert!(harness.query_by_label(UNDO).is_some());
+        // Unrelated B: B opens and its Edit details opens B's form. A's draft is not B's: no
+        // Undo of it shows there, and B's form keeps B's details.
+        open(&mut harness, first);
+        harness.get_by_label("Edit details").click();
+        harness.run_steps(3);
+        assert!(
+            harness.query_by_label(UNDO).is_none() && harness.state().0.name == "Campaign",
+            "A's discarded draft offers its Undo in B's form (name {:?})",
+            harness.state().0.name
+        );
+        // Back in A: the draft ended with the change; A's form shows A's saved details.
+        open(&mut harness, second);
+        harness.get_by_label("Edit details").click();
+        harness.run_steps(3);
+        assert!(harness.query_by_label(UNDO).is_none());
+        assert_eq!(harness.state().0.name, "Campaign");
     }
     #[test]
     fn unregistering_remembers_legacy_names_and_finding_a_folder_restores_one_registration() {
