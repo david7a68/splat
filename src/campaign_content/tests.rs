@@ -953,7 +953,9 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     }
     // A's Toll line names A's folder, and its Undo acts on A's data: Toll's registration
     // goes back to toll/; Watch stays where B found it.
-    harness.get_by_label("Undo recover Toll in packages/toll-a/").click();
+    harness
+        .get_by_label("Undo recover Toll in packages/toll-a/")
+        .click();
     settle(&mut harness);
     assert_eq!(registered(&harness, toll.id), Some(toll.path.clone()));
     assert_eq!(
