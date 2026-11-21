@@ -969,8 +969,10 @@ impl<'a> Action<'a> {
         }
     }
 
-    /// Its words wrap in the room it has, and it grows taller, instead of being cut.
-    pub(in crate::design) fn wraps(mut self) -> Self {
+    /// Its words wrap in the room it has, and it grows taller, instead of being cut: an action
+    /// whose words must all show (a repair that names a file). It keeps its padding, border and
+    /// target; words that fit stay on one line.
+    pub fn wraps(mut self) -> Self {
         self.wraps = true;
         self
     }

@@ -131,12 +131,28 @@ fn menu_slot_icon(ui: &egui::Ui, word: &str) -> Option<&'static str> {
     }
 }
 
-/// The same named side picker serves roster slots and groups. Other opens a text field.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, choices: &[String]) {
+/// A side picker's two fields: the choice of a named side, and the name of another side.
+pub(super) const SIDE_CHOICE: design::FieldName = crate::field_id!("side_choice");
+pub(super) const SIDE_OTHER: design::FieldName = crate::field_id!("side_other");
+
+/// What a side picker offers: a named side, or another side the DM types.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SideChoice {
+    Named(String),
+    Other,
+}
+
+/// The same named side picker serves roster slots and groups. Other opens a text field. Lane E2's
+/// pressure caller (round 31 SD11, chosen-value-weight): the choice is the `Dropdown` part, whose
+/// closed value is regular `Body` weight, and the other side's name is the shared line field.
+/// `choice` and `other` are its two fields, keyed by the object whose side it is.
+pub(super) fn side_control(
+    ui: &mut egui::Ui,
+    (choice, other_field): (design::FieldId, design::FieldId),
+    name: &str,
+    side: &mut String,
+    choices: &[String],
+) {
     let id = ui.make_persistent_id((name, "other_side"));
     let custom = !matches!(side.as_str(), "party" | "enemies")
         && !choices.iter().any(|choice| choice == side);
@@ -148,8 +164,9 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
             } else {
                 String::new()
             };
-            if design::text_input(
+            if design::line_field(
                 ui,
+                other_field,
                 &format!("Other side for {name}"),
                 &mut text,
                 "Side name",
@@ -161,42 +178,54 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
                 *side = text.trim().to_lowercase();
             }
         }
-        let combo = egui::ComboBox::from_id_salt(name)
-            .icon(design::combo_icon)
+        let mut named: Vec<&str> = ["party", "enemies"]
+            .into_iter()
+            .chain(
+                choices
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|choice| !matches!(*choice, "party" | "enemies")),
+            )
+            .collect();
+        // A side typed before (`rivals`) is the current value: the control shows it, and the menu
+        // keeps it among the named sides.
+        if custom && !other && !side.trim().is_empty() {
+            named.push(side.as_str());
+        }
+        let mut chosen = if other {
+            SideChoice::Other
+        } else {
+            SideChoice::Named(side.clone())
+        };
+        let mut dropdown = design::Dropdown::new(choice, name)
             .width(if other {
                 Density::Read.control()
             } else {
                 design::S * 13.0
             })
-            .selected_text(if other {
-                String::new()
-            } else {
-                design::reader::human_label(side)
-            })
-            .show_ui(ui, |ui| {
-                for choice in ["party", "enemies"].into_iter().chain(
-                    choices
-                        .iter()
-                        .map(String::as_str)
-                        .filter(|choice| !matches!(*choice, "party" | "enemies")),
-                ) {
-                    if design::extras::choice_wrapped(
-                        ui,
-                        side == choice && !other,
-                        &design::reader::human_label(choice),
-                        None,
-                    )
-                    .clicked()
-                    {
-                        *side = choice.to_owned();
-                        other = false;
-                    }
+            .choice(
+                SideChoice::Named(named[0].to_owned()),
+                design::reader::human_label(named[0]),
+            );
+        for value in &named[1..] {
+            dropdown = dropdown.choices([(
+                SideChoice::Named((*value).to_owned()),
+                design::reader::human_label(value),
+            )]);
+        }
+        // While another side is typed, the control shows only its arrow.
+        let shown = dropdown
+            .choice_with_short_label(SideChoice::Other, "Other…", "")
+            .show(ui, &mut chosen);
+        if shown.changed {
+            match chosen {
+                SideChoice::Named(value) => {
+                    *side = value;
+                    other = false;
                 }
-                if design::extras::choice_wrapped(ui, other, "Other…", None).clicked() {
-                    other = true;
-                }
-            });
-        design::named(ui, &combo.response, name);
+                SideChoice::Other => other = true,
+            }
+        }
     });
     ui.data_mut(|data| data.insert_temp(id, other));
 }
