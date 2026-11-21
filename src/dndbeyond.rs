@@ -138,6 +138,30 @@ fn connection_help(ui: &mut egui::Ui) {
     });
 }
 
+/// The link's one kept result, `Campaign link saved.`: it ends with the next refresh or link.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LinkSaved;
+
+impl crate::design::results::Owner for LinkSaved {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+impl crate::design::results::Kept for LinkSaved {
+    type Owner = LinkSaved;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // A refresh ends it (`owner_changed`); a new link is a new result.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        press: crate::design::results::Press::Nothing,
+    };
+    fn owner(&self) -> LinkSaved {
+        LinkSaved
+    }
+}
+
 #[derive(Default)]
 pub struct DndBeyond {
     account_epoch: u64,
@@ -148,8 +172,8 @@ pub struct DndBeyond {
     pending: Option<Receiver<Result<Vec<RemoteCampaign>, String>>>,
     loaded: bool,
     error: Option<String>,
-    /// The link's result, with the order the link took for the footer.
-    message: Option<(String, crate::design::ResultOrder)>,
+    /// The link's result, with the order the link took for the footer (the store's).
+    message: crate::design::Results<LinkSaved, LinkSaved>,
     visible_last_frame: bool,
     requested_visible_link: Option<(uuid::Uuid, String)>,
     pending_link: Option<(uuid::Uuid, String)>,
@@ -197,7 +221,7 @@ impl DndBeyond {
             self.loaded = false;
             self.account_epoch = epoch;
             self.error = None;
-            self.message = None;
+            self.message.owner_changed(&LinkSaved);
             return;
         }
         if let Some(rx) = &self.pending {
@@ -244,7 +268,7 @@ impl DndBeyond {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.error = None;
-        self.message = None;
+        self.message.owner_changed(&LinkSaved);
         let ctx = ctx.clone();
         thread::spawn(move || {
             let _ = tx.send(fetch(session));
@@ -391,15 +415,12 @@ impl DndBeyond {
 
     /// Round 26: the D&D Beyond list's error and, on Link and folder (`link`), the link's result,
     /// in the footer of the pane that shows them. Both live until the next refresh or link.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     /// The messages are typed data, so the pane's body can change this list while the footer
-    /// waits for it (`Messages::pane`).
-    pub fn footer_messages<A: 'static>(
+    /// waits for it (`Messages::pane`). `frame` is the pane's.
+    pub fn footer_messages<'f, A: 'static>(
         &self,
-        messages: &mut crate::design::outcome::Messages<'_, A>,
+        frame: &'f crate::design::outcome::PaneFrame,
+        messages: &mut crate::design::outcome::Messages<'f, A>,
         link: bool,
     ) {
         if let Some(error) = &self.error {
@@ -407,11 +428,10 @@ impl DndBeyond {
                 &crate::campaigns::NotDone::words(error),
             ));
         }
-        if link && let Some((message, order)) = &self.message {
-            messages.outcome_at(
-                *order,
-                crate::design::outcome::Said::new(crate::campaigns::footer_words(message)),
-            );
+        if link && let Some(shown) = self.message.get(&LinkSaved) {
+            messages.kept(shown.outcome(frame, |_| {
+                crate::design::outcome::Said::new(crate::sentence!("Campaign link saved.")).into()
+            }));
         }
     }
 
@@ -445,10 +465,6 @@ impl DndBeyond {
     }
 
     /// The link's field: the campaign picker, its refresh and its help.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn show_link(
         &mut self,
         ui: &mut egui::Ui,
@@ -543,10 +559,7 @@ impl DndBeyond {
             match local.link(selected.clone()) {
                 Ok(()) => {
                     self.requested_visible_link = None;
-                    self.message = Some((
-                        "Campaign link saved.".into(),
-                        crate::design::ResultOrder::issue(),
-                    ));
+                    self.message.record(LinkSaved);
                     self.error = None;
                     if let Some(remote) = self
                         .campaigns

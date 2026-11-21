@@ -3327,9 +3327,25 @@ pub mod campaign_content {
             permissions.set_readonly(read_only);
             std::fs::set_permissions(&manifest, permissions).unwrap();
         };
+        // Issue #509: the search results the encounter search's `Use it` offers (Lookup's
+        // index, which that search reads) follow each saved package choice, and Encounters
+        // reads its creatures again. A draft and a failed Save change neither.
+        let offers_wraith = |d: &Driver<'_>| {
+            d.app().lookup.index().is_some_and(|index| {
+                index
+                    .unused_creatures("ash wraith")
+                    .iter()
+                    .any(|(_, _, name, _)| name == UNSELECTED_ENTRY)
+            })
+        };
+        let encounters_read = |d: &Driver<'_>| d.app().encounters.snapshot_revision();
+        let draft_offers = offers_wraith(d);
+        let draft_read = encounters_read(d);
         set_read_only(true);
         d.click(SAVE_SELECTIONS);
         d.settle();
+        let failed_offers = offers_wraith(d);
+        let failed_read = encounters_read(d);
         let failed_tops = package_tops(d);
         let failed = std::fs::read(&manifest).unwrap() == on_disk && d.visible_text("read only");
         set_read_only(false);
@@ -3337,6 +3353,8 @@ pub mod campaign_content {
         d.settle();
         let saved_tops = package_tops(d);
         let saved = d.visible_text("Campaign selections saved.");
+        let saved_offers = offers_wraith(d);
+        let saved_read = encounters_read(d);
         d.observe(
             "iter-25-C-page-results",
             draft_tops.iter().all(Option::is_some)
@@ -3352,6 +3370,22 @@ pub mod campaign_content {
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.click(SAVE_SELECTIONS);
         d.settle();
+        let unused_offers = offers_wraith(d);
+        let unused_read = encounters_read(d);
+        d.observe(
+            "m32-C0-509-choices-refresh",
+            draft_offers
+                && failed_offers
+                && !saved_offers
+                && unused_offers
+                && draft_read.is_some()
+                && failed_read == draft_read
+                && saved_read.is_some_and(|read| Some(read) != draft_read)
+                && unused_read.is_some_and(|read| Some(read) != saved_read),
+            format!(
+                "Use it offers {UNSELECTED_ENTRY}: draft {draft_offers}, failed Save {failed_offers}, saved {saved_offers}, saved unused {unused_offers}; Encounters read {draft_read:?}, {failed_read:?}, {saved_read:?}, {unused_read:?}"
+            ),
+        );
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.expect(CHANGED);
         d.click(DISCARD_SELECTION);
@@ -17240,8 +17274,10 @@ pub mod session_recording {
                 d.is_disabled("Continue processing"),
                 "A banner retry with removed audio is blocked",
             );
-            // iter-23-S FE1: the reason stands beside the blocked action, and the words no
-            // longer tell the DM to select it.
+            // iter-23-S FE1: the reason is painted, and the words no longer tell the DM to select
+            // the blocked action. M-N0.10: the alert is a typed message, so the reason stands on
+            // its lock line under the choices, from the words' first letter (where the first
+            // choice, Continue processing, starts), as every locked choice's reason does.
             const GONE: &str = "Audio removed. Restore the WAV file to process it.";
             // A wrapped label in a wrapped row starts its first line after the controls before
             // it; measure that line.
@@ -17261,10 +17297,10 @@ pub mod session_recording {
                 !d.visible_text("Wait, then select Continue processing")
                     && d.visible_text("The transcript and summary service is busy.")
                     && reason.zip(button).is_some_and(|(reason, button)| {
-                        reason.left() >= button.right() && reason.center().y > button.top()
-                            && reason.center().y < button.bottom()
+                        reason.top() >= button.bottom() - 0.5
+                            && (reason.left() - button.left()).abs() <= 1.0
                     }),
-                format!("The blocked reason follows Continue processing on its line: {reason:?}, {button:?}"),
+                format!("The blocked reason stands under the choices, at the words: {reason:?}, {button:?}"),
             );
             let process = d
                 .nodes()

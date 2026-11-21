@@ -366,8 +366,6 @@ enum ContentFault<'a> {
     Manifest {
         package: &'a str,
         problem: &'a str,
-        /// The manifest's path in its package, for what Replace keeps and replaces.
-        path: &'a str,
         on_disk: bool,
     },
     /// A chosen package that is not available, and where it was.
@@ -459,27 +457,11 @@ impl design::outcome::Fault for ContentFault<'_> {
                 .and_then(&outside)
                 .unwrap_or(crate::sentence!("This needs fixing.")),
             Self::Flag(cause) => outside(cause).unwrap_or(crate::sentence!("This needs fixing.")),
+            // What Replace keeps and replaces is its choice's own help line (ruling M8).
             Self::Manifest {
-                package,
-                problem,
-                path,
-                on_disk,
-            } => {
-                let words = outside(&manifest_message(package, problem))
-                    .unwrap_or(crate::sentence!("The package manifest cannot be used."));
-                // What Replace keeps and replaces, in the Library's words (one owner).
-                match on_disk
-                    .then(|| {
-                        outside(&crate::content_workspace::manifest_replace_consequence(
-                            path,
-                        ))
-                    })
-                    .flatten()
-                {
-                    Some(consequence) => words.then(consequence),
-                    None => words,
-                }
-            }
+                package, problem, ..
+            } => outside(&manifest_message(package, problem))
+                .unwrap_or(crate::sentence!("The package manifest cannot be used.")),
             Self::Unavailable {
                 message,
                 it_was,
@@ -540,6 +522,16 @@ pub struct CampaignContent {
     pub open_run_settings: bool,
     pub found_package: Option<Module>,
     pub forget_package: Option<Uuid>,
+    /// Issue #509: this frame wrote the open campaign's package choices (Save selections,
+    /// Remove from this campaign, Undo of a removal). Campaign.md written again from Splat's copy,
+    /// and its Undo, recover the file and reload this page only, as before.
+    /// The app takes it after the page (`Splat::route`) and reads Lookup and Encounters again,
+    /// so their searches follow what the campaign uses now.
+    pub choices_written: bool,
+    /// Issue #513: Ctrl+S, taken before the page draws (`save_shortcut`). The page saves the
+    /// package choices after the package list has taken the frame's input; the key ends with
+    /// the frame (`show`).
+    save_key: bool,
     error: Option<String>,
     /// The newest failed answer to an act of the DM (ruling Q-x): a refused folder pick, a
     /// failed Undo or write, a repair's failed Save. First in the footer. See [`Answer`] for its
@@ -740,7 +732,6 @@ struct PackageWarnings {
 /// `indeterminate` is the package box's own state: a box that is not fully ticked never says
 /// `All chosen`.
 fn package_count(ticked: usize, total: usize, indeterminate: bool) -> String {
-    let number = |n: usize| design::count(n, "", "").trim().to_owned();
     let entries = || {
         if total == 0 {
             String::new()
@@ -754,7 +745,7 @@ fn package_count(ticked: usize, total: usize, indeterminate: bool) -> String {
     } else if ticked == total && !indeterminate {
         format!("All chosen{}", entries())
     } else {
-        format!("{} of {} chosen", number(ticked), number(total))
+        design::outcome::chosen_count(ticked, total, "")
     }
 }
 
@@ -824,7 +815,7 @@ fn undo_failed(cause: &str) -> String {
     reason = "a manifest write’s words are the content workspace’s own (`ManifestWrite::message`)"
 )]
 fn outcome_of(payload: &Payload, locked: bool) -> design::outcome::KeptOutcome<ContentPress> {
-    use design::outcome::{KeptOutcome, Notice, Said, Sentence, UndoStep, Verb};
+    use design::outcome::{Done, KeptOutcome, Notice, Said, Sentence, UndoStep, Verb};
     let undo = |verb: Verb, object: &str| {
         UndoStep::of(verb, object.to_owned()).pressed_as(ContentPress::Undo)
     };
@@ -838,12 +829,13 @@ fn outcome_of(payload: &Payload, locked: bool) -> design::outcome::KeptOutcome<C
         Payload::CampaignWrite(_) => Said::new(crate::sentence!("Campaign.md was written again."))
             .undo(undo(Verb::Write, "Campaign.md"))
             .into(),
-        Payload::Recovered { module, .. } => {
-            let folder = folder_words(&module.path);
-            Said::new(crate::sentence!("{} found in {}/.", module.name, folder))
-                .undo(undo(Verb::Recover, &folder))
-                .into()
-        }
+        // One verb for the result and its Undo (M0003): `Watch recovered in packages/watch/.`,
+        // its Undo told apart by the same folder.
+        Payload::Recovered { module, .. } => Done::new(Verb::Recover, module.name.clone())
+            .object_first()
+            .within(format!("{}/", folder_words(&module.path)))
+            .undo(ContentPress::Undo)
+            .into(),
         Payload::Discarded { .. } => discarded("Campaign packages"),
         Payload::RepairDiscard { path, .. } => discarded(path.rsplit('/').next().unwrap_or(path)),
         Payload::ManifestWrite { name, write, .. } => Said::new(
@@ -976,6 +968,25 @@ impl CampaignContent {
             design::count(chosen + needed, "entry chosen", "entries chosen")
         })
     }
+    /// Issue #513: the app calls this before the page draws, with its one modal test
+    /// (`crate::modal_open`): no key acts beneath a modal. It only takes the key; the page saves
+    /// after the package list (`page`), so a box ticked in the frame of the key is in the save.
+    /// A repair editor takes its own key (`repair_section`), so the key is left for it while a
+    /// repair stands.
+    pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool) {
+        self.save_key = !modal
+            && self.snapshot.is_some()
+            && self.repairs.is_empty()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+    }
+
+    /// The page wrote the open campaign's package choices: the check is due again, and the app
+    /// reads Lookup and Encounters again (`choices_written`).
+    fn wrote_choices(&mut self) {
+        self.reconcile.checked_at = None;
+        self.choices_written = true;
+    }
+
     /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.
     pub fn tick(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
         let active = campaigns.active_campaign();
@@ -1244,11 +1255,7 @@ impl CampaignContent {
             .is_none_or(|c| c.id != active.id || c.path != active.path)
         {
             if self.dirty() {
-                ui.label(
-                    Type::Section
-                        .rich(ui, "Unsaved campaign content")
-                        .color(colors().text),
-                );
+                design::heading(ui, design::Heading::Section("Unsaved campaign content"));
                 ui.label("The previous campaign still has pending changes. Select it again to save them, or discard and switch.");
                 if Action::destructive("Discard and switch campaign")
                     .show(ui)
@@ -1355,6 +1362,8 @@ impl CampaignContent {
         if write {
             self.write_campaign(campaigns, &active);
         }
+        // A key no save took (the page still loading) ends with its frame.
+        self.save_key = false;
     }
 
     /// Whether the page shows, above the package columns, a list or an editor that scrolls inside
@@ -1425,9 +1434,7 @@ impl CampaignContent {
     ) {
         let top = ui.cursor().top();
         let active = active.clone();
-        if self.snapshot.is_some() {
-            self.selection_bar(ui, campaigns, &active);
-        }
+        let save = self.snapshot.is_some() && self.selection_bar(ui, campaigns, &active);
         if self.body_missing() {
             // Round 27 FB3, AB1: a page with no package list draws its errors as its content,
             // where an empty state starts, so the DM does not look past a blank page for them.
@@ -1476,6 +1483,10 @@ impl CampaignContent {
                     },
                 );
             }
+        }
+        // Issue #513: after the package list, which takes the frame's input.
+        if save || std::mem::take(&mut self.save_key) {
+            self.save_choices();
         }
     }
 
@@ -1741,7 +1752,7 @@ impl CampaignContent {
                     match document.save() {
                         Ok(()) => {
                             self.saved_selections = document.selections.clone();
-                            self.reconcile.checked_at = None;
+                            self.wrote_choices();
                         }
                         Err(error) => {
                             document.selections = after;
@@ -1789,10 +1800,9 @@ impl CampaignContent {
             return;
         }
         let c = colors();
-        ui.label(
-            Type::Section
-                .rich(ui, "Campaign package: changes to review")
-                .color(c.text),
+        design::heading(
+            ui,
+            design::Heading::Section("Campaign package: changes to review"),
         );
         design::ScrollColumn::new("campaign package changes")
             .max_height(220.0)
@@ -2067,11 +2077,18 @@ impl CampaignContent {
         }
     }
 
-    fn selection_bar(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+    /// Whether `Save selections` was pressed. The save waits for the package list (`page`).
+    fn selection_bar(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        active: &Campaign,
+    ) -> bool {
         ui.scope(|ui| {
             ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.selection_bar_content(ui, campaigns, active);
-        });
+            self.selection_bar_content(ui, campaigns, active)
+        })
+        .inner
     }
 
     #[allow(
@@ -2083,7 +2100,7 @@ impl CampaignContent {
         ui: &mut egui::Ui,
         campaigns: &Campaigns,
         active: &Campaign,
-    ) {
+    ) -> bool {
         let snapshot = self.snapshot.as_mut().unwrap();
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
@@ -2097,6 +2114,7 @@ impl CampaignContent {
         let mut reload = false;
         let c = colors();
         let mut repair_reason = None;
+        let mut pressed = false;
         ui.horizontal(|ui| {
             let dirty = document.selections != self.saved_selections || document.baseline.is_none();
             let repair_text = self
@@ -2104,9 +2122,6 @@ impl CampaignContent {
                 .first()
                 .map(|repair| format!("Fix {} first.", repair.path));
             let repair = repair_text.as_deref();
-            let save_key = dirty
-                && repair.is_none()
-                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
             let changed = document.selections != self.saved_selections;
             if changed {
                 design::status(
@@ -2172,7 +2187,7 @@ impl CampaignContent {
                     }),
                 );
             }
-            let pressed = ui
+            pressed = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let blocked = repair.or((!dirty).then_some("No changes to save."));
                     let pressed = (if self.run_open {
@@ -2191,27 +2206,6 @@ impl CampaignContent {
                     pressed
                 })
                 .inner;
-            if pressed || save_key {
-                for selection in &mut document.selections {
-                    if let Some(module) = catalogue
-                        .resolve_ref(&selection.package)
-                        .ok()
-                        .and_then(|id| catalogue.modules.iter().find(|module| module.id == id))
-                    {
-                        selection.name = Some(module.name.clone());
-                    }
-                }
-                match document.save() {
-                    Ok(()) => {
-                        self.saved_selections = document.selections.clone();
-                        self.reconcile.checked_at = None;
-                        new_result!(self, Payload::Saved);
-                        self.error = None;
-                    }
-                    // Ruling Q-x: the newest answer, in place of an older one.
-                    Err(e) => self.answer = answer_in(&self.active, Cause::Failed, e),
-                }
-            }
         });
         // The repair that blocks Save keeps its own line below Save at every width: it stays while
         // the repair does, so it never comes and goes under the DM's work.
@@ -2224,6 +2218,43 @@ impl CampaignContent {
         }
         if reload {
             self.reload(ui.ctx(), campaigns, active.clone());
+        }
+        pressed
+    }
+
+    /// Save the package choices: `Save selections` or Ctrl+S (`save_shortcut`), after the
+    /// package list took the frame's input (issue #513), so a box ticked in the frame of the key
+    /// is in the save. Only changed choices with no repair standing are saved, as Save's own
+    /// lock says; else the key does nothing.
+    fn save_choices(&mut self) {
+        let repairs = !self.repairs.is_empty();
+        let Some(snapshot) = self.snapshot.as_mut() else {
+            return;
+        };
+        let catalogue = &snapshot.catalogue;
+        let document = &mut snapshot.document;
+        let dirty = document.selections != self.saved_selections || document.baseline.is_none();
+        if !dirty || repairs {
+            return;
+        }
+        for selection in &mut document.selections {
+            if let Some(module) = catalogue
+                .resolve_ref(&selection.package)
+                .ok()
+                .and_then(|id| catalogue.modules.iter().find(|module| module.id == id))
+            {
+                selection.name = Some(module.name.clone());
+            }
+        }
+        match document.save() {
+            Ok(()) => {
+                self.saved_selections = document.selections.clone();
+                new_result!(self, Payload::Saved);
+                self.error = None;
+                self.wrote_choices();
+            }
+            // Ruling Q-x: the newest answer, in place of an older one.
+            Err(e) => self.answer = answer_in(&self.active, Cause::Failed, e),
         }
     }
 
@@ -2319,7 +2350,6 @@ impl CampaignContent {
             let fault = FaultMessage::new(&ContentFault::Manifest {
                 package: &module.name,
                 problem,
-                path,
                 on_disk: exists,
             });
             let fault = if exists {
@@ -2334,6 +2364,8 @@ impl CampaignContent {
                             crate::choice!("Replace with a basic {}", path),
                             ContentPress::WriteManifest(module.id),
                         )
+                        // What it keeps and replaces, in the Library's words (one owner).
+                        .help(crate::library::manifest_replace_help(path))
                         .locked_when(unsaved, wait()),
                     )
             } else {
@@ -2597,7 +2629,7 @@ impl CampaignContent {
                             users,
                         })
                     );
-                    self.reconcile.checked_at = None;
+                    self.wrote_choices();
                 }
                 Err(error) => {
                     document.selections = before;

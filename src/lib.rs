@@ -1541,11 +1541,12 @@ impl Splat {
                 .timeline
                 .add(timeline::Kind::Event, self.trackers.played);
             if let Some(added) = self.timeline.event_mut(&event) {
-                added.title = title;
+                added.title = title.clone();
             }
             self.trackers.added = Some(trackers::Added {
                 entry,
                 event,
+                title,
                 at: std::time::Instant::now(),
                 not_saved: None,
             });
@@ -1853,7 +1854,7 @@ impl Splat {
 
     fn no_campaign(&mut self, ui: &mut egui::Ui) {
         let no_campaigns = self.campaigns.all().is_empty();
-        design::page_header(ui, self.page.name(), None, |_| {});
+        design::TitleLine::new(self.page.name()).page().show(ui);
         let mut add = false;
         design::empty_state(
             ui,
@@ -1893,7 +1894,7 @@ impl Splat {
         let (_, session) = self.settings.campaign_session();
         match self.page {
             Page::Settings => {
-                design::page_header(ui, "Settings", None, |_| {});
+                design::TitleLine::new("Settings").page().show(ui);
                 let tab_changed = design::segmented(
                     ui,
                     &mut self.settings_tab,
@@ -2047,13 +2048,13 @@ impl Splat {
                         |(settings, dndbeyond), messages| {
                             campaigns_ref
                                 .borrow()
-                                .footer_messages(messages, true, blocked);
+                                .footer_messages(&frame, messages, true, blocked);
                             settings.footer_messages(messages);
-                            dndbeyond.footer_messages(messages, false);
+                            dndbeyond.footer_messages(&frame, messages, false);
                         },
                     );
                     if let Some(press) = paned.pressed {
-                        campaigns.into_inner().footer_act(press.id);
+                        campaigns.into_inner().footer_act(press);
                     }
                 });
             }
@@ -2253,6 +2254,8 @@ impl Splat {
                 design::gap(ui, design::Gap::XS);
                 match self.campaign_tab {
                     CampaignTab::Packages => {
+                        let modal = self.modal_open(ui.ctx());
+                        self.campaign_content.save_shortcut(ui.ctx(), modal);
                         self.campaign_content.show(ui, &self.campaigns);
                         if std::mem::take(&mut self.campaign_content.open_run_settings) {
                             self.campaign_tab = CampaignTab::RunSettings;
@@ -2314,12 +2317,12 @@ impl Splat {
                                 |dndbeyond, messages| {
                                     campaigns_ref
                                         .borrow()
-                                        .footer_messages(messages, false, blocked);
-                                    dndbeyond.footer_messages(messages, true);
+                                        .footer_messages(&frame, messages, false, blocked);
+                                    dndbeyond.footer_messages(&frame, messages, true);
                                 },
                             );
                             if let Some(press) = paned.pressed {
-                                campaigns.into_inner().footer_act(press.id);
+                                campaigns.into_inner().footer_act(press);
                             }
                         });
                     }
@@ -2458,6 +2461,17 @@ impl Splat {
                 self.lookup.refresh();
             }
             self.campaign_content.package_restored(result);
+        }
+        // Issue #509: the Campaign page wrote the package choices. What Library, Encounters and
+        // Lookup hold of what the campaign uses is now out of date.
+        if std::mem::take(&mut self.campaign_content.choices_written)
+            && let Some(campaign) = self.campaigns.active_campaign()
+        {
+            self.library
+                .refresh_destination(&campaign.path, ctx, &self.campaigns);
+            self.encounters
+                .refresh_content(ctx, &self.campaigns, &campaign.path);
+            self.lookup.refresh();
         }
         if let Some(words) = markdown_view::take_lookup_link(ctx) {
             self.notes_give_way();
