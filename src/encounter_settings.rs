@@ -16,7 +16,7 @@ use uuid::Uuid;
 const MECHANIC: &str = "dnd2024:rules/combat_initiative";
 pub use splat_campaign::encounter_run::{Grouping, Initiative};
 /// The wording shared by Campaign settings and Run.
-pub(crate) trait GroupingWords {
+pub trait GroupingWords {
     fn label(self) -> &'static str;
     fn arrival_rule(self) -> &'static str;
 }
@@ -163,7 +163,7 @@ impl Options {
         }
         result.inspiration_rules = inspiration_rules(campaign, catalogue, document);
         result.house_rules = house_rule_notes(campaign, catalogue, document);
-        result.in_play = crate::trackers::read_in_play(entry.fields.get("splat_in_play"))?;
+        result.in_play = splat_campaign::trackers::read_in_play(entry.fields.get("splat_in_play"))?;
         // A note in play that is gone keeps its row, so that the DM can switch it off.
         for id in &result.in_play {
             if !result.house_rules.iter().any(|(note, _)| note == id) {
@@ -380,7 +380,9 @@ impl Options {
         ];
         // The in-play list changes only when a switch changed, so a campaign with no house rule
         // note gains no key.
-        if crate::trackers::read_in_play(entry.fields.get("splat_in_play"))? != self.in_play {
+        if splat_campaign::trackers::read_in_play(entry.fields.get("splat_in_play"))?
+            != self.in_play
+        {
             fields.push((
                 "splat_in_play",
                 (!self.in_play.is_empty())
@@ -431,7 +433,7 @@ fn house_rule_notes(
     document: &CampaignDocument,
 ) -> Vec<(Uuid, String)> {
     let mut notes: Vec<_> = rules_in_use(campaign, catalogue, document)
-        .filter(|(_, _, entry, _)| crate::trackers::is_house_rule_note(entry))
+        .filter(|(_, _, entry, _)| splat_campaign::trackers::is_house_rule_note(entry))
         .map(|(id, _, entry, _)| (id, entry.name.clone()))
         .collect();
     notes.sort_by_key(|(_, name)| name.to_lowercase());

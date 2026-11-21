@@ -3,7 +3,7 @@
 mod ad_hoc;
 #[path = "encounter_run/dock.rs"]
 mod dock;
-pub(crate) use splat_campaign::encounter_run::effect;
+pub use splat_campaign::encounter_run::effect;
 #[path = "encounter_run/loot.rs"]
 mod loot;
 #[path = "encounter_run/notice.rs"]
@@ -12,24 +12,24 @@ mod notice;
 mod rolling;
 use splat_campaign::encounter_run::undo;
 #[path = "encounter_run/view.rs"]
-pub(crate) mod view;
+pub mod view;
 use crate::encounter_settings::{Grouping, GroupingWords, Initiative};
 #[cfg(test)]
 use splat_campaign::encounter_run::Changes;
-pub(crate) use splat_campaign::encounter_run::{
+pub use splat_campaign::encounter_run::{
     AddedFrom, Carry, FightRow, MAX_PARTICIPANTS, NOBODY_PRESENT, Participant, Phase,
 };
-pub(crate) use splat_campaign::encounter_run::{FightSummary, fight_summary, party_at_end};
+pub use splat_campaign::encounter_run::{FightSummary, fight_summary, party_at_end};
 use splat_campaign::encounter_run::{
     Recovery, SheetShadow, is_player, read_saved_bytes, roll_initiative,
 };
 
-const UNDO_FILE_BYTES: usize = if cfg!(test) {
+const UNDO_FILE_BYTES: usize = if cfg!(any(test, feature = "test-support")) {
     1024 * 1024
 } else {
     undo::SAVED_BYTES
 };
-const UNDO_MEMORY_BYTES: usize = if cfg!(test) {
+const UNDO_MEMORY_BYTES: usize = if cfg!(any(test, feature = "test-support")) {
     32 * 1024 * 1024
 } else {
     undo::MEMORY_BYTES
@@ -38,10 +38,10 @@ const UNDO_MEMORY_BYTES: usize = if cfg!(test) {
 fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
     splat_campaign::encounter_run::read_saved(path, campaign)
 }
-pub(crate) use ad_hoc::RunCreature;
-pub(crate) use effect::Condition;
+pub use ad_hoc::RunCreature;
+pub use effect::Condition;
 use eframe::egui;
-pub(crate) use loot::rewards;
+pub use loot::rewards;
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::inspiration::Inspiration;
 #[cfg(test)]
@@ -58,7 +58,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use uuid::Uuid;
-pub(crate) use view::{change_preview, change_rows};
+pub use view::change_preview;
+pub(crate) use view::change_rows;
 
 /// The words after a name in a sheet change's summary. The run header shortens them to `:`.
 pub(crate) const SHEET_CHANGED: &str = "’s sheet changed:";
@@ -66,31 +67,29 @@ pub(crate) const SHEET_CHANGED: &str = "’s sheet changed:";
 /// A second step that the DM opened: the close dialog. Its keyboard focus belongs to the dialog
 /// part while it shows (`design::dialog_default`, G44), so no flag outlives an opening.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum Opening {
+pub enum Opening {
     #[default]
     Shut,
     Open,
 }
 
 impl Opening {
-    pub(crate) fn open(&mut self) {
+    pub fn open(&mut self) {
         *self = Self::Open;
     }
 
-    pub(crate) fn shut(&mut self) {
+    pub fn shut(&mut self) {
         *self = Self::Shut;
     }
 
-    pub(crate) fn is_open(self) -> bool {
+    pub fn is_open(self) -> bool {
         self == Self::Open
     }
 }
 
-#[cfg(test)]
-pub(crate) use splat_content_ui::roster::keep_whole;
-pub(crate) use splat_content_ui::roster::{
-    FaultKind, GroupMember, MemberFault, RunGroup, grouped_number,
-};
+#[cfg(any(test, feature = "test-support"))]
+pub use splat_content_ui::roster::keep_whole;
+pub use splat_content_ui::roster::{FaultKind, GroupMember, MemberFault, RunGroup, grouped_number};
 /// A campaign's groups, as one run sorts them.
 #[derive(Debug, Default)]
 pub(crate) struct OfferedGroups {
@@ -100,7 +99,7 @@ pub(crate) struct OfferedGroups {
     pub other: Vec<Arc<RunGroup>>,
 }
 impl OfferedGroups {
-    pub(crate) fn of(groups: &[Arc<RunGroup>], encounter: Option<Uuid>) -> Self {
+    pub fn of(groups: &[Arc<RunGroup>], encounter: Option<Uuid>) -> Self {
         let mut offered = Self::default();
         for group in groups {
             match group.encounter {
@@ -246,12 +245,12 @@ impl crate::design::results::Kept for StepResult {
 
 // How many timeline facts (`Run::timeline_fact`, which copies the run's name) this thread made,
 // for a test that an unchanged poll copies none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     pub(crate) static TIMELINE_FACTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-pub(crate) struct Run {
+pub struct Run {
     pub name: String,
     id: Uuid,
     /// The encounter this run came from. Saves from before this was kept have none.
@@ -344,8 +343,8 @@ pub(crate) struct Run {
     /// was worked out from (G178).
     pending_lines: BTreeMap<usize, (u64, String)>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
-    #[cfg(test)]
-    pub(crate) arrival_counts: (usize, usize),
+    #[cfg(any(test, feature = "test-support"))]
+    pub arrival_counts: (usize, usize),
     /// Each Arrivals group's member summary, wrapped for its place, worked out for one read of
     /// the groups, one width and one type size (FI8). Never saved.
     arrival_summaries: Option<(SummaryKey, BTreeMap<Uuid, ArrivalSummary>)>,
@@ -451,7 +450,7 @@ pub(crate) struct Run {
     /// next press of `Edit encounter` ends it, and it ends with the run (closing it, another
     /// run, a campaign change). A draft refusal also ends when no draft blocks any more (the
     /// app checks it while one is stored).
-    pub(crate) prep_refusal: Option<PrepRefusal>,
+    pub prep_refusal: Option<PrepRefusal>,
     pub content: Option<Arc<crate::lookup::ContentIndex>>,
     /// A link the DM followed in the side panel.
     pub lookup_request: Option<usize>,
@@ -528,7 +527,7 @@ const REST_LOG: &str = "Party HP is full after the long rest.";
 pub(crate) const SAVED_HP_STEP: &str = "use saved HP";
 /// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
 /// R23 (Q-n, AJ3, SJ4): the result first, then its cause.
-pub(crate) const CONTINUE_LATER: &str =
+pub const CONTINUE_LATER: &str =
     "This fight cannot go on: a later fight or rest was played. Start a new run to play it again.";
 /// Why Continue fight is not offered: the Timeline has no event for this fight.
 const CONTINUE_NO_EVENT: &str =
@@ -641,8 +640,8 @@ const UNDO_UNREAD_REASON: &str = "Nothing to undo. Splat could not read the save
 /// What the run and its log say, once, when the file's Undo steps could not be read.
 pub(crate) const UNDO_UNREAD: &str = "Splat could not read this run’s saved Undo steps, so Undo starts again from here. No turn, HP or condition was lost.";
 /// The result of `Use the saved HP`, until the next step.
-pub(crate) const SAVED_HP_USED: &str = "Party HP set to the saved values.";
-pub(crate) const CLOSE_BLOCKED: &str =
+pub const SAVED_HP_USED: &str = "Party HP set to the saved values.";
+pub const CLOSE_BLOCKED: &str =
     "Wait for pending sync changes, resolve conflicts, or stop sync for them before closing.";
 /// What the one party action does when pressed.
 enum PartySync {
@@ -861,7 +860,7 @@ impl Run {
             turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             pending_lines: BTreeMap::new(),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             arrival_counts: (0, 0),
             arrival_summaries: None,
             totals_revision: 0,
@@ -1186,7 +1185,7 @@ impl Run {
         })
     }
     /// The read-aloud text and notes, and the setup's technical details, if a run has them.
-    pub(crate) fn prep(&self) -> (&str, Option<&str>) {
+    pub fn prep(&self) -> (&str, Option<&str>) {
         prep_parts(&self.setup_details)
     }
     fn current(&self) -> Option<usize> {
@@ -1525,15 +1524,12 @@ impl Run {
             .filter(|recharged| recharged.step == self.dm_steps)
     }
     /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
-    pub(crate) fn roll_table(
-        &mut self,
-        roll: crate::roll_table::TableRoll,
-    ) -> Result<String, String> {
+    pub fn roll_table(&mut self, roll: crate::roll_table::TableRoll) -> Result<String, String> {
         self.apply(Command::TableRoll(roll))?;
         Ok(self.state.log.last().cloned().unwrap_or_default())
     }
     /// An NPC or a group joins the fight from outside the run page.
-    pub(crate) fn add_group(&mut self, group: Arc<RunGroup>, total: Option<i64>) {
+    pub fn add_group(&mut self, group: Arc<RunGroup>, total: Option<i64>) {
         if let Err(error) = self.apply(Command::AddGroup(group, total)) {
             self.error = Some(error);
         }
@@ -1573,7 +1569,7 @@ impl Run {
     /// named step that Undo puts back; Undo takes back an ending from the run file. Play goes
     /// on from the turn the fight ended on, and sync starts again by the rule for a resumed
     /// run. Otherwise the run says why and stays ended.
-    pub(crate) fn unend(&mut self, act: Unend, timeline: &mut crate::timeline::Book) {
+    pub fn unend(&mut self, act: Unend, timeline: &mut crate::timeline::Book) {
         if !self.ended() {
             return;
         }
@@ -1611,14 +1607,14 @@ impl Run {
         }
     }
     /// This run's own id, the same in every frame and every save.
-    pub(crate) fn id(&self) -> Uuid {
+    pub fn id(&self) -> Uuid {
         self.id
     }
-    pub(crate) fn ended(&self) -> bool {
+    pub fn ended(&self) -> bool {
         matches!(self.state.phase, Phase::Ended { .. })
     }
     /// The sides in this run, in the order they first appear.
-    pub(crate) fn side_names(&self) -> Vec<String> {
+    pub fn side_names(&self) -> Vec<String> {
         let mut sides = Vec::new();
         for participant in &self.state.participants {
             if !sides.contains(&participant.side) {
@@ -1627,7 +1623,7 @@ impl Run {
         }
         sides
     }
-    pub(crate) fn arrivals_in_run(&self) -> BTreeMap<Uuid, (usize, Option<i64>)> {
+    pub fn arrivals_in_run(&self) -> BTreeMap<Uuid, (usize, Option<i64>)> {
         self.state
             .participants
             .iter()
@@ -1637,7 +1633,7 @@ impl Run {
             })
             .collect()
     }
-    pub(crate) fn select_arrival(&mut self, index: usize) {
+    pub fn select_arrival(&mut self, index: usize) {
         if index < self.state.participants.len() {
             self.select(index);
             self.panel = Panel::Reference;
@@ -2587,7 +2583,7 @@ impl Run {
 
     /// What the timeline records about this run.
     pub fn timeline_fact(&self) -> crate::timeline::RunFact {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         TIMELINE_FACTS.with(|made| made.set(made.get() + 1));
         crate::timeline::RunFact {
             id: self.id,
@@ -2667,7 +2663,7 @@ impl Run {
             .count()
     }
     /// Whose unsent values a close would lose: those the run does not hold itself.
-    pub(crate) fn unsent_only_here_names(&self) -> Vec<String> {
+    pub fn unsent_only_here_names(&self) -> Vec<String> {
         self.sync_names(crate::combat_sync::CombatSync::unsent_only_here)
     }
     /// Who has changes a lost session left unsent.
@@ -3399,7 +3395,7 @@ impl Run {
         });
     }
     /// A sheet changed outside Splat, with these words for what changed.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn note_sheet_update(&mut self, lines: &[String]) {
         let before = self.state.clone();
         let indices: Vec<_> = self
@@ -3432,17 +3428,13 @@ pub fn find_run(directory: &Path, campaign: Uuid, id: Uuid) -> Result<PathBuf, S
 /// Why a run's file was not found: its folder (R41: missing or unreadable), or the folder
 /// holds no single file for it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FindRunFault {
+pub enum FindRunFault {
     Folder(RunFolderFault),
     File(String),
 }
 
 /// `find_run`, keeping the folder's cause typed, so a page says it as Encounters does.
-pub(crate) fn find_run_typed(
-    directory: &Path,
-    campaign: Uuid,
-    id: Uuid,
-) -> Result<PathBuf, FindRunFault> {
+pub fn find_run_typed(directory: &Path, campaign: Uuid, id: Uuid) -> Result<PathBuf, FindRunFault> {
     let folder = |fault| FindRunFault::Folder(fault);
     let unreadable = |error: std::io::Error| folder(RunFolderFault::unreadable(directory, &error));
     let mut found = Vec::new();
@@ -3554,7 +3546,7 @@ impl Run {
         (participant.hp, words.collect())
     }
     /// The encounter this run came from, if it says.
-    pub(crate) fn source(&self) -> Option<Uuid> {
+    pub fn source(&self) -> Option<Uuid> {
         self.source
     }
     /// AB1, FB1: Save encounter gives this run, when it came from that encounter, the saved
@@ -3973,7 +3965,7 @@ impl Run {
             turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             pending_lines: BTreeMap::new(),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             arrival_counts: (0, 0),
             arrival_summaries: None,
             totals_revision: 0,
@@ -4257,7 +4249,7 @@ pub enum Standing {
 
 /// Why Prep's `Edit encounter` did not open the run's encounter.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum PrepRefusal {
+pub enum PrepRefusal {
     /// An unsaved draft holds the editor (the shared recipe's kind, so the words are always
     /// that draft's). It ends when no draft blocks.
     Draft(crate::design::Unsaved),
@@ -4266,7 +4258,7 @@ pub(crate) enum PrepRefusal {
 }
 
 impl PrepRefusal {
-    pub(crate) fn reason(&self) -> &str {
+    pub fn reason(&self) -> &str {
         match self {
             Self::Draft(draft) => draft.reason(),
             Self::Other(words) => words,
@@ -4278,7 +4270,7 @@ impl PrepRefusal {
 /// sentence, its tone, and what In progress and History say in place of their rows. The
 /// Encounters snapshot holds it; the next list read that succeeds ends it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RunFolderFault {
+pub enum RunFolderFault {
     /// The folder is not there: it may have been moved or renamed. A warning.
     Missing(PathBuf),
     /// The folder is there, and Splat cannot list it. An error. `cause` is plain words.
@@ -4317,7 +4309,7 @@ impl RunFolderFault {
 
     /// The footer's sentence: what is wrong, with the folder, and what the DM can do. The
     /// footer offers Choose folder beside it.
-    pub(crate) fn message(&self) -> String {
+    pub fn message(&self) -> String {
         match self {
             Self::Missing(folder) => format!(
                 "Splat cannot find the run folder {}. It may have been moved or renamed. Choose its new place, or put it back.",
@@ -4333,7 +4325,7 @@ impl RunFolderFault {
 
     /// The tone of `message`: a folder that is not there, or a setting, is a warning; a folder
     /// that cannot be read is an error.
-    pub(crate) fn severity(&self) -> crate::design::outcome::Severity {
+    pub fn severity(&self) -> crate::design::outcome::Severity {
         match self {
             Self::Missing(_) | Self::Setting(_) => crate::design::outcome::Severity::NeedsFixing,
             Self::Unreadable { .. } => crate::design::outcome::Severity::CannotRead,
@@ -4341,7 +4333,7 @@ impl RunFolderFault {
     }
 
     /// The tone of `message` where a page paints it as a message: the tone of `severity`.
-    pub(crate) fn tone(&self) -> crate::design::Tone {
+    pub fn tone(&self) -> crate::design::Tone {
         match self.severity() {
             crate::design::outcome::Severity::NeedsFixing => crate::design::Tone::Warning,
             crate::design::outcome::Severity::CannotRead
@@ -4496,7 +4488,7 @@ pub fn calendar_time(seconds: u64) -> String {
 
 pub use splat_content_ui::roster::calendar_date;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl Run {
     /// A participant's name, maximum HP and presence, for a test of what reached the run.
     pub fn participant_stats(&self, index: usize) -> (String, Option<i64>, bool) {
@@ -4509,7 +4501,7 @@ impl Run {
     pub fn hp_of(&self, index: usize) -> Option<i64> {
         self.state.participants[index].hp
     }
-    pub(crate) fn simulate_stat_block_edit(&mut self, name: &str, edit: impl FnOnce(&mut String)) {
+    pub fn simulate_stat_block_edit(&mut self, name: &str, edit: impl FnOnce(&mut String)) {
         let participant = self
             .state
             .participants
@@ -4545,7 +4537,7 @@ impl Run {
         self.no_saved_undo = None;
         self.undo_stopped = false;
     }
-    pub(crate) fn simulate_untimed(&mut self) -> Vec<Vec<Condition>> {
+    pub fn simulate_untimed(&mut self) -> Vec<Vec<Condition>> {
         self.state
             .participants
             .iter_mut()
@@ -4555,7 +4547,7 @@ impl Run {
             })
             .collect()
     }
-    pub(crate) fn simulate_conditions(&mut self, conditions: Vec<Vec<Condition>>) {
+    pub fn simulate_conditions(&mut self, conditions: Vec<Vec<Condition>>) {
         for (p, conditions) in self.state.participants.iter_mut().zip(conditions) {
             p.conditions = conditions;
         }
@@ -4602,13 +4594,13 @@ impl Run {
             .for_each(crate::combat_sync::CombatSync::stop_simulating);
     }
     /// How many lines the Log has.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn log_len(&self) -> usize {
         self.state.log.len()
     }
     /// A read of this character's sheet that shows inspiration or none. Test builds have no
     /// live sheet; this is the same note a read of the sheet makes.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sheet_inspiration(&mut self, name: &str, has: bool) {
         let row = self
             .state
@@ -4622,7 +4614,7 @@ impl Run {
         self.error = (!message.is_empty()).then(|| message.to_owned());
     }
     /// Copies of the last participant, until the run has `count` rows.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_rows(&mut self, count: usize) {
         while self.state.participants.len() < count {
             let at = self.state.participants.len();
@@ -4639,14 +4631,14 @@ impl Run {
         }
     }
     /// Every participant has this condition, by its word.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_condition(&mut self, word: &str) {
         for p in &mut self.state.participants {
             p.conditions = vec![Condition::Label(word.into())];
         }
     }
     /// The named participant takes the turn and is selected, with no scroll to it.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_current(&mut self, name: &str) {
         let at = self
             .state
@@ -4704,8 +4696,8 @@ impl Run {
 }
 
 /// A saved run in its second round, written by the same commands the DM controls use.
-#[cfg(test)]
-pub(crate) fn write_in_progress_run(
+#[cfg(any(test, feature = "test-support"))]
+pub fn write_in_progress_run(
     campaign: Uuid,
     directory: &Path,
     name: &str,
@@ -4723,7 +4715,7 @@ pub(crate) fn write_in_progress_run(
 /// A fixture run's ID comes from its campaign and name, so its file is the same on every run of
 /// a test. It takes no ID from `hermetic::new_uuid`, so the seeded IDs and dice that follow do
 /// not move. Two runs of one name in one campaign would share a file, so the second is refused.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn fixture_run_id(campaign: Uuid, directory: &Path, name: &str) -> Result<Uuid, String> {
     let id = splat::character::stable_id(&format!("visual:run:{campaign}:{name}"));
     if directory.join(format!("{id}.json")).exists() {
@@ -4735,8 +4727,8 @@ fn fixture_run_id(campaign: Uuid, directory: &Path, name: &str) -> Result<Uuid, 
 }
 
 /// As `write_in_progress_run`, with the encounter's own text.
-#[cfg(test)]
-pub(crate) fn write_in_progress_run_with(
+#[cfg(any(test, feature = "test-support"))]
+pub fn write_in_progress_run_with(
     campaign: Uuid,
     directory: &Path,
     name: &str,
@@ -4749,7 +4741,7 @@ pub(crate) fn write_in_progress_run_with(
 impl Run {
     /// Typed words as a run saved before effects kept them: a label, whatever its end says,
     /// with that version's Log line and Undo step. A fixture of an older run file.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn label_as_older_run(&mut self, index: usize, words: &str) -> Result<(), String> {
         let mut next = self.state.clone();
         let p = next
@@ -4781,8 +4773,8 @@ impl Run {
 
 /// As `write_in_progress_run_with`, with words an older run kept as conditions, by roster
 /// index.
-#[cfg(test)]
-pub(crate) fn write_in_progress_run_marked(
+#[cfg(any(test, feature = "test-support"))]
+pub fn write_in_progress_run_marked(
     campaign: Uuid,
     directory: &Path,
     name: &str,
@@ -4819,8 +4811,8 @@ pub(crate) fn write_in_progress_run_marked(
 }
 
 /// A run that has ended, for test scenes. It says what the timeline records about it.
-#[cfg(test)]
-pub(crate) fn write_ended_run(
+#[cfg(any(test, feature = "test-support"))]
+pub fn write_ended_run(
     campaign: Uuid,
     directory: &Path,
     name: &str,
@@ -4840,8 +4832,8 @@ pub(crate) fn write_ended_run(
 }
 
 /// As `write_ended_run`, with several participants and the encounter's own text.
-#[cfg(test)]
-pub(crate) fn write_ended_run_with(
+#[cfg(any(test, feature = "test-support"))]
+pub fn write_ended_run_with(
     campaign: Uuid,
     directory: &Path,
     name: &str,
@@ -6081,7 +6073,7 @@ mod tests {
     #[test]
     fn a_run_file_saved_before_effects_opens_with_its_steps_and_keeps_its_words() {
         let folder = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/visual_tests/plain_evening/files/emberfall/Encounter Runs");
+            .join("../../src/visual_tests/plain_evening/files/emberfall/Encounter Runs");
         let source = fs::read_dir(&folder)
             .unwrap()
             .map(|entry| entry.unwrap().path())
@@ -9167,7 +9159,7 @@ mod tests {
             )
         );
         assert_eq!(
-            crate::sessions::first_number(&none_down.xp_line().0),
+            splat_campaign::note::first_number(&none_down.xp_line().0),
             Some(0)
         );
         let mut reopened = close_and_reopen(&mut run, campaign);

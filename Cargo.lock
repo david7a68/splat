@@ -3845,12 +3845,17 @@ dependencies = [
  "sha2",
  "splat-assets",
  "splat-campaign",
+ "splat-campaign-packages",
  "splat-character",
  "splat-content",
  "splat-content-ui",
  "splat-design",
+ "splat-encounters-ui",
  "splat-execution",
+ "splat-library-page",
+ "splat-sessions-ui",
  "splat-trackers",
+ "splat-world-page",
  "syn 2.0.119",
  "tempfile",
  "tikv-jemallocator",
@@ -3879,6 +3884,21 @@ dependencies = [
  "serde_yaml_ng",
  "sha2",
  "splat-content",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-campaign-packages"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "serde_yaml_ng",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
  "tempfile",
  "uuid",
 ]
@@ -3979,6 +3999,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "splat-encounters-ui"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "eframe",
+ "egui_kittest",
+ "image",
+ "keyring",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-execution",
+ "tempfile",
+ "tungstenite",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "splat-execution"
 version = "0.1.0"
 dependencies = [
@@ -3993,6 +4039,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "splat-library-page"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "rfd",
+ "serde_json",
+ "serde_yaml_ng",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-execution",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-sessions-ui"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "eframe",
+ "egui_kittest",
+ "keyring",
+ "libc",
+ "pulldown-cmark",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-encounters-ui",
+ "splat-execution",
+ "tempfile",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "splat-trackers"
 version = "0.1.0"
 dependencies = [
@@ -4001,6 +4093,21 @@ dependencies = [
  "splat-campaign",
  "splat-content",
  "splat-design",
+ "uuid",
+]
+
+[[package]]
+name = "splat-world-page"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-trackers",
+ "tempfile",
  "uuid",
 ]
 

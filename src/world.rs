@@ -4,7 +4,7 @@
 //! See `docs/design/world-and-house-rules.md`.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[path = "world/checks.rs"]
-mod checks;
+pub mod checks;
 #[path = "world/edit.rs"]
 pub mod edit;
 #[path = "world/fields.rs"]
@@ -13,8 +13,6 @@ mod fields;
 pub mod file_fault;
 #[path = "world/lines.rs"]
 pub mod lines;
-#[path = "world/page.rs"]
-pub mod page;
 #[path = "world/related.rs"]
 mod related;
 #[path = "world/repair.rs"]
@@ -293,7 +291,7 @@ fn outside_code(body: &str, mut plain: impl FnMut(&str, &mut String)) -> String 
 }
 
 /// Every `[[link]]` in a text, as (is an embed, target, words).
-pub(crate) fn each_link(text: &str) -> Vec<(std::ops::Range<usize>, bool, String, Option<String>)> {
+pub fn each_link(text: &str) -> Vec<(std::ops::Range<usize>, bool, String, Option<String>)> {
     let mut found = Vec::new();
     let mut from = 0;
     while let Some(start) = text[from..].find("[[").map(|at| at + from) {
@@ -329,7 +327,7 @@ pub fn links_in(body: &str) -> Vec<String> {
 }
 
 /// Redirect explicit links when their named dependency is copied. Keep their display words.
-pub(crate) fn redirect_links(text: &str, old: &Entry, new_id: Uuid) -> String {
+pub fn redirect_links(text: &str, old: &Entry, new_id: Uuid) -> String {
     outside_code(text, |part, output| {
         let mut copied = 0;
         for (range, embed, target, words) in each_link(part) {
@@ -358,7 +356,7 @@ pub(crate) fn redirect_links(text: &str, old: &Entry, new_id: Uuid) -> String {
 }
 
 /// Rename note links outside code. Keep headings, aliases, and unrelated words.
-pub(crate) fn rename_note_links(text: &str, old: &str, new: &str) -> (String, usize) {
+pub fn rename_note_links(text: &str, old: &str, new: &str) -> (String, usize) {
     let mut count = 0;
     let (front, body) = crate::session_notes::split_note(text).unwrap_or(("", text));
     let after = outside_code(body, |part, output| {
@@ -394,7 +392,7 @@ pub fn with_links(body: &str, images: &HashMap<String, PathBuf>) -> String {
 /// The words a link with no words of its own shows: a session note's name as the Sessions page
 /// gives it (`Session 1: The Crossing`, from `names`, `ContentIndex::session_names`), else its
 /// heading or its target. A link to a heading of a session shows that heading.
-pub(crate) fn link_words(target: &str, names: &HashMap<String, String>) -> String {
+pub fn link_words(target: &str, names: &HashMap<String, String>) -> String {
     // By the whole link, folder and all: `[[Notes/Session 1]]` is not the session's
     // `Sessions/Session 1`, and a bare stem is in `names` only when one note has it.
     if !target.contains('#') {
@@ -700,7 +698,7 @@ fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
 /// `line_start` for a quiet action that starts a line: the first in its row, or a later one that
 /// wraps to a line of its own. A later one on the same line keeps its normal target, so the two
 /// targets never overlap.
-pub(crate) fn starts_line<'a>(ui: &egui::Ui, action: Action<'a>, first: bool) -> Action<'a> {
+pub fn starts_line<'a>(ui: &egui::Ui, action: Action<'a>, first: bool) -> Action<'a> {
     if first || action.natural_width(ui) > ui.available_size_before_wrap().x {
         action.line_start()
     } else {
@@ -939,7 +937,7 @@ pub fn start_fight(item: &Item, index: &ContentIndex) -> Option<StartFight> {
         })
 }
 
-pub(crate) fn link_name(value: &Value, fallback: &str) -> String {
+pub fn link_name(value: &Value, fallback: &str) -> String {
     value
         .as_str()
         .or_else(|| value.get("link").and_then(Value::as_str))
@@ -1022,7 +1020,7 @@ pub fn create_entry(campaign: &Campaign, name: &str, kind: &str) -> Result<Uuid,
 
 /// A link on a world note that the DM must fix: its note is missing, or it waits for a choice.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum LinkProblem {
+pub enum LinkProblem {
     PlaceNotFound,
     /// The place link matches this many notes, and waits for the DM to choose one.
     PlaceMatches(usize),
@@ -1047,7 +1045,7 @@ impl std::fmt::Display for LinkProblem {
 /// A list row's words for the links that need fixing. One problem names itself. Several are
 /// `broken links` only when every target is missing; a place that waits for a choice, or one in a
 /// loop, is not broken.
-pub(crate) fn link_problem_words(problems: &[LinkProblem]) -> String {
+pub fn link_problem_words(problems: &[LinkProblem]) -> String {
     match problems {
         [one] => one.to_string(),
         many if many.iter().any(|problem| {
@@ -1081,7 +1079,7 @@ pub(crate) fn renamed_file(item: &Item, index: &ContentIndex) -> Option<String> 
 /// holds, in this order. Every kind is a warning (one fault, one tone); a note that cannot be
 /// read at all is the header's error count, not one of these.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum NoteFault {
+pub enum NoteFault {
     /// Two files claim the note's identity.
     Duplicate,
     /// Values that could not be read, with their count.
@@ -1117,7 +1115,7 @@ impl NoteFault {
     }
 
     /// The list row's words after its warning icon.
-    pub(crate) fn words(&self) -> String {
+    pub fn words(&self) -> String {
         match self {
             Self::Duplicate => "Same note in two files".into(),
             Self::Unread(count) => design::count(*count, "value not read", "values not read"),
@@ -1136,7 +1134,7 @@ impl NoteFault {
     /// name, which tells its row from the other same-name rows (each may have this fault too);
     /// its warning mark and the header count still say there is a fault, and its reader names
     /// both names.
-    pub(crate) fn narrow_words(&self) -> Option<String> {
+    pub fn narrow_words(&self) -> Option<String> {
         match self {
             Self::Renamed(Some(file)) => Some(file.clone()),
             _ => None,
@@ -1148,7 +1146,7 @@ impl NoteFault {
 /// (`ContentIndex::note_faults`): the list rows, the header's count and the count's menu read
 /// these records, so they never disagree and nothing that grows with the notes runs each frame.
 #[derive(Debug, Default)]
-pub(crate) struct NoteFaults {
+pub struct NoteFaults {
     by_position: HashMap<usize, NoteFault>,
     /// The notes with a fault, in the World list's order: the count's menu.
     listed: Vec<usize>,
@@ -1157,7 +1155,7 @@ pub(crate) struct NoteFaults {
 }
 
 impl NoteFaults {
-    pub(crate) fn of(index: &ContentIndex) -> Self {
+    pub fn of(index: &ContentIndex) -> Self {
         let mut faults = Self::default();
         for &(at, _) in index.world_groups("").values().flatten() {
             faults.notes += 1;
@@ -1170,17 +1168,17 @@ impl NoteFaults {
     }
 
     /// The fault of the note at `at` in the index.
-    pub(crate) fn of_note(&self, at: usize) -> Option<&NoteFault> {
+    pub fn of_note(&self, at: usize) -> Option<&NoteFault> {
         self.by_position.get(&at)
     }
 
     /// The notes with a fault, in list order.
-    pub(crate) fn listed(&self) -> &[usize] {
+    pub fn listed(&self) -> &[usize] {
         &self.listed
     }
 
     /// How many World notes the list holds.
-    pub(crate) fn notes(&self) -> usize {
+    pub fn notes(&self) -> usize {
         self.notes
     }
 }
@@ -1192,7 +1190,7 @@ pub const LOG_WAITS_FOR_SAVE: &str = "Save or discard to add a Log line or switc
 pub(crate) const LOG_WAITS_FOR_CANCEL: &str = "Cancel to add a Log line.";
 
 /// The links on this note that need fixing, in the order the reader shows them.
-pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<LinkProblem> {
+pub fn broken_links(item: &Item, index: &ContentIndex) -> Vec<LinkProblem> {
     let mut problems = Vec::new();
     if reader_field(&item.entry, "in").is_some() && index.place_of(item.entry.id).is_none() {
         problems.push(match index.place_choices(item.entry.id).len() {
@@ -1236,7 +1234,7 @@ pub fn create_generated(
 
 /// The folder that holds most entries of this type, from each entry's path and type. Folders
 /// belong to the DM, so a new entry goes where its kind already is.
-pub(crate) fn common_folder<'a>(
+pub fn common_folder<'a>(
     entries: impl Iterator<Item = (&'a str, &'a str)>,
     kind: &str,
 ) -> Option<String> {
@@ -1533,7 +1531,7 @@ pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &st
 
 /// A file line under a title that is the entry's name: the file's path, then the links. Under a
 /// title that is the file's name, use `folder_file_line`.
-pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+pub fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
     entry_file_line(ui, root, relative, obsidian, false);
 }
 
@@ -1620,7 +1618,7 @@ pub fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian
 /// the folder, then the links, so the line never repeats the title (FH9). A folder too
 /// long for its room gives way at its start, so its last part, the one nearest the file, stays.
 /// Its hover and accessible name keep the whole path.
-pub(crate) fn folder_file_line(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+pub fn folder_file_line(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
     let path = root.join(relative);
     let folder = relative
         .rsplit_once('/')
@@ -1668,7 +1666,7 @@ pub(crate) fn folder_file_line(ui: &mut egui::Ui, root: &Path, relative: &str, o
 }
 
 /// The width of a file line's links, with the gap between them.
-pub(crate) fn entry_file_links_width(ui: &egui::Ui, obsidian: bool) -> f32 {
+pub fn entry_file_links_width(ui: &egui::Ui, obsidian: bool) -> f32 {
     design::number_width(ui, "Show file", &Type::Body.font(ui))
         + if obsidian {
             design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui)) + design::S
@@ -1678,7 +1676,7 @@ pub(crate) fn entry_file_links_width(ui: &egui::Ui, obsidian: bool) -> f32 {
 }
 
 /// `Edit in Obsidian` and `Show file` for a file at this full path.
-pub(crate) fn entry_file_links(ui: &mut egui::Ui, path: &Path, obsidian: bool) {
+pub fn entry_file_links(ui: &mut egui::Ui, path: &Path, obsidian: bool) {
     if obsidian && design::link(ui, "Edit in Obsidian").clicked() {
         ui.ctx()
             .open_url(egui::OpenUrl::new_tab(obsidian_url(path)));
@@ -1708,7 +1706,7 @@ fn obsidian_url(path: &Path) -> String {
     format!("obsidian://open?path={}", encode_path(path))
 }
 
-pub(crate) fn make_npc_note(campaign: &Campaign, entry: &Entry) -> Result<Uuid, String> {
+pub fn make_npc_note(campaign: &Campaign, entry: &Entry) -> Result<Uuid, String> {
     let (id, path) = create_at(campaign, &entry.name, "npc", "")?;
     let text = file_fault::read_note(&campaign.path, &path)?;
     let npc = Entry::parse(&path, &text)?;
@@ -1788,7 +1786,7 @@ impl ChangeKind {
 
 impl Change {
     /// Its Undo step: the kind's, with the name of the note it changed (`ChangeKind::undo_step`).
-    pub(crate) fn undo_step(&self, note: &str) -> UndoStep {
+    pub fn undo_step(&self, note: &str) -> UndoStep {
         self.kind
             .undo_step(note, self.path.rsplit('/').next().unwrap_or(&self.path))
     }
@@ -1986,7 +1984,7 @@ impl IdentityNoun {
         }
     }
 
-    pub(crate) fn word(self) -> &'static str {
+    pub fn word(self) -> &'static str {
         match self {
             Self::Note => "note",
             Self::Entry => "entry",
@@ -2157,7 +2155,7 @@ pub(crate) enum ReaderStatus {
 impl ReaderStatus {
     /// The place for this entry's status. `campaign` is the campaign whose entries the reader
     /// may change; `editing` is true while the Status field is open.
-    pub(crate) fn of(item: &Item, index: &ContentIndex, campaign: bool, editing: bool) -> Self {
+    pub fn of(item: &Item, index: &ContentIndex, campaign: bool, editing: bool) -> Self {
         let entry = &item.entry;
         let set = !status(entry).trim().is_empty();
         let row = if entry.kind != "world" || !campaign || !item.is_private() {
@@ -2243,7 +2241,7 @@ impl GroupFault {
 
 /// A new id for a lost Log draft's notice, so two notices from one entry stay apart. A
 /// result's place in a footer is its `design::ResultOrder`.
-pub(crate) fn next_order() -> u64 {
+pub fn next_order() -> u64 {
     static ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
 }
@@ -2375,7 +2373,7 @@ fn least_scroll(view: egui::Rect, rect: egui::Rect) -> Option<f32> {
 /// `Reader::keep_log_lines`), so a new field here is kept by both at once (review of PR 333).
 /// Each result shows only in its own campaign, so it can outlive a campaign change.
 #[derive(Default)]
-pub(crate) struct Held {
+pub struct Held {
     /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
     /// wait while the reader shows another entry; a restart loses them, as every held form.
     log_fields: LogFields,
@@ -2508,7 +2506,7 @@ pub enum PageResult {
 
 impl PageResult {
     /// The page's result as a footer outcome. Its Undo is the page's (`FooterAct::Page`).
-    pub(crate) fn outcome(&self) -> KeptOutcome<FooterAct> {
+    pub fn outcome(&self) -> KeptOutcome<FooterAct> {
         match self {
             Self::Repaired => Said::new(crate::sentence!("Note repaired.")).into(),
             Self::Discarded(name) => discarded_outcome(name, FooterAct::Page),
@@ -2566,12 +2564,7 @@ const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
 /// whole actions, each row filled from the left with as many as fit. An action never goes
 /// away and never loses its word, whatever the length of the name. `title` is the title's measured width, `widths`
 /// each action's own.
-pub(crate) fn title_line_rows(
-    room: f32,
-    line: f32,
-    title: f32,
-    widths: &[f32],
-) -> Option<Vec<usize>> {
+pub fn title_line_rows(room: f32, line: f32, title: f32, widths: &[f32]) -> Option<Vec<usize>> {
     // The one decision lives in the design system (`design::title_placement`); the reader's
     // first action is quiet, so its icon sits `L` after the title.
     match design::title_placement(title, design::title_lead_in(true), widths, room, line) {
@@ -2590,7 +2583,7 @@ pub(crate) fn title_line_rows(
 /// cell's left edge that the actions may use beside the title (less a portrait). Under the
 /// title, the first action's target starts at the text edge, so no part of it is clipped where
 /// a pane clips at its text edge (Lookup). Returns which actions were pressed, in order.
-pub(crate) fn title_line_actions(
+pub fn title_line_actions(
     ui: &mut egui::Ui,
     cell: egui::Rect,
     title: f32,
@@ -2680,7 +2673,7 @@ pub(crate) fn title_line_actions(
 /// Draw one action in its target, which the caller has already allocated or which lies on a
 /// line already allocated: a child that takes no room from `ui`, so a top-down layout never
 /// moves its cursor back up to the target.
-pub(crate) fn in_rect(
+pub fn in_rect(
     ui: &mut egui::Ui,
     rect: egui::Rect,
     add: impl FnOnce(&mut egui::Ui) -> bool,
@@ -2826,7 +2819,7 @@ pub fn said(words: &str) -> Sentence {
 }
 
 /// A reader's fault for its footer, by kind: it gives the tone.
-pub(crate) enum ReaderFault {
+pub enum ReaderFault {
     /// The last action did not write (a refused or failed write, a file that cannot be read).
     Action(String),
     /// Typed words that wait: a Log line whose entry is gone, a draft whose note is gone.
@@ -3034,7 +3027,7 @@ impl Reader {
 
     /// `read_with` in its pane's body: `region` is the pane's editor region (World's and
     /// Lookup's reader panes are always the editor form); the edit form's text draws in it.
-    pub(crate) fn read_in_pane(
+    pub fn read_in_pane(
         &mut self,
         ui: &mut egui::Ui,
         item: &Item,
@@ -4450,7 +4443,7 @@ impl Reader {
 
     /// A change result on this note. It is newer than the page's repair result, so it takes
     /// the one place for results.
-    pub(crate) fn has_change_result(&self, campaign: &Campaign, path: &str) -> bool {
+    pub fn has_change_result(&self, campaign: &Campaign, path: &str) -> bool {
         let on = |slot| match self.result(slot) {
             Some(ReaderResult::Change(change) | ReaderResult::Name(change)) => {
                 change.shows_on(campaign, path)
@@ -4469,7 +4462,7 @@ impl Reader {
 
     /// The change whose result the reader keeps, for the checks.
     #[cfg(test)]
-    pub(crate) fn last_change(&self) -> Option<Change> {
+    pub fn last_change(&self) -> Option<Change> {
         match self.result(Slot::Change)? {
             ReaderResult::Change(change) => Some(change.clone()),
             _ => None,
@@ -4488,7 +4481,7 @@ impl Reader {
 
     /// A repair of the note at `path` ends a name change's result on it: it has nothing left
     /// to undo.
-    pub(crate) fn end_name_change_on(&mut self, campaign: &Campaign, path: &str) {
+    pub fn end_name_change_on(&mut self, campaign: &Campaign, path: &str) {
         if matches!(self.result(Slot::Name), Some(ReaderResult::Name(change)) if change.shows_on(campaign, path))
         {
             self.end(Slot::Name);
@@ -4501,7 +4494,7 @@ impl Reader {
     /// and end when another note opens (`prepare`), a later change replaces them, and Undo ends
     /// them; a rename, a name change and a separate note end at their Undo or the next of their
     /// kind. The page adds its own result. Take the press with `footer_act`.
-    pub(crate) fn footer<'f>(
+    pub fn footer<'f>(
         &mut self,
         frame: &'f PaneFrame,
         messages: &mut Messages<'f, FooterAct>,
@@ -4650,7 +4643,7 @@ impl Reader {
     /// Take a footer press on the open note. `Page`, `Trackers` and `Untick` are the page's or
     /// the pane's; a kept result's press acts by its ticket, and a replaced or ended result
     /// (`Gone`) does nothing.
-    pub(crate) fn footer_act(
+    pub fn footer_act(
         &mut self,
         ctx: &egui::Context,
         press: design::outcome::Press<FooterAct>,
@@ -5288,6 +5281,27 @@ fn add_form(
         }
     });
     end
+}
+
+/// The words for a held NPC, in the rail and in the row above another view. The rail's link
+/// is found by this constant.
+pub const UNSAVED_NPC: &str = "Unsaved NPC";
+
+/// The one row above another view while an unsaved generated NPC is held, on World and in
+/// Lookup: `Unsaved NPC: <name> · Show`. Returns whether the DM chose `Show`.
+pub fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
+    let mut show = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(
+            Type::Body
+                .rich(ui, format!("{UNSAVED_NPC}: {name}"))
+                .color(colors().text),
+        );
+        ui.label(Type::Body.rich(ui, "·").color(colors().muted));
+        show = design::link(ui, "Show").clicked();
+    });
+    design::gap(ui, design::Gap::S);
+    show
 }
 
 #[cfg(test)]

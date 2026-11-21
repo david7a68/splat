@@ -16,6 +16,73 @@ use std::{
 };
 use uuid::Uuid;
 
+/// Return a useful YAML repair message and the physical line to mark.
+pub fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
+    // Repair rows and editors ask on every frame, and a parse of a long note takes about 1 ms.
+    static PROBLEMS: splat::memo::Memo<(Option<String>, Option<usize>)> =
+        splat::memo::Memo::new(64);
+    PROBLEMS.get_or(&[path.as_bytes(), text.as_bytes()], || {
+        find_repair_problem(path, text)
+    })
+}
+
+fn find_repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
+    let Some(problem) = Entry::parse(path, text).err() else {
+        return (None, None);
+    };
+    let yaml = text
+        .strip_prefix("---\n")
+        .and_then(|text| text.split_once("\n---").map(|(yaml, _)| yaml));
+    if let Some(yaml) = yaml
+        && let Err(error) = serde_yaml_ng::from_str::<serde_yaml_ng::Value>(yaml)
+    {
+        let mut opens = Vec::new();
+        for (index, line) in yaml.lines().enumerate() {
+            let mut quote = None;
+            for ch in line.chars() {
+                if matches!(ch, '\'' | '"') {
+                    if quote == Some(ch) {
+                        quote = None;
+                    } else if quote.is_none() {
+                        quote = Some(ch);
+                    }
+                }
+                if quote.is_some() {
+                    continue;
+                }
+                if ch == '#' {
+                    break;
+                }
+                match ch {
+                    '[' | '{' => opens.push((ch, index + 2)),
+                    ']' | '}' => {
+                        opens.pop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Some((ch, line)) = opens.first() {
+            let thing = if *ch == '[' { "list" } else { "mapping" };
+            return (
+                Some(format!(
+                    "Line {line} opens a {thing} with {ch} that never closes."
+                )),
+                Some(*line),
+            );
+        }
+        if let Some(location) = error.location() {
+            let line = location.line() + 1;
+            return (
+                Some(format!(
+                    "Check the YAML on line {line}. Use a name, a colon and its value."
+                )),
+                Some(line),
+            );
+        }
+    }
+    (Some(problem), None)
+}
 /// Recover an identity even when another front-matter line cannot be parsed.
 pub fn note_id(text: &str) -> Option<Uuid> {
     Uuid::parse_str(&note_property(text, "splat_id:")?)
@@ -33,10 +100,10 @@ fn note_property(text: &str, property: &str) -> Option<String> {
         .find_map(|line| serde_yaml_ng::from_str(line.strip_prefix(property)?).ok())
 }
 
-pub(crate) const DELETED_MANIFEST: &str = "The package manifest was deleted. Entries are still available. Write it again, or restore it from a backup.";
+pub const DELETED_MANIFEST: &str = "The package manifest was deleted. Entries are still available. Write it again, or restore it from a backup.";
 /// One tone for a package manifest fault, in Campaign and in Library: a manifest that is on disk
 /// but invalid is an error; a deleted one is a warning, because its entries stay available.
-pub(crate) fn manifest_fault_tone(on_disk: bool) -> crate::design::Tone {
+pub fn manifest_fault_tone(on_disk: bool) -> crate::design::Tone {
     if on_disk {
         crate::design::Tone::Error
     } else {
@@ -50,7 +117,7 @@ pub fn manifest_replace_consequence(path: &str) -> String {
     )
 }
 
-pub(crate) fn package_manifest_path(module: &Module) -> String {
+pub fn package_manifest_path(module: &Module) -> String {
     match content::read_folder(&module.path) {
         Ok(folder) => manifest_path_in(&folder, module),
         Err(_) => "Package.md".into(),
@@ -113,7 +180,7 @@ pub(crate) fn manifest_file_exists(module: &Module, path: &str) -> bool {
 }
 
 /// A copied note gets its file's name in the same write as its new identity.
-pub(crate) fn new_note_identity(text: &str, path: &str, id: Uuid) -> Result<String, String> {
+pub fn new_note_identity(text: &str, path: &str, id: Uuid) -> Result<String, String> {
     let entry = Entry::parse(path, text)?;
     let name = Path::new(path)
         .file_stem()
@@ -147,7 +214,7 @@ pub(crate) fn rename_first_heading(mut after: String, old: &str, name: &str) -> 
 }
 
 /// All writes for a copied package, with one guarded Undo.
-pub(crate) struct PackageCopy {
+pub struct PackageCopy {
     pub module: Module,
     files: Vec<(String, String, String)>,
 }
@@ -309,12 +376,12 @@ pub const UNDO_ENDED: &str =
     "A file changed on disk after this change. Undo is no longer available.";
 
 /// Why a kept result's Undo is blocked: a file it wrote changed after the write.
-pub(crate) const UNDO_ENDED_REASON: crate::design::outcome::Sentence =
+pub const UNDO_ENDED_REASON: crate::design::outcome::Sentence =
     splat::sentence!("A file changed on disk after this change. Undo is no longer available.");
 
 /// True while the file holds exactly these bytes. A missing or unreadable file does not.
 /// Undo results use this on reload: a result whose files changed would only refuse its Undo.
-pub(crate) fn holds(root: &Path, path: &str, text: &str) -> bool {
+pub fn holds(root: &Path, path: &str, text: &str) -> bool {
     note_path(root, path)
         .ok()
         .and_then(|path| fs::read(path).ok())
@@ -337,7 +404,7 @@ pub fn before_next_write(hook: impl FnOnce() + 'static) {
 }
 
 /// A repair keeps the registered identity and never overwrites a later disk edit.
-pub(crate) struct ContentEdits {
+pub struct ContentEdits {
     files: Vec<(PathBuf, String, String, String)>,
 }
 impl ContentEdits {
@@ -823,7 +890,7 @@ pub struct UnreadableNote {
 
 /// A file that differs from its shared key's filename is the copy. Otherwise
 /// prefer the newer file. Atomic saves can replace a file's birth time.
-pub(crate) fn duplicate_repair_path(paths: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+pub fn duplicate_repair_path(paths: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
     paths.into_iter().max_by_key(|path| {
         let copied = fs::read_to_string(path)
             .ok()
@@ -1069,7 +1136,7 @@ impl Catalogue {
             let Some(id) = note_id(&text) else {
                 continue;
             };
-            let (_, line) = crate::campaign_content::repair_problem(&error.path, &text);
+            let (_, line) = crate::content_workspace::repair_problem(&error.path, &text);
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             let line = line.map_or(String::new(), |line| format!(" (line {line})"));
             self.unreadable.insert(
@@ -1294,7 +1361,7 @@ impl Catalogue {
                     .or_else(|| fs::read_to_string(module.path.join(&manifest_path)).ok())
                     .filter(|_| manifest_file_exists(module, &manifest_path))
                 {
-                    let (_, line) = crate::campaign_content::repair_problem(&manifest_path, &text);
+                    let (_, line) = crate::content_workspace::repair_problem(&manifest_path, &text);
                     format!(
                         "{manifest_path} {}{}",
                         if Entry::parse(&manifest_path, &text).is_ok() {

@@ -853,7 +853,7 @@ impl ContentIndex {
     }
 
     /// Every World note's fault, found once per index (`world::NoteFaults`).
-    pub(crate) fn note_faults(&self) -> &world::NoteFaults {
+    pub fn note_faults(&self) -> &world::NoteFaults {
         self.note_faults.get_or_init(|| {
             #[cfg(any(test, feature = "test-support"))]
             FAULT_SCANS.with(|count| count.set(count.get() + 1));
@@ -1164,7 +1164,7 @@ impl ContentIndex {
     }
 
     /// Whether another World note has this note's name (found when the index loads).
-    pub(crate) fn shares_name(&self, at: usize) -> bool {
+    pub fn shares_name(&self, at: usize) -> bool {
         self.shared_world_names.contains(&at)
     }
 
@@ -1296,7 +1296,7 @@ impl ContentIndex {
     }
 
     /// Prepare wiki links in any reader, retaining exactly the note's display words.
-    pub(crate) fn broken_link_count(&self, body: &str, from: Uuid) -> usize {
+    pub fn broken_link_count(&self, body: &str, from: Uuid) -> usize {
         let visible = body
             .lines()
             .filter(|line| !presentation::hidden_provenance_line(line))
@@ -1309,7 +1309,7 @@ impl ContentIndex {
     }
 
     /// A link from this page names nothing the campaign can open.
-    pub(crate) fn link_is_missing(&self, target: &str, from: Uuid) -> bool {
+    pub fn link_is_missing(&self, target: &str, from: Uuid) -> bool {
         let page = target
             .split(['|', '#'])
             .next()
@@ -2900,7 +2900,7 @@ impl Lookup {
             return;
         }
         if let Some(npc) = &self.generated
-            && world::page::unsaved_npc_row(ui, &npc.name)
+            && world::unsaved_npc_row(ui, &npc.name)
         {
             self.show_now(Landing::Card);
         }
@@ -3209,7 +3209,7 @@ pub(crate) fn fitted_detail(ui: &egui::Ui, detail: &str, width: f32) -> String {
 
 /// How a generator card says that it uses the built-in names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum NamesHelp {
+pub enum NamesHelp {
     /// The World page, where the DM prepares: the table marker in full.
     Marker,
     /// Lookup: short words and a quiet link to the World page's card.
@@ -3234,7 +3234,7 @@ pub const USE_OWN_NAMES: &str = "Use your own names";
 
 /// What the DM chose on a generator card.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct CardChoice {
+pub struct CardChoice {
     pub save: bool,
     pub again: bool,
     pub discard: bool,
@@ -3267,7 +3267,7 @@ pub fn generated_card(
 }
 
 /// What the generator rolled, with its choices and the names help for this place.
-pub(crate) fn generator_card(
+pub fn generator_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
     problems: &[crate::npc_generator::TableProblem],

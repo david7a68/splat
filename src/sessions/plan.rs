@@ -827,7 +827,7 @@ enum PlanHover {
     Rating(crate::difficulty::Rating, Option<String>),
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Test builds: how many plan lines were fitted (laid out), so a test can see that an
     /// unchanged frame fits none.
@@ -898,7 +898,7 @@ fn prepare_plan_line(
     day: Option<&str>,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) -> KeptPlanLine {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     PLAN_FITS.with(|fits| fits.set(fits.get() + 1));
     // G118: the roster's typed parts; its words only for the layout and the name.
     let words = typed.text();
@@ -1406,7 +1406,7 @@ impl Scene {
     /// action's width changes; an unchanged frame lays out no words.
     fn log_keeps_rows(&self, ui: &egui::Ui, plain: &str, menu: f32, with_log: f32) -> bool {
         let room = ui.available_width();
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         FIT_COUNTS.with(|counts| counts.set((counts.get().0 + 1, counts.get().1)));
         let mut fit = self
             .fit
@@ -1431,15 +1431,15 @@ impl Scene {
 /// How many rooms a done scene's fit remembers.
 const FIT_ROOMS: usize = 4;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often frames reached a done scene's fit, and how often it laid out the words.
     static FIT_COUNTS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
 
 /// A done scene's fit on this (the UI) thread: frames that reached it, and layouts of its words.
-#[cfg(test)]
-pub(crate) fn scene_fit_counts() -> (usize, usize) {
+#[cfg(any(test, feature = "test-support"))]
+pub fn scene_fit_counts() -> (usize, usize) {
     FIT_COUNTS.with(std::cell::Cell::get)
 }
 
@@ -2102,7 +2102,7 @@ fn lead_width() -> f32 {
 /// beside an action place `with_log` wide, each with the same words as beside the menu alone
 /// (`menu` wide), so no word moves.
 fn log_keeps_rows(ui: &egui::Ui, plain: &str, menu: f32, with_log: f32) -> bool {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     FIT_COUNTS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
     // The words' room beside the action place, as `plan_row_with` gives it after the leading
     // slot.
@@ -2243,7 +2243,7 @@ impl JourneyPlan {
         fights: &[String],
         groups: &[String],
     ) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         timeline::page::JOURNEY_PLAN_READS.with(|reads| reads.set(reads.get() + 1));
         let stubs = plan_fight_stubs(fights);
         let mut coming: Vec<String> = plan_links(body, events, session, &stubs)
@@ -2624,7 +2624,7 @@ type FollowKey = (
     Option<Instant>,
 );
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Tests: how many times a plan line's owners (notes, journeys) were looked up. An
     /// unchanged frame looks up none.
@@ -2705,7 +2705,7 @@ struct RewardsDone {
 
 /// A played fight's name for its rewards result and fault, read once at the act.
 fn fight_name(book: &Book, event: &str) -> String {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     FIGHT_NAME_READS.with(|reads| reads.set(reads.get() + 1));
     book.events
         .iter()
@@ -2713,7 +2713,7 @@ fn fight_name(book: &Book, event: &str) -> String {
         .map_or_else(|| "this fight".to_owned(), |one| one.title.clone())
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a rewards act read a fight's name from the Timeline.
     static FIGHT_NAME_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -3311,7 +3311,7 @@ impl Sessions {
 
     /// For tests: `look` at the newest plan line's entry in this campaign, of `note` when one is
     /// named.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn plan_entry<R>(
         &mut self,
         note: Option<Uuid>,
@@ -3327,7 +3327,7 @@ impl Sessions {
     }
 
     /// A plan line's answer, for tests: the words the newest line (of `note`) opens with.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn plan_line_refusal_for(&mut self, note: Option<Uuid>) -> Option<String> {
         self.plan_entry(note, |shown| {
             shown.refusal().map(|refusal| refusal.words().to_string())
@@ -3335,7 +3335,7 @@ impl Sessions {
         .flatten()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn plan_line_refusal(&mut self) -> Option<String> {
         self.plan_line_refusal_for(None)
     }
@@ -3351,7 +3351,7 @@ impl Sessions {
 
     /// Press the Undo of the newest plan line (of `note`), for tests, by the ticket of the
     /// entry its line shows; the refusal its line then opens with, if any.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn try_plan_undo_for(&mut self, note: Option<Uuid>) -> Option<String> {
         if let Some(ticket) = self.plan_entry(note, |shown| shown.ticket_for_caller_test()) {
             self.undo_plan_line(ticket);
@@ -3359,7 +3359,7 @@ impl Sessions {
         self.plan_line_refusal_for(note)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn try_plan_undo(&mut self) -> Option<String> {
         self.try_plan_undo_for(None)
     }
@@ -3385,7 +3385,7 @@ impl Sessions {
         if self.travel.planned.is_empty() {
             return;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PLAN_OWNER_SCANS.with(|scans| scans.set(scans.get() + 1));
         let notes = &self.notes;
         self.travel.planned.end_unreachable(|planned| {
@@ -3490,13 +3490,13 @@ impl Sessions {
     /// Tests: no disk check runs until `release_disk_check`, however long the frames take
     /// (the last check is set an hour ahead; `poll` reads the time since it as zero), so a
     /// scenario's outside change meets the DM's next press before `poll` reads it.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn hold_disk_check(&mut self) {
         self.last_check = Some(Instant::now() + Duration::from_secs(3600));
     }
 
     /// Tests: the disk checks run again, from now.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn release_disk_check(&mut self) {
         self.last_check = Some(Instant::now());
     }
@@ -3526,7 +3526,7 @@ impl Sessions {
         if self.travel.followed == Some(key) {
             return;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PLAN_FOLLOW_WALKS.with(|walks| walks.set(walks.get() + 1));
         // A refused answer is watched at its note's file now (R45: it stays through a move); a
         // result at the file its act recorded.
@@ -3567,7 +3567,7 @@ impl Sessions {
         if !changed {
             return;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         timeline::page::PLAN_LINE_CHECKS.with(|checks| checks.set(checks.get() + 1));
         let selected = self.selected;
         let draft = self.draft.as_ref();
@@ -3628,7 +3628,7 @@ impl Sessions {
         if self.travel.planned.is_empty() {
             return;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PLAN_OWNER_SCANS.with(|scans| scans.set(scans.get() + 1));
         if self.travel.planned.end_refusals(
             |planned| !book.events.iter().any(|event| event.id == planned.journey),

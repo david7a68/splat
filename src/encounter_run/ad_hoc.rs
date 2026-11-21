@@ -24,7 +24,7 @@ const MAX_AC: i64 = 1000;
 
 /// A creature of this campaign that a run can add. Linked characters are not among these.
 #[derive(Debug)]
-pub(crate) struct RunCreature {
+pub struct RunCreature {
     pub entry: Arc<Entry>,
     pub lower: String,
     pub detail: String,
@@ -275,14 +275,14 @@ impl Run {
     }
 
     /// The panel for what joins the fight, in place of whatever was open beside the list.
-    pub(crate) fn show_arrivals(&mut self) {
+    pub fn show_arrivals(&mut self) {
         self.panel = super::Panel::Groups;
         self.close_lookup = true;
     }
 
     /// An NPC with no stat block joins as a creature made up at the table: the form, with its
     /// name filled in and the keyboard in HP.
-    pub(crate) fn made_up(&mut self, name: &str) {
+    pub fn made_up(&mut self, name: &str) {
         self.ad_hoc = AdHoc {
             query: name.to_owned(),
             focus_hp: true,
@@ -293,7 +293,7 @@ impl Run {
 
     /// FJ5 (iter-27-R), for Lookup's `Add to fight`: why `stat_block` cannot join this fight now,
     /// or None. The same reasons as Arrivals' Add, for a creature that has no typed values.
-    pub(crate) fn add_to_fight_reason(&self, stat_block: &Entry) -> Option<String> {
+    pub fn add_to_fight_reason(&self, stat_block: &Entry) -> Option<String> {
         if !self.takes_arrivals() {
             return Some("This encounter has ended. Undo the ending to continue.".to_owned());
         }
@@ -318,7 +318,7 @@ impl Run {
     /// stat block, as World's form adds it (`Command::AddGroup`). Each is one step, and the
     /// header's Undo (`Undo: add Guard`) takes it away. The run's page is not opened. Returns why
     /// it did not join (`add_to_fight_reason`, or the step's refusal).
-    pub(crate) fn add_entry_to_fight(
+    pub fn add_entry_to_fight(
         &mut self,
         stat_block: Arc<Entry>,
         npc: Option<&Entry>,

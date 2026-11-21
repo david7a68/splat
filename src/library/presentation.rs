@@ -94,7 +94,7 @@ pub(super) fn book_case(value: &str) -> String {
 }
 
 /// A list's second line. Everyday words and existing facts only: never schema terms.
-pub(crate) fn subtitle(entry: &Entry) -> String {
+pub fn subtitle(entry: &Entry) -> String {
     if entry.kind == "package" {
         return "Package".into();
     }
@@ -158,7 +158,7 @@ pub fn list_subtitle(line: &str, source: Option<&str>) -> String {
 }
 
 /// Offer a precise first-H1 repair, preserving every other byte.
-pub(crate) fn heading_fix(text: &str, entry: &Entry) -> Option<(String, String)> {
+pub fn heading_fix(text: &str, entry: &Entry) -> Option<(String, String)> {
     let range = Parser::new(&entry.body)
         .into_offset_iter()
         .find_map(|(event, range)| {
@@ -211,7 +211,7 @@ fn list_fact(entry: &Entry) -> Option<String> {
 }
 
 /// Class scope already owns the feature's class and required level.
-pub(crate) fn class_level(entry: &Entry) -> Option<String> {
+pub fn class_level(entry: &Entry) -> Option<String> {
     let scope = entry
         .fields
         .get("splat_rule")?
@@ -224,14 +224,14 @@ pub(crate) fn class_level(entry: &Entry) -> Option<String> {
     Some(format!("{name} · Level {level}"))
 }
 
-pub(crate) struct ReadingSection<'a> {
+pub struct ReadingSection<'a> {
     pub title: String,
     pub body: &'a str,
 }
 
 /// The embedded SRD preserves printed column wraps for provenance. Reflow only
 /// its reading view; authored Markdown and the stored source are never rewritten.
-pub(crate) fn hidden_provenance_line(line: &str) -> bool {
+pub fn hidden_provenance_line(line: &str) -> bool {
     let line = line.trim().trim_end_matches('\\');
     line.starts_with("<!-- SRD page ")
         || line.starts_with("Original layout: [[")
@@ -239,7 +239,7 @@ pub(crate) fn hidden_provenance_line(line: &str) -> bool {
             && line.ends_with(" %%"))
 }
 
-pub(crate) fn overview_markdown(source: &str) -> String {
+pub fn overview_markdown(source: &str) -> String {
     let mut output = String::new();
     let mut row = false;
     let lines: Vec<&str> = source
@@ -650,7 +650,7 @@ fn joins_across_break(left: &str, right: &str, words: &std::collections::HashSet
 
 /// Split at real Markdown headings; headings in fenced examples remain content.
 /// Keep custom prose and tables; omit reserved storage and empty reading sections.
-pub(crate) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>> {
+pub fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>> {
     let body = body.trim_start();
     let body = body.strip_prefix(&format!("# {name}\n")).unwrap_or(body);
     let headings: Vec<_> = Parser::new(body)

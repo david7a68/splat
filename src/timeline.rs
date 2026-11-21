@@ -2,12 +2,13 @@
 //! in story order. It stands apart from session notes. A note refers to an event by its
 //! stable ID, and the same link works in Obsidian, because each event is a block in
 //! `Timeline.md`. Version 2 keeps the events in the body.
+
+#[path = "timeline/checks.rs"]
 pub mod checks;
-pub mod page;
 
 use crate::design::icons;
 use crate::encounter_run::{SavedRunInfo, Standing};
-pub(crate) use splat_campaign::timeline::*;
+pub use splat_campaign::timeline::*;
 use std::{
     collections::BTreeMap,
     fs,
@@ -16,6 +17,15 @@ use std::{
     time::{Duration, Instant},
 };
 use uuid::Uuid;
+
+/// A session, as the timeline knows it.
+#[derive(Clone, Debug)]
+pub struct SessionLink {
+    pub id: Uuid,
+    pub label: String,
+    /// The events its note links to.
+    pub mentions: Vec<String>,
+}
 
 /// Saved, unfinished fights past Setup keep their HP after a long rest.
 pub fn fights_that_keep_hp(
@@ -250,7 +260,7 @@ pub fn played_fight_summary(event: &Event, open: bool) -> String {
 const SAVE_AFTER: Duration = Duration::from_secs(1);
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 
-pub(crate) fn kind_icon(kind: Kind) -> &'static str {
+pub fn kind_icon(kind: Kind) -> &'static str {
     match kind {
         Kind::Day => icons::DAY,
         Kind::Encounter => icons::ENCOUNTERS,
@@ -261,7 +271,7 @@ pub(crate) fn kind_icon(kind: Kind) -> &'static str {
     }
 }
 
-pub(crate) trait EventDisplay {
+pub trait EventDisplay {
     fn time_warning(&self) -> Option<String>;
     fn summary(&self, session: Option<&str>) -> String;
     fn facts(&self) -> String;
@@ -337,7 +347,7 @@ fn new_id() -> String {
     clippy::disallowed_methods,
     reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
 )]
-pub(crate) fn next_result_order() -> crate::design::ResultOrder {
+pub fn next_result_order() -> crate::design::ResultOrder {
     crate::design::ResultOrder::issue()
 }
 
@@ -409,6 +419,14 @@ impl BookRevision {
 }
 
 impl Book {
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
+    pub fn baseline(&self) -> Option<&[u8]> {
+        self.baseline.as_deref()
+    }
+
     pub fn open(&mut self, folder: Option<&Path>) {
         let path = folder.map(|folder| folder.join(FILE));
         if self.path == path {
@@ -736,7 +754,7 @@ impl Book {
             temp.persist_noclobber(path)
         }
         .map_err(|e| e.to_string())?;
-        crate::sessions::sync_folder(parent)?;
+        splat_campaign::file_batch::sync_folder(parent).map_err(|error| error.to_string())?;
         self.flags = formats::parse_with_sessions(&text, &self.session_links).1;
         self.baseline = Some(text.into_bytes());
         self.revision.advance();
@@ -848,7 +866,7 @@ impl Book {
         });
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn dropped(&self) -> Option<usize> {
         self.results
             .reloaded
@@ -903,7 +921,7 @@ impl Book {
         let now = Instant::now();
         if self.dirty {
             // Test builds save only when told to, so a capture never depends on the clock.
-            #[cfg(not(test))]
+            #[cfg(not(any(test, feature = "test-support")))]
             if !self.conflict
                 && self.error.is_none()
                 && self
@@ -912,7 +930,7 @@ impl Book {
             {
                 self.save();
             }
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             let _ = SAVE_AFTER;
             ctx.request_repaint_after(SAVE_AFTER);
             // A dirty or conflicted book still follows the folder's other timeline file, so its
@@ -1168,7 +1186,7 @@ impl Book {
         self.removal().map(|removal| &removal.event)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn removed(&self) -> Option<&str> {
         self.removal().map(|removal| removal.label.as_str())
     }
@@ -1204,7 +1222,7 @@ impl Book {
     /// Every run sits on the timeline without a step from the DM. The DM's words stay, and
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         self.record_run_at(fact, session, played, None);
     }
@@ -1460,87 +1478,11 @@ impl Book {
     }
 }
 
-/// Which of the book's kept results a test presses Undo on.
 #[cfg(test)]
-#[derive(Clone, Copy)]
-pub(crate) enum TestUndo {
-    Remove,
-    Reload,
-    Ruling,
-}
-
-/// Press that result's Undo in a footer drawn from the book's store, as the pages do: the line
-/// comes from the store's view and the press acts by its ticket. Returns what `undo_remove`
-/// returns (the event put back), else `None`. With no such result, no Undo shows: `None`.
+#[path = "timeline/test_support.rs"]
+mod test_support;
 #[cfg(test)]
-pub(crate) fn press_footer_undo(book: &mut Book, which: TestUndo) -> Option<String> {
-    use crate::design::outcome::{Messages, PaneFrame, Said, UndoStep, Verb};
-    use egui_kittest::kittest::Queryable;
-    let label = match which {
-        TestUndo::Remove => "Undo remove",
-        TestUndo::Reload => "Undo reload",
-        TestUndo::Ruling => "Undo change to ruling",
-    };
-    let mut harness = egui_kittest::Harness::builder()
-        .with_size(eframe::egui::vec2(800.0, 300.0))
-        .build_state(
-            move |ctx, (book, back): &mut (Book, Option<String>)| {
-                eframe::egui::CentralPanel::default().show(ctx, |ui| {
-                    let frame = PaneFrame::new(ui);
-                    let mut messages = Messages::new(&frame, "test_footer", ui.available_width());
-                    let file = book.file();
-                    let words = crate::sentence!("A result.");
-                    match which {
-                        TestUndo::Remove => {
-                            if let Some(shown) = book.results.removal.get(&file) {
-                                messages.kept(shown.outcome(&frame, |_| {
-                                    Said::new(words)
-                                        .undo(UndoStep::verb(Verb::Remove).pressed_as(()))
-                                        .into()
-                                }));
-                            }
-                        }
-                        TestUndo::Reload => {
-                            if let Some(shown) = book.results.reloaded.get(&file) {
-                                messages.kept(shown.outcome(&frame, |_| {
-                                    Said::new(words)
-                                        .undo(UndoStep::verb(Verb::Reload).pressed_as(()))
-                                        .into()
-                                }));
-                            }
-                        }
-                        TestUndo::Ruling => {
-                            if let Some(shown) = book.results.ruling.get(&file) {
-                                messages.kept(shown.outcome(&frame, |_| {
-                                    Said::new(words)
-                                        .undo(UndoStep::of(Verb::Change, "ruling").pressed_as(()))
-                                        .into()
-                                }));
-                            }
-                        }
-                    }
-                    let paned = messages.pane(ui, crate::design::Body::Content, |_| ());
-                    if let Some(ticket) = paned.pressed.and_then(|press| press.ticket) {
-                        match which {
-                            TestUndo::Remove => *back = book.undo_remove(ticket),
-                            TestUndo::Reload => book.undo_reload(ticket),
-                            TestUndo::Ruling => book.undo_restores(ticket),
-                        }
-                    }
-                });
-            },
-            (std::mem::take(book), None),
-        );
-    crate::design::theme::install(&harness.ctx);
-    harness.run_steps(2);
-    if harness.query_by_label(label).is_some() {
-        harness.get_by_label(label).click();
-        harness.run_steps(2);
-    }
-    let (after, back) = std::mem::take(harness.state_mut());
-    *book = after;
-    back
-}
+pub use test_support::{TestUndo, press_footer_undo};
 
 #[cfg(test)]
 mod tests {

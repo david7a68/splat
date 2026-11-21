@@ -11,8 +11,6 @@ pub mod file_batch {
 pub mod art;
 #[path = "../../auth.rs"]
 pub mod auth;
-#[path = "../../campaign_content.rs"]
-pub mod campaign_content;
 #[path = "../../campaigns.rs"]
 pub mod campaigns;
 #[path = "../../content_workspace.rs"]
@@ -27,7 +25,7 @@ pub mod dndbeyond;
 pub mod hermetic;
 #[path = "../../history.rs"]
 pub mod history;
-#[path = "../../library.rs"]
+#[path = "../../library/catalogue.rs"]
 pub mod library;
 #[path = "../../lookup.rs"]
 pub mod lookup;

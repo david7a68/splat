@@ -158,13 +158,13 @@ impl FileFault {
 }
 
 /// A note's text, or a message that names the file in plain words.
-pub(crate) fn read_note(root: &Path, relative: &str) -> Result<String, String> {
+pub fn read_note(root: &Path, relative: &str) -> Result<String, String> {
     let path = crate::library::note_path(root, relative)?;
     std::fs::read_to_string(path).map_err(|error| FileFault::read(relative, &error).message())
 }
 
 /// A failed write, as one message that names the file.
-pub(crate) fn write_error(relative: &str) -> impl Fn(io::Error) -> String + '_ {
+pub fn write_error(relative: &str) -> impl Fn(io::Error) -> String + '_ {
     move |error| FileFault::write(relative, &error).message()
 }
 

@@ -29,7 +29,7 @@ pub const ALREADY_SAVED: &str = "Your changes are already in the note.";
 pub const STATUS_HINT: &str = "A short word, such as alive.";
 
 /// Only the DM's own world entries change here. A shared identity must be fixed first.
-pub(super) fn editable(item: &Item, index: &ContentIndex) -> bool {
+pub fn editable(item: &Item, index: &ContentIndex) -> bool {
     item.entry.kind == "world"
         && item.is_private()
         && !index.duplicate_world.contains_key(&item.entry.path)
@@ -152,8 +152,8 @@ impl Fields {
 pub(super) struct EditDraft {
     /// The campaign whose note this is. Its Undo discard and its lost-note warning show only
     /// there: Lookup keeps its reader across a campaign change.
-    pub(super) campaign: Uuid,
-    pub(super) name: String,
+    pub campaign: Uuid,
+    pub name: String,
     path: String,
     /// The entry as the index read it, so a draft without changes can follow the file.
     seen: (EntryFields, String, Vec<Flag>),
@@ -195,7 +195,7 @@ impl EditDraft {
     }
 
     /// `Undo reload`: the draft from before Reload.
-    pub(super) fn undo_reload(&mut self) {
+    pub fn undo_reload(&mut self) {
         if let Some((_, previous)) = self.reloaded.take() {
             self.now = previous;
         }
@@ -223,7 +223,7 @@ impl EditDraft {
         })
     }
 
-    pub(super) fn dirty(&self) -> bool {
+    pub fn dirty(&self) -> bool {
         let changed = self.now.changed(&self.start);
         changed.status || changed.creature || changed.place || changed.groups || changed.text
     }
@@ -645,7 +645,7 @@ impl Reader {
 
     /// A form is open for this campaign's note. A draft from another campaign with the same
     /// note id (a copied note) is never selected: Lookup keeps its reader across a change.
-    pub(super) fn editing(&self, id: Uuid, campaign: &Campaign) -> bool {
+    pub fn editing(&self, id: Uuid, campaign: &Campaign) -> bool {
         self.edits
             .get(&id)
             .is_some_and(|draft| draft.campaign == campaign.id)
@@ -676,7 +676,7 @@ impl Reader {
 
     /// A new reader that keeps only what this one holds for the DM (`Held`): typed Log lines,
     /// the words of those whose entry is gone or that the DM dismissed, and the kept results.
-    pub(crate) fn keep_log_lines(mut old: Self) -> Self {
+    pub fn keep_log_lines(mut old: Self) -> Self {
         Self {
             held: std::mem::take(&mut old.held),
             ..Self::default()
@@ -738,7 +738,7 @@ impl Reader {
     /// dismissed, with its Undo (ruling R3: typed words never go without an Undo). Each shows,
     /// whatever the reader shows, until the DM copies or dismisses it; another campaign's waits,
     /// unseen, for its campaign.
-    pub(crate) fn gone_log_messages<'f>(
+    pub fn gone_log_messages<'f>(
         &self,
         frame: &'f PaneFrame,
         messages: &mut Messages<'f, super::FooterAct>,
@@ -793,7 +793,7 @@ impl Reader {
 
     /// `Undo dismiss`: the notice and its words come back. A replaced or ended result does
     /// nothing.
-    pub(crate) fn undo_dismiss(&mut self, ticket: crate::design::results::Ticket) {
+    pub fn undo_dismiss(&mut self, ticket: crate::design::results::Ticket) {
         if let Ok((super::DismissedLog(gone), ())) =
             self.held.dismissed.undo_by(ticket, |_| Ok::<_, ()>(()))
         {
@@ -953,7 +953,7 @@ impl Reader {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
-    pub(super) fn edit_form(
+    pub fn edit_form(
         &mut self,
         ui: &mut egui::Ui,
         item: &Item,

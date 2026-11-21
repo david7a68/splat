@@ -92,7 +92,7 @@ fn editor_in_pane(
 /// The source editor, with its two events apart: the DM changed the text, and focus moved into
 /// it. A caller that keeps a result for one draft ends it on a change, not on focus. Campaign's
 /// repair keeps it in a scroll of its own, up to six rows high.
-pub(crate) fn editor_events(
+pub fn editor_events(
     ui: &mut egui::Ui,
     path: &str,
     draft: &mut String,
@@ -133,11 +133,7 @@ pub(crate) fn editor_events(
 /// line to fix, or an identity that the campaign does not allow. It writes nothing and reads no
 /// file: a refusal from the disk (read only, missing, a write error) is Save's own failure. Save, the save row's state, its cause
 /// and Save's availability all use it, so `Unsaved` always means that Save would write.
-pub(crate) fn refusal(
-    campaign: &Campaign,
-    path: &str,
-    draft: &str,
-) -> (Option<String>, Option<usize>) {
+pub fn refusal(campaign: &Campaign, path: &str, draft: &str) -> (Option<String>, Option<usize>) {
     // The save row asks on every frame; a parse of a long note takes about 1 ms.
     static REFUSALS: splat::memo::Memo<(Option<String>, Option<usize>)> =
         splat::memo::Memo::new(64);
@@ -147,7 +143,7 @@ pub(crate) fn refusal(
             if let Some(rule) = crate::library::note_path_rule(path) {
                 return (Some(rule.into()), None);
             }
-            let (problem, line) = crate::campaign_content::repair_problem(path, draft);
+            let (problem, line) = crate::content_workspace::repair_problem(path, draft);
             if problem.is_some() {
                 return (problem, line);
             }
@@ -166,11 +162,11 @@ pub(crate) fn refusal(
 }
 
 /// Why Save refuses a note that would claim a package, or another campaign, as its identity.
-pub(super) const OWNERSHIP: &str = "Keep campaign ownership consistent with settings.";
+pub const OWNERSHIP: &str = "Keep campaign ownership consistent with settings.";
 
 /// Why a repair did not open.
 #[derive(Debug)]
-pub(super) enum OpenError {
+pub enum OpenError {
     /// The file is there, but the system will not read it as text.
     Unread(FileFault),
     Words(String),
@@ -258,7 +254,7 @@ enum RepairAct {
     Undo,
 }
 
-pub(super) struct Repair {
+pub struct Repair {
     pub path: String,
     campaign: Uuid,
     baseline: String,

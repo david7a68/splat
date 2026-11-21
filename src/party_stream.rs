@@ -33,7 +33,7 @@ impl Stream {
         let (tx, rx) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         // Test builds have no route to D&D Beyond. A signed-in test has an open stream.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "test-support")) {
             let _ = tx.send(Event::Open);
             return Self { rx, cancel };
         }

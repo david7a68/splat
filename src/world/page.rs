@@ -1,6 +1,6 @@
 //! The World page: what is true in this world. One list of notes and entries, and the Reader.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
-use super::{Nav, Reader, file_fault::FileFault};
+use crate::world::{Nav, Reader, checks::tick_file, file_fault::FileFault};
 use crate::{
     design::{
         self, Type, colors, icons,
@@ -33,9 +33,7 @@ pub(crate) const PROBLEMS_TITLE: &str = "Things to check";
 
 /// What the Things to check page lists, in the words of its sections.
 const PROBLEMS_INTRO: &str = "These lists show notes with a date outside an event, a link to no note, no summary, no links, or a name or sentence on two notes. Splat only lists them. You change the notes.";
-/// The words for a held NPC, in the rail and in the row above another view. The rail's link
-/// is found by this constant.
-pub const UNSAVED_NPC: &str = "Unsaved NPC";
+pub use crate::world::UNSAVED_NPC;
 
 /// A repair cause must stay whole even when Lookup narrows the list. So must the path: a long
 /// one wraps, because a cut path cannot tell two files in one folder apart. A note that cannot
@@ -162,7 +160,7 @@ type Held = (
 
 /// The page's one kept result (`Note repaired.`, a generated NPC's discard). A later one
 /// replaces it; it shows only while its own state holds (`page_messages`).
-struct PageKept(super::PageResult);
+struct PageKept(crate::world::PageResult);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PageSlot;
@@ -289,8 +287,8 @@ pub struct WorldPage {
     new_kind: Option<&'static str>,
     new_name: String,
     note_type: String,
-    repair: Option<super::repair::Repair>,
-    kept_repairs: Vec<super::repair::Repair>,
+    repair: Option<crate::world::repair::Repair>,
+    kept_repairs: Vec<crate::world::repair::Repair>,
     campaign: Option<Uuid>,
     /// An unsaved generated NPC is a held draft. Only Save NPC and Discard end it.
     generated: Option<crate::npc_generator::Generated>,
@@ -310,7 +308,7 @@ pub struct WorldPage {
     pub lookup_npc: Option<String>,
     view: View,
     /// The checks for one load of the index.
-    checks: Option<(u64, super::checks::Checks)>,
+    checks: Option<(u64, crate::world::checks::Checks)>,
     /// Check rows with nothing left that stay in the list (FE4): a row whose page was open when
     /// its last item went. Leaving the page keeps it, so no press moves the list; the next check
     /// of the notes (a new index) ends it.
@@ -333,23 +331,6 @@ struct BrokenDetail {
     hover: String,
 }
 
-/// The one row above another view while an unsaved generated NPC is held, on World and in
-/// Lookup: `Unsaved NPC: <name> · Show`. Returns whether the DM chose `Show`.
-pub(crate) fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
-    let mut show = false;
-    ui.horizontal_wrapped(|ui| {
-        ui.label(
-            Type::Body
-                .rich(ui, format!("{UNSAVED_NPC}: {name}"))
-                .color(colors().text),
-        );
-        ui.label(Type::Body.rich(ui, "·").color(colors().muted));
-        show = design::link(ui, "Show").clicked();
-    });
-    design::gap(ui, design::Gap::S);
-    show
-}
-
 impl WorldPage {
     /// All file reads and repair parsing stay behind this generation check.
     fn refresh_checks(
@@ -364,7 +345,7 @@ impl WorldPage {
         {
             return;
         }
-        self.checks = Some((index.generation(), super::checks::run(index)));
+        self.checks = Some((index.generation(), crate::world::checks::run(index)));
         self.kept_empty.clear();
         // A tick's Undo lives while its note holds the ticked line where the tick wrote it.
         self.ticks.disk_changed(|tick| {
@@ -387,7 +368,9 @@ impl WorldPage {
                     text => BrokenDetail {
                         cause: text
                             .and_then(Result::ok)
-                            .and_then(|text| crate::campaign_content::repair_problem(path, &text).0)
+                            .and_then(|text| {
+                                crate::content_workspace::repair_problem(path, &text).0
+                            })
                             .unwrap_or_else(|| problem.clone()),
                         hover: problem.clone(),
                     },
@@ -400,8 +383,11 @@ impl WorldPage {
     pub fn dirty(&self) -> bool {
         self.repair
             .as_ref()
-            .is_some_and(super::repair::Repair::dirty)
-            || self.kept_repairs.iter().any(super::repair::Repair::dirty)
+            .is_some_and(crate::world::repair::Repair::dirty)
+            || self
+                .kept_repairs
+                .iter()
+                .any(crate::world::repair::Repair::dirty)
     }
 
     fn keep_repair(&mut self) {
@@ -523,7 +509,7 @@ impl WorldPage {
         let loaded = if let Some(at) = self.kept_repairs.iter().position(|r| r.path == path) {
             Ok(self.kept_repairs.remove(at))
         } else {
-            super::repair::Repair::open(campaign, path)
+            crate::world::repair::Repair::open(campaign, path)
         };
         match loaded {
             Ok(repair) => {
@@ -532,8 +518,8 @@ impl WorldPage {
                 self.new_kind = None;
                 self.leave_card();
             }
-            Err(super::repair::OpenError::Words(error)) => self.error = Some(error.into()),
-            Err(super::repair::OpenError::Unread(fault)) => {
+            Err(crate::world::repair::OpenError::Words(error)) => self.error = Some(error.into()),
+            Err(crate::world::repair::OpenError::Unread(fault)) => {
                 // The pane is about this file now, as an opened repair would be.
                 self.error = Some(PageError::Unread(Unread {
                     fault,
@@ -551,7 +537,7 @@ impl WorldPage {
         ui: &mut egui::Ui,
         index: Option<&Arc<ContentIndex>>,
         campaign: &Campaign,
-        trackers: &mut dyn super::TrackerUi,
+        trackers: &mut dyn crate::world::TrackerUi,
     ) {
         self.set_campaign(campaign.id);
         // Lookup's reason line ends with the NPC it explains.
@@ -785,7 +771,8 @@ impl WorldPage {
                         self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
-                        self.results.record(PageKept(super::PageResult::Repaired));
+                        self.results
+                            .record(PageKept(crate::world::PageResult::Repaired));
                         // The repair is the newer result. A change result kept from before the
                         // note broke has nothing left to undo, and would hide `Note repaired.`.
                         // Another note's rename keeps its Undo.
@@ -818,7 +805,7 @@ impl WorldPage {
                         design::reader::measure(ui, |ui| self.checks_view(ui, index))
                     });
                     if let Some(press) = paned.pressed
-                        && press.id == super::FooterAct::Untick
+                        && press.id == crate::world::FooterAct::Untick
                         && let Some(ticket) = press.ticket
                     {
                         self.untick(index, campaign, ticket);
@@ -964,7 +951,7 @@ impl WorldPage {
     /// it sits in the pane footer.
     fn held_row(&mut self, ui: &mut egui::Ui) {
         if let Some(npc) = self.generated.as_ref().filter(|_| !self.generated_shown)
-            && unsaved_npc_row(ui, &npc.name)
+            && crate::world::unsaved_npc_row(ui, &npc.name)
         {
             self.show_held();
         }
@@ -975,17 +962,17 @@ impl WorldPage {
     fn page_messages<'f>(
         &self,
         frame: &'f PaneFrame,
-        messages: &mut Messages<'f, super::FooterAct>,
+        messages: &mut Messages<'f, crate::world::FooterAct>,
         open: Option<Uuid>,
     ) {
         let Some(shown) = self.results.get(&PageSlot) else {
             return;
         };
         let shows = match &shown.value().0 {
-            super::PageResult::Discarded(_) => {
+            crate::world::PageResult::Discarded(_) => {
                 self.discarded_npc.is_some() && self.generated.is_none()
             }
-            super::PageResult::Repaired => open.is_some() && self.repaired == open,
+            crate::world::PageResult::Repaired => open.is_some() && self.repaired == open,
         };
         if shows {
             messages.kept(shown.outcome(frame, |kept| kept.0.outcome()));
@@ -997,20 +984,20 @@ impl WorldPage {
     fn footer_press(
         &mut self,
         ctx: &egui::Context,
-        press: crate::design::outcome::Press<super::FooterAct>,
+        press: crate::design::outcome::Press<crate::world::FooterAct>,
         item: Option<&crate::lookup::Item>,
         campaign: &Campaign,
-        trackers: &mut dyn super::TrackerUi,
+        trackers: &mut dyn crate::world::TrackerUi,
     ) -> Option<Nav> {
         match press.id {
-            super::FooterAct::Page => {
+            crate::world::FooterAct::Page => {
                 let ticket = press.ticket?;
                 // Only the discard has an Undo; a replaced result (`Gone`) does nothing.
                 if self
                     .results
                     .undo_by(ticket, |kept| match kept.0 {
-                        super::PageResult::Discarded(_) => Ok(()),
-                        super::PageResult::Repaired => Err(()),
+                        crate::world::PageResult::Discarded(_) => Ok(()),
+                        crate::world::PageResult::Repaired => Err(()),
                     })
                     .is_ok()
                 {
@@ -1018,7 +1005,7 @@ impl WorldPage {
                 }
                 None
             }
-            super::FooterAct::Trackers => {
+            crate::world::FooterAct::Trackers => {
                 trackers.undo_remove();
                 None
             }
@@ -1072,7 +1059,7 @@ impl WorldPage {
         let fault = unread.fault.clone();
         design::reader::title(ui, fault.path.rsplit('/').next().unwrap_or(&fault.path));
         // No editor link: an editor cannot open a file that Splat cannot read either.
-        super::folder_file_line(ui, &campaign.path, &fault.path, false);
+        crate::world::folder_file_line(ui, &campaign.path, &fault.path, false);
         // The title and file line name the file, so the error says `this note` (FG6).
         let (again, cancel) =
             design::message_with_actions(ui, design::Tone::Error, &fault.pane_headline(), |ui| {
@@ -1127,14 +1114,16 @@ impl WorldPage {
     fn creation_form(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let form = self.new_kind.is_some() || self.card_shown();
         let frame = PaneFrame::new(ui);
-        let mut messages: Messages<'_, super::FooterAct> =
+        let mut messages: Messages<'_, crate::world::FooterAct> =
             Messages::new(&frame, "world_creation", ui.available_width());
         let card = self.generated.as_ref().filter(|_| self.generated_shown);
         if let Some(npc) = card {
             // Two NPCs: the one Lookup keeps and the one on this card. Each is named, so the DM
             // knows which to save and which moves here. It is a state: an info notice.
             if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
-                messages.outcome(Notice::new(super::said(&kept_in_lookup(name, &npc.name))));
+                messages.outcome(Notice::new(crate::world::said(&kept_in_lookup(
+                    name, &npc.name,
+                ))));
             }
             if let Some(shown) = self
                 .marker_copied
@@ -1153,7 +1142,7 @@ impl WorldPage {
         if let Some(PageError::Words(error)) = &self.error
             && form
         {
-            messages.outcome(FaultMessage::new(&super::ReaderFault::Action(
+            messages.outcome(FaultMessage::new(&crate::world::ReaderFault::Action(
                 error.clone(),
             )));
         }
@@ -1228,7 +1217,9 @@ impl WorldPage {
                             ),
                             egui::vec2(create_width, design::Density::Scan.control()),
                         );
-                        super::in_rect(ui, at, |ui| create().blocked(reason).show(ui).clicked())
+                        crate::world::in_rect(ui, at, |ui| {
+                            create().blocked(reason).show(ui).clicked()
+                        })
                     };
                 let mut name_field = |ui: &mut egui::Ui| {
                     design::labelled_field(ui, NEW_NAME, "Name", name, None, None)
@@ -1255,7 +1246,7 @@ impl WorldPage {
                 } else {
                     kind
                 };
-                made = Some(super::create_entry(campaign, &self.new_name, kind));
+                made = Some(crate::world::create_entry(campaign, &self.new_name, kind));
             }
             // The kept line: Cancel at its start, then the reason, or the file the name makes.
             ui.horizontal(|ui| {
@@ -1272,7 +1263,7 @@ impl WorldPage {
                 if reason.is_some() {
                     design::blocked_reason(ui, reason);
                 } else if kind == "npc" {
-                    let path = super::new_entry_path(Some(index), &self.new_name, "npc");
+                    let path = crate::world::new_entry_path(Some(index), &self.new_name, "npc");
                     ui.add(
                         egui::Label::new(
                             Type::Small
@@ -1292,14 +1283,14 @@ impl WorldPage {
                 &self.generator_sources,
                 self.run_open,
                 crate::lookup::NamesHelp::Marker,
-                &super::new_entry_path(Some(index), &npc.name, "npc"),
+                &crate::world::new_entry_path(Some(index), &npc.name, "npc"),
             );
             if choice.copied_marker {
                 // Each press is a new result, ahead of the older one it replaces.
                 self.marker_copied.record(MarkerCopied(npc.name.clone()));
             }
             if choice.save {
-                made = Some(super::create_generated(campaign, npc));
+                made = Some(crate::world::create_generated(campaign, npc));
             }
             if choice.again {
                 self.roll(index);
@@ -1310,7 +1301,9 @@ impl WorldPage {
                 // The copy's result belonged to this card; `Undo discard` does not bring it back.
                 self.marker_copied.owner_changed(&MarkerSlot);
                 self.results
-                    .record(PageKept(super::PageResult::Discarded(npc.name.clone())));
+                    .record(PageKept(crate::world::PageResult::Discarded(
+                        npc.name.clone(),
+                    )));
                 self.discarded_npc = Some((
                     npc,
                     std::mem::take(&mut self.generator_problems),
@@ -1423,7 +1416,7 @@ impl WorldPage {
         // each line is `Body` first and opens the note at its heading; the note that holds them
         // follows in `Small` (round 26 FE4). An open question has its box before its words.
         let questions = self.view == View::Questions;
-        let mut by_page = |ui: &mut egui::Ui, found: &[super::checks::Found]| {
+        let mut by_page = |ui: &mut egui::Ui, found: &[crate::world::checks::Found]| {
             let mut place = 0;
             for group in found.chunk_by(|a, b| a.page == b.page).take(CHECK_ROWS) {
                 ui.push_id(group[0].page, |ui| {
@@ -1639,7 +1632,7 @@ impl WorldPage {
         {
             return Err(format!("Save or discard your edit of {name} first."));
         }
-        let before = super::file_fault::read_note(&campaign.path, &item.entry.path)?;
+        let before = crate::world::file_fault::read_note(&campaign.path, &item.entry.path)?;
         // Another note that took this file's place outside Splat is not this question's note.
         if splat::content::note_id(&before) != Some(item.entry.id) {
             return Err(format!("{name} changed on disk. Nothing was written."));
@@ -1655,7 +1648,7 @@ impl WorldPage {
     fn questions_messages<'f>(
         &self,
         frame: &'f PaneFrame,
-        messages: &mut Messages<'f, super::FooterAct>,
+        messages: &mut Messages<'f, crate::world::FooterAct>,
         campaign: &Campaign,
     ) {
         for shown in self.ticks.newest_first(&campaign.id) {
@@ -1663,12 +1656,12 @@ impl WorldPage {
                 Done::new(Verb::Tick, format!("\u{201c}{}\u{201d}", tick.question))
                     .object_first()
                     .within(tick.note_name.clone())
-                    .undo(super::FooterAct::Untick)
+                    .undo(crate::world::FooterAct::Untick)
                     .into()
             }));
         }
         if let Some(error) = &self.tick_error {
-            messages.outcome(FaultMessage::new(&super::ReaderFault::Action(
+            messages.outcome(FaultMessage::new(&crate::world::ReaderFault::Action(
                 error.clone(),
             )));
         }
@@ -1726,7 +1719,7 @@ impl WorldPage {
                 let fault = index.note_faults().of_note(position);
                 // A fault's words that do not fit the row whole give way to its short form.
                 let narrow = fault
-                    .and_then(super::NoteFault::narrow_words)
+                    .and_then(crate::world::NoteFault::narrow_words)
                     .map(|words| format!("{} {words}", icons::WARN));
                 let detail = if let Some(fault) = fault {
                     format!("{} {}", icons::WARN, fault.words())
@@ -1737,14 +1730,14 @@ impl WorldPage {
                             .unwrap_or_default()
                             .to_string_lossy()
                             .into_owned();
-                        match super::status(entry) {
+                        match crate::world::status(entry) {
                             "" => file,
                             status => format!("{file} · {status}"),
                         }
                     } else {
                         [
-                            super::date_words(entry),
-                            Some(super::status(entry).to_owned()),
+                            crate::world::date_words(entry),
+                            Some(crate::world::status(entry).to_owned()),
                         ]
                         .into_iter()
                         .flatten()
@@ -1835,14 +1828,15 @@ const QUESTION_BOX: f32 = design::Gap::XXL.size();
 fn question_row(
     ui: &mut egui::Ui,
     index: &ContentIndex,
-    found: &super::checks::Found,
+    found: &crate::world::checks::Found,
 ) -> (bool, bool) {
     let row = ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         let (slot, _) =
             ui.allocate_exact_size(egui::vec2(QUESTION_BOX, design::XL), egui::Sense::hover());
         let mut ticked = false;
-        if found.open_box.is_some() && super::edit::editable(&index.items[found.page], index) {
+        if found.open_box.is_some() && crate::world::edit::editable(&index.items[found.page], index)
+        {
             let mut cell = ui.new_child(
                 egui::UiBuilder::new()
                     .max_rect(egui::Rect::from_min_size(
@@ -1864,28 +1858,6 @@ fn question_row(
     });
     design::register_row(ui, row.response.rect);
     row.inner
-}
-
-/// The note's text with the box of an open question set: `question` is the question as read
-/// (unticked), its first line and continuation lines joined by `\n`, and `at` its first line in
-/// the note's body. `None` unless that place holds the whole question, its box in the other
-/// state: the act never looks for another line that reads the same.
-pub(super) fn tick_file(text: &str, at: usize, question: &str, done: bool) -> Option<String> {
-    let front =
-        crate::session_notes::split_note(text).map_or(0, |(front, _)| front.matches('\n').count());
-    let mut lines = question.split('\n');
-    let line = lines.next()?;
-    let mut held = text.split('\n').skip(front + at + 1);
-    if !lines.all(|wanted| held.next().map(|at| at.trim_end_matches('\r')) == Some(wanted)) {
-        return None;
-    }
-    let ticked = crate::session_notes::ticked(line, true);
-    let (from, to) = if done {
-        (line, ticked.as_str())
-    } else {
-        (ticked.as_str(), line)
-    };
-    crate::session_notes::change_line(text, front + at, from, Some(to))
 }
 
 #[cfg(test)]

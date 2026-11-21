@@ -132,7 +132,7 @@ impl Party {
     /// to a live one, so a visual test shows the sync panel's editable values this way.
     /// For visual tests: swap in a party's members and its read error, and get the old ones back
     /// (an empty party whose read failed, then the party as it was).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn swap_members_and_error(
         &mut self,
         members: Vec<crate::party_sync::Member>,
@@ -144,7 +144,7 @@ impl Party {
         )
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sheet_read(&mut self, max_hp: i64, sheet: &Value) {
         let id = self
             .reader
@@ -157,7 +157,7 @@ impl Party {
 
     /// How often the sync panel asked for its stepper wells, and how often it read the values
     /// to measure them.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn sync_well_counts(&self) -> (usize, usize) {
         self.combat.well_counts
     }
@@ -1017,7 +1017,7 @@ const SYNC_STOPPED: design::outcome::Sentence = crate::sentence!(
 /// Combat sync stopped. It waits for the DM to connect, and the rail marks it on every page as a
 /// warning, so every place that says it is a warning (R41). This is the one value that the
 /// Party footer and the rail read.
-pub(crate) struct SyncStopped;
+pub struct SyncStopped;
 
 impl SyncStopped {
     /// The tone of every place that says it.
@@ -1032,7 +1032,7 @@ impl SyncStopped {
     }
 
     /// The rail's mark, a link to Party, in its tone.
-    pub(crate) fn rail() -> Status<'static> {
+    pub fn rail() -> Status<'static> {
         Status {
             icon: icons::SYNC_OFF,
             word: "Sync stopped",
@@ -2005,7 +2005,7 @@ fn overview_death_saves(record: &EntitySnapshot, live: Option<&LiveValues>) -> O
     ))
 }
 
-pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
+pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
     let narrow = ui.available_width() < 560.0;
     sheet_section(ui, "Combat");
     tiles(ui, |ui| {
@@ -2560,7 +2560,7 @@ fn sheet_heading(ui: &mut egui::Ui, title: &str, count: usize) {
     design::heading(ui, design::Heading::Group { title, count });
 }
 
-pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
+pub fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     detail_intro(ui, record, page, search);
     let entries = sheet_entries(record, page);
     let search = search.to_lowercase();

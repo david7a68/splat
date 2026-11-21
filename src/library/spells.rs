@@ -494,7 +494,7 @@ pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
 /// printed order. In a run they follow the stat block's own actions, in the panel, on the
 /// action bar and by Ctrl+number.
 #[derive(Default)]
-pub(crate) struct Resolved {
+pub struct Resolved {
     /// The entry's spells, each with the entry it opens, or `None` when it is missing.
     pub references: Vec<Option<(usize, String)>>,
     /// Each list line, trimmed, with its tiles.
@@ -631,7 +631,7 @@ impl SpellCache {
 
 /// An entry's Spellcasting, resolved once and kept by the links' cache, so an unchanged frame
 /// looks nothing up. Links with no cache resolve it on each call.
-pub(crate) fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
+pub fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
     let Some(cache) = links.spell_cache() else {
         return Arc::new(build(entry, links));
     };

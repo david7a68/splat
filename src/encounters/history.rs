@@ -4,13 +4,13 @@
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use crate::{
     encounter_run::{SavedRunInfo, Standing},
-    timeline::{Event, page::SessionLink},
+    timeline::{Event, SessionLink},
 };
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
 /// One encounter note, as the page lists it.
-pub(crate) struct Template {
+pub struct Template {
     pub path: String,
     pub id: Uuid,
     pub name: String,
@@ -26,7 +26,7 @@ pub(crate) struct Template {
 /// difficulty line (so a member the summary shows is not named again after `XP not known`); the
 /// same parts as words are its hover and the plan's text. Built once, where the template is
 /// built from its setup; nothing of it is read from or written to a file.
-pub(crate) struct Roster {
+pub struct Roster {
     pub parts: crate::difficulty::Summary,
     pub words: String,
     /// The row's hover: the words, then the difficulty's form (`… · XP not known`).
@@ -112,10 +112,7 @@ const NO_SESSION: &str = "No session";
 
 /// The template a run came from. A save with no record of it matches by name, but only when
 /// one template has that name: entries can share a name, and a wrong match would hide one.
-pub(crate) fn template_of<'a>(
-    run: &SavedRunInfo,
-    templates: &'a [Template],
-) -> Option<&'a Template> {
+pub fn template_of<'a>(run: &SavedRunInfo, templates: &'a [Template]) -> Option<&'a Template> {
     if let Some(source) = run.source {
         return templates.iter().find(|template| template.id == source);
     }

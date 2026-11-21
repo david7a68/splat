@@ -55,7 +55,12 @@ do not tell you the scope. For example, the tracker tests load
 | `crates/cli` | Verification tools |
 | `src/design` | Shared egui widgets and messages (`splat-design`) |
 | `src/trackers` | Trackers panel and history (`splat-trackers`) |
-| `src/content_ui` | World, Lookup, Library, Campaign, and their shared readers (`splat-content-ui`) |
+| `src/content_ui` | Content catalogue, Lookup, Campaign registration, and shared readers (`splat-content-ui`) |
+| `src/library_page` | Library browsing and authoring (`splat-library-page`) |
+| `src/world_page` | World page (`splat-world-page`) |
+| `src/campaign_packages` | Campaign Packages page (`splat-campaign-packages`) |
+| `src/encounters_ui` | Encounter planning, fight runs, party sheets and sync, and the Timeline book (`splat-encounters-ui`) |
+| `src/sessions_ui` | Sessions and Timeline pages, recording, and processing (`splat-sessions-ui`) |
 | `src` | Desktop app and public content, character and execution APIs |
 
 Character, execution and campaign can compile in parallel once content metadata
@@ -63,8 +68,10 @@ is ready. The desktop library depends on the logic crates directly. The
 verification tools use content, character and execution.
 
 The UI crates keep their sources under `src/` so the design checks follow the same files.
-An edit in Trackers rebuilds Trackers and the desktop. An edit in World, Lookup, Library, or
-Campaign rebuilds their crate and the desktop. Encounters and Run compile in the desktop crate.
+A World page, Campaign Packages, Library page, or Trackers edit rebuilds that feature and the desktop.
+An edit to the catalogue, Lookup, or a shared reader rebuilds Content UI and the crates that use it.
+Sessions and Timeline use the encounter and run records from Encounters UI. A change to that crate
+therefore also rebuilds Sessions UI before linking the desktop.
 
 Development and test builds use 16 code-generation units and include file and
 line information in backtraces. They disable incremental compilation by

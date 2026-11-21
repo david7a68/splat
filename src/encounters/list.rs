@@ -5,8 +5,8 @@ use crate::encounter_run::{FightSummary, SavedRunInfo};
 use std::path::Path;
 
 /// Why a Ready row's Start fight is blocked while its run is open (FJ7), and the link to it.
-pub(crate) const FIGHT_OPEN: &str = "This fight is open.";
-pub(crate) const GO_TO_RUN: &str = "Go to the run";
+pub const FIGHT_OPEN: &str = "This fight is open.";
+pub const GO_TO_RUN: &str = "Go to the run";
 
 pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
     if let Some(reason) = reason {
@@ -446,7 +446,7 @@ fn fit_detail(ui: &egui::Ui, detail: &str, font: &egui::FontId, width: f32) -> S
 }
 
 /// Read the state from old and current run labels without exposing round zero.
-pub(crate) fn run_state_word(run: &SavedRunInfo, paused: bool) -> String {
+pub fn run_state_word(run: &SavedRunInfo, paused: bool) -> String {
     let round = run
         .label
         .split(" · ")
@@ -1141,7 +1141,7 @@ fn final_state_rest(
 #[cfg(test)]
 mod iter_2_c_tests {
     use super::*;
-    use crate::timeline::{Book, Kind, page::SessionLink};
+    use crate::timeline::{Book, Kind, SessionLink};
     use std::path::PathBuf;
 
     /// F1, FB2, FB6: a Ready row's line ends with the difficulty in its one form at every width;

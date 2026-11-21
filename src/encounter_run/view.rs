@@ -158,7 +158,7 @@ pub(crate) fn other_effect_field(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
-pub(crate) fn toggle(
+pub fn toggle(
     ui: &mut egui::Ui,
     label: &str,
     icon: &str,
@@ -213,7 +213,7 @@ fn vital_columns(ui: &mut egui::Ui, columns: &[(&str, String)]) {
 
 /// The width `toggle` takes, on or off: its words and the frame's padding.
 pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
     let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
         .into_galley(
@@ -233,13 +233,13 @@ pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
     words + 2.0 * (ui.spacing().button_padding.x + expansion)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a group row scanned the run's participants for that group's joins.
     static GROUP_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often the Arrivals summaries and the Arrivals reasons were worked out (Astra 2): an
     /// unchanged frame works out none of them.
@@ -247,7 +247,7 @@ thread_local! {
         const { std::cell::Cell::new((0, 0)) };
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many toggle widths the conditions grid measured.
     static CONDITION_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -453,7 +453,7 @@ fn arrival_add_word(group: &super::RunGroup) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Test builds: how often a pending line was worked out (Astra, PR 371: not each frame).
     static PENDING_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -470,7 +470,7 @@ const PENDING_WORDS: &str =
 /// D&D Beyond yet. Splat tries again by itself.` HP has the form of the conflict's buttons.
 /// With nothing to compare, the general words.
 fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     PENDING_WORK.with(|work| work.set(work.get() + 1));
     let max = sync.max_hp().unwrap_or(0);
     let mut changed: Vec<String> = Vec::new();
@@ -1736,7 +1736,7 @@ impl Run {
             // Too tall even at its tightest. It scrolls, at that tight pitch.
             layouts = self.roster_layouts(ui, width - SCROLL_BAR, scale, RowFit::Summary);
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         for (&index, layout) in self.state.order.iter().zip(&layouts) {
             let first = &layouts[0];
             assert_eq!(layout.initiative_right, first.initiative_right);
@@ -3483,7 +3483,7 @@ impl Run {
         if let Some((_, reasons)) = self.arrival_reasons.as_ref().filter(|(at, _)| *at == key) {
             return reasons.clone();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             let (a, b) = PREPARED.with(std::cell::Cell::get);
             PREPARED.with(|count| count.set((a, b + 1)));
@@ -3546,7 +3546,7 @@ impl Run {
         if let Some(summary) = kept.get(&group.id) {
             return summary.clone();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             let (a, b) = PREPARED.with(std::cell::Cell::get);
             PREPARED.with(|count| count.set((a + 1, b)));
@@ -3573,12 +3573,12 @@ impl Run {
     pub(super) fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
         let key = (self.revision, self.groups_revision(), self.scale_revision());
         let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.arrival_counts.0 += 1;
         }
         if self.arrival_words.as_ref().map(|(at, _)| *at) != Some(key) {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             {
                 self.arrival_counts.1 += 1;
             }
@@ -4025,7 +4025,7 @@ impl Run {
     /// The newest round this group joined in (0 for setup), from one scan of the participants
     /// and no list. Its row's status and its layout both take it from here.
     fn group_joined(&self, group: &super::RunGroup) -> Option<u64> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         GROUP_SCANS.with(|count| count.set(count.get() + 1));
         self.state
             .participants
@@ -6944,7 +6944,7 @@ pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     }
 }
 
-pub(crate) use splat_content_ui::roster::change_preview;
+pub use splat_content_ui::roster::change_preview;
 
 /// An Arrivals row's status and members for a slot `width` wide. None when a part of the status
 /// cannot fit the slot whole: then the status takes a full-width line of its own.
@@ -6989,7 +6989,7 @@ const STAT_BLOCK_UNREAD: &str = "stat block could not be read";
 
 /// What the DM chose among a close dialog's recovery actions.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
-pub(crate) struct CloseRecovery {
+pub struct CloseRecovery {
     pub review: bool,
     pub connect: bool,
 }
@@ -6999,11 +6999,7 @@ pub(crate) struct CloseRecovery {
 /// buttons on one line, `Connect to sync` before `Review conflict`, and the first one's border
 /// starts at the dialog text. FK2: a message action without an icon has the secondary border, so
 /// the safe action never reads as a label beside `Close now`.
-pub(crate) fn close_recovery_actions(
-    ui: &mut egui::Ui,
-    review: bool,
-    connect: bool,
-) -> CloseRecovery {
+pub fn close_recovery_actions(ui: &mut egui::Ui, review: bool, connect: bool) -> CloseRecovery {
     let mut chosen = CloseRecovery::default();
     if !review && !connect {
         return chosen;
@@ -7056,7 +7052,7 @@ fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
     let forms = shortened_names(group, before)
         .skip(usize::from(group == arrival))
         .inspect(|_| {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             MOVE_FORMS.with(|forms| forms.set(forms.get() + 1));
         });
     whole
@@ -7064,7 +7060,7 @@ fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
 }
 
 // Move forms built on this thread, for a test that an unchanged frame builds none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static MOVE_FORMS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -7693,7 +7689,7 @@ pub(super) fn log_link(ui: &mut egui::Ui) -> egui::Response {
 
 /// Concentration, as a run row marks it and History's Final state repeats it: its icon and
 /// `Conc`, in its own colour.
-pub(crate) fn concentration_mark() -> (String, egui::Color32) {
+pub fn concentration_mark() -> (String, egui::Color32) {
     (
         format!("{} Conc", icons::CONCENTRATING),
         colors().participant.concentrating,
@@ -7792,7 +7788,7 @@ const PICTURE_GAP: f32 = 6.0;
 #[derive(Clone, Default)]
 struct RowCache(std::collections::HashMap<u64, RowLayout>);
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often `fitted` was asked for a row, and how often a row was laid out.
     static ROW_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -8233,7 +8229,7 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         ROW_FITS.with(|count| count.set(count.get() + 1));
         let input = RowInput {
             words: RowWords::of(p),
@@ -8467,7 +8463,7 @@ impl RowLayout {
         input: &RowInput,
         (condition_count, bonus_fit, extra): (usize, BonusFit, &Extra),
     ) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         ROW_LAYOUTS.with(|count| count.set(count.get() + 1));
         // The layout reads only its input: the cache of `fitted` is keyed on all of it.
         let RowInput {

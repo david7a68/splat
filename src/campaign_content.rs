@@ -1,5 +1,6 @@
 //! What a campaign uses: package selections, and the repair of invalid notes. This is
 //! a rare setup task, so it stays calm, with one scrolling list at 2,000+ rows.
+pub use crate::content_workspace::repair_problem;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{
@@ -11,7 +12,6 @@ use crate::{
 };
 use eframe::egui;
 use splat::character::campaign_package::{self, Move, Proposal};
-use splat::content::Entry;
 use std::{
     collections::BTreeSet,
     fs,
@@ -586,73 +586,6 @@ struct RemovedPackage {
     users: Vec<(Uuid, String)>,
 }
 
-/// Return a useful YAML repair message and the physical line to mark.
-pub fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
-    // Repair rows and editors ask on every frame, and a parse of a long note takes about 1 ms.
-    static PROBLEMS: splat::memo::Memo<(Option<String>, Option<usize>)> =
-        splat::memo::Memo::new(64);
-    PROBLEMS.get_or(&[path.as_bytes(), text.as_bytes()], || {
-        find_repair_problem(path, text)
-    })
-}
-
-fn find_repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
-    let Some(problem) = Entry::parse(path, text).err() else {
-        return (None, None);
-    };
-    let yaml = text
-        .strip_prefix("---\n")
-        .and_then(|text| text.split_once("\n---").map(|(yaml, _)| yaml));
-    if let Some(yaml) = yaml
-        && let Err(error) = serde_yaml_ng::from_str::<serde_yaml_ng::Value>(yaml)
-    {
-        let mut opens = Vec::new();
-        for (index, line) in yaml.lines().enumerate() {
-            let mut quote = None;
-            for ch in line.chars() {
-                if matches!(ch, '\'' | '"') {
-                    if quote == Some(ch) {
-                        quote = None;
-                    } else if quote.is_none() {
-                        quote = Some(ch);
-                    }
-                }
-                if quote.is_some() {
-                    continue;
-                }
-                if ch == '#' {
-                    break;
-                }
-                match ch {
-                    '[' | '{' => opens.push((ch, index + 2)),
-                    ']' | '}' => {
-                        opens.pop();
-                    }
-                    _ => {}
-                }
-            }
-        }
-        if let Some((ch, line)) = opens.first() {
-            let thing = if *ch == '[' { "list" } else { "mapping" };
-            return (
-                Some(format!(
-                    "Line {line} opens a {thing} with {ch} that never closes."
-                )),
-                Some(*line),
-            );
-        }
-        if let Some(location) = error.location() {
-            let line = location.line() + 1;
-            return (
-                Some(format!(
-                    "Check the YAML on line {line}. Use a name, a colon and its value."
-                )),
-                Some(line),
-            );
-        }
-    }
-    (Some(problem), None)
-}
 /// A folder recovery must keep the selected package's identity. `name` is the package the DM
 /// looks for, as the campaign names it.
 fn find_package_folder(

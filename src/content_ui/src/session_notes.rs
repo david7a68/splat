@@ -360,3 +360,31 @@ impl Fault for FolderFault {
 pub fn notice_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something went wrong."))
 }
+
+/// Every name in a note's `[[links]]`, in order, without timeline references. A name linked
+/// twice comes twice: a plan can hold the same fight again.
+pub fn each_linked_name(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("[[") {
+        rest = &rest[start + 2..];
+        let Some(end) = rest.find("]]") else {
+            break;
+        };
+        let inner = &rest[..end];
+        let name = inner.split('|').next().unwrap_or(inner).trim();
+        if !name.is_empty() && !name.starts_with("Timeline#") {
+            names.push(name.to_owned());
+        }
+        rest = &rest[end + 2..];
+    }
+    names
+}
+
+/// The names in a note's `[[links]]`, once each.
+pub fn linked_names(text: &str) -> Vec<String> {
+    let mut names = each_linked_name(text);
+    let mut seen = std::collections::BTreeSet::new();
+    names.retain(|name| seen.insert(name.clone()));
+    names
+}

@@ -29,3 +29,14 @@ pub fn split_note(text: &str) -> Option<(&str, &str)> {
         from = after;
     }
 }
+
+/// The first number of an XP line: `XP 1,250 for 3 at 0 HP` is 1,250.
+pub fn first_number(words: &str) -> Option<u64> {
+    let start = words.find(|c: char| c.is_ascii_digit())?;
+    let digits: String = words[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == ',')
+        .filter(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
+}

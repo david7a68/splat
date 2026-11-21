@@ -28,18 +28,17 @@ pub mod auth {
     #[cfg(test)]
     pub use splat_content_ui::auth::connect_live;
     pub use splat_content_ui::auth::{Session, connect};
-    pub(crate) use splat_content_ui::auth::{stream_request, website_request};
 }
-use splat_content_ui::campaign_content;
+use splat_campaign_packages::campaign_content;
 use splat_content_ui::campaigns;
-mod combat_sync;
+#[cfg(test)]
+use splat_encounters_ui::combat_sync;
 mod commands;
 #[cfg(test)]
 mod content_integration_tests;
 use splat_content_ui::content_workspace;
 use splat_content_ui::copy_dialog;
-use splat_content_ui::creature_filter;
-mod credentials;
+use splat_sessions_ui::credentials;
 #[path = "design/app.rs"]
 mod design;
 // The layout parts are public only so that their `compile_fail` doc tests can name them.
@@ -69,46 +68,48 @@ pub mod ownership {
         Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,
     };
 }
-mod difficulty;
 use splat_content_ui::dndbeyond;
-mod encounter_run;
-mod encounter_settings;
-mod encounters;
-mod file_batch;
 use splat_content_ui::hermetic;
 use splat_content_ui::history;
-use splat_content_ui::library;
 use splat_design::frame_clock;
+use splat_encounters_ui::encounter_run;
+#[cfg(test)]
+use splat_encounters_ui::encounter_settings;
+use splat_encounters_ui::encounters;
+use splat_library_page::library;
 #[cfg(test)]
 mod load_bench;
 use splat_content_ui::lookup;
-mod loot_editor;
+#[cfg(test)]
 use splat_content_ui::markdown_source;
 use splat_content_ui::markdown_view;
+#[cfg(test)]
 use splat_content_ui::matching;
-use splat_content_ui::npc_generator;
-mod party;
-mod party_bar;
-mod party_stream;
-mod party_sync;
 use splat_content_ui::persistence;
-mod processing;
-mod recording;
 use splat_content_ui::roll_table;
 use splat_content_ui::rolls;
-mod sessions;
+use splat_encounters_ui::party;
+use splat_encounters_ui::party_bar;
+use splat_sessions_ui::processing;
+#[cfg(test)]
+use splat_sessions_ui::recording;
+use splat_sessions_ui::sessions;
 mod settings;
+#[cfg(test)]
 use splat_content_ui::sheet_writer;
 #[cfg(test)]
 use splat_content_ui::test_support;
-mod timeline;
+use splat_sessions_ui::timeline;
 mod touchpad;
 #[path = "trackers/app.rs"]
 mod trackers;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
-use splat_content_ui::world;
+mod world {
+    pub use splat_content_ui::world::*;
+    pub use splat_world_page::page;
+}
 
 use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
@@ -2806,12 +2807,7 @@ impl Splat {
     }
 }
 
-/// Whether a modal is open over the app: one of its own dialogs (`app_dialog`: the copy dialog,
-/// the close confirmation), the full-window image, or any egui modal layer. The one test every
-/// global and page shortcut asks, so no key acts beneath a modal.
-pub(crate) fn modal_open(ctx: &egui::Context, app_dialog: bool) -> bool {
-    app_dialog || art::viewer_open(ctx) || ctx.memory(|memory| memory.top_modal_layer()).is_some()
-}
+use art::modal_open;
 
 impl Splat {
     /// `modal_open` for this app's own dialogs.

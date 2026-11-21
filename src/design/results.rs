@@ -1026,14 +1026,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1), Ban::Body],
         ),
         // M20 (M-L0.6): a read fault in the reader's body, with `Try again`.
-        ("src/library.rs", "fault_notice", &[Ban::Body]),
+        ("src/library/catalogue.rs", "fault_notice", &[Ban::Body]),
         // M20 (M-L0.6): a copied package folder's warnings in the form, with its repair.
         ("src/library.rs", "package_form", &[Ban::Body]),
         // M20 (M-L0.6): a failed load where the page has no pane.
         ("src/library.rs", "show statement", &[Ban::Body]),
-        ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
+        ("src/library/catalogue.rs", "field_key", &[Ban::RowKey(1)]),
         // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
-        ("src/library.rs", "cause", &[Ban::Words]),
+        ("src/library/catalogue.rs", "cause", &[Ban::Words]),
         // M17 (M-L0.4b): a manifest write's words, which start with the file's path from disk.
         ("src/library.rs", "outcome_of", &[Ban::Words]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
@@ -1326,8 +1326,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(2)],
         ),
         // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
-        ("src/library.rs", "repair_notice", &[Ban::Body]),
-        ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
+        ("src/library/catalogue.rs", "repair_notice", &[Ban::Body]),
+        (
+            "src/library/catalogue.rs",
+            "use_checkbox",
+            &[Ban::Extras(1)],
+        ),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
@@ -1632,7 +1636,8 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/content_workspace.rs", 1),
             ("src/design/comparison.rs", 1),
             ("crates/campaign/src/encounter_run/undo.rs", 2),
-            ("src/library.rs", 2),
+            ("src/library.rs", 1),
+            ("src/library/catalogue.rs", 1),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
             ("src/trackers.rs", 1),

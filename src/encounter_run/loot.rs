@@ -194,7 +194,7 @@ fn note_lines(state: &State, holder: &Holder) -> Vec<(String, bool)> {
 /// when Splat knows it; the characters who were there; and the encounter's loot and each
 /// downed creature's.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct Rewards {
+pub struct Rewards {
     pub downed: Vec<(String, Option<u64>)>,
     pub standing: Vec<Option<u64>>,
     pub characters: usize,
@@ -204,7 +204,7 @@ pub(crate) struct Rewards {
 }
 
 /// The rewards of the run saved at `path`, read now.
-pub(crate) fn rewards(path: &std::path::Path, campaign: uuid::Uuid) -> Result<Rewards, String> {
+pub fn rewards(path: &std::path::Path, campaign: uuid::Uuid) -> Result<Rewards, String> {
     let saved = super::read_saved(path, campaign)?;
     let state = &saved.state;
     let mut out = Rewards::default();
@@ -238,7 +238,7 @@ impl Rewards {
     /// (XP 200)`. A creature whose XP Splat does not know is named, and its amount is left out
     /// of every sum, never counted as zero. With the line: its XP, and the count of those
     /// awards not known.
-    pub(crate) fn xp_line(&self) -> (String, u64, u64) {
+    pub fn xp_line(&self) -> (String, u64, u64) {
         let scale = crate::difficulty::Scale::default();
         let downed = scale.weigh(&[], self.downed.iter().map(|(_, xp)| *xp));
         let grouped = crate::encounter_run::grouped_number;

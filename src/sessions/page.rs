@@ -42,8 +42,8 @@ mod carry;
 mod kept;
 #[path = "plan.rs"]
 mod plan;
-#[cfg(test)]
-pub(crate) use plan::scene_fit_counts;
+#[cfg(any(test, feature = "test-support"))]
+pub use plan::scene_fit_counts;
 
 const MOVE_FILES: &str = "Move files and save";
 const SAVED_WORD_FOR: Duration = Duration::from_secs(8);
@@ -135,23 +135,23 @@ struct FolderScan {
     listed: FolderFiles,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// The session folder listing's end events (`refresh`) on this thread.
     static FOLDER_SCAN_ENDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How often `refresh` ended the session folder's listing on this thread.
-#[cfg(test)]
-pub(crate) fn folder_scan_ends() -> usize {
+#[cfg(any(test, feature = "test-support"))]
+pub fn folder_scan_ends() -> usize {
     FOLDER_SCAN_ENDS.with(std::cell::Cell::get)
 }
 
-pub(crate) use splat_content_ui::session_notes::FolderFault;
+pub use splat_content_ui::session_notes::FolderFault;
 
 /// The Session folder's acts: `Save folder` in its save row, and the warning's two choices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FolderAct {
+pub enum FolderAct {
     Save,
     Move,
     WithoutMoving,
@@ -540,10 +540,10 @@ impl LinkUndoRefused {
 }
 
 /// Tests: what runs after a link update writes a note.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 type LinkWriteHook = Box<dyn FnMut(&Path)>;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Tests: runs after a link update writes a note, to change the next one under it.
     static AFTER_LINK_WRITE: std::cell::RefCell<Option<LinkWriteHook>> =
@@ -666,7 +666,7 @@ pub struct Sessions {
     /// What the removal's owner note looked like; a later edit of it ends the removal.
     removal_note: Option<RemovalNote>,
     /// How often the owner's note was looked for, which only a change may cause.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     removal_scans: usize,
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The plan's scenes: the Scene field and the results of scene acts.
@@ -1331,7 +1331,7 @@ fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
 /// system's "the warning that this is not the session being played or that its date has
 /// passed"). This is the one value that the Session footer, the Notes panel's footer, the Record
 /// step and the rail's `Old session` read.
-pub(crate) struct NotTonight;
+pub struct NotTonight;
 
 impl NotTonight {
     /// The tone of every place that says it.
@@ -1346,7 +1346,7 @@ impl NotTonight {
     }
 
     /// The rail's mark while a run files itself under a session dated before today.
-    pub(crate) fn rail() -> Status<'static> {
+    pub fn rail() -> Status<'static> {
         let (icon, color) = match Self::TONE {
             Tone::Warning => (icons::WARN, colors().result.warning),
             _ => (icons::INFO, colors().result.info),
@@ -1665,7 +1665,7 @@ impl Sessions {
         {
             return;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.removal_scans += 1;
         }
@@ -1757,7 +1757,7 @@ impl Sessions {
             .flatten()
         {
             if draft.state == DraftState::Unsaved {
-                #[cfg(not(test))]
+                #[cfg(not(any(test, feature = "test-support")))]
                 if draft.due_at(Instant::now()) {
                     draft.save();
                 }
@@ -2547,7 +2547,7 @@ impl Sessions {
 
     /// The end event of the folder's listing (`FolderScan`): the next draw lists the folder again.
     fn end_folder_listing(&mut self) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         FOLDER_SCAN_ENDS.with(|ends| ends.set(ends.get() + 1));
         self.folder_scan = None;
     }
@@ -3038,7 +3038,7 @@ impl Sessions {
     }
 
     /// A reveal that waits for its next draw, as one does just after an add or a travel act.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_pending_reveal(&mut self, row: &str, pass: u64) {
         self.row_reveal = Some((row.to_owned(), 0, pass));
     }
@@ -3052,7 +3052,7 @@ impl Sessions {
         self.notes
             .iter()
             .filter_map(|note| {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 NOTE_READS.with(|reads| reads.set(reads.get() + 1));
                 let body = self
                     .draft
@@ -3164,7 +3164,7 @@ impl Sessions {
             {
                 self.draft = Some(next.clone());
             }
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             AFTER_LINK_WRITE.with(|hook| {
                 if let Some(hook) = hook.borrow_mut().as_mut() {
                     hook(&next.path);
@@ -3209,7 +3209,7 @@ impl Sessions {
             // Undo writes only into the file it wrote: the draft it saves through must hold the
             // same bytes and the same session, and `save` checks the file against them again
             // right before writing.
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             BEFORE_UNDO_READ.with(|hook| {
                 if let Some(hook) = hook.borrow_mut().as_mut() {
                     hook(&write.before.path);
@@ -4949,7 +4949,7 @@ impl Sessions {
                     ui.data_mut(|data| {
                         data.insert_temp(view_id, (visible_height, at_end, output.content_size.y));
                     });
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "test-support"))]
                     ui.data_mut(|data| {
                         data.insert_temp(
                             egui::Id::new("session_editor_proof"),
@@ -8199,7 +8199,7 @@ impl Sessions {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl Sessions {
     pub fn busy(&self) -> bool {
         self.job.as_ref().is_some_and(|(job, _)| !job.is_held())

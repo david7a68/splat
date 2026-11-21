@@ -1346,9 +1346,14 @@ fn no_lint_level_frees_raw_calls_outside_the_source() {
         "crates/character/Cargo.toml",
         "crates/content/Cargo.toml",
         "crates/execution/Cargo.toml",
+        "src/campaign_packages/Cargo.toml",
         "src/content_ui/Cargo.toml",
         "src/design/Cargo.toml",
+        "src/encounters_ui/Cargo.toml",
+        "src/library_page/Cargo.toml",
+        "src/sessions_ui/Cargo.toml",
         "src/trackers/Cargo.toml",
+        "src/world_page/Cargo.toml",
         ".cargo/config.toml",
     ] {
         let text = fs::read_to_string(format!("{root}/{file}")).unwrap_or_default();

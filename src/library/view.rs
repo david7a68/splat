@@ -8,12 +8,7 @@ use splat::content::{Entry, Reading, Reference};
 use uuid::Uuid;
 
 /// Keep the picture beside the title, so the stats can follow the meta line.
-pub(crate) fn title_with_art(
-    ui: &mut egui::Ui,
-    title: &str,
-    subtitle: &str,
-    entry: Option<&Entry>,
-) {
+pub fn title_with_art(ui: &mut egui::Ui, title: &str, subtitle: &str, entry: Option<&Entry>) {
     let subtitle = if let Some(entry) = entry {
         let rarity = entry
             .fields
@@ -280,7 +275,7 @@ pub(crate) fn show(
 /// no row. The prose then starts without the reader's own gap, where a plain note's prose
 /// starts. Line warnings keep the gap after them.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn show_with_related(
+pub fn show_with_related(
     ui: &mut egui::Ui,
     name: &str,
     entry: Option<&Entry>,
@@ -401,7 +396,7 @@ fn show_inner(
 
 const REFERENCE_MAX: f32 = 360.0;
 /// The reader's measure, its gap and the margin at their widest.
-pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;
+pub const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;
 
 /// What the entry says. `styled` is the entry when it reads as a styled stat block.
 /// `lead_gap` is false when nothing above needs a gap before the first prose.

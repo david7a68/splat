@@ -249,6 +249,13 @@ pub fn portrait(
     }
 }
 
+/// Whether a modal is open over the app: one of its own dialogs (`app_dialog`: the copy dialog,
+/// the close confirmation), the full-window image, or any egui modal layer. The one test every
+/// global and page shortcut asks, so no key acts beneath a modal.
+pub fn modal_open(ctx: &egui::Context, app_dialog: bool) -> bool {
+    app_dialog || viewer_open(ctx) || ctx.memory(|memory| memory.top_modal_layer()).is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

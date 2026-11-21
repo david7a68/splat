@@ -49,7 +49,7 @@ pub fn footer_words(words: &str) -> crate::design::outcome::Sentence {
 
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
-    pub(crate) static MODULE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub static MODULE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 pub struct Campaigns {
@@ -321,7 +321,7 @@ impl Campaigns {
         &self.data.modules
     }
 
-    pub(crate) fn module_positions(&self) -> &Revised<HashMap<Uuid, usize>> {
+    pub fn module_positions(&self) -> &Revised<HashMap<Uuid, usize>> {
         &self.module_positions
     }
 
@@ -333,7 +333,7 @@ impl Campaigns {
     }
 
     /// Validated settings always contain the active campaign, when one is selected.
-    pub(crate) fn active_id(&self) -> Option<Uuid> {
+    pub fn active_id(&self) -> Option<Uuid> {
         self.data.active_campaign_id.filter(|_| self.writable)
     }
 
@@ -459,7 +459,7 @@ impl Campaigns {
 
     /// Add `campaign` if it is new, and make it the active campaign, as the switcher does.
     #[cfg(any(test, feature = "test-support"))]
-    pub(crate) fn open_for_test(&mut self, campaign: &Campaign) {
+    pub fn open_for_test(&mut self, campaign: &Campaign) {
         let mut data = self.data.clone();
         if !data.campaigns.iter().any(|known| known.id == campaign.id) {
             data.campaigns.push(campaign.clone());

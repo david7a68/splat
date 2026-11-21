@@ -20,7 +20,7 @@ const LENGTH: design::FieldName = crate::field_id!("event_length");
 
 /// The "How long" field of this event. egui keeps a field's cursor and text Undo under its id, so
 /// each event has its own id: another event's length never gets this one's history.
-pub(super) fn length_field(event: &Event) -> design::FieldId {
+pub fn length_field(event: &Event) -> design::FieldId {
     LENGTH.of(design::TextKey::of(event))
 }
 
