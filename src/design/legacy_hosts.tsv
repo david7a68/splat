@@ -120,7 +120,6 @@ row-clip	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 row-clip	src/world/repair.rs	source_editor	1	World
 row-clip	src/design/pane/columns.rs	PaneEdges::show_children	1	design	design implementation boundary: a resizable child clips to the composite's view (egui's side panel sets its own clip)
 scroll-area	src/copy_dialog.rs	CopyDialog::show	1	Library
-scroll-area	src/creature_filter.rs	menu	1	Encounters
 scroll-area	src/design/components.rs	dialog_width	1	design	design implementation boundary
 scroll-area	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 scroll-area	src/design/components.rs	scroll_part	1	design	design implementation boundary

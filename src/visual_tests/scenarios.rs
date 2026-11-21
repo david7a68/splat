@@ -17307,8 +17307,10 @@ pub mod session_recording {
                 d.is_disabled("Continue processing"),
                 "A banner retry with removed audio is blocked",
             );
-            // iter-23-S FE1: the reason stands beside the blocked action, and the words no
-            // longer tell the DM to select it.
+            // iter-23-S FE1: the reason is painted, and the words no longer tell the DM to select
+            // the blocked action. M-N0.10: the alert is a typed message, so the reason stands on
+            // its lock line under the choices, from the words' first letter (where the first
+            // choice, Continue processing, starts), as every locked choice's reason does.
             const GONE: &str = "Audio removed. Restore the WAV file to process it.";
             // A wrapped label in a wrapped row starts its first line after the controls before
             // it; measure that line.
@@ -17328,10 +17330,10 @@ pub mod session_recording {
                 !d.visible_text("Wait, then select Continue processing")
                     && d.visible_text("The transcript and summary service is busy.")
                     && reason.zip(button).is_some_and(|(reason, button)| {
-                        reason.left() >= button.right() && reason.center().y > button.top()
-                            && reason.center().y < button.bottom()
+                        reason.top() >= button.bottom() - 0.5
+                            && (reason.left() - button.left()).abs() <= 1.0
                     }),
-                format!("The blocked reason follows Continue processing on its line: {reason:?}, {button:?}"),
+                format!("The blocked reason stands under the choices, at the words: {reason:?}, {button:?}"),
             );
             let process = d
                 .nodes()
