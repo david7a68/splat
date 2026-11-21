@@ -2288,6 +2288,16 @@ impl<'a> Driver<'a> {
         )
     }
 
+    /// The right edge of the registered row that holds `control`: a list row still ends at its
+    /// column's scroll lane where its actions follow its facts (layout PR 5a).
+    pub fn row_right_of(&self, control: egui::Rect) -> Option<f32> {
+        super::ergonomics::row_rects(&self.harness.ctx)
+            .into_iter()
+            .filter(|row| row.contains(control.center()))
+            .map(|row| row.right())
+            .reduce(f32::max)
+    }
+
     /// Layout PR 5a (I6, §4.1): the encounter ledger's rows, from the part's records. All its
     /// lists share one action column, `L` after the widest facts; each list's widest action
     /// recipe starts there and its rows' actions end at one edge; each row's gap from its own
