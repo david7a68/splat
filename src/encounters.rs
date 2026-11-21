@@ -7137,8 +7137,9 @@ impl Encounters {
                 let saved_name =
                     design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
                 // The field's margins are outside its desired width.
+                // Layout PR 6 (I7): the actions keep `L` after the field (the item spacing and `S`).
                 let rest =
-                    ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
+                    ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - design::L;
                 let stack_actions = rest < saved_name.max(Density::Scan.control());
                 let width = if stack_actions {
                     (ui.available_rect_before_wrap().width() - 2.0 * design::S)

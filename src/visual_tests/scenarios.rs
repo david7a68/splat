@@ -20425,16 +20425,19 @@ pub mod encounter_groups {
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
-            // At the editor's content edge, within 0.5 px, as Save encounter ends there; and
-            // that edge is the page's (the window less its `M` margin), so a Save that pushes
-            // the editor wider fails too.
+            // Layout PR 6 (I7, replacing "at the editor's content edge"): Save group begins `L`
+            // after the name field, as Save encounter does, and the editor still ends at the
+            // page's edge (the window less its `M` margin).
             let page = size.0 - crate::design::M;
             d.observe(
                 "iter-28-B-FB7",
-                save.zip(edge).is_some_and(|(save, edge)| {
-                    (save.right() - edge).abs() <= 0.5 && (edge - page).abs() <= 0.5
+                save.zip(edge).zip(name).is_some_and(|((save, edge), name)| {
+                    (save.left() - (name.right() + crate::design::L)).abs() <= 0.5
+                        && (edge - page).abs() <= 0.5
                 }),
-                format!("At {size:?}: Save group {save:?}, the editor's content edge {edge:?}"),
+                format!(
+                    "At {size:?}: Save group {save:?}, the name field {name:?}, the editor's content edge {edge:?}"
+                ),
             );
             d.observe(
                 "iter-27-B-FB7",
@@ -27688,11 +27691,16 @@ pub mod session_plan {
             });
             d.observe(
                 "iter-26-B-FA9",
+                // Layout PR 6 (I7, replacing "the name ends at the roster's rule" and "Start
+                // fight ends where Save creature ends"): the name field stays within the roster's
+                // rule, and Save encounter begins `L` after it.
                 name.zip(rule)
-                    .is_some_and(|(name, rule)| (name.right() - rule).abs() <= 1.0)
-                    && start.zip(creature).is_some_and(|(start, creature)| {
-                        (start.right() - creature.right()).abs() <= 1.0
-                    }),
+                    .is_some_and(|(name, rule)| name.right() <= rule + 1.0)
+                    && name.zip(d.at_size(size, |d| d.place_of("Save encounter"))).is_some_and(
+                        |(name, save)| (save.left() - (name.right() + crate::design::L)).abs() <= 0.5,
+                    )
+                    && start.is_some()
+                    && creature.is_some(),
                 format!(
                     "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Start fight {start:?}, Save creature {creature:?}"
                 ),
