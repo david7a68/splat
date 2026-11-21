@@ -8595,14 +8595,23 @@ impl Encounters {
                         *expanded = None;
                     }
                 } else if is_open && !missing {
+                    // The row's fields, keyed by the draft and the row.
+                    let row_key = design::TextKey::from_data(&slot.key);
                     ui.horizontal(|ui| {
                         ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
-                        side_control(ui, "Side", &mut slot.side, &sides);
+                        side_control(
+                            ui,
+                            (
+                                list::SIDE_CHOICE.of(draft_id).with(&row_key),
+                                list::SIDE_OTHER.of(draft_id).with(&row_key),
+                            ),
+                            "Side",
+                            &mut slot.side,
+                            &sides,
+                        );
                     });
                     ui.horizontal_wrapped(|ui| {
-                        let field = INITIATIVE_GROUP
-                            .of(draft_id)
-                            .with(design::TextKey::from_data(&slot.key));
+                        let field = INITIATIVE_GROUP.of(draft_id).with(&row_key);
                         const GROUP_LABEL: &str = "Initiative group (optional)";
                         // While the field has focus it keeps the exact words typed (a lone
                         // space too): the field part drops its text Undo when the bound text is

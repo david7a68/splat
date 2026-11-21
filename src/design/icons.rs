@@ -19,13 +19,8 @@ pub use egui_phosphor::regular::{
     WAVEFORM as AUDIO, X as CLOSE,
 };
 
-/// A left arrow for a back action, kept only for the callers not yet moved. A back link that
-/// starts a line is `design::TitleLine::back`: its word at the text edge, its own icon after
-/// the word (FL7). A bare arrow with its word on hover only is the form that it replaces.
-/// Staged: `design::results::STAGED` counts its uses per file (its name must be spelled at each
-/// use, also in an alias or a grouped import), and the deprecation fails a file without a
-/// counted `allow(deprecated)`.
-#[deprecated(
-    note = "a back link that starts a line is `design::TitleLine::back` (its word is always shown); a history step (`Back`, Alt+Left) keeps its word"
-)]
-pub const LEGACY_BACK: &str = egui_phosphor::regular::ARROW_LEFT;
+/// The arrow of the step back through a reader's history, before its word `Back`
+/// (`Action::history_back`). Only the design system draws it, never without the word: a back
+/// link that starts a line is `design::TitleLine::back`, and an editor's back is
+/// `design::EditorHead`.
+pub(crate) const HISTORY_BACK: &str = egui_phosphor::regular::ARROW_LEFT;

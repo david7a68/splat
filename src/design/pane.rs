@@ -122,10 +122,15 @@
 pub use super::components::Footer;
 use super::{layout::ScrollColumn, tokens::S};
 
+/// Composite columns and their edges, resolved before the pane paints (layout step 7).
+mod columns;
 /// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
 mod plan;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
+#[cfg(any(test, feature = "test-support"))]
+pub use columns::rejected_edges;
+pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Row};
 pub use region::{BlockRegion, Navigation, RegionState};
@@ -419,6 +424,8 @@ impl EditorRegion<'_> {
                     usable: pane.map_or(ui.clip_rect(), |open| open.usable),
                     edge: false,
                     pane: self.pane,
+                    measure: None,
+                    extent: None,
                 }),
             );
             // Where the content starts in this layout (the view's top less the offset used).
@@ -599,6 +606,13 @@ pub fn held_seen(ui: &Ui, control: impl std::hash::Hash, top: f32) {
     });
 }
 
+/// Whether the footer `id` followed its content in the last pass (`Footer::pane`): its top
+/// stays and it grows down, so an answer to a press of one of its lines stands under that line.
+pub(super) fn footer_follows(ctx: &egui::Context, id: Id) -> bool {
+    ctx.data(|data| data.get_temp::<bool>(id.with("follows")))
+        .unwrap_or(false)
+}
+
 /// Where a pane's footer stands.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Placement {
@@ -623,6 +637,12 @@ struct OpenPane {
     edge: bool,
     /// The pane's footer id.
     pane: Id,
+    /// Inside a child of composite columns (`Columns`): where its scroll columns add the height
+    /// they hide, so the composite knows each child's whole height (`columns::Measure`).
+    measure: Option<Id>,
+    /// A `Content` body: its content's top in this pass (in the scrolled layout) and the height
+    /// of its room, so a part in it knows the room left below a point, whatever the offset.
+    extent: Option<(f32, f32)>,
 }
 
 /// What kind of pane is open now, innermost last, per layer, with its body's usable rect.
@@ -700,6 +720,16 @@ pub(super) fn in_content_pane(ui: &Ui) -> bool {
                     .is_some_and(|pane| pane.layer == layer && pane.content)
         })
     })
+}
+
+/// For `ScrollColumn`: a column drawn in a child of composite columns adds the height its view
+/// hides to that child's whole height (`Columns`), so the composite is measured by its content,
+/// never by the room its columns were given.
+pub(super) fn hidden_height<R>(ui: &Ui, output: &egui::scroll_area::ScrollAreaOutput<R>) {
+    if let Some(slot) = innermost(ui).and_then(|pane| pane.measure) {
+        let hidden = (output.content_size.y - output.inner_rect.height()).max(0.0);
+        columns::add_hidden(ui.ctx(), slot, hidden);
+    }
 }
 
 /// The usable rect of the innermost pane body that `ui` is drawn in, on `ui`'s layer: its room
@@ -1828,6 +1858,8 @@ impl Footer<'_> {
                             usable,
                             edge,
                             pane: id,
+                            measure: None,
+                            extent: Some((ui.cursor().top(), room_height)),
                         }),
                     );
                     let first = widget_count(ui);
@@ -1899,6 +1931,8 @@ impl Footer<'_> {
                         usable,
                         edge,
                         pane: id,
+                        measure: None,
+                        extent: None,
                     }),
                 );
                 let inner = add(
@@ -2086,6 +2120,11 @@ impl Footer<'_> {
             let held = hold_place(ui, held, facts);
             ui.ctx().data_mut(|data| data.insert_temp(held_key, held));
         }
+        // Where the footer stood, for the next pass's order of its lines: an answer to a pressed
+        // line stands under it while the footer follows (`Messages::answer`).
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(id.with("follows"), placement == Placement::Follows);
+        });
         ui.advance_cursor_after_rect(room);
         #[cfg(any(test, feature = "test-support"))]
         keep(
