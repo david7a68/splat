@@ -1060,7 +1060,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(3)],
+            // `RowKey`: a template file's one identity is its name (layout PR 9's editor).
+            &[Ban::Results, Ban::Layout(1), Ban::RowKey(1)],
         ),
         (
             "src/sessions/plan.rs",
