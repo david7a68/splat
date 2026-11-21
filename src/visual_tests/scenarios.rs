@@ -3945,6 +3945,7 @@ pub mod campaign_content {
         d.expect_same("the footer's one new line, a lone Undo");
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
+            package_footer_follows(d, "Campaign.md was written again.", "l7-SA4-AA2");
         });
         // Round 25 review: a failed Undo keeps the write and its Undo; once the fault is gone,
         // the same Undo works. The test namespace runs as root, so permission bits do not stop
@@ -3995,6 +3996,55 @@ pub mod campaign_content {
         d.click("Write a new Campaign.md");
         d.wait_for_control("Undo write Campaign.md");
         assert!(manifest.exists());
+    }
+
+    /// Layout step 7 (SA4, AA2): the package list and the chosen package are one task, as tall as
+    /// the taller list. Its footer (the one that holds `words`) starts `S` below the taller
+    /// list's last row (the lowest control or words in either column, never a container), and
+    /// the splitter's rule ends at that row. Only when the lists are taller than the room is the
+    /// footer pinned: then the rule ends `S` above it. At 1920 the lists are short and the footer
+    /// follows them.
+    fn package_footer_follows(d: &mut Driver<'_>, words: &str, id: &str) {
+        let size = d.window_size();
+        let tab = d.place_of(TAB_PACKAGES);
+        let footer = footer_with(d, words);
+        let end = footer.zip(tab).and_then(|(footer, tab)| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role != egui::accesskit::Role::GenericContainer
+                        && node.shown.is_positive()
+                        && node.shown.top() > tab.bottom()
+                        && node.shown.bottom() < footer.top()
+                })
+                .map(|node| node.shown.bottom())
+                .reduce(f32::max)
+        });
+        let rule = footer.zip(tab).and_then(|(footer, tab)| {
+            d.vertical_lines_in(egui::Rect::from_min_max(
+                egui::pos2(footer.left(), tab.bottom() + crate::design::S),
+                egui::pos2(footer.right(), footer.top()),
+            ))
+            .into_iter()
+            .filter(|line| line.height() > crate::design::XXL)
+            .map(|line| line.bottom())
+            .reduce(f32::max)
+        });
+        let (follows, pinned) = match (footer, end, rule) {
+            (Some(footer), Some(end), Some(rule)) => (
+                (footer.top() - (end + crate::design::S)).abs() <= 1.0 && (rule - end).abs() <= 1.0,
+                end >= footer.top() - crate::design::S - 1.0
+                    && (rule - (footer.top() - crate::design::S)).abs() <= 1.0,
+            ),
+            _ => (false, false),
+        };
+        d.observe(
+            id,
+            follows || (pinned && size.0 < 1900.0),
+            format!(
+                "At {size:?}, the footer {footer:?} follows the taller list's last row {end:?} by `S` and the splitter's rule ends there {rule:?} (follows {follows}, pinned under lists taller than the room {pinned})"
+            ),
+        );
     }
 
     /// Round 25 review, round 26: a repair whose discard result and cause are long. They sit in
