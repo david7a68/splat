@@ -1013,8 +1013,9 @@ mod tests {
         // Layout step 6 (`head_plan`, I8; SL4): a draft head's reasons are planned for the
         // complete state set. At every width, each state the draft reaches (clean, new and empty,
         // dirty, refused, just saved) draws its word, its Discard and every reason the plan puts
-        // on the row in its longest form, and the row stays inside its room: so a state change
-        // never pushes a reason off the row, and the line count under it never changes.
+        // on the row in its longest form, and the row keeps one height in every state (a reason
+        // with no room would wrap and grow it) and stays inside its room: so a state change never
+        // pushes a reason off the row, and nothing under it moves.
         let reasons = ["Add a creature first.", SAVE_OR_DISCARD_TO_SWITCH];
         let head_states = [
             DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft).locks_campaign(),
@@ -1032,8 +1033,10 @@ mod tests {
         let mut placed = std::collections::BTreeSet::new();
         for width in (240..=900).step_by(4) {
             let width = width as f32;
+            let mut heights = Vec::new();
             for state in &head_states {
                 let mut right = 0.0;
+                let mut height = 0.0;
                 let mut plan = None;
                 let _ = ctx.run(egui::RawInput::default(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
@@ -1062,6 +1065,7 @@ mod tests {
                                 }
                             });
                             right = row.response.rect.right() - rect.left();
+                            height = row.response.rect.height();
                             plan = Some(head);
                         });
                     });
@@ -1073,7 +1077,12 @@ mod tests {
                     "at {width} the row of {:?} is {right} wide, past its room: {plan:?}",
                     state.word()
                 );
+                heights.push((state.word(), height));
             }
+            assert!(
+                heights.iter().all(|(_, h)| (h - heights[0].1).abs() < 0.5),
+                "at {width} the row's height changes with the state: {heights:?}"
+            );
         }
         assert!(
             placed.len() >= 2,
