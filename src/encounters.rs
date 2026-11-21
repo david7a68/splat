@@ -8301,11 +8301,25 @@ impl Encounters {
                     let mut change_extra = 0.0_f32;
                     let (kept_facts, kept_actions) = design::action_rows::columns(ui, list);
                     let room = ui.available_width();
+                    // This row's own facts, before it is drawn: where they are wider than the
+                    // kept column (its words just changed), the row keeps them whole for the one
+                    // frame the column takes to follow.
+                    let own_facts = design::number_width(
+                        ui,
+                        &format!("{}. {name}", i + 1),
+                        &Type::Strong.font(ui),
+                    )
+                    .max(design::number_width(
+                        ui,
+                        &detail,
+                        &Type::Small.font(ui),
+                    ));
+                    let column_facts = kept_facts.max(own_facts);
                     let column =
-                        kept_facts > 0.0 && kept_facts + design::L + kept_actions <= room + 0.5;
+                        kept_facts > 0.0 && column_facts + design::L + kept_actions <= room + 0.5;
                     let left = ui.cursor().left();
                     let width = if column {
-                        kept_facts + design::L + kept_actions
+                        column_facts + design::L + kept_actions
                     } else {
                         room
                     };
@@ -8563,7 +8577,7 @@ impl Encounters {
                                     ),
                                     action: actions,
                                     column: if column {
-                                        left + kept_facts + design::L
+                                        left + column_facts + design::L
                                     } else {
                                         actions.left()
                                     },
