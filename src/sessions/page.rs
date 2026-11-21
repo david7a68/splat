@@ -56,8 +56,9 @@ const NOTE_COLUMN: &str = "session_note_frame";
 /// The note frame's padding and hairline, on both sides.
 const NOTE_FRAME_EDGES: f32 = 2.0 * (design::S + design::HAIRLINE_WIDTH);
 /// The header's toggle of the session list, by what a press does.
-pub const HIDE_LIST: &str = "Hide the session list";
-pub const SHOW_LIST: &str = "Show the session list";
+/// The session list's toggle: one name in both states; its pressed state says whether the list
+/// is shown (review of PR 618).
+pub const LIST_TOGGLE: &str = "Session list";
 /// The page header's actions (M0498).
 const NEW_SESSION: design::Word = crate::word!("New session");
 const NEW_TEMPLATE: design::Word = crate::word!("New template");
@@ -8300,12 +8301,12 @@ impl Sessions {
             .context((!context.is_empty()).then_some(context.as_str()))
             .page();
         if offers_list_toggle {
-            let (name, hint) = if self.list_hidden {
-                (SHOW_LIST, "Show the session list (Ctrl+\\)")
+            let hint = if self.list_hidden {
+                "Show the session list (Ctrl+\\)"
             } else {
-                (HIDE_LIST, "Hide the session list (Ctrl+\\)")
+                "Hide the session list (Ctrl+\\)"
             };
-            line = line.toggle(icons::SESSION_LIST, name, hint, !self.list_hidden);
+            line = line.toggle(icons::SESSION_LIST, LIST_TOGGLE, hint, !self.list_hidden);
         }
         if self.view == View::Notes && !in_form && !empty && !folder_missing {
             line = line.action(

@@ -10600,7 +10600,7 @@ pub mod gallery {
 pub mod column_resize {
     use super::*;
     use crate::design::{PANEL_MIN_WIDTH, RAIL_DRAG_MAX_WIDTH, RAIL_WIDTH, S};
-    use crate::sessions::page::{HIDE_LIST, SHOW_LIST};
+    use crate::sessions::page::LIST_TOGGLE;
 
     const CHECK: &str = "Column resize";
     const MEMBER: &str = "Brannoch Vale";
@@ -10677,7 +10677,7 @@ pub mod column_resize {
         // Layout step 7 (`session-header-measure`, SH11 and AP4): the session's actions end at
         // its content's edge (the note's frame, or the plan and the note's column beside it),
         // not at the page's; the room the note leaves is the DM's to drag into.
-        let page = right_of(d, HIDE_LIST);
+        let page = right_of(d, LIST_TOGGLE);
         let note = session_content_edge(d);
         d.observe(
             CHECK,
@@ -10697,7 +10697,16 @@ pub mod column_resize {
     fn the_session_list_hides(d: &mut Driver<'_>) {
         d.set_base(DEFAULT);
         d.click(NAV_SESSIONS);
-        d.expect(HIDE_LIST);
+        d.expect(LIST_TOGGLE);
+        // Review of PR 618: one name in both states; its pressed state says the list shows.
+        d.observe(
+            CHECK,
+            d.is_pressed(LIST_TOGGLE) == Some(true),
+            format!(
+                "The Session list toggle is pressed while the list shows: {:?}",
+                d.is_pressed(LIST_TOGGLE)
+            ),
+        );
         // The list's row and the pane's title both start with the session's name.
         let named = |d: &Driver<'_>, role: egui::accesskit::Role| {
             d.nodes()
@@ -10709,9 +10718,16 @@ pub mod column_resize {
         };
         let row = |d: &Driver<'_>| named(d, egui::accesskit::Role::Button);
         let title = |d: &Driver<'_>| named(d, egui::accesskit::Role::Label).map(|rect| rect.left());
-        let (list_row, title_left, toggle) = (row(d), title(d), d.place_of(HIDE_LIST));
-        d.click(HIDE_LIST);
-        d.expect(SHOW_LIST);
+        let (list_row, title_left, toggle) = (row(d), title(d), d.place_of(LIST_TOGGLE));
+        d.click(LIST_TOGGLE);
+        d.observe(
+            CHECK,
+            d.is_pressed(LIST_TOGGLE) == Some(false),
+            format!(
+                "Hidden, the list's toggle keeps its name and is not pressed: {:?}",
+                d.is_pressed(LIST_TOGGLE)
+            ),
+        );
         d.observe(
             CHECK,
             row(d).is_none() && list_row.is_some(),
@@ -10729,10 +10745,10 @@ pub mod column_resize {
         );
         d.observe(
             CHECK,
-            toggle.is_some() && d.place_of(SHOW_LIST) == toggle,
+            toggle.is_some() && d.place_of(LIST_TOGGLE) == toggle,
             format!(
                 "The toggle keeps its place: {:?}, from {toggle:?}",
-                d.place_of(SHOW_LIST)
+                d.place_of(LIST_TOGGLE)
             ),
         );
         d.state("session-list-hidden", Sizes::All);
@@ -10778,7 +10794,7 @@ pub mod column_resize {
         d.set_base(DEFAULT);
         // Ctrl+\ shows it again, as wide as it was.
         d.press_ctrl(Key::Backslash);
-        d.expect(HIDE_LIST);
+        d.expect(LIST_TOGGLE);
         d.observe(
             CHECK,
             row(d).is_some() && row(d) == list_row,
@@ -10792,7 +10808,7 @@ pub mod column_resize {
     /// Write and Read share a prose measure; spare width stays outside the Write frame.
     fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
         d.set_base(LARGE);
-        let page = right_of(d, HIDE_LIST);
+        let page = right_of(d, LIST_TOGGLE);
         d.type_into_editor(&"The party crossed the old bridge at dusk. ".repeat(30));
         let write = d.longest_visible_line();
         d.state_prepared("session-write-keeps-prose-measure", Sizes::All, |d| {
@@ -16482,7 +16498,7 @@ pub mod session_notes {
             let page_right = nodes
                 .iter()
                 .filter(|node| {
-                    ["New session", crate::sessions::page::HIDE_LIST].contains(&node.name.as_str())
+                    ["New session", crate::sessions::page::LIST_TOGGLE].contains(&node.name.as_str())
                 })
                 .map(|node| node.rect.right())
                 .reduce(f32::max)?;

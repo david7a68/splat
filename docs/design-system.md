@@ -2099,8 +2099,8 @@ The Read/Write switch sits at the right end of the note frame’s top edge at ev
 
 The DM can hide the session list to give the session its room. In a wide page with a session open, the page header
 (the shared title line, `TitleLine::page`) has its view toggle at its right end (`TitleLine::toggle`,
-`SIDEBAR_SIMPLE`), named `Hide the session list` or `Show the session list`; its hover adds `Ctrl+\`, which does
-the same on the notes view. The header's actions (`New session` or `New template`, `Stop recording`, `Templates`,
+`SIDEBAR_SIMPLE`), named `Session list` in both states and pressed while the list shows; its hover says
+`Hide the session list (Ctrl+\)` or `Show the session list (Ctrl+\)`, and `Ctrl+\` does the same on the notes view. The header's actions (`New session` or `New template`, `Stop recording`, `Templates`,
 `Show party`) follow the title and come and go there, so they never move it, and it is one size in both states.
 The Notes panel's header is a title line too: the note's title, its date after it, and the close icon. The
 choice is the DM's for the app, saved with the window's state, and only the toggle changes it. With the list
