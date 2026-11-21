@@ -182,7 +182,7 @@ impl Slash {
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
-        output: &egui::text_edit::TextEditOutput,
+        output: &crate::design::Editor,
         body: &mut String,
         place: &Place<'_>,
     ) -> Done {
@@ -190,11 +190,7 @@ impl Slash {
         let editor = output.response.id;
         // `take_keys` finds the popup by this id, too.
         let popup = editor.with("slash");
-        let caret = output
-            .state
-            .cursor
-            .char_range()
-            .map(|range| range.primary.index);
+        let caret = output.cursor_range.map(|range| range.primary.index);
         if self
             .open
             .as_ref()
@@ -286,9 +282,12 @@ impl Slash {
                     }
                 });
                 if let Some(command) = chosen {
-                    // The command's words go. Its link takes their place.
+                    // The command's words go. Its link takes their place. It is the note's own
+                    // edit, so the note's Undo history stays.
                     let end = caret.unwrap_or(words).max(words);
-                    remove_chars(body, open.at, end);
+                    crate::design::edit_in_place(ui.ctx(), editor, body, |body| {
+                        remove_chars(body, open.at, end);
+                    });
                     done.edited = true;
                     set_caret(ui.ctx(), editor, open.at);
                     open.stage = match command {
@@ -415,7 +414,9 @@ impl Slash {
             Outcome::Cancel => self.close(ui, editor, Some(at)),
             Outcome::Link(link) => {
                 let at = at.min(body.chars().count());
-                body.insert_str(byte_of(body, at), &link);
+                crate::design::edit_in_place(ui.ctx(), editor, body, |body| {
+                    body.insert_str(byte_of(body, at), &link);
+                });
                 done.edited = true;
                 self.close(ui, editor, Some(at + link.chars().count()));
             }
@@ -734,7 +735,8 @@ mod tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
 
-    const EDITOR: &str = "slash_test_note";
+    const EDITOR: crate::design::FieldId =
+        crate::field_id!("slash_test_note").once(crate::design::Once::Example);
 
     struct Note {
         body: String,
@@ -746,10 +748,6 @@ mod tests {
         _dir: tempfile::TempDir,
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn note(body: &str) -> Harness<'static, Note> {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("Powers")).unwrap();
@@ -770,12 +768,12 @@ mod tests {
             .with_size(egui::vec2(800.0, 600.0))
             .build_ui_state(
                 |ui, note: &mut Note| {
-                    let id = egui::Id::new(EDITOR);
+                    let id = EDITOR.id();
                     if std::mem::take(&mut note.focus) {
                         ui.memory_mut(|memory| memory.request_focus(id));
                     }
                     note.slash.take_keys(ui, Some(id));
-                    let output = egui::TextEdit::multiline(&mut note.body).id(id).show(ui);
+                    let output = EDITOR.editor(ui, &mut note.body, |edit| edit);
                     let place = Place {
                         session: None,
                         campaign: Some(&note.campaign),
@@ -966,5 +964,30 @@ mod tests {
         assert!(!harness.state().slash.is_open());
         type_text(&mut harness, "x");
         assert_eq!(harness.state().body, "Met x");
+        // Words typed and taken out before a command come back with Ctrl+Z after it: the
+        // command's own change keeps the note's Undo history (review of PR 594).
+        type_text(&mut harness, " lost");
+        harness.run_steps(5);
+        for _ in 0..4 {
+            press(&mut harness, egui::Key::Backspace);
+        }
+        type_text(&mut harness, "/");
+        type_text(&mut harness, "gen");
+        press(&mut harness, egui::Key::Enter);
+        harness.get_by_label("Save NPC");
+        press(&mut harness, egui::Key::Escape);
+        assert_eq!(harness.state().body, "Met x ");
+        // Each Backspace is a step of the history, so Ctrl+Z goes back one at a time.
+        let mut undone = Vec::new();
+        while undone.len() < 6 && harness.state().body != "Met x lost" {
+            harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+            harness.run_steps(3);
+            undone.push(harness.state().body.clone());
+        }
+        assert_eq!(
+            harness.state().body,
+            "Met x lost",
+            "n0-slash-undo: Ctrl+Z after a command brings back the words typed before it: {undone:?}"
+        );
     }
 }

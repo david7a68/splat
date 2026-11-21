@@ -1033,6 +1033,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "show_form", &[Ban::Body]),
         ("src/sessions/page.rs", "notes_panel", &[Ban::Body]),
         ("src/sessions/page.rs", "show", &[Ban::Body]),
+        // M-N0.10: the record line's warning (M0453).
+        ("src/sessions/page.rs", "record_line_body", &[Ban::Body]),
         (
             "src/sessions/page.rs",
             "banner_notices",
@@ -1050,10 +1052,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Body],
         ),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
+        // M-N0.4: the template's text field is keyed by its file (`TextKey::from_data`): a
+        // template has no typed owner key yet.
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::RowKey(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -1096,7 +1100,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "edit_form",
             &[Ban::Results, Ban::Extras(1)],
         ),
-        ("src/world/page.rs", "creation_body", &[Ban::Extras(1)]),
+        // M20 (M-W0.4): the creation error in place of the page's body (was
+        // `message_with_actions`).
+        (
+            "src/world/page.rs",
+            "creation_body",
+            &[Ban::Extras(1), Ban::Body],
+        ),
         // Package K: raw egui calls that a layout part replaces.
         (
             "src/campaigns.rs",
@@ -1104,8 +1114,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1), Ban::Extras(2)],
         ),
         ("src/copy_dialog.rs", "show", &[Ban::Layout(2)]),
-        ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
-        ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
+        ("src/creature_filter.rs", "menu", &[Ban::Layout(1)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
@@ -1174,13 +1183,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        ("src/sessions/page.rs", "banner", &[Ban::Extras(2)]),
+        ("src/sessions/page.rs", "banner", &[Ban::Body]),
         (
             "src/sessions/page.rs",
             "note_editor",
-            &[Ban::Layout(2), Ban::Body],
+            &[Ban::Layout(1), Ban::Body],
         ),
-        ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         (
             "src/timeline/page.rs",
@@ -1270,6 +1278,20 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/processing/settings.rs", "cause", &[Ban::Words]),
         ("src/processing/settings.rs", "key_fault", &[Ban::Body]),
+        // M-U0.1 (rulings M17, M20): the account's warning, in the keyring's words when it is not
+        // the unsaved sign-in; it replaces `message_with_action` and `message` in `show_account`.
+        (
+            "src/settings.rs",
+            "account_warning",
+            &[Ban::Body, Ban::Words],
+        ),
+        // M-U0.1 (rulings M17, M20): a table marker's warning, in its parser's words, under the
+        // table in the reader's body; it replaces two `design::message` calls in `roll_control`.
+        (
+            "src/roll_table.rs",
+            "table_warning",
+            &[Ban::Body, Ban::Words],
+        ),
         ("src/timeline/checks.rs", "cause", &[Ban::Words]),
         ("src/timeline/page.rs", "as_sentence", &[Ban::Words]),
         ("src/sessions/plan.rs", "as_sentence", &[Ban::Words]),
@@ -1371,13 +1393,21 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        ("src/world.rs", "draw", &[Ban::Extras(4)]),
+        // M20 (M-W0.4, M-W0.5): the index's warnings on this note and the renamed-file warning
+        // with its two repairs, in the reader's body (were `message`, `message_with_actions`).
+        ("src/world.rs", "draw", &[Ban::Extras(3), Ban::Body]),
+        // M20 (M-W0.4): an unread value's warning (was `message`).
+        ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
-        ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
+        // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
+        // `message` and a link).
+        ("src/world.rs", "unread_groups_message", &[Ban::Body]),
         ("src/world.rs", "value_row", &[Ban::Extras(1)]),
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
+        // M20 (M-W0.5): a note that cannot be read, in place of its page (was
+        // `message_with_actions`).
+        ("src/world/page.rs", "unread_pane", &[Ban::Body]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
@@ -1687,8 +1717,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 3),
             ("src/timeline/test_support.rs", 2),
-            ("src/trackers/history.rs", 1),
-            ("src/trackers/view.rs", 2),
             ("src/world.rs", 1),
             ("src/world/repair.rs", 1),
         ],
