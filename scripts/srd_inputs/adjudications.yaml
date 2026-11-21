@@ -8,7 +8,7 @@ cases:
   source_token: '2'
   source_pages:
   - 340
-  evidence: docs/research/young-white-dragon-save.md
+  evidence: docs/srd-definitions.md
 - key: dnd2024:spells/creation
   subject: unlisted_mineral_duration
   status: required_case_input

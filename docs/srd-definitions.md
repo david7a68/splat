@@ -35,7 +35,8 @@ scaling, choices, traits, conditions, durations, resources, recovery, forms,
 spell grants, equipment effects, inventory capacities, restrictions and exceptions.
 Keeping the source prose alone no longer qualifies a note as specified.
 
-The source research is kept as [Markdown with YAML frontmatter](research/srd-conversion/).
+The converter reads [reviewed specifications](../scripts/srd_inputs/specifications/)
+stored as Markdown with YAML front matter.
 The converter merges these specifications with the original stat/header/table
 extraction to produce the built-in Markdown library. Full original prose remains
 with each definition for reading and comparison. The input documents cite the
@@ -135,11 +136,10 @@ Changing a content declaration cannot register engine code or grant execution.
 
 ## Source rulings and required inputs
 
-The Young White Dragon's Intelligence SAVE is **−2**. The PDF prints an unsigned
-`2`, and the user ruled on 2026-11-01 that this is a printing error. This replaces
-the earlier +2 ruling in [the research note](research/young-white-dragon-save.md).
-`source.txt` keeps the printed value, and `scripts/srd_inputs/transcription_patches.json`
-holds the correction.
+The Young White Dragon's Intelligence save modifier is **−2**. Page 340 of
+the PDF prints an unsigned `2`. The project ruled on 2026-11-01 that this was
+a printing error. `source.txt` preserves the printed value. The converter
+uses the correction in [the transcription patches](../scripts/srd_inputs/transcription_patches.json).
 
 Narrow source ambiguities are explicit case inputs or rule selections, not
 invented defaults or generic manual-resolution fallbacks:
@@ -155,11 +155,6 @@ resolved when the affected case is used. Normal source-authorized GM choices,
 such as Wish's Reshape Reality mode, remain explicit choices. Geometry facts
 remain supplied assumptions; this work does not introduce maps or pathfinding.
 The truncated Telekinesis example adds no guessed rule.
-
-The [independent source audit](research/srd-contract-audit.md) checked nine complex
-contracts. Its two findings were fixed: separate Apparatus claw damage rolls,
-and Wand of Wonder's requirement that its own restraint still apply before the
-petrification repeat save. Regression tests cover both.
 
 ## Reproduce and verify
 
