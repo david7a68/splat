@@ -17,16 +17,16 @@
 //! The setup, and a twin that compiles: the owner keeps the projection, and a frame presents it.
 //!
 //! ```
-//! use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results, Retained};
-//! use splat::outcome::{KeptLine, NoPress, PaneFrame, Said, UndoStep, Verb};
+//! use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results, Retained};
+//! use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said, UndoStep, Verb};
 //! #[derive(Clone, PartialEq, Eq)] struct Link;
 //! impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
 //! struct Saved;
 //! impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
-//! struct App { store: Results<Link, Saved>, view: Retained<Link, NoPress, splat::ownership::Revision> }
-//! fn frame(ui: &mut eframe::egui::Ui, app: &mut App, book: splat::ownership::Revision) {
+//! struct App { store: Results<Link, Saved>, view: Retained<Link, NoPress, splat_design::ownership::Revision> }
+//! fn frame(ui: &mut egui::Ui, app: &mut App, book: splat_design::ownership::Revision) {
 //!     let projection = app.view.refresh(&app.store, &Link, book, |_| {
-//!         Said::new(splat::sentence!("Campaign link saved.")).into()
+//!         Said::new(splat_design::sentence!("Campaign link saved.")).into()
 //!     });
 //!     let frame = PaneFrame::new(ui);
 //!     let line: Option<KeptLine<NoPress>> = app.store.present(&frame, projection, &Link, book).ok().flatten();
@@ -37,21 +37,21 @@
 //! A projection is made only by `Retained::refresh`, from a store:
 //!
 //! ```compile_fail
-//! use splat::ownership::{Projection, Revision};
+//! use splat_design::ownership::{Projection, Revision};
 //! let _ = Projection::<u8, u8, Revision> { bound: todo!(), line: None }; // <- made by hand
 //! ```
 //!
 //! It carries no ticket that a caller can read or act with:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results, Retained, Revision};
-//! # use splat::outcome::{NoPress, Said};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results, Retained, Revision};
+//! # use splat_design::outcome::{NoPress, Said};
 //! # #[derive(Clone, PartialEq, Eq)] struct Link;
 //! # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
 //! # struct Saved;
 //! # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
 //! fn owner(store: &Results<Link, Saved>, view: &mut Retained<Link, NoPress, Revision>, book: Revision) {
-//!     let projection = view.refresh(store, &Link, book, |_| Said::new(splat::sentence!("Saved.")).into());
+//!     let projection = view.refresh(store, &Link, book, |_| Said::new(splat_design::sentence!("Saved.")).into());
 //!     let _ticket = projection.line.unwrap().ticket(); // <- a ticket without a frame
 //! }
 //! ```
@@ -60,8 +60,8 @@
 //! does not compile (the twin above uses it in its frame):
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results, Retained, Revision};
-//! # use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results, Retained, Revision};
+//! # use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
 //! # #[derive(Clone, PartialEq, Eq)] struct Link;
 //! # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
 //! # struct Saved;
@@ -71,8 +71,8 @@
 //!     view: Retained<Link, NoPress, Revision>,
 //!     kept: Option<KeptLine<'static, NoPress>>,
 //! }
-//! fn frame(ui: &mut eframe::egui::Ui, app: &mut App, book: Revision) {
-//!     let projection = app.view.refresh(&app.store, &Link, book, |_| Said::new(splat::sentence!("Saved.")).into());
+//! fn frame(ui: &mut egui::Ui, app: &mut App, book: Revision) {
+//!     let projection = app.view.refresh(&app.store, &Link, book, |_| Said::new(splat_design::sentence!("Saved.")).into());
 //!     let frame = PaneFrame::new(ui);
 //!     app.kept = app.store.present(&frame, projection, &Link, book).ok().flatten(); // <- kept past its frame
 //! }
@@ -287,7 +287,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
 /// suite runs scenarios on parallel threads, so the count is the thread's own). Counted inside
 /// the work itself.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct Work {
+pub struct Work {
     /// Calls of `Retained::refresh`: frames that reached the seam.
     pub lookups: usize,
     /// Lines made from the store and the owner's data.
@@ -301,7 +301,7 @@ pub(crate) struct Work {
     pub handed: usize,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     pub(crate) static WORK: std::cell::Cell<Work> = const {
         std::cell::Cell::new(Work { lookups: 0, built: 0, bytes: 0, visits: 0, handed: 0 })
@@ -309,7 +309,7 @@ thread_local! {
 }
 
 /// Count work, in a test build.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(super) fn count(add: impl FnOnce(&mut Work)) {
     WORK.with(|work| {
         let mut now = work.get();
@@ -318,11 +318,11 @@ pub(super) fn count(add: impl FnOnce(&mut Work)) {
     });
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub(super) fn count(_: impl FnOnce(&mut Work)) {}
 
 /// This thread's projection and timer work so far.
-#[cfg(test)]
-pub(crate) fn work() -> Work {
+#[cfg(any(test, feature = "test-support"))]
+pub fn work() -> Work {
     WORK.with(std::cell::Cell::get)
 }

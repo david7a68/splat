@@ -26,7 +26,7 @@
 //! Each case has a twin that compiles and differs only in the marked line.
 //!
 //! ```
-//! use splat::ownership::{Changed, Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord};
+//! use splat_design::ownership::{Changed, Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord};
 //! let draft = DraftState::new(DraftOrigin::New, Changed::Yes, Primary::Draft) // <-
 //!     .check(Diagnosis::incomplete("Add a creature first.")); // <-
 //! assert_eq!((draft.word(), draft.save_weight()), (SaveWord::New, SaveWeight::Secondary));
@@ -35,7 +35,7 @@
 //! The word comes from the state; a caller cannot set it, or build a state by hand:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{Changed, DraftOrigin, DraftState, Primary, SaveWord};
+//! # use splat_design::ownership::{Changed, DraftOrigin, DraftState, Primary, SaveWord};
 //! let draft = DraftState {
 //!     word: SaveWord::Unsaved, // <-
 //!     ..DraftState::new(DraftOrigin::New, Changed::Yes, Primary::Draft)
@@ -45,7 +45,7 @@
 //! Every draft states its origin; none is assumed:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{Changed, DraftState, Primary};
+//! # use splat_design::ownership::{Changed, DraftState, Primary};
 //! let draft = DraftState::new(Changed::Yes, Primary::Draft); // <- no origin
 //! ```
 //!
@@ -53,7 +53,7 @@
 //! place:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DraftOrigin, DraftState, Primary};
+//! # use splat_design::ownership::{DraftOrigin, DraftState, Primary};
 //! let draft = DraftState::new(DraftOrigin::New, true, Primary::Draft); // <- a bare bool
 //! ```
 //!
@@ -61,17 +61,17 @@
 //! its named constructors:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{Changed, DraftOrigin, DraftState, Primary};
+//! # use splat_design::ownership::{Changed, DraftOrigin, DraftState, Primary};
 //! let draft = DraftState::new(DraftOrigin::New, Changed::Yes, Primary::Draft)
 //!     .check("Add a creature first."); // <- text
 //! ```
 //!
 //! ```compile_fail
-//! # use splat::ownership::Diagnosis;
+//! # use splat_design::ownership::Diagnosis;
 //! let found = Diagnosis { refused: None, missing: None, incomplete: None, unreadable: true }; // <- by hand
 //! ```
 use super::{Action, Density, Status, Tone, colors, components::status, icons};
-use eframe::egui::{self, Ui};
+use egui::{self, Ui};
 use std::borrow::Cow;
 
 /// Whether the draft differs from the saved text: the same type as a revised value's change.

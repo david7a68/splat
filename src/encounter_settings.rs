@@ -4,7 +4,6 @@ use crate::{
     library::note_path,
     persistence::Campaign,
 };
-use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
 use splat::content::Entry;
 use splat::content::inspiration::{self, Inspiration};
@@ -15,24 +14,16 @@ use std::{
 use uuid::Uuid;
 
 const MECHANIC: &str = "dnd2024:rules/combat_initiative";
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Grouping {
-    #[default]
-    Identical,
-    Individual,
-    BySide,
-    Explicit,
+pub use splat_campaign::encounter_run::{Grouping, Initiative};
+/// The wording shared by Campaign settings and Run.
+pub trait GroupingWords {
+    fn label(self) -> &'static str;
+    fn arrival_rule(self) -> &'static str;
 }
-impl Grouping {
-    pub const ALL: [Self; 4] = [
-        Self::Identical,
-        Self::Individual,
-        Self::BySide,
-        Self::Explicit,
-    ];
+
+impl GroupingWords for Grouping {
     /// Reads on from "Roll NPC initiative".
-    pub fn label(self) -> &'static str {
+    fn label(self) -> &'static str {
         match self {
             Self::Identical => "In groups of identical NPCs (D&D default)",
             Self::Individual => "Individually",
@@ -42,7 +33,7 @@ impl Grouping {
     }
     /// How an encounter group takes its initiative under this rule. A typed total is the
     /// DM's ruling, and it applies to every member under any rule.
-    pub fn arrival_rule(self) -> &'static str {
+    fn arrival_rule(self) -> &'static str {
         match self {
             Self::Identical => {
                 "A group rolls once, with the first member’s bonus, even with different creatures."
@@ -57,19 +48,7 @@ impl Grouping {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Initiative {
-    pub grouping: Grouping,
-    pub roster_ties: bool,
-}
-impl Default for Initiative {
-    fn default() -> Self {
-        Self {
-            grouping: Grouping::Identical,
-            roster_ties: false,
-        }
-    }
-}
+
 /// An inspiration rule the campaign can use, from its packages or its own notes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspirationRule {
@@ -184,7 +163,7 @@ impl Options {
         }
         result.inspiration_rules = inspiration_rules(campaign, catalogue, document);
         result.house_rules = house_rule_notes(campaign, catalogue, document);
-        result.in_play = crate::trackers::read_in_play(entry.fields.get("splat_in_play"))?;
+        result.in_play = splat_campaign::trackers::read_in_play(entry.fields.get("splat_in_play"))?;
         // A note in play that is gone keeps its row, so that the DM can switch it off.
         for id in &result.in_play {
             if !result.house_rules.iter().any(|(note, _)| note == id) {
@@ -401,7 +380,9 @@ impl Options {
         ];
         // The in-play list changes only when a switch changed, so a campaign with no house rule
         // note gains no key.
-        if crate::trackers::read_in_play(entry.fields.get("splat_in_play"))? != self.in_play {
+        if splat_campaign::trackers::read_in_play(entry.fields.get("splat_in_play"))?
+            != self.in_play
+        {
             fields.push((
                 "splat_in_play",
                 (!self.in_play.is_empty())
@@ -452,7 +433,7 @@ fn house_rule_notes(
     document: &CampaignDocument,
 ) -> Vec<(Uuid, String)> {
     let mut notes: Vec<_> = rules_in_use(campaign, catalogue, document)
-        .filter(|(_, _, entry, _)| crate::trackers::is_house_rule_note(entry))
+        .filter(|(_, _, entry, _)| splat_campaign::trackers::is_house_rule_note(entry))
         .map(|(id, _, entry, _)| (id, entry.name.clone()))
         .collect();
     notes.sort_by_key(|(_, name)| name.to_lowercase());

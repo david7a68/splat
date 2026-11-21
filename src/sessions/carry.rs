@@ -493,7 +493,7 @@ pub(super) struct Carries {
     /// notes that embeds show can change.
     read: Option<(ReadKey, Arc<Prepared>)>,
     /// How often a frame asked for Read's words, and how often they were made.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(super) read_counts: crate::test_support::Counts,
     /// `preparing`'s answer, for the session, the current session, the open run's and the live
     /// recording's sessions, and the number of the Timeline's events it was worked out for.
@@ -1074,7 +1074,7 @@ impl Sessions {
             Arc::as_ptr(model) as usize,
             beside,
         );
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.carries.read_counts.reached += 1;
         }
@@ -1083,7 +1083,7 @@ impl Sessions {
         {
             return Some(Arc::clone(prepared));
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.carries.read_counts.work += 1;
         }

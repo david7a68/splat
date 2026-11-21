@@ -33,7 +33,7 @@ use std::{
     sync::{Arc, Mutex, Weak},
 };
 
-use eframe::egui::{self, Context, Id, Rect, Response, Ui, Vec2};
+use egui::{self, Context, Id, Rect, Response, Ui, Vec2};
 
 /// A reveal's bound: frames in which it scrolls.
 pub const PASSES: u8 = 4;
@@ -151,8 +151,8 @@ impl Act {
 
     /// An act in this frame, in the column `ui` is drawn in, for a test that opens a form with
     /// no press. No input of the frame is the act's.
-    #[cfg(test)]
-    pub(crate) fn test(ui: &Ui, salt: impl Hash) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn test(ui: &Ui, salt: impl Hash) -> Self {
         Self {
             column: owning_region(ui)
                 .filter(|(_, region)| region.hosts)
@@ -163,8 +163,8 @@ impl Act {
 
     /// An act in this frame of `ctx` and in no column, for a test with no frame drawn: its
     /// reveal ends `Unowned`.
-    #[cfg(test)]
-    pub(crate) fn outside(ctx: &Context, salt: impl Hash) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn outside(ctx: &Context, salt: impl Hash) -> Self {
         Self {
             ctx: ctx.clone(),
             frame: ctx.cumulative_frame_nr(),
@@ -356,14 +356,14 @@ impl Reveal {
     }
 
     /// Whether it runs.
-    #[cfg(test)]
-    pub(crate) fn running(&self) -> bool {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn running(&self) -> bool {
         self.run.as_ref().is_some_and(|run| lock(run).phase.is_ok())
     }
 
     /// Why it ended; `None` while it runs or before any act.
-    #[cfg(test)]
-    pub(crate) fn ended(&self) -> Option<End> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn ended(&self) -> Option<End> {
         self.run.as_ref().and_then(|run| lock(run).phase.err())
     }
 

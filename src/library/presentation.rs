@@ -5,7 +5,7 @@ use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 use splat::content::Entry;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
-pub(crate) enum Section {
+pub enum Section {
     #[default]
     All,
     Creatures,
@@ -94,7 +94,7 @@ pub(super) fn book_case(value: &str) -> String {
 }
 
 /// A list's second line. Everyday words and existing facts only: never schema terms.
-pub(crate) fn subtitle(entry: &Entry) -> String {
+pub fn subtitle(entry: &Entry) -> String {
     if entry.kind == "package" {
         return "Package".into();
     }
@@ -150,7 +150,7 @@ pub(crate) fn subtitle(entry: &Entry) -> String {
 
 /// The campaign's main source needs no suffix. Other packages and campaign-owned
 /// entries supply their display word, using the same rule in Library and Lookup.
-pub(crate) fn list_subtitle(line: &str, source: Option<&str>) -> String {
+pub fn list_subtitle(line: &str, source: Option<&str>) -> String {
     match source {
         Some(source) => format!("{line} · {source}"),
         None => line.to_owned(),
@@ -158,7 +158,7 @@ pub(crate) fn list_subtitle(line: &str, source: Option<&str>) -> String {
 }
 
 /// Offer a precise first-H1 repair, preserving every other byte.
-pub(crate) fn heading_fix(text: &str, entry: &Entry) -> Option<(String, String)> {
+pub fn heading_fix(text: &str, entry: &Entry) -> Option<(String, String)> {
     let range = Parser::new(&entry.body)
         .into_offset_iter()
         .find_map(|(event, range)| {
@@ -184,7 +184,7 @@ pub(crate) fn heading_fix(text: &str, entry: &Entry) -> Option<(String, String)>
 }
 
 /// The one fact a DM scans for: CR, spell level, or item rarity. Nothing is invented.
-pub(crate) fn challenge_text(entry: &Entry) -> Option<&str> {
+pub fn challenge_text(entry: &Entry) -> Option<&str> {
     entry
         .fields
         .get("splat_creature")
@@ -211,7 +211,7 @@ fn list_fact(entry: &Entry) -> Option<String> {
 }
 
 /// Class scope already owns the feature's class and required level.
-pub(crate) fn class_level(entry: &Entry) -> Option<String> {
+pub fn class_level(entry: &Entry) -> Option<String> {
     let scope = entry
         .fields
         .get("splat_rule")?
@@ -224,14 +224,14 @@ pub(crate) fn class_level(entry: &Entry) -> Option<String> {
     Some(format!("{name} · Level {level}"))
 }
 
-pub(crate) struct ReadingSection<'a> {
+pub struct ReadingSection<'a> {
     pub title: String,
     pub body: &'a str,
 }
 
 /// The embedded SRD preserves printed column wraps for provenance. Reflow only
 /// its reading view; authored Markdown and the stored source are never rewritten.
-pub(crate) fn hidden_provenance_line(line: &str) -> bool {
+pub fn hidden_provenance_line(line: &str) -> bool {
     let line = line.trim().trim_end_matches('\\');
     line.starts_with("<!-- SRD page ")
         || line.starts_with("Original layout: [[")
@@ -239,7 +239,7 @@ pub(crate) fn hidden_provenance_line(line: &str) -> bool {
             && line.ends_with(" %%"))
 }
 
-pub(crate) fn overview_markdown(source: &str) -> String {
+pub fn overview_markdown(source: &str) -> String {
     let mut output = String::new();
     let mut row = false;
     let lines: Vec<&str> = source
@@ -650,7 +650,7 @@ fn joins_across_break(left: &str, right: &str, words: &std::collections::HashSet
 
 /// Split at real Markdown headings; headings in fenced examples remain content.
 /// Keep custom prose and tables; omit reserved storage and empty reading sections.
-pub(crate) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>> {
+pub fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>> {
     let body = body.trim_start();
     let body = body.strip_prefix(&format!("# {name}\n")).unwrap_or(body);
     let headings: Vec<_> = Parser::new(body)
@@ -772,10 +772,7 @@ mod reading_tests {
             }
         }
         let mut files = Vec::new();
-        walk(
-            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("builtin"),
-            &mut files,
-        );
+        walk(&crate::workspace().join("builtin"), &mut files);
         files.sort();
         let notes: Vec<_> = files
             .into_iter()
@@ -784,7 +781,7 @@ mod reading_tests {
                 let start = text.find("## Source text\n")? + "## Source text\n".len();
                 let body = &text[start..];
                 let end = body.find("\n## ").unwrap_or(body.len());
-                let name = path.strip_prefix(env!("CARGO_MANIFEST_DIR")).ok()?;
+                let name = path.strip_prefix(crate::workspace()).ok()?;
                 Some((name.display().to_string(), body[..end].to_owned()))
             })
             .collect();
@@ -997,9 +994,7 @@ mod reading_tests {
     }
 
     fn real_note(path: &str) -> String {
-        let text =
-            std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path))
-                .unwrap();
+        let text = std::fs::read_to_string(crate::workspace().join(path)).unwrap();
         let start = text.find("## Source text\n").map_or(0, |at| at + 15);
         let body = &text[start..];
         body[..body.find("\n## ").unwrap_or(body.len())].to_owned()
@@ -1008,8 +1003,7 @@ mod reading_tests {
     #[test]
     fn a_real_stat_block_keeps_its_actions_apart() {
         let source = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("builtin/dnd2024-definitions/creatures/adult_black_dragon.md"),
+            crate::workspace().join("builtin/dnd2024-definitions/creatures/adult_black_dragon.md"),
         )
         .unwrap();
         let reading = overview_markdown(&source);

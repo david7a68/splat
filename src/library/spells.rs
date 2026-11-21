@@ -494,7 +494,7 @@ pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
 /// printed order. In a run they follow the stat block's own actions, in the panel, on the
 /// action bar and by Ctrl+number.
 #[derive(Default)]
-pub(crate) struct Resolved {
+pub struct Resolved {
     /// The entry's spells, each with the entry it opens, or `None` when it is missing.
     pub references: Vec<Option<(usize, String)>>,
     /// Each list line, trimmed, with its tiles.
@@ -572,7 +572,7 @@ impl Resolved {
 /// is found again by all that resolving it reads: its id, its text and its fields (the
 /// save DC and the spells its data gives), so a changed draft resolves again.
 #[derive(Default)]
-pub(crate) struct SpellCache(std::sync::Mutex<Vec<(Kept, Arc<Resolved>)>>);
+pub struct SpellCache(std::sync::Mutex<Vec<(Kept, Arc<Resolved>)>>);
 
 /// What a resolved entry is known by.
 struct Kept {
@@ -631,7 +631,7 @@ impl SpellCache {
 
 /// An entry's Spellcasting, resolved once and kept by the links' cache, so an unchanged frame
 /// looks nothing up. Links with no cache resolve it on each call.
-pub(crate) fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
+pub fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
     let Some(cache) = links.spell_cache() else {
         return Arc::new(build(entry, links));
     };
@@ -704,7 +704,7 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
 
 /// A creature's action tiles in Run order. Its own actions come first, then each rolling spell
 /// occurrence. Only the creature's own actions are available without a content index.
-pub(crate) fn ordered_actions(entry: &Entry, links: Option<&dyn Links>) -> Vec<Chip> {
+pub fn ordered_actions(entry: &Entry, links: Option<&dyn Links>) -> Vec<Chip> {
     links.map_or_else(
         || crate::rolls::chips(&entry.body),
         |links| resolve(entry, links).rolls.clone(),

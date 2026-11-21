@@ -20,6 +20,9 @@
 
 use std::marker::PhantomData;
 
+#[path = "test_support/sheets.rs"]
+pub mod sheets;
+
 /// A seam's counts at one moment, or the change between two moments.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Counts {
@@ -136,6 +139,7 @@ impl<S: ?Sized, F: Fn(&mut S) -> Counts> CachedWork<S, F> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

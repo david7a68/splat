@@ -34,7 +34,7 @@
 //! glyphs are inside the room; the run's visual checks do (rung 4).
 use std::sync::Arc;
 
-use eframe::egui::{
+use egui::{
     Align, Color32, FontId, Galley, Layout, Rect, Sense, Ui, UiBuilder, WidgetInfo, WidgetType,
     pos2, vec2,
 };
@@ -46,7 +46,7 @@ use super::{
 
 /// From this width of a run's line, `Add` reads `Add to fight`; below it, `Add`. The dock
 /// below the roster uses the same width for its own words (`DOCK_ALL_WORDS_FROM`).
-pub(crate) const ADD_WORDS_FROM: f32 = 500.0;
+pub const ADD_WORDS_FROM: f32 = 500.0;
 
 /// The gap between the heading's parts: the round, the name, `Add` and `Next turn`. As before
 /// the part (`S` and the line's item spacing, `S`), so the line keeps its look.
@@ -185,7 +185,7 @@ impl<'a> TurnHeading<'a> {
 
 /// `Add to fight`, which opens Arrivals: `Add` with the icon on a narrow line. The run's setup
 /// header uses it too (`Run::add_to_fight`), so both say the same.
-pub(crate) fn add_to_fight(words: bool, density: Density, selected: bool) -> Action<'static> {
+pub fn add_to_fight(words: bool, density: Density, selected: bool) -> Action<'static> {
     let action = if words {
         Action::secondary("Add to fight").icon(icons::ADD)
     } else {
@@ -218,6 +218,10 @@ pub struct KeptTurnHeading {
 }
 
 impl KeptTurnHeading {
+    #[allow(
+        clippy::new_without_default,
+        reason = "the source gate counts each kept heading constructor"
+    )]
     pub fn new() -> Self {
         Self {
             line: None,
@@ -226,8 +230,8 @@ impl KeptTurnHeading {
     }
 
     /// How many times the part chose a candidate: once per change of the data or the metrics.
-    #[cfg(test)]
-    pub(crate) fn scans(&self) -> u64 {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn scans(&self) -> u64 {
         self.scans
     }
 
@@ -537,7 +541,7 @@ fn letters(name: &str, fit: impl Fn(&str) -> bool) -> Option<String> {
 /// joining word, and a copy number or letter stays after the `…` (`Ember Cultist… 12`). The
 /// Legacy users outside the part (counted by the lint's `fitting-escape` rule): the run's
 /// `dock_name`, for the dock's conflict words and the run's Undo.
-pub(crate) fn whole_words_name(ui: &Ui, name: &str, font: &FontId, width: f32) -> String {
+pub fn whole_words_name(ui: &Ui, name: &str, font: &FontId, width: f32) -> String {
     let fitted = words_that_fit(ui, name, font, width);
     if fitted == name {
         return fitted;

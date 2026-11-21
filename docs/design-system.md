@@ -197,7 +197,7 @@ that hosts reveals (R34, R44, R46); the Settings pane's column (the import form)
 | List row | `row`, `two_line_row` | Fixed height for `show_rows`; paints hover in the current frame |
 | Status | `status`, `wrapped_status`, `status_link`, `Status`, `rail_status_detail`, `KindStatus`, `StatusKind` | Icon, word and colour; a `KindStatus` paints its icon and its word apart, in the colours its `StatusKind` decides (no free colour): `Recording` paints only its record icon in the `recording` token, its words and time in the text colour (R5); `status_link` opens where the DM can act. A status that wraps (`wrapped_status`, `status_link`, `rail_status_detail`) paints its icon and its word where a one-line status paints them; every line after the first starts at the word, never under the icon |
 | Stat tile | `stat_tile`, `fact::roll_tile`, `fact::tile_label` | Sentence-case muted `Small` label over a large value, no box; a value that rolls is `roll_tile`; a label that holds its own number says `Str: 8` (`tile_label`, the fact form) |
-| HP | `hp_bar`, `hp_readout`, `hp_state`, `combat_sync::fraction` | Fixed slots; separate temporary HP. Every displayed HP fraction is compact (`62/62`), through one formatter; stored text and service payloads keep their format |
+| HP | `hp_bar`, `hp_readout`, `hp_state`, `design::fraction` | Fixed slots; separate temporary HP. Every displayed HP fraction is compact (`62/62`), through one formatter; stored text and service payloads keep their format |
 | Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding; it starts at one y on every page (the Encounters page steps past its header without an extra item gap) |
 | Heading | `heading(ui, Heading::Group / Label / Section)` | A heading adds its own space: `Heading::above` (`L`; `XL` for a serif `Section`) from the item before it, none when it is first in its column, and `XS` under it, so a heading belongs to what follows. `Group`: `Label` capitals, nonzero count muted, no rule; serif `Section` headings belong to readers and stat blocks. Clippy refuses the old `group_heading` and `group_label` outside `src/design/` (staged); the old `reader::section_heading` is gone |
 | Gap | `gap(ui, Gap::…)` | Space between two things is one step of the scale (`XS` to `XXL`); no other amount exists. Clippy refuses `Ui::add_space` and `Ui::allocate_space` outside `src/design/` (staged, counted by function in `STAGED_ALLOWS` as `Ban::Extras`). A change of `item_spacing` through `spacing_mut` is not refused: a reviewer reads it, and the gate's alignment and stillness checks see its effects |
@@ -2795,8 +2795,10 @@ line's reminders.
 ## Tests
 
 - `design::tokens::tests` checks WCAG contrast over token pairs.
-- `design::lint` rejects raw colours or type sizes outside `src/design/`, and a straight apostrophe inside a word
-  in a string of `src/` or `crates/core/src/`, with the shrink-only allowlist in `src/design/lint_allowlist.txt`.
+- `design::lint` checks raw colours, type sizes and straight apostrophes inside words in the desktop and
+  Trackers sources and in the campaign, character, content and execution crates. The design and visual
+  test sources have their own rules.
+  The shrink-only allowlist is in `src/design/lint_allowlist.txt`.
 - `design::lint::legacy` freezes the layout and host paths that the pane mechanism replaces (migration 32,
   ruling L12): closure pane hosts (`Footer::pane` and `Messages::pane` and kin), hand-placed footers, `Fills`
   (also the Sessions wrapper `fills_body`), closure virtual rows, `register_row`, clips that a caller sets, raw

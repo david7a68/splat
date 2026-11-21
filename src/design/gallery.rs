@@ -1,7 +1,7 @@
 //! Every token and component, in each state, for the `gallery` visual scenario.
 // It shows the old message functions until Wave 3 makes them private.
 #![allow(deprecated)]
-use super::{extras::space, reader as style, *};
+use super::{extras::test_space as space, reader as style, *};
 use eframe::egui::{self, Color32};
 
 fn swatch(ui: &mut egui::Ui, name: &str, color: Color32) {
@@ -425,7 +425,7 @@ pub fn components(ui: &mut egui::Ui) {
         .iter()
         .map(|kind| {
             Action::quiet(kind.word())
-                .icon(kind.icon())
+                .icon(crate::timeline::kind_icon(*kind))
                 .density(Density::Read)
         })
         .collect(),

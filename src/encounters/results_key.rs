@@ -61,7 +61,7 @@ pub(super) struct KeyWatch(Weak<Key>);
 impl KeyWatch {
     /// Whether some copy of the draft still exists.
     pub(super) fn alive(&self) -> bool {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         super::KEY_CHECKS.with(|count| count.set(count.get() + 1));
         self.0.strong_count() > 0
     }

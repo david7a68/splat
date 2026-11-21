@@ -7,7 +7,7 @@
 /// fit. Linear and in order: each legal candidate is measured at most once, and never by
 /// bisection, because a later candidate can be wider than an earlier one (R31: dropping a
 /// creature can add its name to the reason).
-pub(crate) fn first_fit<C: Copy, R>(
+pub fn first_fit<C: Copy, R>(
     order: impl IntoIterator<Item = C>,
     legal: impl Fn(C) -> bool,
     mut measure: impl FnMut(C) -> Option<R>,
