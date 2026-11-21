@@ -15,7 +15,7 @@ use zeroize::{Zeroize, Zeroizing};
 /// own words.
 #[allow(
     clippy::disallowed_methods,
-    reason = "a body place: the account's warning stands in the account column, in the keyring's words (Ban::Body, Ban::Words)"
+    reason = "a body place: the account’s warning stands in the account column, in the keyring’s words (Ban::Body, Ban::Words)"
 )]
 fn account_warning(ui: &mut egui::Ui, keyring: bool, warning: &str) -> bool {
     use design::outcome::{BodyMessage, Choice, MessageChoice, Notice, Sentence};

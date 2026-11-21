@@ -32,7 +32,7 @@ fn requester_id() -> egui::Id {
 /// reader's body, where the table is.
 #[allow(
     clippy::disallowed_methods,
-    reason = "a body place: a table's warning stands under the table it is about, in its parser's words (Ban::Body, Ban::Words)"
+    reason = "a body place: a table’s warning stands under the table it is about, in its parser’s words (Ban::Body, Ban::Words)"
 )]
 fn table_warning(ui: &mut egui::Ui, words: &str) {
     if let Some(words) = Sentence::outside(words) {
