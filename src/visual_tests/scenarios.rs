@@ -3282,9 +3282,25 @@ pub mod campaign_content {
             permissions.set_readonly(read_only);
             std::fs::set_permissions(&manifest, permissions).unwrap();
         };
+        // Issue #509: the search results the encounter search's `Use it` offers (Lookup's
+        // index, which that search reads) follow each saved package choice, and Encounters
+        // reads its creatures again. A draft and a failed Save change neither.
+        let offers_wraith = |d: &Driver<'_>| {
+            d.app().lookup.index().is_some_and(|index| {
+                index
+                    .unused_creatures("ash wraith")
+                    .iter()
+                    .any(|(_, _, name, _)| name == UNSELECTED_ENTRY)
+            })
+        };
+        let encounters_read = |d: &Driver<'_>| d.app().encounters.snapshot_revision();
+        let draft_offers = offers_wraith(d);
+        let draft_read = encounters_read(d);
         set_read_only(true);
         d.click(SAVE_SELECTIONS);
         d.settle();
+        let failed_offers = offers_wraith(d);
+        let failed_read = encounters_read(d);
         let failed_tops = package_tops(d);
         let failed = std::fs::read(&manifest).unwrap() == on_disk && d.visible_text("read only");
         set_read_only(false);
@@ -3292,6 +3308,8 @@ pub mod campaign_content {
         d.settle();
         let saved_tops = package_tops(d);
         let saved = d.visible_text("Campaign selections saved.");
+        let saved_offers = offers_wraith(d);
+        let saved_read = encounters_read(d);
         d.observe(
             "iter-25-C-page-results",
             draft_tops.iter().all(Option::is_some)
@@ -3307,6 +3325,22 @@ pub mod campaign_content {
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.click(SAVE_SELECTIONS);
         d.settle();
+        let unused_offers = offers_wraith(d);
+        let unused_read = encounters_read(d);
+        d.observe(
+            "m32-C0-509-choices-refresh",
+            draft_offers
+                && failed_offers
+                && !saved_offers
+                && unused_offers
+                && draft_read.is_some()
+                && failed_read == draft_read
+                && saved_read.is_some_and(|read| Some(read) != draft_read)
+                && unused_read.is_some_and(|read| Some(read) != saved_read),
+            format!(
+                "Use it offers {UNSELECTED_ENTRY}: draft {draft_offers}, failed Save {failed_offers}, saved {saved_offers}, saved unused {unused_offers}; Encounters read {draft_read:?}, {failed_read:?}, {saved_read:?}, {unused_read:?}"
+            ),
+        );
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.expect(CHANGED);
         d.click(DISCARD_SELECTION);
