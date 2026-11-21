@@ -82,7 +82,7 @@ impl CopyDialog {
     }
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "the dialog’s error is a typed body message in its place (M20, design::results::STAGED_ALLOWS)"
     )]
     pub fn show(&mut self, ctx: &egui::Context, campaigns: &Campaigns) -> bool {
         if let Some(rx) = &self.pending {
