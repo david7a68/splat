@@ -66,6 +66,9 @@ pub struct UiState {
     /// The DM hid the session list on the Session page.
     #[serde(default)]
     pub session_list_hidden: bool,
+    /// The DM screen's layout, once the DM changed it.
+    #[serde(default)]
+    pub dm_screen_layout: Option<crate::sessions::page::DmScreenLayout>,
 }
 
 #[derive(Default)]
@@ -162,6 +165,19 @@ mod tests {
             touchpad_speed: crate::touchpad::TouchpadSpeed::Twelve,
             party_bar: Some(false),
             session_list_hidden: true,
+            dm_screen_layout: Some(crate::sessions::page::DmScreenLayout {
+                root: Some(crate::sessions::page::SavedNode {
+                    split: Some("across".into()),
+                    parts: vec![crate::sessions::page::SavedPart {
+                        share: 1.0,
+                        node: crate::sessions::page::SavedNode {
+                            tile: Some("plan".into()),
+                            ..Default::default()
+                        },
+                    }],
+                    ..Default::default()
+                }),
+            }),
         };
         store.save(&state);
         assert_eq!(Store::at(path.clone()).load(), state);

@@ -1060,24 +1060,59 @@ pub fn delete_recording(path: &Path) -> Result<(), String> {
 }
 
 /// The heading a note's events and summaries belong under, if the note has it.
-const WHAT_HAPPENED: &str = "## What happened";
+const WHAT_HAPPENED: &str = "What happened";
+
+/// One `## heading` section of a note, as byte offsets in its words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Section {
+    /// Where the heading's line starts.
+    heading: usize,
+    /// Where the section's words start: the line after the heading. When the next heading
+    /// follows at once, or the note ends at the heading, it is `end`.
+    words: usize,
+    /// Where the line break before the next heading starts, or the end of the note.
+    end: usize,
+    /// Where the next heading starts, or the end of the note.
+    next: usize,
+}
+
+/// The one reading of a note's `## heading` section, for every writer and reader of one: the
+/// first line that reads `## heading`, and the lines up to the next line that starts with
+/// `## `. A longer heading that starts the same way is another section.
+fn section(body: &str, heading: &str) -> Option<Section> {
+    let mut line_end = 0;
+    for line in body.split_inclusive('\n') {
+        let start = line_end;
+        line_end += line.len();
+        if line.trim_end().strip_prefix("## ") != Some(heading) {
+            continue;
+        }
+        let text_end = start + line.trim_end_matches(['\r', '\n']).len();
+        let (end, next) = match body[text_end..].find("\n## ") {
+            Some(at) => {
+                let at = text_end + at;
+                let end = if body[..at].ends_with('\r') {
+                    at - 1
+                } else {
+                    at
+                };
+                (end.max(text_end), at + 1)
+            }
+            None => (body.len(), body.len()),
+        };
+        return Some(Section {
+            heading: start,
+            words: line_end.min(end),
+            end,
+            next,
+        });
+    }
+    None
+}
 
 /// Where a note's `What happened` section ends, if it has one.
 fn what_happened_end(body: &str) -> Option<usize> {
-    body.match_indices(WHAT_HAPPENED)
-        .find(|(at, _)| {
-            (*at == 0 || body[..*at].ends_with('\n'))
-                && body[at + WHAT_HAPPENED.len()..]
-                    .chars()
-                    .next()
-                    .is_none_or(|c| c == '\n' || c == '\r')
-        })
-        .map(|(at, _)| at + WHAT_HAPPENED.len())
-        .map(|start| {
-            body[start..]
-                .find("\n## ")
-                .map_or(body.len(), |next| start + next)
-        })
+    section(body, WHAT_HAPPENED).map(|section| section.end)
 }
 
 /// Add words to a note where a DM would put them: at the end of its `What happened`
@@ -1186,34 +1221,23 @@ pub fn without_empty_sections(text: &str) -> String {
 
 /// The words under one `## heading`, up to the next heading of that level.
 pub fn section_text(body: &str, heading: &str) -> Option<String> {
-    let mut lines = body.lines();
-    lines.find(|line| line.trim_end().strip_prefix("## ") == Some(heading))?;
-    let words = lines
-        .take_while(|line| !line.starts_with("## "))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let words = words.trim();
-    (!words.is_empty()).then(|| words.to_owned())
+    let found = section(body, heading)?;
+    let words = body[found.words..found.end].trim();
+    (!words.is_empty()).then(|| words.replace("\r\n", "\n"))
 }
 
 /// Add a line to a note's plan: under `Plan for tonight`, or where other words go.
 pub fn insert_in_plan(body: &mut String, words: &str) {
-    const PLAN: &str = "## Plan for tonight";
-    let Some(at) = body
-        .match_indices(PLAN)
-        .find(|(at, _)| *at == 0 || body[..*at].ends_with('\n'))
-        .map(|(at, _)| at + PLAN.len())
-    else {
+    let Some(plan) = section(body, "Plan for tonight") else {
         insert_in_note(body, words);
         return;
     };
-    let end = body[at..]
-        .find("\n## ")
-        .map_or(body.len(), |next| at + next);
+    let empty = body[plan.words..plan.end].trim().is_empty();
+    let end = plan.end;
     let kept = body[..end].trim_end().len();
     let rest = body[end..].to_owned();
     body.truncate(kept);
-    body.push_str(if kept == at { "\n\n" } else { "\n" });
+    body.push_str(if empty { "\n\n" } else { "\n" });
     body.push_str(words.trim());
     body.push('\n');
     body.push_str(&rest);
@@ -3633,6 +3657,31 @@ mod tests {
             None
         );
         assert_eq!(section_text(body, "Loot"), None);
+        // The section's words, as the DM screen's What happened tile edits them.
+        fn words(body: &str) -> Option<&str> {
+            section(body, WHAT_HAPPENED).map(|s| &body[s.words..s.end])
+        }
+        assert_eq!(words(body), Some("\nA fight.\n"));
+        assert_eq!(words("## What happened\r\nA\r\n## Next\r\n"), Some("A"));
+        // The next heading at once, or the note's end at the heading: no words, and the
+        // place to type stays off the heading's line break.
+        let adjacent = "## What happened\n## Next\n";
+        assert_eq!(
+            section(adjacent, WHAT_HAPPENED).map(|s| (s.words, s.end, s.next)),
+            Some((16, 16, 17))
+        );
+        let crlf = "## What happened\r\n## Next";
+        assert_eq!(
+            section(crlf, WHAT_HAPPENED).map(|s| (s.words, s.end, s.next)),
+            Some((16, 16, 18))
+        );
+        assert_eq!(words("## What happened"), Some(""));
+        assert_eq!(words("## What happened\nA\n"), Some("A\n"));
+        assert_eq!(section("## What happened later\n", WHAT_HAPPENED), None);
+        assert_eq!(
+            section("Intro\n## What happened  \nA", WHAT_HAPPENED).map(|s| s.heading),
+            Some(6)
+        );
     }
 
     #[test]

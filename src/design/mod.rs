@@ -5,6 +5,7 @@ pub mod action_rows;
 pub mod column;
 mod comparison;
 pub mod components;
+pub mod dock;
 pub mod extras;
 pub mod fact;
 pub mod fitting;
@@ -18,6 +19,7 @@ pub mod reader;
 pub mod results;
 pub mod reveal;
 pub mod save_row;
+pub mod split;
 pub mod status;
 pub mod theme;
 pub mod tokens;
@@ -56,10 +58,12 @@ pub use pane::{
     Navigation, Placement, RegionState, Row,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
+pub use dock::{DockSide, dock_preview, drag_grip};
 #[allow(unused_imports)]
 pub use popups::{Dropdown, DropdownResponse, Ghost, ImageSize, TipLine, drag_source, rich_tip};
 pub use results::Results;
 pub use save_row::{DraftState, save_row};
+pub use split::{SplitAxis, SplitMove, split_handle};
 #[allow(unused_imports)]
 pub use status::{KindStatus, StatusKind, Tinted};
 pub use tokens::*;

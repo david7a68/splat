@@ -1649,13 +1649,22 @@ impl PlanModel {
 #[derive(Default)]
 pub(super) struct PlanModelCache {
     key: Option<(Option<Uuid>, u64, Option<u64>, u64)>,
-    model: Option<Arc<PlanModel>>,
+    model: Option<design::memo::Revised<Arc<PlanModel>>>,
     /// How often a frame asked for the model, and how often it was built.
     pub(super) reached: usize,
     pub(super) builds: usize,
     /// Per linked name, whether its entry had a second line when last found
     /// (`PlanModel::place_not_found`).
     seen: std::collections::HashMap<String, bool>,
+}
+
+impl PlanModelCache {
+    pub(super) fn revision(&self) -> design::memo::Revision {
+        self.model
+            .as_ref()
+            .expect("call plan_model first")
+            .revision()
+    }
 }
 
 /// Where a scene act's words show: under the scene's row, under the Scene field, or in the
@@ -1864,6 +1873,7 @@ fn scene_row(
     (slot, line): (Slot, usize),
     plan: &Plan<'_>,
     act: &mut Option<SceneAct>,
+    in_tile: bool,
 ) -> f32 {
     let c = colors();
     let task = &scene.task;
@@ -1890,12 +1900,25 @@ fn scene_row(
     let on_row = with_log.is_some();
     let action_width = with_log.unwrap_or(menu);
     let widths = [width - action_width - design::S, action_width];
+    let detail = scene
+        .entry
+        .as_ref()
+        .and_then(|entry| entry.detail.as_deref());
     let mut tick = false;
     let mut remove = false;
     let mut start = None;
     let mut add_log = false;
     let top = ui.cursor().top();
     ui.push_id(("scene", task.at, &task.line), |ui| {
+        if in_tile {
+            // The tile has no shared action column. Keep a short scene's menu with its words.
+            let title = design::number_width(ui, &plain, &Type::Body.font(ui));
+            let detail = detail.map_or(0.0, |text| {
+                design::number_width(ui, text, &Type::Small.font(ui))
+            });
+            let row_width = lead_width() + title.max(detail) + action_width + 3.0 * design::S;
+            ui.set_max_width(width.min(row_width));
+        }
         plan_row_with(
             ui,
             &widths,
@@ -1914,11 +1937,7 @@ fn scene_row(
                 }
             },
             |ui| {
-                if let Some(detail) = scene
-                    .entry
-                    .as_ref()
-                    .and_then(|entry| entry.detail.as_deref())
-                {
+                if let Some(detail) = detail {
                     wrapped_words(ui, Type::Small, detail, c.muted);
                 } else if scene.not_found && scene.second_line {
                     // As Lookup and World say it of a link whose entry is gone (X14).
@@ -1965,6 +1984,9 @@ fn scene_row(
                 }
             },
         );
+        if in_tile {
+            ui.set_max_width(width);
+        }
         plan_rule(ui);
     });
     if tick {
@@ -4911,7 +4933,15 @@ impl Sessions {
             if shown.removed == Some(place) {
                 self.removed_scene_message(ui, place, act);
             }
-            height += scene_row(ui, width, scene, ((position, at), *line), plan, act);
+            height += scene_row(
+                ui,
+                width,
+                scene,
+                ((position, at), *line),
+                plan,
+                act,
+                self.dm_screen.in_tiles(),
+            );
             self.row_fault(ui, place, shown);
         }
         let end = Place::Row((position, scenes.len()));
@@ -5027,10 +5057,10 @@ impl Sessions {
             let body = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
             let mut model = PlanModel::build(body, plan.fights, plan.groups, index);
             model.place_not_found(&mut cache.seen);
-            cache.model = Some(Arc::new(model));
+            cache.model = Some(design::memo::Revised::new(Arc::new(model)));
             cache.key = Some(key);
         }
-        Arc::clone(cache.model.as_ref().expect("the model was just built"))
+        Arc::clone(cache.model.as_deref().expect("the model was just built"))
     }
 
     /// `Removed “…” from tonight.` with `Undo remove`, at `place`, while the note is as the
@@ -8072,7 +8102,8 @@ mod tests {
                     };
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.set_width(330.0);
-                        state.1 = scene_row(ui, 330.0, &scene, ((0, 0), 0), &plan, &mut None);
+                        state.1 =
+                            scene_row(ui, 330.0, &scene, ((0, 0), 0), &plan, &mut None, false);
                     });
                 },
                 (false, 0.0),
