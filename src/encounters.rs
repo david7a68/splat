@@ -8512,6 +8512,12 @@ impl Encounters {
                                                         groups::show_form_when_it_opens(ui);
                                                         *expanded = Some(slot.key.clone());
                                                     }
+                                                    // Layout PR 5b: the facts' width holds the
+                                                    // link (the roster's column measures it);
+                                                    // their height keeps the row's pitch.
+                                                    ui.expand_to_include_x(
+                                                        inline.min_rect().right(),
+                                                    );
                                                 });
                                                 return;
                                             }

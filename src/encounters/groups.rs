@@ -3814,10 +3814,16 @@ fn members(
                     ui.max_rect().right()
                 };
                 let own_facts = facts.width().max(count.rect.right() - left);
+                // The line's own height, as before; its width ends at the column.
+                let region = egui::Rect::from_min_max(
+                    egui::pos2(ui.cursor().left(), ui.max_rect().top()),
+                    egui::pos2(end.max(ui.cursor().left()), ui.max_rect().bottom()),
+                );
                 let actions = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2((end - ui.cursor().left()).max(0.0), 0.0),
-                        egui::Layout::right_to_left(egui::Align::Center),
+                    .scope_builder(
+                        egui::UiBuilder::new()
+                            .max_rect(region)
+                            .layout(egui::Layout::right_to_left(egui::Align::Center)),
                         |ui| {
                             super::row_menu(ui, &name, |ui| {
                                 if super::menu_action(
