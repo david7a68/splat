@@ -1,4 +1,5 @@
 //! The same disk comparison for encounter, group and creature drafts.
+#![warn(deprecated)] // Its parent allows old message functions; this file uses none.
 use crate::{
     design::{
         self, Type, colors,
