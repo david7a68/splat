@@ -7092,23 +7092,21 @@ impl Encounters {
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
-        // FA9, FI9: in a wide window the name field ends at the roster column's edge and the
-        // header's actions at the Add participants column's edge, so neither stretches to the
-        // window's edge. The roster's edge is the one its pane drew last.
-        // The edges the panes drew last; with the panes as tabs, the header takes the line.
-        let edge = |pane: &str| {
-            ui.ctx()
-                .data(|data| data.get_temp::<f32>(pane_right_id(draft_ref.id, pane)))
-                .filter(|_| !compact)
-                .unwrap_or(f32::INFINITY)
-        };
-        let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
+        // FA9, FI9: in a wide window the name field ends at the roster column's edge, so it
+        // does not stretch to the window's edge. The roster's edge is the one its pane drew last;
+        // with the panes as tabs, the name takes the line.
+        let roster_right = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(pane_right_id(draft_ref.id, ROSTER_PANE)))
+            .filter(|_| !compact)
+            .unwrap_or(f32::INFINITY);
         let (back, ()) = head.show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                // X51, SB1: Save and Start keep their width on line one, and the name field takes
-                // the rest. The actions are measured, as they are drawn. They take a line of their
-                // own only when the saved name does not fit beside them: the saved name, not the
-                // typed one, so nothing moves while the DM types.
+            {
+                // Layout step 6 (`DraftHead`, I7; SL3): the group editor's rule. Save and Start
+                // keep their widest width and follow the name field `L` after it, never at the far
+                // edge of the Add participants column; when the name would be narrower than
+                // `NAME_LEAST` beside them, they take a line of their own at the text edge. The
+                // plan comes from the widths only, so nothing moves while the DM types.
                 let gap = ui.spacing().item_spacing.x;
                 let start_word = if unfinished.is_some() {
                     "Resume"
@@ -7143,103 +7141,99 @@ impl Encounters {
                     } else {
                         0.0
                     };
-                let saved_name =
-                    design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
-                // The field's margins are outside its desired width.
-                let rest =
-                    ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
-                let stack_actions = rest < saved_name.max(Density::Scan.control());
-                let width = if stack_actions {
-                    (ui.available_rect_before_wrap().width() - 2.0 * design::S)
-                        .max(Density::Scan.control())
-                } else {
-                    rest
-                }
-                // The field's margins are outside its desired width.
-                .min(
-                    (roster_right - ui.cursor().left() - 2.0 * design::S)
-                        .max(Density::Scan.control()),
+                let left = ui.max_rect().left();
+                let line = ui.max_rect().right() - left;
+                let plan = design::save_row::head_plan(
+                    ui,
+                    &design::save_row::HeadSpec {
+                        column: (roster_right - left).min(line),
+                        line,
+                        actions,
+                        row: line,
+                        reasons: &[],
+                    },
                 );
-                let response = name_field(ui, draft_ref, width);
-                design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
-                if std::mem::take(focus_name) {
-                    design::focus_and_select(ui, response.id, &draft_ref.name);
-                }
-                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    *focus_search_after_name = true;
-                }
-                let action_width = if stack_actions {
-                    ui.max_rect().width()
-                } else {
-                    ui.available_rect_before_wrap()
-                        .width()
-                        .min(header_right - ui.cursor().left())
-                        .max(0.0)
-                };
-                ui.allocate_ui_with_layout(
-                    egui::vec2(action_width, Density::Scan.control()),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        let start_blocked =
-                            roster_reason
+                let mut actions_ui = |ui: &mut egui::Ui, lead: f32, draft: &Draft| {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(lead + actions, Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            let start_blocked = roster_reason
                                 .as_deref()
                                 .or(empty_group.as_deref())
                                 .or(has_run
                                     .then_some(BLOCKED_BY_RUN)
                                     .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
                                     .or(loading.then_some("Still reading this campaign."))
-                                    .or(draft_ref
+                                    .or(draft
                                         .setup
                                         .roster
                                         .is_empty()
                                         .then_some("Add participants first.")));
-                        if unfinished.is_some() {
-                            row_menu(ui, &draft_ref.name, |ui| {
-                                start_another =
-                                    menu_action(ui, "Start another fight", start_blocked);
-                            });
-                        }
-                        let word = start_word;
-                        // Unsaved changes own the primary: Resume waits until they are saved or
-                        // discarded.
-                        run_it = if has_run || dirty {
-                            Action::secondary(word)
-                        } else {
-                            Action::primary(word)
-                        }
-                        .blocked(if unfinished.is_some() {
-                            has_run
-                                .then_some(BLOCKED_BY_RUN)
-                                .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                                .or(loading.then_some("Still reading this campaign."))
-                        } else {
-                            start_blocked
-                        })
-                        .hint(if unfinished.is_some() {
-                            "Save this encounter and resume its unfinished run."
-                        } else {
-                            "Save this encounter and start a run."
-                        })
-                        .show(ui)
-                        .clicked();
-                        if has_run {
-                            blocked_reason(ui, Some(BLOCKED_BY_RUN));
-                            design::gap(ui, design::Gap::L);
-                        }
-                        save = match state.save_weight() {
-                            design::save_row::SaveWeight::Primary => {
-                                Action::primary("Save encounter")
+                            if unfinished.is_some() {
+                                row_menu(ui, &draft.name, |ui| {
+                                    start_another =
+                                        menu_action(ui, "Start another fight", start_blocked);
+                                });
                             }
-                            design::save_row::SaveWeight::Secondary => {
-                                Action::secondary("Save encounter")
+                            let word = start_word;
+                            // Unsaved changes own the primary: Resume waits until they are saved or
+                            // discarded.
+                            run_it = if has_run || dirty {
+                                Action::secondary(word)
+                            } else {
+                                Action::primary(word)
                             }
-                        }
-                        .blocked(state.save_blocked())
-                        .show(ui)
-                        .clicked();
-                    },
-                );
-            });
+                            .blocked(if unfinished.is_some() {
+                                has_run
+                                    .then_some(BLOCKED_BY_RUN)
+                                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                                    .or(loading.then_some("Still reading this campaign."))
+                            } else {
+                                start_blocked
+                            })
+                            .hint(if unfinished.is_some() {
+                                "Save this encounter and resume its unfinished run."
+                            } else {
+                                "Save this encounter and start a run."
+                            })
+                            .show(ui)
+                            .clicked();
+                            if has_run {
+                                blocked_reason(ui, Some(BLOCKED_BY_RUN));
+                                design::gap(ui, design::Gap::L);
+                            }
+                            save = match state.save_weight() {
+                                design::save_row::SaveWeight::Primary => {
+                                    Action::primary("Save encounter")
+                                }
+                                design::save_row::SaveWeight::Secondary => {
+                                    Action::secondary("Save encounter")
+                                }
+                            }
+                            .blocked(state.save_blocked())
+                            .show(ui)
+                            .clicked();
+                        },
+                    );
+                };
+                ui.horizontal(|ui| {
+                    let response = name_field(ui, draft_ref, plan.name_width);
+                    design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
+                    if std::mem::take(focus_name) {
+                        design::focus_and_select(ui, response.id, &draft_ref.name);
+                    }
+                    if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        *focus_search_after_name = true;
+                    }
+                    if plan.actions_beside {
+                        actions_ui(ui, design::L - gap, draft_ref);
+                    }
+                });
+                if !plan.actions_beside {
+                    ui.horizontal(|ui| actions_ui(ui, 0.0, draft_ref));
+                }
+            }
         });
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
@@ -7535,26 +7529,19 @@ impl Encounters {
                     top: design::S as i8,
                     bottom: 0,
                 }))
-                .show_inside(ui, |ui| {
-                    // The header's actions end here (FA9).
-                    let right = ui.max_rect().right();
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(pane_right_id(draft.id, ADD_PANE), right)
-                    });
-                    match creature {
-                        Some(editor) => {
-                            creature_step = Self::creature_pane(ui, editor, &active.path, save_key);
-                        }
-                        None => Self::add_pane(
-                            ui,
-                            draft,
-                            snapshot,
-                            search,
-                            focus_search,
-                            (peek, &separated),
-                            compact,
-                        ),
+                .show_inside(ui, |ui| match creature {
+                    Some(editor) => {
+                        creature_step = Self::creature_pane(ui, editor, &active.path, save_key);
                     }
+                    None => Self::add_pane(
+                        ui,
+                        draft,
+                        snapshot,
+                        search,
+                        focus_search,
+                        (peek, &separated),
+                        compact,
+                    ),
                 });
                 // A panel clips to its own rect. It starts `S` before the roster's text edge, so
                 // a line-start quiet action there keeps its whole press area.

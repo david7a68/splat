@@ -523,6 +523,47 @@ fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
     );
 }
 
+/// Layout step 6 (I8; SL4, AL9): the tops of a group editor's head and first fields, each by the
+/// start of its accessible name, while in view: the name, `Default side`, `Belongs to`, the
+/// creature search (not on the Members tab at 960) and the first member's menu. `None` where it
+/// is not shown.
+fn group_head_tops(d: &Driver<'_>) -> Vec<(&'static str, Option<f32>)> {
+    let nodes = d.nodes();
+    [
+        "Group name: ",
+        "Default side",
+        "Belongs to",
+        "Find a creature or party member",
+        "More actions for ",
+    ]
+    .into_iter()
+    .map(|prefix| {
+        let top = nodes
+            .iter()
+            .find(|node| node.name.starts_with(prefix) && node.in_view())
+            .map(|node| node.rect.top());
+        (prefix, top)
+    })
+    .collect()
+}
+
+/// Whether two `group_head_tops` readings agree: every field shown in `clean` (the name,
+/// `Default side` and `Belongs to` always) is at the same top (±0.5 px) in `changed`.
+fn group_head_still(
+    clean: &[(&'static str, Option<f32>)],
+    changed: &[(&'static str, Option<f32>)],
+) -> bool {
+    let required = ["Group name: ", "Default side", "Belongs to"];
+    clean
+        .iter()
+        .zip(changed)
+        .all(|((name, before), (_, after))| match (before, after) {
+            (Some(before), Some(after)) => (before - after).abs() <= 0.5,
+            (None, None) => !required.contains(name),
+            _ => false,
+        })
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -19702,6 +19743,9 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
+        // Layout step 6 (SL4, AL9): the clean editor's head and first fields, for the dirty
+        // editor of `group-member-removed-with-undo`.
+        let clean_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
         // R38 (structural B4): the back line, its word whole at the text edge, the name below.
         let faults = back_line_faults(d, "Encounters", "Back to encounters", "Group name", None);
         d.observe(
@@ -20203,10 +20247,9 @@ pub mod encounter_groups {
             );
         }
         // iter-27-B FB7: Save group is on the title line, after the name, as Save encounter is;
-        // the save row below keeps Unsaved and Discard. iter-28-B FB7 (closure): it ends at the
-        // editor's right edge, above the Add creatures column, as Save encounter does: the
-        // search field's right edge. (iter-24-B AK1 put it at the members column's edge; the
-        // round 27 contract, one place in both editors, replaces that.)
+        // the save row below keeps Unsaved and Discard. Layout step 6 (I7, the shared draft
+        // head) replaces round 28's far-edge place: Save follows the name field `L` after it, in
+        // both editors.
         for size in [SMALL, DEFAULT, LARGE] {
             let (save, edge, name, unsaved) = d.at_size(size, |d| {
                 let save = d.place_of(SAVE_GROUP);
@@ -20230,16 +20273,18 @@ pub mod encounter_groups {
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
-            // At the editor's content edge, within 0.5 px, as Save encounter ends there; and
-            // that edge is the page's (the window less its `M` margin), so a Save that pushes
-            // the editor wider fails too.
-            let page = size.0 - crate::design::M;
+            // Layout step 6 (I7; SL3, AL5): Save group starts `L` after the name field (±1 px),
+            // never at the editor's far edge above the Add creatures column; at 1920 it ends
+            // well before that edge.
             d.observe(
                 "iter-28-B-FB7",
-                save.zip(edge).is_some_and(|(save, edge)| {
-                    (save.right() - edge).abs() <= 0.5 && (edge - page).abs() <= 0.5
+                save.zip(name).zip(edge).is_some_and(|((save, name), edge)| {
+                    (save.left() - (name.right() + crate::design::L)).abs() <= 1.0
+                        && (size.0 < 1900.0 || save.right() < edge - crate::design::XXL)
                 }),
-                format!("At {size:?}: Save group {save:?}, the editor's content edge {edge:?}"),
+                format!(
+                    "At {size:?}: Save group {save:?}, the name field {name:?}, the editor's content edge {edge:?}"
+                ),
             );
             d.observe(
                 "iter-27-B-FB7",
@@ -20252,6 +20297,19 @@ pub mod encounter_groups {
                 format!("At {size:?}: Save group {save:?} on the name's line {name:?}, above Unsaved {unsaved:?}"),
             );
         }
+        // Layout step 6 (SL4, AL9): the dirty state (Discard, the switch reason) moves no field
+        // of the head: the name, Default side, Belongs to and the search keep their tops at 960,
+        // 1200 and 1920 (the first member is the removed one, so it is not compared).
+        let dirty_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
+        let without_member = |tops: &[(&'static str, Option<f32>)]| tops[..4].to_vec();
+        d.observe(
+            "l6-SL4-AL9",
+            d.visible_text("Save or discard to switch campaign.")
+                && clean_head.iter().zip(&dirty_head).all(|(clean, dirty)| {
+                    group_head_still(&without_member(clean), &without_member(dirty))
+                }),
+            format!("Clean {clean_head:?}, dirty {dirty_head:?}"),
+        );
         d.state("group-member-removed-with-undo", Sizes::All);
         d.click("Undo remove member");
         d.expect(CHANGES);
@@ -24474,22 +24532,20 @@ pub mod session_plan_groups {
         // moves. A proof aside: Discard puts the clean group back.
         d.aside(|d| {
             let sizes = [SMALL, DEFAULT, LARGE];
-            // The first member's menu: in the members column, or on the Members tab at 960.
-            let member = |d: &Driver<'_>| {
-                d.nodes()
-                    .into_iter()
-                    .find(|node| node.name.starts_with("More actions for ") && node.in_view())
-                    .map(|node| node.rect.top())
-            };
-            let clean = sizes.map(|size| d.at_size(size, member));
+            // Layout step 6 (I8): the name, Default side, Belongs to, the search and the first
+            // member's menu (in the members column, or on the Members tab at 960) keep their tops.
+            let clean = sizes.map(|size| d.at_size(size, group_head_tops));
             d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
-            let changed = sizes.map(|size| d.at_size(size, member));
+            let changed = sizes.map(|size| d.at_size(size, group_head_tops));
             d.observe(
                 "iter-25-B-FK1",
                 d.has_containing("Save or discard to switch campaign.")
-                    && clean.iter().all(Option::is_some)
-                    && clean == changed,
-                format!("First member menu top, clean {clean:?}, changed {changed:?}"),
+                    && clean.iter().all(|tops| tops[4].1.is_some())
+                    && clean
+                        .iter()
+                        .zip(&changed)
+                        .all(|(clean, changed)| group_head_still(clean, changed)),
+                format!("Head and first fields' tops, clean {clean:?}, changed {changed:?}"),
             );
             d.click("Discard");
             d.expect(&format!("Group name: {GROUP_RIVALS}"));
@@ -27429,9 +27485,11 @@ pub mod session_plan {
                 format!("At {size:?}: Name {name:?}, Save creature {save:?}"),
             );
         }
-        // iter-26-B FA9, FI9: in a wide window the encounter's name field ends at the roster
-        // column's edge (where its rows' rules end), and the header's last action at the Add
-        // column's edge, where Save creature ends; at 960 the panes are tabs.
+        // iter-26-B FA9, FI9: in a wide window the encounter's name field ends no further than the
+        // roster column's edge (where its rows' rules end); at 960 the panes are tabs. Layout
+        // step 6 (I7, the shared draft head) replaces the old far-edge place of the actions: the
+        // name is no wider than `FORM_WIDTH` (it ends at the roster's edge when that is within
+        // `XL`), and Save encounter starts `L` after it.
         for size in [DEFAULT, LARGE] {
             let (name, rule, start, creature) = d.at_size(size, |d| {
                 let name = d
@@ -27453,19 +27511,22 @@ pub mod session_plan {
                 (
                     name,
                     rule,
-                    d.place_of("Start fight"),
+                    d.place_of("Save encounter"),
                     d.place_of("Save creature"),
                 )
             });
+            let form = crate::design::FORM_WIDTH + 2.0 * crate::design::S;
             d.observe(
                 "iter-26-B-FA9",
-                name.zip(rule)
-                    .is_some_and(|(name, rule)| (name.right() - rule).abs() <= 1.0)
-                    && start.zip(creature).is_some_and(|(start, creature)| {
-                        (start.right() - creature.right()).abs() <= 1.0
-                    }),
+                name.zip(rule).is_some_and(|(name, rule)| {
+                    name.right() <= rule + 1.0
+                        && ((name.right() - rule).abs() <= 1.0
+                            || (name.width() - form).abs() <= 1.0)
+                }) && start.zip(name).is_some_and(|(save, name)| {
+                    (save.left() - (name.right() + crate::design::L)).abs() <= 1.5
+                }) && creature.is_some(),
                 format!(
-                    "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Start fight {start:?}, Save creature {creature:?}"
+                    "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Save encounter {start:?}, Save creature {creature:?}"
                 ),
             );
         }

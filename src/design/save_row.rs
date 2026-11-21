@@ -634,6 +634,117 @@ impl<'a> DraftState<'a> {
     }
 }
 
+/// Layout step 6 (`DraftHead`): what a draft editor's head is given to plan from. Widths only,
+/// never the draft's state: the plan is the same in every state the draft can reach.
+#[derive(Clone, Copy, Debug)]
+pub struct HeadSpec<'a> {
+    /// The room from the name field's start to its owning column's edge.
+    pub column: f32,
+    /// The room from the name field's start to the end of the title line.
+    pub line: f32,
+    /// The title line's actions after the name (Save in its widest weight, and any others), with
+    /// the gaps between them.
+    pub actions: f32,
+    /// The save row's room, from its start to its reasons' edge, less anything that stands at its
+    /// end (a run's state).
+    pub row: f32,
+    /// Each reason the save row can show, in its longest form, in row order (Save's own reason
+    /// first, then the campaign-switch reason).
+    pub reasons: &'a [&'a str],
+}
+
+/// Where a draft editor's head puts its parts (layout step 6, I7 and I8), from [`head_plan`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct HeadPlan {
+    /// The name field's width; its margins (`S` each side) are outside it.
+    pub name_width: f32,
+    /// The actions stand on the name's line, `L` after the field; else on a line of their own
+    /// under it, from the text edge.
+    pub actions_beside: bool,
+    /// For each reason of [`HeadSpec::reasons`]: on the save row, or on a line of its own under
+    /// it, kept in every state.
+    pub on_row: Vec<bool>,
+}
+
+/// The narrowest a name field gets so that the actions stand beside it; narrower, the actions
+/// take their own line and the name its full width.
+pub const NAME_LEAST: f32 = 160.0;
+
+/// The widest state word the save row can show, with its icon.
+fn widest_word(ui: &Ui) -> f32 {
+    let small = super::Type::Small.font(ui);
+    [
+        SaveWord::Invalid(InvalidCause::Incomplete),
+        SaveWord::Invalid(InvalidCause::Refused),
+        SaveWord::Invalid(InvalidCause::Unreadable),
+        SaveWord::New,
+        SaveWord::ChangedOnDisk,
+        SaveWord::NotSaved,
+        SaveWord::Unsaved,
+        SaveWord::Saved,
+        SaveWord::NoChanges,
+    ]
+    .into_iter()
+    .map(|word| {
+        let status = word.status();
+        super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
+    })
+    .fold(0.0, f32::max)
+}
+
+/// How wide a draft's name field may be, given the room to its column's edge (its margins
+/// outside). It ends at `FORM_WIDTH` or at the column, whichever comes first. Within `XL` of the
+/// column it ends at the column, so the two edges are the same or clearly apart.
+pub fn name_width(column: f32) -> f32 {
+    use super::tokens::{FORM_WIDTH, XL};
+    if column - FORM_WIDTH < XL {
+        column
+    } else {
+        FORM_WIDTH
+    }
+}
+
+/// A draft editor's head, planned before it paints from the widths and fonts only (layout step
+/// 6). The name field is no wider than `FORM_WIDTH`, and ends at its column's edge when that is
+/// within `XL`; the actions stand `L` after it while the name keeps at least `NAME_LEAST`, else
+/// on their own line. Each reason takes the save row while it fits beside the widest state word
+/// and `Discard`, whether or not either shows now: so no state the draft reaches (clean, dirty,
+/// refused, new) moves a reason, the row's height or the first field.
+pub fn head_plan(ui: &Ui, spec: &HeadSpec<'_>) -> HeadPlan {
+    use super::tokens::{L, S};
+    let gap = ui.spacing().item_spacing.x;
+    let margins = 2.0 * S;
+    let least = Density::Scan.control();
+    let column = (spec.column - margins).max(least);
+    let full = name_width(column);
+    let beside = spec.line - margins - L - spec.actions;
+    let (name_width, actions_beside) = if beside >= full.min(NAME_LEAST) {
+        (full.min(beside).max(least), true)
+    } else {
+        (full, false)
+    };
+    let small = super::Type::Small.font(ui);
+    let mut room =
+        spec.row - widest_word(ui) - Action::quiet("Discard").natural_width(ui) - 2.0 * gap;
+    let on_row = spec
+        .reasons
+        .iter()
+        .map(|words| {
+            let width = super::number_width(ui, words, &small) + gap;
+            let fits = width <= room;
+            if fits {
+                room -= width;
+            }
+            fits
+        })
+        .collect();
+    HeadPlan {
+        name_width,
+        actions_beside,
+        on_row,
+    }
+}
+
 /// What the DM pressed in a save row.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[must_use]
@@ -898,6 +1009,75 @@ mod tests {
         assert!(
             forms.len() >= 2,
             "the sweep reached the slot under the row: {forms:?}"
+        );
+        // Layout step 6 (`head_plan`, I8; SL4): a draft head's reasons are planned for the
+        // complete state set. At every width, each state the draft reaches (clean, new and empty,
+        // dirty, refused, just saved) draws its word, its Discard and every reason the plan puts
+        // on the row in its longest form, and the row stays inside its room: so a state change
+        // never pushes a reason off the row, and the line count under it never changes.
+        let reasons = ["Add a creature first.", SAVE_OR_DISCARD_TO_SWITCH];
+        let head_states = [
+            DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft).locks_campaign(),
+            DraftState::new(DraftOrigin::New, Changed::Yes, Primary::Draft)
+                .locks_campaign()
+                .check(Diagnosis::incomplete("Add a creature first.")),
+            DraftState::new(DraftOrigin::Saved, Changed::Yes, Primary::Draft).locks_campaign(),
+            DraftState::new(DraftOrigin::Saved, Changed::Yes, Primary::Draft)
+                .locks_campaign()
+                .check(Diagnosis::refused("Bad id.")),
+            DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft)
+                .locks_campaign()
+                .just_saved(),
+        ];
+        let mut placed = std::collections::BTreeSet::new();
+        for width in (240..=900).step_by(4) {
+            let width = width as f32;
+            for state in &head_states {
+                let mut right = 0.0;
+                let mut plan = None;
+                let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let rect =
+                            egui::Rect::from_min_size(ui.cursor().min, egui::vec2(width, 1_000.0));
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                            let head = head_plan(
+                                ui,
+                                &HeadSpec {
+                                    column: width,
+                                    line: width,
+                                    actions: 120.0,
+                                    row: width,
+                                    reasons: &reasons,
+                                },
+                            );
+                            let row = ui.horizontal(|ui| {
+                                status(ui, state.status());
+                                if state.discard_shown() {
+                                    let _ = Action::quiet("Discard").show(ui);
+                                }
+                                for (words, on_row) in reasons.iter().zip(&head.on_row) {
+                                    if *on_row {
+                                        super::super::blocked_reason(ui, Some(words));
+                                    }
+                                }
+                            });
+                            right = row.response.rect.right() - rect.left();
+                            plan = Some(head);
+                        });
+                    });
+                });
+                let plan = plan.expect("the head was planned");
+                placed.insert(plan.on_row.clone());
+                assert!(
+                    right <= width + 0.5,
+                    "at {width} the row of {:?} is {right} wide, past its room: {plan:?}",
+                    state.word()
+                );
+            }
+        }
+        assert!(
+            placed.len() >= 2,
+            "the sweep reached a reason under the row: {placed:?}"
         );
     }
 

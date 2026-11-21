@@ -2822,56 +2822,43 @@ impl Encounters {
 
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
-        let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
         let (mut save, mut discard) = (false, false);
         let mut name_right = f32::INFINITY;
-        // AK1, AB2: the header is one block that ends where the members column ends. Save group
-        // sits at that edge on the save row, above the member actions and beside the save state
-        // and Discard, never across the Add creatures column. The name keeps its measure, so it
-        // still ends with `Belongs to` and, in a narrow column, at the column's edge. Before the
-        // column is first drawn (and in the compact Add pane), the page's edge stands in for it.
-        let block_right = column_right.map_or(ui.max_rect().right(), |right| {
-            right.min(ui.max_rect().right())
-        });
-        // The save row's reasons are measured to one edge on both tabs of the compact editor
-        // (Astra, 386): the members column's width as `members_pane` gives it, which the Add
-        // creatures tab does not draw. So a reason keeps its place, and the row its height,
-        // when the DM changes tab.
-        let reasons_right = if compact {
-            ui.max_rect().left()
-                + (ui.available_width() - ui.spacing().scroll.allocated_width())
-                    .clamp(0.0, design::LIST_MEASURE)
-        } else {
-            block_right
-        };
-        // FB7: Save group is on the title line at the editor's right edge, above the Add
-        // creatures column, where Save encounter is in the encounter editor (round 28: one place
-        // in both editors). The name and Belongs to keep the block's edge. The save row below
-        // keeps the state, Discard and reasons.
-        let title_right = ui.max_rect().right();
+        // Layout step 6 (`DraftHead`, I7, I8): one plan for the head, made before it paints from
+        // the widths only. The members column's edge comes from the room and the widths the body
+        // draws its columns with (`members_edge`), not from an older frame: the name field ends
+        // at that column (with `Belongs to`) or at `FORM_WIDTH`; Save group follows it `L` after,
+        // or takes its own line; the save row's reasons are measured to the same edge, beside the
+        // widest state word and Discard in every state, so a state change moves no field (SL4).
+        let members_right = members_edge(ui, compact);
+        let left = ui.max_rect().left();
         // Save keeps one width in both weights, so its left edge does not move when a press
-        // changes its weight (G1b): it ends at the editor's right edge.
+        // changes its weight (G1b).
         let save_width = Action::primary("Save group")
             .natural_width(ui)
             .max(Action::secondary("Save group").natural_width(ui))
             .ceil();
-        let button = match state.save_weight() {
-            design::save_row::SaveWeight::Primary => Action::primary("Save group"),
-            design::save_row::SaveWeight::Secondary => Action::secondary("Save group"),
-        }
-        .min_width(save_width)
-        .blocked(state.save_blocked());
+        let plan = design::save_row::head_plan(
+            ui,
+            &design::save_row::HeadSpec {
+                column: members_right - left,
+                line: ui.max_rect().right() - left,
+                actions: save_width,
+                row: members_right - left,
+                reasons: &[EMPTY_REASON, design::save_row::SAVE_OR_DISCARD_TO_SWITCH],
+            },
+        );
+        let button = || {
+            match state.save_weight() {
+                design::save_row::SaveWeight::Primary => Action::primary("Save group"),
+                design::save_row::SaveWeight::Secondary => Action::secondary("Save group"),
+            }
+            .min_width(save_width)
+            .blocked(state.save_blocked())
+        };
         let (back, ()) = head.show(ui, |ui| {
             ui.horizontal(|ui| {
-                let gap = ui.spacing().item_spacing.x;
-                let room = (block_right.min(title_right - button.natural_width(ui) - gap)
-                    - ui.cursor().left())
-                .min(ui.available_width());
-                let width = (room - 2.0 * design::S).max(Density::Scan.control());
-                let column = column_right.map_or(f32::INFINITY, |right| {
-                    right - ui.cursor().left() - 2.0 * design::S
-                });
-                let response = name_field(ui, draft, width.min(name_width(column)));
+                let response = name_field(ui, draft, plan.name_width);
                 design::named(ui, &response, &format!("Group name: {}", draft.name));
                 if response.changed() {
                     draft.touch();
@@ -2881,22 +2868,23 @@ impl Encounters {
                 if focus_name {
                     design::focus_and_select(ui, response.id, &draft.name);
                 }
-                ui.allocate_ui_with_layout(
-                    egui::vec2(
-                        (title_right - ui.cursor().left()).max(0.0),
-                        Density::Scan.control(),
-                    ),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| save = button.show(ui).clicked(),
-                );
+                if plan.actions_beside {
+                    // Save starts `L` after the field.
+                    let gap = ui.spacing().item_spacing.x;
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(design::L - gap + save_width, Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| save = button().show(ui).clicked(),
+                    );
+                }
             });
+            if !plan.actions_beside {
+                ui.horizontal(|ui| save = button().show(ui).clicked());
+            }
         });
-        // The save row: the state and Discard at its start, Save group at the block's edge. A
-        // reason that has no room on the row takes its own line below it. AK1, FK1: each reason
-        // has one place, chosen as if both were shown, and the lines below are reserved, so a
-        // reason that comes or goes moves no field.
-        // Each reason: the words its place is measured by (the longest form), and the words it
-        // shows now, if any.
+        // The save row: the state and Discard at its start. A reason the plan does not put on the
+        // row takes its own line below it, kept in every state (AK1, FK1), so a reason that comes
+        // or goes moves no field.
         // Each line below the row: the words it is measured by, the words it shows now, and
         // whether it is the campaign-switch reason's line (G122, below).
         let mut below: Vec<(&'static str, Option<&'static str>, bool)> = Vec::new();
@@ -2919,39 +2907,27 @@ impl Encounters {
         // The switch reason's place while `gone`, and its words, drawn after the body.
         let mut gone_place: Option<egui::Rect> = None;
         let mut deferred_switch: Option<&'static str> = None;
+        let reasons_right = members_right;
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
             discard =
                 super::editor_save_state(ui, state.word().status(), state.discard_shown(), None);
-            let gap = ui.spacing().item_spacing.x;
-            let font = Type::Small.font(ui);
-            // R37: `New` is shorter than the words it turns into (`Unsaved`, or `Invalid`), so
-            // the reasons' places are measured as if the word were the wider of those: the first
-            // member then moves no reason and no field.
-            let word_width =
-                |word: design::save_row::SaveWord| design::number_width(ui, word.words(), &font);
-            let widest = word_width(design::save_row::SaveWord::Unsaved).max(word_width(
-                design::save_row::SaveWord::Invalid(design::save_row::InvalidCause::Refused),
-            ));
-            let mut room =
-                reasons_right - ui.cursor().left() - (widest - word_width(state.word())).max(0.0);
-            // Save's own reason first: it stays at the row's end, under Save, while there is
-            // room. A dirty group blocks the campaign switch wherever it is open, so it says so,
-            // as the encounter editor does.
-            let mut beside = |measure: &'static str, shown: Option<&'static str>, switch: bool| {
-                let width = design::number_width(ui, measure, &font) + gap;
-                if width <= room {
-                    room -= width;
-                    (shown, true)
-                } else {
-                    below.push((measure, shown, switch));
-                    (None, false)
-                }
-            };
-            let (empty_reason, _) = beside(EMPTY_REASON, empty.then_some(EMPTY_REASON), false);
-            // FB6: while Save is blocked, Discard is the one way out, so the lock says only that
-            // (`DraftState::lock_reason`). Its place is measured by the longer form.
-            let (switch, on_row) = beside(
+            // Save's own reason first, at the row's end, then the campaign-switch reason: each in
+            // its planned place. FB6: while Save is blocked, Discard is the one way out, so the
+            // lock says only that (`DraftState::lock_reason`); its place is measured by the
+            // longer form.
+            let mut place =
+                |at: usize, measure: &'static str, shown: Option<&'static str>, switch| {
+                    if plan.on_row[at] {
+                        (shown, true)
+                    } else {
+                        below.push((measure, shown, switch));
+                        (None, false)
+                    }
+                };
+            let (empty_reason, _) = place(0, EMPTY_REASON, empty.then_some(EMPTY_REASON), false);
+            let (switch, on_row) = place(
+                1,
                 design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
                 state.lock_reason(),
                 true,
@@ -3230,22 +3206,15 @@ impl Encounters {
                 EditorPane::Roster => {
                     return members_pane(ui, draft, snapshot, expanded, name_right, refused);
                 }
-                EditorPane::Add => {
-                    // No members column is drawn, so the name keeps no edge from an older one.
-                    let id = column_right_id(&draft.path);
-                    if ui.data_mut(|data| data.remove_temp::<f32>(id)).is_some() {
-                        ui.ctx().request_discard("The members column is not shown");
-                    }
-                    add_pane(
-                        ui,
-                        draft,
-                        snapshot,
-                        search,
-                        focus_search,
-                        (peek, separated),
-                        true,
-                    )
-                }
+                EditorPane::Add => add_pane(
+                    ui,
+                    draft,
+                    snapshot,
+                    search,
+                    focus_search,
+                    (peek, separated),
+                    true,
+                ),
             }
             return false;
         }
@@ -3363,17 +3332,6 @@ fn add_pane(
     }
 }
 
-/// How wide a group's name may be, given the room to the members column's right edge. It ends at
-/// FORM_WIDTH or at the column, whichever comes first. Within `XL` of the column it ends at the
-/// column, so the two edges are the same or clearly apart.
-fn name_width(column: f32) -> f32 {
-    if column - design::FORM_WIDTH < design::XL {
-        column
-    } else {
-        design::FORM_WIDTH
-    }
-}
-
 /// The key of a member's open changes form and of its fields: its group and its identity in the
 /// draft, never its place among the members.
 fn member_key(path: &str, member: &MemberDraft) -> String {
@@ -3381,8 +3339,23 @@ fn member_key(path: &str, member: &MemberDraft) -> String {
 }
 
 /// Where a group editor's members column ended in the last pass, for the name field above it.
-fn column_right_id(path: &str) -> egui::Id {
-    egui::Id::new(("group_column_right", path))
+/// Layout step 6: where the members column ends, from the room the editor has and the widths its
+/// body draws the columns with (`group_editor_body`: the Add creatures panel, then the members at
+/// most `ROSTER_MAX_WIDTH`; `members_pane`: the scroll bar's lane kept, at most `LIST_MEASURE`).
+/// The head asks before it paints, so its name field and reasons end at the column's edge in the
+/// same pass, with no edge kept from an older one.
+fn members_edge(ui: &egui::Ui, compact: bool) -> f32 {
+    let room = ui.available_width();
+    let members = if compact {
+        room
+    } else {
+        let add = design::side_panel_width(ui.ctx().content_rect().width())
+            .max(room - ROSTER_MAX_WIDTH)
+            .min(ADD_PANE_MAX_WIDTH);
+        (room - add).min(ROSTER_MAX_WIDTH)
+    };
+    ui.max_rect().left()
+        + (members - ui.spacing().scroll.allocated_width()).clamp(0.0, design::LIST_MEASURE)
 }
 
 #[allow(
@@ -3409,19 +3382,11 @@ fn members_pane(
             let mut clip = ui.clip_rect();
             clip.min.y = clip.min.y.max(top);
             ui.set_clip_rect(clip);
-            let column = ui.scope(|ui| {
+            // Its width is the one `members_edge` gives the head before it paints.
+            ui.scope(|ui| {
                 ui.set_width(width.min(ui.available_width()));
                 gone_shown = group_fields(ui, draft, snapshot, expanded, None, name_right, refused);
             });
-            // The name field is drawn before this column; when the column moves (a resize, a
-            // scroll bar), draw the pass again so that both end at the same edge.
-            let right = column.response.rect.right();
-            let id = column_right_id(&draft.path);
-            if ui.data(|data| data.get_temp::<f32>(id)) != Some(right) {
-                ui.data_mut(|data| data.insert_temp(id, right));
-                ui.ctx()
-                    .request_discard("The group name field ends at the members column");
-            }
         });
     gone_shown
 }
@@ -5931,7 +5896,9 @@ mod tests {
 
     #[test]
     fn a_group_name_ends_at_its_column_or_clearly_before_it() {
-        // iter-19-B-FD3: a column just past FORM_WIDTH would give a near miss.
+        // iter-19-B-FD3: a column just past FORM_WIDTH would give a near miss. Layout step 6: the
+        // rule is the shared draft head's (`save_row::name_width`), for both editors.
+        use design::save_row::name_width;
         let near = design::FORM_WIDTH + design::XL - 1.0;
         assert_eq!(
             name_width(near),
