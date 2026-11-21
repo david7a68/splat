@@ -2691,8 +2691,8 @@ Continue processing are primary when no open run owns Next turn and no other pri
 Only the first recording that needs processing owns that primary action; later rows use secondary actions.
 An enabled recovery action in a row or bottom banner takes priority over processing. A visible row's
 recording recovery also takes priority over a processing retry in another session's banner. A blocked
-banner action does not take primary from an enabled row. A blocked banner `Continue processing` shows its reason
-beside it in `Small` text, then an `L` gap to the next choice. With the audio removed, the banner drops the
+banner action does not take primary from an enabled row. A blocked banner `Continue processing` says why under
+the alert, as every locked choice does (the bottom banner above). With the audio removed, the banner drops the
 failure's advice to process again, so the words and the blocked control agree.
 While recording consent is open, Start recording owns primary.
 They are secondary while a run is open. An unresolved recording recovery keeps Choose an input or Record

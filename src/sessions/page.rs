@@ -2601,7 +2601,8 @@ impl Sessions {
         self.job_done = false;
         self.job_warned = false;
         // A folder move's result stays its campaign's (`folder_moves`): this campaign's scope
-        // hides it, and coming back shows it again. So does the page's notice (`notices`).
+        // hides it, and coming back shows it again. The page's notice does not: the change
+        // ends it (`end_notice` above), and coming back does not bring it back.
         self.select(self.current().or(self.notes.first().map(|note| note.id)));
     }
 
