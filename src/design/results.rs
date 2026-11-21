@@ -1140,7 +1140,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
