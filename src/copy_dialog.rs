@@ -11,6 +11,7 @@ use std::{path::PathBuf, sync::mpsc};
 use uuid::Uuid;
 
 const COPY_FOLDER: design::FieldId = crate::field_id!("copy_folder").once(design::Once::CreateForm);
+const COPY_NAME: design::FieldId = crate::field_id!("copy_name").once(design::Once::CreateForm);
 const COPY_DESTINATION: design::FieldId =
     crate::field_id!("copy_destination").once(design::Once::CreateForm);
 
@@ -159,15 +160,18 @@ impl CopyDialog {
                 });
             }
             if let Some(error) = &self.error {
-                design::message(
-                    ui,
-                    if error.contains("which is in this campaign only") {
-                        Tone::Warning
-                    } else {
-                        Tone::Error
-                    },
-                    error,
-                );
+                // A typed message in the dialog's body (M20): a copy that needs an entry of this
+                // campaign only waits for the DM (the warning tone); any other failure is an
+                // error.
+                let fault = if error.contains("which is in this campaign only") {
+                    crate::campaigns::NotDone::needs_fixing(error)
+                } else {
+                    crate::campaigns::NotDone::words(error)
+                };
+                let _ = design::outcome::BodyMessage::<()>::from(
+                    design::outcome::FaultMessage::new(&fault),
+                )
+                .show(ui);
             }
             let destinations: Vec<(bool, Uuid, String, PathBuf, Option<Campaign>)> = campaigns
                 .modules()
@@ -206,7 +210,8 @@ impl CopyDialog {
                         .show(ui, &mut self.destination);
                 }
             });
-            let response = design::text_field(ui, "Copy name", &mut self.name, None, None);
+            let response =
+                design::labelled_field(ui, COPY_NAME, "Copy name", &mut self.name, None, None);
             if std::mem::take(&mut self.focus_name) {
                 design::focus_and_select(ui, response.id, &self.name);
             }
@@ -373,9 +378,11 @@ impl CopyDialog {
                         let height =
                             (ui.available_height() - design::Density::Read.control() - design::L)
                                 .clamp(design::XXL, design::XXL * 5.0);
-                        egui::ScrollArea::both()
+                        design::ScrollColumn::new("copy_review_markdown")
+                            .sideways_too()
+                            .full_width()
+                            .fit_height()
                             .max_height(height)
-                            .auto_shrink([false, true])
                             .show(ui, |ui| {
                                 ui.monospace(&plan.text);
                             });

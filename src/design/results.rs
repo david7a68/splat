@@ -1076,7 +1076,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "selector",
             &[Ban::Layout(1), Ban::Extras(2)],
         ),
-        ("src/copy_dialog.rs", "show", &[Ban::Layout(2)]),
+        // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
+        // `FaultMessage`) in place of an untyped `design::message`.
+        ("src/copy_dialog.rs", "show", &[Ban::Layout(2), Ban::Body]),
         ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
         ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
         (

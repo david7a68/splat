@@ -61,17 +61,33 @@ impl crate::design::results::Kept for FormKept {
 
 /// A failed act of the Settings and Link and folder footers (a campaign's, the account's, D&D
 /// Beyond's), in its own words: the check's or the system's.
-pub struct NotDone(crate::design::outcome::Sentence);
+pub struct NotDone(
+    crate::design::outcome::Sentence,
+    crate::design::outcome::Severity,
+);
 
 impl NotDone {
+    /// A failed act: the error tone.
     pub fn words(words: &str) -> Self {
-        Self(footer_words(words))
+        Self(
+            footer_words(words),
+            crate::design::outcome::Severity::NotSaved,
+        )
+    }
+
+    /// An act that waits for the DM to fix something first (a copy that needs an entry of
+    /// this campaign only): the warning tone.
+    pub fn needs_fixing(words: &str) -> Self {
+        Self(
+            footer_words(words),
+            crate::design::outcome::Severity::NeedsFixing,
+        )
     }
 }
 
 impl crate::design::outcome::Fault for NotDone {
     fn severity(&self) -> crate::design::outcome::Severity {
-        crate::design::outcome::Severity::NotSaved
+        self.1
     }
     fn cause(&self) -> crate::design::outcome::Sentence {
         self.0.clone()
