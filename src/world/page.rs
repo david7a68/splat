@@ -24,7 +24,7 @@ const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
 const CHECK_ROWS: usize = 40;
 /// The line above the World card while Lookup holds a second unsaved NPC (round 26 FB8).
-pub(crate) fn kept_in_lookup(lookup: &str, card: &str) -> String {
+pub fn kept_in_lookup(lookup: &str, card: &str) -> String {
     format!("{lookup} is not saved. It is in Lookup. Save or discard {card} to show {lookup} here.")
 }
 
@@ -551,7 +551,7 @@ impl WorldPage {
         ui: &mut egui::Ui,
         index: Option<&Arc<ContentIndex>>,
         campaign: &Campaign,
-        trackers: &mut crate::trackers::Trackers,
+        trackers: &mut dyn super::TrackerUi,
     ) {
         self.set_campaign(campaign.id);
         // Lookup's reason line ends with the NPC it explains.
@@ -879,13 +879,7 @@ impl WorldPage {
                 self.reader
                     .footer(&frame, &mut messages, item, index, Some(campaign));
                 self.page_messages(&frame, &mut messages, Some(item.entry.id));
-                crate::trackers::history::footer(
-                    trackers,
-                    item.entry.id,
-                    &mut messages,
-                    super::said,
-                    super::FooterAct::Trackers,
-                );
+                trackers.history_footer(item.entry.id, &mut messages);
                 // As in Library, a wide table may use the pane; prose keeps its measure.
                 // The reader pane is always the editor form (P2): an edit form's text draws in its
                 // region and gives way, so Save stays in view under a long note from the first
@@ -1006,7 +1000,7 @@ impl WorldPage {
         press: crate::design::outcome::Press<super::FooterAct>,
         item: Option<&crate::lookup::Item>,
         campaign: &Campaign,
-        trackers: &mut crate::trackers::Trackers,
+        trackers: &mut dyn super::TrackerUi,
     ) -> Option<Nav> {
         match press.id {
             super::FooterAct::Page => {
@@ -1878,20 +1872,20 @@ fn question_row(
 /// state: the act never looks for another line that reads the same.
 pub(super) fn tick_file(text: &str, at: usize, question: &str, done: bool) -> Option<String> {
     let front =
-        crate::sessions::split_note(text).map_or(0, |(front, _)| front.matches('\n').count());
+        crate::session_notes::split_note(text).map_or(0, |(front, _)| front.matches('\n').count());
     let mut lines = question.split('\n');
     let line = lines.next()?;
     let mut held = text.split('\n').skip(front + at + 1);
     if !lines.all(|wanted| held.next().map(|at| at.trim_end_matches('\r')) == Some(wanted)) {
         return None;
     }
-    let ticked = crate::sessions::ticked(line, true);
+    let ticked = crate::session_notes::ticked(line, true);
     let (from, to) = if done {
         (line, ticked.as_str())
     } else {
         (ticked.as_str(), line)
     };
-    crate::sessions::change_line(text, front + at, from, Some(to))
+    crate::session_notes::change_line(text, front + at, from, Some(to))
 }
 
 #[cfg(test)]
@@ -1992,7 +1986,12 @@ mod tests {
                 {
                     let index = index.clone();
                     move |ui, page: &mut WorldPage| {
-                        page.show(ui, Some(&index), &shown, &mut Default::default())
+                        page.show(
+                            ui,
+                            Some(&index),
+                            &shown,
+                            &mut crate::tracker_reader::Reader(&mut Default::default()),
+                        )
                     }
                 },
                 WorldPage::default(),
@@ -2185,7 +2184,12 @@ mod tests {
                 {
                     let index = index.clone();
                     move |ui, page: &mut WorldPage| {
-                        page.show(ui, Some(&index), &campaign, &mut Default::default())
+                        page.show(
+                            ui,
+                            Some(&index),
+                            &campaign,
+                            &mut crate::tracker_reader::Reader(&mut Default::default()),
+                        )
                     }
                 },
                 WorldPage::default(),

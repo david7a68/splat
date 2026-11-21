@@ -47,7 +47,7 @@ pub fn footer_words(words: &str) -> crate::design::outcome::Sentence {
     crate::design::outcome::Sentence::outside(words).unwrap_or(crate::sentence!("It did not work."))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     pub(crate) static MODULE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -316,7 +316,7 @@ impl Campaigns {
     }
 
     pub fn modules(&self) -> &[crate::persistence::Module] {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         MODULE_READS.with(|reads| reads.set(reads.get() + 1));
         &self.data.modules
     }
@@ -421,7 +421,7 @@ impl Campaigns {
         self.persist(data)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
@@ -458,7 +458,7 @@ impl Campaigns {
     }
 
     /// Add `campaign` if it is new, and make it the active campaign, as the switcher does.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn open_for_test(&mut self, campaign: &Campaign) {
         let mut data = self.data.clone();
         if !data.campaigns.iter().any(|known| known.id == campaign.id) {
@@ -469,7 +469,7 @@ impl Campaigns {
     }
 
     /// The same startup load as `default`, from a temporary settings file.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn open_at(path: PathBuf) -> Self {
         let mut campaigns = Self::at(path);
         campaigns.reload();
@@ -1750,7 +1750,7 @@ const IMPORT_FORM: &str = "import form";
 const WILL_CREATE: &str = "Will create ";
 
 /// The result of registering a copied campaign folder, named for the new campaign.
-pub(crate) fn copy_registered(name: &str) -> String {
+pub fn copy_registered(name: &str) -> String {
     format!("{name} is registered as a new campaign. Its D&D Beyond link is off.")
 }
 

@@ -23,7 +23,7 @@ use uuid::Uuid;
 /// Sheets refresh in the background, so the campaign package needs another look now and then.
 const CHECK_EVERY: Duration = Duration::from_secs(5 * 60);
 
-pub(crate) struct Snapshot {
+pub struct Snapshot {
     document: CampaignDocument,
     catalogue: Catalogue,
     /// The closure of these selections. It is too slow to calculate on every frame.
@@ -33,7 +33,7 @@ pub(crate) struct Snapshot {
 /// An invalid note in repair: its path, its text on disk and its draft, with Save's check of the
 /// draft. The check runs only where the draft changes (a load, an edit, Discard, Undo discard), so
 /// an unchanged frame neither hashes nor parses the text.
-pub(crate) struct Repair {
+pub struct Repair {
     path: String,
     baseline: String,
     draft: String,
@@ -587,7 +587,7 @@ struct RemovedPackage {
 }
 
 /// Return a useful YAML repair message and the physical line to mark.
-pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
+pub fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
     // Repair rows and editors ask on every frame, and a parse of a long note takes about 1 ms.
     static PROBLEMS: splat::memo::Memo<(Option<String>, Option<usize>)> =
         splat::memo::Memo::new(64);
@@ -950,7 +950,7 @@ impl CampaignContent {
         }
     }
     /// A repair's draft, by its path, for checks of who owns a result.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn repair_draft(&self, path: &str) -> Option<&str> {
         self.repairs
             .iter()
@@ -958,22 +958,22 @@ impl CampaignContent {
             .map(|repair| repair.draft.as_str())
     }
     /// The words of the newest failed answer the page holds (ruling Q-x), if any.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn answer_words(&self) -> Option<&str> {
         self.answer.as_ref().map(|answer| answer.words.as_str())
     }
     /// How often a frame checked a repair draft again.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn repair_checks(&self) -> usize {
         self.repair_checks
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some() || self.reconcile.pending.is_some()
     }
 
     /// Whether the package selection differs from the saved one, for tests.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn selections_changed(&self) -> bool {
         self.snapshot
             .as_ref()
@@ -1755,7 +1755,7 @@ impl CampaignContent {
     }
 
     /// How often the page prepared a package removal's words.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn removal_text_preparations(&self) -> usize {
         self.removal_text_preparations
     }
@@ -2161,9 +2161,9 @@ impl CampaignContent {
                 design::blocked_reason(
                     ui,
                     Some(if repair.is_some() {
-                        crate::encounters::blocked_draft_switch_reason()
+                        crate::content_actions::blocked_draft_switch_reason()
                     } else {
-                        crate::encounters::draft_switch_reason()
+                        crate::content_actions::draft_switch_reason()
                     }),
                 );
             }
@@ -2683,7 +2683,7 @@ impl CampaignContent {
                         // The file line starts at the warning's words, as its repairs do.
                         design::message_choice_row(ui, design::Tone::Warning, |ui| {
                             ui.vertical(|ui| {
-                                crate::encounters::file_line(ui, &active.path, &document.path)
+                                crate::content_actions::file_line(ui, &active.path, &document.path)
                             });
                         });
                     }
@@ -2696,7 +2696,7 @@ impl CampaignContent {
         }
         if (!errors.is_empty() || !campaign_flags.is_empty()) && issues_shown {
             let heading = if affected.is_empty() {
-                crate::encounters::content_issue_count(errors.len() + campaign_flags.len())
+                crate::content_actions::content_issue_count(errors.len() + campaign_flags.len())
             } else {
                 let gone = format!(
                     "{} need a creature that is gone",
@@ -2716,7 +2716,7 @@ impl CampaignContent {
                 }
             };
             // A fault count is a status: the warning icon and colour, then the count.
-            let job = crate::encounters::issue_count_title(ui, &heading);
+            let job = crate::content_actions::issue_count_title(ui, &heading);
             let issues = egui::CollapsingHeader::new(job)
                 .icon(design::section_icon)
                 .default_open(!campaign_flags.is_empty())
@@ -3214,7 +3214,7 @@ impl CampaignContent {
                                             },
                                         ));
                                     design::named(ui, &response, &format!("Use {}", entry.name));
-                                    if crate::encounters::creature_name_link(ui, &entry.name)
+                                    if crate::content_actions::creature_name_link(ui, &entry.name)
                                         .clicked()
                                     {
                                         self.open_lookup = Some(id);
@@ -3290,7 +3290,7 @@ impl CampaignContent {
 }
 
 /// Read what the Packages page shows: invalid notes to repair, and the campaign's packages.
-pub(crate) fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
+pub fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
     let repairs: Vec<Repair> = splat::content::read_folder(&campaign.path)
         .map(|folder| {
             folder
@@ -3328,7 +3328,7 @@ fn needed_by(reasons: impl Iterator<Item = String>) -> String {
     format!("needed by {}", reasons.collect::<Vec<_>>().join(", "))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 mod tests {
     use super::*;
 
@@ -3386,6 +3386,7 @@ mod tests {
             .collect()
     }
 
+    #[cfg(test)]
     fn has(content: &CampaignContent, campaign: Uuid, kind: PageResult) -> bool {
         !kinds_and(content, campaign, |payload| {
             (payload.kind() == kind).then_some(())
@@ -3393,6 +3394,7 @@ mod tests {
         .is_empty()
     }
 
+    #[cfg(test)]
     fn repair_discards(content: &CampaignContent, campaign: Uuid) -> Vec<String> {
         kinds_and(content, campaign, |payload| match payload {
             Payload::RepairDiscard { path, .. } => Some(path.clone()),
@@ -3628,171 +3630,6 @@ mod tests {
                 .show(ctx, |ui| content.reconcile_section(ui, &campaigns, &active));
         });
         assert!(content.reconcile.pending.is_none());
-    }
-
-    #[test]
-    fn applied_changes_reload_the_catalogue_and_failures_are_shown() {
-        let mut content = CampaignContent::default();
-        finished(
-            &mut content,
-            Checked {
-                applied: Some(Ok(2)),
-                proposals: Ok(Vec::new()),
-            },
-        );
-        assert!(content.refresh_pending);
-        assert_eq!(content.review_detail(), None);
-        let applied = kinds_and(&content, Uuid::nil(), |payload| match payload {
-            Payload::Applied(count) => Some(*count),
-            _ => None,
-        });
-        assert!(applied_words(applied[0]).as_str().starts_with("2 changes"));
-        finished(
-            &mut content,
-            Checked {
-                applied: Some(Err("A sheet has local edits.".into())),
-                proposals: Ok(Vec::new()),
-            },
-        );
-        // Ruling Q-x: the failed Apply is the newest answer, first in the footer.
-        assert_eq!(
-            content.answer.as_ref().map(|answer| answer.words.as_str()),
-            Some("A sheet has local edits.")
-        );
-        // An Apply started in campaign A that completes after the DM opened campaign B belongs
-        // to A: its failure and its proposals are dropped, never shown in B, and B's check is
-        // due again.
-        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
-        content.answer = None;
-        content.reconcile.campaign = Some(a);
-        finished_in(
-            &mut content,
-            Checked {
-                applied: Some(Err("A sheet has local edits.".into())),
-                proposals: Ok(Vec::new()),
-            },
-            Some(b),
-        );
-        assert!(
-            content.answer.is_none(),
-            "A's late failure leads B's footer: {:?}",
-            content
-                .answer
-                .as_ref()
-                .map(|answer| (answer.campaign, &answer.words))
-        );
-        assert_eq!(content.reconcile.campaign, None, "B's check is due");
-        // A -> B -> A before the Apply completes: the change of campaign (run by `tick`, also
-        // while the page is hidden) drops the pending completion; the old one never enters A's
-        // new visit.
-        let temp = tempfile::tempdir().unwrap();
-        let (first, second) = (
-            campaign(&temp.path().join("a")),
-            campaign(&temp.path().join("b")),
-        );
-        content.active = Some(first.clone());
-        content.reconcile.campaign = Some(first.id);
-        let (tx, rx) = mpsc::channel();
-        content.reconcile.pending = Some(rx);
-        content.forget_discards_of_other_campaigns(Some(&second));
-        content.forget_discards_of_other_campaigns(Some(&first));
-        let _ = tx.send(Checked {
-            applied: Some(Err("A sheet has local edits.".into())),
-            proposals: Ok(Vec::new()),
-        });
-        content.finish_check(Some(first.id));
-        assert!(
-            content.answer.is_none() && content.reconcile.pending.is_none(),
-            "an Apply from A's earlier visit entered A's new state"
-        );
-        // The page loaded A and is hidden; the DM opens B. Each tick runs the campaign change and
-        // then starts a check when one is due (`check_due`, as `tick` does): N ticks start one
-        // check for B, and it is never cancelled by the page's own, older campaign.
-        content.active = Some(first.clone());
-        let mut senders = Vec::new();
-        let mut starts = 0;
-        for _ in 0..10 {
-            content.forget_discards_of_other_campaigns(Some(&second));
-            if content.check_due(second.id) {
-                let (tx, rx) = mpsc::channel::<Checked>();
-                content.reconcile.campaign = Some(second.id);
-                content.reconcile.pending = Some(rx);
-                senders.push(tx);
-                starts += 1;
-            }
-        }
-        assert_eq!(
-            starts, 1,
-            "ticks on a hidden page started {starts} checks for B"
-        );
-        // B's check completes while the page holds A; the DM returns to A, whose own check then
-        // fails: A never shows B's proposals (the check's stored data ends with its campaign).
-        let witch = || Proposal {
-            key: "witch-bolt".into(),
-            name: "Witch Bolt".into(),
-            kind: "spell".into(),
-            change: Move::ToPackage("Player's Handbook".into()),
-            blocked: None,
-        };
-        finished_in(
-            &mut content,
-            Checked {
-                applied: None,
-                proposals: Ok(vec![witch()]),
-            },
-            Some(second.id),
-        );
-        assert!(content.review_detail().is_some(), "B's proposals are B's");
-        content.forget_discards_of_other_campaigns(Some(&first));
-        assert!(
-            content.reconcile.proposals.is_empty() && content.review_detail().is_none(),
-            "back in A, B's proposals show while A's own check runs"
-        );
-        assert!(content.check_due(first.id));
-        content.set_check_owner(Some(first.id));
-        finished_in(
-            &mut content,
-            Checked {
-                applied: None,
-                proposals: Err("The campaign package check stopped.".into()),
-            },
-            Some(first.id),
-        );
-        assert!(
-            content.reconcile.proposals.is_empty() && content.review_detail().is_none(),
-            "A shows B's proposals after its own check failed"
-        );
-        // An Apply runs in A: the campaign switch is refused with its reason, a campaign change
-        // does not cancel it, and its failure answers in A when it completes.
-        let (tx, rx) = mpsc::channel();
-        content.set_check_owner(Some(first.id));
-        content.reconcile.pending = Some(rx);
-        content.reconcile.applying = true;
-        let app = crate::Splat {
-            campaign_content: content,
-            ..Default::default()
-        };
-        assert_eq!(app.blocked_switch(), Some("Wait until Apply has finished."));
-        let mut content = app.campaign_content;
-        content.forget_discards_of_other_campaigns(Some(&second));
-        assert!(
-            content.applying(),
-            "a campaign change cancelled a running Apply"
-        );
-        tx.send(Checked {
-            applied: Some(Err("A sheet has local edits.".into())),
-            proposals: Ok(Vec::new()),
-        })
-        .unwrap();
-        content.finish_check(Some(first.id));
-        assert_eq!(
-            content
-                .answer
-                .as_ref()
-                .map(|answer| (answer.campaign, answer.words.as_str())),
-            Some((first.id, "A sheet has local edits.")),
-            "the Apply's failure answers in its own campaign"
-        );
     }
 
     #[test]
@@ -4447,4 +4284,168 @@ mod tests {
             )
         );
     }
+    #[cfg(feature = "test-support")]
+    pub fn applied_changes_reload_the_catalogue_and_failures_are_shown(
+        observe_switch: impl FnOnce(CampaignContent) -> CampaignContent,
+    ) {
+        let mut content = CampaignContent::default();
+        finished(
+            &mut content,
+            Checked {
+                applied: Some(Ok(2)),
+                proposals: Ok(Vec::new()),
+            },
+        );
+        assert!(content.refresh_pending);
+        assert_eq!(content.review_detail(), None);
+        let applied = kinds_and(&content, Uuid::nil(), |payload| match payload {
+            Payload::Applied(count) => Some(*count),
+            _ => None,
+        });
+        assert!(applied_words(applied[0]).as_str().starts_with("2 changes"));
+        finished(
+            &mut content,
+            Checked {
+                applied: Some(Err("A sheet has local edits.".into())),
+                proposals: Ok(Vec::new()),
+            },
+        );
+        // Ruling Q-x: the failed Apply is the newest answer, first in the footer.
+        assert_eq!(
+            content.answer.as_ref().map(|answer| answer.words.as_str()),
+            Some("A sheet has local edits.")
+        );
+        // An Apply started in campaign A that completes after the DM opened campaign B belongs
+        // to A: its failure and its proposals are dropped, never shown in B, and B's check is
+        // due again.
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        content.answer = None;
+        content.reconcile.campaign = Some(a);
+        finished_in(
+            &mut content,
+            Checked {
+                applied: Some(Err("A sheet has local edits.".into())),
+                proposals: Ok(Vec::new()),
+            },
+            Some(b),
+        );
+        assert!(
+            content.answer.is_none(),
+            "A's late failure leads B's footer: {:?}",
+            content
+                .answer
+                .as_ref()
+                .map(|answer| (answer.campaign, &answer.words))
+        );
+        assert_eq!(content.reconcile.campaign, None, "B's check is due");
+        // A -> B -> A before the Apply completes: the change of campaign (run by `tick`, also
+        // while the page is hidden) drops the pending completion; the old one never enters A's
+        // new visit.
+        let temp = tempfile::tempdir().unwrap();
+        let (first, second) = (
+            campaign(&temp.path().join("a")),
+            campaign(&temp.path().join("b")),
+        );
+        content.active = Some(first.clone());
+        content.reconcile.campaign = Some(first.id);
+        let (tx, rx) = mpsc::channel();
+        content.reconcile.pending = Some(rx);
+        content.forget_discards_of_other_campaigns(Some(&second));
+        content.forget_discards_of_other_campaigns(Some(&first));
+        let _ = tx.send(Checked {
+            applied: Some(Err("A sheet has local edits.".into())),
+            proposals: Ok(Vec::new()),
+        });
+        content.finish_check(Some(first.id));
+        assert!(
+            content.answer.is_none() && content.reconcile.pending.is_none(),
+            "an Apply from A's earlier visit entered A's new state"
+        );
+        // The page loaded A and is hidden; the DM opens B. Each tick runs the campaign change and
+        // then starts a check when one is due (`check_due`, as `tick` does): N ticks start one
+        // check for B, and it is never cancelled by the page's own, older campaign.
+        content.active = Some(first.clone());
+        let mut senders = Vec::new();
+        let mut starts = 0;
+        for _ in 0..10 {
+            content.forget_discards_of_other_campaigns(Some(&second));
+            if content.check_due(second.id) {
+                let (tx, rx) = mpsc::channel::<Checked>();
+                content.reconcile.campaign = Some(second.id);
+                content.reconcile.pending = Some(rx);
+                senders.push(tx);
+                starts += 1;
+            }
+        }
+        assert_eq!(
+            starts, 1,
+            "ticks on a hidden page started {starts} checks for B"
+        );
+        // B's check completes while the page holds A; the DM returns to A, whose own check then
+        // fails: A never shows B's proposals (the check's stored data ends with its campaign).
+        let witch = || Proposal {
+            key: "witch-bolt".into(),
+            name: "Witch Bolt".into(),
+            kind: "spell".into(),
+            change: Move::ToPackage("Player's Handbook".into()),
+            blocked: None,
+        };
+        finished_in(
+            &mut content,
+            Checked {
+                applied: None,
+                proposals: Ok(vec![witch()]),
+            },
+            Some(second.id),
+        );
+        assert!(content.review_detail().is_some(), "B's proposals are B's");
+        content.forget_discards_of_other_campaigns(Some(&first));
+        assert!(
+            content.reconcile.proposals.is_empty() && content.review_detail().is_none(),
+            "back in A, B's proposals show while A's own check runs"
+        );
+        assert!(content.check_due(first.id));
+        content.set_check_owner(Some(first.id));
+        finished_in(
+            &mut content,
+            Checked {
+                applied: None,
+                proposals: Err("The campaign package check stopped.".into()),
+            },
+            Some(first.id),
+        );
+        assert!(
+            content.reconcile.proposals.is_empty() && content.review_detail().is_none(),
+            "A shows B's proposals after its own check failed"
+        );
+        // An Apply runs in A: the campaign switch is refused with its reason, a campaign change
+        // does not cancel it, and its failure answers in A when it completes.
+        let (tx, rx) = mpsc::channel();
+        content.set_check_owner(Some(first.id));
+        content.reconcile.pending = Some(rx);
+        content.reconcile.applying = true;
+        let mut content = observe_switch(content);
+        content.forget_discards_of_other_campaigns(Some(&second));
+        assert!(
+            content.applying(),
+            "a campaign change cancelled a running Apply"
+        );
+        tx.send(Checked {
+            applied: Some(Err("A sheet has local edits.".into())),
+            proposals: Ok(Vec::new()),
+        })
+        .unwrap();
+        content.finish_check(Some(first.id));
+        assert_eq!(
+            content
+                .answer
+                .as_ref()
+                .map(|answer| (answer.campaign, answer.words.as_str())),
+            Some((first.id, "A sheet has local edits.")),
+            "the Apply's failure answers in its own campaign"
+        );
+    }
 }
+
+#[cfg(feature = "test-support")]
+pub use tests::applied_changes_reload_the_catalogue_and_failures_are_shown;

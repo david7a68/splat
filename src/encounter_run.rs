@@ -1,11 +1,17 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
+#[path = "encounter_run/ad_hoc.rs"]
 mod ad_hoc;
+#[path = "encounter_run/dock.rs"]
 mod dock;
 pub(crate) use splat_campaign::encounter_run::effect;
+#[path = "encounter_run/loot.rs"]
 mod loot;
+#[path = "encounter_run/notice.rs"]
 mod notice;
+#[path = "encounter_run/rolling.rs"]
 mod rolling;
 use splat_campaign::encounter_run::undo;
+#[path = "encounter_run/view.rs"]
 pub(crate) mod view;
 use crate::encounter_settings::{Grouping, GroupingWords, Initiative};
 #[cfg(test)]
@@ -38,13 +44,9 @@ use eframe::egui;
 pub(crate) use loot::rewards;
 use serde_yaml_ng::{Mapping, Value};
 use splat::content::inspiration::Inspiration;
-use splat::{
-    content::{
-        Entry,
-        overrides::{Base, Overrides, Resolved},
-    },
-    execution::dice::Random,
-};
+#[cfg(test)]
+use splat::content::overrides::{Base, Overrides};
+use splat::{content::Entry, execution::dice::Random};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -84,309 +86,11 @@ impl Opening {
     }
 }
 
-/// One line of an encounter group, as a run adds it.
-#[derive(Clone, Debug)]
-pub(crate) struct GroupMember {
-    pub entry: Arc<Entry>,
-    pub count: u64,
-    pub overrides: Overrides,
-}
-/// A campaign's encounter group, ready to add. Its members are resolved when it loads.
-#[derive(Clone, Debug)]
-pub(crate) struct RunGroup {
-    pub id: Uuid,
-    pub path: String,
-    pub name: String,
-    pub side: String,
-    /// The one encounter this group is for. With none, it is for any encounter.
-    pub encounter: Option<Uuid>,
-    /// That encounter's name, while this campaign still has it.
-    pub encounter_name: Option<String>,
-    pub members: Vec<GroupMember>,
-    pub notes: String,
-    /// What this group's creatures are worth. Overrides do not change it.
-    pub xp: u64,
-    /// The creatures with no XP in their entry, so that the total is not read as complete.
-    pub xp_unknown: Vec<String>,
-    /// How many creatures the note names that this campaign cannot find.
-    pub unavailable: u64,
-    /// Missing members retain their position, count and display name for the summary.
-    pub unavailable_members: Vec<(usize, u64, String)>,
-    /// Every reason this group cannot be added now.
-    pub problem: Option<String>,
-    /// Unread rows do not block the readable members.
-    pub warnings: Vec<MemberFault>,
-}
-
-/// Why one member of a group cannot join. The check that finds the fault decides its kind, and
-/// every view of the group (its editor, the Encounters list, Arrivals, the session plan) takes
-/// the fault's tone and repair link from that kind.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct MemberFault {
-    pub kind: FaultKind,
-    pub text: String,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FaultKind {
-    /// The note names a creature that this campaign's packages do not have.
-    NotInPackages,
-    /// The member's changes make a creature that cannot be, such as a maximum HP below 1.
-    InvalidChange,
-    /// The member can be read but not run: a D&D Beyond sheet, no maximum HP.
-    CannotJoin,
-    /// The member's row, or its creature's file, is there and cannot be read (R41, lead ruling
-    /// s30 B11): an error wherever it shows.
-    Unreadable,
-}
-
-impl FaultKind {
-    /// An invalid value and unreadable data are errors wherever they show (R41). A member that is
-    /// only left out is a warning: the group still loads, and its other members can join.
-    pub(crate) fn tone(self) -> crate::design::Tone {
-        match self {
-            Self::InvalidChange | Self::Unreadable => crate::design::Tone::Error,
-            Self::NotInPackages | Self::CannotJoin => crate::design::Tone::Warning,
-        }
-    }
-}
-
-impl MemberFault {
-    pub(crate) fn new(kind: FaultKind, text: String) -> Self {
-        Self { kind, text }
-    }
-    pub(crate) fn tone(&self) -> crate::design::Tone {
-        self.kind.tone()
-    }
-}
-
-impl std::ops::Deref for MemberFault {
-    type Target = str;
-    fn deref(&self) -> &str {
-        &self.text
-    }
-}
-
 #[cfg(test)]
-impl From<&str> for MemberFault {
-    fn from(text: &str) -> Self {
-        Self::new(FaultKind::CannotJoin, text.to_owned())
-    }
-}
-
-impl RunGroup {
-    /// The group's own reasons it cannot join, such as `No members can join.`: the lines of
-    /// `problem` after the ones its member faults wrote. Every view draws the member faults with
-    /// their own tone, then these as warnings.
-    pub(crate) fn own_problems(&self) -> Vec<&str> {
-        let members = self
-            .warnings
-            .iter()
-            .map(|fault| fault.lines().count())
-            .sum();
-        self.problem
-            .as_deref()
-            .map(|problem| problem.lines().skip(members).collect())
-            .unwrap_or_default()
-    }
-
-    /// The first member's bonus decides a shared roll, as it does for any initiative group.
-    pub(crate) fn leader(&self) -> Option<Resolved> {
-        let member = self.members.first()?;
-        let base = Base::of(&member.entry, &self.side);
-        member.overrides.resolve(&base).ok()
-    }
-    /// The group's own facts in the one order of `difficulty::FightAfter` (side, count, then
-    /// its XP when `worth`): `Enemies · 3 members · XP 150`. The Encounters list, the plan
-    /// (through `summary`) and Arrivals all start a group's line with these words.
-    pub(crate) fn facts(&self, worth: bool) -> String {
-        crate::difficulty::FightAfter {
-            side: &crate::design::reader::human_label(&self.side),
-            members: &self.count_label(),
-            worth: &if worth {
-                self.xp_label()
-            } else {
-                String::new()
-            },
-        }
-        .facts()
-    }
-    /// How many, on which side, and what they are worth, in one line.
-    pub(crate) fn summary(&self) -> String {
-        // When nobody can join, the count says it all: no XP, no `Will add: none`.
-        if self.joinable_count() == 0 && self.unavailable > 0 {
-            return self.facts(false);
-        }
-        let mut summary = self.facts(true);
-        if self
-            .members
-            .iter()
-            .any(|member| member.overrides.changes_creature())
-        {
-            // FJ5: `Changed` keeps its muted pencil wherever a group's summary shows, as in
-            // Arrivals. The no-break space keeps the two on one line.
-            summary.push_str(&format!(
-                " · {}\u{a0}Changed",
-                crate::design::icons::CHANGED
-            ));
-        }
-        if self
-            .members
-            .iter()
-            .any(|member| member.overrides.loot.is_some())
-        {
-            summary.push_str(" · Loot");
-        }
-        let members = self.member_summary();
-        if !members.is_empty() {
-            summary.push_str(&format!(" · {members}"));
-        }
-        summary
-    }
-    pub(crate) fn joinable_count(&self) -> u64 {
-        self.members.iter().map(|member| member.count).sum()
-    }
-    pub(crate) fn count_label(&self) -> String {
-        if self.unavailable_members.is_empty() {
-            crate::design::count(self.creature_count() as usize, "member", "members")
-        } else {
-            format!(
-                "{} of {} can join",
-                self.joinable_count(),
-                self.creature_count()
-            )
-        }
-    }
-    pub(crate) fn xp_label(&self) -> String {
-        if self.xp_unknown.is_empty() {
-            format!("XP {}", grouped_number(self.xp))
-        } else if self.xp == 0 && self.members.len() == self.xp_unknown.len() {
-            "XP not known".to_owned()
-        } else {
-            format!("XP {} + unknown", grouped_number(self.xp))
-        }
-    }
-    pub(crate) fn member_summary(&self) -> String {
-        let members: Vec<_> = self
-            .members
-            .iter()
-            .map(|member| {
-                let base = Base::of(&member.entry, &self.side);
-                let name = member
-                    .overrides
-                    .resolve(&base)
-                    .map_or(base.name, |resolved| resolved.name);
-                let name = if member.overrides.name.is_some() {
-                    format!("{name} (as {})", member.entry.name)
-                } else {
-                    name
-                };
-                format!(
-                    "{} × {name}",
-                    crate::design::count(member.count as usize, "", "").trim()
-                )
-            })
-            .collect();
-        let summary = members.join(", ");
-        if self.unavailable > 0 {
-            format!(
-                "Will add: {}",
-                if summary.is_empty() { "none" } else { &summary }
-            )
-        } else {
-            summary
-        }
-    }
-
-    /// The member summary for a line `width` wide in `font`: it wraps between members, never
-    /// inside one. A member wider than the line breaks at its own spaces, first before its
-    /// `(as …)`, and never inside a word.
-    pub(crate) fn member_summary_wrapped(
-        &self,
-        ui: &egui::Ui,
-        font: &egui::FontId,
-        width: f32,
-    ) -> String {
-        self.member_summary_fit(ui, font, width).0
-    }
-
-    /// `member_summary_wrapped`, and whether `Will add:` had to stand apart from its first
-    /// member because the two do not fit one line `width` wide (FI8).
-    pub(crate) fn member_summary_fit(
-        &self,
-        ui: &egui::Ui,
-        font: &egui::FontId,
-        width: f32,
-    ) -> (String, bool) {
-        let summary = self.member_summary();
-        let (lead, members) = match summary.strip_prefix("Will add: ") {
-            Some(members) => ("Will\u{a0}add:", members),
-            None => ("", summary.as_str()),
-        };
-        let mut members: Vec<_> = members
-            .split(", ")
-            .map(|member| keep_whole(ui, font, member, width))
-            .collect();
-        if lead.is_empty() {
-            return (members.join(", "), false);
-        }
-        // FC6: `Will add:` stays on a line with its first member when the two fit one line;
-        // only a member too wide for that takes a line of its own.
-        let first = members.first().cloned().unwrap_or_default();
-        let together = format!("{lead}\u{a0}{first}");
-        if crate::design::number_width(ui, &together, font) <= width {
-            members[0] = together;
-            (members.join(", "), false)
-        } else {
-            (format!("{lead} {}", members.join(", ")), true)
-        }
-    }
-
-    /// Every creature the note names, whether or not it can be found now.
-    pub(crate) fn creature_count(&self) -> u64 {
-        self.members
-            .iter()
-            .map(|member| member.count)
-            .fold(self.unavailable, u64::saturating_add)
-    }
-}
-/// `words` with no-break spaces when they fit one line `width` wide. Too wide, they break
-/// first before `(as …)`, each part whole when it fits; a part that still does not fit breaks
-/// at its own spaces.
-pub(crate) fn keep_whole(ui: &egui::Ui, font: &egui::FontId, words: &str, width: f32) -> String {
-    let whole = |part: &str| {
-        let joined = part.replace(' ', "\u{a0}");
-        if crate::design::number_width(ui, &joined, font) <= width {
-            joined
-        } else {
-            part.to_owned()
-        }
-    };
-    let joined = whole(words);
-    if joined != words || !words.contains(' ') {
-        return joined;
-    }
-    match words.split_once(" (as ") {
-        Some((name, base)) => format!("{} {}", whole(name), whole(&format!("(as {base}"))),
-        None => words.to_owned(),
-    }
-}
-pub(crate) fn grouped_number(number: impl ToString) -> String {
-    let text = number.to_string();
-    let digits = text.trim_start_matches('-');
-    let mut out = if text.starts_with('-') {
-        "−".to_owned()
-    } else {
-        String::new()
-    };
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
-}
+pub(crate) use splat_content_ui::roster::keep_whole;
+pub(crate) use splat_content_ui::roster::{
+    FaultKind, GroupMember, MemberFault, RunGroup, grouped_number,
+};
 /// A campaign's groups, as one run sorts them.
 #[derive(Debug, Default)]
 pub(crate) struct OfferedGroups {
@@ -4790,24 +4494,7 @@ pub fn calendar_time(seconds: u64) -> String {
     )
 }
 
-/// A UTC date from seconds since 1970, by Howard Hinnant's `civil_from_days`.
-pub fn calendar_date(seconds: u64) -> String {
-    let days = (seconds / 86_400) as i64 + 719_468;
-    let era = days.div_euclid(146_097);
-    let day_of_era = days.rem_euclid(146_097);
-    let year_of_era =
-        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_index = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
-    let month = if month_index < 10 {
-        month_index + 3
-    } else {
-        month_index - 9
-    };
-    let year = year_of_era + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}")
-}
+pub use splat_content_ui::roster::calendar_date;
 
 #[cfg(test)]
 impl Run {

@@ -1,27 +1,12 @@
-use crate::{
-    content_workspace::CampaignDocument, lookup::ContentIndex, persistence::Campaign,
-    timeline::Book,
-};
-use splat_content::content::Entry;
+use crate::{lookup::ContentIndex, persistence::Campaign, timeline::Book};
 use std::sync::Arc;
 use uuid::Uuid;
 
 pub use splat_trackers::trackers::*;
 
-impl RuleSource for ContentIndex {
-    fn manifest(&self, campaign: &Campaign) -> Result<String, String> {
-        CampaignDocument::load(campaign).map(|document| document.path)
-    }
-
-    fn note(&self, id: Uuid) -> Option<(&Entry, bool)> {
-        let item = self.items.iter().find(|item| item.entry.id == id)?;
-        Some((&item.entry, item.is_campaign_note()))
-    }
-
-    fn loot_sources(&self) -> Arc<splat_campaign::loot::Sources> {
-        ContentIndex::loot_sources(self)
-    }
-}
+#[path = "reader.rs"]
+mod reader;
+pub(super) use reader::Reader;
 
 pub fn clock(book: &Book) -> Clock<'_> {
     Clock {

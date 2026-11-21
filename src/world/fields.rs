@@ -81,7 +81,7 @@ pub(super) fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option
 
 /// Retain the source spelling of each kept group, including aliases, quotes and comments.
 fn patch_groups(text: &str, groups: &[Value]) -> Result<Option<String>, String> {
-    let (_, body) = crate::sessions::split_note(text).ok_or("Missing front matter")?;
+    let (_, body) = crate::session_notes::split_note(text).ok_or("Missing front matter")?;
     let front_end = text.len() - body.len();
     let mut offset = 0;
     let mut start = None;

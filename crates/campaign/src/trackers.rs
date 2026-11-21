@@ -14,6 +14,14 @@ use uuid::Uuid;
 /// A `rule` entry with this implementation is a house rule note.
 pub const IMPLEMENTATION: &str = "splat:house_rules";
 
+/// The catalogue snapshot used to locate a campaign's rule notes.
+pub trait RuleSource {
+    fn manifest(&self, campaign: &crate::campaign::Campaign) -> Result<String, String>;
+    /// The entry in the index and whether to reread its campaign file before using it.
+    fn note(&self, id: Uuid) -> Option<(&crate::content::Entry, bool)>;
+    fn loot_sources(&self) -> Arc<Sources>;
+}
+
 // Definitions: the members of a house rule note.
 
 /// A tracker: a named number. Its history is in the ledger.

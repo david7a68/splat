@@ -4166,26 +4166,6 @@ fn packages_repair(ui: &mut egui::Ui) -> bool {
         .clicked()
 }
 
-/// A member's fault is a typed fault: its tone from its kind (an invalid value and unreadable
-/// data are errors, R41; a missing member or one that cannot join is a warning), its words as
-/// the loader wrote them (`Unknown creature · line 13: Not in this campaign’s packages.`).
-impl design::outcome::Fault for MemberFault {
-    fn severity(&self) -> design::outcome::Severity {
-        match self.tone() {
-            Tone::Error => design::outcome::Severity::CannotRead,
-            _ => design::outcome::Severity::NeedsFixing,
-        }
-    }
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "a member fault’s words are the loader’s, with the DM’s names in them"
-    )]
-    fn cause(&self) -> design::outcome::Sentence {
-        design::outcome::Sentence::outside(self.text.as_str())
-            .unwrap_or(crate::sentence!("This member cannot join."))
-    }
-}
-
 /// The repair a member fault's choice asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MemberRepair {

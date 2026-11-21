@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 /// The repair editor's accessible name. It names the file, so a DM who tabs between two open
 /// repairs hears which is which. Selectors that ask for `Note text` still find it.
-pub(crate) fn editor_name(path: &str) -> String {
+pub fn editor_name(path: &str) -> String {
     format!("Note text: {path}")
 }
 

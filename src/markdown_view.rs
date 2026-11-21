@@ -47,7 +47,7 @@ pub fn wanted_heading(ctx: &egui::Context, heading: &str) -> bool {
     false
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
     show_with_density(ui, markdown, false, ShortLinks::Prose, None);
 }

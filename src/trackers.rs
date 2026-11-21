@@ -12,7 +12,7 @@ pub mod view;
 use crate::design::outcome::Sentence;
 use ledger::{Entry, Fault, Ledger, NoticeRef, Op, Roll};
 pub use splat_campaign::trackers::*;
-use splat_campaign::{campaign::Campaign, loot::Sources, timeline};
+use splat_campaign::{campaign::Campaign, timeline};
 use splat_content::content::Entry as Note;
 use std::{
     collections::HashMap,
@@ -26,14 +26,6 @@ use uuid::Uuid;
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 /// Today's `Undo add` of an event keeps its 30 seconds.
 pub const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
-
-/// The catalogue snapshot used to locate a campaign's rule notes.
-pub trait RuleSource {
-    fn manifest(&self, campaign: &Campaign) -> Result<String, String>;
-    /// The entry in the index and whether to reread its campaign file before using it.
-    fn note(&self, id: Uuid) -> Option<(&Note, bool)>;
-    fn loot_sources(&self) -> Arc<Sources>;
-}
 
 /// The part of the Timeline that determines when day marks are due.
 pub struct Clock<'a> {

@@ -7,11 +7,12 @@ publish = false
 default-run = "splat"
 
 [workspace]
-members = ["crates/*", "src/design", "src/trackers"]
-default-members = [".", "crates/*", "src/design", "src/trackers"]
+members = ["crates/*", "src/design", "src/trackers", "src/content_ui"]
+default-members = [".", "crates/*", "src/design", "src/trackers", "src/content_ui"]
 resolver = "3"
 
 [dependencies]
+splat-content-ui = { path = "src/content_ui" }
 splat-assets = { path = "crates/assets" }
 splat-campaign = { path = "crates/campaign" }
 splat-character = { path = "crates/character" }
@@ -44,6 +45,7 @@ url = "2.5"
 unicode-segmentation = "1.13"
 
 [dev-dependencies]
+splat-content-ui = { path = "src/content_ui", features = ["test-support"] }
 rayon = "1.11"
 splat-campaign = { path = "crates/campaign", features = ["test-support"] }
 splat-content = { path = "crates/content", features = ["test-support"] }
@@ -92,4 +94,7 @@ opt-level = 2
 opt-level = 2
 
 [profile.test.package.splat-trackers]
+opt-level = 2
+
+[profile.test.package.splat-content-ui]
 opt-level = 2

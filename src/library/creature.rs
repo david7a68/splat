@@ -401,7 +401,7 @@ pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, body: &str, text: &str) 
 }
 
 fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
-    let preview = crate::encounter_run::change_preview(&splat::content::overrides::Row {
+    let preview = crate::roster::change_preview(&splat::content::overrides::Row {
         label: "Speed",
         base: printed.into(),
         changed: speed.into(),
@@ -600,7 +600,7 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
             };
             for (label, text) in rows {
                 let run_hp = values.filter(|_| label == "HIT POINTS").map(|values| {
-                    crate::combat_sync::fraction(
+                    crate::design::fraction(
                         values
                             .current_hp
                             .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string()),

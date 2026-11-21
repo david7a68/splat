@@ -30,7 +30,7 @@ pub struct Loader {
 }
 
 impl Loader {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
     }

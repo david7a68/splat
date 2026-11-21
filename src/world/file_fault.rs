@@ -8,7 +8,7 @@ use std::{io, path::Path};
 
 /// What went wrong, from the system error's kind. Never from its words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Kind {
+pub enum Kind {
     /// The bytes are not UTF-8 text.
     NotText,
     ReadDenied,
@@ -23,7 +23,7 @@ pub(crate) enum Kind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct FileFault {
+pub struct FileFault {
     /// The file as the DM knows it: a path relative to the campaign, or a folder.
     pub path: String,
     pub kind: Kind,

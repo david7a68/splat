@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 /// How a d20 or a damage roll is made.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Mode {
+pub enum Mode {
     Normal,
     Advantage,
     Disadvantage,
@@ -36,7 +36,7 @@ impl Mode {
 
 /// A press on a rollable number, waiting for whoever owns the dice.
 #[derive(Clone, Debug)]
-pub(crate) struct Ask {
+pub struct Ask {
     pub link: RollLink,
     pub occurrence: Option<SpellOccurrence>,
     pub mode: Mode,
@@ -68,7 +68,7 @@ fn outcome_id(entry: &str) -> Id {
 }
 
 /// The press of this frame, for the run or the preview stream.
-pub(crate) fn take_ask(ctx: &egui::Context) -> Option<Ask> {
+pub fn take_ask(ctx: &egui::Context) -> Option<Ask> {
     ctx.data_mut(|data| {
         let ask = data.get_temp::<Ask>(ask_id());
         data.remove::<Ask>(ask_id());
@@ -77,7 +77,7 @@ pub(crate) fn take_ask(ctx: &egui::Context) -> Option<Ask> {
 }
 
 /// Who rolls from what is drawn next: a run row, or nobody. Set it around a run's reader.
-pub(crate) fn set_roller(ctx: &egui::Context, roller: Option<usize>) {
+pub fn set_roller(ctx: &egui::Context, roller: Option<usize>) {
     ctx.data_mut(|data| match roller {
         Some(row) => data.insert_temp(roller_id(), row),
         None => data.remove::<usize>(roller_id()),
@@ -86,12 +86,12 @@ pub(crate) fn set_roller(ctx: &egui::Context, roller: Option<usize>) {
 
 /// Whether the roller drawn next can expend inspiration for advantage before a roll. Set it
 /// around a run's reader, by the campaign's inspiration rule and the character's sheet.
-pub(crate) fn set_inspired(ctx: &egui::Context, inspired: bool) {
+pub fn set_inspired(ctx: &egui::Context, inspired: bool) {
     ctx.data_mut(|data| data.insert_temp(inspired_id(), inspired));
 }
 
 /// The entry whose numbers are drawn next, to name its rolls.
-pub(crate) fn set_entry(ctx: &egui::Context, name: &str) {
+pub fn set_entry(ctx: &egui::Context, name: &str) {
     ctx.data_mut(|data| data.insert_temp(entry_id(), name.to_owned()));
 }
 
@@ -124,7 +124,7 @@ fn ask(
 
 /// How a right-click on a d20 roll can roll it: the mode, and whether inspiration pays for
 /// advantage. `verb` names the press: `Roll`, or `Roll for them`.
-pub(crate) fn mode_choices(verb: &str, inspired: bool) -> Vec<(String, Mode, bool)> {
+pub fn mode_choices(verb: &str, inspired: bool) -> Vec<(String, Mode, bool)> {
     let mut choices = vec![
         (verb.to_owned(), Mode::Normal, false),
         (format!("{verb} with advantage"), Mode::Advantage, false),
@@ -145,7 +145,7 @@ pub(crate) fn mode_choices(verb: &str, inspired: bool) -> Vec<(String, Mode, boo
 }
 
 /// An action's name: `Bite`, `Ember Burst`.
-pub(crate) fn link_label(link: &RollLink) -> &str {
+pub fn link_label(link: &RollLink) -> &str {
     match link {
         RollLink::D20 { label, .. }
         | RollLink::Damage { label, .. }
@@ -156,7 +156,7 @@ pub(crate) fn link_label(link: &RollLink) -> &str {
 
 /// Words in a menu: a heading or a question. A menu's layout is justified, which would stretch
 /// the gaps of a wrapped line, so the words get a left-aligned layout of their own.
-pub(crate) fn menu_text(ui: &mut egui::Ui, text: &str, color: egui::Color32) -> egui::Response {
+pub fn menu_text(ui: &mut egui::Ui, text: &str, color: egui::Color32) -> egui::Response {
     ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
         ui.add(egui::Label::new(Type::Small.rich(ui, text).color(color)).wrap())
     })
@@ -165,7 +165,7 @@ pub(crate) fn menu_text(ui: &mut egui::Ui, text: &str, color: egui::Color32) -> 
 
 /// One line of a menu under a heading or a question: its words start at the heading's text.
 /// In a menu the keys opened, the first choice takes the focus.
-pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
+pub fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
     let response = Action::quiet(words)
         .density(Density::Read)
         .line_start()
@@ -229,7 +229,7 @@ fn menu_focus_again_id() -> egui::Id {
 
 /// A control that can own a menu says it is still on screen. Call it every frame, before any
 /// early return, so a menu whose last choice went away still has its owner.
-pub(crate) fn keep_menu_owner(response: &egui::Response) {
+pub fn keep_menu_owner(response: &egui::Response) {
     let ctx = &response.ctx;
     if ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) == Some(response.id) {
         let frame = ctx.cumulative_frame_nr();
@@ -250,7 +250,7 @@ pub(crate) fn keep_menu_owner(response: &egui::Response) {
 /// - Closed by a mouse click: the clicked control keeps the focus. When the click left none
 ///   (a choice that went away), it goes to the owner.
 /// - The owner is gone (its row taken away, the run ended): the menu ends and the focus stays.
-pub(crate) fn end_menu_frame(ctx: &egui::Context) {
+pub fn end_menu_frame(ctx: &egui::Context) {
     let frame = ctx.cumulative_frame_nr();
     let focused = ctx.memory(|memory| memory.focused());
     let again = ctx.data_mut(|data| {
@@ -327,7 +327,7 @@ fn opened_menu(response: &egui::Response, by_keys: bool) {
 /// Shift+F10 on the focused control and a screen reader's `show context menu`, which put the
 /// focus on its first choice and give it back to the control when the menu closes. A plain
 /// click or Enter on the control closes it.
-pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOpenCommand> {
+pub fn menu_open_command(response: &egui::Response) -> Option<egui::SetOpenCommand> {
     use egui::accesskit::Action as Access;
     keep_menu_owner(response);
     let ctx = &response.ctx;
@@ -469,7 +469,7 @@ fn part_text(part: &DamagePart) -> String {
 
 /// `2d6+2 bludgeoning, 1d6 fire`: every part of a damage roll. A part with a condition
 /// follows as `or 4d6+4 piercing` or `plus 1d4 slashing`; its condition is in the text.
-pub(crate) fn parts_text(parts: &[DamagePart]) -> String {
+pub fn parts_text(parts: &[DamagePart]) -> String {
     parts
         .iter()
         .enumerate()
@@ -485,7 +485,7 @@ pub(crate) fn parts_text(parts: &[DamagePart]) -> String {
 
 /// A number in a table that rolls: an ability's modifier, a save, a skill, a sheet's bonus.
 /// Accent text with a quiet underline, at least 24 px each way.
-pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -> egui::Response {
+pub fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -> egui::Response {
     let c = colors();
     // Laid out without a colour, so the hover colour below paints the words too.
     let galley = design::one_line(
@@ -570,7 +570,7 @@ enum Pick {
 
 /// One group of dice in a result: a label, each face and whether it was dropped.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Piece {
+pub struct Piece {
     pub label: String,
     pub faces: Vec<(i64, bool)>,
     /// The dice rolled, such as `2d20kh1` or `2d6+2`, so that one die can roll again.
@@ -579,7 +579,7 @@ pub(crate) struct Piece {
 
 /// One die of an outcome: in its damage or its first roll, in which piece, at which place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Die {
+pub struct Die {
     pub damage: bool,
     pub piece: usize,
     pub face: usize,
@@ -587,7 +587,7 @@ pub(crate) struct Die {
 
 /// A made roll, with what the action line and the Log say about it.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Rolled {
+pub struct Rolled {
     /// Who rolled: a participant, an entry, or the DM.
     pub who: String,
     pub link: RollLink,
@@ -745,7 +745,7 @@ impl Rolled {
 }
 
 /// Make a roll. `change` is a run's attack or damage bonus for the roller.
-pub(crate) fn roll(
+pub fn roll(
     who: &str,
     link: &RollLink,
     mode: Mode,
@@ -875,7 +875,7 @@ pub(crate) fn roll_with(
 
 /// A spell's printed position stays the same when a reload shifts its shortcut.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct SpellOccurrence {
+pub struct SpellOccurrence {
     pub paragraph: usize,
     pub line: usize,
     pub item: usize,
@@ -883,7 +883,7 @@ pub(crate) struct SpellOccurrence {
 
 /// One action of a creature or a character: a feature with an attack, a save or damage.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Chip {
+pub struct Chip {
     /// `Bite +4`, `Ember Burst DC 12`, `Claw 2d6`.
     pub label: String,
     pub link: RollLink,
@@ -998,7 +998,7 @@ pub(crate) fn place_in(all: &[(usize, Chip)], chip: &Chip) -> Option<usize> {
 /// One press of an action and what it rolled: an attack and its damage, a save's damage,
 /// or a single d20 or dice roll.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Outcome {
+pub struct Outcome {
     pub link: RollLink,
     /// The d20, or plain dice.
     pub first: Option<Rolled>,
@@ -1019,7 +1019,7 @@ impl Outcome {
 /// Roll an action. An attack rolls its damage too, as a critical hit on a natural 20; a
 /// save DC rolls its damage once. `changes` are a run's attack and damage changes; `extra`
 /// is a bonus for the d20.
-pub(crate) fn make(
+pub fn make(
     who: &str,
     link: &RollLink,
     mode: Mode,
@@ -1080,7 +1080,7 @@ pub(crate) fn make(
 
 /// Whether a damage condition holds, when the roll's mode settles it: `if the attack roll had
 /// Advantage`. `None` when the mode does not say.
-pub(crate) fn condition_by_mode(when: &dice_text::When, mode: Mode) -> Option<bool> {
+pub fn condition_by_mode(when: &dice_text::When, mode: Mode) -> Option<bool> {
     let words = when.text.to_lowercase();
     (words.contains("attack roll")
         && words.contains("advantage")
@@ -1149,7 +1149,7 @@ impl Outcome {
 /// Roll one die of an outcome again; the new die stands, and its keeps and totals are made
 /// again. When an attack's d20 begins or ends a critical hit, its damage rolls again too.
 /// Returns the outcome, the old face and the new.
-pub(crate) fn reroll(
+pub fn reroll(
     who: &str,
     outcome: &Outcome,
     die: Die,
@@ -1212,13 +1212,13 @@ pub(crate) fn reroll(
 
 /// A preview outside a run, on its own stream, kept for the entry's action line. Tests use a
 /// fixed seed.
-pub(crate) fn preview(ctx: &egui::Context, ask: &Ask) {
+pub fn preview(ctx: &egui::Context, ask: &Ask) {
     let mut random = ctx
         .data(|data| data.get_temp::<Random>(preview_id()))
         .unwrap_or_else(|| {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             let seed = 20_261_110;
-            #[cfg(not(test))]
+            #[cfg(not(any(test, feature = "test-support")))]
             let seed = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(1, |since| since.as_nanos() as u64);
@@ -1240,7 +1240,7 @@ fn preview_outcome(ctx: &egui::Context, entry: &str) -> Option<Outcome> {
 
 /// The run's armed action, for the tiles to mark it and say what can follow.
 #[derive(Clone, Debug)]
-pub(crate) struct ArmedView {
+pub struct ArmedView {
     pub link: RollLink,
     pub occurrence: Option<SpellOccurrence>,
     /// What to do next, such as `Click a target. Escape stops.`
@@ -1262,7 +1262,7 @@ impl ArmedView {
 
 /// What the line under an armed tile can ask the run to do.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ArmedAction {
+pub enum ArmedAction {
     /// For a player's attack: roll it for them against the target.
     RollForThem,
     /// For a save: roll its damage once, into Amount.
@@ -1287,7 +1287,7 @@ fn armed_action_id() -> Id {
 }
 
 /// Show the run's armed action on the tiles drawn next, or none.
-pub(crate) fn set_armed(ctx: &egui::Context, view: Option<ArmedView>) {
+pub fn set_armed(ctx: &egui::Context, view: Option<ArmedView>) {
     ctx.data_mut(|data| match view {
         Some(view) => data.insert_temp(armed_id(), view),
         None => data.remove::<ArmedView>(armed_id()),
@@ -1295,7 +1295,7 @@ pub(crate) fn set_armed(ctx: &egui::Context, view: Option<ArmedView>) {
 }
 
 /// What the DM pressed under an armed tile this frame.
-pub(crate) fn take_armed_action(ctx: &egui::Context) -> Option<ArmedAction> {
+pub fn take_armed_action(ctx: &egui::Context) -> Option<ArmedAction> {
     ctx.data_mut(|data| {
         let action = data.get_temp::<ArmedAction>(armed_action_id());
         data.remove::<ArmedAction>(armed_action_id());
@@ -1317,13 +1317,13 @@ fn changes_id() -> Id {
 }
 
 /// The run row whose stat block or sheet is drawn now, if any.
-pub(crate) fn roller(ctx: &egui::Context) -> Option<usize> {
+pub fn roller(ctx: &egui::Context) -> Option<usize> {
     ctx.data(|data| data.get_temp::<usize>(roller_id()))
 }
 
 /// A run's attack and damage changes for `row`, so that row's tiles show the numbers Splat
 /// rolls. Set it with the roller, around a run's reader.
-pub(crate) fn set_changes(ctx: &egui::Context, row: usize, changes: (i64, i64)) {
+pub fn set_changes(ctx: &egui::Context, row: usize, changes: (i64, i64)) {
     ctx.data_mut(|data| data.insert_temp(changes_id(), (row, changes)));
 }
 
@@ -1932,7 +1932,7 @@ pub(crate) enum Tile {
 ///
 /// Each tile comes with its place in the entry's whole list of actions, if it has one: the
 /// number it shows is the number that arms it.
-pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chip)]) {
+pub fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chip)]) {
     let tiles: Vec<Tile> = chips
         .iter()
         .map(|(place, chip)| Tile::Roll {
@@ -2086,12 +2086,12 @@ pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
 }
 
 /// The height of a line of buttons above the dock.
-pub(crate) const BAR_BUTTONS: f32 = 28.0;
+pub const BAR_BUTTONS: f32 = 28.0;
 
 /// The run's actions on one line above the dock while Lookup or Notes hide the panel: a
 /// quiet button for each tile, the armed one marked, with a run's changes in its numbers.
 /// The first button starts at the dock's content edge.
-pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
+pub fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
     let ctx = ui.ctx().clone();
     let armed = ctx.data(|data| data.get_temp::<ArmedView>(armed_id()));
     let changes = roller_changes(&ctx);

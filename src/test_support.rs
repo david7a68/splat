@@ -136,6 +136,7 @@ impl<S: ?Sized, F: Fn(&mut S) -> Counts> CachedWork<S, F> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

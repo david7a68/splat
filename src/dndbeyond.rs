@@ -24,9 +24,7 @@ struct RemoteCampaign {
     player_count: Option<u64>,
 }
 
-pub(crate) fn campaign_id<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<String, D::Error> {
+pub fn campaign_id<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
     let value = serde_json::Value::deserialize(deserializer)?;
     let id = match value {
         serde_json::Value::String(value) => value.parse::<u64>().ok(),
@@ -158,7 +156,7 @@ pub struct DndBeyond {
 impl DndBeyond {
     /// Give one remote campaign another name, as a new list from D&D Beyond would. Tests only:
     /// the test list is fixed (`fetch`).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn rename_remote(&mut self, id: &str, name: &str) {
         for remote in self.campaigns.iter_mut().filter(|remote| remote.id == id) {
             remote.name = name.to_owned();
@@ -167,7 +165,7 @@ impl DndBeyond {
     }
 
     /// A list is on its way, so what is on screen is due to change.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
     }

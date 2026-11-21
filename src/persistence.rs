@@ -182,7 +182,7 @@ pub struct Store {
 }
 
 impl Store {
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     pub fn user() -> Result<Self, String> {
         let dirs = directories::ProjectDirs::from("", "", "splat")
             .ok_or("Could not find your user settings directory.")?;
@@ -190,12 +190,12 @@ impl Store {
     }
 
     // Test builds must name a temporary file. They cannot open the user's settings.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn user() -> Result<Self, String> {
         Err("Test builds have no user settings.".into())
     }
 
-    pub(crate) fn at(path: PathBuf) -> Self {
+    pub fn at(path: PathBuf) -> Self {
         Self {
             path,
             baseline: None,
@@ -235,7 +235,7 @@ impl Store {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn save(&mut self, data: &UserData) -> Result<(), String> {
         self.save_with(data, Vec::new())
     }

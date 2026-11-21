@@ -21,10 +21,7 @@ impl Session {
 
     /// The official message broker carries the short-term token in the handshake URL.
     /// Keep this request private and never log the URL or websocket errors.
-    pub(crate) fn stream_request(
-        &self,
-        campaign: &str,
-    ) -> Result<tungstenite::http::Request<()>, String> {
+    pub fn stream_request(&self, campaign: &str) -> Result<tungstenite::http::Request<()>, String> {
         use base64::Engine;
         use tungstenite::client::IntoClientRequest;
         if campaign.parse::<u64>().ok().is_none_or(|n| n == 0)
@@ -70,7 +67,7 @@ impl Session {
 
     /// A session no request can use: test builds have no route to D&D Beyond. It lets a
     /// test show the signed-in state.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn for_test(refresh_in: Duration, expires_in: Duration) -> Self {
         Self {
             cookie: Zeroizing::new("test-cookie".to_owned()),
@@ -80,7 +77,7 @@ impl Session {
         }
     }
 
-    pub(crate) fn website_request(
+    pub fn website_request(
         &self,
         request: reqwest::blocking::RequestBuilder,
     ) -> Result<reqwest::blocking::RequestBuilder, String> {
@@ -124,20 +121,20 @@ fn cookie_header(cookie: &str) -> Result<header::HeaderValue, String> {
     Ok(value)
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn connect(cookie: Zeroizing<String>) -> Result<Session, String> {
     exchange(AUTH_URL, cookie)
 }
 
 // Every D&D Beyond request needs a Session. Test builds cannot sign in, so they
 // cannot reach the network, and the UI shows its ordinary connection failure.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn connect(_: Zeroizing<String>) -> Result<Session, String> {
     Err("Could not reach D&D Beyond. Check your connection.".into())
 }
 
 /// For the `#[ignore]`d live tests only, which a person runs on purpose.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn connect_live(cookie: Zeroizing<String>) -> Result<Session, String> {
     exchange(AUTH_URL, cookie)
 }

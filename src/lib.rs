@@ -23,15 +23,17 @@ extern crate self as splat;
 #[global_allocator]
 static TEST_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-mod art;
-pub mod auth;
-mod campaign_content;
-mod campaigns;
+use splat_content_ui::art;
+pub use splat_content_ui::auth;
+use splat_content_ui::campaign_content;
+use splat_content_ui::campaigns;
 mod combat_sync;
 mod commands;
-mod content_workspace;
-mod copy_dialog;
-mod creature_filter;
+#[cfg(test)]
+mod content_integration_tests;
+use splat_content_ui::content_workspace;
+use splat_content_ui::copy_dialog;
+use splat_content_ui::creature_filter;
 mod credentials;
 #[path = "design/app.rs"]
 mod design;
@@ -63,37 +65,37 @@ pub mod ownership {
     };
 }
 mod difficulty;
-mod dndbeyond;
+use splat_content_ui::dndbeyond;
 mod encounter_run;
 mod encounter_settings;
 mod encounters;
 mod file_batch;
+use splat_content_ui::hermetic;
+use splat_content_ui::history;
+use splat_content_ui::library;
 use splat_design::frame_clock;
-mod hermetic;
-mod history;
-mod library;
 #[cfg(test)]
 mod load_bench;
-mod lookup;
+use splat_content_ui::lookup;
 mod loot_editor;
-mod markdown_source;
-mod markdown_view;
-mod matching;
-mod npc_generator;
+use splat_content_ui::markdown_source;
+use splat_content_ui::markdown_view;
+use splat_content_ui::matching;
+use splat_content_ui::npc_generator;
 mod party;
 mod party_bar;
 mod party_stream;
 mod party_sync;
-mod persistence;
+use splat_content_ui::persistence;
 mod processing;
 mod recording;
-mod roll_table;
-mod rolls;
+use splat_content_ui::roll_table;
+use splat_content_ui::rolls;
 mod sessions;
 mod settings;
-mod sheet_writer;
+use splat_content_ui::sheet_writer;
 #[cfg(test)]
-mod test_support;
+use splat_content_ui::test_support;
 mod timeline;
 mod touchpad;
 #[path = "trackers/app.rs"]
@@ -101,7 +103,7 @@ mod trackers;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
-mod world;
+use splat_content_ui::world;
 
 use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
@@ -2184,8 +2186,12 @@ impl Splat {
             Page::World => {
                 if let Some(campaign) = &active {
                     let index = self.lookup.index();
-                    self.world_page
-                        .show(ui, index.as_ref(), campaign, &mut self.trackers);
+                    self.world_page.show(
+                        ui,
+                        index.as_ref(),
+                        campaign,
+                        &mut trackers::Reader(&mut self.trackers),
+                    );
                 } else {
                     self.no_campaign(ui);
                 }
@@ -3072,7 +3078,8 @@ impl eframe::App for Splat {
                 self.lookup
                     .set_written(self.sessions.written(&self.timeline));
             }
-            self.lookup.show(ctx, &mut self.trackers);
+            self.lookup
+                .show(ctx, &mut trackers::Reader(&mut self.trackers));
         }
         self.apply_tracker_act();
         self.add_tracker_act_to_timeline();

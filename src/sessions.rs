@@ -19,62 +19,7 @@ use std::{
 };
 use uuid::Uuid;
 
-const FOLDER_FIELD: &str = "splat_session_storage";
-pub const DEFAULT_FOLDER: &str = "Sessions";
-pub(crate) const TEMPLATES: &str = "Templates";
-pub(crate) const RECORDINGS: &str = "Recordings";
 const SAVE_AFTER: Duration = Duration::from_secs(2);
-
-/// The folder's name as the manifest gives it.
-pub fn folder_setting(campaign: &Campaign) -> Result<String, String> {
-    let document = CampaignDocument::load(campaign)?;
-    let entry = Entry::parse(&document.path, &document.text)?;
-    match entry
-        .fields
-        .get(FOLDER_FIELD)
-        .and_then(|v| v.get("directory"))
-    {
-        Some(value) => Ok(value
-            .as_str()
-            .ok_or("The session folder must be text.")?
-            .to_owned()),
-        None => Ok(DEFAULT_FOLDER.to_owned()),
-    }
-}
-
-fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err("Enter a session folder.".into());
-    }
-    let path = Path::new(name);
-    if path
-        .components()
-        .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
-        return Err("Session folders cannot contain “..”.".into());
-    }
-    Ok(if path.is_absolute() {
-        path.into()
-    } else {
-        campaign.path.join(path)
-    })
-}
-
-pub fn folder(campaign: &Campaign) -> Result<PathBuf, String> {
-    folder_typed(campaign).map_err(String::from)
-}
-
-/// The campaign's session folder, or why it cannot be used, as a typed fault.
-pub(crate) fn folder_typed(campaign: &Campaign) -> Result<PathBuf, page::FolderFault> {
-    let path = resolve(campaign, &folder_setting(campaign)?)?;
-    let document = CampaignDocument::load(campaign)?;
-    let entry = Entry::parse(&document.path, &document.text)?;
-    if entry.fields.contains_key(FOLDER_FIELD) && !path.is_dir() {
-        return Err(page::FolderFault::Missing(path));
-    }
-    Ok(path)
-}
 
 /// `open_folder_typed` with the fault's words, for the fixtures. The page keeps the fault typed.
 #[cfg(test)]
@@ -115,127 +60,7 @@ fn write_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-pub(crate) use splat_campaign::note::split_note;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Note {
-    pub id: Uuid,
-    pub number: u32,
-    pub title: String,
-    pub date: String,
-    pub path: PathBuf,
-    /// Other files that claim this session, such as a sync conflict's copy.
-    pub also: Vec<PathBuf>,
-}
-
-impl Note {
-    /// `Session 12`, then the title if it has one.
-    pub fn label(&self) -> String {
-        let mut label = format!("Session {}", self.number);
-        if !self.title.trim().is_empty() {
-            label.push_str(": ");
-            label.push_str(self.title.trim());
-        }
-        label
-    }
-
-    /// The name a link in Obsidian uses.
-    pub fn link(&self) -> String {
-        self.path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    }
-}
-
-/// The YAML inside a note's properties block, without its fences.
-pub(crate) fn properties_yaml(text: &str) -> Option<&str> {
-    let (front, _) = split_note(text)?;
-    Some(
-        front
-            .trim_start_matches('\u{feff}')
-            .trim_end()
-            .strip_suffix("---")?
-            .trim_start_matches("---"),
-    )
-}
-
-fn parse_note(path: &Path, text: &str) -> Option<Note> {
-    let value: Value = serde_yaml_ng::from_str(properties_yaml(text)?).ok()?;
-    let id = Uuid::parse_str(value.get("session_id")?.as_str()?).ok()?;
-    let text_of = |name: &str| match value.get(name) {
-        Some(Value::String(text)) => text.clone(),
-        Some(Value::Number(number)) => number.to_string(),
-        _ => String::new(),
-    };
-    Some(Note {
-        id,
-        number: value
-            .get("session_number")
-            .and_then(Value::as_u64)
-            .and_then(|n| u32::try_from(n).ok())
-            .unwrap_or(0),
-        title: text_of("session_title"),
-        date: text_of("session_date"),
-        path: path.to_owned(),
-        also: Vec::new(),
-    })
-}
-
-/// Every note in the folder, newest first. Other Markdown files there are not sessions.
-pub fn list_notes(folder: &Path) -> Vec<Note> {
-    let mut notes: Vec<Note> = note_paths(folder)
-        .into_iter()
-        .filter_map(|path| parse_note(&path, &fs::read_to_string(&path).ok()?))
-        .collect();
-    // The plainest name first, so that a copy such as `Session 12 (conflict).md` never wins.
-    let known = known_notes(folder);
-    notes.sort_by_key(|note| {
-        (
-            known
-                .get(&note.id)
-                .is_none_or(|path| folder.join(path) != note.path),
-            note.path.as_os_str().len(),
-            note.path.clone(),
-        )
-    });
-    let mut unique: Vec<Note> = Vec::new();
-    for note in notes {
-        match unique.iter_mut().find(|kept| kept.id == note.id) {
-            Some(kept) => kept.also.push(note.path),
-            None => unique.push(note),
-        }
-    }
-    unique.sort_by(|a, b| {
-        b.number
-            .cmp(&a.number)
-            .then_with(|| b.date.cmp(&a.date))
-            .then_with(|| a.path.cmp(&b.path))
-    });
-    unique
-}
-
-fn note_paths(folder: &Path) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-    for file in fs::read_dir(folder).into_iter().flatten().flatten() {
-        let path = file.path();
-        let name = file.file_name();
-        if name.to_string_lossy().starts_with('.') || name == TEMPLATES || name == RECORDINGS {
-            continue;
-        }
-        let Ok(kind) = file.file_type() else {
-            continue;
-        };
-        if kind.is_dir() {
-            paths.extend(note_paths(&path));
-        } else if kind.is_file() && path.extension().is_some_and(|ext| ext == "md") {
-            paths.push(path);
-        }
-    }
-    paths
-}
-
-const NOTE_PATHS: &str = ".splat-session-paths.json";
+pub use splat_content_ui::session_notes::*;
 
 pub(crate) struct IdentityUndo {
     path: PathBuf,
@@ -281,13 +106,6 @@ impl IdentityUndo {
     }
 }
 
-fn known_notes(folder: &Path) -> std::collections::BTreeMap<Uuid, PathBuf> {
-    fs::read(folder.join(NOTE_PATHS))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
-}
-
 pub(crate) fn remember_notes(folder: &Path, notes: &[Note]) -> Result<(), String> {
     let path = folder.join(NOTE_PATHS);
     let mut known = known_notes(folder);
@@ -326,21 +144,6 @@ pub fn unreadable_notes(folder: &Path) -> Vec<String> {
 /// Whether a file's words claim a session whose properties cannot be read.
 fn unreadable_note(path: &Path, text: &str) -> bool {
     text.lines().any(|line| line.starts_with("session_id:")) && parse_note(path, text).is_none()
-}
-
-/// What a file name cannot hold, in any common file system.
-pub(crate) fn file_safe(text: &str) -> String {
-    text.chars()
-        .filter(|c| {
-            !matches!(
-                c,
-                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '#' | '^' | '[' | ']'
-            )
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 fn free_path(folder: &Path, stem: &str, extension: &str) -> PathBuf {
@@ -601,33 +404,6 @@ pub(crate) fn move_storage(
         return Err(errors.join(" "));
     }
     Ok((new, moved))
-}
-
-/// Moves `source` to `target` in one step, and never replaces a file at `target`: Linux's
-/// `RENAME_NOREPLACE` refuses with `AlreadyExists`, even for a file that arrives at the last
-/// moment. Moves across file systems fail with `EXDEV`.
-#[cfg(target_os = "linux")]
-pub(crate) fn rename_no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
-    use std::os::unix::ffi::OsStrExt;
-    let from =
-        std::ffi::CString::new(source.as_os_str().as_bytes()).map_err(std::io::Error::other)?;
-    let to =
-        std::ffi::CString::new(target.as_os_str().as_bytes()).map_err(std::io::Error::other)?;
-    // Both paths are valid C strings.
-    if unsafe {
-        libc::renameat2(
-            libc::AT_FDCWD,
-            from.as_ptr(),
-            libc::AT_FDCWD,
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    } == 0
-    {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
 }
 
 /// Why a file did not move, and where it is now (round 30 B7e): the step that failed, both
@@ -1448,25 +1224,6 @@ pub fn linked_names(text: &str) -> Vec<String> {
     names
 }
 
-/// A note's `[[links]]` as the words a reader expects, not as markup.
-pub fn plain_links(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(start) = rest.find("[[") {
-        out.push_str(&rest[..start]);
-        rest = &rest[start + 2..];
-        let Some(end) = rest.find("]]") else {
-            out.push_str("[[");
-            break;
-        };
-        let inner = &rest[..end];
-        out.push_str(inner.rsplit('|').next().unwrap_or(inner).trim());
-        rest = &rest[end + 2..];
-    }
-    out.push_str(rest);
-    out
-}
-
 /// Add a line to a note's plan: under `Plan for tonight`, or where other words go.
 pub fn insert_in_plan(body: &mut String, words: &str) {
     const PLAN: &str = "## Plan for tonight";
@@ -1553,36 +1310,6 @@ pub fn plan_lines(body: &str) -> Vec<PlanLine> {
             None => PlanLine::Links(each_linked_name(line)),
         })
         .collect()
-}
-
-/// The note's words with one line replaced, or taken out with `None`. The line is the one at
-/// `at` that the act was drawn from, and it must still hold `line` exactly. `None` comes back
-/// when that place holds other words: the act never looks for another line that reads the same.
-pub fn change_line(body: &str, at: usize, line: &str, new: Option<&str>) -> Option<String> {
-    let lines: Vec<&str> = body.split_inclusive('\n').collect();
-    if lines.get(at)?.trim_end_matches(['\n', '\r']) != line {
-        return None;
-    }
-    let mut out = String::with_capacity(body.len());
-    for (index, text) in lines.iter().enumerate() {
-        if index != at {
-            out.push_str(text);
-        } else if let Some(new) = new {
-            out.push_str(new);
-            out.push_str(&text[line.len()..]);
-        }
-    }
-    Some(out)
-}
-
-/// The same task line, ticked or not: one character changes.
-pub fn ticked(line: &str, done: bool) -> String {
-    let at = line.find('[').map_or(0, |at| at + 1);
-    let mut out = line.to_owned();
-    if at > 0 && at < line.len() {
-        out.replace_range(at..at + 1, if done { "x" } else { " " });
-    }
-    out
 }
 
 /// A scene's line at the end of the plan. A note with no plan gets the heading at its end.

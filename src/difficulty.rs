@@ -546,27 +546,7 @@ fn party_words(party: usize) -> String {
     crate::design::count(party, "party", "party")
 }
 
-/// Arrivals' heading line of a group, after its name (the name is the heading's own and never
-/// part of this line, so no form of the line can paint it twice; SB1): its side, its member
-/// count, and its own XP (`XP 150`). The group's own XP shows only where the fight has no form:
-/// a heading that says `Fight after: XP 450` never says a second XP number (FJ3).
-pub struct FightAfter<'a> {
-    pub side: &'a str,
-    pub members: &'a str,
-    pub worth: &'a str,
-}
-
-impl FightAfter<'_> {
-    /// The group's own facts in the line's one order: `Enemies · 3 members · XP 150`. The
-    /// Encounters list, the plan (`RunGroup::summary`) and Arrivals start a group with them.
-    pub fn facts(&self) -> String {
-        [self.side, self.members, self.worth]
-            .into_iter()
-            .filter(|words| !words.is_empty())
-            .collect::<Vec<_>>()
-            .join(" · ")
-    }
-}
+pub(crate) use splat_content_ui::roster::FightAfter;
 
 /// When a part gives way: its rank among every part of the line. A lower rank goes first.
 const PARTY_GOES: usize = 0;

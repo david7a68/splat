@@ -147,69 +147,7 @@ pub(crate) fn folder_scan_ends() -> usize {
     FOLDER_SCAN_ENDS.with(std::cell::Cell::get)
 }
 
-/// Why the session folder cannot be used, or why a write to it failed. The kind gives the tone,
-/// in the page's own place and in the footer of the Session folder form.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FolderFault {
-    /// The folder the campaign names is gone: the DM chooses it again (routing row 136).
-    Missing(PathBuf),
-    /// The campaign's note or the folder cannot be read, in the system's own words.
-    CannotRead(String),
-    /// A write failed: the folder setting, the move, or the notes' list.
-    NotSaved(String),
-    /// A folder save waited, because the open note could not be saved first.
-    NoteNotSaved,
-    /// Save folder found files in the current folder that the form did not show yet.
-    FilesCame,
-    /// Save without moving found other files in the current folder than its warning named.
-    FilesChanged,
-    /// Save without moving found no file left in the current folder: Save folder is the way on.
-    FilesGone,
-}
-
-impl From<String> for FolderFault {
-    fn from(error: String) -> Self {
-        Self::CannotRead(error)
-    }
-}
-
-impl From<FolderFault> for String {
-    fn from(fault: FolderFault) -> Self {
-        design::outcome::fault_words(&fault).as_str().to_owned()
-    }
-}
-
-impl Fault for FolderFault {
-    fn severity(&self) -> Severity {
-        match self {
-            Self::Missing(_) => Severity::NeedsFixing,
-            Self::CannotRead(_) => Severity::CannotRead,
-            Self::NotSaved(_) | Self::NoteNotSaved => Severity::NotSaved,
-            Self::FilesCame | Self::FilesChanged | Self::FilesGone => Severity::NeedsFixing,
-        }
-    }
-    fn cause(&self) -> Sentence {
-        match self {
-            Self::Missing(folder) => crate::sentence!(
-                "Splat cannot find the session folder {}. It may have been moved or renamed.",
-                folder.display()
-            ),
-            Self::CannotRead(words) | Self::NotSaved(words) => notice_sentence(words),
-            Self::NoteNotSaved => crate::sentence!(
-                "Not changed. Your note could not be saved. Choose what to do with it first."
-            ),
-            Self::FilesCame => crate::sentence!(
-                "Not changed. The current folder now keeps session files. Choose to move them or not."
-            ),
-            Self::FilesChanged => crate::sentence!(
-                "Not changed. The files in the current folder changed. Check the new counts, then choose again."
-            ),
-            Self::FilesGone => crate::sentence!(
-                "Not changed. The current folder has no files now. Use Save folder."
-            ),
-        }
-    }
-}
+pub(crate) use splat_content_ui::session_notes::FolderFault;
 
 /// The Session folder's acts: `Save folder` in its save row, and the warning's two choices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -917,15 +855,7 @@ impl Fault for PageFault {
     }
 }
 
-/// The page's notice slot holds its words as a sentence; an error of the system comes as its
-/// own text and is made a sentence here, the one place the page takes words from outside.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "an error of the system or of a file keeps its own words (design::results::STAGED_ALLOWS)"
-)]
-fn notice_sentence(words: &str) -> Sentence {
-    Sentence::outside(words).unwrap_or(crate::sentence!("Something went wrong."))
-}
+use splat_content_ui::session_notes::notice_sentence;
 
 /// A pane body that manages its own room, for one of the pane's closed reasons.
 #[allow(

@@ -280,7 +280,7 @@ impl LibraryKept {
     }
 
     /// How many marks the store holds, for the tests that no mark outlives its data.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(super) fn marks(&self) -> usize {
         self.marks.newest_first(&()).count()
     }

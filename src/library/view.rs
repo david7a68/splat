@@ -47,7 +47,7 @@ pub(crate) fn title_with_art(
 }
 
 /// What the reader's links can open. An index belongs to the implementer.
-pub(crate) trait Links {
+pub trait Links {
     /// The one entry a reference names, or nothing if it is missing or ambiguous.
     fn find(&self, reference: &Reference) -> Option<(usize, String)>;
     /// Like `find`, for a reference that must name a spell.
@@ -66,7 +66,7 @@ pub(crate) trait Links {
 }
 
 /// For an entry shown with nothing to link to.
-pub(crate) struct NoLinks;
+pub struct NoLinks;
 impl Links for NoLinks {
     fn find(&self, _: &Reference) -> Option<(usize, String)> {
         None
@@ -248,14 +248,14 @@ fn spell_links(ui: &mut egui::Ui, targets: Vec<Option<(usize, String)>>) -> Opti
 }
 
 /// Where an entry comes from.
-pub(crate) struct Origin<'a> {
+pub struct Origin<'a> {
     pub path: &'a str,
     pub owner: &'a str,
     pub builtin: bool,
 }
 
 /// Values from an open run. The saved entry stays unchanged.
-pub(crate) struct RunValues {
+pub struct RunValues {
     pub armor_class: Option<i64>,
     pub hp: Option<i64>,
     pub current_hp: Option<i64>,
@@ -303,7 +303,7 @@ pub(crate) fn show_with_related(
     )
 }
 
-pub(crate) fn show_run(
+pub fn show_run(
     ui: &mut egui::Ui,
     entry: &Entry,
     origin: &Origin<'_>,

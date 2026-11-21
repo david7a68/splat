@@ -3847,6 +3847,7 @@ dependencies = [
  "splat-campaign",
  "splat-character",
  "splat-content",
+ "splat-content-ui",
  "splat-design",
  "splat-execution",
  "splat-trackers",
@@ -3926,6 +3927,36 @@ dependencies = [
  "splat-assets",
  "tempfile",
  "uuid",
+]
+
+[[package]]
+name = "splat-content-ui"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "directories",
+ "eframe",
+ "egui-phosphor",
+ "egui_extras",
+ "egui_kittest",
+ "image",
+ "libc",
+ "pulldown-cmark",
+ "reqwest",
+ "rfd",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-design",
+ "splat-execution",
+ "splat-trackers",
+ "tempfile",
+ "tungstenite",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]

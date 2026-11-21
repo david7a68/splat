@@ -55,14 +55,16 @@ do not tell you the scope. For example, the tracker tests load
 | `crates/cli` | Verification tools |
 | `src/design` | Shared egui widgets and messages (`splat-design`) |
 | `src/trackers` | Trackers panel and history (`splat-trackers`) |
+| `src/content_ui` | World, Lookup, Library, Campaign, and their shared readers (`splat-content-ui`) |
 | `src` | Desktop app and public content, character and execution APIs |
 
 Character, execution and campaign can compile in parallel once content metadata
 is ready. The desktop library depends on the logic crates directly. The
 verification tools use content, character and execution.
 
-The design and Trackers crates keep their sources under `src/` so the design
-checks follow the same files. A Tracker edit rebuilds the feature and the desktop.
+The UI crates keep their sources under `src/` so the design checks follow the same files.
+An edit in Trackers rebuilds Trackers and the desktop. An edit in World, Lookup, Library, or
+Campaign rebuilds their crate and the desktop. Encounters and Run compile in the desktop crate.
 
 Development and test builds use 16 code-generation units and include file and
 line information in backtraces. They disable incremental compilation by

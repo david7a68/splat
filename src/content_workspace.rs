@@ -17,7 +17,7 @@ use std::{
 use uuid::Uuid;
 
 /// Recover an identity even when another front-matter line cannot be parsed.
-pub(crate) fn note_id(text: &str) -> Option<Uuid> {
+pub fn note_id(text: &str) -> Option<Uuid> {
     Uuid::parse_str(&note_property(text, "splat_id:")?)
         .ok()
         .filter(|id| !id.is_nil())
@@ -44,7 +44,7 @@ pub(crate) fn manifest_fault_tone(on_disk: bool) -> crate::design::Tone {
     }
 }
 /// What `Replace with a basic <path>` keeps and what it replaces, in Campaign and in Library.
-pub(crate) fn manifest_replace_consequence(path: &str) -> String {
+pub fn manifest_replace_consequence(path: &str) -> String {
     format!(
         "This keeps the package name and its links. It replaces the other contents of {path}, including its description. The entries stay unchanged."
     )
@@ -304,8 +304,8 @@ impl PackageCopy {
 }
 
 /// [`UNDO_ENDED_REASON`]'s words, for the visual checks that find them on screen.
-#[cfg(test)]
-pub(crate) const UNDO_ENDED: &str =
+#[cfg(any(test, feature = "test-support"))]
+pub const UNDO_ENDED: &str =
     "A file changed on disk after this change. Undo is no longer available.";
 
 /// Why a kept result's Undo is blocked: a file it wrote changed after the write.
@@ -321,7 +321,7 @@ pub(crate) fn holds(root: &Path, path: &str, text: &str) -> bool {
         .is_some_and(|bytes| bytes == text.as_bytes())
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Runs once, between the check that every file still holds what was read and the first
     /// write: a test changes a file on disk at the last moment here.
@@ -331,8 +331,8 @@ thread_local! {
 
 /// Test hook: `hook` runs once inside the next `ContentEdits` write, after its files are checked
 /// and directly before it writes.
-#[cfg(test)]
-pub(crate) fn before_next_write(hook: impl FnOnce() + 'static) {
+#[cfg(any(test, feature = "test-support"))]
+pub fn before_next_write(hook: impl FnOnce() + 'static) {
     BEFORE_WRITE.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
 }
 
@@ -404,7 +404,7 @@ impl ContentEdits {
                 ));
             }
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         BEFORE_WRITE.with(|hook| {
             if let Some(hook) = hook.borrow_mut().take() {
                 hook();
@@ -440,7 +440,7 @@ impl ContentEdits {
 }
 
 /// A repair keeps the registered identity and never overwrites a later disk edit.
-pub(crate) struct ManifestWrite {
+pub struct ManifestWrite {
     root: PathBuf,
     path: String,
     before: Option<String>,
@@ -457,7 +457,7 @@ impl ManifestWrite {
         })
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn write(module: &Module) -> Result<Self, String> {
         let path = package_manifest_path(module);
         let replace = manifest_file_exists(module, &path);
@@ -529,7 +529,7 @@ impl ManifestWrite {
     }
     /// Whether the write replaced a file that was there. Tests only: the result says
     /// `written again` either way.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn replaced(&self) -> bool {
         self.before.is_some()
     }
@@ -958,7 +958,7 @@ fn missing_reference_context(
 
 impl Catalogue {
     /// Run copies keep enough provenance to distinguish a removed package from a deleted file.
-    pub(crate) fn run_entry(&self, id: Uuid) -> Entry {
+    pub fn run_entry(&self, id: Uuid) -> Entry {
         let indexed = &self.entries[&id];
         let mut entry = indexed.entry.clone();
         if let Some((path, _)) = self.files.get(&id) {
@@ -1831,7 +1831,7 @@ impl CampaignDocument {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn save_metadata(campaign: &Campaign, previous: Option<&Campaign>) -> Result<(), String> {
         crate::file_batch::apply(&[Self::metadata_change(campaign, previous)?])
     }
@@ -2175,7 +2175,7 @@ pub fn redirect_reference(text: &str, old: &Entry, new_id: Uuid) -> Result<Strin
         }
     }
     let updated = content::formats::patch_model(text, &changes)?;
-    let Some((front, body)) = crate::sessions::split_note(&updated) else {
+    let Some((front, body)) = crate::session_notes::split_note(&updated) else {
         return Ok(updated);
     };
     Ok(format!(
@@ -2666,115 +2666,6 @@ mod tests {
             fs::read_to_string(temp.path().join("Package.md")).unwrap(),
             manifest
         );
-    }
-
-    #[test]
-    fn package_copy_keeps_original_entries_encounters_and_byte_exact_undo() {
-        use crate::visual_tests::fixture::{Seed, World};
-        let temp = tempfile::tempdir().unwrap();
-        let world = World::build(
-            temp.path(),
-            &temp.path().join("cache"),
-            "copy-test",
-            Seed::Campaign,
-        )
-        .unwrap();
-        let app = world.app();
-        let original = &app.campaigns.modules()[0];
-        let campaign = app.campaigns.active_campaign().unwrap();
-        let copied = temp.path().join("copy");
-        fs::create_dir(&copied).unwrap();
-        let (entries, errors) = content::read_directory(&original.path).unwrap();
-        assert!(errors.is_empty());
-        let before: Vec<_> = entries
-            .iter()
-            .map(|e| {
-                let text = fs::read_to_string(original.path.join(&e.path)).unwrap();
-                let to = copied.join(&e.path);
-                fs::create_dir_all(to.parent().unwrap()).unwrap();
-                fs::write(to, &text).unwrap();
-                (e.path.clone(), text)
-            })
-            .collect();
-        let copy = PackageCopy::write(&copied, "New Marches").unwrap();
-        let modules = [original.clone(), copy.module.clone()];
-        let catalogue = Catalogue::load(&modules, Some(&campaign)).unwrap();
-        assert!(catalogue.errors.is_empty(), "{:?}", catalogue.errors);
-        for entry in &entries {
-            assert_eq!(catalogue.entries[&entry.id].owner, original.id);
-            assert_eq!(
-                fs::read_to_string(original.path.join(&entry.path)).unwrap(),
-                before.iter().find(|(p, _)| p == &entry.path).unwrap().1
-            );
-        }
-        let (copies, _) = content::read_directory(&copied).unwrap();
-        assert_eq!(copies.len(), entries.len());
-        for entry in &copies {
-            assert!(
-                !entries
-                    .iter()
-                    .any(|old| old.id == entry.id || old.key == entry.key)
-            );
-            assert_eq!(catalogue.entries[&entry.id].owner, copy.module.id);
-            for reference in content::required_references(entry).unwrap() {
-                assert!(catalogue.resolve(&reference).is_ok());
-            }
-        }
-        for name in ["Bridge Ambush", "Shrine of Cinders"] {
-            let encounter = catalogue
-                .entries
-                .values()
-                .find(|e| e.entry.name == name)
-                .unwrap();
-            let refs = content::required_references(&encounter.entry).unwrap();
-            assert!(!refs.is_empty());
-            for reference in refs {
-                assert!(catalogue.resolve(&reference).is_ok());
-            }
-        }
-        let (rosters, _) = content::read_directory(&campaign.path).unwrap();
-        let rosters: Vec<_> = rosters
-            .into_iter()
-            .filter(|entry| matches!(entry.kind.as_str(), "encounter" | "encounter_group"))
-            .collect();
-        let originals: Vec<_> = rosters
-            .iter()
-            .map(|entry| fs::read_to_string(campaign.path.join(&entry.path)).unwrap())
-            .collect();
-        let edits = copy.use_in_rosters(&campaign).unwrap();
-        assert!(!edits.files.is_empty());
-        for (entry, before) in rosters.iter().zip(&originals) {
-            let mut expected = before.clone();
-            for old in &entries {
-                let replacement = copies.iter().find(|new| new.path == old.path).unwrap();
-                expected = redirect_reference(&expected, old, replacement.id).unwrap();
-            }
-            let after = fs::read_to_string(campaign.path.join(&entry.path)).unwrap();
-            assert_eq!(
-                after, expected,
-                "Only references change; counts, names, changes and prose stay: {}",
-                entry.path
-            );
-        }
-        edits.undo().unwrap();
-        for (entry, before) in rosters.iter().zip(&originals) {
-            assert_eq!(
-                fs::read_to_string(campaign.path.join(&entry.path)).unwrap(),
-                *before
-            );
-        }
-        copy.undo().unwrap();
-        for (path, text) in &before {
-            assert_eq!(fs::read(copied.join(path)).unwrap(), text.as_bytes());
-        }
-        let copy = PackageCopy::write(&copied, "New Marches").unwrap();
-        fs::write(copied.join("Module.md"), "A later edit").unwrap();
-        assert!(copy.undo().is_err());
-        for (path, _, after) in &copy.files {
-            if path != "Module.md" {
-                assert_eq!(fs::read_to_string(copied.join(path)).unwrap(), *after);
-            }
-        }
     }
 
     #[test]
@@ -3865,5 +3756,106 @@ mod tests {
                 .iter()
                 .all(|error| !error.contains(&package.to_string()))
         );
+    }
+}
+
+#[cfg(feature = "test-support")]
+pub fn package_copy_keeps_original_entries_encounters_and_byte_exact_undo(
+    temp: &tempfile::TempDir,
+    original: &Module,
+    campaign: Campaign,
+) {
+    let copied = temp.path().join("copy");
+    fs::create_dir(&copied).unwrap();
+    let (entries, errors) = content::read_directory(&original.path).unwrap();
+    assert!(errors.is_empty());
+    let before: Vec<_> = entries
+        .iter()
+        .map(|e| {
+            let text = fs::read_to_string(original.path.join(&e.path)).unwrap();
+            let to = copied.join(&e.path);
+            fs::create_dir_all(to.parent().unwrap()).unwrap();
+            fs::write(to, &text).unwrap();
+            (e.path.clone(), text)
+        })
+        .collect();
+    let copy = PackageCopy::write(&copied, "New Marches").unwrap();
+    let modules = [original.clone(), copy.module.clone()];
+    let catalogue = Catalogue::load(&modules, Some(&campaign)).unwrap();
+    assert!(catalogue.errors.is_empty(), "{:?}", catalogue.errors);
+    for entry in &entries {
+        assert_eq!(catalogue.entries[&entry.id].owner, original.id);
+        assert_eq!(
+            fs::read_to_string(original.path.join(&entry.path)).unwrap(),
+            before.iter().find(|(p, _)| p == &entry.path).unwrap().1
+        );
+    }
+    let (copies, _) = content::read_directory(&copied).unwrap();
+    assert_eq!(copies.len(), entries.len());
+    for entry in &copies {
+        assert!(
+            !entries
+                .iter()
+                .any(|old| old.id == entry.id || old.key == entry.key)
+        );
+        assert_eq!(catalogue.entries[&entry.id].owner, copy.module.id);
+        for reference in content::required_references(entry).unwrap() {
+            assert!(catalogue.resolve(&reference).is_ok());
+        }
+    }
+    for name in ["Bridge Ambush", "Shrine of Cinders"] {
+        let encounter = catalogue
+            .entries
+            .values()
+            .find(|e| e.entry.name == name)
+            .unwrap();
+        let refs = content::required_references(&encounter.entry).unwrap();
+        assert!(!refs.is_empty());
+        for reference in refs {
+            assert!(catalogue.resolve(&reference).is_ok());
+        }
+    }
+    let (rosters, _) = content::read_directory(&campaign.path).unwrap();
+    let rosters: Vec<_> = rosters
+        .into_iter()
+        .filter(|entry| matches!(entry.kind.as_str(), "encounter" | "encounter_group"))
+        .collect();
+    let originals: Vec<_> = rosters
+        .iter()
+        .map(|entry| fs::read_to_string(campaign.path.join(&entry.path)).unwrap())
+        .collect();
+    let edits = copy.use_in_rosters(&campaign).unwrap();
+    assert!(!edits.files.is_empty());
+    for (entry, before) in rosters.iter().zip(&originals) {
+        let mut expected = before.clone();
+        for old in &entries {
+            let replacement = copies.iter().find(|new| new.path == old.path).unwrap();
+            expected = redirect_reference(&expected, old, replacement.id).unwrap();
+        }
+        let after = fs::read_to_string(campaign.path.join(&entry.path)).unwrap();
+        assert_eq!(
+            after, expected,
+            "Only references change; counts, names, changes and prose stay: {}",
+            entry.path
+        );
+    }
+    edits.undo().unwrap();
+    for (entry, before) in rosters.iter().zip(&originals) {
+        assert_eq!(
+            fs::read_to_string(campaign.path.join(&entry.path)).unwrap(),
+            *before
+        );
+    }
+    copy.undo().unwrap();
+    for (path, text) in &before {
+        assert_eq!(fs::read(copied.join(path)).unwrap(), text.as_bytes());
+    }
+    let copy = PackageCopy::write(&copied, "New Marches").unwrap();
+    fs::write(copied.join("Module.md"), "A later edit").unwrap();
+    assert!(copy.undo().is_err());
+    for (path, _, after) in &copy.files {
+        if path != "Module.md" {
+            assert_eq!(fs::read_to_string(copied.join(path)).unwrap(), *after);
+        }
     }
 }

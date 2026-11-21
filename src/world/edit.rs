@@ -13,7 +13,7 @@ use crate::{
     library::write_note,
     lookup::{ContentIndex, Item},
     persistence::Campaign,
-    sessions,
+    session_notes as sessions,
 };
 use eframe::egui;
 use serde_yaml_ng::Value;
@@ -23,10 +23,10 @@ use uuid::Uuid;
 const SAVED: &str = "Changes saved.";
 /// What the form says when it closes with nothing to write, for the checks: the footer says it
 /// with a checked `sentence!` of the same words (`Reader::footer`).
-#[cfg(test)]
-pub(crate) const ALREADY_SAVED: &str = "Your changes are already in the note.";
+#[cfg(any(test, feature = "test-support"))]
+pub const ALREADY_SAVED: &str = "Your changes are already in the note.";
 /// The faint example in an empty Status field: the rule the value must follow.
-pub(crate) const STATUS_HINT: &str = "A short word, such as alive.";
+pub const STATUS_HINT: &str = "A short word, such as alive.";
 
 /// Only the DM's own world entries change here. A shared identity must be fixed first.
 pub(super) fn editable(item: &Item, index: &ContentIndex) -> bool {
@@ -844,7 +844,7 @@ impl Reader {
         self.edit_forms_into(&mut other.edited_elsewhere);
         // Copied again only when a field here opened or closed (its stamp), not each pass.
         if other.logs_elsewhere_from != self.held.log_fields.keys {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             super::LOG_KEY_SHARES.with(|count| count.set(count.get() + 1));
             other.logs_elsewhere.clear();
             other
@@ -907,8 +907,8 @@ impl Reader {
     }
 
     /// The text of the open edit draft of `id`, for the checks.
-    #[cfg(test)]
-    pub(crate) fn draft_text(&self, id: Uuid) -> Option<&str> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn draft_text(&self, id: Uuid) -> Option<&str> {
         self.edits.get(&id).map(|draft| draft.now.text.as_str())
     }
 
@@ -1190,7 +1190,7 @@ impl Reader {
         let switch = if log_waits {
             super::LOG_WAITS_FOR_SAVE
         } else {
-            crate::encounters::draft_switch_reason()
+            crate::content_actions::draft_switch_reason()
         };
         let clean_reason = log_waits.then_some(super::LOG_WAITS_FOR_CANCEL);
         let narrow = switch_reason_below(ui, switch);

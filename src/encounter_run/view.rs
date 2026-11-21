@@ -6944,42 +6944,7 @@ pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     }
 }
 
-pub(crate) fn change_preview(row: &Row) -> String {
-    fn numbers(text: &str) -> String {
-        let mut result = String::new();
-        let mut number = String::new();
-        for c in text.chars().chain(std::iter::once('\0')) {
-            if c.is_ascii_digit() || (c == '-' && number.is_empty()) {
-                number.push(c);
-            } else {
-                if !number.is_empty() {
-                    result.push_str(&super::grouped_number(&number));
-                    number.clear();
-                }
-                if c != '\0' {
-                    result.push(c);
-                }
-            }
-        }
-        result
-    }
-    format!(
-        "{} → {}{}",
-        numbers(if row.label == "Speed" {
-            row.base.trim().trim_end_matches('.')
-        } else {
-            &row.base
-        }),
-        numbers(&row.changed),
-        if row.by_hand {
-            " · add by hand"
-        } else if row.in_rolls {
-            " · in Splat’s rolls"
-        } else {
-            ""
-        }
-    )
-}
+pub(crate) use splat_content_ui::roster::change_preview;
 
 /// An Arrivals row's status and members for a slot `width` wide. None when a part of the status
 /// cannot fit the slot whole: then the status takes a full-width line of its own.

@@ -3,14 +3,22 @@
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+#[path = "world/checks.rs"]
 mod checks;
-pub(crate) mod edit;
+#[path = "world/edit.rs"]
+pub mod edit;
+#[path = "world/fields.rs"]
 mod fields;
-pub(crate) mod file_fault;
+#[path = "world/file_fault.rs"]
+pub mod file_fault;
+#[path = "world/lines.rs"]
 pub mod lines;
+#[path = "world/page.rs"]
 pub mod page;
+#[path = "world/related.rs"]
 mod related;
-pub(crate) mod repair;
+#[path = "world/repair.rs"]
+pub mod repair;
 
 use crate::{
     content_workspace::{EntryRef, patch_fields},
@@ -22,12 +30,12 @@ use crate::{
         },
         reader as style,
     },
-    encounter_run::{GroupMember, RunGroup},
     library::{note_path, view, write_note},
     lookup::{ContentIndex, Item},
     markdown_view::{FILE_LINK, NOTE_LINK},
     persistence::Campaign,
-    sessions, timeline,
+    roster::{GroupMember, RunGroup},
+    session_notes as sessions,
 };
 use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
@@ -40,6 +48,7 @@ use splat::content::{
     layout::{Field, FlagKind},
     overrides::Overrides,
 };
+use splat_campaign::timeline;
 use std::{
     collections::HashMap,
     fs,
@@ -50,7 +59,7 @@ use std::{
 use uuid::Uuid;
 
 /// The kind of a plain note's Lookup item. No file holds this kind.
-pub(crate) const NOTE_KIND: &str = "world_note";
+pub const NOTE_KIND: &str = "world_note";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Role {
@@ -182,7 +191,9 @@ pub fn scan(root: &Path, sessions_folder: &Path) -> Scan {
             sessions::split_note(&text).map_or((None, text.as_str()), |(f, b)| (Some(f), b));
         // The tracker ledger is Splat's own file, not a world note. A note of the DM's that has
         // that name and is no ledger stays a world note.
-        if path.parent() == Some(root) && crate::trackers::ledger::is_ledger(&file_name, front) {
+        if path.parent() == Some(root)
+            && splat_campaign::trackers::ledger::is_ledger(&file_name, front)
+        {
             continue;
         }
         let (name, role) = match transcript {
@@ -349,7 +360,7 @@ pub(crate) fn redirect_links(text: &str, old: &Entry, new_id: Uuid) -> String {
 /// Rename note links outside code. Keep headings, aliases, and unrelated words.
 pub(crate) fn rename_note_links(text: &str, old: &str, new: &str) -> (String, usize) {
     let mut count = 0;
-    let (front, body) = crate::sessions::split_note(text).unwrap_or(("", text));
+    let (front, body) = crate::session_notes::split_note(text).unwrap_or(("", text));
     let after = outside_code(body, |part, output| {
         let mut copied = 0;
         for (range, embed, target, words) in each_link(part) {
@@ -1176,7 +1187,7 @@ impl NoteFaults {
 
 /// The save row's one reason while a Log field of the note waits for a changed form: the
 /// campaign switch and the Log line have one cause (ruling Q-t).
-pub(crate) const LOG_WAITS_FOR_SAVE: &str = "Save or discard to add a Log line or switch campaign.";
+pub const LOG_WAITS_FOR_SAVE: &str = "Save or discard to add a Log line or switch campaign.";
 /// The same, for a form with no changes: Cancel closes it and opens the field.
 pub(crate) const LOG_WAITS_FOR_CANCEL: &str = "Cancel to add a Log line.";
 
@@ -1255,7 +1266,7 @@ fn path_in(folder: &str, name: &str) -> String {
 
 /// Where a new entry of this kind and name will be written, from the campaign's notes as the
 /// index read them. It uses the folder rule of the write, so a card can promise the real path.
-pub(crate) fn new_entry_path(index: Option<&ContentIndex>, name: &str, kind: &str) -> String {
+pub fn new_entry_path(index: Option<&ContentIndex>, name: &str, kind: &str) -> String {
     let folder = index
         .and_then(|index| index.type_folder(kind))
         .unwrap_or_else(|| default_folder(kind));
@@ -1287,7 +1298,7 @@ fn folder_for(campaign: &Campaign, kind: &str) -> String {
 
 /// The link to an entry just made by `create_entry` or `create_generated`, before the index
 /// reads it. Its bare name serves when that is the file's name and nothing else has it.
-pub(crate) fn new_entry_link(index: Option<&ContentIndex>, name: &str, kind: &str) -> String {
+pub fn new_entry_link(index: Option<&ContentIndex>, name: &str, kind: &str) -> String {
     let name = name.trim();
     let stem = sessions::file_safe(name);
     let taken = index.is_some_and(|index| {
@@ -1374,9 +1385,9 @@ fn create_at(
 
 /// What giving a note a type gives the DM, in the DM's words. It does not repeat the section
 /// heading.
-pub(crate) const TYPE_HELP: &str = "A type adds the fields for that kind of note, such as an NPC’s place and stat block. Its text stays the same.";
+pub const TYPE_HELP: &str = "A type adds the fields for that kind of note, such as an NPC’s place and stat block. Its text stays the same.";
 /// How Splat stores the type, for Technical details only.
-pub(crate) const TYPE_STORAGE: &str = "Splat adds fields that start with splat_ (the type, name and an ID) to the front matter \
+pub const TYPE_STORAGE: &str = "Splat adds fields that start with splat_ (the type, name and an ID) to the front matter \
      at the top of the file.";
 
 /// Give a plain note an identity. Its body does not change.
@@ -1579,7 +1590,7 @@ fn entry_file_line(
     }
 }
 
-pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+pub fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
     let path = root.join(relative);
     let action_width = entry_file_links_width(ui, obsidian);
     let budget = (ui.available_width() - action_width - design::L).max(0.0);
@@ -1719,7 +1730,7 @@ struct Picker {
 }
 
 #[derive(Clone)]
-pub(crate) struct Change {
+pub struct Change {
     /// The campaign whose folder holds the note. The result shows, and Undo acts, only there:
     /// Lookup keeps its reader across a campaign change.
     campaign: Uuid,
@@ -1782,7 +1793,7 @@ impl Change {
             .undo_step(note, self.path.rsplit('/').next().unwrap_or(&self.path))
     }
 
-    pub(crate) fn message(&self) -> &str {
+    pub fn message(&self) -> &str {
         &self.word
     }
 
@@ -1791,7 +1802,7 @@ impl Change {
         self.campaign == campaign.id && self.path == path
     }
 
-    pub(crate) fn undo(&self, campaign: &Campaign) -> Result<(), String> {
+    pub fn undo(&self, campaign: &Campaign) -> Result<(), String> {
         if campaign.id != self.campaign {
             return Err("This change belongs to another campaign. Nothing was changed.".into());
         }
@@ -1868,7 +1879,7 @@ struct Moves {
 
 const SYSTEM_MOVES: Moves = Moves {
     #[cfg(target_os = "linux")]
-    rename: |source, target| crate::sessions::rename_no_replace(source, target),
+    rename: |source, target| crate::session_notes::rename_no_replace(source, target),
     #[cfg(not(target_os = "linux"))]
     rename: |source, target| std::fs::rename(source, target),
     link: |source, target| std::fs::hard_link(source, target),
@@ -1961,13 +1972,13 @@ fn move_note_with(
 
 /// World notes and Library entries share identity repair, but keep their own nouns.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum IdentityNoun {
+pub enum IdentityNoun {
     Note,
     Entry,
 }
 
 impl IdentityNoun {
-    pub(crate) fn of(entry: &Entry) -> Self {
+    pub fn of(entry: &Entry) -> Self {
         if entry.kind == "world" {
             Self::Note
         } else {
@@ -1982,14 +1993,14 @@ impl IdentityNoun {
         }
     }
 
-    pub(crate) fn duplicate_warning(self) -> &'static str {
+    pub fn duplicate_warning(self) -> &'static str {
         match self {
             Self::Note => "These two files claim to be the same note.",
             Self::Entry => DUPLICATE_ENTRY,
         }
     }
 
-    pub(crate) fn action(self, filename: &str) -> String {
+    pub fn action(self, filename: &str) -> String {
         format!("Make {filename} a separate {}", self.word())
     }
 
@@ -1998,7 +2009,7 @@ impl IdentityNoun {
     }
 }
 
-pub(crate) const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
+pub const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
 
 /// Long filenames keep the complete repair action inside its secondary border.
 pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
@@ -2020,7 +2031,7 @@ pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
     response.clicked()
 }
 
-pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
+pub fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
     let before = file_fault::read_note(&campaign.path, relative)?;
     let noun = IdentityNoun::of(&Entry::parse(relative, &before)?);
     let id = crate::hermetic::new_uuid();
@@ -2045,7 +2056,7 @@ pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Chang
     ))
 }
 
-pub(crate) fn repair_in_world(path: &Path) -> bool {
+pub fn repair_in_world(path: &Path) -> bool {
     fs::read_to_string(path)
         .ok()
         .and_then(|text| Entry::parse("note.md", &text).ok())
@@ -2186,7 +2197,7 @@ fn flag_words(flag: &splat::content::layout::Flag) -> (String, String) {
     (copy_words(flag.short_message()), copy_words(&flag.message))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// `copy_words` calls on this (the UI) thread.
     static WORD_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -2201,7 +2212,7 @@ pub(crate) fn word_copies() -> usize {
 /// The one copy of an unread warning's words, made when its fault is cached. The reader draws
 /// from a borrow, so an unchanged frame makes none.
 pub(super) fn copy_words(words: &str) -> String {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     WORD_COPIES.with(|count| count.set(count.get() + 1));
     words.to_owned()
 }
@@ -2285,7 +2296,7 @@ impl std::ops::Deref for LogFields {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Rebuilds of a reader's copy of the other reader's Log keys, on this thread.
     pub(crate) static LOG_KEY_SHARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -2685,7 +2696,7 @@ pub(crate) fn in_rect(
 /// What a reader pane's footer can press. A kept result's press comes with its ticket, and the
 /// store it came from acts by it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FooterAct {
+pub enum FooterAct {
     /// The Undo of a result of the reader's store (`Reader::results`).
     Undo,
     /// The page result's Undo: the World page's store.
@@ -2706,6 +2717,14 @@ pub(crate) enum FooterAct {
     Untick,
     /// `Edit in Obsidian` of the file the error names.
     OpenEditor(std::path::PathBuf),
+}
+
+/// Trackers can draw in Lookup and in a note's reader without giving those screens its state.
+pub trait TrackerUi {
+    fn show(&mut self, ui: &mut egui::Ui, from_top: bool);
+    fn history(&mut self, ui: &mut egui::Ui, note: &Entry);
+    fn history_footer(&self, note: Uuid, messages: &mut design::outcome::Messages<'_, FooterAct>);
+    fn undo_remove(&mut self);
 }
 
 /// The reader's kinds of kept result, one each: a later one of a kind replaces the earlier
@@ -2765,7 +2784,7 @@ impl design::results::Kept for ReaderResult {
 }
 
 /// A Log line the DM dismissed with its typed words: its Undo puts the notice back.
-pub(crate) struct DismissedLog(pub(crate) GoneLog);
+pub(crate) struct DismissedLog(pub GoneLog);
 
 /// One dismissed Log line, by its notice's number, in its campaign.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2802,7 +2821,7 @@ impl design::results::Kept for DismissedLog {
     clippy::disallowed_methods,
     reason = "the words hold the DM’s names and values, or the system’s error"
 )]
-pub(crate) fn said(words: &str) -> Sentence {
+pub fn said(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Done."))
 }
 
@@ -2831,7 +2850,7 @@ impl Fault for ReaderFault {
 impl Reader {
     /// The run refused `Add to fight` for `entry`: its reason waits in the footer, owned by the
     /// campaign and run open now (`run_owner`). No other error changes.
-    pub(crate) fn refuse(&mut self, entry: Uuid, reason: String) {
+    pub fn refuse(&mut self, entry: Uuid, reason: String) {
         self.add_refusal = self.run_owner.map(|owner| Refusal {
             owner,
             entry,
@@ -2840,7 +2859,7 @@ impl Reader {
     }
 
     /// `Add to fight` for `entry` succeeded: its refusal, if any, is over.
-    pub(crate) fn added_to_fight(&mut self, entry: Uuid) {
+    pub fn added_to_fight(&mut self, entry: Uuid) {
         if self
             .add_refusal
             .as_ref()
@@ -2987,7 +3006,7 @@ impl Reader {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn read(
         &mut self,
         ui: &mut egui::Ui,
@@ -3001,14 +3020,14 @@ impl Reader {
     /// `read`, with the trackers, outside any pane (checks): a house rule note in play shows its
     /// problems and each tracker's history after its text. The app reads in a pane
     /// (`read_in_pane`).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn read_with(
         &mut self,
         ui: &mut egui::Ui,
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
-        trackers: Option<&mut crate::trackers::Trackers>,
+        trackers: Option<&mut dyn TrackerUi>,
     ) -> Option<Nav> {
         self.read_in_pane(ui, item, index, campaign, trackers, None)
     }
@@ -3021,7 +3040,7 @@ impl Reader {
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
-        trackers: Option<&mut crate::trackers::Trackers>,
+        trackers: Option<&mut dyn TrackerUi>,
         region: Option<design::pane::EditorRegion<'_>>,
     ) -> Option<Nav> {
         self.prepare(item);
@@ -3066,7 +3085,7 @@ impl Reader {
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
-        trackers: Option<&mut crate::trackers::Trackers>,
+        trackers: Option<&mut dyn TrackerUi>,
         region: Option<design::pane::EditorRegion<'_>>,
     ) -> Option<Go> {
         let mut go = None;
@@ -3562,7 +3581,7 @@ impl Reader {
                         room_at = Some(log_room_space(ui));
                     }
                     if let Some(trackers) = trackers {
-                        crate::trackers::history::show(ui, trackers, &item.entry);
+                        trackers.history(ui, &item.entry);
                     }
                     related(ui, item, index).and_then(|go| {
                         if let Go::Item(at, _) = go {
@@ -6142,7 +6161,7 @@ mod tests {
         assert_eq!(scan.notes[0].path, "Setting.md");
         // The scan and the ledger's reader use one rule: a ledger with a quoted key is one.
         let quoted = "---\n\"trackers_version\": 1\nchanges: []\n---\n";
-        assert!(crate::trackers::ledger::Ledger::parse(quoted).is_ok());
+        assert!(splat_campaign::trackers::ledger::Ledger::parse(quoted).is_ok());
         note(dir.path(), "Trackers.md", quoted);
         assert_eq!(super::scan(dir.path(), dir.path()).notes.len(), 1);
         // A note of the DM's named Trackers.md that is no ledger stays a world note.
