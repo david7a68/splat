@@ -827,6 +827,34 @@ pub(super) fn guarded_field(
     response
 }
 
+/// The field with `id` edits its own text by `edit`: a command typed in it takes its words
+/// out, words go in at its caret. A guarded field takes a text it did not draw for another
+/// object's and drops its Undo history; this edit keeps it, so Ctrl+Z still goes back through
+/// what the DM typed before. The guard's record moves to the edited text only when it holds
+/// the text before the edit, so a replacement that came first (a reload, another object's
+/// text) still drops the history on the next frame. Not for another object's text, or for a
+/// whole new text: that history must go.
+pub fn edit_in_place(
+    ctx: &egui::Context,
+    id: Id,
+    text: &mut String,
+    edit: impl FnOnce(&mut String),
+) {
+    let before = BoundText::of(text);
+    edit(text);
+    let after = BoundText::of(text);
+    ctx.data_mut(|data| {
+        if let Some(record) = data
+            .get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
+            .0
+            .iter_mut()
+            .find(|(record, bound)| *record == id && *bound == before)
+        {
+            record.1 = after;
+        }
+    });
+}
+
 /// What [`FieldId::search`] drew: the field, and whether `Clear` emptied it this frame.
 #[must_use = "read `field` for focus and `cleared` to reset what the search chose"]
 pub struct Search {
@@ -1159,7 +1187,7 @@ impl ScrollColumn {
         // In a pane's body, the area starts where a `line_start` hang may reach and its content
         // at the text edge (P3a): the surface covers the hang, and nothing moves.
         let Some(reach) = super::pane::column_reach(ui, lane_width()) else {
-            return Self::styled(ui, |ui, width| {
+            let output = Self::styled(ui, |ui, width| {
                 let (area, column) = self.area_in(ui);
                 area.show_viewport(ui, |ui, viewport| {
                     super::reveal::region(ui, column, viewport, |ui| {
@@ -1173,8 +1201,11 @@ impl ScrollColumn {
                     })
                 })
             });
+            // A column in a child of composite columns adds what it hides to the child's height.
+            super::pane::hidden_height(ui, &output);
+            return output;
         };
-        super::pane::reaching(ui, reach, |ui| {
+        let output = super::pane::reaching(ui, reach, |ui| {
             Self::styled(ui, |ui, width| {
                 let (area, column) = self.area_in(ui);
                 area.show_viewport(ui, |ui, viewport| {
@@ -1196,7 +1227,9 @@ impl ScrollColumn {
                     })
                 })
             })
-        })
+        });
+        super::pane::hidden_height(ui, &output);
+        output
     }
 
     /// The scroll of a pane's editor region (`pane::EditorRegion`), the one scroll a `Content`
@@ -1228,7 +1261,7 @@ impl ScrollColumn {
         if super::pane::column_in_content(ui) {
             return self.inline(ui, |ui| add(ui, 0..rows));
         }
-        Self::styled(ui, |ui, width| {
+        let output = Self::styled(ui, |ui, width| {
             let (full, id) = (self.full_width, self.id);
             self.area().show_rows(ui, row_height, rows, |ui, range| {
                 ui.set_max_width(width);
@@ -1237,7 +1270,9 @@ impl ScrollColumn {
                 }
                 super::pane::whole_rows(ui, id, |ui| add(ui, range))
             })
-        })
+        });
+        super::pane::hidden_height(ui, &output);
+        output
     }
 
     /// For content that draws only what is in view of the given viewport.

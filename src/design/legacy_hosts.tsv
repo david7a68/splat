@@ -9,7 +9,6 @@
 # `design` are the design system's implementation boundary. Both are frozen, not debt: a new site
 # fails. All others are debt that a step of the layout plan removes.
 # capability	file	function	count	owner	note
-host-region	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign	allowed host composition
 host-region	src/design/column.rs	Column::panel_within	2	design	design implementation boundary
 host-region	src/encounter_run/view.rs	Run::ended_view	2	Run	allowed host composition
 host-region	src/encounter_run/view.rs	Run::live_view	2	Run	allowed host composition
@@ -61,7 +60,6 @@ pane-host	src/trackers/view.rs	show	2	Trackers
 pane-host	src/world/page.rs	WorldPage::creation_form	1	World
 pane-host	src/world/page.rs	WorldPage::show	3	World
 pane-host	src/world/repair.rs	Repair::show	1	World
-fills	src/campaign_content.rs	CampaignContent::show	1	Campaign
 fills	src/encounter_run/view.rs	Run::ended_view	1	Run
 fills	src/encounter_run/view.rs	Run::groups_tab	1	Run	Arrivals' list with its own scroll under its typed footer (migration-32 L2c)
 fills	src/encounter_run/view.rs	Run::live_view	1	Run
@@ -70,12 +68,15 @@ fills	src/encounters.rs	Encounters::creature_pane	1	Encounters	the creature's Ma
 fills	src/encounters.rs	Encounters::editor_view	1	Encounters
 fills	src/encounters/groups.rs	Encounters::group_editor_view	1	Encounters
 fills	src/party.rs	Party::show	1	Party
+fills	src/campaign_content.rs	CampaignContent::show	1	Campaign	only while a repair editor, the changes to review or the issue list scrolls above the package columns (`inner_scrolls`); steps 9 and 10
 fills	src/sessions/page.rs	Sessions::notes_panel	1	Sessions
 fills	src/sessions/page.rs	Sessions::session_body_kind	3	Sessions
 fills	src/sessions/page.rs	Sessions::session_pane	1	Sessions
 fills	src/sessions/page.rs	Sessions::templates_view	1	Sessions
 fills	src/sessions/page.rs	fills_body	1	Sessions	the Sessions wrapper (named `fills` until this PR); each pane that names it is a row
 fills	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
+composite-child	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign	the package list and the chosen package: a shared task (step 7); its children become closed blocks with the forms and lists of steps 10 and 11
+composite-child	src/sessions/page.rs	Sessions::session_content	1	Sessions	the plan and the note beside it: a shared task (step 7) in the edges the session header was drawn in; its children become closed blocks with the plan recipes and the Editor and Reader blocks of steps 9 and 11
 footer-feed	src/lib.rs	Splat::page	5	App	mixed task footer (Settings): one footer for Campaigns, Settings and D&D Beyond (3), and the campaign link's for Campaigns and D&D Beyond (2); step 8
 footer-feed	src/party.rs	Party::sheet_view	1	Party
 virtual-rows	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign
@@ -97,7 +98,6 @@ row-register	src/trackers/history.rs	rows_in_view	1	Trackers
 row-register	src/trackers/view.rs	register_block	1	Trackers
 row-register	src/world/page.rs	question_row	1	World
 row-register	src/world/related.rs	page_row	1	World
-row-clip	src/campaign_content.rs	CampaignContent::packages_content	2	Campaign
 row-clip	src/design/components.rs	Action::paint	2	design	design implementation boundary
 row-clip	src/design/components.rs	Footer::show_by_hand	1	design	design implementation boundary
 row-clip	src/design/components.rs	comparison_missing_row	1	design	design implementation boundary
@@ -117,6 +117,7 @@ row-clip	src/party_bar.rs	show	1	Party
 row-clip	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 row-clip	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 row-clip	src/world/repair.rs	source_editor	1	World
+row-clip	src/design/pane/columns.rs	PaneEdges::show_children	1	design	design implementation boundary: a resizable child clips to the composite's view (egui's side panel sets its own clip)
 scroll-area	src/copy_dialog.rs	CopyDialog::show	1	Library
 scroll-area	src/creature_filter.rs	menu	1	Encounters
 scroll-area	src/design/components.rs	dialog_width	1	design	design implementation boundary
@@ -132,7 +133,6 @@ scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
 scroll-area	src/markdown_view.rs	reader_table	1	Reader
 scroll-area	src/sessions/page.rs	Sessions::note_editor	1	Sessions
-scroll-area	src/sessions/page.rs	Sessions::template_editor	1	Sessions
 scroll-area	src/sessions/plan.rs	Sessions::fight_block	1	Sessions
 scroll-area	src/sessions/plan.rs	plan_menu	1	Sessions
 scroll-area	src/timeline/page.rs	TimelinePage::detail	1	Timeline
