@@ -37,7 +37,7 @@ const LEDGER_PATH: &str = "src/design/c3_ledger.tsv";
 /// are spelled, split at spaces (`bans::Shape::of`): a bare name is every mention of that
 /// function, or of that type when it starts with a capital; `Owner::name` a path; `name()` a
 /// free function's call; `.name/n` a method called with at least `n` arguments.
-const CAPABILITIES: [(&str, &str); 11] = [
+const CAPABILITIES: [(&str, &str); 12] = [
     // A body drawn by a closure into a pane. `Self::pane` counts in `Footer` and `Messages` only.
     // `pane_then` (migration-32 L1c) is a pane whose messages come after the body.
     (
@@ -78,6 +78,10 @@ const CAPABILITIES: [(&str, &str); 11] = [
         "host-region",
         "CentralPanel SidePanel TopBottomPanel Column::panel",
     ),
+    // Children of composite columns drawn by a closure (`PaneEdges::show_children`, layout step
+    // 7): the composite owns their edges and height, not yet what they draw. Each host is a row
+    // until its children are closed blocks.
+    ("composite-child", "show_children"),
     // An owner's messages fed into a footer by hand (`footer_messages`). One footer fed by more
     // than one owner is a mixed task footer: the Settings debt of step 8.
     ("footer-feed", "footer_messages"),
