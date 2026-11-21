@@ -1407,7 +1407,8 @@ fn dated_before_today(note: &Note, today: &str) -> Option<String> {
 }
 
 /// Words at the note's caret. For a new thought after the end of a line of words, they start
-/// a line of their own, and with no words only that break goes in.
+/// a line of their own, and with no words only that break goes in. It is the note's own edit,
+/// so the note's Undo history stays.
 fn insert_at_caret(
     ctx: &egui::Context,
     id: egui::Id,
@@ -1418,7 +1419,7 @@ fn insert_at_caret(
     let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
     let Some(range) = state.cursor.char_range() else {
         if !words.is_empty() {
-            insert_in_note(&mut draft.body, words);
+            design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
             draft.edited();
         }
         return;
@@ -1441,7 +1442,9 @@ fn insert_at_caret(
         .char_indices()
         .nth(at)
         .map_or(draft.body.len(), |(byte, _)| byte);
-    draft.body.insert_str(byte, &added);
+    design::edit_in_place(ctx, id, &mut draft.body, |body| {
+        body.insert_str(byte, &added)
+    });
     draft.edited();
     state
         .cursor
@@ -1449,6 +1452,23 @@ fn insert_at_caret(
             egui::text::CCursor::new(at + added.chars().count()),
         )));
     egui::TextEdit::store_state(ctx, id, state);
+}
+
+/// Words the page adds to the open note (a reading's summary, a plan's link). It is the note's
+/// own edit, so the note's Undo history stays for when the DM goes back to it.
+pub(super) fn add_to_note(
+    ctx: &egui::Context,
+    editor: Option<egui::Id>,
+    draft: &mut Draft,
+    words: &str,
+) {
+    match editor {
+        Some(id) => {
+            design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
+        }
+        None => insert_in_note(&mut draft.body, words),
+    }
+    draft.edited();
 }
 
 /// Session numbers can repeat after a missing note is saved as a new file.
@@ -6544,8 +6564,7 @@ impl Sessions {
         if let Some(body) = add_to_notes
             && let Some(draft) = &mut self.draft
         {
-            insert_in_note(&mut draft.body, &body);
-            draft.edited();
+            add_to_note(ui.ctx(), self.note_editor_id, draft, &body);
             self.notice_session = None;
             self.notice = new_notice(
                 &mut self.notice_order,

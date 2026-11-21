@@ -279,9 +279,12 @@ impl Slash {
                     }
                 });
                 if let Some(command) = chosen {
-                    // The command's words go. Its link takes their place.
+                    // The command's words go. Its link takes their place. It is the note's own
+                    // edit, so the note's Undo history stays.
                     let end = caret.unwrap_or(words).max(words);
-                    remove_chars(body, open.at, end);
+                    crate::design::edit_in_place(ui.ctx(), editor, body, |body| {
+                        remove_chars(body, open.at, end);
+                    });
                     done.edited = true;
                     set_caret(ui.ctx(), editor, open.at);
                     open.stage = match command {
@@ -398,7 +401,9 @@ impl Slash {
             Outcome::Cancel => self.close(ui, editor, Some(at)),
             Outcome::Link(link) => {
                 let at = at.min(body.chars().count());
-                body.insert_str(byte_of(body, at), &link);
+                crate::design::edit_in_place(ui.ctx(), editor, body, |body| {
+                    body.insert_str(byte_of(body, at), &link);
+                });
                 done.edited = true;
                 self.close(ui, editor, Some(at + link.chars().count()));
             }
@@ -929,5 +934,30 @@ mod tests {
         assert!(!harness.state().slash.is_open());
         type_text(&mut harness, "x");
         assert_eq!(harness.state().body, "Met x");
+        // Words typed and taken out before a command come back with Ctrl+Z after it: the
+        // command's own change keeps the note's Undo history (review of PR 594).
+        type_text(&mut harness, " lost");
+        harness.run_steps(5);
+        for _ in 0..4 {
+            press(&mut harness, egui::Key::Backspace);
+        }
+        type_text(&mut harness, "/");
+        type_text(&mut harness, "gen");
+        press(&mut harness, egui::Key::Enter);
+        harness.get_by_label("Save NPC");
+        press(&mut harness, egui::Key::Escape);
+        assert_eq!(harness.state().body, "Met x ");
+        // Each Backspace is a step of the history, so Ctrl+Z goes back one at a time.
+        let mut undone = Vec::new();
+        while undone.len() < 6 && harness.state().body != "Met x lost" {
+            harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+            harness.run_steps(3);
+            undone.push(harness.state().body.clone());
+        }
+        assert_eq!(
+            harness.state().body,
+            "Met x lost",
+            "n0-slash-undo: Ctrl+Z after a command brings back the words typed before it: {undone:?}"
+        );
     }
 }
