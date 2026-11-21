@@ -12,17 +12,35 @@ fn corner(value: f32) -> CornerRadius {
 
 /// A quiet menu button with its caret after the word.
 pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
-    draw_menu_button(ui, word, selected, false)
+    draw_menu_button(ui, word, selected, false, None, Density::Scan)
+}
+
+/// A title line's menu action (`TitleLine::menu`): [`menu_button`] at the `Read` height of the
+/// line's other actions; while `blocked`, it is disabled with the reason on hover and as its
+/// accessible description.
+pub(super) fn title_menu_button(ui: &mut Ui, word: &str, blocked: Option<&str>) -> Response {
+    draw_menu_button(ui, word, false, false, blocked, Density::Read)
 }
 
 /// A menu button whose word starts at the text edge of its own row.
 pub fn menu_button_at_line_start(ui: &mut Ui, word: &str, selected: bool) -> Response {
-    draw_menu_button(ui, word, selected, true)
+    draw_menu_button(ui, word, selected, true, None, Density::Scan)
 }
 
-fn draw_menu_button(ui: &mut Ui, word: &str, selected: bool, line_start: bool) -> Response {
+fn draw_menu_button(
+    ui: &mut Ui,
+    word: &str,
+    selected: bool,
+    line_start: bool,
+    blocked: Option<&str>,
+    density: Density,
+) -> Response {
     let label = format!("{word}    ");
-    let button = Action::quiet(&label).name(word).selected(selected);
+    let button = Action::quiet(&label)
+        .name(word)
+        .selected(selected)
+        .blocked(blocked)
+        .density(density);
     let button = if line_start {
         button.line_start()
     } else {

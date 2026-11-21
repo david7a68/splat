@@ -2420,8 +2420,10 @@ pub mod library_navigation {
             if !d.has("Rules/Ash Exposure.md: 1 broken link") {
                 d.click("1 file needs fixing");
             }
-            // Round 26 FB1: the menu is as wide as its content and ends at the count's right
-            // edge, so its frame and its link keep `S` from every splitter and scroll bar.
+            // Round 26 FB1: the menu is as wide as its content, opens under its count (one of its
+            // edges at the count's), and its frame and its link keep `S` from every splitter
+            // and scroll bar. M-L0.10: the count follows the title now, so the menu keeps to the
+            // column under it (`TitleLine::menu_room`) rather than ending at the page's right.
             // Must stay true: the whole link label fits on one line in the menu.
             let count = d.place_of("1 file needs fixing");
             let link = d.place_of("Rules/Ash Exposure.md: 1 broken link");
@@ -2438,12 +2440,13 @@ pub mod library_navigation {
                 "iter-26-L-FB1",
                 count.zip(frame).zip(words).is_some_and(|((count, frame), words)| {
                     clear(frame)
-                        && (frame.right() - count.right()).abs() <= crate::design::S
+                        && ((frame.right() - count.right()).abs() <= crate::design::S
+                            || (frame.left() - count.left()).abs() <= crate::design::S)
                         && frame.width() <= crate::design::READER_MEASURE + 2.0 * crate::design::M
                         && words.height() <= crate::design::Type::Small.line() + 0.5
                 }),
                 format!(
-                    "The menu {frame:?} ends at the count {count:?}, its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
+                    "The menu {frame:?} opens under the count {count:?} (one edge at the count's), its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
                 ),
             );
             // M0330 (migration-32, the L0 pressure caller): the menu is as tall as its one link,
@@ -2791,19 +2794,96 @@ pub mod library_navigation {
                 "M0330-long-issues-menu",
                 control.zip(frame).is_some_and(|(control, frame)| {
                     (frame.height() - most).abs() <= 1.0
-                        && (frame.right() - control.right()).abs() <= crate::design::S
+                        && ((frame.right() - control.right()).abs() <= crate::design::S
+                            || (frame.left() - control.left()).abs() <= crate::design::S)
                 }) && crossed.is_empty()
                     && last
                         .as_ref()
                         .is_some_and(|(_, hidden, reached)| *hidden && *reached),
                 format!(
-                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), ends at the count {control:?}, reaches over no scroll bar or splitter (crossed: {crossed:?}), and its last link (name, out of view at first, then whole in view inside the frame after scrolling) comes into view: {last:?}"
+                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), opens under the count {control:?} (one edge at the count's), reaches over no scroll bar or splitter (crossed: {crossed:?}), and its last link (name, out of view at first, then whole in view inside the frame after scrolling) comes into view: {last:?}"
                 ),
             );
         }
         if d.has_containing("Broken Watch 1.md: ") {
             d.press(Key::Escape);
         }
+        // M-L0.10: the `Packages` menu follows the title, over the entry list at 960, whose
+        // twelve broken files make it scroll. Its menu keeps inside the list's content, clear
+        // of the list's scroll bar and splitter, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (frame, lanes) = d.act_at_size(size, |d| {
+                d.click("Packages");
+                let choice = d.place_of("Reload from disk");
+                let frame = choice.and_then(|choice| d.painted_frame_around(choice));
+                let lanes = d.chrome_lanes();
+                d.press(Key::Escape);
+                (frame, lanes)
+            });
+            let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+                lanes
+                    .into_iter()
+                    .filter(|lane| {
+                        lane.y_range().intersects(frame.y_range())
+                            && lane.x_range().intersects(frame.x_range())
+                    })
+                    .collect()
+            });
+            d.observe(
+                "M0327-packages-menu-clear",
+                frame.is_some() && crossed.is_empty(),
+                format!(
+                    "At {size:?} the Packages menu {frame:?} reaches over no scroll bar or splitter (crossed: {crossed:?})"
+                ),
+            );
+        }
+        // M-L0.10: a column's room is its content, `S` inside its panel. With the list's
+        // splitter dragged just past the count at 960 (where the twelve broken files make the
+        // list scroll), the count stands over the list's right edge; its menu still keeps
+        // clear of the list's scroll bar.
+        let (frame, lanes, scroll) = d.act_at_size(SMALL, |d| {
+            let edge = d.column_edge("library_entries");
+            let Some(count_rect) = d.place_of(&count) else {
+                return (None, Vec::new(), None);
+            };
+            d.drag_column_edge(edge, count_rect.right() + 6.0);
+            let dragged = d.column_edge("library_entries");
+            d.click(&count);
+            let first = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Broken Watch 1.md: "))
+                .map(|node| node.rect);
+            let frame = first.and_then(|first| d.painted_frame_around(first));
+            let lanes = d.chrome_lanes();
+            // The list's own scroll bar: a lane just left of the splitter, inside the list.
+            let scroll = lanes
+                .iter()
+                .copied()
+                .find(|lane| lane.right() < dragged - 1.0 && lane.right() > dragged - 24.0);
+            d.press(Key::Escape);
+            d.drag_column_edge(dragged, edge);
+            (frame, lanes, scroll)
+        });
+        // The lanes outside the menu that it reaches over (its own scroll bar is inside).
+        let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+            lanes
+                .iter()
+                .copied()
+                .filter(|lane| {
+                    !frame.expand(0.5).contains_rect(*lane)
+                        && lane.y_range().intersects(frame.y_range())
+                        && lane.x_range().intersects(frame.x_range())
+                })
+                .collect()
+        });
+        d.observe(
+            "M0330-menu-at-list-edge",
+            frame.is_some() && scroll.is_some() && crossed.is_empty(),
+            format!(
+                "With the count over the list's right edge, its menu {frame:?} keeps clear of the list's scroll bar {scroll:?} (crossed: {crossed:?}; lanes {lanes:?})"
+            ),
+        );
         // M0331: while a draft holds the open entry, no other entry opens from the menu: it
         // says why, and lists the files as text, not links.
         d.click_starting("Broken Watch 1 · ");
@@ -2884,12 +2964,18 @@ pub mod reader_tables {
         d.state("wide-table-in-library", Sizes::All);
         // Round 23 AE1: at 1920 the table takes the pane past the prose measure and needs no
         // sideways scroll; the prose after it keeps the measure.
-        // The pane's inner edge is the page's right edge, where `New entry` ends.
+        // The pane's inner edge is the right edge of the reader pane's room (M-L0.10: `New
+        // entry` now follows the page's title, so it no longer marks the page's right edge).
         for size in [SMALL, DEFAULT, LARGE] {
             let seen = d.at_size(size, |d| {
                 let read = d.place_of("Read")?;
-                let edge = d.place_of("New entry")?.right();
                 let row = d.place_of("Memorize Spell")?;
+                let edge = d
+                    .pane_records()
+                    .into_iter()
+                    .map(|record| record.room())
+                    .find(|room| room.x_range().contains(row.center().x))?
+                    .right();
                 let last = d.place_of("Ninth-slot")?;
                 // The prose keeps the measure: a paragraph that wraps fills it, and no more.
                 let prose = d.painted_rect_in(
