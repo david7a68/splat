@@ -1759,6 +1759,21 @@ pub mod library_browse {
             "Back returns to the prior entry and its search in one click, with Alt+Left shown",
         );
         d.state("back-after-link", Sizes::Default);
+        // M0387 (round 31 reader-end-section-pitch): the reader's end sections are one group
+        // at the Read row pitch, each header right under the one before.
+        let headers = ["Source text", "Technical details", "Source and identifiers"]
+            .map(|name| d.place_of(name));
+        let pitch = crate::design::Density::Read.control();
+        d.observe(
+            "M0387-end-section-pitch",
+            headers.iter().all(Option::is_some)
+                && headers.windows(2).all(|pair| {
+                    pair[0].zip(pair[1]).is_some_and(|(above, below)| {
+                        (below.center().y - above.center().y - pitch).abs() <= 0.5
+                    })
+                }),
+            format!("The end sections {headers:?} are {pitch} px apart"),
+        );
         d.begin_task();
         d.not_measured(
             "T6.3",

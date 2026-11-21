@@ -475,12 +475,37 @@ fn reference(
     origin: &Origin<'_>,
 ) {
     design::gap(ui, design::Gap::M);
+    // M0387 (round 31 reader-end-section-pitch): the end sections are one group at the Read
+    // row pitch: each header is one `Read` row (egui's header is at least `interact_size` high)
+    // right under the one before. An open section's body gets the page's spacing back.
+    let page = ui.spacing().clone();
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        ui.spacing_mut().interact_size.y = design::Density::Read.control();
+        end_sections(ui, &page, entry, sections, styled, origin);
+    });
+}
+
+/// The reader's end sections (`reference`), header after header; `page` is the page's
+/// spacing, which each open body gets back.
+fn end_sections(
+    ui: &mut egui::Ui,
+    page: &egui::style::Spacing,
+    entry: Option<&Entry>,
+    sections: &[presentation::ReadingSection<'_>],
+    styled: bool,
+    origin: &Origin<'_>,
+) {
+    let body = |ui: &mut egui::Ui| *ui.spacing_mut() = page.clone();
     if entry.is_some_and(|entry| entry.reading().ok().flatten().is_some())
         && let Some(source) = sections
             .iter()
             .find(|section| section.title == "Source text")
     {
-        design::quiet_section(ui, "Source text", |ui| style::markdown(ui, source.body));
+        design::quiet_section(ui, "Source text", |ui| {
+            body(ui);
+            style::markdown(ui, source.body);
+        });
     }
     let technical: Vec<_> = sections
         .iter()
@@ -492,6 +517,7 @@ fn reference(
     let item_details = entry.is_some_and(reader::has_item_details);
     if (!styled && !technical.is_empty()) || item_details {
         design::quiet_section(ui, "Technical details", |ui| {
+            body(ui);
             if let Some(entry) = entry.filter(|_| item_details) {
                 reader::item_details(ui, entry);
             }
@@ -530,6 +556,7 @@ fn reference(
         return;
     }
     design::quiet_section(ui, "Source and identifiers", |ui| {
+        body(ui);
         if entry.is_some_and(|entry| !["world", "package"].contains(&entry.kind.as_str())) {
             design::quiet_section(ui, "What Splat applies", |ui| {
                 ui.label(support);
