@@ -1856,7 +1856,7 @@ pub struct Lookup {
     /// What the generator rolled, until the DM saves it or lets it go.
     generated: Option<crate::npc_generator::Generated>,
     /// Whether that NPC's card is the view. An entry that opens takes its place, under the
-    /// row `Unsaved NPC: <name> · Show`.
+    /// row `<name> ✎ Unsaved NPC · Show`.
     generated_shown: bool,
     /// Campaign tables the generator could not use.
     generator_problems: Vec<crate::npc_generator::TableProblem>,

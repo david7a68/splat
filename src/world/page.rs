@@ -4,7 +4,10 @@ use crate::world::{Nav, Reader, checks::tick_file, file_fault::FileFault};
 use crate::{
     design::{
         self, Type, colors, icons,
-        outcome::{Done, FaultMessage, Messages, Notice, PaneFrame, Said, Verb},
+        outcome::{
+            Choice, Done, FaultMessage, MessageChoice, Messages, Notice, PagePlaceholder,
+            PaneFrame, Said, Verb,
+        },
         pane::Body,
     },
     lookup::{ContentIndex, WorldGroups},
@@ -1338,14 +1341,12 @@ impl WorldPage {
             && self.new_kind.is_none()
             && !self.card_shown()
         {
-            // Cancel starts at the message text, as every message's choices do. A message
-            // action without an icon has the secondary border (round 25 family).
-            let cancel = design::message_with_actions(ui, design::Tone::Error, &error, |ui| {
-                design::Action::secondary("Cancel")
-                    .density(design::Density::Read)
-                    .show(ui)
-                    .clicked()
-            });
+            // M0607 (ruling M20): the error in place of the page's body, with its Cancel at the
+            // message text.
+            let cancel = PagePlaceholder::new(&crate::world::ReaderFault::Action(error))
+                .choice(Choice::new(MessageChoice::Choice("Cancel"), ()))
+                .show(ui)
+                .is_some();
             if cancel {
                 self.error = None;
             }
