@@ -4281,7 +4281,13 @@ mod editor_region_tests {
                     let focus = std::mem::take(&mut state.focus);
                     let set_caret = std::mem::take(&mut state.set_caret);
                     let text = &mut state.text;
-                    let save_row = |ui: &mut Ui| ui.button("Save").rect;
+                    // Save at the column's right edge, as the app's save row ends.
+                    let save_row = |ui: &mut Ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.button("Save").rect
+                        })
+                        .inner
+                    };
                     let (save, caret) = if state.plain {
                         let paned = messages.pane(ui, Body::Content, |ui| {
                             ui.label("Title");
@@ -4377,6 +4383,53 @@ mod editor_region_tests {
                 _ => None,
             })
             .expect("the editor's text is painted")
+    }
+
+    /// Layout PR 9 (I10): the editor's fixed frame. All four outside edges are in view, the
+    /// frame and Save end at one outside right edge, the inner scroll view (text and lane) ends
+    /// at the frame's inner margin (the lane is inside the frame, subtracted once), and the
+    /// painted text is inside that view.
+    fn frame_whole(harness: &egui_kittest::Harness<'_, State>, case: &str, save: Rect) {
+        let frames = editor_frames(&harness.ctx);
+        let [record] = frames.as_slice() else {
+            panic!("i10-one-{case}: one editor frame, not {frames:?}");
+        };
+        let frame = record.frame();
+        assert!(
+            record.whole() && !record.least(),
+            "i10-whole-{case}: the frame {frame:?} is whole in its clip {:?}",
+            record.clip()
+        );
+        assert!(
+            (frame.right() - save.right()).abs() <= 0.5,
+            "i10-edge-{case}: the frame {frame:?} and Save {save:?} share their outside right edge"
+        );
+        let inner = frame.shrink(S + super::super::tokens::HAIRLINE_WIDTH);
+        let view = record.view();
+        assert!(
+            (view.right() - inner.right()).abs() <= 0.5
+                && view.top() >= inner.top() - 0.5
+                && view.bottom() <= inner.bottom() + 0.5,
+            "i10-lane-{case}: the scroll view {view:?} (text and lane) fills the frame's inside {inner:?}"
+        );
+        let text = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.job.text.starts_with("Line 0\nLine 1") => {
+                    Some((clipped.clip_rect, text.pos.x + text.galley.rect.width()))
+                }
+                _ => None,
+            })
+            .expect("the editor's text is painted");
+        assert!(
+            view.expand(0.5).contains_rect(text.0)
+                && text.1 <= view.right() - super::super::layout::lane_width() + 0.5,
+            "i10-text-{case}: the text (clip {:?}, right {}) is inside the view {view:?}, left of its lane",
+            text.0,
+            text.1
+        );
     }
 
     /// Round 28, P2: a pane's editor region. A short draft: the footer is `S` under the save
@@ -4573,6 +4626,7 @@ mod editor_region_tests {
             at.bottom() < room.bottom() - 4.0 * super::super::tokens::XXL,
             "p2-short-follows: the footer {at:?} follows the short content, far above the room's bottom {room:?}"
         );
+        frame_whole(&short, "short", save);
         // Long, 300 px room: the save row whole above the footer, the region scrolls.
         let mut long = harness(
             300.0,
@@ -4612,6 +4666,7 @@ mod editor_region_tests {
                 view.bottom() <= save.top() + 0.5 && view.height() < 600.0,
                 "p2-region-{case}: the region {view:?} scrolls above the save row {save:?}"
             );
+            frame_whole(harness, case, save);
         };
         let whole = |harness: &egui_kittest::Harness<'_, State>, case: &str| {
             whole_at(harness, case, true);
@@ -4681,6 +4736,7 @@ mod editor_region_tests {
                 save.bottom() <= at.top() - S + 0.5,
                 "p2-growth-whole: {lines} lines, save row {save:?}, footer {at:?}"
             );
+            frame_whole(&grow, &format!("growth-{lines}"), save);
             if save.top() - last > 0.5 {
                 moved += 1;
             } else {
