@@ -641,21 +641,57 @@ fn plan_row_with(
                 egui::vec2(title_width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    ui.set_width(title_width);
+                    ui.set_max_width(title_width);
                     ui.spacing_mut().item_spacing.y = 0.0;
                     words(ui);
                 },
             );
-            let action_rect = egui::Rect::from_min_size(
-                egui::pos2(ui.max_rect().right() - widths[1], left.y),
-                egui::vec2(widths[1], Density::Read.control()),
-            );
+            // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest title, and end
+            // at its widest action recipe; the spare width lies after them. Each title keeps the
+            // room and the lines it had, so where the column does not fit the actions keep the
+            // far edge.
+            let words_width = title.response.rect.width();
+            let (kept, actions) = plan_columns(ui, words_width, widths[1]);
+            // Until a pass has measured the plan (or a row's own recipe grew), the far edge.
+            let facts = kept.max(words_width);
+            let room = ui.max_rect().right() - left.x;
+            let column = kept > 0.0
+                && actions >= widths[1] - 0.5
+                && facts + design::L + actions <= room + 0.5;
+            let action_rect = if column {
+                egui::Rect::from_min_size(
+                    egui::pos2(left.x + facts + design::L, left.y),
+                    egui::vec2(actions, Density::Read.control()),
+                )
+            } else {
+                egui::Rect::from_min_size(
+                    egui::pos2(ui.max_rect().right() - widths[1], left.y),
+                    egui::vec2(widths[1], Density::Read.control()),
+                )
+            };
             let mut action_ui = ui.new_child(
                 egui::UiBuilder::new()
                     .max_rect(action_rect)
                     .layout(egui::Layout::right_to_left(egui::Align::Center)),
             );
             action(&mut action_ui);
+            #[cfg(any(test, feature = "test-support"))]
+            if action_ui.min_rect().is_positive() {
+                design::action_rows::keep(
+                    ui,
+                    design::action_rows::RowRecord {
+                        owner: "plan",
+                        row: 0,
+                        facts: egui::Rect::from_min_size(
+                            left,
+                            egui::vec2(words_width, title.response.rect.height()),
+                        ),
+                        action: action_ui.min_rect(),
+                        column: action_rect.left(),
+                        wrapped: !column,
+                    },
+                );
+            }
             ui.spacing_mut().item_spacing.y = 0.0;
             ui.advance_cursor_after_rect(
                 title
@@ -679,6 +715,37 @@ fn plan_row_with(
         });
     });
     design::register_row(ui, row.response.rect);
+}
+
+/// The plan's columns, from its last pass: its widest title and its widest action recipe. Each
+/// row adds its own to this pass's; when they change, the plan is drawn once more, so its
+/// actions settle in their column on the next frame.
+fn plan_columns(ui: &egui::Ui, words: f32, actions: f32) -> (f32, f32) {
+    #[derive(Clone, Copy, Default)]
+    struct Kept {
+        pass: u64,
+        last: (f32, f32),
+        next: (f32, f32),
+    }
+    let pass = ui.ctx().cumulative_pass_nr();
+    let (columns, changed) = ui.ctx().data_mut(|data| {
+        let kept = data.get_temp_mut_or_default::<Kept>(egui::Id::new("plan_row_columns"));
+        let mut changed = false;
+        if kept.pass != pass {
+            changed = kept.pass + 1 == pass && kept.next != kept.last;
+            if kept.pass + 1 == pass {
+                kept.last = kept.next;
+            }
+            kept.next = (0.0, 0.0);
+            kept.pass = pass;
+        }
+        kept.next = (kept.next.0.max(words), kept.next.1.max(actions));
+        (kept.last, changed)
+    });
+    if changed {
+        ui.ctx().request_repaint();
+    }
+    columns
 }
 
 /// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words

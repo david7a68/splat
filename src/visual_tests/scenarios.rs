@@ -24122,7 +24122,17 @@ pub mod session_plan_groups {
                 && d.visible_text(crate::encounters::draft_switch_reason()),
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
-        d.state("plan-group-assembled", Sizes::All);
+        // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest title, in one
+        // column; at 1920 the plan has room for it.
+        d.state_prepared("plan-group-assembled", Sizes::All, |d| {
+            let (holds, column, detail) = d.plan_columns_hold();
+            let wide = d.window_size().0 >= LARGE.0;
+            d.observe(
+                "pr5a2-plan-columns",
+                holds && (column || !wide),
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
+        });
         // iter-27-B FL3, replaced by layout PR 4 (I6): each result's Add follows the measured
         // facts, not the search field's edge: `L` after the widest facts, or under its own
         // facts at the text edge where the column does not fit.

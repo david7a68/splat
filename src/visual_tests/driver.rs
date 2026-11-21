@@ -2288,6 +2288,55 @@ impl<'a> Driver<'a> {
         )
     }
 
+    /// Layout PR 5a-2 (I6): the Session plan's rows, from their records. In column mode every
+    /// row's actions start at one column exactly `L` after the widest title, lie inside it, and
+    /// end at one edge; otherwise (the plan too narrow for the column) each row keeps its actions
+    /// at the far edge, `L` or more after its title's room. Returns whether it holds, whether the
+    /// plan is in column mode, and the rows.
+    pub fn plan_columns_hold(&self) -> (bool, bool, String) {
+        const L: f32 = crate::design::L;
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == "plan")
+            .collect();
+        let column = records.iter().all(|record| !record.wrapped);
+        let widest = records
+            .iter()
+            .map(|record| record.facts.right())
+            .fold(f32::MIN, f32::max);
+        let end = records.first().map_or(0.0, |record| record.action.right());
+        let holds = !records.is_empty()
+            && records.iter().all(|record| record.wrapped == !column)
+            && records.iter().all(|record| {
+                if column {
+                    (record.column - (widest + L)).abs() <= 0.5
+                        && record.action.left() >= record.column - 0.5
+                        && (record.action.right() - end).abs() <= 0.5
+                } else {
+                    record.action.left() >= record.facts.right() + crate::design::S - 0.5
+                }
+            });
+        let rows: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.facts.right().round(),
+                    record.column.round(),
+                    record.action.left().round(),
+                    record.action.right().round(),
+                    record.wrapped,
+                )
+            })
+            .collect();
+        (
+            holds,
+            column,
+            format!(
+                "the widest title ends at {widest:.1}; rows (title end, column, actions start, actions end, far edge): {rows:?}"
+            ),
+        )
+    }
+
     /// The right edge of the registered row that holds `control`: a list row still ends at its
     /// column's scroll lane where its actions follow its facts (layout PR 5a).
     pub fn row_right_of(&self, control: egui::Rect) -> Option<f32> {
