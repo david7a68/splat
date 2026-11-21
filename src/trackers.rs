@@ -759,7 +759,7 @@ impl Trackers {
                 act: named(action.label),
             },
             Act::Roll { table, .. } => crate::design::results::FailedAct::NotRolled {
-                table: named(&self.rules.table_name(table)),
+                table: named(self.rules.table_name(table)),
             },
             Act::Done { drawn, .. } | Act::Dismiss { drawn } | Act::DismissAll { drawn } => {
                 crate::design::results::FailedAct::NotRecorded {

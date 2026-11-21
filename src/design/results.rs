@@ -1708,7 +1708,11 @@ pub(crate) const STAGED: &[Staged] = &[
     (
         "Refusal::at_limit(",
         "A refusal ends at its cause only at a limit the DM cannot change: a tracker's `min`, every name rolled (M13), or the run rule after the fight's encounter was deleted (M15). A fault in the tracker rules, and every other cause, gets its next step: `Refusal::new`.",
-        &[("src/design/results/refusal.rs", 5)],
+        &[
+            ("src/design/results/refusal.rs", 5),
+            // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
+            ("src/trackers.rs", 2),
+        ],
     ),
 ];
 
