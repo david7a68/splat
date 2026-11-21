@@ -586,7 +586,18 @@ impl EditorRegion<'_> {
         // is not always what the body allocated).
         let height = (ui.cursor().top() - top - ui.spacing().item_spacing.y).max(0.0);
         let (mut editor, origin) = output.inner;
-        let view = output.inner_rect;
+        // The view egui allocated: the area's inner rect is its most; a fitted view is as tall as
+        // its content.
+        let view = Rect::from_min_size(
+            output.inner_rect.min,
+            vec2(
+                output.inner_rect.width(),
+                output
+                    .inner_rect
+                    .height()
+                    .min(if fills { max } else { output.content_size.y }),
+            ),
+        );
         editor.frame = frame_rect;
         editor.view = view;
         // The text is clipped to the part of it in view: a caller that paints over the text
