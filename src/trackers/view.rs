@@ -947,7 +947,7 @@ fn amount_field(
     }
     if response.lost_focus() {
         let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-        if enter && let Ok(amount) = typed.trim().parse::<i64>() {
+        if enter && let Some(amount) = typed_amount(typed) {
             let (key, instance) = (key.clone(), instance.clone());
             // Enter is the press: the action keeps its place as a click's does.
             hold_press(ui, (&key, &instance, label, at), &response);
@@ -1057,6 +1057,12 @@ fn footer_press(trackers: &Trackers, pressed: Option<TrackerPress>, act: &mut Op
 /// The result's choice that makes a Major event of the act.
 const ADD_TO_TIMELINE: &str = "Add to Timeline";
 
+/// A whole number the DM typed in an action's Amount field. The view writes a negative number
+/// with a true minus (`design::signed`), so a typed `−3` is `-3`, as a typed `-3` is.
+fn typed_amount(typed: &str) -> Option<i64> {
+    typed.trim().replace('\u{2212}', "-").parse().ok()
+}
+
 /// The words of a failed save: the file, the reason, and that nothing was recorded.
 pub fn not_saved(error: &str) -> Sentence {
     TrackerFault::NotSaved(error.to_owned()).cause()
@@ -1066,6 +1072,18 @@ pub fn not_saved(error: &str) -> Sentence {
 mod tests {
     use super::*;
     use egui_kittest::Harness;
+
+    /// PR 638 review (P2): Enter takes a typed amount with either minus sign; words that are
+    /// not a whole number record nothing.
+    #[test]
+    fn a_typed_amount_takes_either_minus_sign() {
+        assert_eq!(typed_amount("-3"), Some(-3));
+        assert_eq!(typed_amount(" \u{2212}3 "), Some(-3));
+        assert_eq!(typed_amount("4"), Some(4));
+        assert_eq!(typed_amount("+4"), Some(4));
+        assert_eq!(typed_amount("three"), None);
+        assert_eq!(typed_amount(""), None);
+    }
 
     /// X16: a name wider than its column ends at a whole word, or is `…` alone when its first
     /// word does not fit; unchanged frames do not shorten it again.
