@@ -50,7 +50,7 @@ It retains all source fields, including fields not shown in a dedicated panel.
 
 Single-class slot pools use v5 class progression and usage. Feature uses follow
 v5 limited-use fields: fixed maxima, ability/proficiency additions or multipliers,
-and number used. This follows the cited DDB Importer reference. Source recovery
+and number used. Source recovery
 rules are preserved, but rest execution is not implemented. Multiclass resource
 normalization and arbitrary formula-based feature uses remain explicitly marked
 as gaps. Computed attacks and spellcasting totals still work for such characters.
@@ -94,25 +94,22 @@ delete the local campaign's saved records.
 
 ## Live updates
 
-The viewer uses the official campaign message-broker WebSocket with the existing
-short-term session token. The token-bearing handshake URL is never logged.
-Opening a sheet establishes a connection; closing the Party view cancels the
-subscription and discards pending results. An in-flight read may finish, but it
-cannot replace the cache after its scope is cancelled. Token renewal reconnects with a fresh session.
+While D&D Beyond is connected and the active campaign is linked, Splat reads
+the party on every page. A character update event triggers a read, then a
+second read to catch delayed computed values. A read about once a minute
+covers missed events. When the stream is down and Party is open, Splat
+polls every 15 seconds. Provider errors can delay these reads.
 
-`character-sheet/character-update/fulfilled` invalidates the selected character.
-Updates are debounced and followed by a second read to allow computed data to
-catch up. Duplicate event IDs and events from other campaigns are ignored.
-Reconnection and selecting a character trigger a fresh read. A five-minute
-reconciliation read covers missed events and unverified event coverage. If the
-stream is unavailable, the selected sheet uses a 15-second polling fallback.
-Errors use backoff and respect numeric `Retry-After`; event arrivals do not bypass
-that delay. Network traffic stops when the Party view is closed.
+The Rust tests use synthetic data for cache round trips and event routing.
+The ignored `live_parity_cache_and_stream` test checks the live transport
+and normalization. It uses the desktop keyring and the active campaign and
+writes the local character cache.
 
-The live campaign handshake succeeded, and both user-initiated temporary-HP
-changes arrived as character-update events. Synthetic tests validate routing.
-Other edit categories have not each been verified.
-See [API research](../research/dndbeyond-api.md) for transport and event evidence.
+```sh
+devenv shell -- cargo test --locked -p splat --lib live_parity_cache_and_stream -- --ignored --nocapture
+```
+
+[Party transport](../../src/party_sync.rs) · [Combat sync transport](../../src/combat_sync.rs)
 
 ## User-side campaign copies
 

@@ -4,16 +4,30 @@ Splat is a Rust and egui desktop app for D&D DMs. These notes hold only what you
 
 ## Where things are
 
-- Commands and the visual gate: `README.md`, sections Development and Visual tests. Run them through
-  `devenv shell -- <command>`. `check` is formatting and Clippy; `visual-test <label> --only a,b` is fast
-  feedback; `audit-gate <label>` is the full gate.
+- Code checks and commands: [Check a change](docs/development.md#check-a-change). Run Rust and app checks
+  through `devenv shell -- <command>`.
 - UI rules: `docs/design-system.md` is the source of truth. When your change alters what it says, change it in
   the same PR. Colours, sizes and type come from tokens (`src/design/lint.rs`).
 - Domain words: `CONTEXT.md`. UI text is plain English in short, active sentences.
 
+## Choose code checks
+
+1. Start with the diff that will merge. Code checks apply to changes that can affect a build, program,
+   generated output or test. Include the config, lockfiles, assets, content and fixtures those paths
+   read. Review prose and comments on their own merits when they have no such effect.
+2. Trace each change through callers and dependencies wherever inputs, outputs or effects can change.
+   Follow imports, calls and build rules. Also follow shared files, generated output, schemas, saved
+   data, environment settings and commands that call a tool. Check both paths for a move and the
+   old path for a deletion.
+3. Stop at an interface only when you can prove the change has no effect on the other side. Use
+   source evidence or a comparison that covers the supported contract, including errors and side effects
+   where relevant. A matching signature or one passing case is insufficient. If proof is missing, keep tracing.
+4. Run the checks for every domain the trace reaches on the proposed merge source. In the PR, record
+   what you traced, why you stopped at each boundary and which checks ran.
+
 ## Before you ask for review
 
-Past reviews found the same kinds of fault again and again. Check your own change against these first.
+Apply the rules below to the code and checks your trace reaches.
 
 - **The baseline hides faults.** `src/visual_tests/baseline.json` may hold only egui chrome counts, and a green
   gate means only "no worse than the baseline". Know the cause of every count you change: read both controls of
@@ -49,14 +63,12 @@ Past reviews found the same kinds of fault again and again. Check your own chang
   `src/design/legacy_hosts.tsv` (the legacy host freeze) is stricter: the lint compares each site with the merge
   base, so a raise fails unless the gate's raise file names it (the lead passes that file at landing). Lower its
   rows when you migrate a site; a reference, an alias or a frozen call inside `macro_rules!` fails outright.
-- **The audit's counts (G6) run in every gate.** When your change makes a task of `artifacts/dm-audit/` cost
+- **The audit's counts (G6) run in every app audit.** When your change makes a task of `artifacts/dm-audit/` cost
   more or fewer acts on purpose, run `devenv shell -- audit-freeze counts` and say in the pull request why; add
   a new task with `devenv shell -- audit-freeze add`.
-- **Pull requests of the session-cycle build plan also run G7:** `SPLAT_FROZEN=1 devenv shell -- audit-gate
+- **Code changes in the session-cycle build plan also run G7:** `SPLAT_FROZEN=1 devenv shell -- audit-gate
   <label>`. The plain reference changes only in one commit made by `devenv shell -- audit-freeze reference` on
   an unchanged commit of `main`, which it records; make that commit again after each merge of `main`. A
   feature adds its views with `devenv shell -- audit-freeze add` and its changes as rows in `allowed.json`.
-- **Run what you touched.** A focused run covers the scenarios of every file you changed, also files outside
-  your task. The full `audit-gate` runs on merged source before merge. A visual scenario's ids and dice come
-  from a hash of its name (`first_uuid` in `src/visual_tests/mod.rs`), not from its place in `SCENARIOS`. Add
-  or move a scenario anywhere; renaming one gives it new ids and new dice.
+- **Visual scenarios.** A focused run covers every scenario the change can affect. A scenario's ids and dice
+  come from a hash of its name (`first_uuid` in `src/visual_tests/mod.rs`). Renaming it gives it new ids and dice.

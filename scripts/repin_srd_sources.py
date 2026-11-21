@@ -11,7 +11,8 @@ import sys
 from pathlib import Path
 
 SOURCE = Path('builtin/srd-5.2.1')
-TARGETS = [*Path('docs/research/srd-conversion').glob('*.md'), *Path('scripts/srd_inputs').glob('*.yaml')]
+INPUTS = Path('scripts/srd_inputs')
+TARGETS = [*(INPUTS / 'specifications').glob('*.md'), *INPUTS.glob('*.yaml')]
 
 
 def words(text):

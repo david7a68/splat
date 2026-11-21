@@ -99,7 +99,7 @@
     echo "Output: $out"
     exit "$status"
   '';
-  # G6's counts and G7's plain reference (README.md, Visual tests).
+  # G6's counts and G7's plain reference (docs/development.md, Visual tests).
   #   audit-freeze counts [label]     G6: write every row of the audit's counts from this source.
   #   audit-freeze journeys [label]   G6: write every row of journeys J2, J3, J4 and J6 likewise.
   #   audit-freeze reference [label]  G7: write the plain reference on an unchanged commit of main.

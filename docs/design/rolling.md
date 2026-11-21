@@ -313,8 +313,7 @@ The `run-rolls` visual scenario measures these:
 - Reminders of conditions that can change a roll. These need a table of which
   conditions affect which rolls, and come close to a ruling.
 - Upcast spell damage.
-- Sending rolls to the D&D Beyond game log, opt-in. The write path is not
-  verified (`docs/research/dndbeyond-api.md` covers only reading).
+- Sending rolls to the D&D Beyond game log, opt-in. The write path still needs verification.
 
 ## Out of scope
 

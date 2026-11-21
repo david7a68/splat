@@ -9,7 +9,7 @@ is fixed. Full-page and cross-page changes are allowed.
 section 3, and section 5. Sections 4, 6, 7, and 8 are reference tables.
 
 Evidence: `file:line` refers to the working tree on 2026-11-01 (base `7a25305`).
-Another agent is editing `src/`, so line numbers can move by a few lines.
+The README citations refer to [the README at that commit](https://github.com/david7a68/splat/blob/7a25305/README.md).
 No screenshots existed during this research. Layout claims come from the code.
 Items marked *(estimate)* need a check against a screenshot.
 
@@ -36,7 +36,7 @@ conditions, and death. The run stores the result (`src/encounter_run.rs:1`,
   `src/main.rs:255-265`). Automatic combat resolution is also later work.
 
 **The user.** One DM, working alone on one computer, with a D&D Beyond campaign
-and players who keep their own sheets there (`docs/character-viewer.md:43`). See
+and players who keep their own sheets there. See
 assumptions A1 to A3.
 
 **Two contexts of use.** They have opposite needs. Most design disputes come from
