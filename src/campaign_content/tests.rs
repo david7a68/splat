@@ -634,6 +634,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
             && harness.state().refreshed == 0,
         "behind a modal Ctrl+S saved"
     );
+    harness.run_steps(2);
     harness.get_by_label("Discard").click();
     harness.run_steps(2);
     assert!(!harness.state().content.selections_changed());
