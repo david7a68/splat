@@ -14,11 +14,12 @@ devenv shell -- cargo run --locked
 
 Use one of these options in **Settings**.
 
-- **Local campaign.** Open **Add campaign**, choose a folder for your notes,
-  encounters and runs, and select **Add campaign**. You can use a folder in an
-  Obsidian vault.
-- **D&D Beyond campaign.** Connect your account, then choose **Add from D&D Beyond**
-  and select a campaign and folder. [Connection steps](docs/campaigns-and-party.md#dd-beyond-connection)
+- **Local campaign.** Open the **Add campaign** form if it is closed. Enter
+  a **Campaign name** and a **Folder**, then select **Add campaign**. You can
+  use a folder in an Obsidian vault.
+- **D&D Beyond campaign.** Connect your account, then expand **Add from D&D Beyond**.
+  Select **Add…** beside the campaign, choose a folder and select **Add campaign**.
+  [Connection steps](docs/campaigns-and-party.md#dd-beyond-connection)
 
 Use the campaign switcher at the top of the sidebar to select your campaign.
 

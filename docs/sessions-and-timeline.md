@@ -51,8 +51,9 @@ beside any page.
 Splat saves notes and templates as Markdown in `Sessions` by default. To move
 the folder, open **Campaign → Link and folder**. Splat counts the files that
 would stay behind. Choose **Move files and save** to move notes, templates,
-events, recordings and processing files, or **Save without moving**. The move
-keeps existing files at the destination.
+events, recordings and processing files. If a file already exists at the
+destination, Splat stops the move. **Save without moving** leaves the files
+in the old folder. They drop out of view when Splat opens the new folder.
 
 ### Insert a link with a slash command
 
@@ -96,26 +97,30 @@ Bold words inside an explicit link follow that link. An empty note offers
 
 ## Resolve a changed or missing file
 
-When a note or Timeline file changes on disk, Splat opens your draft beside
-the file at the first difference. Use **Next difference** to move between
-groups of changed lines. Choose **Overwrite with my draft** to keep your edits,
-or **Reload and lose my draft** to use the disk version. You can still record
-during the conflict. After a Timeline repair, Splat reads the file again and
-applies the open fight's latest result.
+When a note or Timeline file changes on disk during an edit, Splat compares
+your draft with the disk version. Use **Next difference** to move between
+groups of changed lines.
+
+- For a session note, use **Overwrite with my draft** to keep your edits or
+  **Reload and lose my draft** to use the disk version. You can still record.
+- For Timeline, use **Overwrite with my timeline** or **Reload and lose my
+  timeline**. After a repair, Splat reads the file again and applies the
+  open fight's latest result.
 
 Timeline saves preserve unknown properties and fields and comments outside the
 event list. Saving may remove comments inside the rewritten list. See
 [Timeline's file format](obsidian-file-layouts.md#timeline).
 
 A moved draft can save at its new path. If you copy a session file, choose
-**Make <file> a separate entry**. If a session or run folder is gone, choose its
+**Make `filename` a separate entry**. If a session or run folder is gone, choose its
 folder before creating more files.
 
 ## Record and process a session
 
 1. Tell the table before you record.
 2. Select **Record** on the session. Select **Stop recording** to finish.
-3. In **Settings**, choose a speech service and a service for **Transcript and summary**.
+3. In **Settings → Recording and processing**, choose the speech service
+   and the service for **Transcript and summary**.
 4. On the recording's row, select **Process**. Check the service destination
    below the action or on hover before you send it.
 5. Review the generated text and suggested events. Use **Add** beside a
@@ -135,12 +140,15 @@ transcript can be reused without sending audio again.
 
 ### What processing sends and saves
 
-The speech service transcribes the audio and saves `<recording>.transcript.md`.
-It needs an API key. If it stops partway through, **Continue processing**
-resumes from the next part.
+The speech service receives the audio and the session and campaign names.
+It needs an API key. Splat saves the raw transcript as
+`<recording>.transcript.md`. If transcription stops partway through,
+**Continue processing** resumes from the next part.
 
-The transcript service cleans and checks the text, proposes Timeline events,
-and writes the review and summary. The default uses the Codex CLI with your
+The transcript service receives the raw transcript, session name, notes and
+events. It first cleans the text and proposes Timeline events, then checks
+that work against the raw transcript and writes the review and summary. The
+default uses the Codex CLI with your
 Codex sign-in. Anthropic and OpenAI-compatible services are also available.
 The raw transcript stays intact. Review the generated text before adding it
 to your notes.

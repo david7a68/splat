@@ -31,9 +31,11 @@ you copied the folder, use **Register as a new package** to keep both packages.
 ### Repair a manifest
 
 Open the package's **About** page for its warning. **Write the manifest again**
-restores a missing manifest. If the manifest is unreadable, open it in the
-Library editor to repair it, or choose the basic replacement and review which
-fields it will drop. Replacing a manifest offers Undo.
+restores a missing manifest. If the file reads as text but has invalid
+properties, repair it in the Library editor. You can also choose the basic
+replacement after reviewing which fields it will drop. Replacing a manifest
+offers Undo. If Splat cannot read the file as UTF-8 text, use **Show file** to
+locate it and **Try again** after fixing it.
 
 Splat leaves plain README text in `Package.md` or `Module.md` in place. If
 both names hold notes, free one of the names before writing a new manifest.
@@ -66,7 +68,7 @@ Package** folder. Review proposed moves under **Campaign → Packages**.
   offers **Undo discard** until the next edit or disk change.
 - If a file was deleted, use **Save my draft again** or **Remove entry and
   lose draft**. If it moved, saving follows its new path.
-- If two files share an identity, select **Make <file> a separate entry**.
+- If two files share an identity, select **Make `filename` a separate entry**.
   Review which encounters would change source. The repair offers Undo.
 
 Drafts stay while you change pages. Save or discard them before switching

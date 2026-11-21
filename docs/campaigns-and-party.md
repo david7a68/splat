@@ -2,14 +2,17 @@
 
 ## Add or switch a campaign
 
-- **Local campaign.** In **Settings**, select a data folder and choose
-  **Add campaign**. You can use an existing folder in an Obsidian vault.
-- **D&D Beyond campaign.** After connecting, expand **Add from D&D Beyond** and
-  select the campaign. Splat fills in its name. Choose its data folder, then
-  select **Add campaign**. Each D&D Beyond campaign can link to one local campaign.
+- **Local campaign.** In **Settings**, open the **Add campaign** form if it is
+  closed. Enter a **Campaign name** and a **Folder**. You can use **Browse…**
+  to choose an existing folder in an Obsidian vault. Select **Add campaign**.
+- **D&D Beyond campaign.** After connecting, expand **Add from D&D Beyond**
+  and select **Add…** beside the campaign. Splat fills in its name. Check the
+  folder and select **Add campaign**. Each D&D Beyond campaign can link to
+  one local campaign.
 - **Switch or remove.** Use the sidebar switcher to change campaigns. To remove
   a registration, open **More actions** on its row. The campaign files stay.
-- **Change a link.** Choose another D&D Beyond campaign or select **Not linked**.
+- **Change a link.** Open **Campaign → Link and folder**. In **D&D Beyond
+  campaign link**, choose another campaign or select **Not linked**.
 
 Splat reads the campaign manifest on startup or when you select **Reload**.
 Opening an existing campaign folder keeps its identity, settings and notes.
@@ -18,14 +21,15 @@ its own identity. The result offers **Undo register campaign**.
 
 ## D&D Beyond connection
 
-1. Open **Settings**, then open the D&D Beyond sign-in link.
+1. In **Settings**, select **Connect…** if the sign-in form is closed.
+   Select **Open D&D Beyond sign-in**.
 2. Sign in to D&D Beyond in your browser.
 3. In the browser's developer tools, open **Application** or **Storage**. Under
    cookies for `dndbeyond.com`, copy the value of `CobaltSession`.
-4. Paste the value into Splat's masked field and select **Connect**.
+4. Paste the value into **Sign-in cookie**. To reconnect at startup, select
+   **Remember my D&D Beyond sign-in on this computer**. Select **Connect**.
 
-Keep the cookie and tokens out of Git. Select **Remember session in desktop
-keyring** to reconnect at startup. If the keyring is unavailable, you can
+Keep the cookie and tokens out of Git. If the keyring is unavailable, you can
 connect for the current app session. Splat tells you if it could not save the cookie.
 
 **Disconnect** removes local credentials and leaves your browser sign-in active.

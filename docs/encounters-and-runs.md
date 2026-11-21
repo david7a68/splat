@@ -39,7 +39,8 @@ An encounter group is a set of creatures you can add together during a fight.
 
 1. Close any other open run. Select **Start fight** or **Resume** beside the
    encounter. **Start fight** copies the roster and its values into the run.
-   Editing the template later leaves the run intact.
+   Saving the encounter later updates its open run’s **Prep** text. Combat
+   values stay as they were.
 2. Enter or roll initiative. Use **Tie** and the arrows to order tied
    participants. A shared roll needs no tie ruling.
 3. Use **Correct…** in the row menu to fill in missing HP.
@@ -63,9 +64,9 @@ Moving the current participant takes effect after **Next turn**.
 - Use **Effect** or **Other effect…** to write a reminder such as
   `Bless 10 rounds`. A duration counts down at the end of that participant's
   turn. `on its turn` repeats a reminder. You choose when to remove the effect.
-- The amount field also accepts dice expressions such as `2d6 + 3`. The roll
-  goes in the log. Undo applies to the preceding change, while the dice roll
-  stays logged.
+- Enter a dice expression such as `2d6 + 3` in **Dice**, then select **Roll**.
+  The result goes in the log. Undo applies to the preceding change. The roll
+  stays in the log.
 
 You resolve attacks, damage modifiers, condition effects, Concentration,
 death and recovery. Splat records your decisions.
@@ -114,7 +115,9 @@ fight or rest has happened, start a new run to play this one again.
 
 In **Campaign → Rules and runs**, choose the run folder and the NPC
 initiative rule. The folder defaults to `Encounter Runs`. Close the run before
-moving the folder. Choose **Move runs and save** or **Save without moving**.
+changing the folder. If the old folder contains runs, choose **Move runs and save**
+to keep them available. **Save without moving** leaves the files in the old
+folder and takes those runs out of the list.
 
 Runs save as JSON. If the run file has changed on disk, choose **Replace the
 file with this run** or **Save as a new run**. The new copy keeps your changes
@@ -133,15 +136,16 @@ beside it to change the rule for one roll.
 
 **Sync party with D&D Beyond** is on by default for encounters in a linked
 campaign. With sync on, players start from their sheets. Changes to current
-and temporary HP, death saves, official conditions, spent spell slots and
-supported limited uses can go back to those sheets. Concentration, custom
-effects, initiative, inventory charges and notes stay in Splat.
+and temporary HP, death saves, official conditions, spent spell slots,
+Heroic Inspiration and supported limited uses can go back to those sheets.
+Concentration, custom effects, initiative, inventory charges and notes stay
+in Splat.
 
 For a test or flashback, turn the encounter option off. The run then starts
-from local copies and starting overrides. Select **Sync party** in a run to
-start or stop sync for all linked players. The **Record** panel has individual
-controls. An ended run stops syncing. An ended fight that goes live again
-resumes sync if it was on.
+from local copies and starting overrides. In a run, select **Sync party**
+to start sync for linked players or **Stop sync** to stop it. The **Correct**
+tab has controls for each player. An ended run can finish pending sync
+work. If you continue the fight, sync resumes if it was on.
 
 ### Review conflicts and unsent changes
 

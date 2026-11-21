@@ -54,9 +54,10 @@ This reference describes how Splat behaves across pages. The
 - Session and Timeline use the same fight and rest states. An open fight's round
   links back to the run. A long rest's row shows **Everyone at full** or
   **Not at full**. Change the ruling on either page, with Undo.
-- After a long rest, saved fights past Setup keep their HP. A resumed Setup
-  starts at full HP. **Use the saved HP** restores its previous values and
-  offers **Undo use saved HP**.
+- After a long rest, saved fights past Setup keep their HP. When you resume a
+  Setup saved before that rest, Splat fills the HP of linked party members
+  whose maximum HP is known. **Use the saved HP** restores their previous HP
+  and temporary HP and offers **Undo use saved HP**.
 
 ## Recordings and messages
 
