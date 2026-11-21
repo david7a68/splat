@@ -16,7 +16,6 @@ src/encounters.rs allow-deprecated 1
 src/encounters/disk.rs allow-deprecated 1
 src/encounters/groups.rs allow-deprecated 1
 src/lib.rs allow-deprecated 1
-src/library.rs allow-deprecated 1
 src/library/view.rs allow-deprecated 1
 src/lookup.rs allow-deprecated 1
 src/loot_editor.rs allow-deprecated 1

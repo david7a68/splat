@@ -4130,9 +4130,6 @@ impl Library {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces, and the disk-change warnings above the comparison (design::results::STAGED_ALLOWS, ruling M20)"
     )]
-    // The reader toolbar's Back keeps the old back arrow until the TitleLine part lands (the
-    // file's only old API left: M-L0.6 moved the allow here from the whole file).
-    #[allow(deprecated)]
     fn editor_pane(
         &mut self,
         ui: &mut egui::Ui,
@@ -4562,7 +4559,6 @@ impl Library {
         )
         .back(
             self.trail.peek(Step::Back).is_some(),
-            icons::LEGACY_BACK,
             "Return to the entry before this link. During a draft, read it in Lookup.",
         );
         // M0355 (round 31 reader-toolbar-icon-form): every toolbar action has one form, its
