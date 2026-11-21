@@ -1254,7 +1254,12 @@ mod tests {
                     "{dice:?} {menu:?}"
                 );
             } else {
-                assert!(dice.top() >= menu.bottom() && (dice.left() - menu.left()).abs() < 1.0);
+                // On a line of their own the words start at the text edge, the label's: the
+                // menu's target hangs left of it (`line_start`).
+                assert!(
+                    dice.top() >= menu.bottom() && (dice.left() - label.left()).abs() < 1.0,
+                    "{dice:?} {label:?}"
+                );
             }
         }
     }
