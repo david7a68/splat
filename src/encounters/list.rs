@@ -225,9 +225,12 @@ pub(super) fn side_control(
     ui.data_mut(|data| data.insert_temp(id, other));
 }
 
-/// A list group's heading (M0264): the shared heading part, with its own space above it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
-    design::heading(ui, design::Heading::Group { title: word, count });
+    design::group_heading(ui, word, count);
 }
 
 /// Q-o: the In progress heading says the rows' order after its count, in the count's muted
