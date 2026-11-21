@@ -1083,7 +1083,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world/edit.rs",
             "edit_form",
-            &[Ban::Results, Ban::Extras(2)],
+            &[Ban::Results, Ban::Extras(1)],
         ),
         ("src/world/page.rs", "creation_body", &[Ban::Extras(1)]),
         // Package K: raw egui calls that a layout part replaces.
@@ -1626,7 +1626,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaigns.rs", 1),
             ("src/design/components.rs", 1),
             ("src/design/gallery.rs", 2),
-            ("src/world/edit.rs", 1),
         ],
     ),
     (

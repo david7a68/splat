@@ -360,6 +360,10 @@ pub struct DraftState<'a> {
     waits: Option<&'a str>,
     /// The wait is another commit that saves this draft (`commits_elsewhere`).
     elsewhere: bool,
+    /// A form draft (`cancels`): clean, it shows `Cancel`, with this reason after it.
+    cancels: Option<Option<&'a str>>,
+    /// The lock sentence while something else waits for this draft too (`holds`).
+    holds: Option<&'a str>,
 }
 
 impl<'a> DraftState<'a> {
@@ -378,6 +382,8 @@ impl<'a> DraftState<'a> {
             repair: None,
             waits: None,
             elsewhere: false,
+            cancels: None,
+            holds: None,
         }
     }
 
@@ -440,6 +446,49 @@ impl<'a> DraftState<'a> {
     pub fn just_saved(mut self) -> Self {
         self.saved = true;
         self
+    }
+
+    /// An open form's draft (World's edit form): while it has no changes, quiet `Cancel`
+    /// stands where `Discard` would and closes the form, with `reason` after it when something
+    /// waits for the form to close (`Cancel to add a Log line.`). Its reasons take the row
+    /// when the widest one fits there, else a line under the row that keeps its room in every
+    /// state, so the first edit moves nothing.
+    pub fn cancels(mut self, reason: Option<&'a str>) -> Self {
+        self.cancels = Some(reason);
+        self
+    }
+
+    /// The lock sentence while something else waits for this draft too, in place of the
+    /// campaign switch's (World's Log line: `Save or discard to add a Log line or switch
+    /// campaign.`). It holds while the draft has changes.
+    pub fn holds(mut self, words: &'a str) -> Self {
+        self.holds = Some(words);
+        self
+    }
+
+    /// `Cancel` shows: a form draft with no changes, the comparison not owning the pane.
+    pub fn cancel_shown(&self) -> bool {
+        self.cancels.is_some() && !self.changed() && !self.on_disk
+    }
+
+    /// The form's reason after `Cancel` while it shows.
+    fn cancel_reason(&self) -> Option<&'a str> {
+        self.cancels.flatten().filter(|_| self.cancel_shown())
+    }
+
+    /// Every sentence this draft's row can paint after its controls, whatever it holds now:
+    /// the widest decides where a form draft's reasons stand.
+    fn reasons(&self) -> Vec<&'a str> {
+        let locks: &[&'a str] = if self.locks_campaign {
+            &[SAVE_OR_DISCARD_TO_SWITCH, DISCARD_TO_SWITCH]
+        } else {
+            &[]
+        };
+        self.holds
+            .into_iter()
+            .chain(locks.iter().copied())
+            .chain(self.cancels.flatten())
+            .collect()
     }
 
     /// This draft locks the campaign switch while it has changes.
@@ -563,6 +612,16 @@ impl<'a> DraftState<'a> {
         self.changed() && !self.on_disk
     }
 
+    /// The sentence the row paints after its controls now: the caller's while something else
+    /// waits for the draft too (`holds`), else the campaign-switch reason, else a clean form's
+    /// reason after `Cancel`.
+    fn row_reason(&self) -> Option<&'a str> {
+        self.holds
+            .filter(|_| self.changed())
+            .or(self.lock_reason())
+            .or(self.cancel_reason())
+    }
+
     /// The campaign-switch reason after `Discard`, for a draft that locks the switch.
     pub fn lock_reason(&self) -> Option<&'static str> {
         (self.locks_campaign && self.changed()).then(|| {
@@ -581,6 +640,8 @@ impl<'a> DraftState<'a> {
 pub struct SaveRow {
     pub save: bool,
     pub discard: bool,
+    /// A form draft's `Cancel` (`DraftState::cancels`).
+    pub cancel: bool,
 }
 
 /// The save row of `state`, as wide as the `Ui`: the word, `Discard` and any lock reason at the
@@ -675,6 +736,30 @@ pub(in crate::design) fn save_row_with(
             None
         }
     });
+    // A form draft's reasons (the lock sentence while it has changes, Cancel's while clean)
+    // stand on the row when the widest fits beside the widest word, the widest of Discard and
+    // Cancel, and Save; else on a line under the row that keeps its room in every state.
+    let form = state.cancels.is_some();
+    let below = form && {
+        let word = [SaveWord::Unsaved, SaveWord::NoChanges]
+            .into_iter()
+            .map(|word| {
+                let status = word.status();
+                super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
+            })
+            .fold(0.0, f32::max);
+        let room = ui.available_width()
+            - save_width
+            - word
+            - Action::quiet("Discard")
+                .natural_width(ui)
+                .max(Action::quiet("Cancel").natural_width(ui))
+            - 4.0 * gap;
+        state
+            .reasons()
+            .iter()
+            .any(|words| super::number_width(ui, words, &small) > room)
+    };
     let mut pressed = SaveRow::default();
     ui.horizontal(|ui| {
         ui.set_min_height(Density::Scan.control());
@@ -685,7 +770,10 @@ pub(in crate::design) fn save_row_with(
                 if state.discard_shown() {
                     pressed.discard = Action::quiet("Discard").show(ui).clicked();
                 }
-                if let Some(reason) = state.lock_reason() {
+                if state.cancel_shown() {
+                    pressed.cancel = Action::quiet("Cancel").show(ui).clicked();
+                }
+                if !below && let Some(reason) = state.row_reason() {
                     super::blocked_reason(ui, Some(reason));
                 }
                 if let Some(reason) = reason
@@ -702,6 +790,22 @@ pub(in crate::design) fn save_row_with(
             });
         });
     });
+    // A form draft's reasons under the row: the one that holds now, or the widest kept
+    // unseen, so the row's height is the same in every state.
+    if below {
+        match state.row_reason() {
+            Some(reason) => super::blocked_reason(ui, Some(reason)),
+            None => {
+                let widest = state.reasons().into_iter().max_by(|a, b| {
+                    super::number_width(ui, a, &small)
+                        .total_cmp(&super::number_width(ui, b, &small))
+                });
+                ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
+                    super::blocked_reason(ui, widest);
+                });
+            }
+        }
+    }
     // Too narrow for the short form: a slot under the row, its room kept while open.
     if let Some(reason) = reason
         && on_line.is_none()
@@ -1232,16 +1336,30 @@ mod tests {
     #[test]
     fn the_row_draws_the_state() {
         use egui_kittest::kittest::Queryable;
-        for (state, word, discard) in [
+        // M-W0.3: an open form's draft (`cancels`, World's edit form): clean, `Cancel` and its
+        // reason; changed, `Discard` and the caller's sentence (`holds`).
+        const CANCEL_WHY: &str = "Cancel to add a Log line.";
+        const HOLDS: &str = "Save or discard to add a Log line or switch campaign.";
+        let form = |changed| {
+            DraftState::new(DraftOrigin::Saved, changed, Primary::Draft)
+                .locks_campaign()
+                .cancels(Some(CANCEL_WHY))
+                .holds(HOLDS)
+        };
+        for (state, word, discard, cancel, reason) in [
             (
                 DraftState::new(DraftOrigin::Saved, Changed::Yes, Primary::Draft),
                 "Unsaved",
                 true,
+                false,
+                None,
             ),
             (
                 DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft),
                 "No changes",
                 false,
+                false,
+                None,
             ),
             // A repair's row names its write.
             (
@@ -1249,14 +1367,24 @@ mod tests {
                     .repairs("Save replaces the unread choice on line 23 with these settings"),
                 "Save replaces the unread choice on line 23",
                 false,
+                false,
+                None,
             ),
+            (
+                form(Changed::No),
+                "No changes",
+                false,
+                true,
+                Some(CANCEL_WHY),
+            ),
+            (form(Changed::Yes), "Unsaved", true, false, Some(HOLDS)),
         ] {
             let pressed = std::cell::Cell::new(SaveRow::default());
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(600.0, 80.0))
                 .build_ui(|ui| {
                     let row = save_row(ui, &state, "Save");
-                    if row.save || row.discard {
+                    if row.save || row.discard || row.cancel {
                         pressed.set(row);
                     }
                 });
@@ -1268,6 +1396,25 @@ mod tests {
                 discard,
                 "{word}"
             );
+            assert_eq!(harness.query_by_label("Cancel").is_some(), cancel, "{word}");
+            if let Some(reason) = reason {
+                assert!(
+                    harness.query_by_label(reason).is_some(),
+                    "{word}: the row says {reason:?}"
+                );
+            }
+            if cancel {
+                harness.get_by_label("Cancel").click();
+                harness.run();
+                assert_eq!(
+                    pressed.get(),
+                    SaveRow {
+                        save: false,
+                        discard: false,
+                        cancel: true
+                    }
+                );
+            }
             if discard {
                 harness.get_by_label("Discard").click();
                 harness.run();
@@ -1275,7 +1422,8 @@ mod tests {
                     pressed.get(),
                     SaveRow {
                         save: false,
-                        discard: true
+                        discard: true,
+                        cancel: false
                     }
                 );
                 harness.get_by_label("Save").click();
@@ -1284,10 +1432,68 @@ mod tests {
                     pressed.get(),
                     SaveRow {
                         save: true,
-                        discard: false
+                        discard: false,
+                        cancel: false
                     }
                 );
             }
+        }
+        // A narrow form: its reasons go on a line under the row, and the row with that line is
+        // as tall clean as changed, so the first edit moves nothing; a wide one keeps them on
+        // the row.
+        // A form with nothing waiting says nothing while clean: the line under the row keeps
+        // its room unseen.
+        let plain = |changed| {
+            DraftState::new(DraftOrigin::Saved, changed, Primary::Draft)
+                .locks_campaign()
+                .cancels(None)
+        };
+        for (width, under, waits) in [
+            (300.0, true, true),
+            (800.0, false, true),
+            (300.0, true, false),
+        ] {
+            let mut heights = Vec::new();
+            for changed in [Changed::No, Changed::Yes] {
+                let state = if waits { form(changed) } else { plain(changed) };
+                let (after, save, words) = (
+                    std::cell::Cell::new(0.0),
+                    std::cell::Cell::new(egui::Rect::NOTHING),
+                    std::cell::Cell::new(egui::Rect::NOTHING),
+                );
+                let mut harness = egui_kittest::Harness::builder()
+                    .with_size(egui::vec2(width + 20.0, 200.0))
+                    .build_ui(|ui| {
+                        ui.set_max_width(width);
+                        let start = ui.cursor().top();
+                        let _ = save_row(ui, &state, "Save changes");
+                        after.set(ui.label("After").rect.top() - start);
+                    });
+                crate::design::theme::install(&harness.ctx);
+                harness.run();
+                save.set(harness.get_by_label("Save changes").rect());
+                let reason = match (changed, waits) {
+                    (Changed::Yes, true) => Some(HOLDS),
+                    (Changed::Yes, false) => Some(SAVE_OR_DISCARD_TO_SWITCH),
+                    (Changed::No, true) => Some(CANCEL_WHY),
+                    (Changed::No, false) => None,
+                };
+                if let Some(reason) = reason {
+                    words.set(harness.get_by_label(reason).rect());
+                    assert_eq!(
+                        words.get().top() >= save.get().bottom(),
+                        under,
+                        "{width}: {reason:?} {:?} under the row (Save {:?}): {under}",
+                        words.get(),
+                        save.get()
+                    );
+                }
+                heights.push(after.get());
+            }
+            assert!(
+                (heights[0] - heights[1]).abs() < 0.5,
+                "{width}: the row keeps its height clean and changed: {heights:?}"
+            );
         }
     }
 }
