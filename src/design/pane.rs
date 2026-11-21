@@ -4415,6 +4415,28 @@ mod editor_region_tests {
             (frame.right() - save.right()).abs() <= 0.5,
             "i10-edge-{case}: the frame {frame:?} and Save {save:?} share their outside right edge"
         );
+        // The painted stroke is that frame, whole in its clip: not a frame inside the scroll.
+        let painted: Vec<(Rect, Rect)> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Rect(rect)
+                    if rect.stroke.color == super::super::tokens::colors().field_border =>
+                {
+                    Some((rect.rect, clipped.clip_rect))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            painted.iter().any(|(rect, clip)| {
+                (rect.min - frame.min).length() <= 0.5
+                    && (rect.max - frame.max).length() <= 0.5
+                    && clip.expand(0.5).contains_rect(*rect)
+            }),
+            "i10-stroke-{case}: the painted frame strokes {painted:?} include the frame {frame:?}, whole in its clip"
+        );
         let inner = frame.shrink(S + super::super::tokens::HAIRLINE_WIDTH);
         let lane = super::super::layout::lane_width();
         // egui's view excludes its bar while the bar shows: it ends at the frame's inside, or
