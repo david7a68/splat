@@ -8,24 +8,23 @@
 //! work, and an open one draws only the rows in view.
 use super::TrackerFault;
 use super::{
-    NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, place_name, replay,
+    NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, orphaned, place_name,
     result_words, with_dependents,
 };
 use crate::design::outcome::PagePlaceholder;
-use crate::design::outcome::{FaultMessage, Messages, Outcome, Said, UndoStep, Verb};
+use crate::design::outcome::{FaultMessage, Messages, Outcome, Said, Sentence, UndoStep, Verb};
 use crate::design::{self, Action, Density, Gap, Type, colors};
-use crate::world::FooterAct;
-use eframe::egui;
-use ledger::{Entry, Ledger, Op};
+use egui;
+use ledger::{Entry, Ledger, Op, Placed};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-#[cfg(test)]
+#[cfg(feature = "test-support")]
 thread_local! {
     /// Rows worked out by `rows`: the work that grows with the ledger.
-    pub(super) static PREPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub static PREPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Open sections drawn, and rows drawn in them.
-    pub(super) static DRAWN: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    pub static DRAWN: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
 
 /// One row of a member's history: the entry as the file held it, its words, and the value it
@@ -36,9 +35,6 @@ pub struct Row {
     pub words: String,
     pub value: Option<i64>,
 }
-
-/// Each entry a `Remove` took, with the entry it followed then, as read.
-type Placed = Vec<(Option<Entry>, Entry)>;
 
 /// The last `Remove`: the entries it took, each with the entry it followed, for its one Undo.
 #[derive(Clone, Debug, PartialEq)]
@@ -76,7 +72,7 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         if rules.def(&key).is_none() && rules.day_mark(&key).is_none() {
             continue;
         }
-        #[cfg(test)]
+        #[cfg(feature = "test-support")]
         PREPARED.with(|n| n.set(n.get() + 1));
         let one = std::slice::from_ref(entry);
         let words = if entry.notice.is_some() {
@@ -91,7 +87,7 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         rows.entry(key).or_default().push(Row {
             entry: entry.clone(),
             words,
-            value: state.after.get(&entry.id).copied(),
+            value: state.value_after(&entry.id),
         });
     }
     rows
@@ -192,30 +188,6 @@ fn in_play(rules: &Rules, note: Uuid) -> bool {
         || rules.problems.iter().any(|(owner, _)| *owner == Some(note))
 }
 
-/// The act whose entries about a notice would be left with nothing to name, when the ledger
-/// becomes `next`: a notice that a change raised in `ledger` and raises no more in `next`.
-pub(super) fn orphaned(
-    rules: &Rules,
-    today: &Today,
-    ledger: &Ledger,
-    next: &Ledger,
-) -> Option<String> {
-    let (before, after) = (replay(rules, ledger, today), replay(rules, next, today));
-    let orphan = next.changes.iter().find(|entry| {
-        entry
-            .notice
-            .as_ref()
-            .is_some_and(|notice| before.raised(notice) && !after.raised(notice))
-    })?;
-    let press: Vec<Entry> = next
-        .changes
-        .iter()
-        .filter(|entry| entry.same_press(orphan))
-        .cloned()
-        .collect();
-    Some(label(rules, next, &press))
-}
-
 /// The entries that `Remove` takes for the entry the DM clicked, as the file holds them now,
 /// with each one's place for its Undo, and the result's words.
 fn removal(
@@ -312,14 +284,17 @@ impl Trackers {
         let today = self.today.clone();
         let mut stale = false;
         let done = self.commit(|rules, ledger| {
-            let op = Op::Restore(removed.placed.clone());
-            let next = ledger.apply(&op).inspect_err(|_| stale = true)?;
-            if let Some(name) = orphaned(rules, &today, ledger, &next) {
-                return Err(format!(
-                    "{name} depends on the removal. Remove that first. Nothing was put back."
-                ));
-            }
-            Ok(op)
+            super::restore_op(rules, &today, ledger, removed.placed.clone()).map_err(
+                |why| match why {
+                    super::RestoreFault::Stale(words) => {
+                        stale = true;
+                        words
+                    }
+                    super::RestoreFault::Dependent(name) => format!(
+                        "{name} depends on the removal. Remove that first. Nothing was put back."
+                    ),
+                },
+            )
         });
         match done {
             Ok(()) => self.removed = None,
@@ -335,7 +310,7 @@ impl Trackers {
 }
 
 /// One footer message of a note's history, as `footer_lines` selects it: its words, and its kind.
-pub(crate) struct FooterLine {
+pub struct FooterLine {
     pub words: String,
     kind: LineKind,
 }
@@ -352,7 +327,7 @@ enum LineKind {
 /// The footer messages of the history of `note`, in the footer's order: why the last `Remove`
 /// or its Undo wrote nothing, and the last `Remove` with `Undo remove`. A note turned off shows
 /// nothing. The one selection: `footer` draws exactly these, and the checks read them.
-pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
+pub fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     let mut lines = Vec::new();
     if !in_play(&trackers.rules, note) {
         return lines;
@@ -392,11 +367,17 @@ pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     clippy::disallowed_methods,
     reason = "staged: the last Remove keeps the order `remove` issued (design::results::STAGED_ALLOWS)"
 )]
-pub(crate) fn footer(trackers: &Trackers, note: Uuid, messages: &mut Messages<'_, FooterAct>) {
+pub fn footer<A: Clone + 'static>(
+    trackers: &Trackers,
+    note: Uuid,
+    messages: &mut Messages<'_, A>,
+    said: fn(&str) -> Sentence,
+    undo: A,
+) {
     for line in footer_lines(trackers, note) {
         match line.kind {
             LineKind::Refused => {
-                messages.outcome(Outcome::Refused(crate::world::said(&line.words)));
+                messages.outcome(Outcome::Refused(said(&line.words)));
             }
             LineKind::NotSaved(words) => {
                 messages.outcome(FaultMessage::new(&NotSaved(words)));
@@ -404,8 +385,8 @@ pub(crate) fn footer(trackers: &Trackers, note: Uuid, messages: &mut Messages<'_
             LineKind::Removed(order) => {
                 messages.outcome_at(
                     order,
-                    Said::new(crate::world::said(&line.words))
-                        .undo(UndoStep::verb(Verb::Remove).pressed_as(FooterAct::Trackers)),
+                    Said::new(said(&line.words))
+                        .undo(UndoStep::verb(Verb::Remove).pressed_as(undo.clone())),
                 );
             }
         }
@@ -430,7 +411,7 @@ impl crate::design::outcome::Fault for NotSaved {
     clippy::disallowed_methods,
     reason = "the history cannot show: a page placeholder; a member’s problem: a row fault"
 )]
-pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::Entry) {
+pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat_content::content::Entry) {
     if !super::is_house_rule_note(note) || !trackers.in_play() {
         return;
     }
@@ -533,7 +514,7 @@ fn rows_in_view(
         egui::Sense::hover(),
     );
     let seen = area.intersect(ui.clip_rect());
-    #[cfg(test)]
+    #[cfg(feature = "test-support")]
     DRAWN.with(|n| n.set((n.get().0 + 1, n.get().1)));
     if !seen.is_positive() {
         return;
@@ -541,7 +522,7 @@ fn rows_in_view(
     let first = ((seen.top() - area.top()) / pitch).floor().max(0.0) as usize;
     let last = (((seen.bottom() - area.top()) / pitch).ceil() as usize).min(rows.len());
     for (at, row) in rows.iter().enumerate().take(last).skip(first) {
-        #[cfg(test)]
+        #[cfg(feature = "test-support")]
         DRAWN.with(|n| n.set((n.get().0, n.get().1 + 1)));
         let rect = egui::Rect::from_min_size(
             egui::pos2(area.left(), area.top() + at as f32 * pitch),
@@ -561,7 +542,7 @@ fn rows_in_view(
 }
 
 /// Why `Remove` is off on a row of the session being played: its own Undo takes it back.
-pub(crate) const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this session.";
+pub const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this session.";
 
 /// A row, laid out from its right end: its menu with `Remove` (off, with its reason painted under
 /// it, on a row of the session being played), so every row looks alike and the values stand in one column; the

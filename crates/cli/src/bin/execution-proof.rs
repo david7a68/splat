@@ -1,6 +1,6 @@
 //! Run a small SRD encounter from the executable Markdown definitions.
 use serde_json::json;
-use splat::execution::{ENGINE_ID, Engine, TargetFacts, Use, builtin, dice::Random};
+use splat_execution::execution::{ENGINE_ID, Engine, TargetFacts, Use, builtin, dice::Random};
 fn main() {
     if let Err(error) = run() {
         eprintln!("{error}");

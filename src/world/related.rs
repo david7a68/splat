@@ -281,7 +281,7 @@ fn from_other_pages(
 }
 
 /// What is here, who is part of this, its history, and what other pages say about it.
-pub(super) fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<Go> {
+pub fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<Go> {
     let mut go = None;
     let here = index.inside(&item.entry);
     let mut listed = here.clone();

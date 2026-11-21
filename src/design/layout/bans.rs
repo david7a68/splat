@@ -822,7 +822,7 @@ mod tests {
             "use crate::design::{Body, Fills as Room};",
             "type Fill = crate::design::Fills;",
             "use crate::design::pane::Fills::because as fills;",
-            "use eframe::egui::ScrollArea as Area;",
+            "use egui::ScrollArea as Area;",
             "use crate::design::outcome::banner as notice;",
             "type Hand = splat::design::components::Footer<'static>;",
             // Round 29 P-1: a free function through a module that re-exports it.

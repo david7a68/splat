@@ -209,7 +209,7 @@ pub fn release(campaign: &Path, device: Uuid, now: u64) {
 }
 
 /// Writes a note for a test that needs a turn already settled.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn hold(campaign: &Path, holder: &Holder) {
     write(campaign, holder).unwrap();
 }

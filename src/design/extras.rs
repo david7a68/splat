@@ -9,7 +9,7 @@
 //! assignments in 20 files) is a reviewer duty; the gate's alignment and stillness checks see its
 //! effects. A caller of `choice` gives words and whether the choice is the selected one.
 use super::{components::*, icons, tokens::*};
-use eframe::egui::{self, Align2, Response, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
+use egui::{self, Align2, Response, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
 use std::sync::Arc;
 
 // ------------------------------------------------------------------------------------------------
@@ -20,24 +20,24 @@ use std::sync::Arc;
 /// field add them.
 ///
 /// ```
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     splat::extras::gap(ui, splat::extras::Gap::L);
+/// fn f(ui: &mut egui::Ui) {
+///     splat_design::extras::gap(ui, splat_design::extras::Gap::L);
 /// }
 /// ```
 ///
 /// A raw number is not a gap:
 ///
 /// ```compile_fail,E0308
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     splat::extras::gap(ui, 10.0);
+/// fn f(ui: &mut egui::Ui) {
+///     splat_design::extras::gap(ui, 10.0);
 /// }
 /// ```
 ///
 /// The design's own raw space is not public:
 ///
 /// ```compile_fail,E0603
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     splat::extras::space(ui, 10.0);
+/// fn f(ui: &mut egui::Ui) {
+///     splat_design::extras::space(ui, 10.0);
 /// }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,6 +78,11 @@ pub(in crate::design) fn space(ui: &mut Ui, amount: f32) {
     ui.add_space(amount);
 }
 
+#[cfg(feature = "test-support")]
+pub fn test_space(ui: &mut Ui, amount: f32) {
+    space(ui, amount);
+}
+
 /// What a heading is. Each kind has its type, its colour and the space above it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Heading<'a> {
@@ -116,16 +121,16 @@ impl Heading<'_> {
 /// review sees).
 ///
 /// ```
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     splat::extras::heading(ui, splat::extras::Heading::Group { title: "Ready", count: 2 });
+/// fn f(ui: &mut egui::Ui) {
+///     splat_design::extras::heading(ui, splat_design::extras::Heading::Group { title: "Ready", count: 2 });
 /// }
 /// ```
 ///
 /// The space is the heading's, not the caller's:
 ///
 /// ```compile_fail,E0061
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     splat::extras::heading(ui, splat::extras::Heading::Label("Party"), 12.0);
+/// fn f(ui: &mut egui::Ui) {
+///     splat_design::extras::heading(ui, splat_design::extras::Heading::Label("Party"), 12.0);
 /// }
 /// ```
 pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
@@ -186,8 +191,8 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
 /// [`choice_wrapped`], which wraps them inside the row and never cuts them.
 ///
 /// ```
-/// fn f(ui: &mut eframe::egui::Ui, scope: &mut u8) {
-///     if splat::extras::choice(ui, *scope == 1, "This campaign").clicked() {
+/// fn f(ui: &mut egui::Ui, scope: &mut u8) {
+///     if splat_design::extras::choice(ui, *scope == 1, "This campaign").clicked() {
 ///         *scope = 1;
 ///     }
 /// }
@@ -196,30 +201,30 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
 /// Whether it is selected is said, never left out:
 ///
 /// ```compile_fail,E0061
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     let _ = splat::extras::choice(ui, "This campaign");
+/// fn f(ui: &mut egui::Ui) {
+///     let _ = splat_design::extras::choice(ui, "This campaign");
 /// }
 /// ```
 ///
 /// A name from the user's data is not the app's fixed words; it goes through `choice_wrapped`:
 ///
 /// ```compile_fail,E0308
-/// fn f(ui: &mut eframe::egui::Ui, name: String) {
-///     let _ = splat::extras::choice(ui, true, name);
+/// fn f(ui: &mut egui::Ui, name: String) {
+///     let _ = splat_design::extras::choice(ui, true, name);
 /// }
 /// ```
 ///
 /// ```compile_fail,E0621
-/// fn f(ui: &mut eframe::egui::Ui, name: &str) {
-///     let _ = splat::extras::choice(ui, true, name);
+/// fn f(ui: &mut egui::Ui, name: &str) {
+///     let _ = splat_design::extras::choice(ui, true, name);
 /// }
 /// ```
 ///
 /// The compiling twin for data words:
 ///
 /// ```
-/// fn f(ui: &mut eframe::egui::Ui, name: &str) {
-///     let _ = splat::extras::choice_wrapped(ui, true, name, None);
+/// fn f(ui: &mut egui::Ui, name: &str) {
+///     let _ = splat_design::extras::choice_wrapped(ui, true, name, None);
 /// }
 /// ```
 pub fn choice(ui: &mut Ui, selected: bool, label: &'static str) -> Response {
@@ -345,14 +350,14 @@ fn choice_row(ui: &mut Ui, selected: bool, label: &str, lines: Lines<'_>) -> Res
 /// words, as [`choice`]'s are; a value named by the user's data uses [`choice_wrapped`].
 ///
 /// ```compile_fail,E0308
-/// fn f(ui: &mut eframe::egui::Ui, at: &mut u8, name: String) {
-///     let _ = splat::extras::choice_value(ui, at, 1, name);
+/// fn f(ui: &mut egui::Ui, at: &mut u8, name: String) {
+///     let _ = splat_design::extras::choice_value(ui, at, 1, name);
 /// }
 /// ```
 ///
 /// ```
-/// fn f(ui: &mut eframe::egui::Ui, at: &mut u8) {
-///     let _ = splat::extras::choice_value(ui, at, 1, "First");
+/// fn f(ui: &mut egui::Ui, at: &mut u8) {
+///     let _ = splat_design::extras::choice_value(ui, at, 1, "First");
 /// }
 /// ```
 pub fn choice_value<T: PartialEq>(
@@ -460,7 +465,7 @@ pub fn choice_wrapped_value<T: PartialEq>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eframe::egui::Context;
+    use egui::Context;
 
     fn run(add: impl FnMut(&mut Ui)) {
         let ctx = Context::default();

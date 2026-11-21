@@ -24,12 +24,12 @@ or its inputs, review the text, links and commands as applicable.
 | Build, shell and test setup | Run the changed build, shell or check through its normal entry point. Follow any effect on its users. Use `devenv test` for the devenv setup. |
 
 For a package-level Rust check, substitute the affected package name for
-`splat-core` in the Clippy and test commands.
+`splat-content` in the Clippy and test commands.
 
 ```sh
 devenv shell -- cargo fmt --all --check
-devenv shell -- cargo clippy --locked -p splat-core --all-targets -- -D warnings
-devenv shell -- cargo test --locked -p splat-core
+devenv shell -- cargo clippy --locked -p splat-content --all-targets -- -D warnings
+devenv shell -- cargo test --locked -p splat-content
 ```
 
 `devenv shell -- check` runs formatting and Clippy for the workspace.
@@ -48,12 +48,36 @@ do not tell you the scope. For example, the tracker tests load
 | Path | Contents |
 | --- | --- |
 | `crates/assets` | Bundled assets |
-| `crates/core` | Content and rules |
+| `crates/content` | Content and search ranking |
+| `crates/character` | Character data and rules |
+| `crates/execution` | Rules execution |
+| `crates/campaign` | Campaign data, tracker rules and ledger operations |
 | `crates/cli` | Verification tools |
+| `src/design` | Shared egui widgets and messages (`splat-design`) |
+| `src/trackers` | Trackers panel and history (`splat-trackers`) |
+| `src/content_ui` | Content catalogue, Lookup, Campaign registration, and shared readers (`splat-content-ui`) |
+| `src/library_page` | Library browsing and authoring (`splat-library-page`) |
+| `src/world_page` | World page (`splat-world-page`) |
+| `src/campaign_packages` | Campaign Packages page (`splat-campaign-packages`) |
+| `src/session_records` | Saved fight records, difficulty summaries, and the Timeline book (`splat-session-records`) |
+| `src/encounters_ui` | Encounter planning and fight runs (`splat-encounters-ui`) |
+| `src/party_support` | Live party sheets, sync, and sheet UI shared with runs (`splat-party`) |
+| `src/party_page` | Party page (`splat-party-page`) |
+| `src/sessions_ui` | Sessions and Timeline pages, recording, and processing (`splat-sessions-ui`) |
 | `src` | Desktop app and public content, character and execution APIs |
 
-The desktop library can compile once Cargo has the core metadata. The
-verification tools use core and build without the GUI.
+Character, execution and campaign can compile in parallel once content metadata
+is ready. The desktop library depends on the logic crates directly. The
+verification tools use content, character and execution.
+
+The UI crates keep their sources under `src/` so the design checks follow the same files.
+A World page, Campaign Packages, Library page, or Trackers edit rebuilds that feature and the desktop.
+An edit to the catalogue, Lookup, or a shared reader rebuilds Content UI and the crates that use it.
+Encounters UI and Sessions UI share the saved fight records and the Timeline book.
+In an app build, edits to either UI crate rebuild that crate and the desktop.
+The Sessions tests use the Encounters crate to create saved-run fixtures.
+Party page edits rebuild that page and the desktop. Edits to the shared sheets or
+sync also rebuild the Encounters UI that uses them.
 
 Development and test builds use 16 code-generation units and include file and
 line information in backtraces. They disable incremental compilation by

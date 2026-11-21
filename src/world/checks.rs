@@ -168,6 +168,28 @@ pub fn run(index: &ContentIndex) -> Checks {
     checks
 }
 
+/// The note's text with the box of an open question set: `question` is the question as read
+/// (unticked), its first line and continuation lines joined by `\n`, and `at` its first line in
+/// the note's body. `None` unless that place holds the whole question, its box in the other
+/// state: the act never looks for another line that reads the same.
+pub fn tick_file(text: &str, at: usize, question: &str, done: bool) -> Option<String> {
+    let front =
+        crate::session_notes::split_note(text).map_or(0, |(front, _)| front.matches('\n').count());
+    let mut lines = question.split('\n');
+    let line = lines.next()?;
+    let mut held = text.split('\n').skip(front + at + 1);
+    if !lines.all(|wanted| held.next().map(|at| at.trim_end_matches('\r')) == Some(wanted)) {
+        return None;
+    }
+    let ticked = crate::session_notes::ticked(line, true);
+    let (from, to) = if done {
+        (line, ticked.as_str())
+    } else {
+        (ticked.as_str(), line)
+    };
+    crate::session_notes::change_line(text, front + at, from, Some(to))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,7 +278,6 @@ mod tests {
         );
         // X45 of app round 2: a question knows the line of its note that holds its box, and a
         // tick sets that box only while the line is as read.
-        let tick_file = super::super::page::tick_file;
         let (at, line) = checks.questions[0].open_box.clone().unwrap();
         let file = std::fs::read_to_string(dir.path().join("Places/Kabrigar.md")).unwrap();
         let ticked = tick_file(&file, at, &line, true).unwrap();

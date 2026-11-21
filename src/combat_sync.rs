@@ -18,23 +18,7 @@ use std::{
 
 const BASE: &str = "https://character-service.dndbeyond.com/character/v5";
 const INTERVAL: Duration = Duration::from_secs(15);
-pub const CONDITIONS: [(u64, &str); 15] = [
-    (1, "Blinded"),
-    (2, "Charmed"),
-    (3, "Deafened"),
-    (4, "Exhaustion"),
-    (5, "Frightened"),
-    (6, "Grappled"),
-    (7, "Incapacitated"),
-    (8, "Invisible"),
-    (9, "Paralyzed"),
-    (10, "Petrified"),
-    (11, "Poisoned"),
-    (12, "Prone"),
-    (13, "Restrained"),
-    (14, "Stunned"),
-    (15, "Unconscious"),
-];
+pub use splat_campaign::encounter_run::effect::CONDITIONS;
 /// The character's own purse, as the official sheet names it in a currency write.
 const CHARACTER_ENTITY_TYPE: u64 = 1_581_111_423;
 /// Each coin: its field on the sheet, its route, and its name.
@@ -791,7 +775,7 @@ const DIFFER_AFTER_READ: &str =
     "Splat and D&D Beyond differ, and you changed this while sync was off. Choose which to keep.";
 
 /// A sheet with this damage and nothing else recorded. Test builds cannot read a live one.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn simulated_sheet(character: u64, max_hp: i64, damage: i64, can_edit: bool) -> Remote {
     Remote::from_raw(
         character,
@@ -902,7 +886,7 @@ pub struct CombatSync {
     wells: Option<(WellsKey, Wells)>,
     /// How often frames asked for the wells, and how often the values were read to measure
     /// them (`CachedWork` in tests).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) well_counts: (usize, usize),
     blocked: BTreeMap<String, String>,
     pending: Option<Pending>,
@@ -933,7 +917,7 @@ pub struct CombatSync {
     /// those itself. The Party page does not, so without this they would be lost there.
     keeps_all_unsent: bool,
     /// Never talks to D&D Beyond. It only shows the state it was given.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     simulated: bool,
 }
 impl Drop for CombatSync {
@@ -945,7 +929,7 @@ impl Drop for CombatSync {
 }
 impl CombatSync {
     /// A sync in a state test builds cannot read from a live sheet. It only shows that.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulated_state(state: SyncState, character: u64, max_hp: i64, damage: i64) -> Self {
         if state == SyncState::Conflict {
             return Self::simulated_conflict(character, max_hp, damage);
@@ -971,7 +955,7 @@ impl CombatSync {
 
     /// The state after a refresh finds that D&D Beyond and Splat changed the same HP.
     /// Test builds cannot read a live sheet, so a visual test shows the panel this way.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulated_conflict(character: u64, max_hp: i64, damage: i64) -> Self {
         let read = simulated_sheet(character, max_hp, damage, true);
         let mut sync = Self::default();
@@ -1035,7 +1019,7 @@ impl CombatSync {
     }
     /// The session ended. This sync stops, and says so until the DM starts it again.
     pub fn session_ended(&mut self) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if self.simulated {
             return;
         }
@@ -1096,7 +1080,7 @@ impl CombatSync {
         self.remote.as_ref().map(|remote| &remote.groups)
     }
     /// Let this sync react to the session, as a real one does.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn stop_simulating(&mut self) {
         self.simulated = false;
     }
@@ -1124,11 +1108,11 @@ impl CombatSync {
         }
     }
     /// Test builds have no session, and `tick` stops sync without one. Keep it on.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn keep_without_connection(&mut self) {
         self.simulated = true;
     }
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     pub fn keep_without_connection(&mut self) {}
     /// Turn sync on. It reads the sheet before it writes anything.
     pub fn start(&mut self) {
@@ -1185,7 +1169,7 @@ impl CombatSync {
         id: &str,
     ) {
         // Test builds have no route to D&D Beyond. A signed-in test stays on its first read.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "test-support")) {
             let _ = (ctx, &session, epoch, campaign, id);
             return;
         }
@@ -1384,16 +1368,16 @@ impl CombatSync {
         self.next = None;
     }
     /// A read from D&D Beyond, with the sheet's HP. Test builds have no route to a live one.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_read(&mut self, character: u64, max_hp: i64, damage: i64) {
         self.accept_read(simulated_sheet(character, max_hp, damage, true));
     }
     /// A read of a sheet given in full, in D&D Beyond's own fields.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sheet(&mut self, character: u64, max_hp: i64, sheet: &Value) {
         self.accept_read(Remote::from_raw(character, max_hp, sheet).expect("simulated sheet"));
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn accept_read(&mut self, remote: Remote) {
         let sent = self.desired.clone();
         self.accept(
@@ -1404,7 +1388,7 @@ impl CombatSync {
             &sent,
         );
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn conflict_keys(&self) -> Vec<String> {
         self.blocked.keys().cloned().collect()
     }
@@ -1471,7 +1455,7 @@ impl CombatSync {
     pub fn conflicts(&mut self, ui: &mut egui::Ui) {
         self.conflicts_inner(ui, None, true);
     }
-    pub(crate) fn conflicts_for(&mut self, ui: &mut egui::Ui, name: &str) {
+    pub fn conflicts_for(&mut self, ui: &mut egui::Ui, name: &str) {
         self.conflicts_inner(ui, Some(name), false);
     }
     fn conflicts_inner(&mut self, ui: &mut egui::Ui, name: Option<&str>, explanation: bool) {
@@ -1764,7 +1748,7 @@ impl CombatSync {
     /// changes, so an unchanged frame or a resize reads no values.
     fn wells(&mut self, ui: &egui::Ui, max_hp: i64) -> Wells {
         use crate::design::Type;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.well_counts.0 += 1;
         }
@@ -1789,7 +1773,7 @@ impl CombatSync {
     }
     /// Reads every value the panel shows to find each block's widest. Only `wells` calls it.
     fn measure_wells(&mut self, ui: &egui::Ui, max_hp: i64) -> Wells {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.well_counts.1 += 1;
         }
@@ -2375,11 +2359,7 @@ fn step_field(group: &mut Value, field: &str, edit: impl FnOnce(&mut i64) -> boo
 fn current_hp(hp: &Value, max_hp: i64) -> i64 {
     (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0)
 }
-/// A displayed current/maximum fraction. Presentation only: stored values and service
-/// payloads keep their existing representation. Callers supply their own unknown-value words.
-pub(crate) fn fraction(current: impl std::fmt::Display, maximum: impl std::fmt::Display) -> String {
-    format!("{current}/{maximum}")
-}
+pub use crate::design::fraction;
 
 fn describe(key: &str, value: Option<&Value>, max_hp: i64) -> String {
     let Some(value) = value else {
@@ -2488,7 +2468,7 @@ fn group_label(key: &str) -> &str {
 /// A character's sync block heading in the ended view, one form for every state (FK3): the
 /// name in `Heading` and the text colour, ` · `, then the status's icon and word in its colour.
 /// A status is an icon, a word and a colour; the name never takes the status colour.
-pub(crate) fn sync_heading(
+pub fn sync_heading(
     ui: &mut egui::Ui,
     name: &str,
     status: &str,
