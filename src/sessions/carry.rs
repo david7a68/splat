@@ -4,7 +4,7 @@
 use super::{Plan, Sessions, prose};
 use crate::{
     content_workspace::patch_fields,
-    design::{self, Action, Tone, Type, colors},
+    design::{self, Action, Type, colors},
     encounter_run::RunGroup,
     encounters::PlanFight,
     sessions::{
