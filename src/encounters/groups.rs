@@ -400,6 +400,31 @@ fn gone_encounter() -> Refusal {
     Refusal::missing(GONE_ENCOUNTER, RefusalPlace::BelongsTo)
 }
 
+/// A fault the group editor says in its body (lane E1, ruling M20), as a typed fault of the
+/// tone its check gives it (R41): an error (an invalid change, unreadable data) or a warning (a
+/// member left out, a link to fix). Its words are the check's or the loader's.
+fn editor_fault(tone: Tone, words: &str) -> MemberFault {
+    let kind = if tone == Tone::Error {
+        FaultKind::InvalidChange
+    } else {
+        FaultKind::CannotJoin
+    };
+    MemberFault::new(kind, words.to_owned())
+}
+
+/// `fault` in the body's full form (`BodyFault`, no repair): the rect it took. Every use of it
+/// replaces an untyped `design::message` (ruling M20).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "ruling M20: the group editor’s faults in its body, typed (`Ban::Body`)"
+)]
+fn body_fault(ui: &mut egui::Ui, fault: &MemberFault) -> egui::Rect {
+    let shown = ui.scope(|ui| {
+        let _: Option<()> = design::outcome::BodyFault::new(fault).show(ui);
+    });
+    shown.response.rect
+}
+
 /// Where the group editor says a refusal of Save.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum RefusalPlace {
@@ -1434,7 +1459,7 @@ fn list_row(
     // A group with no member that can join says so after its member faults, as a message in
     // the same form as the faults above it.
     for reason in group.own_problems() {
-        design::message(ui, Tone::Warning, reason);
+        body_fault(ui, &editor_fault(Tone::Warning, reason));
     }
 }
 
@@ -1790,6 +1815,10 @@ pub(super) fn of_encounter(
 
 /// Who a group is for, in its editor. An encounter being built is a choice before it is saved,
 /// and under the name it has now. True when it says a gone encounter (G122), whole on screen.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "ruling M20: the gone encounter is a typed fault at its field (`Ban::Body`)"
+)]
 fn belongs_to(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -1848,7 +1877,10 @@ fn belongs_to(
         Some(_) if shown == MISSING_ENCOUNTER => {
             // R41: the tone of the refusal that Save gives for it, so the save row's word and
             // this message agree.
-            let said = design::small_message(ui, gone_encounter().tone(), GONE_ENCOUNTER);
+            let said = design::outcome::row_fault(
+                ui,
+                &editor_fault(gone_encounter().tone(), GONE_ENCOUNTER),
+            );
             // Whole on screen: the save row does not say it again (`GONE_BESIDE_SAVE`).
             return ui.is_visible() && ui.clip_rect().contains_rect(said.rect);
         }
@@ -2015,16 +2047,15 @@ fn show_change_fault(
     error: &str,
     fault: &dyn Fn(&str) -> String,
 ) -> egui::Rect {
-    let said = design::message(
+    let said = body_fault(
         ui,
-        FaultKind::InvalidChange.tone(),
-        &fault(&override_error(error)),
+        &MemberFault::new(FaultKind::InvalidChange, fault(&override_error(error))),
     );
     if let Some(overrides) = overrides {
         change_rows(ui, &overrides.rows(&Base::of(entry, side)));
     }
     // G122 asks whether the fault itself is on screen.
-    said.rect
+    said
 }
 
 const FORM_OPENED: &str = "override_form_opened";
@@ -2129,8 +2160,11 @@ fn change_row(
         ui.horizontal(|ui| {
             ui.add_space(LABEL_WIDTH + ui.spacing().item_spacing.x);
             ui.vertical(|ui| {
-                design::small_message(ui, FaultKind::InvalidChange.tone(), &override_error(&error))
-                    .rect
+                design::outcome::row_fault(
+                    ui,
+                    &MemberFault::new(FaultKind::InvalidChange, override_error(&error)),
+                )
+                .rect
             })
             .inner
         })
@@ -2285,13 +2319,15 @@ pub(super) fn overrides_form(
     let mut overrides = match Overrides::parse(block) {
         Ok(overrides) => overrides,
         Err(error) => {
-            let said = design::message(
+            let said = body_fault(
                 ui,
-                Tone::Error,
-                &format!("{error} Repair it in Campaign → Campaign entries."),
+                &MemberFault::new(
+                    FaultKind::Unreadable,
+                    format!("{error} Repair it in Campaign → Campaign entries."),
+                ),
             );
             return FormEnd {
-                fault: Some(said.rect),
+                fault: Some(said),
                 ..FormEnd::default()
             };
         }
@@ -2304,10 +2340,10 @@ pub(super) fn overrides_form(
     let mut done_act = None;
     let heading = ui
         .horizontal(|ui| {
-            let heading = design::group_label(
-                ui,
-                &format!("Changes for {}", shown_name(block, entry.name.clone())),
-            );
+            // M0236: the form's label is the shared heading part (`Heading::Label`), which adds
+            // no space in a row.
+            let title = format!("Changes for {}", shown_name(block, entry.name.clone()));
+            let heading = design::heading(ui, design::Heading::Label(&title));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let response = Action::quiet("Done").name("Done with changes").show(ui);
                 done = response.clicked();
@@ -2345,9 +2381,10 @@ pub(super) fn overrides_form(
     if let Err(error) = overrides.resolve_for(entry, side)
         && !on_a_field
     {
-        said(Some(
-            design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error)).rect,
-        ));
+        said(Some(body_fault(
+            ui,
+            &MemberFault::new(FaultKind::InvalidChange, override_error(&error)),
+        )));
     }
     text_row(
         ui,
@@ -3074,7 +3111,7 @@ impl Encounters {
             if gone_shown.get() {
                 super::blocked_reason(&mut beside, deferred_switch);
             } else {
-                design::small_message(&mut beside, *tone, words);
+                design::outcome::row_fault(&mut beside, &editor_fault(*tone, words));
             }
         }
         this.record_separation(separated.into_inner());
@@ -3494,7 +3531,14 @@ fn group_fields(
         + unread.iter().filter_map(|member| member.count).sum::<u64>();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        design::group_heading(ui, "Members", count as usize);
+        // M0247: the shared heading part; in this row it adds no space.
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: "Members",
+                count: count as usize,
+            },
+        );
         if !draft.setup.members.is_empty() {
             ui.label(
                 Type::Small
@@ -4104,7 +4148,10 @@ fn unread_member(
     {
         // An unread value is a message, as every other unread value is: a mark and bar in the
         // unread row's tone (R41: an error), and words in text colour.
-        let unread = design::small_message(ui, FaultKind::Unreadable.tone(), &unread_changes(&raw));
+        let unread = design::outcome::row_fault(
+            ui,
+            &MemberFault::new(FaultKind::Unreadable, unread_changes(&raw)),
+        );
         if ui
             .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(("unread_form_opened", line))))
             .is_some()
@@ -4139,10 +4186,9 @@ fn unread_member(
                 apply = Some(block.clone());
             }
         } else {
-            design::message(
+            body_fault(
                 ui,
-                Tone::Warning,
-                "Fix the creature link in Obsidian first.",
+                &editor_fault(Tone::Warning, "Fix the creature link in Obsidian first."),
             );
         }
     }
@@ -4152,7 +4198,7 @@ fn unread_member(
         draft.repair_error = Some(error);
     }
     if let Some(error) = &draft.repair_error {
-        design::message(ui, Tone::Warning, error);
+        body_fault(ui, &editor_fault(Tone::Warning, error));
     }
     design::rule(ui);
 }
@@ -4913,6 +4959,17 @@ mod tests {
         );
         harness.get_by_label("Maximum HP: how it changes");
         harness.get_by_label("AC: amount");
+        // Lane E1 (ruling M20): the unread Changes cell is a typed fault at its row, in the
+        // error tone (R41), not an untyped small message.
+        assert!(
+            design::outcome::message_rects(&harness.ctx)
+                .into_iter()
+                .any(
+                    |(_, place, tone)| place == design::outcome::MessagePlace::Row
+                        && tone == Tone::Error
+                ),
+            "the unread Changes cell is a typed row fault"
+        );
         harness.get_by_label("Done with changes").click();
         harness.run_steps(2);
         harness.state_mut().0.save(&active, &[]).unwrap();
