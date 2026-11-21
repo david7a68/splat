@@ -10695,15 +10695,15 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
                 field.top() - second.bottom(),
             ))
         });
-        // The shared part's help line sits no farther from its own repair than from the next
-        // repair (it belongs to its repair); an `M` gap still ends them.
+        // Each repair's help stays close under it, the next repair keeps `L` from that help (the
+        // shared part's spacing, M8), and an `M` gap ends them.
         let held = gaps.is_some_and(|(help, between, after)| {
-            help >= 0.0 && help <= between + 0.5 && after >= design::M - 0.5
+            help < design::S && between >= design::L - 0.5 && after >= design::M - 0.5
         });
         d.observe(
             "iter-10-D-FD5",
             held,
-            format!("Each repair's help is under it, no farther from it than from the next repair, and an M gap ends them at {size:?}: (help, between, after) = {gaps:?}"),
+            format!("Each repair's help is close under it, an L gap separates the two repairs and an M gap ends them at {size:?}: (help, between, after) = {gaps:?}"),
         );
     }
     for size in [SMALL, DEFAULT, LARGE] {

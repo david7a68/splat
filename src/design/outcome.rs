@@ -3808,13 +3808,18 @@ impl Body {
                 if stacked {
                     // The bottom of what the choice before drew: its help line, else itself.
                     let mut below: Option<f32> = None;
+                    let mut help_bottom: Option<f32> = None;
                     for (at, choice) in self.row_choices() {
                         // A red choice stands exactly `M` below the line before it, measured from
-                        // that line's own bounds: a one-line help sits centred in a taller row.
+                        // that line's own bounds; a safe one keeps `L` from the help line before
+                        // it, so that help reads as its own choice's (M8).
+                        let help_before = help_bottom.take();
                         if let Some(below) = below
                             && self.loses(at, choice)
                         {
                             space(ui, (below + M - ui.cursor().top()).max(0.0));
+                        } else {
+                            after_help(ui, help_before);
                         }
                         let shown = message_choice_row(ui, self.tone, |ui| {
                             let room = ui.available_width();
@@ -3827,7 +3832,9 @@ impl Body {
                             (self.helps.get(at).and_then(Option::as_ref), &shown)
                         {
                             let lock = self.locks.get(at).and_then(holding);
-                            below = Some(action_help(ui, self.tone, help, response, lock).bottom());
+                            let help = action_help(ui, self.tone, help, response, lock).bottom();
+                            below = Some(help);
+                            help_bottom = Some(help);
                         }
                     }
                 } else if !one_line {
@@ -4492,6 +4499,9 @@ impl<A> Repair<A> {
 /// accessible description (after its lock's reason while that holds), and a keyboard focus on
 /// the action brings the action and its help into view together (`reveal_with`). The help
 /// line's rect.
+///
+/// It sits `XS` under what its action drew last (the action, or its lock's reason), top-aligned,
+/// so it reads as that action's; the next choice keeps `L` from it ([`after_help`]).
 fn action_help(
     ui: &mut Ui,
     tone: Tone,
@@ -4499,7 +4509,26 @@ fn action_help(
     action: &Response,
     lock: Option<&str>,
 ) -> Rect {
-    let line = message_choice_row(ui, tone, |ui| super::components::help(ui, help.as_str()));
+    let top = ui.min_rect().bottom().max(action.rect.bottom()) + XS;
+    let room = Rect::from_min_max(
+        egui::pos2(ui.max_rect().left(), top),
+        egui::pos2(ui.max_rect().right(), ui.max_rect().bottom().max(top)),
+    );
+    let inset = S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS;
+    let line = ui
+        .scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(room)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+            |ui| {
+                ui.horizontal_top(|ui| {
+                    space(ui, inset);
+                    super::components::help(ui, help.as_str())
+                })
+                .inner
+            },
+        )
+        .inner;
     let description = match lock {
         Some(reason) => format!("{reason} {}", help.as_str()),
         None => help.as_str().to_owned(),
@@ -4508,6 +4537,15 @@ fn action_help(
         .accesskit_node_builder(action.id, |node| node.set_description(description));
     super::components::reveal_with(ui, action.id, action.rect.union(line.rect));
     line.rect
+}
+
+/// The space before the next choice of a stack (ruling M8): `L` from the help line of the
+/// choice before it (`help_bottom`), so that help reads as its own choice's and not the next
+/// one's; nothing after a choice with no help.
+fn after_help(ui: &mut Ui, help_bottom: Option<f32>) {
+    if let Some(bottom) = help_bottom {
+        space(ui, (bottom + L - ui.cursor().top()).max(0.0));
+    }
 }
 
 /// A fault in a page's body that the DM can repair from where it is (Campaign content's package
@@ -4551,8 +4589,10 @@ impl<A> BodyFault<A> {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
                 let text = words.as_str();
                 tone_message(ui, tone, text);
+                let mut help_bottom = None;
                 for (at, repair) in repairs.iter().enumerate() {
                     let lock = holding(&repair.lock);
+                    after_help(ui, help_bottom.take());
                     let action = message_choice_row(ui, tone, |ui| {
                         let room = ui.available_width();
                         data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock)
@@ -4576,7 +4616,7 @@ impl<A> BodyFault<A> {
                         });
                     }
                     if let Some(help) = &repair.help {
-                        action_help(ui, tone, help, &action, lock);
+                        help_bottom = Some(action_help(ui, tone, help, &action, lock).bottom());
                     }
                 }
             })
