@@ -9359,9 +9359,11 @@ mod tests {
         )
         .unwrap();
         let template = create_template(dir.path(), "Short", "## Plan\n").unwrap();
-        let mut sessions = Sessions::default();
-        sessions.draft = Some(Draft::open(&note.path).unwrap());
-        sessions.templates = vec![template.clone()];
+        let mut sessions = Sessions {
+            draft: Some(Draft::open(&note.path).unwrap()),
+            templates: vec![template.clone()],
+            ..Sessions::default()
+        };
         sessions.select_template(&template.name);
         assert!(sessions.template_draft.is_some());
         // The harness draws the note's editor, or the template's.
