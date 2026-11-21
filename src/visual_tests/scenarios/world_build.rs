@@ -2900,6 +2900,58 @@ pub fn places(d: &mut Driver<'_>) {
             }),
         "Both loop notes show Place loop on their rows, and the header counts 2 notes",
     );
+    // M-W0.6 (Astra P1): the header's `2 notes need fixing` menu keeps to the column under
+    // the count (`TitleLine::menu_room`): at every size its frame crosses no scroll bar or
+    // splitter outside it, and its last link is whole in view.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (frame, lanes, last) = d.act_at_size(size, |d| {
+            // The menu's links are the ones the click adds (the reader's warning links the
+            // same notes).
+            let links = |d: &Driver<'_>| {
+                d.nodes()
+                    .into_iter()
+                    .filter(|node| {
+                        node.role == Role::Link
+                            && (node.name == "Loop One" || node.name == "Loop Two")
+                    })
+                    .map(|node| (node.rect, node.fully_in_view(), node.name))
+                    .collect::<Vec<_>>()
+            };
+            let before = links(d);
+            d.click("2 notes need fixing");
+            let menu: Vec<_> = links(d)
+                .into_iter()
+                .filter(|link| !before.iter().any(|old| old.0 == link.0))
+                .collect();
+            let frame = menu
+                .first()
+                .and_then(|first| d.painted_frame_around(first.0));
+            let last = menu
+                .iter()
+                .max_by(|a, b| a.0.top().total_cmp(&b.0.top()))
+                .map(|link| (link.2.clone(), link.1));
+            let lanes = d.chrome_lanes();
+            d.press(Key::Escape);
+            (frame, lanes, last)
+        });
+        let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+            lanes
+                .into_iter()
+                .filter(|lane| {
+                    !frame.expand(0.5).contains_rect(*lane)
+                        && lane.y_range().intersects(frame.y_range())
+                        && lane.x_range().intersects(frame.x_range())
+                })
+                .collect()
+        });
+        d.observe(
+            "M0603-needs-fixing-menu-clear",
+            frame.is_some() && crossed.is_empty() && last.as_ref().is_some_and(|(_, whole)| *whole),
+            format!(
+                "At {size:?} the needs-fixing menu {frame:?} crosses no scroll bar or splitter ({crossed:?}); its last link {last:?} is whole in view"
+            ),
+        );
+    }
     // Round 23 FG5: the loop warning wraps at the reader measure, the right edge of the rows.
     let loop_warning = "Loop One is in Loop Two, and Loop Two is in Loop One. Change one of them.";
     for size in [SMALL, DEFAULT, LARGE] {
