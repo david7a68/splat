@@ -2164,9 +2164,10 @@ chosen template from the folder, so one changed or removed outside Splat is neve
 Templates is a quiet header action. Its page names Templates and Campaign as owner, starts with the shared
 quiet Sessions back action and puts New template in the header. Hide New template and clear list selection
 while its form is open. Keep the list's help outside the form. New forms have `L` above the heading, the shared
-heading's `XS` below it, and `Starts with the title line only.` below Name. The new template form has the one inline creation order:
-`Create template` on the name field's line, the help under the field, then the kept line with quiet `Cancel` at
-its start and `Type a name first.` after it. Built-ins leave one blank line below each heading.
+heading's `XS` below it, and `Starts with the title line only.` below Name. The new template form is the one inline
+creation form with its actions under the field (`InlineCreate::actions_under`): the name field and its help, then
+`Create template` and quiet `Cancel` together on the action line, then the kept line with `Type a name first.`. Enter
+in the field creates, Escape cancels. Built-ins leave one blank line below each heading.
 Template editors use the note's styled source face, no input well, full column width and height. `Deleted
 “<name>”.` with `Undo delete` is a result in the template editor's message footer (in a narrow window with the
 list alone, in the list's footer), never under the list. A campaign change or an edit to a template ends it.

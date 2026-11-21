@@ -1166,11 +1166,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1), Ban::Extras(2)],
         ),
         ("src/sessions/page.rs", "list_pane", &[Ban::Layout(1)]),
-        (
-            "src/sessions/page.rs",
-            "new_template_form",
-            &[Ban::Extras(2)],
-        ),
         ("src/sessions/page.rs", "note_editor", &[Ban::Layout(2)]),
         ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),

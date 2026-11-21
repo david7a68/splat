@@ -75,6 +75,7 @@ const SESSION_TEMPLATE: design::FieldName = crate::field_id!("session_template")
 const CREATE_SESSION: design::Word = crate::word!("Create session");
 const SAVE_DETAILS: design::Word = crate::word!("Save details");
 const CANCEL: design::Word = crate::word!("Cancel");
+const CREATE_TEMPLATE: design::Word = crate::word!("Create template");
 
 crate::create_reasons! {
     /// Why the New session form's Create (or the details form's Save details) waits.
@@ -82,6 +83,13 @@ crate::create_reasons! {
         Number => "Enter the session number as a whole number.",
         Date => "Enter the date as YYYY-MM-DD.",
         TemplateGone => "The chosen template is gone from the folder. Choose another.",
+    }
+}
+
+crate::create_reasons! {
+    /// Why the New template form's Create waits.
+    enum TemplateReason {
+        NoName => "Type a name first.",
     }
 }
 
@@ -7510,65 +7518,37 @@ impl Sessions {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn new_template_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut name) = self.new_template.take() else {
             return;
         };
         design::heading(ui, design::Heading::Label("New template"));
-        // Round 27 FL2, SL1: the one inline creation layout. `Create template` follows the name
-        // field on its line, the help stays under the field, and the kept line below holds quiet
-        // `Cancel` at its start and the reason after it, so typing moves nothing.
-        let create_action = || {
-            if self.open_run.is_some() {
-                Action::secondary("Create template")
-            } else {
-                Action::primary("Create template")
-            }
-        };
-        let reason = name.trim().is_empty().then_some("Type a name first.");
-        let create_width = create_action().natural_width(ui);
-        let mut create = false;
-        ui.horizontal_top(|ui| {
-            let width = ui.available_width() - create_width - ui.spacing().item_spacing.x;
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, 0.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    design::labelled_field(
-                        ui,
-                        TEMPLATE_NAME,
-                        "Template name",
-                        &mut name,
-                        Some("Starts with the title line only."),
-                        None,
-                    );
-                },
-            );
-            ui.vertical(|ui| {
-                ui.add_space(design::L + design::XS);
-                create = create_action().blocked(reason).show(ui).clicked();
-            });
-        });
-        let mut keep = true;
-        ui.horizontal(|ui| {
-            // As tall as Cancel, so the reason coming or going moves nothing.
-            ui.set_min_height(Density::Read.control());
-            if Action::quiet("Cancel")
-                .density(Density::Read)
-                .line_start()
-                .show(ui)
-                .clicked()
-            {
-                keep = false;
-                self.template_error = None;
-            }
-            ui.add_space(design::L - ui.spacing().item_spacing.x);
-            design::blocked_reason(ui, reason);
-        });
+        // The one inline creation form (round 31, `inline-create-action-order`, N0 M0490): the
+        // name and its help, then `Create template` and quiet `Cancel` together on the action
+        // line under the field, then the kept line with the reason. Enter in the field creates,
+        // Escape cancels.
+        let reason = name.trim().is_empty().then_some(TemplateReason::NoName);
+        let create = if self.open_run.is_some() {
+            design::Create::secondary(CREATE_TEMPLATE)
+        } else {
+            design::Create::primary(CREATE_TEMPLATE)
+        }
+        .blocked(reason);
+        let shown = design::InlineCreate::new()
+            .field(
+                design::CreateField::new(TEMPLATE_NAME, "Template name", &mut name)
+                    .help("Starts with the title line only."),
+            )
+            .create(create)
+            .kept_line(design::KeptLine::new().cancel(CANCEL, true))
+            .actions_under()
+            .show(ui);
+        let mut keep = !shown.cancel;
+        if shown.cancel {
+            self.template_error = None;
+        }
+        // A press is judged on the name after this frame's typing.
+        let create = shown.create && !name.trim().is_empty();
         if create && let Some(folder) = &self.folder {
             let body = "# Session {{number}}: {{title}}\n\n";
             match create_template(folder, &name, body) {

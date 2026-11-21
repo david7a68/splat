@@ -14912,8 +14912,10 @@ pub mod session_notes {
         d.state("templates-own", Sizes::Default);
         d.type_into_editor("Edited in the template.\n");
         d.click("New template");
-        // Round 27 FL2, SL1: Create template follows the name field on its line, and Cancel
-        // starts the kept line below it at the field's left; typing moves neither.
+        // Round 31 SP6, AP7 (`inline-create-action-order`, N0 M0490), which replaces round 27
+        // FL2's Create beside the field: `Create template` and `Cancel` stand together on the
+        // action line under the field, Create at the field's left and Cancel after it (or under
+        // it, at the text edge, in a narrow column); typing moves neither.
         let form = |d: &Driver<'_>| {
             [
                 d.nodes()
@@ -14931,16 +14933,19 @@ pub mod session_notes {
         d.type_into("Template name", "Downtime");
         let filled = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, form));
         d.observe(
-            "iter-27-S-FL2",
+            "m32-N0-template-actions-under",
             empty == filled
                 && filled.iter().all(|[field, create, cancel]| {
                     matches!((field, create, cancel), (Some(field), Some(create), Some(cancel))
-                        if field.y_range().contains(create.center().y)
-                            && create.left() > field.right()
-                            && cancel.top() > field.bottom()
-                            && cancel.left() <= field.left() + 1.0)
+                        if create.top() > field.bottom()
+                            && (create.left() - field.left()).abs() < 1.0
+                            && (((cancel.center().y - create.center().y).abs() < 1.0
+                                && cancel.left() > create.right())
+                                || cancel.top() >= create.bottom()))
                 }),
-            format!("Create on the field's line, Cancel below at its start, same empty and filled: {filled:?}"),
+            format!(
+                "Create and Cancel together under the field, same empty and filled: {filled:?}"
+            ),
         );
         // The shared heading rule: the heading owns the `XS` below it, so the field's label
         // starts `XS` under the heading, and the form adds no space of its own there.
