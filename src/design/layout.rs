@@ -1159,7 +1159,7 @@ impl ScrollColumn {
         // In a pane's body, the area starts where a `line_start` hang may reach and its content
         // at the text edge (P3a): the surface covers the hang, and nothing moves.
         let Some(reach) = super::pane::column_reach(ui, lane_width()) else {
-            return Self::styled(ui, |ui, width| {
+            let output = Self::styled(ui, |ui, width| {
                 let (area, column) = self.area_in(ui);
                 area.show_viewport(ui, |ui, viewport| {
                     super::reveal::region(ui, column, viewport, |ui| {
@@ -1173,8 +1173,11 @@ impl ScrollColumn {
                     })
                 })
             });
+            // A column in a child of composite columns adds what it hides to the child's height.
+            super::pane::hidden_height(ui, &output);
+            return output;
         };
-        super::pane::reaching(ui, reach, |ui| {
+        let output = super::pane::reaching(ui, reach, |ui| {
             Self::styled(ui, |ui, width| {
                 let (area, column) = self.area_in(ui);
                 area.show_viewport(ui, |ui, viewport| {
@@ -1196,7 +1199,9 @@ impl ScrollColumn {
                     })
                 })
             })
-        })
+        });
+        super::pane::hidden_height(ui, &output);
+        output
     }
 
     /// The scroll of a pane's editor region (`pane::EditorRegion`), the one scroll a `Content`
@@ -1228,7 +1233,7 @@ impl ScrollColumn {
         if super::pane::column_in_content(ui) {
             return self.inline(ui, |ui| add(ui, 0..rows));
         }
-        Self::styled(ui, |ui, width| {
+        let output = Self::styled(ui, |ui, width| {
             let (full, id) = (self.full_width, self.id);
             self.area().show_rows(ui, row_height, rows, |ui, range| {
                 ui.set_max_width(width);
@@ -1237,7 +1242,9 @@ impl ScrollColumn {
                 }
                 super::pane::whole_rows(ui, id, |ui| add(ui, range))
             })
-        })
+        });
+        super::pane::hidden_height(ui, &output);
+        output
     }
 
     /// For content that draws only what is in view of the given viewport.

@@ -7554,6 +7554,10 @@ mod tests {
             SideColumn,
             Nested,
             Editor,
+            /// Two unequal columns of one task (`PaneColumns::shared_task`, layout step 7): a
+            /// resizable column of `count` rows that scrolls on its own, and a column of four
+            /// rows and the last action.
+            Composite,
         }
         const REASON: &str = "Line 1 opens a list.";
         let rows = |ui: &mut Ui, count: usize| {
@@ -7603,6 +7607,7 @@ mod tests {
                 Shape::SideColumn,
                 Shape::Nested,
                 Shape::Editor,
+                Shape::Composite,
             ] {
                 for count in [2, 200] {
                     let pressed = Rc::new(Cell::new(None::<&'static str>));
@@ -7698,6 +7703,36 @@ mod tests {
                                             press(ui, "Last action");
                                         });
                                     }
+                                    Shape::Composite => {
+                                        super::super::pane::PaneColumns::shared_task(
+                                            "shape_columns",
+                                        )
+                                        .resizable(
+                                            0.0,
+                                            super::super::Column::left(
+                                                "shape_left",
+                                                200.0,
+                                                150.0..=300.0,
+                                            ),
+                                        )
+                                        .rest(S)
+                                        .edges(ui)
+                                        .show_children(
+                                            ui,
+                                            |ui, index| {
+                                                if index == 0 {
+                                                    ScrollColumn::new("shape_left_rows")
+                                                        .fit_height()
+                                                        .show(ui, |ui| rows(ui, count));
+                                                } else {
+                                                    for line in 0..4 {
+                                                        ui.label(format!("Line R{line}"));
+                                                    }
+                                                    press(ui, "Last action");
+                                                }
+                                            },
+                                        );
+                                    }
                                     Shape::Editor => {
                                         let mut text = (0..count)
                                             .map(|line| format!("Line {line}"))
@@ -7776,8 +7811,13 @@ mod tests {
                         }
                     }
                     assert!(words_seen > 0, "{case}: body words are painted");
+                    // The composite follows its taller column (the four rows and the last
+                    // action) while its 2 rows are shorter.
                     let follows = count == 2
-                        && matches!(shape, Shape::Rows | Shape::InScope | Shape::InFrame);
+                        && matches!(
+                            shape,
+                            Shape::Rows | Shape::InScope | Shape::InFrame | Shape::Composite
+                        );
                     if follows {
                         // The frame's 4 px margin is under its last rect.
                         let margin = if shape == Shape::InFrame { 4.0 } else { 0.0 };
@@ -7810,6 +7850,7 @@ mod tests {
                         Shape::TallColumn => Some("Tall action"),
                         Shape::SideColumn => Some("Left action"),
                         Shape::Editor => None,
+                        Shape::Composite => Some("Last action"),
                         _ if count == 2 => Some("Last action"),
                         _ => None,
                     };
