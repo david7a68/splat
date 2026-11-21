@@ -2048,13 +2048,13 @@ impl Splat {
                         |(settings, dndbeyond), messages| {
                             campaigns_ref
                                 .borrow()
-                                .footer_messages(messages, true, blocked);
+                                .footer_messages(&frame, messages, true, blocked);
                             settings.footer_messages(messages);
-                            dndbeyond.footer_messages(messages, false);
+                            dndbeyond.footer_messages(&frame, messages, false);
                         },
                     );
                     if let Some(press) = paned.pressed {
-                        campaigns.into_inner().footer_act(press.id);
+                        campaigns.into_inner().footer_act(press);
                     }
                 });
             }
@@ -2317,12 +2317,12 @@ impl Splat {
                                 |dndbeyond, messages| {
                                     campaigns_ref
                                         .borrow()
-                                        .footer_messages(messages, false, blocked);
-                                    dndbeyond.footer_messages(messages, true);
+                                        .footer_messages(&frame, messages, false, blocked);
+                                    dndbeyond.footer_messages(&frame, messages, true);
                                 },
                             );
                             if let Some(press) = paned.pressed {
-                                campaigns.into_inner().footer_act(press.id);
+                                campaigns.into_inner().footer_act(press);
                             }
                         });
                     }

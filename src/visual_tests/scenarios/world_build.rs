@@ -6984,15 +6984,19 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("package-wrong-folder-picked", Sizes::All);
     crate::hermetic::closed::next_folder(moved.clone());
     d.click("Find the folder…");
-    d.wait_for_control("Undo recover modules/watch-package");
-    d.expect("Ashen Marches found in modules/watch-package/.");
+    d.wait_for_control("Undo recover Ashen Marches in modules/watch-package/");
+    d.expect("Ashen Marches recovered in modules/watch-package/.");
     d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
-        check_undo_icon(d, "Undo recover modules/watch-package", "iter-6-C-AD3");
+        check_undo_icon(
+            d,
+            "Undo recover Ashen Marches in modules/watch-package/",
+            "iter-6-C-AD3",
+        );
     });
-    d.click("Undo recover modules/watch-package");
+    d.click("Undo recover Ashen Marches in modules/watch-package/");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
-    d.wait_for_control("Undo recover modules/watch-package");
+    d.wait_for_control("Undo recover Ashen Marches in modules/watch-package/");
     go_library(d);
     d.click("Packages");
     d.click("Reload from disk");
@@ -7614,6 +7618,11 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Open in Library has a secondary border");
         d.observe("iter-7-C-FD5", d.visible_text("Package.md cannot be read (line 4). Entries are still available."),
             "The manifest fault and availability sentence have a full stop between them");
+        // Ruling M8 (migration-32 C0, M0001/M0012): what Replace keeps and replaces is that
+        // choice's own help line, painted under it, not part of the fault's words above it.
+        let help_line = d.painted_rect_in("This keeps the package name and its links.", egui::Rect::EVERYTHING);
+        d.observe("m32-C0-M8-replace-help", help_line.is_some_and(|line| line.top() >= replace.bottom() - 0.5),
+            format!("Replace's help {help_line:?} is under Replace {replace:?}"));
         d.observe("iter-6-C-AD1", d.visible_text("This keeps the package name and its links.")
             && d.visible_text("including its description.")
             && d.visible_text("The entries stay unchanged."),
