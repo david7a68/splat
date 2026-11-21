@@ -1164,24 +1164,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/sessions/page.rs",
-            "banner",
-            &[Ban::Layout(1), Ban::Body],
-        ),
-        ("src/sessions/page.rs", "list_pane", &[Ban::Layout(1)]),
-        (
-            "src/sessions/page.rs",
-            "new_template_form",
-            &[Ban::Extras(2)],
-        ),
+        ("src/sessions/page.rs", "banner", &[Ban::Body]),
         (
             "src/sessions/page.rs",
             "note_editor",
             &[Ban::Layout(2), Ban::Body],
         ),
-        ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
-        ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
@@ -1584,11 +1572,6 @@ mod suppressions;
 ///   editor uses `design::EditorHead` (R38).
 /// - `BackEdge::Segments`: the Recordings row's named escape (its back link in one row with
 ///   `Add to notes`); its one use is counted, so a second row back link fails.
-/// - `LEGACY_BACK`: the bare back arrow (`design::icons`). An editor's back is
-///   `design::EditorHead` (R38); a back link that starts a line is `design::TitleLine::back`,
-///   whose word is always shown (K4b, FL7). The lint's `arrow-label` finds the arrow given as
-///   an action's whole label, by name or as a literal. The name is spelled at
-///   each use, also in an alias or a grouped import, so the text count sees every one.
 /// - `UndoStep::verb(`: an Undo with no object (`Undo remove`), whose words cannot name what it
 ///   takes back even where the line has room (ruling M9). The 23 production calls move to
 ///   `UndoStep::of` in their caller lanes, or stay as named exceptions; `outcome.rs` keeps its
@@ -1665,15 +1648,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
             ("src/trackers.rs", 1),
-        ],
-    ),
-    (
-        "LEGACY_BACK",
-        "An editor's back is `design::EditorHead` above its name row; a back link that starts a line is `design::TitleLine::back(word!(…), BackEdge)`.",
-        &[
-            ("src/design/icons.rs", 1),
-            ("src/library.rs", 1),
-            ("src/lookup.rs", 2),
         ],
     ),
     (
