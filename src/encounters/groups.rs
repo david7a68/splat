@@ -54,6 +54,10 @@ const HEAD_REASONS: [design::save_row::ReasonSlot<'static>; 2] = [
             design::save_row::DISCARD_TO_SWITCH,
         ],
         substitutes: &[GONE_BESIDE_SAVE, MEMBER_BESIDE_SAVE],
+        short: &[
+            design::save_row::SAVE_OR_DISCARD_SHORT,
+            design::save_row::DISCARD_SHORT,
+        ],
     },
 ];
 /// The Groups list's heading for groups whose encounter is gone; Arrivals says the same words
@@ -2941,6 +2945,10 @@ impl Encounters {
         let mut gone_place: Option<egui::Rect> = None;
         let mut deferred_switch: Option<&'static str> = None;
         let reasons_right = members_right;
+        // Ruling M24: where the switch reason does not fit beside the widest word and Discard,
+        // the row says its short form in every state, the full reason in hover and the accessible
+        // description; no line is kept for it below.
+        let switch_short = plan.short[1];
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
             discard =
@@ -2973,7 +2981,7 @@ impl Encounters {
                 ));
                 deferred_switch = switch;
             } else {
-                super::blocked_reason(ui, switch);
+                switch_reason(ui, switch, switch_short);
             }
             ui.allocate_ui_with_layout(
                 egui::vec2(
@@ -3132,7 +3140,7 @@ impl Encounters {
             // Nothing is painted outside the place.
             beside.set_clip_rect(place.intersect(ui.clip_rect()));
             if gone_shown.get() {
-                super::blocked_reason(&mut beside, deferred_switch);
+                switch_reason(&mut beside, deferred_switch, switch_short);
             } else {
                 design::outcome::row_fault(&mut beside, &editor_fault(*tone, words));
             }
@@ -3354,6 +3362,17 @@ fn member_key(path: &str, member: &MemberDraft) -> String {
 }
 
 /// Where a group editor's members column ended in the last pass, for the name field above it.
+/// The campaign-switch reason on the group's save row: its full words, or its short form with
+/// the full words in hover and the accessible description (ruling M24).
+fn switch_reason(ui: &mut egui::Ui, words: Option<&str>, short: bool) {
+    match words {
+        Some(full) if short => {
+            design::save_row::short_reason(ui, design::save_row::switch_short(full), full);
+        }
+        words => super::blocked_reason(ui, words),
+    }
+}
+
 /// Layout step 6: where the members column ends, from the room the editor has and the widths its
 /// body draws the columns with (`group_editor_body`: the Add creatures panel, then the members at
 /// most `ROSTER_MAX_WIDTH`; `members_pane`: the scroll bar's lane kept, at most `LIST_MEASURE`).

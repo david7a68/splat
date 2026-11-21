@@ -1517,7 +1517,11 @@ encounter editor uses the same rule for Save encounter and Start fight. Save nev
 unrelated Add creatures column. Then the save row with the state and Discard at its start and the reasons. The save
 state, Discard and reasons use one plan for every reachable state at that width: each reason is measured beside the
 widest state word and Discard, whether or not they show, so a reason takes the row or its reserved line below in
-every state (clean, new, changed, refused, saved), and its arrival chooses no new place and moves no field. A resize
+every state (clean, new, changed, refused, saved), and its arrival chooses no new place and moves no field. Where the
+campaign-switch reason does not fit there, the row says its short form, `Save or discard to switch.` (`Discard to
+switch.` while Save is blocked), in every state, with the full reason in the hover text and the accessible
+description (ruling M24): no blank line is kept for it. Only a row too narrow for the short form keeps a line below,
+as tall as the tallest of the reason's forms and of the words that can take its place. A resize
 may change the plan. A cause that already shows at its field is not repeated; the existing refusal substitution
 (G122) still applies. A group draft that Save's check refuses says `Invalid`, changed
 or not, in the tone of its cause, and Save group is not primary: the error tone for a member's change that cannot

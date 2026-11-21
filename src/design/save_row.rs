@@ -337,6 +337,18 @@ pub const CHANGED_ON_DISK: &str = "Choose what to do with the changed file first
 pub const NO_CHANGES: &str = "No changes to save.";
 /// The campaign-switch reason of a draft whose Save would write.
 pub const SAVE_OR_DISCARD_TO_SWITCH: &str = "Save or discard to switch campaign.";
+/// The campaign-switch reason's short forms on a draft head's narrow save row (ruling M24).
+pub const SAVE_OR_DISCARD_SHORT: &str = "Save or discard to switch.";
+pub const DISCARD_SHORT: &str = "Discard to switch.";
+
+/// The short form of a campaign-switch reason (ruling M24), for a row too narrow for it.
+pub fn switch_short(full: &str) -> &'static str {
+    if full == DISCARD_TO_SWITCH {
+        DISCARD_SHORT
+    } else {
+        SAVE_OR_DISCARD_SHORT
+    }
+}
 /// The campaign-switch reason of a draft whose Save waits: Discard is the one way out.
 pub const DISCARD_TO_SWITCH: &str = "Discard to switch campaign.";
 
@@ -662,6 +674,10 @@ pub struct HeadSpec<'a> {
 pub struct ReasonSlot<'a> {
     pub forms: &'a [&'a str],
     pub substitutes: &'a [&'a str],
+    /// The short forms the row shows in every state when the forms do not fit beside the widest
+    /// word and Discard (ruling M24: `Save or discard to switch.`), the full reason in the hover
+    /// text and the accessible description (`short_reason`). Empty: no short form.
+    pub short: &'a [&'a str],
 }
 
 impl<'a> ReasonSlot<'a> {
@@ -670,26 +686,26 @@ impl<'a> ReasonSlot<'a> {
         Self {
             forms,
             substitutes: &[],
+            short: &[],
         }
     }
 
-    /// The widest the slot needs on one line.
-    fn width(&self, ui: &Ui) -> f32 {
+    /// The widest of `words` on one line.
+    fn widest(ui: &Ui, words: &[&str]) -> f32 {
         let small = super::Type::Small.font(ui);
-        let forms = self
-            .forms
+        words
             .iter()
             .map(|words| super::number_width(ui, words, &small))
-            .fold(0.0, f32::max);
-        let substitutes = self
-            .substitutes
-            .iter()
-            .map(|words| {
-                super::number_width(ui, words, &small) + super::tokens::ICON_SLOT + super::tokens::S
-            })
-            .fold(0.0, f32::max);
-        forms.max(substitutes)
+            .fold(0.0, f32::max)
     }
+}
+
+/// A reason in its short form on the save row (ruling M24): the short words, muted, with the
+/// full reason in the hover text and the accessible description.
+pub fn short_reason(ui: &mut Ui, short: &str, full: &str) {
+    let response = ui.label(super::Type::Small.rich(ui, short).color(colors().muted));
+    super::named(ui, &response, full);
+    let _ = response.on_hover_text(full);
 }
 
 /// The height of `slot`'s own line under the save row, `width` wide: the tallest of its forms
@@ -729,6 +745,8 @@ pub struct HeadPlan {
     /// For each reason of [`HeadSpec::reasons`]: on the save row, or on a line of its own under
     /// it, kept in every state.
     pub on_row: Vec<bool>,
+    /// For each reason on the row: in its short form (ruling M24), in every state.
+    pub short: Vec<bool>,
 }
 
 /// The narrowest a name field gets so that the actions stand beside it; narrower, the actions
@@ -790,22 +808,29 @@ pub fn head_plan(ui: &Ui, spec: &HeadSpec<'_>) -> HeadPlan {
     };
     let mut room =
         spec.row - widest_word(ui) - Action::quiet("Discard").natural_width(ui) - 2.0 * gap;
-    let on_row = spec
+    let (on_row, short) = spec
         .reasons
         .iter()
         .map(|slot| {
-            let width = slot.width(ui) + gap;
-            let fits = width <= room;
-            if fits {
-                room -= width;
+            // Its forms, else its short forms (M24), else a line of its own below the row.
+            for (words, short) in [(slot.forms, false), (slot.short, true)] {
+                if words.is_empty() {
+                    continue;
+                }
+                let width = ReasonSlot::widest(ui, words) + gap;
+                if width <= room {
+                    room -= width;
+                    return (true, short);
+                }
             }
-            fits
+            (false, false)
         })
-        .collect();
+        .unzip();
     HeadPlan {
         name_width,
         actions_beside,
         on_row,
+        short,
     }
 }
 
@@ -1089,6 +1114,7 @@ mod tests {
                     "Its encounter was deleted. See Belongs to.",
                     "A creature here cannot be saved. See its row.",
                 ],
+                short: &[SAVE_OR_DISCARD_SHORT, DISCARD_SHORT],
             },
         ];
         let head_states = [
@@ -1105,6 +1131,7 @@ mod tests {
                 .just_saved(),
         ];
         let mut placed = std::collections::BTreeSet::new();
+        let mut short_seen = false;
         for width in (240..=900).step_by(4) {
             let width = width as f32;
             let mut heights = Vec::new();
@@ -1134,8 +1161,12 @@ mod tests {
                                 if state.discard_shown() {
                                     let _ = Action::quiet("Discard").show(ui);
                                 }
-                                for (slot, on_row) in reasons.iter().zip(&head.on_row) {
-                                    if *on_row {
+                                for ((slot, on_row), short) in
+                                    reasons.iter().zip(&head.on_row).zip(&head.short)
+                                {
+                                    if *on_row && *short {
+                                        short_reason(ui, slot.short[0], slot.forms[0]);
+                                    } else if *on_row {
                                         super::super::blocked_reason(ui, Some(slot.forms[0]));
                                     }
                                 }
@@ -1180,6 +1211,7 @@ mod tests {
                 });
                 let plan = plan.expect("the head was planned");
                 placed.insert(plan.on_row.clone());
+                short_seen |= plan.short.iter().any(|short| *short);
                 assert!(
                     right <= width + 0.5,
                     "at {width} the row of {:?} is {right} wide, past its room: {plan:?}",
@@ -1193,8 +1225,8 @@ mod tests {
             );
         }
         assert!(
-            placed.len() >= 2,
-            "the sweep reached a reason under the row: {placed:?}"
+            placed.len() >= 2 && short_seen,
+            "the sweep reached a reason under the row and a short form on it (M24): {placed:?}, {short_seen}"
         );
     }
 
