@@ -7,13 +7,53 @@ publish = false
 default-run = "splat"
 
 [workspace]
-members = ["crates/assets", "crates/core", "crates/cli"]
-default-members = [".", "crates/assets", "crates/core", "crates/cli"]
+members = [
+    "crates/*",
+    "src/campaign_packages",
+    "src/content_ui",
+    "src/design",
+    "src/encounters_ui",
+    "src/library_page",
+    "src/session_records",
+    "src/party_support",
+    "src/party_page",
+    "src/sessions_ui",
+    "src/trackers",
+    "src/world_page",
+]
+default-members = [
+    ".",
+    "crates/*",
+    "src/campaign_packages",
+    "src/content_ui",
+    "src/design",
+    "src/encounters_ui",
+    "src/library_page",
+    "src/session_records",
+    "src/party_support",
+    "src/party_page",
+    "src/sessions_ui",
+    "src/trackers",
+    "src/world_page",
+]
 resolver = "3"
 
 [dependencies]
+splat-party = { path = "src/party_support" }
+splat-party-page = { path = "src/party_page" }
+splat-library-page = { path = "src/library_page" }
+splat-campaign-packages = { path = "src/campaign_packages" }
+splat-world-page = { path = "src/world_page" }
+splat-sessions-ui = { path = "src/sessions_ui" }
+splat-encounters-ui = { path = "src/encounters_ui" }
+splat-content-ui = { path = "src/content_ui" }
 splat-assets = { path = "crates/assets" }
-splat-core = { path = "crates/core" }
+splat-campaign = { path = "crates/campaign" }
+splat-character = { path = "crates/character" }
+splat-content = { path = "crates/content" }
+splat-design = { path = "src/design" }
+splat-execution = { path = "crates/execution" }
+splat-trackers = { path = "src/trackers" }
 eframe = { version = "0.33", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 serde = { version = "1", features = ["derive", "rc"] }
@@ -39,7 +79,16 @@ url = "2.5"
 unicode-segmentation = "1.13"
 
 [dev-dependencies]
+splat-library-page = { path = "src/library_page", features = ["test-support"] }
+splat-campaign-packages = { path = "src/campaign_packages", features = ["test-support"] }
+splat-sessions-ui = { path = "src/sessions_ui", features = ["test-support"] }
+splat-encounters-ui = { path = "src/encounters_ui", features = ["test-support"] }
+splat-content-ui = { path = "src/content_ui", features = ["test-support"] }
 rayon = "1.11"
+splat-campaign = { path = "crates/campaign", features = ["test-support"] }
+splat-content = { path = "crates/content", features = ["test-support"] }
+splat-design = { path = "src/design", features = ["test-support"] }
+splat-trackers = { path = "src/trackers", features = ["test-support"] }
 # The source checks read Rust with a real parser (`design::attributes`), never by hand.
 syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
@@ -67,5 +116,47 @@ opt-level = 2
 [profile.test.package.splat]
 opt-level = 2
 
-[profile.test.package.splat-core]
+[profile.test.package.splat-campaign]
+opt-level = 2
+
+[profile.test.package.splat-character]
+opt-level = 2
+
+[profile.test.package.splat-content]
+opt-level = 2
+
+[profile.test.package.splat-design]
+opt-level = 2
+
+[profile.test.package.splat-execution]
+opt-level = 2
+
+[profile.test.package.splat-trackers]
+opt-level = 2
+
+[profile.test.package.splat-content-ui]
+opt-level = 2
+
+[profile.test.package.splat-encounters-ui]
+opt-level = 2
+
+[profile.test.package.splat-session-records]
+opt-level = 2
+
+[profile.test.package.splat-party]
+opt-level = 2
+
+[profile.test.package.splat-party-page]
+opt-level = 2
+
+[profile.test.package.splat-sessions-ui]
+opt-level = 2
+
+[profile.test.package.splat-world-page]
+opt-level = 2
+
+[profile.test.package.splat-campaign-packages]
+opt-level = 2
+
+[profile.test.package.splat-library-page]
 opt-level = 2

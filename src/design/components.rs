@@ -1,6 +1,6 @@
 //! Shared UI parts. Screens compose these instead of styling widgets themselves.
 use super::{comparison::Comparison, extras::space, icons, status::Tinted, tokens::*};
-use eframe::egui::{
+use egui::{
     self, Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Pos2, Rect, Response, Sense,
     Stroke, StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2,
 };
@@ -12,10 +12,41 @@ fn corner(value: f32) -> CornerRadius {
 
 /// A quiet menu button with its caret after the word.
 pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
-    let response = Action::quiet(&format!("{word}    "))
+    draw_menu_button(ui, word, selected, false, None, Density::Scan)
+}
+
+/// A title line's menu action (`TitleLine::menu`): [`menu_button`] at the `Read` height of the
+/// line's other actions; while `blocked`, it is disabled with the reason on hover and as its
+/// accessible description.
+pub(super) fn title_menu_button(ui: &mut Ui, word: &str, blocked: Option<&str>) -> Response {
+    draw_menu_button(ui, word, false, false, blocked, Density::Read)
+}
+
+/// A menu button whose word starts at the text edge of its own row.
+pub fn menu_button_at_line_start(ui: &mut Ui, word: &str, selected: bool) -> Response {
+    draw_menu_button(ui, word, selected, true, None, Density::Scan)
+}
+
+fn draw_menu_button(
+    ui: &mut Ui,
+    word: &str,
+    selected: bool,
+    line_start: bool,
+    blocked: Option<&str>,
+    density: Density,
+) -> Response {
+    let label = format!("{word}    ");
+    let button = Action::quiet(&label)
         .name(word)
         .selected(selected)
-        .show(ui);
+        .blocked(blocked)
+        .density(density);
+    let button = if line_start {
+        button.line_start()
+    } else {
+        button
+    };
+    let response = button.show(ui);
     let caret = Rect::from_min_max(
         pos2(response.rect.right() - L - XS, response.rect.top()),
         response.rect.right_bottom(),
@@ -241,12 +272,12 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
     /// navigation and keeps its arrow). It takes no icon.
     ///
     /// ```
-    /// use splat::layout::doc_parts::{Availability, ModeLock, ReaderToolbar};
+    /// use splat_design::layout::doc_parts::{Availability, ModeLock, ReaderToolbar};
     /// let _ = ReaderToolbar::new(false, "Markdown", "Markdown", ModeLock::Open)
     ///     .action("Copy to…", 1, Availability::Draft);
     /// ```
     /// ```compile_fail,E0061
-    /// use splat::layout::doc_parts::{Availability, ModeLock, ReaderToolbar};
+    /// use splat_design::layout::doc_parts::{Availability, ModeLock, ReaderToolbar};
     /// let _ = ReaderToolbar::new(false, "Markdown", "Markdown", ModeLock::Open)
     ///     .action("Copy to…", Some("c"), 1, Availability::Draft);
     /// ```
@@ -2072,19 +2103,19 @@ type ResultDraw<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
 /// one first (`InlineCreate::escape_closes_above`). It shows only with its actions:
 ///
 /// ```
-/// use splat::layout::doc_parts::{AddField, add_field};
-/// fn f(ui: &mut eframe::egui::Ui, state: &mut AddField) {
-///     let id = splat::field_id!("doc_add_line").once(splat::layout::Once::Example);
+/// use splat_design::layout::doc_parts::{AddField, add_field};
+/// fn f(ui: &mut egui::Ui, state: &mut AddField) {
+///     let id = splat_design::field_id!("doc_add_line").once(splat_design::layout::Once::Example);
 ///     let _ = add_field::<()>(id, "Log line for Hob", "What happened?")
-///         .actions(splat::word!("Add"), splat::word!("Cancel"))
+///         .actions(splat_design::word!("Add"), splat_design::word!("Cancel"))
 ///         .show(ui, state);
 /// }
 /// ```
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::doc_parts::{AddField, add_field};
-/// fn f(ui: &mut eframe::egui::Ui, state: &mut AddField) {
-///     let id = splat::field_id!("doc_add_bare").once(splat::layout::Once::Example);
+/// use splat_design::layout::doc_parts::{AddField, add_field};
+/// fn f(ui: &mut egui::Ui, state: &mut AddField) {
+///     let id = splat_design::field_id!("doc_add_bare").once(splat_design::layout::Once::Example);
 ///     let _ = add_field::<()>(id, "Log line for Hob", "What happened?").show(ui, state);
 /// }
 /// ```
@@ -2502,8 +2533,8 @@ impl StatusText {
     }
 
     /// Each laid-out line: its characters and the left edge of its first one.
-    #[cfg(test)]
-    pub(crate) fn lines(&self) -> Vec<(String, f32)> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn lines(&self) -> Vec<(String, f32)> {
         self.0
             .rows
             .iter()
@@ -2863,7 +2894,7 @@ pub fn hp_readout(
     painter.text(
         pos2(slash, center_y + offset),
         Align2::LEFT_CENTER,
-        crate::combat_sync::fraction("", &max_text),
+        fraction("", &max_text),
         fonts.max.clone(),
         c.muted,
     );
@@ -2876,6 +2907,11 @@ pub fn hp_readout(
         &fonts.current,
         current_color,
     )
+}
+
+/// A displayed current/maximum fraction. Callers supply their own unknown-value words.
+pub fn fraction(current: impl std::fmt::Display, maximum: impl std::fmt::Display) -> String {
+    format!("{current}/{maximum}")
 }
 
 /// A modifier, with a true minus sign: `+3`, `−1`.
@@ -3075,9 +3111,9 @@ pub(super) fn small_tone_message(ui: &mut Ui, tone: Tone, text: &str) -> Respons
 /// Work in progress. Test builds draw a still mark: the moving one is drawn from the clock,
 /// so two captures of the same state would differ.
 pub fn spinner(ui: &mut Ui) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     ui.label(Type::Body.rich(ui, icons::BUSY).color(colors().muted));
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     ui.spinner();
 }
 
@@ -3093,9 +3129,9 @@ pub fn busy_after(ui: &Ui, status: Rect, color: Color32) {
         status.top() + Type::Small.line() / 2.0,
     );
     // Tests draw one fixed frame, so captures repeat between runs.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     let turn = 0.0;
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let turn = {
         ui.ctx().request_repaint();
         ui.input(|i| i.time) as f32 * std::f32::consts::TAU
@@ -3123,11 +3159,20 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
 )]
 pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    single_action_message(ui, tone, text, action).inner
+}
+
+/// One bordered repair beside its message when it fits, or under the words when it wraps.
+pub(super) fn single_action_message(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+) -> egui::InnerResponse<bool> {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
         message_with_action_inside(ui, tone, text, action)
     })
-    .inner
 }
 
 fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
@@ -3194,7 +3239,7 @@ pub(super) fn actions_message<R>(
 }
 
 /// Where test builds keep the labels that `row_detail` marked in the last pass.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub const ROW_DETAILS: &str = "design_row_details";
 /// Where `register_row` keeps the rects it registered in this pass: the pane's whole-row cut
 /// (N12) and the gate's `help-measure` check read them.
@@ -3235,7 +3280,7 @@ pub(super) fn register_field_action(ui: &Ui, field: Id, action: Id) {
 
 /// The pairs `register_field_action` registered in the last pass: (field id, button id), as
 /// AccessKit ids. Only the gate reads them.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn field_actions(ctx: &egui::Context) -> Vec<(u64, u64)> {
     let pass = ctx.cumulative_pass_nr();
     ctx.data(|data| data.get_temp::<(u64, Vec<(u64, u64)>)>(Id::new(FIELD_ACTIONS)))
@@ -3258,9 +3303,9 @@ pub(super) fn rows_this_pass(ctx: &egui::Context) -> Vec<Rect> {
 /// `register_row` registered: a mark on a label outside any row changes nothing. Call it on the
 /// label's response. Only test builds keep the mark.
 pub fn row_detail(ui: &Ui, response: &Response) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     keep_for_pass(ui, ROW_DETAILS, response.id);
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let _ = (ui, response);
 }
 
@@ -3850,7 +3895,7 @@ impl<'a> Footer<'a> {
             remember(ui, pane.bottom(), pane.bottom());
             return pane.bottom();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         record_band(ui, pane, rect);
         // egui's `set_max_height` also moves the cursor back to the top of `ui`, so it goes
         // back to where the body starts.
@@ -4018,7 +4063,7 @@ impl FooterBody {
 
 /// For checks: the band each message footer took from its pane in this pass, from `S` above the
 /// footer to the pane's bottom, across the whole pane. A pane's content ends at its top.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(super) fn record_band(ui: &Ui, pane: Rect, footer: Rect) {
     let pass = ui.ctx().cumulative_pass_nr();
     let band = Rect::from_min_max(pos2(pane.left(), footer.top() - S), pane.right_bottom());
@@ -4032,8 +4077,8 @@ pub(super) fn record_band(ui: &Ui, pane: Rect, footer: Rect) {
 }
 
 /// The bands that the message footers of the last finished pass took from their panes.
-#[cfg(test)]
-pub(crate) fn footer_bands(ctx: &egui::Context) -> Vec<Rect> {
+#[cfg(any(test, feature = "test-support"))]
+pub fn footer_bands(ctx: &egui::Context) -> Vec<Rect> {
     let last = ctx.cumulative_pass_nr().saturating_sub(1);
     ctx.data(|data| data.get_temp::<(u64, Vec<Rect>)>(Id::new("footer_bands")))
         .filter(|(pass, _)| *pass == last)
@@ -5211,7 +5256,7 @@ impl<'a> FolderGroup<'a> {
 /// root has its own name in one place ([`FolderGroup::ROOT_NAME`]); only a folder ends in `/`.
 ///
 /// ```
-/// use splat::layout::doc_parts::FolderGroup;
+/// use splat_design::layout::doc_parts::FolderGroup;
 /// let words = |path| FolderGroup::of_path(path).words();
 /// for root in ["", ".", "/", "./", "//"] {
 ///     assert!(FolderGroup::of_path(root).is_root(), "{root:?}");
@@ -5228,14 +5273,14 @@ impl<'a> FolderGroup<'a> {
 /// The form is private: a folder cannot be made by hand, so an empty one cannot be shown as `/`.
 ///
 /// ```compile_fail,E0423
-/// let _ = splat::layout::doc_parts::FolderGroup("");
+/// let _ = splat_design::layout::doc_parts::FolderGroup("");
 /// ```
 ///
 /// The heading takes a `FolderGroup`, never a path string that it would edit:
 ///
 /// ```compile_fail,E0308
-/// # fn draw(ui: &mut eframe::egui::Ui) {
-/// splat::layout::doc_parts::folder_group_heading(ui, "Places", 3);
+/// # fn draw(ui: &mut egui::Ui) {
+/// splat_design::layout::doc_parts::folder_group_heading(ui, "Places", 3);
 /// # }
 /// ```
 pub fn folder_group_heading(ui: &mut Ui, folder: FolderGroup<'_>, count: usize) {
@@ -5883,24 +5928,7 @@ mod tests {
         }
     }
 
-    /// The painted text shapes of a harness: each galley's words and where they are drawn.
-    fn painted_texts(harness: &egui_kittest::Harness<'_>) -> Vec<(String, Rect)> {
-        fn walk(shape: &egui::Shape, out: &mut Vec<(String, Rect)>) {
-            match shape {
-                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
-                egui::Shape::Text(text) => out.push((
-                    text.galley.job.text.clone(),
-                    Rect::from_min_size(text.pos, text.galley.size()),
-                )),
-                _ => {}
-            }
-        }
-        let mut out = Vec::new();
-        for shape in &harness.output().shapes {
-            walk(&shape.shape, &mut out);
-        }
-        out
-    }
+    use crate::input_frame::painted_texts;
 
     /// SD1: an Undo below its message starts its words at the message's words; its icon hangs
     /// over the message's icon column. Beside the message, it keeps its icon before its words.
@@ -5943,7 +5971,7 @@ mod tests {
         }
         // P3a, ruling R19 (proof 3): a hanging Undo keeps keyboard focus, Enter, Space and an
         // AccessKit click with the pointer anywhere; one input frame per step, counted in it.
-        use crate::visual_tests::input_frame::one_pass;
+        use crate::input_frame::one_pass;
         use egui_kittest::kittest::{NodeT, Queryable};
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(360.0, 200.0))
@@ -6140,103 +6168,6 @@ mod tests {
             words("Undo tight"),
             EDGE - 10.0
         );
-    }
-
-    #[test]
-    fn a_wrapped_message_keeps_its_whole_action() {
-        for width in [240.0, 360.0, 440.0, 880.0] {
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(vec2(width, 240.0))
-                .build_ui(|ui| {
-                    message_with_action(ui, Tone::Info,
-                        "The party has full HP after this long rest. Every changed value is kept for undo.",
-                        "Undo delete saved run");
-                });
-            super::super::theme::install(&harness.ctx);
-            harness.run_steps(2);
-            let cut = crate::visual_tests::ergonomics::cut_text(
-                &harness.output().shapes,
-                &[],
-                &[],
-                "message",
-                "wrapped",
-                "test",
-            );
-            assert!(cut.is_empty(), "width {width}: {cut:?}");
-            // iter-23-S FK3: beside the words, the action starts `L` after their last letter.
-            if width >= 880.0 {
-                use egui_kittest::kittest::Queryable;
-                let words = harness
-                    .output()
-                    .shapes
-                    .iter()
-                    .find_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text)
-                            if text.galley.job.text.starts_with("The party has full HP") =>
-                        {
-                            Some(Rect::from_min_size(text.pos, text.galley.size()))
-                        }
-                        _ => None,
-                    })
-                    .expect("the words are painted");
-                let action = harness.get_by_label("Undo delete saved run").rect();
-                assert!(
-                    action.top() < words.bottom()
-                        && (action.left() - words.right() - L).abs() <= 1.0,
-                    "width {width}: words {words:?}, action {action:?}"
-                );
-            }
-        }
-        // iter-25-A AB2: in a wide pane, the message and its action stay inside `LIST_MEASURE`,
-        // as every notice does. The words alone are wider than the measure.
-        const LONG: &str = "This is the open session, not the session you played. Changes here go to \
-            the open session's note, so go back to the played session before you add what happened.";
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(vec2(1800.0, 240.0))
-            .build_ui(|ui| {
-                message_with_action(ui, Tone::Warning, LONG, "Go to the played session");
-            });
-        super::super::theme::install(&harness.ctx);
-        harness.run_steps(2);
-        let texts = painted_texts(&harness);
-        let words = texts
-            .iter()
-            .find(|(text, _)| text == LONG)
-            .map(|(_, rect)| *rect)
-            .expect("the words are painted");
-        use egui_kittest::kittest::Queryable;
-        let action = harness.get_by_label("Go to the played session").rect();
-        let left = words.left().min(action.left()) - S - 1.0;
-        let right = words.right().max(action.right());
-        assert!(
-            right - left <= LIST_MEASURE + 0.5 && words.height() > Type::Body.line(),
-            "the message spans {left}..{right}: words {words:?}, action {action:?}"
-        );
-        // The same cap holds for the Undo message (the message with links is gone: its last
-        // caller, Campaign content, moved to the typed footer).
-        {
-            let links = false;
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(vec2(1800.0, 240.0))
-                .build_ui(move |ui| {
-                    undo_message(ui, Tone::Success, LONG, "Undo");
-                });
-            super::super::theme::install(&harness.ctx);
-            harness.run_steps(2);
-            let texts = painted_texts(&harness);
-            let right = texts
-                .iter()
-                .map(|(_, rect)| rect.right())
-                .fold(0.0, f32::max);
-            let left = texts
-                .iter()
-                .map(|(_, rect)| rect.left())
-                .fold(f32::MAX, f32::min);
-            assert!(
-                !texts.is_empty() && right - left <= LIST_MEASURE,
-                "links {links}: the message spans {left}..{right}"
-            );
-        }
     }
 
     /// iter-25-A: `help` and a field's help wrap at `READER_MEASURE` in a wide pane.

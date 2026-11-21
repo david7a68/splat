@@ -39,7 +39,7 @@ fn rows_shown(matches: usize, show_all: bool) -> usize {
         RESULTS_SHOWN
     }
 }
-pub(crate) const RESULTS_LISTED: usize = 8;
+pub const RESULTS_LISTED: usize = 8;
 const PANEL_MARGIN: f32 = design::M;
 
 pub const SEARCH_NAME: &str = "Search everything";
@@ -55,7 +55,7 @@ fn search_hint(width: f32) -> &'static str {
     }
 }
 /// What an empty search finds, below the search field.
-pub(crate) const SEARCH_HELP: &str = "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.";
+pub const SEARCH_HELP: &str = "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
 const FOUND_FROM_LINES: usize = 12;
@@ -210,7 +210,7 @@ struct UnusedKept {
 
 // Creature names `unused_creatures` visited on this thread, for a test that an unchanged
 // repaint visits none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     pub(crate) static UNUSED_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -218,7 +218,7 @@ thread_local! {
 /// Every entry the active campaign can see, including all registered packages.
 #[derive(Default)]
 pub struct ContentIndex {
-    pub(crate) campaign: Option<Campaign>,
+    pub campaign: Option<Campaign>,
     pub items: Vec<Item>,
     usable: Option<HashSet<Uuid>>,
     package_owners: HashMap<Uuid, Uuid>,
@@ -254,7 +254,7 @@ pub struct ContentIndex {
     files_seen: u64,
     pub errors: Vec<String>,
     /// The loot editor's tables and items, read the first time a page asks.
-    loot: std::sync::OnceLock<Arc<crate::loot_editor::Sources>>,
+    loot: std::sync::OnceLock<Arc<splat_campaign::loot::Sources>>,
     /// Each World note's link problems in its list row's words, found the first time a result
     /// row asks. Any file change makes a new index, so this starts empty again (round 26 AE2).
     link_problems: std::sync::OnceLock<HashMap<usize, String>>,
@@ -273,7 +273,7 @@ pub struct ContentIndex {
     session_names: HashMap<String, String>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// `shown_name` calls on this (the UI) thread.
     static SHOWN_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -283,14 +283,14 @@ thread_local! {
 
 /// Runs of the shared-name search, by campaign folder. The index loads on another thread, and
 /// scenarios run side by side, so each counts under its own folder.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 static SHARED_NAME_SEARCHES: std::sync::Mutex<BTreeMap<std::path::PathBuf, usize>> =
     std::sync::Mutex::new(BTreeMap::new());
 
 /// How often `shown_name` ran on this thread, and how often the shared-name search ran for
 /// the campaign in this folder.
-#[cfg(test)]
-pub(crate) fn shown_name_counts(campaign: &std::path::Path) -> crate::test_support::Counts {
+#[cfg(any(test, feature = "test-support"))]
+pub fn shown_name_counts(campaign: &std::path::Path) -> crate::test_support::Counts {
     crate::test_support::Counts {
         reached: SHOWN_NAMES.with(std::cell::Cell::get),
         work: SHARED_NAME_SEARCHES
@@ -304,13 +304,13 @@ pub(crate) fn shown_name_counts(campaign: &std::path::Path) -> crate::test_suppo
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) enum Origin {
+pub enum Origin {
     Own,
     Book,
     Sheet,
 }
 
-pub(crate) fn entry_origin(entry: Option<&Entry>, private: bool) -> Origin {
+pub fn entry_origin(entry: Option<&Entry>, private: bool) -> Origin {
     let from_sheet = entry.is_some_and(|entry| {
         entry.fields.contains_key("splat_character")
             || std::path::Path::new(&entry.path)
@@ -440,7 +440,7 @@ fn session_names<'a>(
         *stems.entry(stem_of(path)).or_default() += 1;
     }
     let mut names = HashMap::new();
-    for note in crate::sessions::list_notes(folder) {
+    for note in crate::session_notes::list_notes(folder) {
         let label = note.label();
         let stem = note.link().to_lowercase();
         if let Ok(path) = note.path.strip_prefix(&campaign.path) {
@@ -526,7 +526,7 @@ impl Item {
 }
 
 impl ContentIndex {
-    pub(crate) fn load(modules: &[Module], campaign: Option<&Campaign>) -> Result<Self, String> {
+    pub fn load(modules: &[Module], campaign: Option<&Campaign>) -> Result<Self, String> {
         let catalogue = Catalogue::load(modules, campaign)?;
         let usable = campaign.map(|campaign| {
             let mut usable: HashSet<_> = catalogue
@@ -557,8 +557,8 @@ impl ContentIndex {
         };
         let builtin = catalogue.modules.first().map(|module| module.id);
         let sessions_folder = campaign.map(|campaign| {
-            crate::sessions::folder(campaign)
-                .unwrap_or_else(|_| campaign.path.join(crate::sessions::DEFAULT_FOLDER))
+            crate::session_notes::folder(campaign)
+                .unwrap_or_else(|_| campaign.path.join(crate::session_notes::DEFAULT_FOLDER))
         });
         let scan = campaign
             .zip(sessions_folder.as_deref())
@@ -807,7 +807,7 @@ impl ContentIndex {
     /// The rule for an official condition, by the name on a run's row.
     pub fn condition_rule(&self, condition: &str) -> Option<usize> {
         let name = condition.split(" (").next()?.trim().to_lowercase();
-        if !crate::combat_sync::CONDITIONS
+        if !splat_campaign::encounter_run::effect::CONDITIONS
             .iter()
             .any(|(_, official)| official.eq_ignore_ascii_case(&name))
         {
@@ -853,9 +853,9 @@ impl ContentIndex {
     }
 
     /// Every World note's fault, found once per index (`world::NoteFaults`).
-    pub(crate) fn note_faults(&self) -> &world::NoteFaults {
+    pub fn note_faults(&self) -> &world::NoteFaults {
         self.note_faults.get_or_init(|| {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             FAULT_SCANS.with(|count| count.set(count.get() + 1));
             world::NoteFaults::of(self)
         })
@@ -863,13 +863,13 @@ impl ContentIndex {
 
     /// A result row's detail: what the entry is, its link fault when it has one, then its
     /// summary. World's list row and Lookup's result say the same fault (round 26 AE2).
-    pub(crate) fn result_detail(&self, at: usize) -> String {
+    pub fn result_detail(&self, at: usize) -> String {
         self.items[at].result_detail_marked(self.link_problem_words(at))
     }
 
     /// What a loot list can name: each roll table in the campaign's own notes by its key, the
     /// first by path, and the items this campaign can use. Read once for this index.
-    pub fn loot_sources(&self) -> Arc<crate::loot_editor::Sources> {
+    pub fn loot_sources(&self) -> Arc<splat_campaign::loot::Sources> {
         self.loot
             .get_or_init(|| {
                 let mut notes: Vec<(&str, &str)> = self
@@ -891,7 +891,7 @@ impl ContentIndex {
                     })
                     .map(|at| {
                         let item = &self.items[at];
-                        crate::loot_editor::Item {
+                        splat_campaign::loot::Item {
                             name: item.entry.name.clone(),
                             lower: item.lower.clone(),
                             link: self.link_to(at),
@@ -899,8 +899,8 @@ impl ContentIndex {
                         }
                     })
                     .collect();
-                Arc::new(crate::loot_editor::Sources {
-                    tables: crate::loot_editor::Sources::tables_from(notes),
+                Arc::new(splat_campaign::loot::Sources {
+                    tables: splat_campaign::loot::Sources::tables_from(notes),
                     items,
                 })
             })
@@ -1118,7 +1118,7 @@ impl ContentIndex {
     /// The World notes whose name another World note in another file also has. It runs once
     /// per index; the test count is kept here.
     fn find_shared_world_names(&self) -> HashSet<usize> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(campaign) = &self.campaign {
             *SHARED_NAME_SEARCHES
                 .lock()
@@ -1151,7 +1151,7 @@ impl ContentIndex {
     /// note has the same name (`Watch House (Locations)`), so the two can be told apart. The
     /// shared names are found when the index loads.
     pub(crate) fn shown_name(&self, at: usize) -> String {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         SHOWN_NAMES.with(|count| count.set(count.get() + 1));
         let entry = &self.items[at].entry;
         if !self.shared_world_names.contains(&at) {
@@ -1164,7 +1164,7 @@ impl ContentIndex {
     }
 
     /// Whether another World note has this note's name (found when the index loads).
-    pub(crate) fn shares_name(&self, at: usize) -> bool {
+    pub fn shares_name(&self, at: usize) -> bool {
         self.shared_world_names.contains(&at)
     }
 
@@ -1263,7 +1263,7 @@ impl ContentIndex {
     /// names the item exactly and shows its name: the DM's own by path, a book's by key.
     /// A heading that a link cannot name, such as `Room #3`, links to its note. Of two
     /// headings with the same words, a link finds the first, in Obsidian too.
-    pub(crate) fn link_to(&self, position: usize) -> String {
+    pub fn link_to(&self, position: usize) -> String {
         let (at, heading) = self.target_of(position);
         let heading = heading.filter(|heading| !heading.contains(['#', '|', '[', ']', '^']));
         let item = &self.items[at];
@@ -1296,7 +1296,7 @@ impl ContentIndex {
     }
 
     /// Prepare wiki links in any reader, retaining exactly the note's display words.
-    pub(crate) fn broken_link_count(&self, body: &str, from: Uuid) -> usize {
+    pub fn broken_link_count(&self, body: &str, from: Uuid) -> usize {
         let visible = body
             .lines()
             .filter(|line| !presentation::hidden_provenance_line(line))
@@ -1309,7 +1309,7 @@ impl ContentIndex {
     }
 
     /// A link from this page names nothing the campaign can open.
-    pub(crate) fn link_is_missing(&self, target: &str, from: Uuid) -> bool {
+    pub fn link_is_missing(&self, target: &str, from: Uuid) -> bool {
         let page = target
             .split(['|', '#'])
             .next()
@@ -1379,7 +1379,7 @@ impl ContentIndex {
     }
 
     /// Which load of the index this is. See `generation` on the struct.
-    pub(crate) fn generation(&self) -> u64 {
+    pub fn generation(&self) -> u64 {
         self.generation
     }
 
@@ -1448,7 +1448,7 @@ impl ContentIndex {
         if query.trim().is_empty() {
             return Vec::new();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         UNUSED_NAMES.with(|names| names.set(names.get() + self.creatures.len()));
         let typed = Typed::new(query);
         let mut found: Vec<(Rank, Origin, usize)> = self
@@ -1699,7 +1699,7 @@ impl ContentIndex {
     /// typo comes last: in a name, and then, last of all, in a note's words. A creature's name
     /// ranks in the one creature order (M3: a word and anywhere are one tier); results of one
     /// rank, of any kind, sort by origin and then by name.
-    pub(crate) fn search(&self, query: &str) -> Vec<usize> {
+    pub fn search(&self, query: &str) -> Vec<usize> {
         self.search_typos(query)
             .into_iter()
             .map(|(at, _)| at)
@@ -1894,7 +1894,7 @@ fn content_fingerprint(modules: &[Module], campaign: Option<&Campaign>) -> u64 {
 impl Lookup {
     /// The check that starts when the window gets focus decides whether every page reloads
     /// from disk, so it counts until its answer is in.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some() || self.checking.is_some()
     }
@@ -2097,7 +2097,7 @@ impl Lookup {
     /// The rail's `Unsaved NPC` for the NPC this panel holds: Lookup opens, leaves Trackers and a
     /// written entry it was reading, and shows the NPC's card, as its own `Show` does. (Package C,
     /// review of PR 323, a named lead exception in D's file; it replaces D's `open_held`.)
-    pub(crate) fn show_generated(&mut self) {
+    pub fn show_generated(&mut self) {
         if self.generated.is_none() {
             return;
         }
@@ -2311,7 +2311,7 @@ impl Lookup {
 
     /// Back and Forward. Beside the Library page, a key acts here only with focus here,
     /// and a mouse button only with the pointer here; the Library takes the rest.
-    pub(crate) fn history_input(&mut self, ctx: &egui::Context, library_page: bool) {
+    pub fn history_input(&mut self, ctx: &egui::Context, library_page: bool) {
         if !self.open {
             return;
         }
@@ -2423,7 +2423,7 @@ impl Lookup {
         self.current.is_some() || self.reading_written.is_some()
     }
 
-    pub fn show(&mut self, ctx: &egui::Context, trackers: &mut crate::trackers::Trackers) {
+    pub fn show(&mut self, ctx: &egui::Context, trackers: &mut dyn world::TrackerUi) {
         let width = design::side_panel_width(ctx.content_rect().width());
         design::Column::panel("lookup", width)
             .page_keeps(design::PANEL_LEAVES_PAGE)
@@ -2452,7 +2452,7 @@ impl Lookup {
         response
     }
 
-    fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut crate::trackers::Trackers) {
+    fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut dyn world::TrackerUi) {
         // With the margin, so a press anywhere on the panel counts as here.
         let panel = ui.max_rect().expand(PANEL_MARGIN);
         self.panel_rect = Some(panel);
@@ -2553,7 +2553,7 @@ impl Lookup {
         }
         if self.trackers_shown {
             design::rule(ui);
-            crate::trackers::view::show(ui, trackers, std::mem::take(&mut self.trackers_from_top));
+            trackers.show(ui, std::mem::take(&mut self.trackers_from_top));
             return;
         }
         let Some(index) = self.index.clone() else {
@@ -2900,7 +2900,7 @@ impl Lookup {
             return;
         }
         if let Some(npc) = &self.generated
-            && world::page::unsaved_npc_row(ui, &npc.name)
+            && world::unsaved_npc_row(ui, &npc.name)
         {
             self.show_now(Landing::Card);
         }
@@ -2955,7 +2955,7 @@ impl Lookup {
             ui.available_width(),
         );
         reader.footer(&frame, &mut messages, current, &index, campaign);
-        crate::trackers::history::footer(trackers, current.entry.id, &mut messages);
+        trackers.history_footer(current.entry.id, &mut messages);
         // The results list above sets its own row spacing. The reader keeps the app's, so an
         // entry reads the same whether a search or a link opened it. The pane is always the
         // editor form (P2), so an edit form's text gives way and Save stays in view from the
@@ -3209,7 +3209,7 @@ pub(crate) fn fitted_detail(ui: &egui::Ui, detail: &str, width: f32) -> String {
 
 /// How a generator card says that it uses the built-in names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum NamesHelp {
+pub enum NamesHelp {
     /// The World page, where the DM prepares: the table marker in full.
     Marker,
     /// Lookup: short words and a quiet link to the World page's card.
@@ -3220,21 +3220,21 @@ pub(crate) enum NamesHelp {
 
 /// The World page's words for using the campaign's own names. The marker itself is copied, not
 /// shown, because the DM types it in another program.
-pub(crate) const OWN_NAMES_HELP: &str = "Built-in names. To use your own, add a table of names to a note. Paste the marker on the line above the table.";
+pub const OWN_NAMES_HELP: &str = "Built-in names. To use your own, add a table of names to a note. Paste the marker on the line above the table.";
 /// The exact line that marks a table of names, for `Copy the marker`.
 pub(crate) const NAMES_MARKER: &str = "<!-- splat:rolls key=npc-name dice=1d6 -->";
-pub(crate) const COPY_MARKER: &str = "Copy the marker";
+pub const COPY_MARKER: &str = "Copy the marker";
 /// After the copy: what the DM changes in the pasted line. The dice are the marker's own.
 /// The words of the card's copy result, for the checks: World's footer says them with a checked
 /// `sentence!` of the same words.
-#[cfg(test)]
-pub(crate) const MARKER_COPIED: &str = "Copied. Change 1d6 to the number of names.";
-pub(crate) const BUILT_IN_NAMES: &str = "Built-in names.";
-pub(crate) const USE_OWN_NAMES: &str = "Use your own names";
+#[cfg(any(test, feature = "test-support"))]
+pub const MARKER_COPIED: &str = "Copied. Change 1d6 to the number of names.";
+pub const BUILT_IN_NAMES: &str = "Built-in names.";
+pub const USE_OWN_NAMES: &str = "Use your own names";
 
 /// What the DM chose on a generator card.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct CardChoice {
+pub struct CardChoice {
     pub save: bool,
     pub again: bool,
     pub discard: bool,
@@ -3246,7 +3246,7 @@ pub(crate) struct CardChoice {
 
 /// What the generator rolled, with its choices. Returns save, reroll and discard. A session
 /// note's card says only that the names are built in.
-pub(crate) fn generated_card(
+pub fn generated_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
     problems: &[crate::npc_generator::TableProblem],
@@ -3267,7 +3267,7 @@ pub(crate) fn generated_card(
 }
 
 /// What the generator rolled, with its choices and the names help for this place.
-pub(crate) fn generator_card(
+pub fn generator_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
     problems: &[crate::npc_generator::TableProblem],
@@ -3384,6 +3384,21 @@ pub(crate) fn generator_card(
             .clicked();
     });
     choice
+}
+
+impl splat_campaign::trackers::RuleSource for ContentIndex {
+    fn manifest(&self, campaign: &Campaign) -> Result<String, String> {
+        crate::content_workspace::CampaignDocument::load(campaign).map(|document| document.path)
+    }
+
+    fn note(&self, id: Uuid) -> Option<(&splat_content::content::Entry, bool)> {
+        let item = self.items.iter().find(|item| item.entry.id == id)?;
+        Some((&item.entry, item.is_campaign_note()))
+    }
+
+    fn loot_sources(&self) -> Arc<splat_campaign::loot::Sources> {
+        ContentIndex::loot_sources(self)
+    }
 }
 
 #[cfg(test)]
@@ -3816,7 +3831,12 @@ mod tests {
         lookup.navigate(7);
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::new_ui_state(
-            |ui, lookup: &mut Lookup| lookup.panel(ui, &mut Default::default()),
+            |ui, lookup: &mut Lookup| {
+                lookup.panel(
+                    ui,
+                    &mut crate::tracker_reader::Reader(&mut Default::default()),
+                )
+            },
             std::mem::take(&mut lookup),
         );
         design::theme::install(&harness.ctx);
@@ -4810,7 +4830,7 @@ mod tests {
         // as typed only (no typo compared); another load of the index ranks again.
         use egui_kittest::kittest::Queryable;
         let names = || UNUSED_NAMES.with(std::cell::Cell::get);
-        let typos = || crate::matching::TYPO_CHECKS.with(std::cell::Cell::get);
+        let typos = crate::matching::typo_checks;
         let index = Arc::new(index);
         type State = (Arc<ContentIndex>, String);
         let mut harness = egui_kittest::Harness::builder().build_ui_state(

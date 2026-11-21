@@ -1008,6 +1008,15 @@ impl<'a> Driver<'a> {
             .and_then(|node| node.accesskit_node().value())
     }
 
+    /// The accessible description attached to this control.
+    pub fn description_of(&self, name: &str) -> Option<String> {
+        self.harness
+            .root()
+            .children_recursive()
+            .find(|node| node_name(node) == name)
+            .and_then(|node| node.accesskit_node().description())
+    }
+
     /// The accessible description of every node on screen that has one.
     pub fn descriptions(&self) -> Vec<String> {
         let mut found = Vec::new();
@@ -2218,7 +2227,8 @@ impl<'a> Driver<'a> {
 
     /// Click a control on the same row as some text, such as a saved run's Resume.
     pub fn click_beside(&mut self, text: &str, name: &str) {
-        let row = self.row_of(text);
+        let text_row = self.row_of(text);
+        let row = self.action_row_of(text_row);
         let rect = self.aim(&format!("{name:?} beside {text:?}"), |node| {
             node.name == name
                 && Self::is_control(node)
@@ -2226,6 +2236,129 @@ impl<'a> Driver<'a> {
                 && node.rect.center().y <= row.max.y + 12.0
         });
         self.click_rect(rect, &format!("Click: {name} beside {text}"));
+    }
+
+    /// The whole row of a fact/action row (layout PR 4) whose facts hold `text`: its facts and
+    /// its action, which may wrap under them; else `text` itself.
+    fn action_row_of(&self, text: egui::Rect) -> egui::Rect {
+        crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .find(|record| record.facts.contains(text.center()))
+            .map_or(text, |record| record.facts.union(record.action))
+    }
+
+    /// Layout PR 4 (I6): the creature search's rows, from the part's records. Each row's action
+    /// starts `L` after the widest facts, or, where the column does not fit, under its own
+    /// facts at their text edge.
+    pub fn search_actions_follow_facts(&self) -> (bool, String) {
+        const L: f32 = crate::design::L;
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == "encounter_results")
+            .collect();
+        let widest = records
+            .iter()
+            .map(|record| record.facts.right())
+            .fold(f32::MIN, f32::max);
+        let follows = !records.is_empty()
+            && records.iter().all(|record| {
+                if record.wrapped {
+                    (record.action.left() - record.facts.left()).abs() <= 0.5
+                        && record.action.top() >= record.facts.bottom() - 0.5
+                } else {
+                    (record.action.left() - (widest + L)).abs() <= 0.5
+                }
+            });
+        let rows: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.facts.left().round(),
+                    record.facts.right().round(),
+                    record.action.left().round(),
+                    record.wrapped,
+                )
+            })
+            .collect();
+        (
+            follows,
+            format!(
+                "the widest facts end at {widest:.1}; rows (facts start, facts end, action start, wrapped): {rows:?}"
+            ),
+        )
+    }
+
+    /// The right edge of the registered row that holds `control`: a list row still ends at its
+    /// column's scroll lane where its actions follow its facts (layout PR 5a).
+    pub fn row_right_of(&self, control: egui::Rect) -> Option<f32> {
+        super::ergonomics::row_rects(&self.harness.ctx)
+            .into_iter()
+            .filter(|row| row.contains(control.center()))
+            .map(|row| row.right())
+            .reduce(f32::max)
+    }
+
+    /// Layout PR 5a (I6, §4.1): the encounter ledger's rows, from the part's records. All its
+    /// lists share one action column, `L` after the widest facts; each list's widest action
+    /// recipe starts there and its rows' actions end at one edge; each row's gap from its own
+    /// facts is at least `L` (a gap above 4L is a counted residual). At 1200 and 1920 no list
+    /// gives way. At 960 a list that does not fit keeps its actions at the far edge, `L` or more
+    /// after each row's facts.
+    pub fn ledger_columns(&self) -> (bool, String) {
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner.starts_with("ledger"))
+            .collect();
+        let widest = records
+            .iter()
+            .map(|record| record.facts.right())
+            .fold(f32::MIN, f32::max);
+        let mut lists = std::collections::BTreeMap::<&str, Vec<_>>::new();
+        for record in &records {
+            lists.entry(record.owner).or_default().push(record);
+        }
+        const L: f32 = crate::design::L;
+        let room = self.window.0 > SMALL.0;
+        let gap = |record: &crate::design::action_rows::RowRecord| {
+            record.action.left() >= record.facts.right() + L - 0.5
+        };
+        let columns = lists.values().all(|rows| {
+            if rows.iter().any(|record| record.wrapped) {
+                return !room && rows.iter().all(|record| gap(record));
+            }
+            let start = rows
+                .iter()
+                .map(|record| record.action.left())
+                .fold(f32::MAX, f32::min);
+            let end = rows[0].action.right();
+            // A list's recipe holds its widest alternate (the first row's primary Start weighs
+            // a point more than a secondary one), so its widest drawn row may start a little in.
+            start >= widest + L - 0.5
+                && start <= widest + L + L / 4.0
+                && rows.iter().all(|record| {
+                    (record.column - (widest + L)).abs() <= 0.5
+                        && (record.action.right() - end).abs() <= 0.5
+                })
+        });
+        let residuals = records.iter().filter(|record| record.residual()).count();
+        let rows: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.owner,
+                    record.facts.right().round(),
+                    record.action.left().round(),
+                    record.action.right().round(),
+                    record.wrapped,
+                )
+            })
+            .collect();
+        (
+            !records.is_empty() && columns && records.iter().all(gap),
+            format!(
+                "the widest facts end at {widest:.1}; {residuals} residual gaps above 4L; rows (list, facts end, actions start, actions end, gave way): {rows:?}"
+            ),
+        )
     }
 
     /// Like `click_beside`, for a row whose text is exactly this, among longer texts.
@@ -2237,7 +2370,7 @@ impl<'a> Driver<'a> {
             .nodes()
             .into_iter()
             .filter(|node| is_row(node))
-            .map(|node| node.rect)
+            .map(|node| self.action_row_of(node.rect))
             .collect();
         let rect = self.aim(&format!("{name:?} beside {text:?}"), |node| {
             node.name == name

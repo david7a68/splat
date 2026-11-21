@@ -3,7 +3,7 @@
 //!
 //! `cargo test` runs every scenario and enforces the ergonomics baseline, without
 //! a GPU or any screenshots. `devenv shell -- visual-test <label>` also renders
-//! PNGs, on a GPU when one is available. See "Visual tests" in the README.
+//! PNGs, on a GPU when one is available. See "Visual tests" in docs/development.md.
 //!
 //! Environment:
 //! - `SPLAT_VISUAL_CAPTURE=1` renders PNGs. Setting `SPLAT_VISUAL_DIR` also does.

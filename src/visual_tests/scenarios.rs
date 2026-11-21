@@ -99,9 +99,6 @@ fn check_choices_at_text(
     }
 }
 
-/// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
-/// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
-/// words' first line, within 1 px.
 /// R38, R35 (structural B4): an Encounters editor's back line at 960, 1200 and 1920, read from
 /// the painted text after each resize. The link (accessible `name`) paints its destination
 /// `word` whole at the editor's text edge with the return arrow after it, inside the window; the
@@ -121,9 +118,15 @@ fn back_line_faults(
             let mut faults = Vec::new();
             let (width, height) = d.window_size();
             let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
-            let Some(link) = d.place_of(name) else {
+            let nodes = d.nodes();
+            let Some(button) = nodes.iter().find(|node| node.name == name) else {
                 return vec![format!("{size:?}: no {name:?}")];
             };
+            let link = button.rect;
+            let description = d.description_of(name);
+            if button.disabled != reason.is_some() || description.as_deref() != reason {
+                faults.push(format!("{size:?}: {name:?} disabled {}, description {description:?}, expected {reason:?}", button.disabled));
+            }
             let Some(ink) = d.painted_word_rect(word, link) else {
                 return vec![format!("{size:?}: {word:?} is not painted in {link:?}")];
             };
@@ -134,13 +137,15 @@ fn back_line_faults(
             if !arrow.is_some_and(|arrow| arrow.left() > ink.right()) {
                 faults.push(format!("{size:?}: no arrow after {word:?}: {arrow:?}"));
             }
-            let field = d
-                .nodes()
-                .into_iter()
+            let field = nodes
+                .iter()
                 .find(|node| node.name.starts_with(field))
                 .map(|node| node.rect);
             match field {
                 Some(field) if field.top() >= link.bottom() - 0.5 => {
+                    if field.width() < 200.0 {
+                        faults.push(format!("{size:?}: the name field is only {} px wide", field.width()));
+                    }
                     if (field.left() - ink.left()).abs() > 1.5 {
                         faults.push(format!(
                             "{size:?}: {word:?} at x {} and the name field at x {}",
@@ -154,18 +159,11 @@ fn back_line_faults(
                 )),
             }
             let line = egui::Rect::from_x_y_ranges(link.right()..=width, link.y_range());
-            let painted =
-                reason.map(|reason| d.painted_rect_in(reason, line.expand2(egui::vec2(0.0, 8.0))));
-            match (reason, painted.flatten()) {
-                (Some(reason), None) => {
-                    faults.push(format!(
-                        "{size:?}: {reason:?} is not painted beside the link"
-                    ));
-                }
-                (Some(reason), Some(rect)) if !window.contains_rect(rect) => {
-                    faults.push(format!("{size:?}: {reason:?} is cut at {rect:?}"));
-                }
-                _ => {}
+            if let Some(reason) = reason
+                && !(d.painted_whole_in(reason, line)
+                    && d.painted_word_rect(reason, line).is_some_and(|rect| line.contains_rect(rect)))
+            {
+                faults.push(format!("{size:?}: {reason:?} is not painted whole beside the link"));
             }
             faults
         });
@@ -174,6 +172,9 @@ fn back_line_faults(
     faults
 }
 
+/// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
+/// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
+/// words' first line, within 1 px.
 fn check_dismiss_at_message_end(d: &mut Driver<'_>, id: &str, words: &str) {
     let name = crate::design::outcome::DISMISS_NAME;
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
@@ -1206,8 +1207,8 @@ fn file_links_at_message_words(
 }
 
 /// The same for a file line still drawn by hand (`encounters::file_line` in
-/// `message_with_actions`: Campaign's flags, run setup), whose links are named only
-/// `Edit in Obsidian` and `Show file`.
+/// `message_with_actions`: Campaign's flags), whose links are named only `Edit in Obsidian` and
+/// `Show file`. Run setup's file line is the typed `FileLine` (M-P0 item 7).
 fn file_links_at_message_words_by_hand(
     d: &Driver<'_>,
     message: &str,
@@ -1759,6 +1760,21 @@ pub mod library_browse {
             "Back returns to the prior entry and its search in one click, with Alt+Left shown",
         );
         d.state("back-after-link", Sizes::Default);
+        // M0387 (round 31 reader-end-section-pitch): the reader's end sections are one group
+        // at the Read row pitch, each header right under the one before.
+        let headers = ["Source text", "Technical details", "Source and identifiers"]
+            .map(|name| d.place_of(name));
+        let pitch = crate::design::Density::Read.control();
+        d.observe(
+            "M0387-end-section-pitch",
+            headers.iter().all(Option::is_some)
+                && headers.windows(2).all(|pair| {
+                    pair[0].zip(pair[1]).is_some_and(|(above, below)| {
+                        (below.center().y - above.center().y - pitch).abs() <= 0.5
+                    })
+                }),
+            format!("The end sections {headers:?} are {pitch} px apart"),
+        );
         d.begin_task();
         d.not_measured(
             "T6.3",
@@ -1993,7 +2009,7 @@ pub mod library_author {
             "ctrl-s",
             "library, dirty note",
             saved,
-            "Ctrl+S saves a dirty note, as artifacts/ui-review.md says".into(),
+            "Ctrl+S saves a dirty note".into(),
         );
         d.expect("Saved");
         assert!(
@@ -2420,8 +2436,10 @@ pub mod library_navigation {
             if !d.has("Rules/Ash Exposure.md: 1 broken link") {
                 d.click("1 file needs fixing");
             }
-            // Round 26 FB1: the menu is as wide as its content and ends at the count's right
-            // edge, so its frame and its link keep `S` from every splitter and scroll bar.
+            // Round 26 FB1: the menu is as wide as its content, opens under its count (one of its
+            // edges at the count's), and its frame and its link keep `S` from every splitter
+            // and scroll bar. M-L0.10: the count follows the title now, so the menu keeps to the
+            // column under it (`TitleLine::menu_room`) rather than ending at the page's right.
             // Must stay true: the whole link label fits on one line in the menu.
             let count = d.place_of("1 file needs fixing");
             let link = d.place_of("Rules/Ash Exposure.md: 1 broken link");
@@ -2438,12 +2456,13 @@ pub mod library_navigation {
                 "iter-26-L-FB1",
                 count.zip(frame).zip(words).is_some_and(|((count, frame), words)| {
                     clear(frame)
-                        && (frame.right() - count.right()).abs() <= crate::design::S
+                        && ((frame.right() - count.right()).abs() <= crate::design::S
+                            || (frame.left() - count.left()).abs() <= crate::design::S)
                         && frame.width() <= crate::design::READER_MEASURE + 2.0 * crate::design::M
                         && words.height() <= crate::design::Type::Small.line() + 0.5
                 }),
                 format!(
-                    "The menu {frame:?} ends at the count {count:?}, its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
+                    "The menu {frame:?} opens under the count {count:?} (one edge at the count's), its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
                 ),
             );
             // M0330 (migration-32, the L0 pressure caller): the menu is as tall as its one link,
@@ -2710,10 +2729,10 @@ pub mod library_navigation {
 
         // M0330: a long issues menu stops at six controls and scrolls, and still ends at the
         // count. Read without a capture: the gate cannot yet tell a scrolling popup's
-        // background from a control (its rows reach below its frame). Known fault, not this
-        // check's claim: lines wider than the room between the reader's splitter and the count
-        // make the menu reach over the list at 960 and 1200 (`menu_popup` has no room inside
-        // the reader yet); the detail names each lane it crosses.
+        // background from a control (its rows reach below its frame). Issue #504: the menu
+        // keeps to the reader's room (`MenuPopup::within`), so lines wider than the room
+        // between the reader's splitter and the count no longer reach over the list's scroll
+        // bar (960) or the splitter (1200); and its last link comes into view by scrolling.
         for n in 1..=BROKEN_FILES {
             let name = format!("Broken Watch {n}");
             std::fs::write(
@@ -2730,7 +2749,7 @@ pub mod library_navigation {
         d.wait_for_text("Broken Watch 1");
         let count = issues_count(d);
         for size in [SMALL, DEFAULT, LARGE] {
-            let (control, frame, margins, stroke, lanes) = d.act_at_size(size, |d| {
+            let (control, frame, margins, stroke, lanes, last) = d.act_at_size(size, |d| {
                 if !d.has_containing("Broken Watch 1.md: ") {
                     d.click(&count);
                 }
@@ -2741,7 +2760,38 @@ pub mod library_navigation {
                     .map(|node| node.rect);
                 let frame = first.and_then(|first| d.painted_frame_around(first));
                 let (_, margins, stroke) = issues_menu_frame(d);
-                (d.place_of(&count), frame, margins, stroke, d.chrome_lanes())
+                let lanes = d.chrome_lanes();
+                // The menu's last link, scrolled out of view at first: the wheel over the
+                // menu brings it into view, whole and inside the frame.
+                let links = |d: &Driver<'_>| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.is_link() && node.name.contains(".md: "))
+                        .collect::<Vec<_>>()
+                };
+                let last = links(d)
+                    .into_iter()
+                    .max_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))
+                    .map(|node| node.name);
+                let hidden = last.as_ref().is_some_and(|last| !d.in_view(last));
+                if let Some(frame) = frame {
+                    d.scroll_at(frame.center(), 10);
+                }
+                let reached = last
+                    .as_ref()
+                    .and_then(|last| links(d).into_iter().find(|node| &node.name == last));
+                let reached = reached.zip(frame).map(|(node, frame)| {
+                    (
+                        node.name.clone(),
+                        hidden,
+                        node.fully_in_view() && frame.contains_rect(node.shown),
+                    )
+                });
+                // Back to the top, so the menu that stays open starts there at the next size.
+                if let Some(frame) = frame {
+                    d.scroll_up_at(frame.center(), 10);
+                }
+                (d.place_of(&count), frame, margins, stroke, lanes, reached)
             });
             // The lanes outside the menu that it reaches over (its own scroll bar is inside).
             let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
@@ -2760,16 +2810,118 @@ pub mod library_navigation {
                 "M0330-long-issues-menu",
                 control.zip(frame).is_some_and(|(control, frame)| {
                     (frame.height() - most).abs() <= 1.0
-                        && (frame.right() - control.right()).abs() <= crate::design::S
-                }),
+                        && ((frame.right() - control.right()).abs() <= crate::design::S
+                            || (frame.left() - control.left()).abs() <= crate::design::S)
+                }) && crossed.is_empty()
+                    && last
+                        .as_ref()
+                        .is_some_and(|(_, hidden, reached)| *hidden && *reached),
                 format!(
-                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}) and ends at the count {control:?}; known fault, lanes it reaches over: {crossed:?}"
+                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), opens under the count {control:?} (one edge at the count's), reaches over no scroll bar or splitter (crossed: {crossed:?}), and its last link (name, out of view at first, then whole in view inside the frame after scrolling) comes into view: {last:?}"
                 ),
             );
         }
         if d.has_containing("Broken Watch 1.md: ") {
             d.press(Key::Escape);
         }
+        // M-L0.10: the `Packages` menu follows the title, over the entry list at 960, whose
+        // twelve broken files make it scroll. Its menu keeps inside the list's content, clear
+        // of the list's scroll bar and splitter, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (frame, lanes) = d.act_at_size(size, |d| {
+                d.click("Packages");
+                let choice = d.place_of("Reload from disk");
+                let frame = choice.and_then(|choice| d.painted_frame_around(choice));
+                let lanes = d.chrome_lanes();
+                d.press(Key::Escape);
+                (frame, lanes)
+            });
+            let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+                lanes
+                    .into_iter()
+                    .filter(|lane| {
+                        lane.y_range().intersects(frame.y_range())
+                            && lane.x_range().intersects(frame.x_range())
+                    })
+                    .collect()
+            });
+            d.observe(
+                "M0327-packages-menu-clear",
+                frame.is_some() && crossed.is_empty(),
+                format!(
+                    "At {size:?} the Packages menu {frame:?} reaches over no scroll bar or splitter (crossed: {crossed:?})"
+                ),
+            );
+        }
+        // M-L0.10: a column's room is its content, `S` inside its panel. With the list's
+        // splitter dragged just past the count at 960 (where the twelve broken files make the
+        // list scroll), the count stands over the list's right edge; its menu still keeps
+        // clear of the list's scroll bar.
+        let (frame, lanes, scroll) = d.act_at_size(SMALL, |d| {
+            let edge = d.column_edge("library_entries");
+            let Some(count_rect) = d.place_of(&count) else {
+                return (None, Vec::new(), None);
+            };
+            d.drag_column_edge(edge, count_rect.right() + 6.0);
+            let dragged = d.column_edge("library_entries");
+            d.click(&count);
+            let first = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Broken Watch 1.md: "))
+                .map(|node| node.rect);
+            let frame = first.and_then(|first| d.painted_frame_around(first));
+            let lanes = d.chrome_lanes();
+            // The list's own scroll bar: a lane just left of the splitter, inside the list.
+            let scroll = lanes
+                .iter()
+                .copied()
+                .find(|lane| lane.right() < dragged - 1.0 && lane.right() > dragged - 24.0);
+            d.press(Key::Escape);
+            d.drag_column_edge(dragged, edge);
+            (frame, lanes, scroll)
+        });
+        // The lanes outside the menu that it reaches over (its own scroll bar is inside).
+        let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+            lanes
+                .iter()
+                .copied()
+                .filter(|lane| {
+                    !frame.expand(0.5).contains_rect(*lane)
+                        && lane.y_range().intersects(frame.y_range())
+                        && lane.x_range().intersects(frame.x_range())
+                })
+                .collect()
+        });
+        d.observe(
+            "M0330-menu-at-list-edge",
+            frame.is_some() && scroll.is_some() && crossed.is_empty(),
+            format!(
+                "With the count over the list's right edge, its menu {frame:?} keeps clear of the list's scroll bar {scroll:?} (crossed: {crossed:?}; lanes {lanes:?})"
+            ),
+        );
+        // M0331: while a draft holds the open entry, no other entry opens from the menu: it
+        // says why, and lists the files as text, not links.
+        d.click_starting("Broken Watch 1 · ");
+        d.click(EDIT_MARKDOWN);
+        d.type_into_editor("A draft that holds this entry. ");
+        d.click(&count);
+        let files: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.contains("Broken Watch 2.md: "))
+            .collect();
+        d.observe(
+            "M0331-issues-menu-locked",
+            d.has_label("Save or discard this entry first.")
+                && !files.is_empty()
+                && files.iter().all(|node| !node.is_link()),
+            format!(
+                "With a draft, the menu says why no entry opens and lists the files as text (link: {:?})",
+                files.iter().map(crate::visual_tests::driver::Found::is_link).collect::<Vec<_>>()
+            ),
+        );
+        d.press(Key::Escape);
     }
 
     /// Files that M0330's long issues menu lists, more than its six controls hold.
@@ -2828,12 +2980,18 @@ pub mod reader_tables {
         d.state("wide-table-in-library", Sizes::All);
         // Round 23 AE1: at 1920 the table takes the pane past the prose measure and needs no
         // sideways scroll; the prose after it keeps the measure.
-        // The pane's inner edge is the page's right edge, where `New entry` ends.
+        // The pane's inner edge is the right edge of the reader pane's room (M-L0.10: `New
+        // entry` now follows the page's title, so it no longer marks the page's right edge).
         for size in [SMALL, DEFAULT, LARGE] {
             let seen = d.at_size(size, |d| {
                 let read = d.place_of("Read")?;
-                let edge = d.place_of("New entry")?.right();
                 let row = d.place_of("Memorize Spell")?;
+                let edge = d
+                    .pane_records()
+                    .into_iter()
+                    .map(|record| record.room())
+                    .find(|room| room.x_range().contains(row.center().x))?
+                    .right();
                 let last = d.place_of("Ninth-slot")?;
                 // The prose keeps the measure: a paragraph that wraps fills it, and no more.
                 let prose = d.painted_rect_in(
@@ -3156,7 +3314,9 @@ pub mod campaign_content {
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
-        assert!(d.visible_text("Campaign entries"));
+        // M0341: the scope control is one line; in this narrow column its words are cut at a
+        // whole word (`Campaign…`), and its name keeps the whole scope.
+        assert!(d.has("What the Library shows: Campaign entries") && d.visible_text("Campaign"));
         d.state("own-entries-in-library", Sizes::All);
         d.begin_task();
         let in_list = |d: &Driver<'_>, name: &str| {
@@ -4988,9 +5148,12 @@ pub mod encounter_build {
     fn search_lists_wolf_order(d: &mut Driver<'_>) {
         let size = d.window_size();
         let wolves = wolves_listed(d, egui::Rect::EVERYTHING, |name, wolf| name == wolf);
+        // Layout 3b/4: a row the results' edge cuts has no node, so a short window lists the
+        // order's first rows, whole; a taller one all six.
+        let first_rows = size.1 < 700.0 && wolves.len() >= 3 && WOLF_ORDER.starts_with(&wolves);
         d.observe(
             "M3-creature-search-order",
-            wolves == WOLF_ORDER,
+            wolves == WOLF_ORDER || first_rows,
             format!("At {size:?} the encounter search lists {wolves:?} for {MONSTER}"),
         );
     }
@@ -5054,7 +5217,19 @@ pub mod encounter_build {
         d.click(NEW_ENCOUNTER);
         d.type_text(NEW_NAME);
         d.expect("5. ");
-        d.state("new-encounter", Sizes::Default);
+        let faults = back_line_faults(
+            d,
+            "Encounters",
+            "Back to encounters",
+            "Encounter name",
+            Some("Save or discard the open encounter first."),
+        );
+        d.observe(
+            "iter-29-B1-back",
+            faults.is_empty(),
+            format!("New encounter: {faults:?}"),
+        );
+        d.state("new-encounter", Sizes::All);
 
         // The party is already there, and Enter goes on to the search.
         d.press(Key::Enter);
@@ -5384,7 +5559,7 @@ pub mod encounter_build {
             clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
             format!("The run state's x, clean {clean_x:?} and after the first edit {edited_x:?}"),
         );
-        d.state("saved-roster-sync-off", Sizes::Default);
+        d.state("saved-roster-sync-off", Sizes::All);
         d.observe(
             "T5.6",
             d.visible_text(LOCAL_ONLY) && !d.visible_text(PARTY_NOW),
@@ -5903,7 +6078,7 @@ pub mod encounter_run {
         // iter-27-R FJ4: the choice that plain `Roll NPCs` uses has a check, the others keep
         // its slot empty, so each choice's words start at one x. Read in each choice's own row
         // (M-R0.3: the shared `design::choice` paints the check and the words apart).
-        use crate::encounter_settings::Grouping;
+        use crate::encounter_settings::{Grouping, GroupingWords};
         let names = [
             Grouping::Identical,
             Grouping::Individual,
@@ -11859,6 +12034,7 @@ pub mod library_scope {
     use super::*;
     const USES: &str = "Can use";
     const EVERYTHING: &str = "Everything";
+    const BUILTIN: &str = "D&D 2024 · SRD 5.2.1";
     const ACTIVE: &str = "The Emberfall Marches";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -11872,6 +12048,42 @@ pub mod library_scope {
         // Round 23 AC1: the menu is checked against the splitter beside its column at 960 and
         // 1200, and every choice ends at the control's right edge, `S` before that splitter.
         d.state("scope-menu", Sizes::Standard);
+        // M0341: the scope list is the shared drop-down in two groups. `Can use` and
+        // `Everything` touch; a rule starts the second group at `D&D 2024`.
+        {
+            let row = |d: &Driver<'_>, name: &str, column: Option<egui::Rect>| {
+                d.nodes()
+                    .into_iter()
+                    .filter(|node| node.name == name && node.in_view())
+                    .map(|node| node.rect)
+                    .find(|rect| {
+                        column.is_none_or(|column| (rect.left() - column.left()).abs() < 1.0)
+                    })
+            };
+            let uses = row(d, USES, None);
+            let everything = row(d, EVERYTHING, uses);
+            let builtin = row(d, BUILTIN, uses);
+            let gap = |above: egui::Rect, below: egui::Rect| {
+                egui::Rect::from_x_y_ranges(
+                    above.x_range(),
+                    above.bottom() - 0.5..=below.top() + 0.5,
+                )
+            };
+            let first = uses
+                .zip(everything)
+                .map(|(above, below)| d.line_segments_in(gap(above, below)));
+            let second = everything
+                .zip(builtin)
+                .map(|(above, below)| d.line_segments_in(gap(above, below)));
+            d.observe(
+                "M0341-scope-groups",
+                first.as_ref().is_some_and(Vec::is_empty)
+                    && second.as_ref().is_some_and(|rules| !rules.is_empty()),
+                format!(
+                    "No rule between {USES} and {EVERYTHING} ({first:?}); a rule above {BUILTIN} ({second:?})"
+                ),
+            );
+        }
         for size in [SMALL, DEFAULT] {
             let (control, choices) = d.at_size(size, |d| {
                 (
@@ -11893,10 +12105,11 @@ pub mod library_scope {
             );
         }
         // Round 24 FA5: the open menu is as wide as its control, so it covers the counts beside
-        // the control. Each choice fills the menu's content width, so the choices' insets from
-        // the control's two edges are equal, and each is the menu's frame (its margin and rule).
-        let frame = f32::from(d.app_style().spacing.menu_margin.left)
-            + d.app_style().visuals.window_stroke.width;
+        // the control. M0341: the shared drop-down's rows start one frame stroke inside the
+        // control's left edge and end its scroll lane (and the stroke) inside its right edge,
+        // so the list is exactly as wide as the control.
+        let stroke = d.app_style().visuals.window_stroke.width;
+        let lane = crate::design::lane_width();
         for size in [SMALL, DEFAULT] {
             let (control, choices) = d.at_size(size, |d| {
                 (
@@ -11911,12 +12124,12 @@ pub mod library_scope {
                         choice.is_some_and(|choice| {
                             let left = choice.left() - control.left();
                             let right = control.right() - choice.right();
-                            (left - right).abs() <= 1.0 && right <= frame + 1.0
+                            (left - stroke).abs() <= 1.0 && (right - lane - stroke).abs() <= 1.0
                         })
                     })
                 }),
                 format!(
-                    "At {size:?} the scope menu's choices {choices:?} sit the menu frame ({frame}) inside both edges of the control {control:?}"
+                    "At {size:?} the scope menu's choices {choices:?} start the frame stroke ({stroke}) inside the control {control:?} and end its lane ({lane}) inside it"
                 ),
             );
         }
@@ -19532,7 +19745,7 @@ pub mod encounter_groups {
             };
             d.click("More actions for Rival Captainx");
             d.click(step);
-            let open = d.has("Maximum HP: how it changes");
+            let open = d.has_containing("Maximum HP: how it changes");
             d.type_into("Display name", "");
             d.press_ctrl(Key::Z);
             let undone = d.visible_text("Rival Captain") && !d.visible_text("Rival Captainx");
@@ -19661,7 +19874,7 @@ pub mod encounter_groups {
         d.click("Done with changes");
         d.observe(
             "F5",
-            !d.has("Maximum HP: how it changes")
+            !d.has_containing("Maximum HP: how it changes")
                 && d.in_view_containing("Changes for Ember Cultist"),
             "Done closes the form and returns to its member",
         );
@@ -19804,7 +20017,7 @@ pub mod encounter_groups {
         // beside the field takes the error colour.
         for size in [SMALL, DEFAULT] {
             let (placed, detail) = d.at_size(size, |d| {
-                let field = d.place_of("Maximum HP: how it changes");
+                let field = d.place_of(&d.name_starting("Maximum HP: how it changes"));
                 let mut faults = Vec::new();
                 let mut preview = None;
                 d.each_painted_text(|text, clip| {
@@ -19901,11 +20114,9 @@ pub mod encounter_groups {
             let lanes = [(DEFAULT.0, 2000.0), (DEFAULT.0, SMALL.1)].map(|size| {
                 d.at_size(size, |d| {
                     let adds = right_edges(d, ADD);
-                    let bar = adds
-                        .iter()
-                        .copied()
-                        .reduce(f32::max)
-                        .is_some_and(|edge| scroll_bar_right_of(d, edge));
+                    // Add follows the facts. The search field still ends at the scroll lane.
+                    let field = d.place_of(FIND).expect("the creature search field");
+                    let bar = scroll_bar_right_of(d, field.right());
                     (adds, bar)
                 })
             });
@@ -19927,7 +20138,9 @@ pub mod encounter_groups {
         d.type_into(FIND, "wolf");
         // iter-27-B FI5: the one creature order, as Arrivals sorts it: the exact name first, then
         // every name that holds the search in the list's order (Werewolf before Winter Wolf).
-        let order = {
+        // Read at a tall window: at 960 the narrow pane wraps each Add under its facts (layout
+        // PR 4), and the later names are below the fold.
+        let order = d.at_size((DEFAULT.0, 2000.0), |d| {
             let mut found: Vec<(f32, String)> = Vec::new();
             d.each_painted_text(|text, clip| {
                 let words = &text.galley.job.text;
@@ -19939,7 +20152,7 @@ pub mod encounter_groups {
             });
             found.sort_by(|a, b| a.0.total_cmp(&b.0));
             found.into_iter().map(|(_, name)| name).collect::<Vec<_>>()
-        };
+        });
         d.observe(
             "iter-27-B-FI5",
             order == ["Wolf", "Werewolf", "Winter Wolf"],
@@ -20161,8 +20374,18 @@ pub mod encounter_groups {
             .zip(d.place_of("Undo discard of Lost Patrol"))
             .map(|(removed, discarded)| (removed.top(), discarded.top()));
         d.state_prepared("group-removed", Sizes::All, |d| {
-            // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
             let size = d.window_size();
+            let menu = d
+                .place_of(&format!("More actions for {GROUP_LOST}"))
+                .expect("Lost Patrol remains in the list after removing Goblin Wave");
+            // Layout PR 5a: the menu follows the row's facts; its row ends at the scroll lane.
+            let scrolls = scroll_bar_right_of(d, d.row_right_of(menu).unwrap_or(menu.right()));
+            d.observe(
+                "iter-26-B-FI1",
+                scrolls == (size == SMALL),
+                format!("At {size:?}, the list beside the group menu {menu:?} scrolls: {scrolls}"),
+            );
+            // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
             let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
             let discarded = d.painted_rect_in("Lost Patrol draft discarded.", window);
             let removed = d.painted_rect_in(&format!("Removed group {GROUP_GOBLINS}."), window);
@@ -20531,9 +20754,14 @@ pub mod encounter_groups {
         d.clear_text_in(TOTAL_FOR_RIVALS);
         let before = roster_places(d).len();
         d.click(&add_group(GROUP_LOST));
+        let run = d.app_mut().encounters.run().unwrap();
+        let joined = run
+            .arrivals_in_run()
+            .get(&splat::character::stable_id("visual:group:lost"))
+            .map(|(at, _)| run.participant_stats(*at).0);
         d.observe(
             "AT2",
-            roster_places(d).len() == before + 1,
+            roster_places(d).len() == before + 1 && joined.as_deref() == Some("Goblin Warrior"),
             "The valid member joins while the two unavailable members stay out",
         );
         // R3f X43, X44: the footer's Move button starts at the message's words and is whole.
@@ -21446,17 +21674,19 @@ pub mod encounter_owned_groups {
         d.expect("GROUPS");
         // FB2: opening Groups makes the page scroll at 960, and no row action moves.
         let actions = |d: &Driver<'_>| {
-            let menus: Vec<f32> = d
+            let menus: Vec<egui::Rect> = d
                 .nodes()
                 .into_iter()
                 .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
-                .map(|node| node.rect.right())
+                .map(|node| node.rect)
                 .collect();
+            // Layout PR 5a: the menus follow the rows' facts; their rows end at the scroll lane.
             let bar = menus
                 .iter()
-                .copied()
+                .map(|menu| d.row_right_of(*menu).unwrap_or(menu.right()))
                 .reduce(f32::max)
                 .is_some_and(|edge| scroll_bar_right_of(d, edge));
+            let menus: Vec<f32> = menus.iter().map(|menu| menu.right()).collect();
             (right_edges(d, "Resume"), menus, bar)
         };
         let closed = d.at_size(SMALL, actions);
@@ -22261,9 +22491,9 @@ pub mod encounter_owned_groups {
             .place_of(&add_group(NEW_NAME))
             .expect("the list shows the group that joined");
         d.scroll_until(list.center(), "Edit group", 5);
-        // iter-25-R FB5: a member fault's repair is a bordered secondary button. Below its
-        // fault, its border starts at the warning text; in a wide panel, it stays beside the
-        // fault on its line, after an `L` gap.
+        // iter-25-R FB5: a member fault's repair is a bordered secondary button. M0126 (M-R0.9):
+        // it is a choice of the fault's typed message, so at every size it stands on the line
+        // under the fault, its border starting at the warning text.
         for size in [SMALL, DEFAULT, LARGE] {
             let (placed, detail) = d.at_size(size, |d| {
                 let mut placed = true;
@@ -22290,11 +22520,6 @@ pub mod encounter_owned_groups {
                             .is_some_and(|frame| frame.stroke.width > 0.0)
                     };
                     placed &= match (text, buttons.as_slice()) {
-                        (Some(text), [button]) if size == LARGE => {
-                            bordered(button)
-                                && button.center().y < text.bottom()
-                                && button.left() >= text.right() + crate::design::L - 0.5
-                        }
                         (Some(text), [button]) => {
                             bordered(button)
                                 && button.top() >= text.bottom() - 0.5
@@ -22772,7 +22997,7 @@ pub mod run_overrides {
         );
         d.observe(
             "T13.3",
-            d.in_view("Maximum HP: how it changes"),
+            d.in_view_containing("Maximum HP: how it changes"),
             "Opening a slot's overrides brings the form into view, however low the slot is",
         );
         d.state("slot-changes-open", Sizes::All);
@@ -24000,27 +24225,15 @@ pub mod session_plan_groups {
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
         d.state("plan-group-assembled", Sizes::All);
-        // iter-27-B FL3: the search field ends where each result's Add ends, at the scroll
-        // lane, with or without the bar.
+        // iter-27-B FL3, replaced by layout PR 4 (I6): each result's Add follows the measured
+        // facts, not the search field's edge: `L` after the widest facts, or under its own
+        // facts at the text edge where the column does not fit.
         for size in [SMALL, DEFAULT, LARGE] {
-            let edges = d.at_size(size, |d| {
-                let search = d.place_of(FIND_CREATURE)?;
-                let adds: Vec<f32> = d
-                    .nodes()
-                    .into_iter()
-                    .filter(|node| {
-                        node.name == ADD && node.in_view() && node.rect.left() > search.left()
-                    })
-                    .map(|node| node.rect.right())
-                    .collect();
-                Some((search.right(), adds))
-            });
+            let (follows, detail) = d.at_size(size, |d| d.search_actions_follow_facts());
             d.observe(
-                "iter-27-B-FL3",
-                edges.as_ref().is_some_and(|(search, adds)| {
-                    !adds.is_empty() && adds.iter().all(|add| (add - search).abs() <= 0.5)
-                }),
-                format!("At {size:?}, the search's right edge and each Add's: {edges:?}"),
+                "pr4-FL3-add-follows-facts",
+                follows,
+                format!("At {size:?}: {detail}"),
             );
         }
         for size in [DEFAULT, LARGE] {
@@ -27520,6 +27733,35 @@ pub mod package_to_table {
             8,
         );
         d.state("new-package-at-the-table", Sizes::All);
+        // The HP warning makes the CR label take the full control height. Compare its
+        // actual node to the wrapped Add button in the same column.
+        let clearance = d.at_size(SMALL, |d| {
+            let nodes = d.nodes();
+            let add = nodes
+                .iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Button
+                        && node.name == ADD
+                        && node.fully_in_view()
+                })?
+                .rect;
+            let column = egui::Rect::from_min_max(egui::pos2(add.left(), 0.0), add.max);
+            let words = d.painted_word_rect("CR 1", column)?;
+            let cr = nodes
+                .iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.fully_in_view()
+                        && node.rect.contains(words.center())
+                })?
+                .rect;
+            Some((cr, add))
+        });
+        d.observe(
+            "pr4-wrapped-cr-add",
+            clearance.is_some_and(|(cr, add)| cr.bottom() <= add.top()),
+            format!("At 960, Copper Drake's CR label and wrapped Add: {clearance:?}"),
+        );
         // iter-24-B FC1, must stay true: a changed draft Save would write still says Unsaved,
         // and its Save is not blocked.
         d.observe(
@@ -28527,6 +28769,48 @@ pub mod run_rolls {
             "Ctrl+3 arms the tile that says Ctrl+3, the attack after the prose",
         );
         d.press(Key::Escape);
+
+        d.aside(|d| d.act_at_size(LARGE, |d| {
+            const SPELLS: &str = "\n\nInnate Spellcasting. The cultist casts (spell save DC 12):\n\nAt Will: Review Wave, Thunderwave\n\n1/Day: Thunderwave";
+            d.app_mut().encounters.run_mut().unwrap().simulate_stat_block_edit(CASTER, |body| body.push_str(SPELLS));
+            d.settle();
+            for (key, hint) in [(Key::Num4, "Ctrl+4."), (Key::Num5, "Ctrl+5.")] {
+                d.press_ctrl(key);
+                let nodes = d.nodes();
+                let matches = nodes.iter().filter(|n| n.name.starts_with("Thunderwave ·") && n.name.ends_with(hint));
+                let stops = nodes.iter().filter(|n| n.name == "Stop" && n.role == Role::Button);
+                d.observe("repeated-spell-shortcut", matches.count() == 1 && stops.count() == 1,
+                    format!("One Thunderwave tile says {hint} and one tile is armed"));
+            }
+            let root = d.app_mut().campaigns.active_campaign().unwrap().path;
+            let file = "Review Wave.md";
+            let text = splat::content::formats::fixture(file, &format!(
+                "splat_id: {}\nsplat_kind: spell\nsplat_name: Review Wave\nsplat_spell: {{level: 1}}\n",
+                splat::character::stable_id("visual:rolls:review-wave")
+            ), "\nEach creature makes a Constitution saving throw. On a failed save, a creature takes 2d8 Thunder damage.\n").unwrap();
+            crate::library::write_note(&root, file, None, &text).unwrap();
+            d.app_mut().lookup.refresh();
+            d.settle();
+            let last = d.nodes().into_iter().find(|n| n.name.starts_with("Thunderwave ·") && n.name.ends_with("Ctrl+6."));
+            d.observe("armed-spell-after-reload", last.zip(d.place_of("Stop")).is_some_and(|(tile, stop)| tile.rect.bottom() <= stop.top()),
+                "Adding an earlier spell changes the shortcuts and keeps Stop below the second Thunderwave");
+            std::fs::remove_file(root.join(file)).unwrap();
+            d.app_mut().lookup.refresh();
+            d.settle();
+            d.press(Key::Escape);
+            d.act_at_size(SMALL, |d| {
+                d.press_ctrl(Key::K);
+                if let Some(more) = d.nodes().into_iter().find(|n| n.name.ends_with(" more") && n.role == Role::Button) {
+                    d.click(&more.name);
+                }
+                d.observe("repeated-spell-shortcut", d.nodes().iter().filter(|n| n.name == "Thunderwave DC 12" && n.role == Role::Button).count() == 2,
+                    "The compact action bar's menu lists both Thunderwave actions");
+                d.press(Key::Escape);
+                d.press_ctrl(Key::K);
+            });
+            d.app_mut().encounters.run_mut().unwrap().simulate_stat_block_edit(CASTER, |body| body.truncate(body.len() - SPELLS.len()));
+            d.settle();
+        }));
 
         // A save: each clicked row is a target, and its save stands where its AC is.
         d.click_row(CASTER);

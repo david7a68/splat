@@ -1,0 +1,30 @@
+[package]
+name = "splat-party"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[features]
+test-support = ["splat-content-ui/test-support"]
+
+[dependencies]
+splat-campaign = { path = "../../crates/campaign" }
+splat-character = { path = "../../crates/character" }
+splat-content = { path = "../../crates/content" }
+splat-content-ui = { path = "../content_ui" }
+splat-design = { path = "../design" }
+eframe = { version = "0.33", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1", features = ["raw_value"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
+
+[dev-dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+zeroize = "1"
+directories = "6"
+tempfile = "3"
+splat-content-ui = { path = "../content_ui", features = ["test-support"] }
+egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }

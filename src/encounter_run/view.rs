@@ -9,10 +9,9 @@ use super::{
 use crate::{
     combat_sync::SyncState,
     design::{
-        self, Action, Density, HpFonts, RunScale, Status, Tone, Type, colors, icons,
-        reader as style,
+        self, Action, Density, HpFonts, RunScale, Status, Type, colors, icons, reader as style,
     },
-    encounter_settings::Grouping,
+    encounter_settings::{Grouping, GroupingWords},
     library::view,
 };
 use eframe::egui::{
@@ -158,7 +157,7 @@ pub(crate) fn other_effect_field(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
-pub(crate) fn toggle(
+pub fn toggle(
     ui: &mut egui::Ui,
     label: &str,
     icon: &str,
@@ -213,7 +212,7 @@ fn vital_columns(ui: &mut egui::Ui, columns: &[(&str, String)]) {
 
 /// The width `toggle` takes, on or off: its words and the frame's padding.
 pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
     let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
         .into_galley(
@@ -233,13 +232,13 @@ pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
     words + 2.0 * (ui.spacing().button_padding.x + expansion)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a group row scanned the run's participants for that group's joins.
     static GROUP_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often the Arrivals summaries and the Arrivals reasons were worked out (Astra 2): an
     /// unchanged frame works out none of them.
@@ -247,7 +246,7 @@ thread_local! {
         const { std::cell::Cell::new((0, 0)) };
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many toggle widths the conditions grid measured.
     static CONDITION_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -453,7 +452,7 @@ fn arrival_add_word(group: &super::RunGroup) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Test builds: how often a pending line was worked out (Astra, PR 371: not each frame).
     static PENDING_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -470,7 +469,7 @@ const PENDING_WORDS: &str =
 /// D&D Beyond yet. Splat tries again by itself.` HP has the form of the conflict's buttons.
 /// With nothing to compare, the general words.
 fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     PENDING_WORK.with(|work| work.set(work.get() + 1));
     let max = sync.max_hp().unwrap_or(0);
     let mut changed: Vec<String> = Vec::new();
@@ -1489,64 +1488,35 @@ impl Run {
                                                         } else {
                                                             shown
                                                         };
-                                                        // FJ4: the words get `text_room`; the message's bar, icon and
-                                                        // their gaps take room before them. A fitted notice then keeps
-                                                        // one line, and its band the height the list gave up.
-                                                        let message_width = text_room
-                                                            + lead
-                                                            + ui.spacing().item_spacing.x * 2.0;
-                                                        let response = ui
-                                                            .allocate_ui_with_layout(
-                                                                vec2(
-                                                                    message_width,
-                                                                    if compact
-                                                                        || one_line
-                                                                        || self
-                                                                            .notice_summary
-                                                                            .is_some()
-                                                                    {
-                                                                        Type::Small.line()
-                                                                    } else {
-                                                                        notice_height
-                                                                    },
-                                                                ),
-                                                                Layout::left_to_right(Align::TOP),
-                                                                |ui| {
-                                                                    // One form for every result: the tone marks
-                                                                    // the icon and bar, the words keep text colour.
-                                                                    let tone = if self
-                                                                        .notice_summary
-                                                                        .is_some()
-                                                                    {
-                                                                        Tone::Warning
-                                                                    } else {
-                                                                        Tone::Success
-                                                                    };
-                                                                    design::small_message(
-                                                                        ui, tone, shown,
-                                                                    )
-                                                                },
-                                                            )
-                                                            .inner;
-                                                        let detail =
-                                                            self.notice.as_deref().unwrap_or(shown);
-                                                        design::named(ui, &response, detail);
-                                                        response.on_hover_text(detail);
-                                                        let log = log_link(ui);
-                                                        design::named(ui, &log, "Log");
-                                                        if log.clicked() {
-                                                            self.panel = Panel::Log;
-                                                            self.close_lookup = true;
-                                                        }
-                                                        let dismiss = design::icon_button(
-                                                            ui,
-                                                            icons::CLOSE,
-                                                            "Dismiss this message",
-                                                        )
-                                                        .clicked();
-                                                        if dismiss {
-                                                            self.notice = None;
-                                                            self.return_focus = self.lookup_open;
+                                                        // M-P0 item 7: the notice is one typed compact message: its words (a sheet
+                                                        // notice's fitted to `text_room`), `Log` and its close icon in one band beside
+                                                        // them, one control high. A sheet notice is a warning; a result is said in the
+                                                        // success tone, with no way back here. The whole notice is the words' name and
+                                                        // hover.
+                                                        let detail = self
+                                                            .notice
+                                                            .clone()
+                                                            .unwrap_or_else(|| shown.to_owned());
+                                                        if let Some(words) =
+                                                            outside_words(shown.to_owned())
+                                                        {
+                                                            match live_notice(
+                                                                ui,
+                                                                self.notice_summary.is_some(),
+                                                                words,
+                                                                detail,
+                                                            ) {
+                                                                Some(LiveNotice::Log) => {
+                                                                    self.panel = Panel::Log;
+                                                                    self.close_lookup = true;
+                                                                }
+                                                                Some(LiveNotice::Dismiss) => {
+                                                                    self.notice = None;
+                                                                    self.return_focus =
+                                                                        self.lookup_open;
+                                                                }
+                                                                None => {}
+                                                            }
                                                         }
                                                     },
                                                 );
@@ -1736,7 +1706,7 @@ impl Run {
             // Too tall even at its tightest. It scrolls, at that tight pitch.
             layouts = self.roster_layouts(ui, width - SCROLL_BAR, scale, RowFit::Summary);
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         for (&index, layout) in self.state.order.iter().zip(&layouts) {
             let first = &layouts[0];
             assert_eq!(layout.initiative_right, first.initiative_right);
@@ -3483,7 +3453,7 @@ impl Run {
         if let Some((_, reasons)) = self.arrival_reasons.as_ref().filter(|(at, _)| *at == key) {
             return reasons.clone();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             let (a, b) = PREPARED.with(std::cell::Cell::get);
             PREPARED.with(|count| count.set((a, b + 1)));
@@ -3546,7 +3516,7 @@ impl Run {
         if let Some(summary) = kept.get(&group.id) {
             return summary.clone();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             let (a, b) = PREPARED.with(std::cell::Cell::get);
             PREPARED.with(|count| count.set((a + 1, b)));
@@ -3573,12 +3543,12 @@ impl Run {
     pub(super) fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
         let key = (self.revision, self.groups_revision(), self.scale_revision());
         let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.arrival_counts.0 += 1;
         }
         if self.arrival_words.as_ref().map(|(at, _)| *at) != Some(key) {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             {
                 self.arrival_counts.1 += 1;
             }
@@ -4025,7 +3995,7 @@ impl Run {
     /// The newest round this group joined in (0 for setup), from one scan of the participants
     /// and no list. Its row's status and its layout both take it from here.
     fn group_joined(&self, group: &super::RunGroup) -> Option<u64> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         GROUP_SCANS.with(|count| count.set(count.get() + 1));
         self.state
             .participants
@@ -4469,32 +4439,23 @@ impl Run {
             .into_iter()
             .map(|line| super::MemberFault::new(super::FaultKind::CannotJoin, line.into()))
             .collect();
-        if !warnings.is_empty() || !own.is_empty() {
-            for fault in warnings.iter().chain(&own) {
-                // The one member-fault row (Contract B, R): the Encounters list draws it too.
-                if crate::encounters::member_fault_row(ui, fault) {
-                    if fault.kind == super::FaultKind::NotInPackages {
-                        self.wants_packages = true;
-                    } else {
-                        self.wants_group_editor = Some(group.path.clone());
-                    }
+        let faults: Vec<&super::MemberFault> = warnings.iter().chain(&own).collect();
+        // Every fault gives one repair; when all point to packages, the last one also offers
+        // the group editor (M0126: a choice of the same typed message), so it stays one click
+        // away.
+        let packages_only = faults
+            .iter()
+            .all(|fault| fault.kind == super::FaultKind::NotInPackages);
+        for (at, fault) in faults.iter().enumerate() {
+            let edit_too = packages_only && at + 1 == faults.len();
+            // The one member-fault row (Contract B, R): the Encounters list draws it too.
+            let view = crate::encounters::MemberFaultView::Arrivals { edit_too };
+            match crate::encounters::member_fault_row(ui, fault, view) {
+                Some(crate::encounters::MemberRepair::Packages) => self.wants_packages = true,
+                Some(crate::encounters::MemberRepair::EditGroup) => {
+                    self.wants_group_editor = Some(group.path.clone());
                 }
-            }
-            // Every fault gives one link; when all point to packages, the group editor
-            // stays one click away.
-            if warnings
-                .iter()
-                .chain(&own)
-                .all(|fault| fault.kind == super::FaultKind::NotInPackages)
-                // The faults' actions start at the message words; this one does too.
-                && design::message_choice_row(ui, Tone::Warning, |ui| {
-                    Action::secondary("Edit group")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                })
-            {
-                self.wants_group_editor = Some(group.path.clone());
+                None => {}
             }
         }
 
@@ -5334,64 +5295,25 @@ impl Run {
         );
         design::rule(ui);
         if let Some((root, filename)) = &self.roster_source {
-            // FA11: the path in the campaign, as the encounter editor names the same file.
+            // FA11: the path in the campaign, as the encounter editor names the same file. Each
+            // unread row is one typed compact message (`BodyMessage::compact`), at a row
+            // message's size. R41 (lead ruling, s30 B11): an unread roster row is an error, in
+            // the editor's tone (`unread_row_tone`), here as there: the run's `CannotRead`. One
+            // file names every unread row, so its file line shows once, with the last warning:
+            // on its row when it fits, else under its words.
             let last = self.roster_faults.len().saturating_sub(1);
             for (index, fault) in self.roster_faults.iter().enumerate() {
-                let words = fault.words();
-                // One file names every unread row, so its name and actions show once, after
-                // the last warning about it.
-                // R41 (lead ruling, s30 B11): an unread roster row is an error, in the editor's
-                // tone (`unread_row_tone`), here as there.
-                if index < last {
-                    design::small_message(ui, crate::encounters::unread_row_tone(), &words);
+                let Some(words) = outside_words(fault.words()) else {
                     continue;
+                };
+                let mut message = design::outcome::FaultMessage::<()>::new(&RunFault::Error(words));
+                if index == last {
+                    message =
+                        message.file(design::outcome::FileLine::new(root, filename).edit().show());
                 }
-                ui.scope(|ui| {
-                    ui.spacing_mut().item_spacing.y = design::XS;
-                    let gap = ui.spacing().item_spacing.x;
-                    let inset = design::S
-                        + design::HAIRLINE_WIDTH
-                        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
-                        + gap * 2.0
-                        - design::XS;
-                    let message_width =
-                        design::number_width(ui, &words, &Type::Body.font(ui)) + inset;
-                    let file_width = design::number_width(ui, filename, &Type::Small.font(ui))
-                        + design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
-                        + design::number_width(ui, "Show file", &Type::Body.font(ui))
-                        + gap * 2.0;
-                    if message_width + design::L + file_width <= ui.available_width() {
-                        ui.horizontal_top(|ui| {
-                            ui.allocate_ui_with_layout(
-                                vec2(message_width, 0.0),
-                                Layout::top_down(Align::Min),
-                                |ui| {
-                                    design::small_message(
-                                        ui,
-                                        crate::encounters::unread_row_tone(),
-                                        &words,
-                                    );
-                                },
-                            );
-                            ui.add_space(design::L - gap);
-                            crate::world::entry_file_parts(ui, root, filename, true);
-                        });
-                    } else {
-                        // The file line starts at the warning's words, as every message's
-                        // actions do, and its name wraps whole rather than being cut.
-                        let words_left =
-                            design::small_message(ui, crate::encounters::unread_row_tone(), &words)
-                                .rect
-                                .left();
-                        let inset = words_left - ui.cursor().left();
-                        ui.horizontal_top(|ui| {
-                            ui.add_space(inset);
-                            ui.vertical(|ui| {
-                                crate::encounters::file_line(ui, root, filename);
-                            });
-                        });
-                    }
-                });
+                let _ = design::outcome::BodyMessage::from(message)
+                    .compact()
+                    .show(ui);
             }
         }
         // FI2: errors, the carry-over warning and the rest offers and their result are in the
@@ -6649,6 +6571,42 @@ fn snapshot_values_line(notice_shown: bool) -> &'static str {
     }
 }
 
+/// What the DM pressed on the live view's notice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LiveNotice {
+    Log,
+    Dismiss,
+}
+
+/// The live view's notice (M0102, M0103): a sheet notice (`warning`) or a result, in the
+/// compact form with `Log` and its close icon beside its words; `detail` is the whole notice.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a body place: the live view says its notice where it is (Ban::Body)"
+)]
+fn live_notice(
+    ui: &mut egui::Ui,
+    warning: bool,
+    words: design::outcome::Sentence,
+    detail: String,
+) -> Option<LiveNotice> {
+    use design::outcome::{BodyMessage, Choice, Lost, MessageChoice, Notice};
+    let log = Choice::new(
+        MessageChoice::Link {
+            word: "Log",
+            hover: None,
+        },
+        LiveNotice::Log,
+    );
+    let dismiss = Choice::new(MessageChoice::Dismiss(Lost::Nothing), LiveNotice::Dismiss);
+    let message = if warning {
+        BodyMessage::from(Notice::warning(words).choice(log).choice(dismiss))
+    } else {
+        BodyMessage::result(words, [log, dismiss])
+    };
+    message.compact().detail(detail).show(ui)
+}
+
 /// Words from outside the app's own: a write's or the system's error, a stat block's file
 /// name, the DM's names in a recharge roll or a carry-over. `Sentence::outside` gives them a
 /// capital and an end mark; blank words give `None`.
@@ -6656,7 +6614,7 @@ fn snapshot_values_line(notice_shown: bool) -> &'static str {
     clippy::disallowed_methods,
     reason = "the run’s errors carry the system’s words, and its results the DM’s names"
 )]
-fn outside_words(words: String) -> Option<design::outcome::Sentence> {
+pub(super) fn outside_words(words: String) -> Option<design::outcome::Sentence> {
     design::outcome::Sentence::outside(words)
 }
 
@@ -6953,42 +6911,7 @@ pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     }
 }
 
-pub(crate) fn change_preview(row: &Row) -> String {
-    fn numbers(text: &str) -> String {
-        let mut result = String::new();
-        let mut number = String::new();
-        for c in text.chars().chain(std::iter::once('\0')) {
-            if c.is_ascii_digit() || (c == '-' && number.is_empty()) {
-                number.push(c);
-            } else {
-                if !number.is_empty() {
-                    result.push_str(&super::grouped_number(&number));
-                    number.clear();
-                }
-                if c != '\0' {
-                    result.push(c);
-                }
-            }
-        }
-        result
-    }
-    format!(
-        "{} → {}{}",
-        numbers(if row.label == "Speed" {
-            row.base.trim().trim_end_matches('.')
-        } else {
-            &row.base
-        }),
-        numbers(&row.changed),
-        if row.by_hand {
-            " · add by hand"
-        } else if row.in_rolls {
-            " · in Splat’s rolls"
-        } else {
-            ""
-        }
-    )
-}
+pub use splat_content_ui::roster::change_preview;
 
 /// An Arrivals row's status and members for a slot `width` wide. None when a part of the status
 /// cannot fit the slot whole: then the status takes a full-width line of its own.
@@ -7033,7 +6956,7 @@ const STAT_BLOCK_UNREAD: &str = "stat block could not be read";
 
 /// What the DM chose among a close dialog's recovery actions.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
-pub(crate) struct CloseRecovery {
+pub struct CloseRecovery {
     pub review: bool,
     pub connect: bool,
 }
@@ -7043,11 +6966,7 @@ pub(crate) struct CloseRecovery {
 /// buttons on one line, `Connect to sync` before `Review conflict`, and the first one's border
 /// starts at the dialog text. FK2: a message action without an icon has the secondary border, so
 /// the safe action never reads as a label beside `Close now`.
-pub(crate) fn close_recovery_actions(
-    ui: &mut egui::Ui,
-    review: bool,
-    connect: bool,
-) -> CloseRecovery {
+pub fn close_recovery_actions(ui: &mut egui::Ui, review: bool, connect: bool) -> CloseRecovery {
     let mut chosen = CloseRecovery::default();
     if !review && !connect {
         return chosen;
@@ -7100,7 +7019,7 @@ fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
     let forms = shortened_names(group, before)
         .skip(usize::from(group == arrival))
         .inspect(|_| {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             MOVE_FORMS.with(|forms| forms.set(forms.get() + 1));
         });
     whole
@@ -7108,7 +7027,7 @@ fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
 }
 
 // Move forms built on this thread, for a test that an unchanged frame builds none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static MOVE_FORMS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -7696,48 +7615,9 @@ impl TurnMark {
     }
 }
 
-/// Everything on a row, for assistive technology and for the tests.
-/// The notice's `Log` link. The underline covers only the word, and the word starts where the
-/// item gap puts it. The 24 px target is the link's own minimum size: a word narrower than that
-/// gets the extra width evenly on both sides, inside the gaps, so nothing beside it moves.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-pub(super) fn log_link(ui: &mut egui::Ui) -> egui::Response {
-    const WORD: &str = "Log";
-    let c = colors();
-    let galley = ui
-        .painter()
-        .layout_no_wrap(WORD.to_owned(), Type::Small.font(ui), c.accent);
-    let (id, word) = ui.allocate_space(vec2(galley.size().x, galley.size().y.max(design::XL)));
-    let target = word.expand2(vec2(((design::XL - word.width()) / 2.0).max(0.0), 0.0));
-    let response = ui.interact(target, id, egui::Sense::click());
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), WORD));
-    if ui.is_rect_visible(target) {
-        let top = word.center().y - galley.size().y / 2.0;
-        let color = if response.hovered() {
-            c.focus
-        } else {
-            c.accent
-        };
-        ui.painter().hline(
-            word.x_range(),
-            top + galley.size().y - 1.0,
-            egui::Stroke::new(design::HAIRLINE_WIDTH, color.gamma_multiply(0.6)),
-        );
-        ui.painter().galley(pos2(word.left(), top), galley, color);
-        if response.has_focus() {
-            design::focus_ring(ui, target);
-        }
-    }
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
-}
-
 /// Concentration, as a run row marks it and History's Final state repeats it: its icon and
 /// `Conc`, in its own colour.
-pub(crate) fn concentration_mark() -> (String, egui::Color32) {
+pub fn concentration_mark() -> (String, egui::Color32) {
     (
         format!("{} Conc", icons::CONCENTRATING),
         colors().participant.concentrating,
@@ -7836,7 +7716,7 @@ const PICTURE_GAP: f32 = 6.0;
 #[derive(Clone, Default)]
 struct RowCache(std::collections::HashMap<u64, RowLayout>);
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often `fitted` was asked for a row, and how often a row was laid out.
     static ROW_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -8277,7 +8157,7 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         ROW_FITS.with(|count| count.set(count.get() + 1));
         let input = RowInput {
             words: RowWords::of(p),
@@ -8511,7 +8391,7 @@ impl RowLayout {
         input: &RowInput,
         (condition_count, bonus_fit, extra): (usize, BonusFit, &Extra),
     ) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         ROW_LAYOUTS.with(|count| count.set(count.get() + 1));
         // The layout reads only its input: the cache of `fitted` is keyed on all of it.
         let RowInput {
@@ -11760,7 +11640,7 @@ mod tests {
         let words = "Brannoch Vale’s sheet changed: HP 58 → 54, temp HP 5 → 0";
         let mut harness = egui_kittest::Harness::new(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                design::small_message(ui, Tone::Warning, words);
+                design::small_message(ui, design::Tone::Warning, words);
             });
         });
         design::theme::install(&harness.ctx);
@@ -13227,7 +13107,11 @@ mod tests {
             let shown = fault.clone();
             let mut harness = egui_kittest::Harness::new(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::encounters::member_fault_row(ui, &shown);
+                    crate::encounters::member_fault_row(
+                        ui,
+                        &shown,
+                        crate::encounters::MemberFaultView::Arrivals { edit_too: false },
+                    );
                 });
             });
             design::theme::install(&harness.ctx);
@@ -13271,6 +13155,57 @@ mod tests {
             });
             assert!(bordered, "{fault:?}: the repair {repair:?} has a border");
             assert!(!fills.contains(&other), "{fault:?}: {fills:?}");
+        }
+        // M0126 (m-r0-9-edit-too): a missing creature's fault offers `Edit group` too when
+        // Arrivals asks (`edit_too`), as a choice of the same typed message: on the line under
+        // the words, after `Campaign → Packages`; each press comes back as its repair.
+        use crate::encounters::{MemberFaultView, MemberRepair};
+        use egui_kittest::kittest::Queryable;
+        for view in [
+            MemberFaultView::EncounterList,
+            MemberFaultView::Arrivals { edit_too: false },
+            MemberFaultView::Arrivals { edit_too: true },
+        ] {
+            let edit_too = matches!(view, MemberFaultView::Arrivals { edit_too: true });
+            let fault = super::super::MemberFault::new(
+                super::super::FaultKind::NotInPackages,
+                "Unknown creature · line 13: Not in this campaign’s packages.".into(),
+            );
+            let pressed = std::rc::Rc::new(std::cell::Cell::new(None));
+            let seen = pressed.clone();
+            let mut harness = egui_kittest::Harness::new(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if let Some(repair) = crate::encounters::member_fault_row(ui, &fault, view) {
+                        seen.set(Some(repair));
+                    }
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            assert_eq!(
+                harness.query_by_label("Edit group").is_some(),
+                edit_too,
+                "m-r0-9-edit-too: Edit group shows when Arrivals asks, and only then"
+            );
+            harness.get_by_label("Campaign → Packages").click();
+            harness.run_steps(1);
+            assert_eq!(pressed.get(), Some(MemberRepair::Packages));
+            if edit_too {
+                let packages = harness.get_by_label("Campaign → Packages").rect();
+                let edit = harness.get_by_label("Edit group").rect();
+                assert!(
+                    (edit.center().y - packages.center().y).abs() < 1.0
+                        && edit.left() > packages.right(),
+                    "m-r0-9-edit-too: Edit group follows Packages on its line: {packages:?} {edit:?}"
+                );
+                harness.get_by_label("Edit group").click();
+                harness.run_steps(1);
+                assert_eq!(
+                    pressed.get(),
+                    Some(MemberRepair::EditGroup),
+                    "m-r0-9-edit-too: Edit group opens the group editor"
+                );
+            }
         }
     }
 

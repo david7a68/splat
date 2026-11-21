@@ -10,7 +10,7 @@
 //! Every kind but a copy holds one result at a time: a new act of that kind replaces the older
 //! result, whose order (and ticket) ends with it. Copies are several per file, each owned by the
 //! file it linked and the path it copied. Scope is `()`: a campaign switch hides none of them;
-//! each kind's own end events decide (see `docs/notes/library-results.md` §4).
+//! each kind's own end events decide. See `KeptMark::ENDS` and `forget_changed_undos`.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{DependencyUndo, FileId, IdentityUndo, LetGo, OwnerKey, Scope, SelectionUndo};
 use crate::content_workspace::{ContentEdits, ManifestWrite};
@@ -276,11 +276,11 @@ impl LibraryKept {
     pub(super) fn order_of(&self, kind: KeptKind) -> Option<design::ResultOrder> {
         self.marks
             .get(&KeptOwner::of(kind))
-            .map(|shown| shown.order())
+            .map(|shown| shown.order_for_caller_test())
     }
 
     /// How many marks the store holds, for the tests that no mark outlives its data.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(super) fn marks(&self) -> usize {
         self.marks.newest_first(&()).count()
     }

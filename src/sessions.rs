@@ -1,7 +1,9 @@
 //! Session notes and templates, as plain Markdown in the campaign's own folder, so that
 //! Obsidian can read and edit them too. A note's frontmatter avoids the `splat_` prefix on
 //! purpose: the catalogue treats any such note as a Library entry.
+#[path = "sessions/page.rs"]
 pub mod page;
+#[path = "sessions/slash.rs"]
 mod slash;
 
 use crate::{
@@ -15,70 +17,16 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Instant,
 };
 use uuid::Uuid;
 
-const FOLDER_FIELD: &str = "splat_session_storage";
-pub const DEFAULT_FOLDER: &str = "Sessions";
-pub(crate) const TEMPLATES: &str = "Templates";
-pub(crate) const RECORDINGS: &str = "Recordings";
-const SAVE_AFTER: Duration = Duration::from_secs(2);
-
-/// The folder's name as the manifest gives it.
-pub fn folder_setting(campaign: &Campaign) -> Result<String, String> {
-    let document = CampaignDocument::load(campaign)?;
-    let entry = Entry::parse(&document.path, &document.text)?;
-    match entry
-        .fields
-        .get(FOLDER_FIELD)
-        .and_then(|v| v.get("directory"))
-    {
-        Some(value) => Ok(value
-            .as_str()
-            .ok_or("The session folder must be text.")?
-            .to_owned()),
-        None => Ok(DEFAULT_FOLDER.to_owned()),
-    }
-}
-
-fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err("Enter a session folder.".into());
-    }
-    let path = Path::new(name);
-    if path
-        .components()
-        .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
-        return Err("Session folders cannot contain “..”.".into());
-    }
-    Ok(if path.is_absolute() {
-        path.into()
-    } else {
-        campaign.path.join(path)
-    })
-}
-
-pub fn folder(campaign: &Campaign) -> Result<PathBuf, String> {
-    folder_typed(campaign).map_err(String::from)
-}
-
-/// The campaign's session folder, or why it cannot be used, as a typed fault.
-pub(crate) fn folder_typed(campaign: &Campaign) -> Result<PathBuf, page::FolderFault> {
-    let path = resolve(campaign, &folder_setting(campaign)?)?;
-    let document = CampaignDocument::load(campaign)?;
-    let entry = Entry::parse(&document.path, &document.text)?;
-    if entry.fields.contains_key(FOLDER_FIELD) && !path.is_dir() {
-        return Err(page::FolderFault::Missing(path));
-    }
-    Ok(path)
-}
+#[cfg(any(test, not(feature = "test-support")))]
+const SAVE_AFTER: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// `open_folder_typed` with the fault's words, for the fixtures. The page keeps the fault typed.
-#[cfg(test)]
-pub(crate) fn open_folder(campaign: &Campaign) -> Result<PathBuf, String> {
+#[cfg(any(test, feature = "test-support"))]
+pub fn open_folder(campaign: &Campaign) -> Result<PathBuf, String> {
     open_folder_typed(campaign).map_err(String::from)
 }
 
@@ -115,160 +63,16 @@ fn write_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// The frontmatter block with its fences, and the body after it.
-pub(crate) fn split_note(text: &str) -> Option<(&str, &str)> {
-    let start = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let newline = if start.starts_with("---\r\n") {
-        "\r\n"
-    } else if start.starts_with("---\n") {
-        "\n"
-    } else {
-        return None;
-    };
-    let offset = text.len() - start.len();
-    let close = format!("{newline}---");
-    let mut from = offset + 3 + newline.len();
-    loop {
-        let found = text[from..].find(&close)? + from;
-        let after = found + close.len();
-        let rest = &text[after..];
-        if rest.is_empty() {
-            return Some((&text[..after], ""));
-        }
-        if let Some(body) = rest.strip_prefix(newline) {
-            return Some((&text[..after + newline.len()], body));
-        }
-        from = after;
-    }
-}
+use splat_campaign::note::first_number;
+pub use splat_content_ui::session_notes::*;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Note {
-    pub id: Uuid,
-    pub number: u32,
-    pub title: String,
-    pub date: String,
-    pub path: PathBuf,
-    /// Other files that claim this session, such as a sync conflict's copy.
-    pub also: Vec<PathBuf>,
-}
-
-impl Note {
-    /// `Session 12`, then the title if it has one.
-    pub fn label(&self) -> String {
-        let mut label = format!("Session {}", self.number);
-        if !self.title.trim().is_empty() {
-            label.push_str(": ");
-            label.push_str(self.title.trim());
-        }
-        label
-    }
-
-    /// The name a link in Obsidian uses.
-    pub fn link(&self) -> String {
-        self.path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    }
-}
-
-/// The YAML inside a note's properties block, without its fences.
-pub(crate) fn properties_yaml(text: &str) -> Option<&str> {
-    let (front, _) = split_note(text)?;
-    Some(
-        front
-            .trim_start_matches('\u{feff}')
-            .trim_end()
-            .strip_suffix("---")?
-            .trim_start_matches("---"),
-    )
-}
-
-fn parse_note(path: &Path, text: &str) -> Option<Note> {
-    let value: Value = serde_yaml_ng::from_str(properties_yaml(text)?).ok()?;
-    let id = Uuid::parse_str(value.get("session_id")?.as_str()?).ok()?;
-    let text_of = |name: &str| match value.get(name) {
-        Some(Value::String(text)) => text.clone(),
-        Some(Value::Number(number)) => number.to_string(),
-        _ => String::new(),
-    };
-    Some(Note {
-        id,
-        number: value
-            .get("session_number")
-            .and_then(Value::as_u64)
-            .and_then(|n| u32::try_from(n).ok())
-            .unwrap_or(0),
-        title: text_of("session_title"),
-        date: text_of("session_date"),
-        path: path.to_owned(),
-        also: Vec::new(),
-    })
-}
-
-/// Every note in the folder, newest first. Other Markdown files there are not sessions.
-pub fn list_notes(folder: &Path) -> Vec<Note> {
-    let mut notes: Vec<Note> = note_paths(folder)
-        .into_iter()
-        .filter_map(|path| parse_note(&path, &fs::read_to_string(&path).ok()?))
-        .collect();
-    // The plainest name first, so that a copy such as `Session 12 (conflict).md` never wins.
-    let known = known_notes(folder);
-    notes.sort_by_key(|note| {
-        (
-            known
-                .get(&note.id)
-                .is_none_or(|path| folder.join(path) != note.path),
-            note.path.as_os_str().len(),
-            note.path.clone(),
-        )
-    });
-    let mut unique: Vec<Note> = Vec::new();
-    for note in notes {
-        match unique.iter_mut().find(|kept| kept.id == note.id) {
-            Some(kept) => kept.also.push(note.path),
-            None => unique.push(note),
-        }
-    }
-    unique.sort_by(|a, b| {
-        b.number
-            .cmp(&a.number)
-            .then_with(|| b.date.cmp(&a.date))
-            .then_with(|| a.path.cmp(&b.path))
-    });
-    unique
-}
-
-fn note_paths(folder: &Path) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-    for file in fs::read_dir(folder).into_iter().flatten().flatten() {
-        let path = file.path();
-        let name = file.file_name();
-        if name.to_string_lossy().starts_with('.') || name == TEMPLATES || name == RECORDINGS {
-            continue;
-        }
-        let Ok(kind) = file.file_type() else {
-            continue;
-        };
-        if kind.is_dir() {
-            paths.extend(note_paths(&path));
-        } else if kind.is_file() && path.extension().is_some_and(|ext| ext == "md") {
-            paths.push(path);
-        }
-    }
-    paths
-}
-
-const NOTE_PATHS: &str = ".splat-session-paths.json";
-
-pub(crate) struct IdentityUndo {
+pub struct IdentityUndo {
     path: PathBuf,
     before: String,
     after: String,
 }
 
-pub(crate) fn new_identity(path: &Path) -> Result<IdentityUndo, String> {
+pub fn new_identity(path: &Path) -> Result<IdentityUndo, String> {
     let before = fs::read_to_string(path).map_err(|error| not_read(&error))?;
     let after = patch_fields(
         &before,
@@ -290,7 +94,7 @@ pub(crate) fn new_identity(path: &Path) -> Result<IdentityUndo, String> {
 
 impl IdentityUndo {
     /// The copy's file name, which its result names.
-    pub(crate) fn file_name(&self) -> String {
+    pub fn file_name(&self) -> String {
         self.path
             .file_name()
             .unwrap_or_default()
@@ -304,13 +108,6 @@ impl IdentityUndo {
         }
         replace_file_io(&self.path, &self.before).map_err(|error| not_saved(&error))
     }
-}
-
-fn known_notes(folder: &Path) -> std::collections::BTreeMap<Uuid, PathBuf> {
-    fs::read(folder.join(NOTE_PATHS))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
 }
 
 pub(crate) fn remember_notes(folder: &Path, notes: &[Note]) -> Result<(), String> {
@@ -351,21 +148,6 @@ pub fn unreadable_notes(folder: &Path) -> Vec<String> {
 /// Whether a file's words claim a session whose properties cannot be read.
 fn unreadable_note(path: &Path, text: &str) -> bool {
     text.lines().any(|line| line.starts_with("session_id:")) && parse_note(path, text).is_none()
-}
-
-/// What a file name cannot hold, in any common file system.
-pub(crate) fn file_safe(text: &str) -> String {
-    text.chars()
-        .filter(|c| {
-            !matches!(
-                c,
-                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '#' | '^' | '[' | ']'
-            )
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 fn free_path(folder: &Path, stem: &str, extension: &str) -> PathBuf {
@@ -422,7 +204,7 @@ fn session_heading(number: u32, title: &str) -> String {
     }
 }
 
-pub(crate) fn note_path(folder: &Path, number: u32, title: &str) -> PathBuf {
+pub fn note_path(folder: &Path, number: u32, title: &str) -> PathBuf {
     let mut stem = format!("Session {number}");
     let title = file_safe(title);
     if !title.is_empty() {
@@ -432,15 +214,15 @@ pub(crate) fn note_path(folder: &Path, number: u32, title: &str) -> PathBuf {
     free_path(folder, &stem, "md")
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Scans of a session folder by `storage_files`, counted inside the scan.
     static STORAGE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How often `storage_files` scanned a folder on this thread.
-#[cfg(test)]
-pub(crate) fn storage_scans() -> usize {
+#[cfg(any(test, feature = "test-support"))]
+pub fn storage_scans() -> usize {
     STORAGE_SCANS.with(std::cell::Cell::get)
 }
 
@@ -454,17 +236,17 @@ fn scan_fault(path: &Path, error: &std::io::Error) -> String {
     )
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// A test's refused scan: reading the session folder fails with this system error code.
     pub(crate) static FAILING_SCAN: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
 }
 
 /// Files owned by session storage. Other campaign notes stay where they are.
-pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
-    #[cfg(test)]
+pub fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
+    #[cfg(any(test, feature = "test-support"))]
     STORAGE_SCANS.with(|scans| scans.set(scans.get() + 1));
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if let Some(code) = FAILING_SCAN.with(std::cell::Cell::get) {
         return Err(scan_fault(folder, &std::io::Error::from_raw_os_error(code)));
     }
@@ -531,7 +313,7 @@ pub(crate) struct StorageCounts {
 }
 
 impl StorageCounts {
-    pub(crate) fn of(folder: &Path, files: &[PathBuf]) -> Self {
+    pub fn of(folder: &Path, files: &[PathBuf]) -> Self {
         let templates = folder.join(TEMPLATES);
         let recordings = folder.join(RECORDINGS);
         let kept = [folder.join("Timeline.md"), folder.join(NOTE_PATHS)];
@@ -628,33 +410,6 @@ pub(crate) fn move_storage(
     Ok((new, moved))
 }
 
-/// Moves `source` to `target` in one step, and never replaces a file at `target`: Linux's
-/// `RENAME_NOREPLACE` refuses with `AlreadyExists`, even for a file that arrives at the last
-/// moment. Moves across file systems fail with `EXDEV`.
-#[cfg(target_os = "linux")]
-pub(crate) fn rename_no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
-    use std::os::unix::ffi::OsStrExt;
-    let from =
-        std::ffi::CString::new(source.as_os_str().as_bytes()).map_err(std::io::Error::other)?;
-    let to =
-        std::ffi::CString::new(target.as_os_str().as_bytes()).map_err(std::io::Error::other)?;
-    // Both paths are valid C strings.
-    if unsafe {
-        libc::renameat2(
-            libc::AT_FDCWD,
-            from.as_ptr(),
-            libc::AT_FDCWD,
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    } == 0
-    {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
 /// Why a file did not move, and where it is now (round 30 B7e): the step that failed, both
 /// paths, and the system's error, whose words never reach the DM. [`TransferFault::words`]
 /// says where the file is and what the DM does next, in plain words from the error's kind
@@ -692,7 +447,7 @@ pub(crate) enum TransferFault {
 impl TransferFault {
     /// What happened and where the file is now. `back` for the return of a file that a
     /// refused storage move had already moved.
-    pub(crate) fn words(&self, back: bool) -> String {
+    pub fn words(&self, back: bool) -> String {
         use crate::world::file_fault::FileFault;
         let name = |path: &Path| {
             path.file_name()
@@ -950,7 +705,7 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
 /// A new file, never replacing one, with the system error kept, so the caller can say what
 /// happened in plain words (`not_created`).
 fn write_new_io(path: &Path, text: &str) -> std::io::Result<()> {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if let Some(code) = FAILING_WRITES.with(std::cell::Cell::get) {
         return Err(std::io::Error::from_raw_os_error(code));
     }
@@ -1027,7 +782,7 @@ pub(crate) fn replace_file(path: &Path, text: &str) -> Result<(), String> {
 /// `replace_file` with the system error kept, so a note's save can say what happened in plain
 /// words (`not_saved`).
 fn replace_file_io(path: &Path, text: &str) -> std::io::Result<()> {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if let Some(code) = FAILING_WRITES.with(std::cell::Cell::get) {
         return Err(std::io::Error::from_raw_os_error(code));
     }
@@ -1041,17 +796,7 @@ fn replace_file_io(path: &Path, text: &str) -> std::io::Result<()> {
     sync_folder_io(parent)
 }
 
-pub(crate) fn sync_folder(path: &Path) -> Result<(), String> {
-    sync_folder_io(path).map_err(|e| e.to_string())
-}
-
-fn sync_folder_io(path: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
-    fs::File::open(path).and_then(|file| file.sync_all())?;
-    #[cfg(not(unix))]
-    let _ = path;
-    Ok(())
-}
+use splat_campaign::file_batch::sync_folder as sync_folder_io;
 
 /// Round 30 B7d: a note's failed save in plain words from the error's KIND, never the system's
 /// words: `Not saved.`, the cause and the recovery of the World page's file faults
@@ -1074,7 +819,7 @@ fn not_read(error: &std::io::Error) -> String {
     format!("Not saved. {}. {}", fault.cause(), fault.recovery())
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// A test's failing disk for the write helpers (`replace_file_io`, `write_new_io`): each
     /// fails with this system error code before anything is written.
@@ -1277,15 +1022,15 @@ pub(crate) fn not_deleted(path: &Path, error: &std::io::Error) -> String {
     format!("Not deleted. {what} {}", fault.recovery())
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// A test's refused removals: removing a file that exists fails with this system error code.
     pub(crate) static FAILING_REMOVES: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
 }
 
 /// Remove a file, with the system's error kept for `not_deleted`.
-pub(crate) fn remove_file(path: &Path) -> std::io::Result<()> {
-    #[cfg(test)]
+pub fn remove_file(path: &Path) -> std::io::Result<()> {
+    #[cfg(any(test, feature = "test-support"))]
     if let Some(code) = FAILING_REMOVES.with(std::cell::Cell::get)
         && path.exists()
     {
@@ -1451,53 +1196,6 @@ pub fn section_text(body: &str, heading: &str) -> Option<String> {
     (!words.is_empty()).then(|| words.to_owned())
 }
 
-/// Every name in a note's `[[links]]`, in order, without timeline references. A name linked
-/// twice comes twice: a plan can hold the same fight again.
-pub fn each_linked_name(text: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    let mut rest = text;
-    while let Some(start) = rest.find("[[") {
-        rest = &rest[start + 2..];
-        let Some(end) = rest.find("]]") else {
-            break;
-        };
-        let inner = &rest[..end];
-        let name = inner.split('|').next().unwrap_or(inner).trim();
-        if !name.is_empty() && !name.starts_with("Timeline#") {
-            names.push(name.to_owned());
-        }
-        rest = &rest[end + 2..];
-    }
-    names
-}
-
-/// The names in a note's `[[links]]`, once each.
-pub fn linked_names(text: &str) -> Vec<String> {
-    let mut names = each_linked_name(text);
-    let mut seen = std::collections::BTreeSet::new();
-    names.retain(|name| seen.insert(name.clone()));
-    names
-}
-
-/// A note's `[[links]]` as the words a reader expects, not as markup.
-pub fn plain_links(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(start) = rest.find("[[") {
-        out.push_str(&rest[..start]);
-        rest = &rest[start + 2..];
-        let Some(end) = rest.find("]]") else {
-            out.push_str("[[");
-            break;
-        };
-        let inner = &rest[..end];
-        out.push_str(inner.rsplit('|').next().unwrap_or(inner).trim());
-        rest = &rest[end + 2..];
-    }
-    out.push_str(rest);
-    out
-}
-
 /// Add a line to a note's plan: under `Plan for tonight`, or where other words go.
 pub fn insert_in_plan(body: &mut String, words: &str) {
     const PLAN: &str = "## Plan for tonight";
@@ -1584,36 +1282,6 @@ pub fn plan_lines(body: &str) -> Vec<PlanLine> {
             None => PlanLine::Links(each_linked_name(line)),
         })
         .collect()
-}
-
-/// The note's words with one line replaced, or taken out with `None`. The line is the one at
-/// `at` that the act was drawn from, and it must still hold `line` exactly. `None` comes back
-/// when that place holds other words: the act never looks for another line that reads the same.
-pub fn change_line(body: &str, at: usize, line: &str, new: Option<&str>) -> Option<String> {
-    let lines: Vec<&str> = body.split_inclusive('\n').collect();
-    if lines.get(at)?.trim_end_matches(['\n', '\r']) != line {
-        return None;
-    }
-    let mut out = String::with_capacity(body.len());
-    for (index, text) in lines.iter().enumerate() {
-        if index != at {
-            out.push_str(text);
-        } else if let Some(new) = new {
-            out.push_str(new);
-            out.push_str(&text[line.len()..]);
-        }
-    }
-    Some(out)
-}
-
-/// The same task line, ticked or not: one character changes.
-pub fn ticked(line: &str, done: bool) -> String {
-    let at = line.find('[').map_or(0, |at| at + 1);
-    let mut out = line.to_owned();
-    if at > 0 && at < line.len() {
-        out.replace_range(at..at + 1, if done { "x" } else { " " });
-    }
-    out
 }
 
 /// A scene's line at the end of the plan. A note with no plan gets the heading at its end.
@@ -1755,8 +1423,6 @@ pub struct Draft {
     pub restored: Option<Uuid>,
     /// The words the DM chose to lose, and how, until the next edit.
     pub dropped: Option<Dropped>,
-    /// When the drop's result was made (`timeline::next_result_order`).
-    pub dropped_order: crate::design::ResultOrder,
     /// The file's text when the words were dropped. If the draft has followed the file since,
     /// Undo meets the conflict choice instead of saving over the newer text.
     dropped_baseline: Option<String>,
@@ -1768,7 +1434,7 @@ pub struct Draft {
     revision: u64,
     /// A test's failing disk: each write fails with this system error code (28 is a full disk),
     /// before anything is written or the baseline moves.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) failing_write: Option<i32>,
 }
 
@@ -1808,19 +1474,18 @@ impl Draft {
             moved_to: None,
             restored: None,
             dropped: None,
-            dropped_order: crate::design::ResultOrder::default(),
             dropped_baseline: None,
             save_again_error: None,
             last_edit: None,
             revision: next_revision(),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             failing_write: None,
         })
     }
 
     /// The file's words as this draft last read or wrote them.
-    #[cfg(test)]
-    pub(crate) fn baseline(&self) -> Option<&str> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn baseline(&self) -> Option<&str> {
         self.baseline.as_deref()
     }
 
@@ -1872,6 +1537,7 @@ impl Draft {
         )
     }
 
+    #[cfg(any(test, not(feature = "test-support")))]
     fn due_at(&self, now: Instant) -> bool {
         self.state == DraftState::Unsaved
             && self
@@ -1911,12 +1577,12 @@ impl Draft {
 
     fn write(&mut self) {
         let text = format!("{}{}", self.prefix, self.body);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         let written = match self.failing_write {
             Some(code) => Err(std::io::Error::from_raw_os_error(code)),
             None => replace_file_io(&self.path, &text),
         };
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test-support")))]
         let written = replace_file_io(&self.path, &text);
         match written {
             Ok(()) => {
@@ -2025,7 +1691,6 @@ impl Draft {
             }
         }
         self.dropped = Some(Dropped::Discarded(words));
-        self.dropped_order = crate::timeline::next_result_order();
         self.dropped_baseline.clone_from(&self.baseline);
     }
 
@@ -2053,7 +1718,6 @@ impl Draft {
         let words = self.body.clone();
         self.reload()?;
         self.dropped = Some(Dropped::Reloaded(words));
-        self.dropped_order = crate::timeline::next_result_order();
         self.dropped_baseline.clone_from(&self.baseline);
         Ok(())
     }
@@ -2485,17 +2149,6 @@ pub fn earlier_notes(folder: &Path, session: Uuid) -> Vec<Option<String>> {
                 .map(|text| body_of(&text).to_owned())
         }))
         .collect()
-}
-
-/// The first number of an XP line: `XP 1,250 for 3 at 0 HP` is 1,250.
-pub fn first_number(words: &str) -> Option<u64> {
-    let start = words.find(|c: char| c.is_ascii_digit())?;
-    let digits: String = words[start..]
-        .chars()
-        .take_while(|c| c.is_ascii_digit() || *c == ',')
-        .filter(char::is_ascii_digit)
-        .collect();
-    digits.parse().ok()
 }
 
 /// The session's XP as the note stands: the first number of each block's XP line, and how many

@@ -1,6 +1,9 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
-use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_numbers, reference};
+use super::{
+    Book, Event, EventDisplay, Kind, checks, clock, clock_now, clock_words, day_numbers, kind_icon,
+    reference,
+};
 use crate::design::{
     self, Action, Density, Status, Tone, Type, colors, icons,
     outcome::{
@@ -80,7 +83,7 @@ impl Default for FilterKey {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times this thread worked out a list view: the test counts the work itself.
     static VIEWS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -88,7 +91,7 @@ thread_local! {
 
 impl ListView {
     fn make(book: &Book, (filter, search, session): &(Filter, String, Option<Uuid>)) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         VIEWS_MADE.with(|made| made.set(made.get() + 1));
         let days = day_numbers(&book.events);
         let rows = (0..book.events.len())
@@ -96,8 +99,7 @@ impl ListView {
             .collect();
         Self {
             flagged: book
-                .baseline
-                .as_deref()
+                .baseline()
                 .and_then(|bytes| std::str::from_utf8(bytes).ok())
                 .map(super::formats::flagged_days)
                 .unwrap_or_default()
@@ -148,7 +150,7 @@ pub struct PlanNames {
 
 impl PlanNames {
     pub fn new(revision: Option<Uuid>, fights: Vec<String>, groups: Vec<String>) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PLAN_NAMES_MADE.with(|made| made.set(made.get() + 1));
         Self {
             revision,
@@ -158,7 +160,7 @@ impl PlanNames {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times the plan's names were copied from the encounters (row 123, point 4).
     pub static PLAN_NAMES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -168,14 +170,7 @@ thread_local! {
     pub static PLAN_LINE_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// A session, as the timeline knows it.
-#[derive(Clone, Debug)]
-pub struct SessionLink {
-    pub id: Uuid,
-    pub label: String,
-    /// The events its note links to.
-    pub mentions: Vec<String>,
-}
+pub use super::SessionLink;
 
 #[derive(Default)]
 pub struct TimelinePage {
@@ -228,7 +223,7 @@ pub struct TimelinePage {
     /// The DM asked to read this location.
     pub open_place: Option<Uuid>,
     /// The campaign's marked tables, for a journey's encounter checks.
-    pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
+    pub tables: Option<std::sync::Arc<splat_campaign::loot::Sources>>,
     /// Row 123: the campaign's fights and groups by name, for a check result's plan offer.
     pub plan_names: PlanNames,
     focus_length: bool,
@@ -272,7 +267,7 @@ pub fn quick_add_with(
         .zip(&names)
         .map(|(kind, name)| {
             Action::quiet(kind.word())
-                .icon(kind.icon())
+                .icon(kind_icon(*kind))
                 .name(name)
                 .density(Density::Read)
                 .blocked_if(blocked, "The timeline file must be repaired first.")
@@ -554,7 +549,7 @@ pub fn file_messages<'f, A: 'static>(
     // file`) under the last; then a second timeline file with its own line. They are footer
     // messages, so they stay in view over long content and move no row (PR 340's rule), in the
     // footer's height-limited region, which scrolls when they fill it.
-    let folder = book.path.as_deref().and_then(std::path::Path::parent);
+    let folder = book.path().and_then(std::path::Path::parent);
     for (at, flag) in book.flags.iter().enumerate() {
         let fault = FaultMessage::new(&FileFault::Flag(as_sentence(&flag_words(flag))));
         messages.outcome(match folder {
@@ -642,7 +637,7 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
                 Ok((draft, disk)) => {
                     let face = egui::TextStyle::Monospace.resolve(ui.style());
                     let height = ui.fonts_mut(|fonts| fonts.row_height(&face));
-                    let id = ("timeline_conflict", &book.path, &disk);
+                    let id = ("timeline_conflict", book.path(), &disk);
                     design::draft_comparison_styled(ui, &draft, &disk, id, face, height);
                 }
                 Err(error) => {
@@ -820,7 +815,7 @@ impl TimelinePage {
 
     /// Tests: a reveal left pending by a roll in `journey` at `at`, as when the DM leaves that
     /// journey before its next draw.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_pending_reveal(&mut self, journey: &str, at: u64) {
         self.reveal_checks = Some((journey.to_owned(), at));
     }
@@ -915,7 +910,7 @@ impl TimelinePage {
             painter.text(
                 egui::pos2(spine, icon_y),
                 egui::Align2::CENTER_CENTER,
-                event.kind.icon(),
+                kind_icon(event.kind),
                 Type::Name.font(ui),
                 if event.kind == Kind::Day {
                     c.text
@@ -2026,7 +2021,7 @@ fn short_session(label: &str) -> &str {
 }
 
 #[cfg(test)]
-pub fn check_long_rest_add(kinds: &'static [Kind]) {
+pub(crate) fn check_long_rest_add(kinds: &'static [Kind]) {
     use egui_kittest::kittest::Queryable;
     let session = Some(Uuid::new_v4());
     let mut harness = egui_kittest::Harness::builder().build_state(
@@ -2087,9 +2082,9 @@ fn second_line(
 
 fn header_kind(event: &Event) -> String {
     if event.kind == Kind::Day || event.own_title().is_none() {
-        event.kind.icon().to_owned()
+        kind_icon(event.kind).to_owned()
     } else {
-        format!("{} {}", event.kind.icon(), event.kind.word())
+        format!("{} {}", kind_icon(event.kind), event.kind.word())
     }
 }
 

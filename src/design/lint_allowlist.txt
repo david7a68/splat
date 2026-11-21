@@ -31,15 +31,13 @@ src/world.rs allow-deprecated 1
 src/world/page.rs allow-deprecated 1
 # Phrases outside their owner: the stat block's printed XP (core) is the creature's, not an
 # encounter's; the others move to their owner in Wave 2.
-crates/core/src/content/stat_blocks.rs phrase-owner 2
+crates/content/src/content/stat_blocks.rs phrase-owner 2
 src/campaign_content.rs phrase-owner 1
-src/encounter_run.rs phrase-owner 2
-src/encounter_run/loot.rs phrase-owner 2
+src/content_ui/src/roster.rs phrase-owner 2
+src/session_records/src/rewards.rs phrase-owner 2
 src/sessions/plan.rs phrase-owner 1
 # A close icon named by hand (round 28, package X, N6). Wave 2 moves each to
 # `MessageChoice::Dismiss`, which names it and centres it on the message's first line.
-src/encounter_run/notice.rs phrase-owner 1
-src/encounter_run/view.rs phrase-owner 1
 # A layer built by hand (`LayerId { order: … }`, `Order::…`), which Clippy's method list cannot see
 # (package K). Wave 2 moves the drag ghost to a design part.
 # M5 (round 30, lead's ruling 3 on B5): the run's old ways to cut words, `.truncate()`, the old
@@ -57,5 +55,5 @@ src/encounter_run/notice.rs heading-owner 1
 # moves them. The run's `turn_reminders` builds `Reminders for <name>: a · b` (lane R0). World's
 # `line` builds `<label>: <cells>` as a line's search words, not drawn (lane W0 decides).
 src/encounter_run/notice.rs fact-owner 1
-src/party.rs fact-owner 3
+src/party_support/sheets.rs fact-owner 3
 src/world/lines.rs fact-owner 1

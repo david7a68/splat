@@ -12,16 +12,16 @@ trait Vault: Send {
     fn forget(&self) -> Result<(), String>;
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 struct DesktopVault;
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 fn entry() -> Result<keyring::Entry, String> {
     keyring::Entry::new("splat", "dndbeyond-session")
         .map_err(|_| "The desktop keyring is unavailable.".into())
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 impl Vault for DesktopVault {
     fn load(&self) -> Result<Option<Zeroizing<String>>, String> {
         match entry()?.get_password() {
@@ -49,10 +49,10 @@ impl Vault for DesktopVault {
 }
 
 // Test builds have no route to the desktop keyring: nothing to load, nothing saved.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 struct DesktopVault;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl Vault for DesktopVault {
     fn load(&self) -> Result<Option<Zeroizing<String>>, String> {
         Ok(None)
@@ -74,7 +74,7 @@ pub enum KeySlot {
     Llm,
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 impl KeySlot {
     fn entry(self) -> Result<keyring::Entry, String> {
         let name = match self {
@@ -85,7 +85,7 @@ impl KeySlot {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn load_key(slot: KeySlot) -> Result<Option<Zeroizing<String>>, String> {
     match slot.entry()?.get_password() {
         Ok(key) => Ok(Some(Zeroizing::new(key))),
@@ -94,14 +94,14 @@ pub fn load_key(slot: KeySlot) -> Result<Option<Zeroizing<String>>, String> {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn save_key(slot: KeySlot, key: &str) -> Result<(), String> {
     slot.entry()?
         .set_password(key)
         .map_err(|_| "The key could not be saved in the desktop keyring.".into())
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn forget_key(slot: KeySlot) -> Result<(), String> {
     match slot.entry()?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -110,17 +110,17 @@ pub fn forget_key(slot: KeySlot) -> Result<(), String> {
 }
 
 // Test builds have no route to the desktop keyring.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn load_key(_: KeySlot) -> Result<Option<Zeroizing<String>>, String> {
     Ok(None)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn save_key(_: KeySlot, _: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn forget_key(_: KeySlot) -> Result<(), String> {
     Ok(())
 }
@@ -192,7 +192,7 @@ fn perform(vault: &dyn Vault, action: Action) -> Result<Outcome, String> {
 }
 
 impl Worker {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn test_channels() -> (Self, Receiver<(u64, Action)>, Sender<Reply>) {
         let (tx, commands) = mpsc::channel();
         let (results, rx) = mpsc::channel();

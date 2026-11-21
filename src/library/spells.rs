@@ -3,7 +3,7 @@
 //! spell with neither opens its description.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{presentation, reader, view::Links};
-use crate::rolls::Chip;
+use crate::rolls::{Chip, SpellOccurrence};
 use splat::content::{
     Entry, Reference,
     spell_rolls::{Caster, spell_roll},
@@ -23,6 +23,10 @@ pub(crate) struct SpellTile {
     pub text: String,
     /// What it rolls when this creature casts it.
     pub chip: Option<Chip>,
+    /// Its place in the creature's complete action order, when it was resolved from the body.
+    pub place: Option<usize>,
+    /// The printed item, including any preceding items that could not be resolved.
+    item: usize,
 }
 
 /// One line of a Spellcasting list: its label and its spells.
@@ -262,7 +266,14 @@ fn facts(spell: &Entry, cast: Option<u32>, chip: Option<&Chip>, text: &str) -> S
 
 /// One spell's tile: its facts, its rules text, and what it rolls when this caster casts it
 /// at `cast`. Built only when an entry is resolved, which its links' cache keeps.
-fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caster) -> SpellTile {
+fn tile(
+    name: &str,
+    open: usize,
+    spell: &Entry,
+    cast: Option<u32>,
+    caster: Caster,
+    item: usize,
+) -> SpellTile {
     let text = rules_text(spell);
     let level = spell_level(spell);
     let cast = cast.or(level);
@@ -281,6 +292,8 @@ fn tile(name: &str, open: usize, spell: &Entry, cast: Option<u32>, caster: Caste
         facts,
         text,
         chip,
+        place: None,
+        item,
     }
 }
 
@@ -292,6 +305,7 @@ fn without_concentration(facts: &str) -> String {
 /// One list item's spell tile, found by the entry's own references first, then by name:
 /// `Err` with the name when no spell has it, `None` for an empty item.
 fn item_tile(
+    position: usize,
     item: &str,
     caster: Caster,
     references: &[Option<(usize, String)>],
@@ -324,7 +338,7 @@ fn item_tile(
     let Some((open, spell)) = found.and_then(|(open, _)| Some((open, links.entry(open)?))) else {
         return Some(Err(name.to_owned()));
     };
-    let mut spell = tile(name, open, spell, cast, caster);
+    let mut spell = tile(name, open, spell, cast, caster, position);
     // The list may waive it: `Shapechange (... no Concentration ... required)`.
     if item.to_lowercase().contains("no concentration") {
         spell.facts = without_concentration(&spell.facts);
@@ -346,8 +360,8 @@ pub(crate) fn line(
     let (label, spells) = line.split_once(':')?;
     let mut tiles = Vec::new();
     let mut missing = Vec::new();
-    for item in list_items(spells) {
-        match item_tile(item, caster, references, links) {
+    for (position, item) in list_items(spells).into_iter().enumerate() {
+        match item_tile(position, item, caster, references, links) {
             Some(Ok(spell)) => tiles.push(spell),
             Some(Err(name)) => missing.push(name),
             None => {}
@@ -431,7 +445,8 @@ pub(crate) fn cast_line(
     };
     let tiles: Vec<SpellTile> = names
         .into_iter()
-        .filter_map(|item| item_tile(item, caster, references, links)?.ok())
+        .enumerate()
+        .filter_map(|(position, item)| item_tile(position, item, caster, references, links)?.ok())
         .collect();
     (!tiles.is_empty()).then(|| SpellLine {
         label: String::new(),
@@ -479,18 +494,18 @@ pub(crate) fn groups(body: &str) -> Vec<(&str, Vec<&str>)> {
 /// printed order. In a run they follow the stat block's own actions, in the panel, on the
 /// action bar and by Ctrl+number.
 #[derive(Default)]
-pub(crate) struct Resolved {
+pub struct Resolved {
     /// The entry's spells, each with the entry it opens, or `None` when it is missing.
     pub references: Vec<Option<(usize, String)>>,
     /// Each list line, trimmed, with its tiles.
-    lines: Vec<(String, SpellLine)>,
+    lines: Vec<(String, Caster, SpellLine)>,
     /// Each paragraph that casts spells by name, by its words, with its tiles, or `None` when
     /// it names no spell that can be found.
     casts: Vec<(String, Option<SpellLine>)>,
     /// Each Spellcasting paragraph with its lists, as the reader joins them, with the spells
     /// their words name, for the line of spells that no list shows.
     named: Vec<(String, Vec<(usize, String)>)>,
-    pub rolls: Vec<Chip>,
+    rolls: Vec<Chip>,
 }
 
 /// Text as its words alone, so the reader's text and the body's compare equal: the reader
@@ -503,13 +518,16 @@ fn words(text: &str) -> String {
 }
 
 impl Resolved {
-    /// The tiles of a list line, as its paragraph prints it.
-    pub(crate) fn line(&self, text: &str) -> Option<&SpellLine> {
+    /// The next occurrence of a list line. The reader presents the source in order and may
+    /// omit sections. Identical lines in separate lists still have separate positions.
+    pub(crate) fn line(&self, text: &str, caster: Caster, next: &mut usize) -> Option<&SpellLine> {
         let text = words(text);
-        self.lines
-            .iter()
-            .find(|(line, _)| *line == text)
-            .map(|(_, line)| line)
+        let at = *next
+            + self.lines[*next..]
+                .iter()
+                .position(|(line, numbers, _)| *line == text && *numbers == caster)?;
+        *next = at + 1;
+        Some(&self.lines[at].2)
     }
 
     /// The spells that a Spellcasting paragraph and its lists name, by their joined words.
@@ -523,12 +541,28 @@ impl Resolved {
 
     /// What a paragraph that casts spells by name resolved to: `Some(None)` when it names no
     /// spell that can be found, `None` when the paragraph was not resolved.
-    pub(crate) fn cast(&self, paragraph: &str) -> Option<Option<&SpellLine>> {
+    pub(crate) fn cast(&self, paragraph: &str, next: &mut usize) -> Option<Option<&SpellLine>> {
         let paragraph = words(paragraph);
-        self.casts
-            .iter()
-            .find(|(text, _)| *text == paragraph)
-            .map(|(_, line)| line.as_ref())
+        let at = *next
+            + self.casts[*next..]
+                .iter()
+                .position(|(text, _)| *text == paragraph)?;
+        *next = at + 1;
+        Some(self.casts[at].1.as_ref())
+    }
+
+    fn number(&mut self, spells: &mut SpellLine, paragraph: usize, line: usize) {
+        for tile in &mut spells.tiles {
+            if let Some(chip) = &mut tile.chip {
+                tile.place = Some(self.rolls.len());
+                chip.spell_occurrence = Some(SpellOccurrence {
+                    paragraph,
+                    line,
+                    item: tile.item,
+                });
+                self.rolls.push(chip.clone());
+            }
+        }
     }
 }
 
@@ -538,7 +572,7 @@ impl Resolved {
 /// is found again by all that resolving it reads: its id, its text and its fields (the
 /// save DC and the spells its data gives), so a changed draft resolves again.
 #[derive(Default)]
-pub(crate) struct SpellCache(std::sync::Mutex<Vec<(Kept, Arc<Resolved>)>>);
+pub struct SpellCache(std::sync::Mutex<Vec<(Kept, Arc<Resolved>)>>);
 
 /// What a resolved entry is known by.
 struct Kept {
@@ -597,7 +631,7 @@ impl SpellCache {
 
 /// An entry's Spellcasting, resolved once and kept by the links' cache, so an unchanged frame
 /// looks nothing up. Links with no cache resolve it on each call.
-pub(crate) fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
+pub fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
     let Some(cache) = links.spell_cache() else {
         return Arc::new(build(entry, links));
     };
@@ -612,6 +646,7 @@ pub(crate) fn resolve(entry: &Entry, links: &dyn Links) -> Arc<Resolved> {
 fn build(entry: &Entry, links: &dyn Links) -> Resolved {
     let mut resolved = Resolved {
         references: references(entry, links),
+        rolls: crate::rolls::chips(&entry.body),
         ..Resolved::default()
     };
     // The numbers of the Spellcasting paragraph whose lists come next, if any, and its words
@@ -625,12 +660,10 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
             group.clear();
         }
     };
-    for paragraph in entry
-        .body
-        .split("\n\n")
-        .map(str::trim)
-        .filter(|p| !p.is_empty())
-    {
+    for (at, paragraph) in entry.body.split("\n\n").map(str::trim).enumerate() {
+        if paragraph.is_empty() {
+            continue;
+        }
         if spellcasting(paragraph) {
             end_group(&mut group, &mut resolved);
             lists = Some(caster(entry, paragraph));
@@ -642,12 +675,10 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
                 continue;
             }
             if paragraph.lines().all(list_line) {
-                for text in paragraph.lines() {
-                    if let Some(found) = line(text, caster, &resolved.references, links) {
-                        resolved
-                            .rolls
-                            .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
-                        resolved.lines.push((words(text), found));
+                for (row, text) in paragraph.lines().enumerate() {
+                    if let Some(mut found) = line(text, caster, &resolved.references, links) {
+                        resolved.number(&mut found, at, row);
+                        resolved.lines.push((words(text), caster, found));
                     }
                 }
                 group.push_str("\n\n");
@@ -660,11 +691,9 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
         // A paragraph that casts by name is kept also when no spell it names is found, so
         // the reader does not look again.
         if cast_names(paragraph).is_some() {
-            let found = cast_line(entry, paragraph, &resolved.references, links);
-            if let Some(found) = &found {
-                resolved
-                    .rolls
-                    .extend(found.tiles.iter().filter_map(|tile| tile.chip.clone()));
+            let mut found = cast_line(entry, paragraph, &resolved.references, links);
+            if let Some(found) = &mut found {
+                resolved.number(found, at, 0);
             }
             resolved.casts.push((words(paragraph), found));
         }
@@ -673,9 +702,13 @@ fn build(entry: &Entry, links: &dyn Links) -> Resolved {
     resolved
 }
 
-/// The spells an entry's lists and its paragraphs name that roll, in printed order.
-pub(crate) fn rolls(entry: &Entry, links: &dyn Links) -> Vec<Chip> {
-    resolve(entry, links).rolls.clone()
+/// A creature's action tiles in Run order. Its own actions come first, then each rolling spell
+/// occurrence. Only the creature's own actions are available without a content index.
+pub fn ordered_actions(entry: &Entry, links: Option<&dyn Links>) -> Vec<Chip> {
+    links.map_or_else(
+        || crate::rolls::chips(&entry.body),
+        |links| resolve(entry, links).rolls.clone(),
+    )
 }
 
 #[cfg(test)]
@@ -771,9 +804,8 @@ mod tests {
                 "owner": item.owner,
                 "actions": crate::rolls::chips(&entry.body).iter().map(&tile).collect::<Vec<_>>(),
                 "spellcasting": groups,
-                "run_order": crate::rolls::chips(&entry.body)
+                "run_order": ordered_actions(entry, Some(&index))
                     .into_iter()
-                    .chain(rolls(entry, &index))
                     .map(|chip| chip.label)
                     .collect::<Vec<_>>(),
                 "references": references
@@ -1046,7 +1078,7 @@ mod tests {
         let fear = cast_line(&dragon, presence, &[], &index).unwrap();
         assert_eq!(fear.tiles[0].chip.as_ref().unwrap().label, "Fear DC 14");
         // In a run it follows the stat block's actions and its lists, in printed order.
-        let order: Vec<String> = rolls(&dragon, &index)
+        let order: Vec<String> = ordered_actions(&dragon, Some(&index))
             .into_iter()
             .map(|c| c.label)
             .collect();
@@ -1077,7 +1109,10 @@ mod tests {
                 splat::content::definitions::source_file(&path).unwrap(),
             )
             .unwrap();
-            let order: Vec<String> = rolls(&entry, &index).into_iter().map(|c| c.label).collect();
+            let order: Vec<String> = ordered_actions(&entry, Some(&index))
+                .into_iter()
+                .map(|c| c.label)
+                .collect();
             assert!(
                 order.iter().any(|label| label == spell),
                 "{creature}: {order:?}"

@@ -70,7 +70,7 @@ fn body_vital(line: &str) -> Option<(&'static str, &'static str, i64)> {
 
 /// Each printed vital line that disagrees with the stat block: its stat key, the DM's word for it
 /// (`Hit Points`), the printed value and the warning.
-pub(super) fn vital_checks(
+pub fn vital_checks(
     entry: &Entry,
 ) -> Vec<(
     &'static str,
@@ -135,12 +135,7 @@ pub(super) fn without_vitals(entry: &Entry, body: &str) -> String {
     splat::content::stat_blocks::reading_body(entry, &output)
 }
 
-pub(super) fn use_vital(
-    text: &str,
-    entry: &Entry,
-    key: &str,
-    value: i64,
-) -> Result<String, String> {
+pub fn use_vital(text: &str, entry: &Entry, key: &str, value: i64) -> Result<String, String> {
     let mut stats = entry.fields["splat_stats"].clone();
     stats[key]["value"] = value.into();
     splat::content::formats::patch_model(text, &[("splat_stats", Some(stats))])
@@ -271,7 +266,7 @@ fn block_anchor(text: &str) -> bool {
 
 /// The spells a creature's spellcasting lists. The built-in files keep the list under
 /// `spells` (the Priest, the Adult Bronze Dragon) or under `options` (the Druid, the Mage).
-pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
+pub fn spell_references(entry: &Entry) -> Vec<Reference> {
     let spellcasting = ["parameters", "features", "spellcasting"]
         .into_iter()
         .fold(entry.fields.get("splat_rule"), |value, key| {
@@ -401,7 +396,7 @@ pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, body: &str, text: &str) 
 }
 
 fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
-    let preview = crate::encounter_run::change_preview(&splat::content::overrides::Row {
+    let preview = crate::roster::change_preview(&splat::content::overrides::Row {
         label: "Speed",
         base: printed.into(),
         changed: speed.into(),
@@ -600,7 +595,7 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
             };
             for (label, text) in rows {
                 let run_hp = values.filter(|_| label == "HIT POINTS").map(|values| {
-                    crate::combat_sync::fraction(
+                    crate::design::fraction(
                         values
                             .current_hp
                             .map_or_else(|| "Unknown".to_owned(), |hp| hp.to_string()),

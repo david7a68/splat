@@ -2,7 +2,7 @@
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use serde_yaml_ng::Value;
 
-pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, String> {
+pub fn patch(text: &str, key: &str, value: Value) -> Result<String, String> {
     let entry = splat::content::Entry::parse("World.md", text)?;
 
     let flat = splat::content::formats::WORLD_FIELDS
@@ -45,7 +45,7 @@ pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, Strin
 /// A Part of list the note reader could not read: the line of the value it names, and the
 /// reader's own message, which quotes that value and says how to write it.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Unread {
+pub struct Unread {
     pub line: usize,
     /// The reader's sentence, with a long value cut around `…` (round 25 FD4).
     pub reason: String,
@@ -55,7 +55,7 @@ pub(super) struct Unread {
 
 /// Use the parser's flag inside the Part of value, including rejected object-list values. A
 /// flag on a list item belongs to the key above its block.
-pub(super) fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option<Unread> {
+pub fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option<Unread> {
     let lines: Vec<&str> = file.lines().collect();
     entry.flags.iter().find_map(|flag| {
         let mut at = flag.line.checked_sub(1)?;
@@ -81,7 +81,7 @@ pub(super) fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option
 
 /// Retain the source spelling of each kept group, including aliases, quotes and comments.
 fn patch_groups(text: &str, groups: &[Value]) -> Result<Option<String>, String> {
-    let (_, body) = crate::sessions::split_note(text).ok_or("Missing front matter")?;
+    let (_, body) = crate::session_notes::split_note(text).ok_or("Missing front matter")?;
     let front_end = text.len() - body.len();
     let mut offset = 0;
     let mut start = None;

@@ -8,12 +8,7 @@ use splat::content::{Entry, Reading, Reference};
 use uuid::Uuid;
 
 /// Keep the picture beside the title, so the stats can follow the meta line.
-pub(crate) fn title_with_art(
-    ui: &mut egui::Ui,
-    title: &str,
-    subtitle: &str,
-    entry: Option<&Entry>,
-) {
+pub fn title_with_art(ui: &mut egui::Ui, title: &str, subtitle: &str, entry: Option<&Entry>) {
     let subtitle = if let Some(entry) = entry {
         let rarity = entry
             .fields
@@ -47,7 +42,7 @@ pub(crate) fn title_with_art(
 }
 
 /// What the reader's links can open. An index belongs to the implementer.
-pub(crate) trait Links {
+pub trait Links {
     /// The one entry a reference names, or nothing if it is missing or ambiguous.
     fn find(&self, reference: &Reference) -> Option<(usize, String)>;
     /// Like `find`, for a reference that must name a spell.
@@ -66,7 +61,7 @@ pub(crate) trait Links {
 }
 
 /// For an entry shown with nothing to link to.
-pub(crate) struct NoLinks;
+pub struct NoLinks;
 impl Links for NoLinks {
     fn find(&self, _: &Reference) -> Option<(usize, String)> {
         None
@@ -118,6 +113,8 @@ struct SpellLinks<'a> {
     /// in printed order, which a tile's Ctrl number counts in.
     resolved: std::sync::Arc<spells::Resolved>,
     links: &'a dyn Links,
+    next_list: usize,
+    next_cast: usize,
     shown: Vec<usize>,
     opened: Option<usize>,
 }
@@ -125,17 +122,13 @@ struct SpellLinks<'a> {
 impl SpellLinks<'_> {
     /// A line's spells as a row of tiles: each that rolls with its number after the stat
     /// block's actions, and the spell it opens when the DM reads one.
-    fn draw(&mut self, ui: &mut egui::Ui, line: &spells::SpellLine, actions: usize) {
-        let rolls = &self.resolved.rolls;
+    fn draw(&mut self, ui: &mut egui::Ui, line: &spells::SpellLine) {
         let tiles: Vec<crate::rolls::Tile> = line
             .tiles
             .iter()
             .map(|spell| match &spell.chip {
                 Some(chip) => crate::rolls::Tile::Roll {
-                    place: rolls
-                        .iter()
-                        .position(|known| known.label == chip.label && known.link == chip.link)
-                        .map(|place| actions + place),
+                    place: spell.place,
                     chip: chip.clone(),
                     read: Some(spell.name.clone()),
                 },
@@ -156,13 +149,11 @@ impl SpellLinks<'_> {
 impl creature::Spells for SpellLinks<'_> {
     fn list(&mut self, ui: &mut egui::Ui, spellcasting: &str, paragraph: &str) {
         let caster = spells::caster(self.entry, spellcasting);
-        // A spell's number follows the stat block's own actions.
-        let actions = crate::rolls::actions(&self.entry.body).len();
         for text in paragraph.lines() {
             // Resolved with the entry, unless the reader's words differ from its body's.
             let resolved = std::sync::Arc::clone(&self.resolved);
             let fresh;
-            let line = match resolved.line(text) {
+            let line = match resolved.line(text, caster, &mut self.next_list) {
                 Some(line) => line,
                 None => match spells::line(text, caster, &resolved.references, self.links) {
                     Some(line) => {
@@ -173,7 +164,7 @@ impl creature::Spells for SpellLinks<'_> {
                 },
             };
             design::help(ui, &line.label);
-            self.draw(ui, line, actions);
+            self.draw(ui, line);
             if !line.missing.is_empty() {
                 design::help(
                     ui,
@@ -187,7 +178,7 @@ impl creature::Spells for SpellLinks<'_> {
         let resolved = std::sync::Arc::clone(&self.resolved);
         let fresh;
         // Resolved with the entry, unless the reader's words differ from its body's.
-        let line = match resolved.cast(paragraph) {
+        let line = match resolved.cast(paragraph, &mut self.next_cast) {
             Some(line) => line,
             None => {
                 fresh = spells::cast_line(self.entry, paragraph, &resolved.references, self.links);
@@ -195,8 +186,7 @@ impl creature::Spells for SpellLinks<'_> {
             }
         };
         if let Some(line) = line {
-            let actions = crate::rolls::actions(&self.entry.body).len();
-            self.draw(ui, line, actions);
+            self.draw(ui, line);
         }
     }
 
@@ -253,14 +243,14 @@ fn spell_links(ui: &mut egui::Ui, targets: Vec<Option<(usize, String)>>) -> Opti
 }
 
 /// Where an entry comes from.
-pub(crate) struct Origin<'a> {
+pub struct Origin<'a> {
     pub path: &'a str,
     pub owner: &'a str,
     pub builtin: bool,
 }
 
 /// Values from an open run. The saved entry stays unchanged.
-pub(crate) struct RunValues {
+pub struct RunValues {
     pub armor_class: Option<i64>,
     pub hp: Option<i64>,
     pub current_hp: Option<i64>,
@@ -285,7 +275,7 @@ pub(crate) fn show(
 /// no row. The prose then starts without the reader's own gap, where a plain note's prose
 /// starts. Line warnings keep the gap after them.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn show_with_related(
+pub fn show_with_related(
     ui: &mut egui::Ui,
     name: &str,
     entry: Option<&Entry>,
@@ -308,7 +298,7 @@ pub(crate) fn show_with_related(
     )
 }
 
-pub(crate) fn show_run(
+pub fn show_run(
     ui: &mut egui::Ui,
     entry: &Entry,
     origin: &Origin<'_>,
@@ -406,7 +396,7 @@ fn show_inner(
 
 const REFERENCE_MAX: f32 = 360.0;
 /// The reader's measure, its gap and the margin at their widest.
-pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;
+pub const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;
 
 /// What the entry says. `styled` is the entry when it reads as a styled stat block.
 /// `lead_gap` is false when nothing above needs a gap before the first prose.
@@ -434,6 +424,8 @@ fn content(
             entry,
             resolved: spells::resolve(entry, links),
             links,
+            next_list: 0,
+            next_cast: 0,
             shown: Vec::new(),
             opened: None,
         };
@@ -478,12 +470,39 @@ fn reference(
     origin: &Origin<'_>,
 ) {
     design::gap(ui, design::Gap::M);
+    // M0387 (round 31 reader-end-section-pitch): the end sections are one group at the Read
+    // row pitch. A header keeps egui's height (its `Small` words and button padding, at least
+    // `interact_size`), and the gap after it is the rest of one `Read` row, so a reader that
+    // fits its pane still does. An open section's body gets the page's spacing back.
+    let page = ui.spacing().clone();
+    let header =
+        (design::Type::Small.line() + 2.0 * page.button_padding.y).max(page.interact_size.y);
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = (design::Density::Read.control() - header).max(0.0);
+        end_sections(ui, &page, entry, sections, styled, origin);
+    });
+}
+
+/// The reader's end sections (`reference`), header after header; `page` is the page's
+/// spacing, which each open body gets back.
+fn end_sections(
+    ui: &mut egui::Ui,
+    page: &egui::style::Spacing,
+    entry: Option<&Entry>,
+    sections: &[presentation::ReadingSection<'_>],
+    styled: bool,
+    origin: &Origin<'_>,
+) {
+    let body = |ui: &mut egui::Ui| *ui.spacing_mut() = page.clone();
     if entry.is_some_and(|entry| entry.reading().ok().flatten().is_some())
         && let Some(source) = sections
             .iter()
             .find(|section| section.title == "Source text")
     {
-        design::quiet_section(ui, "Source text", |ui| style::markdown(ui, source.body));
+        design::quiet_section(ui, "Source text", |ui| {
+            body(ui);
+            style::markdown(ui, source.body);
+        });
     }
     let technical: Vec<_> = sections
         .iter()
@@ -495,6 +514,7 @@ fn reference(
     let item_details = entry.is_some_and(reader::has_item_details);
     if (!styled && !technical.is_empty()) || item_details {
         design::quiet_section(ui, "Technical details", |ui| {
+            body(ui);
             if let Some(entry) = entry.filter(|_| item_details) {
                 reader::item_details(ui, entry);
             }
@@ -533,6 +553,7 @@ fn reference(
         return;
     }
     design::quiet_section(ui, "Source and identifiers", |ui| {
+        body(ui);
         if entry.is_some_and(|entry| !["world", "package"].contains(&entry.kind.as_str())) {
             design::quiet_section(ui, "What Splat applies", |ui| {
                 ui.label(support);

@@ -41,7 +41,7 @@ pub fn filter_bar<'a>(
         } else {
             format!("Filter ({count})")
         };
-        let response = design::menu_button(ui, &word, count > 0);
+        let response = design::menu_button_at_line_start(ui, &word, count > 0);
         design::named(ui, &response, "Filter creatures");
         egui::Popup::menu(&response)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)

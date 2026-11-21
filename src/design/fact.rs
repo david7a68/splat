@@ -14,7 +14,7 @@
 //! - [`roll_tile`]: the rolling stat tile, a [`super::stat_tile`] whose value rolls.
 //!
 //! ```
-//! use splat::fact::{tile_label, words};
+//! use splat_design::fact::{tile_label, words};
 //! assert_eq!(words("Coins", ["12 cp", "40 sp"]), "Coins: 12 cp · 40 sp");
 //! assert_eq!(words("Resistance", ["Fire", ""]), "Resistance: Fire");
 //! assert_eq!(words("Resistance", ["  Fire   and  Cold "]), "Resistance: Fire and Cold");
@@ -26,8 +26,7 @@ use std::fmt::Display;
 use std::ops::Range;
 use std::sync::Arc;
 
-use eframe::egui::{self, Response, Ui};
-use splat::content::dice_text::RollLink;
+use egui::{self, Response, Ui};
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{Type, colors};
@@ -188,13 +187,12 @@ pub(super) fn tile_label_line(ui: &mut Ui, label: &str) {
     ui.add(egui::Label::new(Type::Small.rich(ui, label).color(colors().muted)).truncate());
 }
 
-/// A stat tile whose value rolls: the label line of [`super::stat_tile`] over the value as a
-/// roll link in the large numeral type. The press rolls `link`.
-pub fn roll_tile(ui: &mut Ui, label: &str, value: &str, link: &RollLink) -> Response {
+/// A stat tile whose value rolls: the label line above the caller's roll link.
+pub fn roll_tile(ui: &mut Ui, label: &str, link: impl FnOnce(&mut Ui) -> Response) -> Response {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         tile_label_line(ui, label);
-        crate::rolls::link(ui, value, Type::NumeralLarge, link)
+        link(ui)
     })
     .inner
 }
@@ -203,7 +201,6 @@ pub fn roll_tile(ui: &mut Ui, label: &str, value: &str, link: &RollLink) -> Resp
 mod tests {
     use super::*;
     use egui_kittest::kittest::NodeT;
-    use splat::content::dice_text::D20;
 
     /// The text shapes a frame painted that start with `start`, row by row.
     fn painted_rows(harness: &egui_kittest::Harness<'_>, start: &str) -> Vec<String> {
@@ -409,34 +406,5 @@ mod tests {
             .find(|node| node.accesskit_node().is_focused())
             .and_then(|node| node.accesskit_node().value());
         assert_eq!(focused.as_deref(), Some(WORDS), "Tab focuses the fact");
-
-        // The rolling tile has the stat tile's label line and value type; only its value rolls.
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(400.0, 200.0))
-            .build_ui(|ui| {
-                ui.horizontal(|ui| {
-                    super::super::stat_tile(ui, &tile_label("Str", 8), "−1");
-                    let link = RollLink::d20(D20::Check, 2, "Dexterity");
-                    let _ = roll_tile(ui, &tile_label("Dex", 14), "+2", &link);
-                });
-            });
-        super::super::theme::install(&harness.ctx);
-        harness.run();
-        let style = |words: &str| {
-            harness
-                .output()
-                .shapes
-                .iter()
-                .find_map(|clipped| match &clipped.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == words => {
-                        let format = &text.galley.job.sections[0].format;
-                        Some((format.font_id.clone(), text.fallback_color))
-                    }
-                    _ => None,
-                })
-                .unwrap_or_else(|| panic!("{words} is painted"))
-        };
-        assert_eq!(style("Str: 8"), style("Dex: 14"), "one label line");
-        assert_eq!(style("−1").0, style("+2").0, "one value type");
     }
 }

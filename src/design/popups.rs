@@ -12,7 +12,7 @@
 //! layer, `Area` or raw interaction of its own, has no duty left for that rule.
 use std::{any::Any, borrow::Cow, marker::PhantomData};
 
-use eframe::egui::{
+use egui::{
     self, Align, Align2, Id, Layout, Rect, RectAlign, Response, Sense, Ui, Vec2, WidgetInfo,
     WidgetType, pos2, text::LayoutJob, vec2,
 };
@@ -44,9 +44,9 @@ pub struct HasChoices;
 /// Duties left to the caller: the choices and their words, and what a choice does.
 ///
 /// ```
-/// use splat::layout::Dropdown;
-/// fn pick(ui: &mut eframe::egui::Ui, side: &mut u8) {
-///     let _ = Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side")
+/// use splat_design::layout::Dropdown;
+/// fn pick(ui: &mut egui::Ui, side: &mut u8) {
+///     let _ = Dropdown::new(splat_design::field_id!("doc_side").once(splat_design::layout::Once::Example), "Side")
 ///         .choice(0, "Allies")
 ///         .blocked_choice(1, "Enemies", "Close the run first.")
 ///         .show(ui, side);
@@ -56,55 +56,55 @@ pub struct HasChoices;
 /// A drop-down with no choice has no `show`:
 ///
 /// ```compile_fail,E0599
-/// fn pick(ui: &mut eframe::egui::Ui, side: &mut u8) {
-///     let _ = splat::layout::Dropdown::<u8>::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").show(ui, side);
+/// fn pick(ui: &mut egui::Ui, side: &mut u8) {
+///     let _ = splat_design::layout::Dropdown::<u8>::new(splat_design::field_id!("doc_side").once(splat_design::layout::Once::Example), "Side").show(ui, side);
 /// }
 /// ```
 ///
 /// Its id is a `FieldId`, never an id from the layout:
 ///
 /// ```compile_fail,E0308
-/// let _ = splat::layout::Dropdown::<u8>::new(eframe::egui::Id::new("side"), "Side");
+/// let _ = splat_design::layout::Dropdown::<u8>::new(egui::Id::new("side"), "Side");
 /// ```
 ///
 /// A choice is a value and its words, never a closure that draws:
 ///
 /// ```compile_fail,E0061
-/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").choice(0_u8);
+/// let _ = splat_design::layout::Dropdown::new(splat_design::field_id!("doc_side").once(splat_design::layout::Once::Example), "Side").choice(0_u8);
 /// ```
 ///
 /// A blocked choice says why:
 ///
 /// ```compile_fail,E0061
-/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").blocked_choice(0_u8, "Allies");
+/// let _ = splat_design::layout::Dropdown::new(splat_design::field_id!("doc_side").once(splat_design::layout::Once::Example), "Side").blocked_choice(0_u8, "Allies");
 /// ```
 ///
 /// Plain labels and short labels compile:
 ///
 /// ```
-/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_short").once(splat::layout::Once::Example), "Session")
+/// let _ = splat_design::layout::Dropdown::new(splat_design::field_id!("doc_short").once(splat_design::layout::Once::Example), "Session")
 ///     .choice_with_short_label(0_u8, "Session 1: Tonight", "Session 1");
 /// ```
 ///
 /// A caller cannot give a choice a weight (including a short closed label):
 ///
 /// ```compile_fail,E0277
-/// fn pick(ui: &eframe::egui::Ui) {
-///     let _ = splat::layout::Dropdown::new(splat::field_id!("doc_weight").once(splat::layout::Once::Example), "Side")
-///         .choice(0_u8, eframe::egui::RichText::new("Allies").strong());
+/// fn pick(ui: &egui::Ui) {
+///     let _ = splat_design::layout::Dropdown::new(splat_design::field_id!("doc_weight").once(splat_design::layout::Once::Example), "Side")
+///         .choice(0_u8, egui::RichText::new("Allies").strong());
 /// }
 /// ```
 ///
 /// ```compile_fail,E0061
-/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_short_weight").once(splat::layout::Once::Example), "Session")
-///     .choice_with_short_label(0_u8, "Session 1: Tonight", "Session 1", eframe::egui::FontId::default());
+/// let _ = splat_design::layout::Dropdown::new(splat_design::field_id!("doc_short_weight").once(splat_design::layout::Once::Example), "Session")
+///     .choice_with_short_label(0_u8, "Session 1: Tonight", "Session 1", egui::FontId::default());
 /// ```
 ///
 /// The current value is of the choices' type:
 ///
 /// ```compile_fail,E0308
-/// fn pick(ui: &mut eframe::egui::Ui, side: &mut String) {
-///     let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side")
+/// fn pick(ui: &mut egui::Ui, side: &mut String) {
+///     let _ = splat_design::layout::Dropdown::new(splat_design::field_id!("doc_side").once(splat_design::layout::Once::Example), "Side")
 ///         .choice(0_u8, "Allies")
 ///         .show(ui, side);
 /// }
@@ -285,25 +285,25 @@ fn value_font(ui: &Ui) -> egui::FontId {
 impl Dropdown<'_, ()> {
     /// Accessibility marker for the popup group; the gate keeps checking its choices against
     /// neighbouring splitters and scroll bars after the group receives its proper role.
-    pub(crate) const CHOICES_ROLE: &'static str = "Dropdown choices";
+    pub const CHOICES_ROLE: &'static str = "Dropdown choices";
 
     /// The editable value inside a drop-down. Keeps typed and empty words on one baseline,
     /// in the same regular weight as a closed choice. The caller owns the surrounding field
     /// and its choices, and names the response. No font or weight can be passed.
     ///
     /// ```
-    /// fn field(ui: &mut eframe::egui::Ui, value: &mut String) {
-    ///     splat::layout::Dropdown::editable_value(ui,
-    ///         splat::field_id!("doc_folder").once(splat::layout::Once::Example),
+    /// fn field(ui: &mut egui::Ui, value: &mut String) {
+    ///     splat_design::layout::Dropdown::editable_value(ui,
+    ///         splat_design::field_id!("doc_folder").once(splat_design::layout::Once::Example),
     ///         value, "Main folder", 200.0);
     /// }
     /// ```
     ///
     /// ```compile_fail,E0061
-    /// fn field(ui: &mut eframe::egui::Ui, value: &mut String) {
-    ///     splat::layout::Dropdown::editable_value(ui,
-    ///         splat::field_id!("doc_folder").once(splat::layout::Once::Example),
-    ///         value, "Main folder", 200.0, eframe::egui::FontId::default());
+    /// fn field(ui: &mut egui::Ui, value: &mut String) {
+    ///     splat_design::layout::Dropdown::editable_value(ui,
+    ///         splat_design::field_id!("doc_folder").once(splat_design::layout::Once::Example),
+    ///         value, "Main folder", 200.0, egui::FontId::default());
     /// }
     /// ```
     pub fn editable_value(
@@ -348,6 +348,32 @@ fn list_frame(ui: &Ui) -> egui::Frame {
 
 impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
     pub fn show(self, ui: &mut Ui, current: &mut T) -> DropdownResponse {
+        let index_key = self.id.id().with("chosen_index");
+        let kept = ui.ctx().data(|data| data.get_temp::<usize>(index_key));
+        let chosen_index = kept
+            .filter(|&at| {
+                self.choices
+                    .get(at)
+                    .is_some_and(|entry| entry.value == *current)
+            })
+            .or_else(|| {
+                self.choices
+                    .iter()
+                    .position(|entry| entry.value == *current)
+            });
+        if let Some(at) = chosen_index {
+            ui.ctx().data_mut(|data| data.insert_temp(index_key, at));
+        }
+        self.show_at(ui, current, chosen_index)
+    }
+
+    /// Draw a retained list whose owner already knows the current row. A missing value has no row.
+    pub fn show_at(
+        &self,
+        ui: &mut Ui,
+        current: &mut T,
+        chosen_index: Option<usize>,
+    ) -> DropdownResponse {
         let c = colors();
         let width = self
             .width
@@ -364,22 +390,6 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             Sense::hover()
         };
         let mut response = ui.interact(rect, control, sense);
-        let index_key = control.with("chosen_index");
-        let kept = ui.ctx().data(|data| data.get_temp::<usize>(index_key));
-        let chosen_index = kept
-            .filter(|&at| {
-                self.choices
-                    .get(at)
-                    .is_some_and(|entry| entry.value == *current)
-            })
-            .or_else(|| {
-                self.choices
-                    .iter()
-                    .position(|entry| entry.value == *current)
-            });
-        if let Some(at) = chosen_index {
-            ui.ctx().data_mut(|data| data.insert_temp(index_key, at));
-        }
         let chosen_entry = chosen_index.and_then(|at| self.choices.get(at));
         let chosen = chosen_entry.map(|entry| entry.label.as_ref());
         // A blocked or disabled drop-down has no open list: it takes no selection or command.
@@ -597,6 +607,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let font = Type::Body.font(ui);
         let small = Type::Small.font(ui);
         let scale = ui.ctx().pixels_per_point();
+        let fonts = super::outcome::font_key(ui.ctx());
         let kept = ui
             .ctx()
             .data(|data| data.get_temp::<std::sync::Arc<RowMetrics>>(key));
@@ -607,6 +618,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     && kept.bounded == self.room.is_some()
                     && kept.font == font
                     && kept.small == small
+                    && kept.fonts == fonts
                     && kept.scale == scale
                     && kept.command == self.command.is_some()
                     && kept.groups == groups
@@ -666,6 +678,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     menu_width,
                     font,
                     small,
+                    fonts,
                     scale,
                     command: self.command.is_some(),
                     groups: groups.clone(),
@@ -794,6 +807,7 @@ struct RowMetrics {
     menu_width: f32,
     font: egui::FontId,
     small: egui::FontId,
+    fonts: u64,
     scale: f32,
     command: bool,
     /// The choices that start a group, under a rule.
@@ -872,8 +886,8 @@ pub const TIP_WIDTH: f32 = 360.0;
 /// so a keyboard user reads it too. The lines are also the control's accessible description.
 ///
 /// ```
-/// use splat::layout::{TipLine, rich_tip};
-/// fn more(response: eframe::egui::Response) -> eframe::egui::Response {
+/// use splat_design::layout::{TipLine, rich_tip};
+/// fn more(response: egui::Response) -> egui::Response {
 ///     rich_tip(response, &[TipLine::title("Brannoch Vale"), TipLine::detail("58 of 62 HP")])
 /// }
 /// ```
@@ -881,8 +895,8 @@ pub const TIP_WIDTH: f32 = 360.0;
 /// A closure that draws is not a line:
 ///
 /// ```compile_fail,E0308
-/// fn more(response: eframe::egui::Response) -> eframe::egui::Response {
-///     splat::layout::rich_tip(response, |ui: &mut eframe::egui::Ui| { ui.label("Brannoch"); })
+/// fn more(response: egui::Response) -> egui::Response {
+///     splat_design::layout::rich_tip(response, |ui: &mut egui::Ui| { ui.label("Brannoch"); })
 /// }
 /// ```
 #[allow(
@@ -949,8 +963,8 @@ impl<'a> Ghost<'a> {
 /// `Response::dnd_release_payload`.
 ///
 /// ```
-/// use splat::layout::{Ghost, drag_source};
-/// fn grip(ui: &eframe::egui::Ui, response: &eframe::egui::Response) {
+/// use splat_design::layout::{Ghost, drag_source};
+/// fn grip(ui: &egui::Ui, response: &egui::Response) {
 ///     drag_source(ui, response, Some(7_u32), Ghost::new("+", "Cinder Wolf"));
 /// }
 /// ```
@@ -958,8 +972,8 @@ impl<'a> Ghost<'a> {
 /// A ghost is typed words, never a closure that paints:
 ///
 /// ```compile_fail,E0308
-/// fn grip(ui: &eframe::egui::Ui, response: &eframe::egui::Response) {
-///     splat::layout::drag_source(ui, response, Some(7_u32), |painter: &eframe::egui::Painter| {});
+/// fn grip(ui: &egui::Ui, response: &egui::Response) {
+///     splat_design::layout::drag_source(ui, response, Some(7_u32), |painter: &egui::Painter| {});
 /// }
 /// ```
 #[allow(
@@ -1036,17 +1050,17 @@ pub fn fitted(size: Vec2, room: Vec2) -> Vec2 {
 /// the image closes it too. Returns true when the DM closed it.
 ///
 /// ```
-/// use splat::layout::{ImageSize, image_viewer};
-/// fn view(ctx: &eframe::egui::Context) -> bool {
-///     image_viewer(ctx, "Map", "file://map.png", ImageSize::Known(eframe::egui::vec2(800.0, 600.0)))
+/// use splat_design::layout::{ImageSize, image_viewer};
+/// fn view(ctx: &egui::Context) -> bool {
+///     image_viewer(ctx, "Map", "file://map.png", ImageSize::Known(egui::vec2(800.0, 600.0)))
 /// }
 /// ```
 ///
 /// The size is said, known or not:
 ///
 /// ```compile_fail,E0061
-/// fn view(ctx: &eframe::egui::Context) -> bool {
-///     splat::layout::image_viewer(ctx, "Map", "file://map.png")
+/// fn view(ctx: &egui::Context) -> bool {
+///     splat_design::layout::image_viewer(ctx, "Map", "file://map.png")
 /// }
 /// ```
 #[allow(
