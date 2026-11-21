@@ -2138,6 +2138,8 @@ impl Splat {
                         .index()
                         .map(|index| index.places())
                         .unwrap_or_default();
+                    // The app's one test of an open modal: Ctrl+S waits for it.
+                    self.timeline_page.modal = self.modal_open(ui.ctx());
                     self.timeline_page.show(
                         ui,
                         &mut self.timeline,

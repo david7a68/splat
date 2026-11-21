@@ -187,6 +187,8 @@ pub struct TimelinePage {
     selected: Option<String>,
     copied: Option<(String, Instant)>,
     focus_title: bool,
+    /// A modal is open over the app (the app's one test, `modal_open`): Ctrl+S waits for it.
+    pub modal: bool,
     reset_detail: bool,
     scroll_to: Option<usize>,
     /// An event just added with the buttons, with one step of undo.
@@ -1851,9 +1853,27 @@ impl TimelinePage {
         if problems(ui, book) {
             return;
         }
-        if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
+        // Ctrl+S is taken here, before the fields, and saves after they took this frame's
+        // input (issue #513): words typed in the same frame are saved with it. Under a modal it
+        // waits, as every shortcut does.
+        let save =
+            !self.modal && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        self.body(ui, book, page_width, (sessions, current), notes);
+        if save {
             book.save();
         }
+    }
+
+    /// The page under its header and the file's problems: the quick add, the list and the open
+    /// event.
+    fn body(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &mut Book,
+        page_width: f32,
+        (sessions, current): (&[SessionLink], Option<Uuid>),
+        notes: &mut crate::sessions::page::Sessions,
+    ) {
         if let Some(id) = quick_add(
             ui,
             book,
@@ -2091,6 +2111,70 @@ fn header_kind(event: &Event) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #513: Ctrl+S is taken before the fields and saves after them, so words typed in
+    /// ONE input frame with it are saved with it. Under a modal it saves nothing.
+    #[test]
+    fn ctrl_s_saves_the_words_typed_in_its_frame() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        let id = book.add(Kind::Event, None);
+        book.events[0].title = "Toll".into();
+        book.save();
+        let mut page = TimelinePage::default();
+        page.reveal(&id, &book);
+        type State = (TimelinePage, Book, crate::sessions::page::Sessions);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_state(
+                |ctx, (page, book, notes): &mut State| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
+                    });
+                },
+                (page, book, crate::sessions::page::Sessions::default()),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Title")
+            .focus();
+        harness.run_steps(2);
+        let on_disk = |harness: &egui_kittest::Harness<'_, State>| {
+            std::fs::read_to_string(harness.state().1.path().unwrap()).unwrap()
+        };
+        let ctrl_s = egui::Event::Key {
+            key: egui::Key::S,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        };
+        // Typing and Ctrl+S in one frame's raw input (kittest gives each `event` a frame).
+        let type_and_save = |harness: &mut egui_kittest::Harness<'_, State>, words: &str| {
+            harness
+                .input_mut()
+                .events
+                .extend([egui::Event::Text(words.into()), ctrl_s.clone()]);
+            harness.step();
+        };
+        harness.state_mut().0.modal = true;
+        type_and_save(&mut harness, " gate");
+        assert_eq!(harness.state().1.events[0].title, "Toll gate");
+        assert!(
+            !on_disk(&harness).contains("Toll gate"),
+            "under a modal, Ctrl+S saves nothing"
+        );
+        harness.state_mut().0.modal = false;
+        type_and_save(&mut harness, "s");
+        assert!(
+            on_disk(&harness).contains("Toll gates"),
+            "the words typed in Ctrl+S's frame are saved with it: {}",
+            on_disk(&harness)
+        );
+    }
 
     /// Round 30 B7d, ruling L9: the Add result ends in the page's owner update
     /// (`settle_added`), before the footer presents its kept line: by the frame clock (the
