@@ -1098,9 +1098,10 @@ line says it too), `Name changed to <name>.`, `Note repaired.` and
 `<file> is now a separate note.` (`world::CHANGED`). Encounters' finished changes have it too: a replacement
 (`Replaced Unknown creature with Ember Cultist.`, `2 Cinder Wolf rows replaced with Guard.`), a removed member or
 group, a group moved or deleted on save, a removed encounter (`Removed encounter <name>.`), and a deleted run. A result that wrote nothing keeps the info tone:
-`Your changes are already in the note.` and `<name> draft discarded.`. The unread `Part of` warning draws
-`Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
-reader with no file line.
+`Your changes are already in the note.` and `<name> draft discarded.`. The unread `Part of` warning is a body fault
+(`BodyFault`) with its repair, `Edit in Obsidian`, a bordered button whose border starts at the warning's words, in the
+edit form and in a reader with no file line (ruling M23: round 9's quiet link and round 20's link at the words give way
+to the typed repair).
 
 Set values show labelled rows: Stat block, Place, Part of and Status. An NPC also shows its empty Stat block row. Status shows once (`ReaderStatus`): when the reader draws a campaign entry's Status row, World's and Lookup's kind line has no status (`NPC · Campaign`); an entry with no Status row (a package entry, a built-in creature) keeps its status on the kind line. Lookup shows a campaign entry's value rows (Stat block, Place, Part of and Status) with their Change, from the one function that draws World's (`Reader::relationships`), so a value in a given state has the same row and the same act in both readers: the DM changes a value where the entry is read, with the same write, Log line and Undo in Lookup's footer. A Part of list that was not read keeps its `not read` row and its blocked Change in both. `Change` puts the keyboard in the field with its words selected, in both readers. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
@@ -1149,7 +1150,8 @@ sentences that name both values as the rows show them: the name of the note a li
 (`Place set to Watch House (Locations). It was Watch House.`), so the DM can tell which file the change chose. They sit in the pane's footer, as every World result does. A cleared value's row goes with the value. A place that matches more than one
 note is the link `⚠ <name> · N matches`: the warning icon is its own glyph in the warning colour before the link
 words, so the underline covers only the words, as in `status_link`. Its accessible name keeps the icon. Different file and
-stored names offer two safe choices below the warning's words, `L` apart: `Rename the note to <file name>`, with a
+stored names offer two safe repairs under the warning's words, one per line (ruling M23: round 24's two choices `L`
+apart on one line give way to the typed repairs): `Rename the note to <file name>`, with a
 guarded update and `Undo name change`, then `Rename the file to <name>.md`, which keeps the name the DM typed. The file
 move never replaces a file, not even one that arrives during the move, and checks that the note still holds the text the
 reader came from: the whole file the index read, byte order mark, line ends and comments included. Where the folder's
@@ -1238,9 +1240,9 @@ adds, removes and keeps.
 If Part of could not be read, block its Change action with the unread-value message, for example
 `Line 9: Part of "{link: '[[Lost Guild]]'}" was not read. Write each group as a link, such as [[Arena Guild]].`
 A list written below its key names its first value that is not text, and that value's line.
-In Edit, a quiet `Edit in Obsidian` link follows the reason. Read shows the reason in the same warning
-tone below the file line, whose link is the one `Edit in Obsidian`; a reader with no file line puts the link
-after the reason. Read and Edit show Part of as `not read` in the warning colour, with Change blocked by the reason. Other fields stay
+In Edit, the reason's repair, `Edit in Obsidian` (a bordered button, ruling M23), follows it. Read shows the reason in
+the same warning tone below the file line, whose link is the one `Edit in Obsidian`; a reader with no file line puts
+the repair under the reason. Read and Edit show Part of as `not read` in the warning colour, with Change blocked by the reason. Other fields stay
 editable.
 Every Part of write checks the current disk parse flag before it changes anything. A refused write closes
 its picker, keeps every disk byte and reads the note again, so its list row and the header count the fault. Adding or removing a readable group keeps the raw text of the
@@ -1294,8 +1296,9 @@ permission) cannot open in the source editor. Its pane keeps the title and a fil
 editor link, because no editor can open the file either. When a change such as Part of finds an open note that can no
 longer be read, its error and the note's file line also offer no editor link until the file reads again. Its pane leads with an error that
 names the file only as `this note`, because the title and file line name it (`Splat cannot read this note as text.`),
-then gives the recovery in plain words at the reader measure, with `Try again` and, `L` after it, `Close note` (which closes the pane; nothing is in progress), each with
-the secondary border, the first border at the message text. Technical details below holds the system's words. Its row's cause is short
+then gives the recovery in plain words at the reader measure, with `Try again` and `Close note` (which closes the pane;
+nothing is in progress), each with the secondary border, the first border at the message text and the second the
+typed choices' shared gap after it (a `PagePlaceholder`; ruling M23: round 18's `L` gives way). Technical details below holds the system's words. Its row's cause is short
 (`Not a text file`). Try again reads the folder again: a fixed note opens in the reader, a note that is
 still broken opens its repair, and a file moved or deleted outside Splat ends the pane. Splat never writes that file.
 Every other World message about a file that the system will not read or write, away from that file's pane, names the
