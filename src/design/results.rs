@@ -923,6 +923,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Words],
         ),
         ("src/campaigns.rs", "form", &[Ban::Results]),
+        // M20: the first campaign's form has no footer; its error is a typed body fault in
+        // place of `design::message` (`draw_error`, gone).
+        ("src/campaigns.rs", "form_error_inline", &[Ban::Body]),
         // The design system's pane tests with closure lines (the `#[cfg(test)]` `Footer::result`,
         // `legacy_reason`) and a footer placed by hand (migration-32 L2c: no app code can).
         (

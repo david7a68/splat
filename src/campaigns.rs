@@ -1,7 +1,6 @@
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     content_workspace::CampaignDocument,
-    design::{self, Action, Density, Status, Tone, Type, colors, icons, memo::Revised},
+    design::{self, Action, Density, Status, Type, colors, icons, memo::Revised},
     persistence::{Campaign, Store, UserData},
 };
 use eframe::egui;
@@ -1199,7 +1198,11 @@ impl Campaigns {
                                 // Buttons keep every letter. The name and status give way first.
                                 ui.spacing_mut().item_spacing.x = design::XS;
                                 design::row_menu(ui, &campaign.name, |ui| {
-                                    if ui.button("Remove…").clicked() {
+                                    if Action::destructive("Remove…")
+                                        .density(Density::Read)
+                                        .show(ui)
+                                        .clicked()
+                                    {
                                         self.confirm_remove = Some(campaign.id);
                                         ui.close();
                                     }
@@ -1397,42 +1400,31 @@ impl Campaigns {
         }
     }
 
-    /// An error, and its own recovery after it.
-    fn draw_error(
-        me: &std::cell::RefCell<&mut Campaigns>,
-        ui: &mut egui::Ui,
-        error: &str,
-        locked: Option<&str>,
-    ) {
-        design::message(ui, Tone::Error, error);
-        if error.contains("registered at another folder") {
-            let reason = locked.or(me
-                .borrow()
-                .name
-                .trim()
-                .is_empty()
-                .then_some("Type a name first."));
-            if Action::secondary("Register as a new campaign")
-                .blocked(reason)
-                .show(ui)
-                .clicked()
-            {
-                let mut this = me.borrow_mut();
-                if let Err(error) = this.register_campaign_copy() {
-                    this.error = Some(error);
-                }
-            }
-            design::blocked_reason(ui, reason);
-        }
-    }
-
     /// The form's error where its page has no footer: the first campaign's form on an empty
-    /// page, which has no scroll area, so nothing below it can move.
+    /// page, which has no scroll area, so nothing below it can move. A body fault in its place,
+    /// with its own recovery after it (`Register as a new campaign`, locked with its painted
+    /// reason until the form has a name).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the first campaign's form has no footer: its error is the page's body fault (M20)"
+    )]
     pub fn form_error_inline(&mut self, ui: &mut egui::Ui) {
-        let error = self.error.clone();
-        let cell = std::cell::RefCell::new(self);
-        if let Some(error) = error {
-            Self::draw_error(&cell, ui, &error, None);
+        let Some(error) = self.error.clone() else {
+            return;
+        };
+        let mut fault = design::outcome::BodyFault::new(&NotDone::words(&error));
+        if error.contains("registered at another folder") {
+            fault = fault.repair(
+                design::outcome::Repair::new("Register as a new campaign", ()).locked_when(
+                    self.name.trim().is_empty(),
+                    crate::sentence!("Type a name first."),
+                ),
+            );
+        }
+        if fault.show(ui).is_some()
+            && let Err(error) = self.register_campaign_copy()
+        {
+            self.error = Some(error);
         }
     }
 
