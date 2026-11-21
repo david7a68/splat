@@ -587,6 +587,35 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Display name");
     d.expect("For example: HP +5, AC +2, Speed 40 ft.");
     d.state("group-repair-changes-cell", Sizes::All);
+    // Lane E1's pressure caller (round 31 SD11, chosen-value-weight): a change row's closed
+    // value is the `Dropdown` part's, in regular `Body` weight, at 960 and at 1920.
+    for size in [SMALL, (1920.0, 1080.0)] {
+        let families = d.at_size(size, |d| {
+            let control = d.place_of(&d.name_starting("Maximum HP: how it changes"));
+            let mut families = Vec::new();
+            d.each_painted_text(|text, _| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if text.galley.job.text == "Same"
+                    && control.is_some_and(|control| control.contains(rect.center()))
+                {
+                    families.extend(
+                        text.galley
+                            .job
+                            .sections
+                            .iter()
+                            .map(|section| section.format.font_id.family.to_string()),
+                    );
+                }
+            });
+            families
+        });
+        let body = egui::FontFamily::Name(crate::design::Type::Body.family().into()).to_string();
+        d.observe(
+            "r31-SD11-closed-value-weight",
+            !families.is_empty() && families.iter().all(|family| *family == body),
+            format!("At {size:?}, Maximum HP's closed value `Same` is painted in {families:?}, want {body}"),
+        );
+    }
     // iter-24-B FB6: the change form has one right edge: Display name, Note, the Other effect
     // row's Add and the Loot field end at one x (`Roll on a table` follows the Loot field).
     for size in [DEFAULT, (1920.0, 1080.0)] {
@@ -645,8 +674,27 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?}: tones {tones:?}, colour {colour:?}, words {words:?}, example {example:?}"),
         );
     }
-    d.click("Maximum HP: how it changes");
-    d.click("Maximum HP: Add");
+    // The change's kind is the `Dropdown` part (named with its chosen value); its `Add` is the
+    // menu's, under it.
+    let control = d
+        .place_of(&d.name_starting("Maximum HP: how it changes"))
+        .expect("the change kind's drop-down");
+    d.click_starting("Maximum HP: how it changes");
+    // The menu's `Add`: under the drop-down, in its own column (the Add creatures column has
+    // `Add` buttons too).
+    let add = d
+        .nodes()
+        .into_iter()
+        .find(|node| {
+            (node.name == "Add" || node.name == "Maximum HP: Add")
+                && node.in_view()
+                && node.rect.top() >= control.bottom() - 1.0
+                && node.rect.left() >= control.left() - 1.0
+                && node.rect.left() < control.right()
+        })
+        .map(|node| node.rect)
+        .expect("the menu's Add");
+    d.click_rect(add, "Click: Maximum HP: Add");
     d.click("Maximum HP: amount");
     d.press_ctrl(Key::A);
     d.type_text("5");
