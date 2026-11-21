@@ -967,25 +967,27 @@ fn widget_count(ui: &Ui) -> usize {
 /// help, a reason comes, the content above it moves it): it then scrolls only when the field is
 /// not whole in view. The DM's own wheel moves neither the room nor the field's place in the
 /// content, so it is never pulled back. Only a control that the body added (`widgets`, on the
-/// pane's layer) is scrolled to. A focus that comes with a pointer press, hold or release waits
-/// for the release, so the pressed control never moves under the pointer; a block that is not
-/// whole then comes into view (a click on a half-hidden field, a drop-down's chosen row).
+/// pane's layer) is scrolled to. A focus that comes with a pointer press, hold or release on the
+/// focused control itself is not, so the pressed control never moves under the pointer; a focus
+/// that a press gave to another control (a drop-down's chosen row gives it back to its control)
+/// waits for the release, and a block that is not whole then comes into view.
 fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
     let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
     let layer = ui.layer_id();
-    // The focused field's whole block, in this pass.
-    let block = focused.and_then(|focused| {
-        ui.ctx()
-            .viewport(|viewport| {
-                let widgets_now = &viewport.this_pass.widgets;
-                let (at_layer, at) = widgets_now.order(focused)?;
-                (at_layer == layer && widgets.contains(&at))
-                    .then(|| widgets_now.get(focused).map(|widget| widget.rect))
-                    .flatten()
-            })
-            .map(|rect| super::components::reveal_rect(ui.ctx(), focused, rect))
+    // The focused control's own rect, and its field's whole block, in this pass.
+    let own = focused.and_then(|focused| {
+        ui.ctx().viewport(|viewport| {
+            let widgets_now = &viewport.this_pass.widgets;
+            let (at_layer, at) = widgets_now.order(focused)?;
+            (at_layer == layer && widgets.contains(&at))
+                .then(|| widgets_now.get(focused).map(|widget| widget.rect))
+                .flatten()
+        })
     });
+    let block = focused
+        .zip(own)
+        .map(|(focused, rect)| super::components::reveal_rect(ui.ctx(), focused, rect));
     // Where the block is in the content (the content's origin is the column's top less its
     // offset, so a wheel does not move it) and how tall it is, to whole points.
     let origin = ui.max_rect().top();
@@ -1007,10 +1009,13 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
         let pointer = &input.pointer;
         pointer.any_down() || pointer.any_pressed() || pointer.any_released()
     });
-    // A press does not scroll its own control away under the pointer. A focused block that is
-    // not whole waits, unseen, for the pointer's release: a click (a drop-down's chosen row that
-    // gives the focus back to its control) then brings it whole above the footer (I9).
-    if pointer && block.is_some_and(|block| !visible.contains_rect(block)) {
+    // A press does not scroll its own control away under the pointer: a control the pointer is
+    // on keeps its place. A focus that a press gave to ANOTHER control (a drop-down's chosen row
+    // gives it back to its control) waits, unseen, for the pointer's release while its block is
+    // not whole, and then comes whole above the footer (I9).
+    let under = ui.input(|input| input.pointer.latest_pos());
+    let given = own.is_some_and(|own| under.is_none_or(|at| !own.contains(at)));
+    if pointer && given && block.is_some_and(|block| !visible.contains_rect(block)) {
         return;
     }
     ui.ctx()
