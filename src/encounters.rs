@@ -1601,12 +1601,35 @@ pub fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>, hp_
     });
 }
 
-/// Where a pane of this draft's editor ends, as the pane drew it last: the header's name field
-/// ends at the roster's edge, and its actions at the Add column's edge (FA9, FI9).
-fn pane_right_id(draft: Uuid, pane: &str) -> egui::Id {
-    egui::Id::new(("encounter_pane_right", draft, pane))
+/// Layout step 6b: the encounter editor's roster and Add participants as one composite, in panes
+/// `width` wide: the roster has the rest of the room, and Add participants trails at the right
+/// at its own or dragged width (`Column::right`). The head resolves its edges before it paints
+/// (`editor_view`), and the body draws its columns in them (`editor_panes`).
+fn editor_columns(ctx: &egui::Context, width: f32) -> design::PaneColumns {
+    let add = design::side_panel_width(ctx.content_rect().width())
+        .max(width - ROSTER_MAX_WIDTH)
+        .min(ADD_PANE_MAX_WIDTH);
+    design::PaneColumns::shared_task("encounter_editor_columns")
+        .rest(0.0)
+        .trailing(
+            0.0,
+            design::Column::right(ADD_PANE, add, design::PANEL_MIN_WIDTH..=ADD_PANE_MAX_WIDTH)
+                .page_keeps(design::RUN_LIST_KEEPS)
+                .frame(egui::Frame::new().inner_margin(egui::Margin {
+                    left: design::S as i8,
+                    right: 0,
+                    top: design::S as i8,
+                    bottom: 0,
+                })),
+        )
 }
-const ROSTER_PANE: &str = "roster";
+
+/// Where the roster's rows and rules end, in its child `rest` of `editor_columns`: its panel's
+/// `S` margin before the Add column's splitter, and at most `ROSTER_MAX_WIDTH` (`editor_panes`).
+/// The head's name field ends there (FA9, FI9).
+fn roster_edge(rest: egui::Rangef) -> f32 {
+    rest.min + (rest.span() - design::S).min(ROSTER_MAX_WIDTH)
+}
 
 /// The roster and Add participants side by side: the roster at most `ROSTER_MAX_WIDTH`, then
 /// the Add column at its own or dragged width.
@@ -7093,13 +7116,16 @@ impl Encounters {
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
         // FA9, FI9: in a wide window the name field ends at the roster column's edge, so it
-        // does not stretch to the window's edge. The roster's edge is the one its pane drew last;
-        // with the panes as tabs, the name takes the line.
-        let roster_right = ui
-            .ctx()
-            .data(|data| data.get_temp::<f32>(pane_right_id(draft_ref.id, ROSTER_PANE)))
-            .filter(|_| !compact)
-            .unwrap_or(f32::INFINITY);
+        // does not stretch to the window's edge. Layout step 6b: the roster and Add participants
+        // are one composite (`editor_columns`) whose edges are resolved now, before the head
+        // paints, from this pass's room and splitter; the body draws its columns in the same
+        // edges (`editor_panes`). With the panes as tabs, the name takes the line.
+        let panes_width = editor_panes_width(ui);
+        let panes =
+            (!compact).then(|| editor_columns(ui.ctx(), panes_width).edges_in(ui, panes_width));
+        let roster_right = panes.as_ref().map_or(f32::INFINITY, |edges| {
+            roster_edge(edges.child_within(ui, panes_width, 0))
+        });
         let (back, ()) = head.show(ui, |ui| {
             {
                 // Layout step 6 (`DraftHead`, I7; SL3): the group editor's rule. Save and Start
@@ -7239,25 +7265,67 @@ impl Encounters {
                 }
             }
         });
+        // Layout step 6b (I8): the save row's reasons have one place in every state, planned
+        // from the widths only (`head_plan`): the campaign-switch reason, then the row's other
+        // reason (the creature's, a read in progress, no participants), each on the row while
+        // it fits beside the widest state word and Discard (and the run's state at the row's
+        // end), else on a line of its own below, kept while it does not show.
+        let run_words = unfinished.as_ref().map(|run| {
+            run_state_word(
+                run,
+                self.run
+                    .as_ref()
+                    .and_then(|open| open.path())
+                    .is_none_or(|path| path != run.path),
+            )
+        });
+        let creature_here = creature_dirty && head.held_by() != Some(design::Unsaved::Creature);
+        let lock_shown = state.lock_reason();
+        let other_shown = creature_here
+            .then_some(BLOCKED_BY_CREATURE)
+            .or(loading.then_some("Still reading this campaign."))
+            .or(
+                (!has_run && unfinished.is_none() && draft_ref.setup.roster.is_empty())
+                    .then_some("Add participants first."),
+            );
+        let small = Type::Small.font(ui);
+        let other_measure = [
+            BLOCKED_BY_CREATURE,
+            "Still reading this campaign.",
+            "Add participants first.",
+        ]
+        .into_iter()
+        .max_by(|a, b| {
+            design::number_width(ui, a, &small).total_cmp(&design::number_width(ui, b, &small))
+        })
+        .unwrap_or_default();
+        let run_width = run_words.as_ref().map_or(0.0, |words| {
+            design::number_width(ui, &format!("{} {words}", icons::RUN), &small)
+                + 2.0 * ui.spacing().item_spacing.x
+        });
+        let row_plan = design::save_row::head_plan(
+            ui,
+            &design::save_row::HeadSpec {
+                column: ui.available_width(),
+                line: ui.available_width(),
+                actions: 0.0,
+                row: ui.available_width() - run_width,
+                reasons: &[design::save_row::SAVE_OR_DISCARD_TO_SWITCH, other_measure],
+            },
+        );
+        let (lock_on_row, other_on_row) = (row_plan.on_row[0], row_plan.on_row[1]);
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
             // FB9, FC13: the unfinished run's state ends the row, apart from the save state,
             // Discard and their reasons, so it reads as the run's and no reason that comes or
             // goes moves it (FB5).
-            if let Some(run) = &unfinished {
-                let words = run_state_word(
-                    run,
-                    self.run
-                        .as_ref()
-                        .and_then(|open| open.path())
-                        .is_none_or(|path| path != run.path),
-                );
+            if let Some(words) = &run_words {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     design::status(
                         ui,
                         Status {
                             icon: icons::RUN,
-                            word: &words,
+                            word: words,
                             color: colors().muted,
                         },
                     );
@@ -7269,7 +7337,7 @@ impl Encounters {
                             creature_dirty.then_some(BLOCKED_BY_CREATURE),
                         );
                         // FB6: while Save is blocked, Discard is the one way out.
-                        blocked_reason(ui, state.lock_reason());
+                        blocked_reason(ui, lock_shown.filter(|_| lock_on_row));
                     });
                 });
             } else {
@@ -7280,22 +7348,34 @@ impl Encounters {
                     creature_dirty.then_some(BLOCKED_BY_CREATURE),
                 );
                 // FB6: while Save is blocked, Discard is the one way out.
-                blocked_reason(ui, state.lock_reason());
+                blocked_reason(ui, lock_shown.filter(|_| lock_on_row));
             }
             // The creature's reason has one home: the back line paints it while it holds Back;
             // while the encounter's changes hold Back, this row says it for Start and Save.
-            let creature_here = creature_dirty && head.held_by() != Some(design::Unsaved::Creature);
-            blocked_reason(
-                ui,
-                creature_here
-                    .then_some(BLOCKED_BY_CREATURE)
-                    .or(loading.then_some("Still reading this campaign."))
-                    .or(
-                        (!has_run && unfinished.is_none() && draft_ref.setup.roster.is_empty())
-                            .then_some("Add participants first."),
-                    ),
-            );
+            blocked_reason(ui, other_shown.filter(|_| other_on_row));
         });
+        // The reasons the plan put under the row: each on its own line, kept while it does not
+        // show, so a reason that comes or goes moves no field (I8).
+        for (on_row, measure, shown) in [
+            (
+                lock_on_row,
+                design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
+                lock_shown,
+            ),
+            (other_on_row, other_measure, other_shown),
+        ] {
+            if on_row {
+                continue;
+            }
+            match shown {
+                Some(words) => blocked_reason(ui, Some(words)),
+                None => {
+                    ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
+                        blocked_reason(ui, Some(measure));
+                    });
+                }
+            }
+        }
 
         if unfinished.is_some() {
             // FB1: the open fight from this encounter takes its read-aloud text and notes at
@@ -7386,7 +7466,7 @@ impl Encounters {
                 design::pane::FillsReason::Columns,
             )),
             move |ui| {
-                this.editor_panes(ui, active, campaigns, party, compact, difficulty);
+                this.editor_panes(ui, active, campaigns, party, compact, difficulty, panes);
                 this
             },
             |this, messages| {
@@ -7421,6 +7501,8 @@ impl Encounters {
         party: &Party,
         compact: bool,
         difficulty: Option<Arc<crate::difficulty::Difficulty>>,
+        // The roster's and Add participants' edges, resolved before the head (`editor_view`).
+        panes: Option<design::PaneEdges>,
     ) {
         let Some(snapshot) = &self.snapshot else {
             crate::design::spinner(ui);
@@ -7516,66 +7598,61 @@ impl Encounters {
             egui::Layout::top_down(egui::Align::LEFT),
             |ui| {
                 ui.set_width(panes_width);
-                let width = design::side_panel_width(ui.ctx().content_rect().width())
-                    .max(ui.available_width() - ROSTER_MAX_WIDTH)
-                    .min(ADD_PANE_MAX_WIDTH);
                 let creature = &mut self.creature;
                 let save_key = &mut self.save_key;
-                design::Column::right(
-                    ADD_PANE,
-                    width,
-                    design::PANEL_MIN_WIDTH..=ADD_PANE_MAX_WIDTH,
-                )
-                .page_keeps(design::RUN_LIST_KEEPS)
-                .frame(egui::Frame::new().inner_margin(egui::Margin {
-                    left: design::S as i8,
-                    right: 0,
-                    top: design::S as i8,
-                    bottom: 0,
-                }))
-                .show_inside(ui, |ui| match creature {
-                    Some(editor) => {
-                        creature_step = Self::creature_pane(ui, editor, &active.path, save_key);
+                // Layout step 6b: the edges the head was drawn with (resolved again if this `Ui`
+                // is not the room they were made for).
+                let edges =
+                    panes.unwrap_or_else(|| editor_columns(ui.ctx(), panes_width).edges(ui));
+                edges.show_children(ui, |ui, index| {
+                    if index == 1 {
+                        match creature {
+                            Some(editor) => {
+                                creature_step =
+                                    Self::creature_pane(ui, editor, &active.path, save_key);
+                            }
+                            None => Self::add_pane(
+                                ui,
+                                draft,
+                                snapshot,
+                                search,
+                                focus_search,
+                                (peek, &separated),
+                                compact,
+                            ),
+                        }
+                        return;
                     }
-                    None => Self::add_pane(
-                        ui,
-                        draft,
-                        snapshot,
-                        search,
-                        focus_search,
-                        (peek, &separated),
-                        compact,
-                    ),
+                    // A panel clips to its own rect. It starts `S` before the roster's text edge, so
+                    // a line-start quiet action there keeps its whole press area.
+                    let rest = ui.available_rect_before_wrap();
+                    let mut roster_ui = ui.new_child(
+                        egui::UiBuilder::new().max_rect(rest.with_min_x(rest.min.x - design::S)),
+                    );
+                    egui::CentralPanel::default()
+                        // The panel's drag handle lies on this edge, so the roster stops short of it.
+                        .frame(egui::Frame::new().inner_margin(egui::Margin {
+                            left: design::S as i8,
+                            right: design::S as i8,
+                            top: design::S as i8,
+                            bottom: 0,
+                        }))
+                        .show_inside(&mut roster_ui, |ui| {
+                            // The content cap also holds after the DM moves the panel.
+                            ui.set_width(ui.available_width().min(ROSTER_MAX_WIDTH));
+                            Self::roster_pane(
+                                ui,
+                                draft,
+                                snapshot,
+                                focus_search,
+                                expanded,
+                                linked.then_some(party),
+                                &mut make_yours,
+                                Some(difficulty.as_deref()),
+                            );
+                        });
+                    ui.advance_cursor_after_rect(roster_ui.min_rect());
                 });
-                // A panel clips to its own rect. It starts `S` before the roster's text edge, so
-                // a line-start quiet action there keeps its whole press area.
-                let rest = ui.available_rect_before_wrap();
-                let mut roster_ui = ui.new_child(
-                    egui::UiBuilder::new().max_rect(rest.with_min_x(rest.min.x - design::S)),
-                );
-                egui::CentralPanel::default()
-                    // The panel's drag handle lies on this edge, so the roster stops short of it.
-                    .frame(egui::Frame::new().inner_margin(egui::Margin {
-                        left: design::S as i8,
-                        right: design::S as i8,
-                        top: design::S as i8,
-                        bottom: 0,
-                    }))
-                    .show_inside(&mut roster_ui, |ui| {
-                        // The content cap also holds after the DM moves the panel.
-                        ui.set_width(ui.available_width().min(ROSTER_MAX_WIDTH));
-                        Self::roster_pane(
-                            ui,
-                            draft,
-                            snapshot,
-                            focus_search,
-                            expanded,
-                            linked.then_some(party),
-                            &mut make_yours,
-                            Some(difficulty.as_deref()),
-                        );
-                    });
-                ui.advance_cursor_after_rect(roster_ui.min_rect());
             },
         );
 
@@ -8044,10 +8121,6 @@ impl Encounters {
             live,
             make_yours,
         );
-        // The header's name field ends where the roster's rows and rules end (FA9, FI9).
-        let right = ui.available_rect_before_wrap().right();
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(pane_right_id(draft.id, ROSTER_PANE), right));
         design::gap(ui, design::Gap::M);
         if let Some(party) = linked_party {
             Self::sync_option(ui, draft, snapshot, party);
