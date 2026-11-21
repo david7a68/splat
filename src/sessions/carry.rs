@@ -1759,7 +1759,9 @@ mod tests {
         );
         fs::write(&last.path, &last_text).unwrap();
         rescan(&mut harness);
-        harness.get_by_label("Undo carry over from Session 1").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         assert!(
@@ -1817,7 +1819,9 @@ mod tests {
                 .body
                 .contains("Who burned the ropes?")
         );
-        harness.get_by_label("Undo carry over from Session 1").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         let draft = harness.state().0.draft.as_ref().unwrap();
         assert!(!draft.text().contains("carried_"));
@@ -1847,9 +1851,35 @@ mod tests {
                 .next()
                 .is_some()
         );
-        harness.get_by_label("Undo carry over from Session 1").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         assert_eq!(read(), changed);
+
+        // M-N1.3: the Undo acts by its line's ticket. A press left over on a result that a later
+        // act of this session replaced reaches nothing: the later result stays.
+        let page = &mut harness.state_mut().0;
+        let refused = || Outcome::Refused {
+            refusal: carry_refusal(&ActFault::Missing, "Session 1", "Session 2", false),
+            seen: 0,
+        };
+        page.carries.record(tonight.id, refused());
+        let stale = page
+            .carries
+            .marks
+            .get(&CarryOwner {
+                session: tonight.id,
+            })
+            .expect("the result is in the page's store")
+            .ticket_for_caller_test();
+        page.carries.record(tonight.id, refused());
+        page.undo_carry(tonight.id, Some(stale));
+        assert!(
+            page.carries.results.contains_key(&tonight.id),
+            "a press on the replaced result's line leaves the newer result alone"
+        );
+        page.carries.end(tonight.id);
 
         // A restart: the note holds what the act wrote, and every part is done.
         let mut draft = Draft::open(&tonight.path).unwrap();
