@@ -1783,7 +1783,11 @@ mod tests {
         assert_eq!(read(), changed);
         assert!(
             harness
-                .query_all_by_label("The note changed on disk. Choose in the note first.")
+                .query_all_by_label(
+                    "Nothing was carried over from Session 1: The Road into Session 2: The \
+                     Crossing. The session note has unsaved words, and its file changed on disk. \
+                     Choose which words to keep in the session note first."
+                )
                 .next()
                 .is_some()
         );
