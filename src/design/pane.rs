@@ -4283,7 +4283,7 @@ mod editor_region_tests {
                     let text = &mut state.text;
                     // Save at the column's right edge, as the app's save row ends.
                     let save_row = |ui: &mut Ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                             ui.button("Save").rect
                         })
                         .inner
