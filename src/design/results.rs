@@ -1057,7 +1057,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Body],
         ),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
-        ("src/sessions/page.rs", "add_dropped", &[Ban::Order]),
         (
             "src/sessions/page.rs",
             "template_editor",

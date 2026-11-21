@@ -1423,8 +1423,6 @@ pub struct Draft {
     pub restored: Option<Uuid>,
     /// The words the DM chose to lose, and how, until the next edit.
     pub dropped: Option<Dropped>,
-    /// When the drop's result was made (`timeline::next_result_order`).
-    pub dropped_order: crate::design::ResultOrder,
     /// The file's text when the words were dropped. If the draft has followed the file since,
     /// Undo meets the conflict choice instead of saving over the newer text.
     dropped_baseline: Option<String>,
@@ -1476,7 +1474,6 @@ impl Draft {
             moved_to: None,
             restored: None,
             dropped: None,
-            dropped_order: crate::design::ResultOrder::default(),
             dropped_baseline: None,
             save_again_error: None,
             last_edit: None,
@@ -1694,7 +1691,6 @@ impl Draft {
             }
         }
         self.dropped = Some(Dropped::Discarded(words));
-        self.dropped_order = crate::timeline::next_result_order();
         self.dropped_baseline.clone_from(&self.baseline);
     }
 
@@ -1722,7 +1718,6 @@ impl Draft {
         let words = self.body.clone();
         self.reload()?;
         self.dropped = Some(Dropped::Reloaded(words));
-        self.dropped_order = crate::timeline::next_result_order();
         self.dropped_baseline.clone_from(&self.baseline);
         Ok(())
     }

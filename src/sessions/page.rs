@@ -707,6 +707,8 @@ pub struct Sessions {
     template_error: Option<String>,
     /// A deleted template's words, for its `Undo delete`.
     deleted_templates: design::Results<kept::Page, kept::DeletedTemplate>,
+    /// The words a draft's warning dropped, as their result (`Undo reload`, `Undo discard`).
+    dropped: design::Results<kept::DraftFile, kept::Dropped>,
     recordings: Vec<Recording>,
     live: Option<Live>,
     confirm_record: bool,
@@ -868,35 +870,55 @@ fn fills_body(reason: design::pane::FillsReason) -> design::pane::Body {
 }
 
 /// The words a draft dropped (reloaded from disk, or discarded) and their Undo, in the footer
-/// of the pane that holds the draft. They keep the order the drop took (`Draft::dropped_order`,
-/// staged): the draft issues it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: the dropped words of a draft keep their own order (`outcome_at`, design::results::STAGED_ALLOWS)"
-)]
-fn add_dropped(messages: &mut Messages<'_, SessionAct>, draft: &Draft) {
-    match draft.dropped {
-        Some(Dropped::Reloaded(_)) => {
-            messages.outcome_at(
-                draft.dropped_order,
-                KeptOutcome::Notice(
-                    Notice::new(crate::sentence!(
-                        "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
-                    )),
-                    UndoStep::verb(Verb::Reload).pressed_as(SessionAct::UndoDrop),
-                ),
-            );
+/// of the pane that holds the draft: the result its store keeps (M0437), with the store's order,
+/// taken at the act, and its ticket.
+fn add_dropped<'f>(
+    frame: &'f PaneFrame,
+    messages: &mut Messages<'f, SessionAct>,
+    draft: &Draft,
+    dropped: &design::Results<kept::DraftFile, kept::Dropped>,
+) {
+    if draft.dropped.is_none() {
+        return;
+    }
+    let Some(shown) = dropped.get(&kept::DraftFile {
+        path: draft.path.clone(),
+    }) else {
+        return;
+    };
+    messages.kept(shown.outcome(frame, |dropped| {
+        if dropped.reloaded {
+            KeptOutcome::Notice(
+                Notice::new(crate::sentence!(
+                    "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
+                )),
+                UndoStep::verb(Verb::Reload).pressed_as(SessionAct::UndoDrop),
+            )
+        } else {
+            KeptOutcome::Notice(
+                Notice::new(crate::sentence!("Draft discarded.")),
+                UndoStep::verb(Verb::Discard).pressed_as(SessionAct::UndoDrop),
+            )
         }
-        Some(Dropped::Discarded(_)) => {
-            messages.outcome_at(
-                draft.dropped_order,
-                KeptOutcome::Notice(
-                    Notice::new(crate::sentence!("Draft discarded.")),
-                    UndoStep::verb(Verb::Discard).pressed_as(SessionAct::UndoDrop),
-                ),
-            );
-        }
-        None => {}
+    }));
+}
+
+/// After a draft's warning: a Reload or Discard that dropped the draft's words records their
+/// result, at the act, so it lists as the newest.
+fn keep_dropped(
+    dropped: &mut design::Results<kept::DraftFile, kept::Dropped>,
+    draft: &Draft,
+    act: Option<DraftAct>,
+) {
+    if matches!(act, Some(DraftAct::Reload | DraftAct::Discard))
+        && let Some(words) = &draft.dropped
+    {
+        dropped.record(kept::Dropped {
+            file: kept::DraftFile {
+                path: draft.path.clone(),
+            },
+            reloaded: matches!(words, Dropped::Reloaded(_)),
+        });
     }
 }
 
@@ -1659,6 +1681,26 @@ impl Sessions {
     /// session's note ends them, from any page; another note's edit does not. Book edits and
     /// combat that begins in that session end them in the book itself. This runs every frame,
     /// so it looks at the notes and the words only when the removal or the draft changed.
+    /// A dropped-words result ends with the words: at an edit, at its Undo or at another change
+    /// of the draft's file, the draft lets them go (`Draft::dropped`). Read on every frame, it
+    /// changes the store only at that change.
+    fn end_dropped(&mut self) {
+        if self.dropped.is_empty() {
+            return;
+        }
+        for draft in [self.draft.as_ref(), self.template_draft.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            let file = kept::DraftFile {
+                path: draft.path.clone(),
+            };
+            if draft.dropped.is_none() && self.dropped.get(&file).is_some() {
+                self.dropped.owner_changed(&file);
+            }
+        }
+    }
+
     fn end_removal_on_note_edit(&mut self, book: &mut Book) {
         let Some(removed) = book.removed_event() else {
             self.removal_note = None;
@@ -1726,6 +1768,7 @@ impl Sessions {
             .collect();
         book.open(self.folder.as_deref());
         self.end_removal_on_note_edit(book);
+        self.end_dropped();
         if let Some(live) = &mut self.live {
             live.recorder.poll();
             if let Health::Stopped(words) = live.recorder.health().clone() {
@@ -2048,7 +2091,8 @@ impl Sessions {
         // that every page uses (`note_name`).
         let name = self.note_name();
         if let Some(draft) = self.draft.as_mut().filter(|draft| draft.needs_attention()) {
-            Self::draft_warning(ui, draft, name.as_deref());
+            let act = Self::draft_warning(ui, draft, name.as_deref());
+            keep_dropped(&mut self.dropped, draft, act);
         }
         if self.on_page
             && self.view == View::Templates
@@ -2057,7 +2101,8 @@ impl Sessions {
                 .as_mut()
                 .filter(|draft| draft.needs_attention())
         {
-            Self::draft_warning(ui, draft, None);
+            let act = Self::draft_warning(ui, draft, None);
+            keep_dropped(&mut self.dropped, draft, act);
         }
     }
 
@@ -4094,7 +4139,7 @@ impl Sessions {
             self.draft.as_ref()
         };
         if let Some(draft) = draft {
-            add_dropped(&mut messages, draft);
+            add_dropped(frame, &mut messages, draft, &self.dropped);
         }
         if template {
             if let Some(shown) = self.deleted_templates.get(&self.page()) {
@@ -4124,8 +4169,11 @@ impl Sessions {
                 } else {
                     self.draft.as_mut()
                 };
-                if let Some(draft) = draft {
-                    draft.undo_dropped();
+                if let (Some(draft), Some(ticket)) = (draft, press.ticket) {
+                    let _ = self.dropped.undo_by(ticket, |_| {
+                        draft.undo_dropped();
+                        Ok::<(), ()>(())
+                    });
                 }
             }
             SessionAct::UndoDeleteTemplate => {
@@ -4145,7 +4193,7 @@ impl Sessions {
     )]
     /// A draft's warning and its choices. `name` names a session note (`note_name`); a
     /// template's warning says `This note`.
-    fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft, name: Option<&str>) {
+    fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft, name: Option<&str>) -> Option<DraftAct> {
         let words = |text: &str| notice_sentence(&owned_words(name, text));
         // A new file could not be made: why, above the choices that are still open.
         if draft.state == DraftState::Missing
@@ -4222,6 +4270,7 @@ impl Sessions {
             // A reload that worked left the draft as the file is.
             Some(DraftAct::Reload) | None => {}
         }
+        pressed
     }
 
     fn open_form(&mut self) {
@@ -5097,7 +5146,7 @@ impl Sessions {
                 let mut messages =
                     Messages::new(&frame, "notes_panel_footer", ui.available_width());
                 if let Some(draft) = &self.draft {
-                    add_dropped(&mut messages, draft);
+                    add_dropped(&frame, &mut messages, draft, &self.dropped);
                 }
                 if let Some(date) = dated {
                     messages.outcome(
@@ -6693,7 +6742,7 @@ impl Sessions {
         let mut messages = Messages::new(frame, ("session_footer", self.selected), width);
         let dismiss = || Choice::new(MessageChoice::Dismiss(Lost::Nothing), SessionAct::Dismiss);
         if let Some(draft) = &self.draft {
-            add_dropped(&mut messages, draft);
+            add_dropped(frame, &mut messages, draft, &self.dropped);
         }
         if let Some((tone, words)) = self
             .notice
@@ -6942,8 +6991,11 @@ impl Sessions {
             SessionAct::OpenSettings => self.wants_processing_settings = true,
             SessionAct::UndoCarry(session) => self.undo_carry(session),
             SessionAct::UndoDrop => {
-                if let Some(draft) = &mut self.draft {
-                    draft.undo_dropped();
+                if let (Some(draft), Some(ticket)) = (&mut self.draft, press.ticket) {
+                    let _ = self.dropped.undo_by(ticket, |_| {
+                        draft.undo_dropped();
+                        Ok::<(), ()>(())
+                    });
                 }
             }
             SessionAct::PlayTonight => self.play_this_one(),
@@ -8630,7 +8682,9 @@ mod tests {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(700.0, 300.0))
                 .build_ui_state(
-                    move |ui, draft: &mut Draft| Sessions::draft_warning(ui, draft, name),
+                    move |ui, draft: &mut Draft| {
+                        let _ = Sessions::draft_warning(ui, draft, name);
+                    },
                     draft,
                 );
             harness.run_steps(2);
