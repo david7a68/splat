@@ -756,6 +756,30 @@ fn settings_footer(d: &Driver<'_>, name: &str) -> Option<SettingsFooter> {
     })
 }
 
+/// Layout PR 8: every control and text of the Settings account column (from its heading's left
+/// edge), by name and rounded rect: the same list before and after a campaign act shows that no
+/// campaign result moved it.
+fn account_column(d: &Driver<'_>) -> Option<Vec<(String, [i32; 4])>> {
+    let left = d
+        .painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING)?
+        .left();
+    Some(
+        d.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.in_view() && !node.name.is_empty() && node.rect.left() >= left - 1.0
+            })
+            .map(|node| {
+                let r = node.rect;
+                (
+                    node.name,
+                    [r.left(), r.top(), r.right(), r.bottom()].map(|v| v.round() as i32),
+                )
+            })
+            .collect(),
+    )
+}
+
 /// Layout PR 8: in the wide Settings tab (1000 px and wider), the footer that holds `name` is its
 /// column's own: its pane does not reach the account column (so another column's content cannot
 /// set where it stands), it stands `S` below its pane's content, and `S` below the lowest control
@@ -7445,12 +7469,7 @@ pub mod empty {
         d.expect(ADD_CAMPAIGN);
         d.state("settings-no-campaigns", Sizes::All);
         // Layout PR 8: the account column's controls, before the campaign is added.
-        let account_before = [SMALL, DEFAULT, LARGE].map(|size| {
-            d.at_size(size, |d| {
-                d.place_of("Connect…")
-                    .zip(d.painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING))
-            })
-        });
+        let account_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, account_column));
         // Round 26 FB6: an inline creation form puts Create on its last field's line, after
         // the field, and its reason on a line below, at the field's left edge, that stays when
         // the reason goes.
@@ -7534,14 +7553,15 @@ pub mod empty {
             let before = [SMALL, DEFAULT, LARGE]
                 .iter()
                 .position(|known| *known == size)
-                .and_then(|at| account_before[at]);
-            let account = d
-                .place_of("Connect…")
-                .zip(d.painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING));
+                .and_then(|at| account_before[at].clone());
+            let account = account_column(d);
             d.observe(
                 "m32-L8-settings-campaign-footer",
-                held && (size.0 < 1000.0 || (before.is_some() && before == account)),
-                format!("{said}; the account column's Connect… and heading before {before:?}, now {account:?}"),
+                held && (size.0 < 1000.0
+                    || before
+                        .as_ref()
+                        .is_some_and(|b| !b.is_empty() && Some(b) == account.as_ref())),
+                format!("{said}; the account column before {before:?}, now {account:?}"),
             );
         });
         d.goal("add a first campaign");

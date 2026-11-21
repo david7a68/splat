@@ -1215,7 +1215,12 @@ impl Campaigns {
             if let Some(id) = open {
                 self.select(Some(id));
             }
-            design::gap(ui, design::Gap::S);
+            // An `S` gap before what follows the list: the import (with a session) or the add form
+            // (when no edit or import form is open). With neither, nothing follows, so the pane's
+            // footer stands `S` below the last rule.
+            if session.is_some() || (self.editing.is_none() && self.remote.is_none()) {
+                design::gap(ui, design::Gap::S);
+            }
             dndbeyond.show_import(ui, session.clone(), self);
             if self.editing.is_none() && self.remote.is_none() {
                 self.form(ui, false, true);
