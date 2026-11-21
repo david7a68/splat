@@ -2081,6 +2081,20 @@ pub(crate) fn detail_text(ui: &egui::Ui, detail: &str, hp_missing: bool) -> egui
     job.into()
 }
 
+/// A roster row's detail line at its whole width, as drawn (`detail_text` of its `stat_line`):
+/// the roster's facts column measures it (layout PR 5b).
+fn detail_width(ui: &egui::Ui, detail: &str, hp_missing: bool) -> f32 {
+    detail_text(ui, &stat_line(detail), hp_missing)
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            egui::TextStyle::Small,
+        )
+        .size()
+        .x
+}
+
 fn stat_line(text: &str) -> String {
     text.split(" · ")
         .map(|part| part.replace(' ', "\u{a0}"))
@@ -8309,11 +8323,7 @@ impl Encounters {
                         &format!("{}. {name}", i + 1),
                         &Type::Strong.font(ui),
                     )
-                    .max(design::number_width(
-                        ui,
-                        &detail,
-                        &Type::Small.font(ui),
-                    ));
+                    .max(detail_width(ui, &detail, hp_missing));
                     let column_facts = kept_facts.max(own_facts);
                     let column =
                         kept_facts > 0.0 && column_facts + design::L + kept_actions <= room + 0.5;
@@ -8556,9 +8566,7 @@ impl Encounters {
                             &format!("{}. {name}", i + 1),
                             &Type::Strong.font(ui),
                         )
-                        .max(
-                            design::number_width(ui, &detail, &Type::Small.font(ui)) + change_extra,
-                        );
+                        .max(detail_width(ui, &detail, hp_missing) + change_extra);
                         design::action_rows::measured(ui, list, natural, actions.width());
                         #[cfg(any(test, feature = "test-support"))]
                         design::action_rows::keep(

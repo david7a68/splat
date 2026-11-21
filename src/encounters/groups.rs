@@ -3814,48 +3814,50 @@ fn members(
                     ui.max_rect().right()
                 };
                 let own_facts = facts.width().max(count.rect.right() - left);
-                // The line's width ends at the column; its height is the old line's.
-                ui.set_max_width((end - ui.max_rect().left()).max(0.0));
                 let actions = ui
-                    .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        super::row_menu(ui, &name, |ui| {
-                            if super::menu_action(
-                                ui,
-                                "Move up",
-                                (index == 0).then_some("Already first."),
-                            ) {
-                                raise = Some(index);
-                            }
-                            if super::menu_action(
-                                ui,
-                                "Move down",
-                                (index + 1 == total).then_some("Already last."),
-                            ) {
-                                lower = Some(index);
-                            }
-                            if super::menu_action(ui, "Remove", None) {
-                                remove = Some(index);
-                            }
-                        });
-                        if Action::quiet(if entry.is_none() {
-                            "Replace…"
-                        } else {
-                            "Edit"
-                        })
-                        .density(Density::Read)
-                        .name(&button)
-                        .selected(is_open)
-                        .show(ui)
-                        .clicked()
-                        {
-                            *expanded = if is_open {
-                                None
+                    .allocate_ui_with_layout(
+                        egui::vec2((end - ui.cursor().left()).max(0.0), 0.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            super::row_menu(ui, &name, |ui| {
+                                if super::menu_action(
+                                    ui,
+                                    "Move up",
+                                    (index == 0).then_some("Already first."),
+                                ) {
+                                    raise = Some(index);
+                                }
+                                if super::menu_action(
+                                    ui,
+                                    "Move down",
+                                    (index + 1 == total).then_some("Already last."),
+                                ) {
+                                    lower = Some(index);
+                                }
+                                if super::menu_action(ui, "Remove", None) {
+                                    remove = Some(index);
+                                }
+                            });
+                            if Action::quiet(if entry.is_none() {
+                                "Replace…"
                             } else {
-                                show_form_when_it_opens(ui);
-                                Some(key.clone())
-                            };
-                        }
-                    })
+                                "Edit"
+                            })
+                            .density(Density::Read)
+                            .name(&button)
+                            .selected(is_open)
+                            .show(ui)
+                            .clicked()
+                            {
+                                *expanded = if is_open {
+                                    None
+                                } else {
+                                    show_form_when_it_opens(ui);
+                                    Some(key.clone())
+                                };
+                            }
+                        },
+                    )
                     .response
                     .rect;
                 design::action_rows::measured(ui, list, own_facts, actions.width());
