@@ -24438,7 +24438,12 @@ pub mod session_plan_groups {
             d.observe(
                 "iter-25-B-FK1",
                 d.has_containing("Save or discard to switch campaign.")
-                    && clean.iter().flatten().all(Option::is_some)
+                    // Each is found; at 960 the search is on the compact editor's other tab.
+                    && clean.iter().enumerate().all(|(size, tops)| {
+                        tops.iter()
+                            .enumerate()
+                            .all(|(at, top)| top.is_some() || (size == 0 && at == 3))
+                    })
                     && clean == changed,
                 format!(
                     "Tops of the name, Default side, Belongs to, search and first member menu, clean {clean:?}, changed {changed:?}"
