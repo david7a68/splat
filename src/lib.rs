@@ -3069,6 +3069,8 @@ impl eframe::App for Splat {
         self.encounters
             .tick_sync(ctx, session, epoch, active.as_ref());
         self.sessions.on_page = self.page == Page::Sessions;
+        // The app's one test of an open modal (`art::modal_open`): Ctrl+S waits for it.
+        self.sessions.modal = modal;
         if !self.sessions.on_page {
             self.sessions.left_page();
         }

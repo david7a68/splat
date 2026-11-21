@@ -1067,9 +1067,15 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world/edit.rs",
             "edit_form",
-            &[Ban::Results, Ban::Extras(2)],
+            &[Ban::Results, Ban::Extras(1)],
         ),
-        ("src/world/page.rs", "creation_body", &[Ban::Extras(1)]),
+        // M20 (M-W0.4): the creation error in place of the page's body (was
+        // `message_with_actions`).
+        (
+            "src/world/page.rs",
+            "creation_body",
+            &[Ban::Extras(1), Ban::Body],
+        ),
         // Package K: raw egui calls that a layout part replaces.
         (
             "src/campaigns.rs",
@@ -1125,7 +1131,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
@@ -1235,6 +1240,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_body_fault_gives_its_repairs_back_by_id",
             &[Ban::Body],
         ),
+        // N0 (ruling M21): a message holds at most one primary choice.
+        (
+            "src/design/outcome.rs",
+            "a_message_has_at_most_one_primary_choice",
+            &[Ban::Body],
+        ),
         ("src/processing/settings.rs", "cause", &[Ban::Words]),
         ("src/processing/settings.rs", "key_fault", &[Ban::Body]),
         ("src/timeline/checks.rs", "cause", &[Ban::Words]),
@@ -1338,7 +1349,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        ("src/world.rs", "draw", &[Ban::Extras(4)]),
+        // M20 (M-W0.4): the index's warnings on this note, in the reader's body (were `message`).
+        ("src/world.rs", "draw", &[Ban::Extras(4), Ban::Body]),
+        // M20 (M-W0.4): an unread value's warning (was `message`).
+        ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
@@ -1611,7 +1625,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaigns.rs", 1),
             ("src/design/components.rs", 1),
             ("src/design/gallery.rs", 2),
-            ("src/world/edit.rs", 1),
         ],
     ),
     (

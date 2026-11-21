@@ -19736,6 +19736,37 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
+        // Lane E2's pressure caller (round 31 SD11, chosen-value-weight): the side picker's closed
+        // value is the `Dropdown` part's, in regular `Body` weight, at 960 and at 1920.
+        for size in [SMALL, LARGE] {
+            let families = d.at_size(size, |d| {
+                let control = d.place_of(&d.name_starting("Default side for "));
+                let mut families = Vec::new();
+                d.each_painted_text(|text, _| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if control.is_some_and(|control| control.contains(rect.center()))
+                        && !text.galley.job.text.trim().is_empty()
+                        && text.galley.job.text.chars().any(char::is_alphabetic)
+                    {
+                        families.extend(
+                            text.galley
+                                .job
+                                .sections
+                                .iter()
+                                .map(|section| section.format.font_id.family.to_string()),
+                        );
+                    }
+                });
+                families
+            });
+            let body =
+                egui::FontFamily::Name(crate::design::Type::Body.family().into()).to_string();
+            d.observe(
+                "r31-SD11-side-value-weight",
+                !families.is_empty() && families.iter().all(|family| *family == body),
+                format!("At {size:?}, the default side's closed value is painted in {families:?}, want {body}"),
+            );
+        }
         // R38 (structural B4): the back line, its word whole at the text edge, the name below.
         let faults = back_line_faults(d, "Encounters", "Back to encounters", "Group name", None);
         d.observe(
