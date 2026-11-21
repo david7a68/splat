@@ -9160,6 +9160,11 @@ fn roster_detail(detail: &str) -> String {
 }
 
 #[cfg(test)]
+pub(crate) use splat_content_ui::content_actions::{
+    blocked_draft_switch_reason, draft_switch_reason,
+};
+
+#[cfg(test)]
 mod tests {
     use super::*;
     #[test]
@@ -13717,8 +13722,3 @@ mod tests {
         assert_eq!(run.hp_of(1), Some(7));
     }
 }
-
-#[cfg(test)]
-pub(crate) use splat_content_ui::content_actions::{
-    blocked_draft_switch_reason, draft_switch_reason,
-};
