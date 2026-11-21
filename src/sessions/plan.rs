@@ -658,14 +658,17 @@ fn plan_row_with(
             let column = kept > 0.0
                 && actions >= widths[1] - 0.5
                 && facts + design::L + actions <= room + 0.5;
+            // The actions are centred on the title's first line, which is centred in its `XL`
+            // band (round 27 FL4): a `⋯` beside the title sits on its line (N2).
+            let top = left.y + (design::XL - Density::Read.control()) / 2.0;
             let action_rect = if column {
                 egui::Rect::from_min_size(
-                    egui::pos2(left.x + facts + design::L, left.y),
+                    egui::pos2(left.x + facts + design::L, top),
                     egui::vec2(widths[1], Density::Read.control()),
                 )
             } else {
                 egui::Rect::from_min_size(
-                    egui::pos2(ui.max_rect().right() - widths[1], left.y),
+                    egui::pos2(ui.max_rect().right() - widths[1], top),
                     egui::vec2(widths[1], Density::Read.control()),
                 )
             };
