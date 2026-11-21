@@ -170,6 +170,16 @@ pub fn broken(d: &mut Driver<'_>) {
     // the pane's bottom; a footer that cuts no body has no hairline at its top.
     d.state_prepared("broken-note-repair", Sizes::All, |d| {
         repair_footer_follows(d, "Line 3 opens a list", "iter-27-A-FE2");
+        // Layout PR 9 (SI5, AI1): the short editor's frame and Save share one right edge.
+        let (whole, detail) = d.editor_frame_whole(
+            &crate::world::repair::editor_name("Notes/Broken.md"),
+            Some("Save repaired note"),
+        );
+        d.observe(
+            "layout-9-SI5-short-frame",
+            whole,
+            format!("The short repair's frame is whole and ends at Save: {detail}"),
+        );
     });
     long_repair_keeps_save(d);
     let external = "---\nsplat_schema: 2\nsplat_id: [\n---\n\nOutside edit kept.\n";
@@ -3214,6 +3224,20 @@ pub fn round_trip(d: &mut Driver<'_>) {
             "iter-8-D-FD2-both",
             one_status,
             format!("A repair and an edit share one repair rail status at {size:?}"),
+        );
+    }
+    // Layout PR 9 (SJ9, AJ8): the repair's frame holds its lane and ends at Save, at each size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (whole, detail) = d.at_size(size, |d| {
+            d.editor_frame_whole(
+                &crate::world::repair::editor_name("Notes/Rail repair.md"),
+                Some("Save repaired note"),
+            )
+        });
+        d.observe(
+            "layout-9-SJ9-repair-frame",
+            whole,
+            format!("At {size:?}, the repair's frame is whole and ends at Save: {detail}"),
         );
     }
     d.state("world-edit-and-repair-drafts", Sizes::All);
@@ -13660,6 +13684,20 @@ fn long_repair_keeps_save(d: &mut Driver<'_>) {
             && !d.visible_passage("Long line 1.\n")
             && d.editor_text().is_some_and(|text| text.contains("Long line 300. Edited.")),
         format!("At 960x640, editing line 300 of 600 keeps Save and Discard whole in view, with the edited line: {detail}"),
+    );
+    // Layout PR 9 (SI1, AI1): the long editor's fixed frame keeps all four edges in view, its
+    // text and lane scroll inside it, and it ends at Save's right edge; at 960 and at 1920.
+    let (whole, detail) = d.editor_frame_whole(&editor_name, Some(SAVE));
+    d.observe(
+        "layout-9-SI1-long-frame",
+        whole,
+        format!("At 960x640, the long repair's frame is whole and ends at Save: {detail}"),
+    );
+    let (whole, detail) = d.at_size(LARGE, |d| d.editor_frame_whole(&editor_name, Some(SAVE)));
+    d.observe(
+        "layout-9-SI1-long-frame-1920",
+        whole,
+        format!("At 1920x1080, the long repair's frame is whole and ends at Save: {detail}"),
     );
     d.state("long-repair-middle-line-edited", Sizes::Small);
     // Discard works, and the footer gains its Undo line: Save stays whole in view.

@@ -3651,6 +3651,20 @@ pub mod campaign_content {
             "Reload from disk stays, blocked, while a repair draft has changes",
             |d| d.has_containing(RELOAD) && d.is_disabled(RELOAD),
         );
+        // Layout PR 9 (SA7, AA6): the repair's frame holds its lane and ends at Save, at each size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (whole, detail) = d.at_size(size, |d| {
+                d.editor_frame_whole(
+                    &crate::world::repair::editor_name("Notes/Broken.md"),
+                    Some("Save repaired note"),
+                )
+            });
+            d.observe(
+                "layout-9-SA7-campaign-repair-frame",
+                whole,
+                format!("At {size:?}, the repair's frame is whole and ends at Save: {detail}"),
+            );
+        }
         d.state("repair-dirty", Sizes::All);
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
         // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
@@ -15088,6 +15102,15 @@ pub mod session_notes {
                 .zip(last_row)
                 .is_some_and(|(result, row)| result.top() > row.bottom() + crate::design::XL),
             format!("The delete result {result:?} is in the footer, below the list {last_row:?}"),
+        );
+        // Layout PR 9 (SP7): a template editor in view keeps all four frame edges above the
+        // pane's footer.
+        let template = d.place_of("Template text").is_some();
+        let (whole, detail) = d.editor_frame_whole("Template text", None);
+        d.observe(
+            "layout-9-SP7-template-frame",
+            template && whole,
+            format!("A template editor beside the delete result keeps its frame whole: {detail}"),
         );
         d.state("templates-deleted", Sizes::Default);
         d.click("Undo delete");
