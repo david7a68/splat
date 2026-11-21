@@ -1663,17 +1663,19 @@ impl CampaignContent {
                 // An answer that already stands first in the footer (a refused pick) keeps that
                 // place for the next one, so the lines below it move by no more than the change
                 // of its height.
-                let answered = self.answer.is_some();
+                // Astra's re-check of PR 619: the place of an answer that already stands (first,
+                // or under the line an earlier failed press answered) is kept for the next one,
+                // so a second failure of the same Undo moves nothing either.
+                let standing = self.answer.as_ref().map(|answer| answer.under);
                 let mut results = std::mem::take(&mut self.results);
                 let undone = results.undo_by(ticket, |kept| self.undo_result(&kept.payload));
                 self.results = results;
-                // A failed Undo keeps its result and its Undo; with no answer standing before
-                // it, its failure answers that press under its line (`Messages::answer`).
+                // A failed Undo keeps its result and its Undo; its failure answers that press
+                // under its line (`Messages::answer`), or takes the standing answer's place.
                 if undone.is_err()
-                    && !answered
                     && let Some(answer) = &mut self.answer
                 {
-                    answer.under = line;
+                    answer.under = standing.unwrap_or(line);
                 }
             }
             // An encounter opens in Lookup by its id, whatever the page holds now.

@@ -3998,20 +3998,37 @@ pub mod campaign_content {
         let written = std::fs::read(&manifest).unwrap();
         std::fs::remove_file(&manifest).unwrap();
         std::fs::create_dir(&manifest).unwrap();
+        // Layout step 7 (Astra's P1 and its re-check on PR 619): the footer follows the page, so
+        // each failure answers its press under the pressed line, and the Undo stays under the
+        // pointer through a first and a second failed press, with the fault left in place.
+        let undo_at = |d: &Driver<'_>| d.place_of("Undo write Campaign.md");
+        let before = undo_at(d);
         d.click("Undo write Campaign.md");
         d.settle();
         let kept =
             d.has("Undo write Campaign.md") && d.visible_text("Campaign.md was written again.");
+        let first = undo_at(d);
+        d.click("Undo write Campaign.md");
+        d.settle();
+        let second = undo_at(d);
+        let kept = kept
+            && d.has("Undo write Campaign.md")
+            && d.visible_text("Campaign.md was written again.");
         std::fs::remove_dir(&manifest).unwrap();
         std::fs::write(&manifest, &written).unwrap();
         d.observe(
             "iter-25-C-undo-failed",
             kept,
             format!(
-                "After a failed Undo: Undo kept {}, result kept {}",
+                "After two failed Undos: Undo kept {}, result kept {}",
                 d.has("Undo write Campaign.md"),
                 d.visible_text("Campaign.md was written again.")
             ),
+        );
+        d.observe(
+            "l7-P1-undo-still",
+            before.is_some() && before == first && first == second,
+            format!("Undo write Campaign.md before {before:?}, after one failed press {first:?}, after two {second:?}"),
         );
         d.click("Undo write Campaign.md");
         d.wait_for_text("Write Campaign.md again");
