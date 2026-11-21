@@ -437,35 +437,68 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     // its menu, and a close icon at the right end of the title's line. Wide, all on one line;
     // narrow, the actions go under the title and the close icon stays on the title's line.
     // The status link opens its menu; the close icon's press comes back as `closed`.
+    // M-L0.10 (ruling M21): a menu action (`Packages`) opens its menu, and a blocked one does
+    // not; the status menu keeps inside the room the caller gives from the link's rect (the
+    // column under it, issue #504), one lane clear of its edges.
     const NEW_ENTRY: Word = crate::word!("New entry");
+    const PACKAGES: Word = crate::word!("Packages");
     const KEY: KeyName = crate::key!("N");
-    fn header(opened: &std::cell::Cell<bool>) -> TitleLine<'_> {
+    const MENU_LINE: &str = "Rules/Watch.md: 2 broken links";
+    fn header<'a>(
+        opened: &'a std::cell::Cell<bool>,
+        packages: &'a std::cell::Cell<bool>,
+        blocked: bool,
+        room: Rect,
+    ) -> TitleLine<'a> {
         TitleLine::new("Library")
             .action(TitleAction::secondary(NEW_ENTRY).key(KEY))
+            .menu(
+                TitleAction::quiet(PACKAGES).blocked(blocked.then_some("Wait for the Library.")),
+                move |ui| {
+                    packages.set(true);
+                    let _ = ui.label("Reload from disk");
+                },
+            )
             .status(
                 Status {
                     icon: crate::design::icons::WARN,
                     word: "3 files need fixing",
                     color: colors().result.warning,
                 },
-                |ui| {
+                move |ui| {
                     opened.set(true);
-                    let _ = ui.label("Rules/Watch.md: 2 broken links");
+                    let _ = ui.label(MENU_LINE);
                 },
             )
+            .menu_room(move |_| room)
             .close("Close Library")
     }
-    for (width, beside) in [(900.0, true), (260.0, false)] {
+    for (width, beside, blocked) in [
+        (900.0, true, false),
+        (260.0, false, false),
+        (900.0, true, true),
+    ] {
         let ctx = context();
         let opened = std::cell::Cell::new(false);
+        let packages = std::cell::Cell::new(false);
+        let lock = std::cell::Cell::new(blocked);
         let closed = std::cell::Cell::new(false);
         let left = std::cell::Cell::new(0.0);
+        // The column under the link: the line's right half, as a reader beside a list.
+        let room = std::cell::Cell::new(Rect::NOTHING);
         let draw = |events: Vec<egui::Event>| {
             frame_with(&ctx, vec2(width + 40.0, 400.0), events, |ui| {
                 let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
                 left.set(rect.left());
+                room.set(Rect::from_min_max(
+                    pos2(rect.center().x, rect.top()),
+                    rect.right_bottom(),
+                ));
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                    if header(&opened).show(ui).closed {
+                    if header(&opened, &packages, lock.get(), room.get())
+                        .show(ui)
+                        .closed
+                    {
                         closed.set(true);
                     }
                 });
@@ -519,10 +552,93 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             ]
         };
         draw(click(status.center()));
-        draw(Vec::new());
+        let (_, painted) = draw(Vec::new());
         assert!(opened.get(), "{width}: the status link opens its menu");
+        let lane = lane_width().max(S);
+        let line = painted
+            .iter()
+            .find(|text| text.text == MENU_LINE)
+            .map(|text| text.rect.intersect(text.clip))
+            .expect("the status menu's line");
+        assert!(
+            line.left() >= room.get().left() + lane - 0.5
+                && line.right() <= room.get().right() - lane + 0.5,
+            "{width}: the status menu {line:?} keeps inside its room {:?}, a lane from its edges",
+            room.get()
+        );
+        draw(vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]);
+        let (nodes, _) = draw(Vec::new());
+        let menu = bounds(&nodes, "Packages");
+        assert!(
+            (menu.center().y - new.center().y).abs() < 1.0,
+            "{width}: the menu action is placed as an action: {menu:?}, New entry {new:?}"
+        );
+        draw(click(menu.center()));
+        let (_, painted) = draw(Vec::new());
+        assert_eq!(
+            packages.get(),
+            !blocked,
+            "{width}: the menu action opens its menu unless it is blocked"
+        );
+        if let Some(choice) = painted
+            .iter()
+            .find(|text| text.text == "Reload from disk")
+            .map(|text| text.rect.intersect(text.clip))
+        {
+            assert!(
+                choice.left() >= room.get().left() + lane - 0.5
+                    && choice.right() <= room.get().right() - lane + 0.5,
+                "{width}: the menu action's menu {choice:?} keeps inside the room {:?} too",
+                room.get()
+            );
+        }
+        assert_eq!(
+            painted.iter().any(|text| text.text == "Reload from disk"),
+            !blocked,
+            "{width}: the menu's choice is drawn exactly when the menu opens"
+        );
+        // A menu that is open when its action becomes blocked is not drawn, so its choices
+        // cannot pass the lock.
+        lock.set(true);
+        packages.set(false);
+        draw(Vec::new());
+        assert!(
+            !packages.get(),
+            "{width}: an open menu is not drawn while its action is blocked"
+        );
+        lock.set(blocked);
         draw(click(close.center()));
         assert!(closed.get(), "{width}: the close icon's press comes back");
+    }
+
+    // Issue #567: a close icon and no actions: a title wider than its line wraps clear of the
+    // close icon, never under it.
+    {
+        let ctx = context();
+        let (nodes, painted) = frame_with(&ctx, vec2(240.0, 300.0), Vec::new(), |ui| {
+            let rect = Rect::from_min_size(ui.cursor().min, vec2(200.0, 200.0));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                let _ = TitleLine::new("The Lantern Market below the old harbour wall")
+                    .close("Close panel")
+                    .show(ui);
+            });
+        });
+        let close = bounds(&nodes, "Close panel");
+        let title: Vec<_> = painted
+            .iter()
+            .filter(|text| text.text.contains("Lantern"))
+            .map(|text| text.rect)
+            .collect();
+        assert!(
+            !title.is_empty() && title.iter().all(|rect| rect.right() <= close.left() + 0.5),
+            "the long title {title:?} keeps clear of the close icon {close:?}"
+        );
     }
 
     // R38, R35: an Encounters editor's head, as both editors draw it. The back line is one row

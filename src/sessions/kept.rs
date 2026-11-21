@@ -106,6 +106,43 @@ impl Kept for FolderMoved {
     }
 }
 
+/// A draft's file: the session note or the template a draft edits. A result of that draft is
+/// its file's; another draft's file hides it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct DraftFile {
+    pub path: PathBuf,
+}
+
+impl Owner for DraftFile {
+    type Scope = Path;
+    fn scope(&self) -> &Path {
+        &self.path
+    }
+}
+
+/// `Reloaded from disk. …` with `Undo reload`, or `Draft discarded.` with `Undo discard`: the
+/// words a draft's warning dropped (M0437). The words stay with the draft (`Draft::dropped`),
+/// which lets them go at an edit, at its Undo or at another change of its file; this entry is
+/// their result, recorded at the act, and ends with them (`Sessions::end_dropped`).
+pub(super) struct Dropped {
+    pub file: DraftFile,
+    pub reloaded: bool,
+}
+
+impl Kept for Dropped {
+    type Owner = DraftFile;
+    const ENDS: Ends = Ends {
+        // The draft letting the words go ends it (`end_dropped`).
+        owner_changed: OwnerChanged::Ends,
+        // Its Undo puts the words back as the draft holds them; a file change ends the words.
+        disk_changed: DiskChanged::Stays,
+        press: Press::Undo,
+    };
+    fn owner(&self) -> DraftFile {
+        self.file.clone()
+    }
+}
+
 /// `<file> is now a separate session.` and its Undo. The copy's file holds the new identity
 /// until the Undo writes the old one back.
 pub(super) struct Separate {
