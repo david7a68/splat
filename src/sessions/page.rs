@@ -2402,7 +2402,7 @@ impl Sessions {
             self.wants_sessions_page = true;
             self.view = View::Notes;
             self.form = None;
-            self.tab = Tab::Recordings;
+            self.show_tab(Tab::Recordings);
             if Some(session) != self.selected {
                 self.select(Some(session));
             }
@@ -2997,7 +2997,7 @@ impl Sessions {
             })
         {
             self.open(session);
-            self.tab = Tab::Recordings;
+            self.show_tab(Tab::Recordings);
         }
     }
 
@@ -5310,10 +5310,16 @@ impl Sessions {
         }
     }
 
+    /// Show one of the session view's tabs. The DM screen's Play has no tabs, so it gives
+    /// way to the full session view (Notes) for the tab.
+    fn show_tab(&mut self, tab: Tab) {
+        self.dm_screen.show_notes();
+        self.tab = tab;
+    }
+
     /// Show the note, ready for words.
     fn write_in_note(&mut self) {
-        self.dm_screen.show_notes();
-        self.tab = Tab::Note;
+        self.show_tab(Tab::Note);
         self.reading_note = false;
         self.caret_to_show = None;
         self.note_scroll_to_top = true;
@@ -7136,6 +7142,8 @@ impl Sessions {
                     });
                 });
             }
+            // One line: where the DM picks up the thread, at the table too.
+            self.last_time_block(ui, book, plan);
             return SessionView::DmScreen;
         }
         // A group being assembled needs the height, and last time can wait for it.
@@ -9087,6 +9095,20 @@ mod tests {
             }
             assert!(sessions.updated_links.is_none());
         }
+    }
+
+    /// Play shows no tabs. An act that shows one (the rail's or the banner's recording) moves
+    /// the DM screen to Notes, where the tab shows; the DM screen stays open.
+    #[test]
+    fn a_tab_shown_from_elsewhere_leaves_play() {
+        let mut sessions = Sessions {
+            notice_session: Some(Uuid::new_v4()),
+            ..Sessions::default()
+        };
+        sessions.dm_screen.open_play();
+        sessions.open_live_recording();
+        assert!(sessions.tab == Tab::Recordings);
+        assert!(sessions.dm_screen.is_open() && !sessions.dm_screen.is_play());
     }
 
     #[test]

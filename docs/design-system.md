@@ -2092,11 +2092,16 @@ chosen, or its file went), and the narrow page keeps its own `All sessions` link
 stays for when it shows again. Nothing is only in the list: another session's recording, processing and
 failures are also in the rail and the bottom banner.
 
-`DM screen` opens a fixed preview on the Session page. Play puts the live plan beside an editor for
-`What happened`, with `Open threads` and the remaining note in the third column. The widgets become
-tabs when the page is too narrow for three columns. The Play and Notes buttons below the widgets,
-or Ctrl+PageUp and Ctrl+PageDown, move between the preview and the full session view. Both use the
-same session draft and save state. The preview is opt-in and lasts for the app run.
+`DM screen` opens a fixed preview on the Session page. Play keeps the `Last time` line and puts the
+live plan beside an editor for `What happened`, with `Open threads` and `Rest of note` in the third
+column. The editor fills its tile. In a note without the section, the first words typed add
+`## What happened` at the note's end, as `insert_in_note` does. When the page has room for two more
+columns of reading (a 1440p screen, or 4K at 150 %), `Open threads` and `Rest of note` get a column
+each. The tiles become tabs when the page is too narrow for three columns; hiding the session list
+(`Ctrl+\`) gives its width to the tiles. The Play and Notes buttons below the tiles, or Ctrl+PageUp
+and Ctrl+PageDown, move between the preview and the full session view. An act that shows a tab of the
+full view (a recording opened from the rail or the banner) moves to Notes. Both use the same session
+draft and save state. The preview is opt-in and lasts for the app run.
 
 ### Notes and templates
 

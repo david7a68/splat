@@ -4939,7 +4939,7 @@ impl Sessions {
                 ((position, at), *line),
                 plan,
                 act,
-                self.dm_screen.is_play(),
+                self.dm_screen.in_tiles(),
             );
             self.row_fault(ui, place, shown);
         }

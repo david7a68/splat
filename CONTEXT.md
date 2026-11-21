@@ -298,10 +298,10 @@ The fights, groups and scenes a session's note lists under its plan, with what h
 holds the plan, so that Obsidian sees it too.
 
 **DM screen**:
-A Session view for use at the table. Its Play screen puts the live plan and sections of the open note in widgets.
+A Session view for use at the table. Its Play screen puts the live plan and sections of the open note in tiles.
 
-**Widget**:
-A tile on the DM screen. A note widget reads or edits the open session's draft.
+**Tile**:
+One framed part of the DM screen's Play screen. A note tile reads or edits the open session's draft.
 
 **Rewards**:
 What the party received in a fight: its loot results and, where the notes use XP, its XP, as one block in the
