@@ -1759,6 +1759,21 @@ pub mod library_browse {
             "Back returns to the prior entry and its search in one click, with Alt+Left shown",
         );
         d.state("back-after-link", Sizes::Default);
+        // M0387 (round 31 reader-end-section-pitch): the reader's end sections are one group
+        // at the Read row pitch, each header right under the one before.
+        let headers = ["Source text", "Technical details", "Source and identifiers"]
+            .map(|name| d.place_of(name));
+        let pitch = crate::design::Density::Read.control();
+        d.observe(
+            "M0387-end-section-pitch",
+            headers.iter().all(Option::is_some)
+                && headers.windows(2).all(|pair| {
+                    pair[0].zip(pair[1]).is_some_and(|(above, below)| {
+                        (below.center().y - above.center().y - pitch).abs() <= 0.5
+                    })
+                }),
+            format!("The end sections {headers:?} are {pitch} px apart"),
+        );
         d.begin_task();
         d.not_measured(
             "T6.3",
@@ -19643,7 +19658,7 @@ pub mod encounter_groups {
             };
             d.click("More actions for Rival Captainx");
             d.click(step);
-            let open = d.has("Maximum HP: how it changes");
+            let open = d.has_containing("Maximum HP: how it changes");
             d.type_into("Display name", "");
             d.press_ctrl(Key::Z);
             let undone = d.visible_text("Rival Captain") && !d.visible_text("Rival Captainx");
@@ -19772,7 +19787,7 @@ pub mod encounter_groups {
         d.click("Done with changes");
         d.observe(
             "F5",
-            !d.has("Maximum HP: how it changes")
+            !d.has_containing("Maximum HP: how it changes")
                 && d.in_view_containing("Changes for Ember Cultist"),
             "Done closes the form and returns to its member",
         );
@@ -19915,7 +19930,7 @@ pub mod encounter_groups {
         // beside the field takes the error colour.
         for size in [SMALL, DEFAULT] {
             let (placed, detail) = d.at_size(size, |d| {
-                let field = d.place_of("Maximum HP: how it changes");
+                let field = d.place_of(&d.name_starting("Maximum HP: how it changes"));
                 let mut faults = Vec::new();
                 let mut preview = None;
                 d.each_painted_text(|text, clip| {
@@ -20276,7 +20291,8 @@ pub mod encounter_groups {
             let menu = d
                 .place_of(&format!("More actions for {GROUP_LOST}"))
                 .expect("Lost Patrol remains in the list after removing Goblin Wave");
-            let scrolls = scroll_bar_right_of(d, menu.right());
+            // Layout PR 5a: the menu follows the row's facts; its row ends at the scroll lane.
+            let scrolls = scroll_bar_right_of(d, d.row_right_of(menu).unwrap_or(menu.right()));
             d.observe(
                 "iter-26-B-FI1",
                 scrolls == (size == SMALL),
@@ -21571,17 +21587,19 @@ pub mod encounter_owned_groups {
         d.expect("GROUPS");
         // FB2: opening Groups makes the page scroll at 960, and no row action moves.
         let actions = |d: &Driver<'_>| {
-            let menus: Vec<f32> = d
+            let menus: Vec<egui::Rect> = d
                 .nodes()
                 .into_iter()
                 .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
-                .map(|node| node.rect.right())
+                .map(|node| node.rect)
                 .collect();
+            // Layout PR 5a: the menus follow the rows' facts; their rows end at the scroll lane.
             let bar = menus
                 .iter()
-                .copied()
+                .map(|menu| d.row_right_of(*menu).unwrap_or(menu.right()))
                 .reduce(f32::max)
                 .is_some_and(|edge| scroll_bar_right_of(d, edge));
+            let menus: Vec<f32> = menus.iter().map(|menu| menu.right()).collect();
             (right_edges(d, "Resume"), menus, bar)
         };
         let closed = d.at_size(SMALL, actions);
@@ -22892,7 +22910,7 @@ pub mod run_overrides {
         );
         d.observe(
             "T13.3",
-            d.in_view("Maximum HP: how it changes"),
+            d.in_view_containing("Maximum HP: how it changes"),
             "Opening a slot's overrides brings the form into view, however low the slot is",
         );
         d.state("slot-changes-open", Sizes::All);

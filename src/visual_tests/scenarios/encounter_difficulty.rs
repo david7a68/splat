@@ -227,6 +227,9 @@ pub fn run(d: &mut Driver<'_>) {
     // Nameless Visitor's only creature lacks its XP, so its row ends with `XP not known` and
     // names Nameless Thing once. Where the summary gave way, the name follows the reason.
     d.state_prepared("ready-to-run", Sizes::All, |d| {
+        // Layout PR 5a (I6): the Ready rows' actions start `L` after the ledger's widest facts.
+        let (columns, detail) = d.ledger_columns();
+        d.observe("pr5a-ledger-columns", columns, detail);
         let mut lines = Vec::new();
         d.each_painted_text(|text, clip| {
             let words = text.galley.job.text.replace('\u{a0}', " ");
