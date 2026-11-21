@@ -297,8 +297,124 @@ impl ContentScroll {
 pub struct EditorRegion<'r> {
     pane: Id,
     max: f32,
+    /// A pane's region, or a viewport of its own (`editor_view`).
+    host: Host,
     /// Ties the region to the body closure (invariant in `'r`): it cannot be returned from it.
     _scope: std::marker::PhantomData<fn(&'r ()) -> &'r ()>,
+}
+
+/// Where an editor viewport is drawn.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Host {
+    /// A `pane_editor` body's region: as tall as the text up to the region's height.
+    Pane,
+    /// A viewport of its own (`editor_view`): `fills`, as tall as `max` with any text; else as
+    /// tall as the text up to `max`.
+    Alone { fills: bool },
+}
+
+/// How tall an editor viewport of its own is ([`editor_view`]).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum ViewHeight {
+    /// As tall as its text, up to this outside height; then its text scrolls inside the frame.
+    AtMost(f32),
+    /// The rest of the `Ui`'s height, with any text (an editor that fills its pane's body).
+    Fills,
+}
+
+/// An editor viewport of its own, outside a `pane_editor` body: the same closed part as
+/// [`EditorRegion::editor`], with the same fixed frame, inner text scroll and lane, caret
+/// follow and reveal. For an editor that a page's own scroll holds (Campaign's repair) or that
+/// fills its pane's body (a Session template). Keyed by `field`'s id.
+pub fn editor_view(
+    ui: &mut Ui,
+    height: ViewHeight,
+    field: super::layout::FieldId,
+    text: &mut dyn egui::TextBuffer,
+    style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+) -> super::layout::Editor {
+    let (max, fills) = match height {
+        ViewHeight::AtMost(most) => (most, false),
+        ViewHeight::Fills => (ui.available_height(), true),
+    };
+    EditorRegion {
+        pane: field.id().with("editor_view"),
+        max: max.floor().max(0.0),
+        host: Host::Alone { fills },
+        _scope: std::marker::PhantomData,
+    }
+    .editor(ui, field, text, style)
+}
+
+/// The fixed frame of every editor viewport: the field's well, its hairline and an `S` inner
+/// margin. The text and the scroll lane are inside it.
+fn editor_frame() -> egui::Frame {
+    egui::Frame::new()
+        .fill(super::tokens::colors().well)
+        .stroke(egui::Stroke::new(
+            super::tokens::HAIRLINE_WIDTH,
+            super::tokens::colors().field_border,
+        ))
+        .corner_radius(super::tokens::RADIUS_CONTROL)
+        .inner_margin(S)
+}
+
+/// What an editor viewport drew in one pass, for checks: its frame, the clip it was drawn in,
+/// its inner text view, the right edge of its scroll lane, and whether the region was held at
+/// its least height (`REGION_LEAST`; the pane then scrolls as a whole, a counted state).
+#[derive(Clone, Copy, Debug)]
+pub struct EditorFrameRecord {
+    field: Id,
+    frame: Rect,
+    clip: Rect,
+    view: Rect,
+    least: bool,
+}
+
+impl EditorFrameRecord {
+    /// The editor's field id.
+    pub fn field(&self) -> Id {
+        self.field
+    }
+
+    /// The fixed outside frame.
+    pub fn frame(&self) -> Rect {
+        self.frame
+    }
+
+    /// The clip the frame was drawn in: the frame is whole when this holds it.
+    pub fn clip(&self) -> Rect {
+        self.clip
+    }
+
+    /// The inner scroll view (the text and its lane), inside the frame.
+    pub fn view(&self) -> Rect {
+        self.view
+    }
+
+    /// The region was held at its least height: the pane scrolls as a whole, and the frame
+    /// may be cut by the pane's own scroll (the 64 px fallback, ruling L3; counted).
+    pub fn least(&self) -> bool {
+        self.least
+    }
+
+    /// All four outside edges are in view.
+    pub fn whole(&self) -> bool {
+        self.clip.expand(0.5).contains_rect(self.frame)
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+const EDITOR_FRAMES: &str = "design_editor_frames";
+
+/// Each editor viewport of the last completed pass, in the order drawn. Test builds only.
+#[cfg(any(test, feature = "test-support"))]
+pub fn editor_frames(ctx: &egui::Context) -> Vec<EditorFrameRecord> {
+    let last = ctx.cumulative_pass_nr().saturating_sub(1);
+    ctx.data(|data| data.get_temp::<(u64, Vec<EditorFrameRecord>)>(Id::new(EDITOR_FRAMES)))
+        .filter(|(pass, _)| *pass == last)
+        .map(|(_, frames)| frames)
+        .unwrap_or_default()
 }
 
 /// The least height of an editor region: a pane too small for its content and this much of
@@ -330,6 +446,12 @@ impl EditorRegion<'_> {
     /// The pane's one editor, drawn through `field` (its id and text guard, `FieldId::editor`)
     /// inside the region, as tall as its text up to the region's height, then scrolling.
     ///
+    /// The part draws the editor's fixed frame (I10): all four outside edges stay put, and the
+    /// text and the scroll lane scroll inside it. The frame takes the whole width it is given,
+    /// so a save row under it ends at the same outside right edge. `style` sets the text's face;
+    /// the part sets the frame, the margin and the width, so a caller cannot frame the text
+    /// inside the scroll or put the lane outside the frame.
+    ///
     /// A focused caret that moved since the last pass (set from code, for example to a broken
     /// line), or the first caret after the editor was not drawn, and lies outside the view is
     /// revealed, centred and with no animation, in the next pass; a caret that did not move is
@@ -343,12 +465,17 @@ impl EditorRegion<'_> {
     ) -> super::layout::Editor {
         let pane = innermost(ui);
         assert!(
-            pane.is_some_and(|open| open.pane == self.pane && open.content)
+            self.host != Host::Pane
+                || pane.is_some_and(|open| open.pane == self.pane && open.content)
                 || !cfg!(debug_assertions),
             "an editor region is drawn in its own pane's body, not in a pane inside it"
         );
         let key = self.pane.with("editor_region");
-        let max = self.max;
+        let frame = editor_frame();
+        let inset = frame.total_margin();
+        // The frame is the region; the text's view is the frame less its margins and stroke.
+        let max = (self.max - inset.sum().y).max(0.0);
+        let least = self.host == Host::Pane && self.max <= REGION_LEAST + 0.5;
         let top = ui.cursor().top();
         // The focused caret of the last pass, in the region's content (left, top, bottom), with
         // that pass's view height and offset. The region is the one writer of its offset, and
@@ -394,10 +521,13 @@ impl EditorRegion<'_> {
             .ctx()
             .data_mut(|data| data.remove_temp::<bool>(reveal_key))
             .unwrap_or(false);
+        let fills = self.host == Host::Alone { fills: true };
         let mut column = ScrollColumn::new(key)
             .max_height(max)
-            .min_scrolled_height(max)
-            .fit_height();
+            .min_scrolled_height(max);
+        if !fills {
+            column = column.fit_height();
+        }
         if let Some(at) = kept.and_then(|(_, caret_top, caret_bottom, view, offset)| {
             follow_caret(
                 caret_top..caret_bottom,
@@ -409,38 +539,62 @@ impl EditorRegion<'_> {
         }) {
             column = column.vertical_scroll_offset(at);
         }
-        let output = column.show_in_region(ui, |ui| {
-            // A scroll inside the region is refused, as in a `Content` body.
-            open(
-                ui,
-                Some(OpenPane {
-                    layer: ui.layer_id(),
-                    content: true,
-                    usable: pane.map_or(ui.clip_rect(), |open| open.usable),
-                    edge: false,
-                    pane: self.pane,
-                }),
-            );
-            // Where the content starts in this layout (the view's top less the offset used).
-            let origin = ui.max_rect().top();
-            let editor = field.editor(ui, text, style);
-            // The editor asks its scroll area to follow a caret that moved (egui's
-            // `scroll_to_rect`, animated, to the nearest edge). The region follows the caret
-            // itself, so that ask is replaced by one that moves nothing: no animated target
-            // competes with the region's offset in a later pass.
-            ui.scroll_to_rect_animation(
-                Rect::from_center_size(ui.clip_rect().center(), egui::Vec2::ZERO),
-                None,
-                egui::style::ScrollAnimation::none(),
-            );
-            open(ui, None);
-            (editor, origin)
+        let usable = pane.map_or(ui.clip_rect(), |open| open.usable);
+        let pane_id = self.pane;
+        let shown = frame.show(ui, |ui| {
+            // The frame takes the whole width: its outside right edge is the column's.
+            ui.set_min_width(ui.available_width());
+            column.show_in_region(ui, |ui| {
+                // A scroll inside the region is refused, as in a `Content` body.
+                open(
+                    ui,
+                    Some(OpenPane {
+                        layer: ui.layer_id(),
+                        content: true,
+                        usable,
+                        edge: false,
+                        pane: pane_id,
+                    }),
+                );
+                // Where the content starts in this layout (the view's top less the offset used).
+                let origin = ui.max_rect().top();
+                let least_text = if fills { max } else { 0.0 };
+                let editor = field.editor(ui, text, |edit| {
+                    style(edit)
+                        .frame(false)
+                        .margin(egui::Vec2::ZERO)
+                        .desired_width(f32::INFINITY)
+                        .min_size(vec2(0.0, least_text))
+                });
+                // The editor asks its scroll area to follow a caret that moved (egui's
+                // `scroll_to_rect`, animated, to the nearest edge). The region follows the caret
+                // itself, so that ask is replaced by one that moves nothing: no animated target
+                // competes with the region's offset in a later pass.
+                ui.scroll_to_rect_animation(
+                    Rect::from_center_size(ui.clip_rect().center(), egui::Vec2::ZERO),
+                    None,
+                    egui::style::ScrollAnimation::none(),
+                );
+                open(ui, None);
+                (editor, origin)
+            })
         });
+        let output = shown.inner;
+        let frame_rect = shown.response.rect;
         let pass = ui.ctx().cumulative_pass_nr();
         // What the region took in the body, as the body laid it out (the scroll output's view
         // is not always what the body allocated).
         let height = (ui.cursor().top() - top - ui.spacing().item_spacing.y).max(0.0);
-        let (editor, origin) = output.inner;
+        let (mut editor, origin) = output.inner;
+        let view = output.inner_rect;
+        editor.frame = frame_rect;
+        editor.view = view;
+        // The text is clipped to the part of it in view: a caller that paints over the text
+        // from outside the scroll (a rule, a mark) stays inside the frame's view.
+        editor.text_clip_rect = editor.text_clip_rect.intersect(view);
+        if editor.response.has_focus() {
+            super::components::focus_ring(ui, frame_rect);
+        }
         // Keep the focused caret for the next pass, in content coordinates.
         let caret = editor
             .response
@@ -498,9 +652,32 @@ impl EditorRegion<'_> {
             }
             None => data.remove::<(f32, f32, f32, f32, f32)>(caret_key),
         });
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(region_drawn_id(self.pane), (pass, height));
-        });
+        if self.host == Host::Pane {
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(region_drawn_id(self.pane), (pass, height));
+            });
+        }
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            let record = EditorFrameRecord {
+                field: editor.response.id,
+                frame: frame_rect,
+                clip: ui.clip_rect(),
+                view,
+                least,
+            };
+            ui.ctx().data_mut(|data| {
+                let kept = data.get_temp_mut_or_default::<(u64, Vec<EditorFrameRecord>)>(Id::new(
+                    EDITOR_FRAMES,
+                ));
+                if kept.0 != pass {
+                    *kept = (pass, Vec::new());
+                }
+                kept.1.push(record);
+            });
+        }
+        #[cfg(not(any(test, feature = "test-support")))]
+        let _ = least;
         editor
     }
 }
@@ -1836,6 +2013,7 @@ impl Footer<'_> {
                         EditorRegion {
                             pane: id,
                             max: region_max,
+                            host: Host::Pane,
                             _scope: std::marker::PhantomData,
                         },
                     );
@@ -1906,6 +2084,7 @@ impl Footer<'_> {
                     EditorRegion {
                         pane: id,
                         max: 0.0,
+                        host: Host::Pane,
                         _scope: std::marker::PhantomData,
                     },
                 );
