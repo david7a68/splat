@@ -59,7 +59,8 @@ do not tell you the scope. For example, the tracker tests load
 | `src/library_page` | Library browsing and authoring (`splat-library-page`) |
 | `src/world_page` | World page (`splat-world-page`) |
 | `src/campaign_packages` | Campaign Packages page (`splat-campaign-packages`) |
-| `src/encounters_ui` | Encounter planning, fight runs, party sheets and sync, and the Timeline book (`splat-encounters-ui`) |
+| `src/session_records` | Saved fight records, difficulty summaries, and the Timeline book (`splat-session-records`) |
+| `src/encounters_ui` | Encounter planning, fight runs, and party sheets and sync (`splat-encounters-ui`) |
 | `src/sessions_ui` | Sessions and Timeline pages, recording, and processing (`splat-sessions-ui`) |
 | `src` | Desktop app and public content, character and execution APIs |
 
@@ -70,8 +71,8 @@ verification tools use content, character and execution.
 The UI crates keep their sources under `src/` so the design checks follow the same files.
 A World page, Campaign Packages, Library page, or Trackers edit rebuilds that feature and the desktop.
 An edit to the catalogue, Lookup, or a shared reader rebuilds Content UI and the crates that use it.
-Sessions and Timeline use the encounter and run records from Encounters UI. A change to that crate
-therefore also rebuilds Sessions UI before linking the desktop.
+Encounters UI and Sessions UI share the saved fight records and the Timeline book.
+Edits to either UI crate rebuild that crate and the desktop.
 
 Development and test builds use 16 code-generation units and include file and
 line information in backtraces. They disable incremental compilation by

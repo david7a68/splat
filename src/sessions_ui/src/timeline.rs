@@ -1,4 +1,4 @@
-pub use splat_encounters_ui::timeline::*;
+pub use splat_session_records::timeline::*;
 
 #[path = "../../timeline/page.rs"]
 pub mod page;

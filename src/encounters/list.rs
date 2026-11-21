@@ -445,31 +445,7 @@ fn fit_detail(ui: &egui::Ui, detail: &str, font: &egui::FontId, width: f32) -> S
     design::words_that_fit(ui, &others.join(" · "), font, width)
 }
 
-/// Read the state from old and current run labels without exposing round zero.
-pub fn run_state_word(run: &SavedRunInfo, paused: bool) -> String {
-    let round = run
-        .label
-        .split(" · ")
-        .find_map(|part| part.strip_prefix("Round "))
-        .and_then(|part| part.parse::<u32>().ok())
-        .unwrap_or(0);
-    let state = if run.standing == crate::encounter_run::Standing::Ended {
-        if round == 0 {
-            "Ended · Setup".to_owned()
-        } else {
-            format!("Ended · Round {round}")
-        }
-    } else if round == 0 {
-        "Setup".to_owned()
-    } else {
-        format!("Round {round}")
-    };
-    if paused && run.standing == crate::encounter_run::Standing::Unfinished {
-        format!("{state} · Paused")
-    } else {
-        state
-    }
-}
+pub use splat_session_records::encounters::run_state_word;
 
 fn row_menu_for_run(
     ui: &mut egui::Ui,

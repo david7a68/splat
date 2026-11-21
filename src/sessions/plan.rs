@@ -5565,7 +5565,7 @@ impl Sessions {
                 let mut widest = 0.0_f32;
                 for row in in_party_order(&summary.rows, plan.party) {
                     let first = row.name.split_whitespace().next().unwrap_or(&row.name);
-                    let hp = crate::combat_sync::fraction(known(row.hp), known(row.max_hp));
+                    let hp = crate::design::fraction(known(row.hp), known(row.max_hp));
                     let mut detail = format!("{}: {hp} HP", row.name);
                     if row.temporary_hp > 0 {
                         detail.push_str(&format!(" · {}", design::temp_hp_text(row.temporary_hp)));

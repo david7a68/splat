@@ -15,8 +15,7 @@ use splat_content_ui::{
 
 #[path = "../../combat_sync.rs"]
 pub mod combat_sync;
-#[path = "../../difficulty.rs"]
-pub mod difficulty;
+pub use splat_session_records::difficulty;
 #[path = "../../encounter_run.rs"]
 pub mod encounter_run;
 #[path = "../../encounter_settings.rs"]
@@ -33,5 +32,4 @@ pub mod party_bar;
 pub mod party_stream;
 #[path = "../../party_sync.rs"]
 pub mod party_sync;
-#[path = "../../timeline.rs"]
-pub mod timeline;
+pub use splat_session_records::timeline;

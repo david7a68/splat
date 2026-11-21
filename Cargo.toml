@@ -14,6 +14,7 @@ members = [
     "src/design",
     "src/encounters_ui",
     "src/library_page",
+    "src/session_records",
     "src/sessions_ui",
     "src/trackers",
     "src/world_page",
@@ -26,6 +27,7 @@ default-members = [
     "src/design",
     "src/encounters_ui",
     "src/library_page",
+    "src/session_records",
     "src/sessions_ui",
     "src/trackers",
     "src/world_page",
@@ -130,6 +132,9 @@ opt-level = 2
 opt-level = 2
 
 [profile.test.package.splat-encounters-ui]
+opt-level = 2
+
+[profile.test.package.splat-session-records]
 opt-level = 2
 
 [profile.test.package.splat-sessions-ui]

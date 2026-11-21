@@ -6,9 +6,10 @@ rust-version = "1.95"
 publish = false
 
 [features]
-test-support = ["splat-content-ui/test-support"]
+test-support = ["splat-session-records/test-support", "splat-content-ui/test-support"]
 
 [dependencies]
+splat-session-records = { path = "../session_records" }
 splat-campaign = { path = "../../crates/campaign" }
 splat-character = { path = "../../crates/character" }
 splat-content = { path = "../../crates/content" }
@@ -30,6 +31,7 @@ keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 
 
 [dev-dependencies]
+splat-session-records = { path = "../session_records", features = ["test-support"] }
 splat-content-ui = { path = "../content_ui", features = ["test-support"] }
 egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
 image = { version = "0.25", default-features = false, features = ["png"] }

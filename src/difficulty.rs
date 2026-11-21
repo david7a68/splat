@@ -11,14 +11,14 @@ use std::collections::BTreeMap;
 pub const CONTRACT: &str = "dnd2024:rules_combat_encounters_step_2_determine_your_xp_budget";
 
 /// Explicit XP wins; a bare CR supplies its standard reward. `None` when the entry has neither.
-pub(crate) fn creature_xp(entry: &Entry) -> Option<u64> {
+pub fn creature_xp(entry: &Entry) -> Option<u64> {
     crate::library::presentation::challenge_text(entry)
         .and_then(splat::content::stat_blocks::challenge_xp)
 }
 
 /// A player character's level, from its saved sheet. `None` for a creature that is not a
 /// character, or a sheet with no level.
-pub(crate) fn character_level(entry: &Entry) -> Option<Option<u64>> {
+pub fn character_level(entry: &Entry) -> Option<Option<u64>> {
     let sheet = entry.fields.get("splat_character")?;
     Some(sheet.get("level").and_then(Value::as_u64))
 }
@@ -1136,8 +1136,8 @@ pub fn above_high() -> Rating {
     }
 }
 
-#[cfg(test)]
-pub(crate) fn party_of(levels: &[u64]) -> BTreeMap<uuid::Uuid, Option<u64>> {
+#[cfg(any(test, feature = "test-support"))]
+pub fn party_of(levels: &[u64]) -> BTreeMap<uuid::Uuid, Option<u64>> {
     levels
         .iter()
         .map(|level| (uuid::Uuid::new_v4(), Some(*level)))

@@ -3768,20 +3768,7 @@ pub struct Encounters {
     /// Each encounter draft's own results (a removed group, a replacement), for its editor.
     editor_results: design::Results<EditorOwner, EditorMark>,
 }
-/// One encounter, as a session's plan offers it.
-pub struct PlanFight {
-    pub saved: Option<crate::encounter_run::SavedRunInfo>,
-    /// The encounter's ID, which `Edit encounter` opens it by.
-    pub id: uuid::Uuid,
-    pub name: String,
-    pub path: String,
-    /// Its roster's typed parts (G118), so the plan's row names a member once.
-    pub summary: crate::difficulty::Summary,
-    /// The roster's line key (`Roster::key`: its parts and its difficulty), for the plan's
-    /// kept line.
-    pub key: u64,
-    pub difficulty: crate::difficulty::Difficulty,
-}
+pub use splat_session_records::encounters::PlanFight;
 /// What the page needs from the story: where each run's event is, and which sessions exist.
 pub struct Story<'a> {
     pub events: &'a [crate::timeline::Event],
