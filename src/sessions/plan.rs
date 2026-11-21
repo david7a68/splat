@@ -5731,7 +5731,8 @@ impl Sessions {
             // R41: the folder's cause in Encounters' words and tone.
             Err(FightFault::Folder(folder)) => {
                 let fault = PlanFault::Toned(as_sentence(&folder.message()), folder.severity());
-                let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
+                let _ =
+                    design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
             }
             Err(FightFault::Other(error)) => {
                 let words = as_sentence(&format!("This fight’s run cannot be read. {error}"));

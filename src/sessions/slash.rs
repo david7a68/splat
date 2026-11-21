@@ -712,7 +712,6 @@ fn search(
     })
 }
 
-
 /// Why `/npc` made or saved no NPC: the generator's or the system's words, or that no campaign
 /// is open. An error, as it always was.
 struct NpcFault<'a>(&'a str);
@@ -726,8 +725,7 @@ impl design::outcome::Fault for NpcFault<'_> {
         reason = "the generator’s and the system’s words, as they came (M17)"
     )]
     fn cause(&self) -> design::outcome::Sentence {
-        design::outcome::Sentence::outside(self.0)
-            .unwrap_or(crate::sentence!("No NPC was made."))
+        design::outcome::Sentence::outside(self.0).unwrap_or(crate::sentence!("No NPC was made."))
     }
 }
 
