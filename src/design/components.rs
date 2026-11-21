@@ -1440,6 +1440,25 @@ pub fn signed_stepper(
     )
 }
 
+/// A stepper whose value is a count that can reach the thousands (a group's member count): it
+/// shows `1,000` with its digits grouped, as every count in the app reads (`count`), and reads
+/// back what the DM types with or without the commas (`1,000`, `1000`). The same − and + and
+/// limits as [`stepper`].
+pub fn grouped_stepper(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+) -> bool {
+    stepper_as(
+        ui,
+        name,
+        value,
+        (range, Density::Read, None, None),
+        Shown::Grouped,
+    )
+}
+
 /// How a stepper's value reads.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Shown {
@@ -1447,6 +1466,29 @@ enum Shown {
     Plain,
     /// `+3`, `−1`: a modifier.
     Signed,
+    /// `1,000`: a count with its digits grouped.
+    Grouped,
+}
+
+/// A count with its digits grouped (`1,000`), a negative one with a true minus.
+fn grouped_value(value: i64) -> String {
+    let digits = grouped_number(value.unsigned_abs() as usize);
+    if value < 0 {
+        format!("\u{2212}{digits}")
+    } else {
+        digits
+    }
+}
+
+/// A count as the DM may type it: `1,000`, `1000`, `1 000`, `−3`.
+fn parse_grouped(text: &str) -> Option<f64> {
+    text.trim()
+        .replace('\u{2212}', "-")
+        .chars()
+        .filter(|c| *c != ',' && !c.is_whitespace())
+        .collect::<String>()
+        .parse()
+        .ok()
 }
 
 /// A modifier as the DM may type it: `−3`, `-3`, `+2`, `2`.
@@ -1545,10 +1587,18 @@ fn stepper_as(
                 widgets.inactive.bg_stroke = Stroke::new(HAIRLINE_WIDTH, c.field_border);
                 ui.spacing_mut().interact_size.y = density.control();
                 let mut field = egui::DragValue::new(value).range(low..=high).speed(0.1);
-                if shown == Shown::Signed {
-                    field = field
-                        .custom_formatter(|value, _| signed(value as i64))
-                        .custom_parser(parse_signed);
+                match shown {
+                    Shown::Plain => {}
+                    Shown::Signed => {
+                        field = field
+                            .custom_formatter(|value, _| signed(value as i64))
+                            .custom_parser(parse_signed);
+                    }
+                    Shown::Grouped => {
+                        field = field
+                            .custom_formatter(|value, _| grouped_value(value as i64))
+                            .custom_parser(parse_grouped);
+                    }
                 }
                 ui.add(field)
             })
@@ -5731,6 +5781,45 @@ mod tests {
         }
         for (typed, read) in [("\u{2212}3", -3.0), ("-3", -3.0), ("+2", 2.0), ("2", 2.0)] {
             assert_eq!(parse_signed(typed), Some(read), "{typed}");
+        }
+        // The grouped stepper (M-P0 item 8, the group editor's member count): a count shows its
+        // digits grouped, `1,000` stays `1,000`, and reads back with or without the commas.
+        for (value, shown) in [(1_000, "1,000"), (12_345, "12,345"), (999, "999"), (1, "1")] {
+            let ctx = egui::Context::default();
+            super::super::theme::install(&ctx);
+            ctx.enable_accesskit();
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mut value = value;
+                    grouped_stepper(ui, "How many", &mut value, 1..=99_999);
+                });
+            });
+            let painted: Vec<String> = output
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                painted.iter().any(|text| text == shown),
+                "{value} shows {shown}: {painted:?}"
+            );
+            let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+            let decrease = nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Decrease How many"))
+                .map(|(_, node)| node.is_disabled());
+            assert_eq!(decrease, Some(value == 1), "{value}: − at its limit only");
+        }
+        for (typed, read) in [
+            ("1,000", 1_000.0),
+            ("1000", 1_000.0),
+            ("12 345", 12_345.0),
+            (" 7 ", 7.0),
+        ] {
+            assert_eq!(parse_grouped(typed), Some(read), "{typed}");
         }
     }
 
