@@ -2528,6 +2528,20 @@ pub struct Press<A> {
     pub ticket: Option<Ticket>,
 }
 
+/// The footer line a press came from, for an answer to that press (`Messages::answer`): a copy
+/// of the line's identity that cannot act, kept by the answer's owner while the answer stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PressedLine(ResultOrder);
+
+impl<A> Press<A> {
+    /// The kept line this press came from, if it came from one.
+    pub fn line(&self) -> Option<PressedLine> {
+        self.ticket
+            .as_ref()
+            .map(|ticket| PressedLine(ticket.order()))
+    }
+}
+
 /// What a pane's body returned, and the one footer press of this frame. At most one press
 /// comes back per pane and frame: the first in the footer's drawing order (newest result first,
 /// then reasons, then notices) wins, and a second in the same frame is dropped.
@@ -2626,6 +2640,8 @@ struct FooterLine<A> {
     ticket: Option<Ticket>,
     /// A refused attempt's line, whose place waits for the footer's newest act order.
     refused: bool,
+    /// The answer to a press of a kept line: that line's order (`Messages::answer`).
+    under: Option<ResultOrder>,
 }
 
 impl<'f, A: 'static> Messages<'f, A> {
@@ -2652,6 +2668,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             typed,
             ticket: None,
             refused: false,
+            under: None,
         });
         self
     }
@@ -2660,7 +2677,14 @@ impl<'f, A: 'static> Messages<'f, A> {
     /// holds as its newest answer and ends at the next act. It comes first in the footer, before
     /// every kept result, which are answers to older acts. One per footer (a second is refused in
     /// debug builds and tests); Clippy refuses it outside a counted use (`Ban::Answer`).
-    pub fn answer(&mut self, fault: FaultMessage<A>) -> &mut Self {
+    ///
+    /// `under`: the act was a press of a kept line of this footer (`Press::line`). While the
+    /// footer follows its content (its top stays and it grows down), the answer stands directly
+    /// under that line, so the line the DM pressed keeps its place under the pointer (layout step
+    /// 7, Astra's P1 on PR 619); pinned (its bottom stays and it grows up), it comes first. Give
+    /// `under` only when no answer stood in this footer before the press: an answer that replaces
+    /// one takes its first place, so the lines below move by no more than the change of height.
+    pub fn answer(&mut self, fault: FaultMessage<A>, under: Option<PressedLine>) -> &mut Self {
         debug_assert!(
             !self.answered,
             "a footer holds one answer to the DM's last act"
@@ -2673,6 +2697,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             typed,
             ticket: None,
             refused: false,
+            under: under.map(|line| line.0),
         });
         self
     }
@@ -2696,6 +2721,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             typed,
             ticket: Some(ticket),
             refused: refused.is_some(),
+            under: None,
         });
         self
     }
@@ -2887,6 +2913,9 @@ struct PlanEnv {
     style: std::sync::Arc<egui::Style>,
     /// The fonts in effect (`font_key`): new fonts, or a family's font replaced, plan again.
     fonts: u64,
+    /// The footer followed its content in the last pass (`pane::footer_follows`): an answer to a
+    /// pressed line stands under it (`Messages::answer`).
+    follows: bool,
 }
 
 /// One line as the plan sees it: what decides its place and its size. A press's id is not in
@@ -2897,6 +2926,7 @@ struct PlanLine {
     rank: FooterRank,
     order: Option<ResultOrder>,
     ticket: Option<ResultOrder>,
+    under: Option<ResultOrder>,
     body: Body,
     file_gone: bool,
 }
@@ -2906,6 +2936,7 @@ impl PlanLine {
         self.rank == line.rank
             && self.order == line.order
             && self.ticket == line.ticket.as_ref().map(Ticket::order)
+            && self.under == line.under
             && self.file_gone == file_gone
             && self.body == line.typed.body
     }
@@ -3101,6 +3132,7 @@ impl<A: 'static> TypedFooter<A> {
                             rank: line.rank,
                             order: line.order,
                             ticket: line.ticket.as_ref().map(Ticket::order),
+                            under: line.under,
                             body: line.typed.body.clone(),
                             file_gone,
                         })
@@ -3115,13 +3147,14 @@ impl<A: 'static> TypedFooter<A> {
         })
     }
 
-    fn env(ui: &Ui, lines: super::memo::Revision, width: f32) -> PlanEnv {
+    fn env(ui: &Ui, id: egui::Id, lines: super::memo::Revision, width: f32) -> PlanEnv {
         PlanEnv {
             lines,
             width: width.to_bits(),
             scale: ui.ctx().pixels_per_point().to_bits(),
             style: ui.style().clone(),
             fonts: font_key(ui.ctx()),
+            follows: super::pane::footer_follows(ui.ctx(), id),
         }
     }
 
@@ -3184,7 +3217,7 @@ impl<A: 'static> TypedFooter<A> {
             Some(retained) => retained,
             None => self.revision(ui.ctx(), id),
         };
-        let env = Self::env(ui, retained.revision, width);
+        let env = Self::env(ui, id, retained.revision, width);
         if let Some(plan) = retained.plan.as_ref().filter(|plan| plan.env == env) {
             let plan = plan.clone();
             self.retained = Some(retained);
@@ -3215,6 +3248,19 @@ impl<A: 'static> TypedFooter<A> {
         let lines = &self.lines;
         let mut order: Vec<usize> = (0..lines.len()).collect();
         order.sort_by_key(|&at| (lines[at].rank, lines[at].order.map(std::cmp::Reverse)));
+        // An answer to a press of a kept line, in a footer that follows its content, stands
+        // directly under that line, so the pressed line keeps its place (`Messages::answer`).
+        if env.follows
+            && let Some(answer) = order.iter().position(|&at| lines[at].under.is_some())
+            && let Some(pressed) = lines[order[answer]].under
+            && let Some(line) = order
+                .iter()
+                .position(|&at| lines[at].ticket.as_ref().map(Ticket::order) == Some(pressed))
+        {
+            let moved = order.remove(answer);
+            let after = if line > answer { line } else { line + 1 };
+            order.insert(after, moved);
+        }
         count(|work| {
             work.plans += 1;
             work.sorted += order.len();
@@ -4900,6 +4946,7 @@ impl<'o> FormOpener<'o> {
                 tone,
                 words,
                 repairs: vec![repair],
+                whole: None,
             }
             .draw(ui)
             .is_some();
@@ -4910,6 +4957,7 @@ impl<'o> FormOpener<'o> {
             tone,
             words,
             repairs: Vec::new(),
+            whole: None,
         }
         .draw(ui);
         if let Some(title) = title {
@@ -4938,6 +4986,8 @@ pub struct BodyFault<A> {
     tone: Tone,
     words: Sentence,
     repairs: Vec<Repair<A>>,
+    /// The whole sentence when the words quote a value cut around `…` (`whole`).
+    whole: Option<String>,
 }
 
 impl<A> BodyFault<A> {
@@ -4946,7 +4996,16 @@ impl<A> BodyFault<A> {
             tone: fault.severity().tone(),
             words: fault_words(fault),
             repairs: Vec::new(),
+            whole: None,
         }
+    }
+
+    /// The whole sentence when the fault's words quote a value cut around `…` (World's unread
+    /// values, round 25 FD4): the words' hover and accessible description, so a screen reader
+    /// and the pointer reach the value whole.
+    pub fn whole(mut self, whole: impl Into<String>) -> Self {
+        self.whole = Some(whole.into());
+        self
     }
 
     pub fn repair(mut self, repair: Repair<A>) -> Self {
@@ -4965,13 +5024,20 @@ impl<A> BodyFault<A> {
             tone,
             words,
             repairs,
+            whole,
         } = self;
         let mut pressed = None;
         let response = ui
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
                 let text = words.as_str();
-                tone_message(ui, tone, text);
+                let message = tone_message(ui, tone, text);
+                if let Some(whole) = whole.filter(|whole| whole != text) {
+                    ui.ctx().accesskit_node_builder(message.id, |node| {
+                        node.set_description(whole.clone())
+                    });
+                    let _ = message.on_hover_text(whole);
+                }
                 for (at, repair) in repairs.iter().enumerate() {
                     let lock = holding(&repair.lock);
                     let action = message_choice_row(ui, tone, |ui| {

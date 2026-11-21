@@ -53,7 +53,7 @@ pub use layout::{
 #[allow(unused_imports)]
 pub use pane::{
     ACTION_ROW, Block, BlockRegion, Body, ENTRY_ROW_HEIGHT, EditorRegion, Fills, FillsReason,
-    Navigation, Placement, RegionState, Row,
+    Navigation, PaneColumns, PaneEdges, Placement, RegionState, Row,
 };
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]
