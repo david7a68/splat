@@ -1266,6 +1266,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/timeline.rs", "removal_follows_run", &[Ban::ByOwner(1)]),
         ("src/timeline/checks.rs", "check_fault", &[Ban::Body]),
         ("src/timeline/checks.rs", "check_notice", &[Ban::Body]),
+        // Ruling M20 (lane T0): Timeline.md's problems in the page's place and the session date
+        // notice, typed; each replaces `design::message`, `message_with_actions` or
+        // `message_with_action`.
+        ("src/timeline/page.rs", "problems", &[Ban::Body]),
+        ("src/timeline/page.rs", "dated_notice", &[Ban::Body]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/world/repair.rs", "cause", &[Ban::Words]),
         ("src/world.rs", "said", &[Ban::Words]),

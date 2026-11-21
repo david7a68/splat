@@ -7,8 +7,8 @@ use super::{
 use crate::design::{
     self, Action, Density, Status, Tone, Type, colors, icons,
     outcome::{
-        Choice, Fault, FaultMessage, FileLine, KeptOutcome, MessageChoice, Messages, Notice,
-        PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+        BodyMessage, Choice, Fault, FaultMessage, FileLine, KeptOutcome, MessageChoice, Messages,
+        Notice, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
     },
 };
 use eframe::egui;
@@ -346,12 +346,17 @@ impl design::results::Kept for JustAdded {
 /// label, its day, its rest ruling) and the saved-run facts' (which fights keep their HP).
 type AddedInputs = (design::memo::Revision, design::memo::Revision);
 
-/// A footer fault of the Timeline: a save that failed, a removal that notes still link to, a
-/// flag of the file, or a second timeline file. The kind gives the tone.
+/// A fault of the Timeline: a save that failed, a removal that notes still link to, a flag of
+/// the file, or a second timeline file (in the footer); the file that cannot be read or that
+/// changed under the draft (in the page's place, `problems`). The kind gives the tone.
 enum FileFault {
     /// Notes still link to the removed event: the DM checks them.
     Linked(Sentence),
     NotSaved(Sentence),
+    /// Timeline.md cannot be read, is gone, or its comparison cannot be made.
+    Unread(Sentence),
+    /// Timeline.md changed on disk under the DM's unsaved edit.
+    Changed,
     /// A line of the file that Splat read its own way (`Line 9: “Day 5” is day 1 in order. …`).
     Flag(Sentence),
     /// Another timeline file in the Timeline's folder.
@@ -361,13 +366,18 @@ enum FileFault {
 impl Fault for FileFault {
     fn severity(&self) -> Severity {
         match self {
-            Self::Linked(_) | Self::Flag(_) | Self::Copy => Severity::NeedsFixing,
+            Self::Linked(_) | Self::Flag(_) | Self::Copy | Self::Changed => Severity::NeedsFixing,
             Self::NotSaved(_) => Severity::NotSaved,
+            Self::Unread(_) => Severity::CannotRead,
         }
     }
     fn cause(&self) -> Sentence {
         match self {
-            Self::Linked(words) | Self::NotSaved(words) | Self::Flag(words) => words.clone(),
+            Self::Linked(words)
+            | Self::NotSaved(words)
+            | Self::Flag(words)
+            | Self::Unread(words) => words.clone(),
+            Self::Changed => as_sentence(crate::timeline::CHANGED_UNDER_DRAFT),
             Self::Copy => crate::sentence!(
                 "Another timeline file exists. Compare its events with Timeline.md before removing either file."
             ),
@@ -592,48 +602,55 @@ pub fn file_act(book: &mut Book, act: FileAct, ticket: Option<design::results::T
 
 /// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
 /// Returns true when the comparison needs the rest of the pane.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "ruling M20: Timeline.md’s problems in the page’s place, typed (`Ban::Body`)"
+)]
 pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Repair {
+        ReadAgain,
+        SaveAgain,
+        Overwrite,
+        Reload,
+    }
     if let Some(error) = book.unreadable.clone() {
-        // Message choices start at the message text. The old-format notice draws its own.
-        let choices = |ui: &mut egui::Ui, book: &mut Book| {
-            ui.horizontal_wrapped(|ui| {
-                if Action::secondary("Read the file again").show(ui).clicked() {
-                    book.reload();
-                }
-                if book.gone
-                    && Action::secondary("Save this timeline there again")
-                        .show(ui)
-                        .clicked()
-                {
-                    book.save_again();
-                }
-            });
-        };
-        design::message_with_actions(ui, Tone::Error, &error, |ui| choices(ui, book));
+        // Its choices start at its words; a gone file can also be saved there again.
+        let mut message =
+            FaultMessage::new(&FileFault::Unread(as_sentence(&error))).choice(Choice::new(
+                MessageChoice::Choice("Read the file again"),
+                Repair::ReadAgain,
+            ));
+        if book.gone {
+            message = message.choice(Choice::new(
+                MessageChoice::Choice("Save this timeline there again"),
+                Repair::SaveAgain,
+            ));
+        }
+        match BodyMessage::from(message).show(ui) {
+            Some(Repair::ReadAgain) => book.reload(),
+            Some(Repair::SaveAgain) => book.save_again(),
+            _ => {}
+        }
     } else if book.conflict {
-        design::message_with_actions(
-            ui,
-            Tone::Warning,
-            crate::timeline::CHANGED_UNDER_DRAFT,
-            |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    if Action::secondary("Overwrite with my timeline")
-                        .show(ui)
-                        .clicked()
-                    {
-                        book.overwrite();
-                    }
-                    // One `L` gap before the red choice: the line's item gap (`S`) and this `S`.
-                    design::gap(ui, design::Gap::S);
-                    if Action::destructive("Reload and lose my timeline")
-                        .show(ui)
-                        .clicked()
-                    {
-                        book.reload_keeping_undo();
-                    }
-                });
-            },
-        );
+        // The safe choice first, then the red one `L` after it (the part's).
+        let pressed = BodyMessage::from(
+            FaultMessage::new(&FileFault::Changed)
+                .choice(Choice::new(
+                    MessageChoice::Choice("Overwrite with my timeline"),
+                    Repair::Overwrite,
+                ))
+                .choice(Choice::new(
+                    MessageChoice::Lose("Reload and lose my timeline"),
+                    Repair::Reload,
+                )),
+        )
+        .show(ui);
+        match pressed {
+            Some(Repair::Overwrite) => book.overwrite(),
+            Some(Repair::Reload) => book.reload_keeping_undo(),
+            _ => {}
+        }
         if book.conflict {
             match book.conflict_comparison() {
                 Ok((draft, disk)) => {
@@ -643,13 +660,29 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
                     design::draft_comparison_styled(ui, &draft, &disk, id, face, height);
                 }
                 Err(error) => {
-                    design::message(ui, Tone::Error, &error);
+                    let fault = FileFault::Unread(as_sentence(&error));
+                    let _ = BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
                 }
             }
             return true;
         }
     }
     false
+}
+
+/// The current session's note is dated before today (`dated_before_today`): the choice to play
+/// this one. True when the DM pressed it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "ruling M20: the session date notice above the list, typed (`Ban::Body`)"
+)]
+fn dated_notice(ui: &mut egui::Ui, words: &str) -> bool {
+    BodyMessage::from(
+        Notice::warning(as_sentence(words))
+            .choice(Choice::new(MessageChoice::Choice("Play this one"), ())),
+    )
+    .show(ui)
+    .is_some()
 }
 
 impl TimelinePage {
@@ -1858,55 +1891,40 @@ impl TimelinePage {
         // waits, as every shortcut does.
         let save =
             !self.modal && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-        self.body(ui, book, page_width, (sessions, current), notes);
-        if save {
-            book.save();
-        }
-    }
-
-    /// The page under its header and the file's problems: the quick add, the list and the open
-    /// event.
-    fn body(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &mut Book,
-        page_width: f32,
-        (sessions, current): (&[SessionLink], Option<Uuid>),
-        notes: &mut crate::sessions::page::Sessions,
-    ) {
-        if let Some(id) = quick_add(
-            ui,
-            book,
-            current,
-            &[
-                Kind::Encounter,
-                Kind::Day,
-                Kind::LongRest,
-                Kind::ShortRest,
-                Kind::Travel,
-                Kind::Event,
-            ],
-            |_| {},
-        ) {
-            self.reveal(&id, book);
-            self.focus_title = true;
-            self.added.record_timed(
-                JustAdded {
-                    file: book.file(),
-                    id,
-                },
-                ui.ctx(),
-            );
-        }
-        if let Some(words) = self.dated.clone()
-            && design::message_with_action(ui, Tone::Warning, &words, "Play this one")
-        {
-            self.play_current = true;
-        }
-        design::gap(ui, design::Gap::XS);
-        if book.events.is_empty() && book.unreadable.is_none() {
-            let open_run = self.open_run.is_some();
-            let first = self.list_pane(ui, book, notes, None, |_, ui, _, _| {
+        // The page under its header and the file's problems: the quick add, the list and the
+        // open event. An early end leaves only this closure, so the save after it always runs.
+        let mut body = || {
+            if let Some(id) = quick_add(
+                ui,
+                book,
+                current,
+                &[
+                    Kind::Encounter,
+                    Kind::Day,
+                    Kind::LongRest,
+                    Kind::ShortRest,
+                    Kind::Travel,
+                    Kind::Event,
+                ],
+                |_| {},
+            ) {
+                self.reveal(&id, book);
+                self.focus_title = true;
+                self.added.record_timed(
+                    JustAdded {
+                        file: book.file(),
+                        id,
+                    },
+                    ui.ctx(),
+                );
+            }
+            if let Some(words) = self.dated.clone() {
+                self.play_current |= dated_notice(ui, &words);
+            }
+            design::gap(ui, design::Gap::XS);
+            if book.events.is_empty() && book.unreadable.is_none() {
+                let open_run = self.open_run.is_some();
+                let first = self.list_pane(ui, book, notes, None, |_, ui, _, _| {
                 let mut first = false;
                 design::empty_state(
                     ui,
@@ -1925,113 +1943,125 @@ impl TimelinePage {
                 );
                 first
             });
-            if first {
-                let id = book.add(Kind::Day, current);
-                self.reveal(&id, book);
-                self.focus_title = true;
-                self.added.record_timed(
-                    JustAdded {
-                        file: book.file(),
-                        id,
-                    },
-                    ui.ctx(),
-                );
-            }
-            return;
-        }
-        if !std::mem::replace(&mut self.opened, true) && self.scroll_to.is_none() {
-            self.scroll_to = book.events.len().checked_sub(1);
-        }
-        // One column, with an event open: the filters would only push it down.
-        let narrow = page_width < TWO_COLUMNS_FROM;
-        self.narrow = narrow;
-        let event_open = self
-            .selected
-            .as_ref()
-            .is_some_and(|id| book.events.iter().any(|event| event.id == *id));
-        if !(narrow && event_open) {
-            // The header is drawn before the body splits. Use the app's current width
-            // decision, including pending keyboard and pointer resize, rather than the
-            // previous pass's panel.
-            let mut room = ui.clip_rect();
-            // The header knows its current clip, not the list footer drawn later. Long
-            // menus keep the part's height cap and inner scroll, as the old ComboBox did.
-            if !narrow && event_open {
-                let natural = design::side_panel_width(page_width);
-                let content_width = page_width.min(design::LIST_MEASURE + natural);
-                let detail = design::Column::panel("timeline_detail_panel", natural).width_within(
-                    ui.ctx(),
-                    egui::Rect::from_min_size(
-                        ui.max_rect().min,
-                        egui::vec2(content_width, ui.available_height()),
-                    ),
-                );
-                room.max.x = room.right().min(
-                    ui.max_rect().left() + content_width
-                        - detail
-                        - ui.style().interaction.resize_grab_radius_side,
-                );
-            }
-            self.filters(ui, sessions, current, room);
-        }
-        design::gap(ui, design::Gap::XS);
-        // Beside Lookup or Notes at a small window, two columns would crush the list.
-        if narrow {
-            if event_open {
-                if design::TitleLine::back(crate::word!("All events"), design::BackEdge::Text)
-                    .show(ui)
-                    .clicked()
-                {
-                    self.select(None);
+                if first {
+                    let id = book.add(Kind::Day, current);
+                    self.reveal(&id, book);
+                    self.focus_title = true;
+                    self.added.record_timed(
+                        JustAdded {
+                            file: book.file(),
+                            id,
+                        },
+                        ui.ctx(),
+                    );
                 }
-                // With the list hidden, the open event's results are in the form's own footer,
-                // so they move no field.
-                notes.expire_event_link_undo(true, book);
-                let open = self.selected.clone();
-                self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, notes| {
-                    page.detail(ui, book, sessions, notes);
-                });
-            } else {
-                notes.expire_event_link_undo(true, book);
+                return;
+            }
+            if !std::mem::replace(&mut self.opened, true) && self.scroll_to.is_none() {
+                self.scroll_to = book.events.len().checked_sub(1);
+            }
+            // One column, with an event open: the filters would only push it down.
+            let narrow = page_width < TWO_COLUMNS_FROM;
+            self.narrow = narrow;
+            let event_open = self
+                .selected
+                .as_ref()
+                .is_some_and(|id| book.events.iter().any(|event| event.id == *id));
+            if !(narrow && event_open) {
+                // The header is drawn before the body splits. Use the app's current width
+                // decision, including pending keyboard and pointer resize, rather than the
+                // previous pass's panel.
+                let mut room = ui.clip_rect();
+                // The header knows its current clip, not the list footer drawn later. Long
+                // menus keep the part's height cap and inner scroll, as the old ComboBox did.
+                if !narrow && event_open {
+                    let natural = design::side_panel_width(page_width);
+                    let content_width = page_width.min(design::LIST_MEASURE + natural);
+                    let detail = design::Column::panel("timeline_detail_panel", natural)
+                        .width_within(
+                            ui.ctx(),
+                            egui::Rect::from_min_size(
+                                ui.max_rect().min,
+                                egui::vec2(content_width, ui.available_height()),
+                            ),
+                        );
+                    room.max.x = room.right().min(
+                        ui.max_rect().left() + content_width
+                            - detail
+                            - ui.style().interaction.resize_grab_radius_side,
+                    );
+                }
+                self.filters(ui, sessions, current, room);
+            }
+            design::gap(ui, design::Gap::XS);
+            // Beside Lookup or Notes at a small window, two columns would crush the list.
+            if narrow {
+                if event_open {
+                    if design::TitleLine::back(crate::word!("All events"), design::BackEdge::Text)
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.select(None);
+                    }
+                    // With the list hidden, the open event's results are in the form's own footer,
+                    // so they move no field.
+                    notes.expire_event_link_undo(true, book);
+                    let open = self.selected.clone();
+                    self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, notes| {
+                        page.detail(ui, book, sessions, notes);
+                    });
+                } else {
+                    notes.expire_event_link_undo(true, book);
+                    self.list_pane(ui, book, notes, None, |page, ui, book, _| {
+                        page.list(ui, book, sessions);
+                    });
+                }
+                return;
+            }
+            if !event_open {
                 self.list_pane(ui, book, notes, None, |page, ui, book, _| {
                     page.list(ui, book, sessions);
                 });
+                return;
             }
-            return;
-        }
-        if !event_open {
-            self.list_pane(ui, book, notes, None, |page, ui, book, _| {
-                page.list(ui, book, sessions);
-            });
-            return;
-        }
-        let width = design::side_panel_width(ui.available_width());
-        let content_width = ui.available_width().min(design::LIST_MEASURE + width);
-        ui.allocate_ui_with_layout(
-            egui::vec2(content_width, ui.available_height()),
-            egui::Layout::top_down(egui::Align::LEFT),
-            |ui| {
-                design::Column::panel("timeline_detail_panel", width)
-                    .frame(egui::Frame::new().inner_margin(egui::Margin {
-                        left: design::S as i8,
-                        ..Default::default()
-                    }))
-                    .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
-                egui::CentralPanel::default()
-                    // The panel's drag handle lies on this edge, so the rows stop short of it.
-                    .frame(egui::Frame::new().inner_margin(egui::Margin {
-                        right: design::S as i8,
-                        ..Default::default()
-                    }))
-                    .show_inside(ui, |ui| {
-                        notes.expire_event_link_undo(true, book);
-                        let open = self.selected.clone();
-                        self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, _| {
-                            page.list(ui, book, sessions);
+            let width = design::side_panel_width(ui.available_width());
+            let content_width = ui.available_width().min(design::LIST_MEASURE + width);
+            ui.allocate_ui_with_layout(
+                egui::vec2(content_width, ui.available_height()),
+                egui::Layout::top_down(egui::Align::LEFT),
+                |ui| {
+                    design::Column::panel("timeline_detail_panel", width)
+                        .frame(egui::Frame::new().inner_margin(egui::Margin {
+                            left: design::S as i8,
+                            ..Default::default()
+                        }))
+                        .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
+                    egui::CentralPanel::default()
+                        // The panel's drag handle lies on this edge, so the rows stop short of it.
+                        .frame(egui::Frame::new().inner_margin(egui::Margin {
+                            right: design::S as i8,
+                            ..Default::default()
+                        }))
+                        .show_inside(ui, |ui| {
+                            notes.expire_event_link_undo(true, book);
+                            let open = self.selected.clone();
+                            self.list_pane(
+                                ui,
+                                book,
+                                notes,
+                                open.as_deref(),
+                                |page, ui, book, _| {
+                                    page.list(ui, book, sessions);
+                                },
+                            );
                         });
-                    });
-            },
-        );
+                },
+            );
+        };
+        body();
+        if save {
+            book.save();
+        }
     }
 }
 
