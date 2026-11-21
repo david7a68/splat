@@ -1630,6 +1630,7 @@ pub struct FaultMessage<A> {
     words: Sentence,
     choices: Vec<Choice<A>>,
     file: Option<FileLine>,
+    hover: Option<String>,
 }
 
 impl<A> FaultMessage<A> {
@@ -1639,11 +1640,20 @@ impl<A> FaultMessage<A> {
             words: fault_words(fault),
             choices: Vec::new(),
             file: None,
+            hover: None,
         }
     }
 
     pub fn choice(mut self, choice: Choice<A>) -> Self {
         self.choices.push(choice);
+        self
+    }
+
+    /// What the system itself said (a recorder's own error), on hover over the fault's words:
+    /// the words stay the app's plain ones, and the DM can still read the system's. Data, never
+    /// instructions to the DM (N0, ruling M21).
+    pub fn hover(mut self, said: String) -> Self {
+        self.hover = Some(said);
         self
     }
 
@@ -2073,6 +2083,8 @@ struct Body {
     helps: Vec<Option<Sentence>>,
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
+    /// What the system itself said, on hover over the words (`FaultMessage::hover`).
+    words_hover: Option<String>,
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
     /// paints `UndoStep::alone` for its room, else `UndoStep::fit`.
     undo_alone: bool,
@@ -2165,6 +2177,7 @@ impl<A> Typed<A> {
                 hovers,
                 helps,
                 file: None,
+                words_hover: None,
                 undo_alone: false,
             },
             undo: undo_id,
@@ -2175,6 +2188,12 @@ impl<A> Typed<A> {
     /// With the file it is about.
     fn with_file(mut self, file: Option<FileLine>) -> Self {
         self.body.file = file;
+        self
+    }
+
+    /// With what the system itself said, on hover over the words.
+    fn with_hover(mut self, hover: Option<String>) -> Self {
+        self.body.words_hover = hover;
         self
     }
 
@@ -2202,7 +2221,9 @@ impl<A> Outcome<A> {
             ),
             Self::Fault(fault) => (
                 FooterRank::Reason,
-                Typed::new(fault.tone, fault.words, None, fault.choices).with_file(fault.file),
+                Typed::new(fault.tone, fault.words, None, fault.choices)
+                    .with_file(fault.file)
+                    .with_hover(fault.hover),
             ),
         }
     }
@@ -2239,7 +2260,9 @@ impl<A> KeptOutcome<A> {
             }
             Self::Offer(offer) => Typed::new(Tone::Info, offer.words, None, offer.choices),
             Self::Fault(fault, undo) => {
-                Typed::new(fault.tone, fault.words, Some(undo), fault.choices).with_file(fault.file)
+                Typed::new(fault.tone, fault.words, Some(undo), fault.choices)
+                    .with_file(fault.file)
+                    .with_hover(fault.hover)
             }
         }
     }
@@ -3161,15 +3184,21 @@ impl<A: 'static> TypedFooter<A> {
                     .data(|data| data.get_temp::<egui::Id>(egui::Id::new("design_footer_drawing")));
                 let id = egui::Id::new(("design_kept_line", pane, ticket.order()));
                 line_ui(ui, Some(id), |ui| {
-                    typed
-                        .body
-                        .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
+                    typed.body.draw_in(
+                        ui,
+                        MessagePlace::Footer,
+                        Reasons::Planned(room),
+                        IconRoom::Measured,
+                    )
                 })
             }
             None => line_ui(ui, None, |ui| {
-                typed
-                    .body
-                    .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
+                typed.body.draw_in(
+                    ui,
+                    MessagePlace::Footer,
+                    Reasons::Planned(room),
+                    IconRoom::Measured,
+                )
             }),
         };
         if let Some(pressed) = pressed
@@ -3286,7 +3315,12 @@ impl<A: 'static> TypedFooter<A> {
                             .as_ref()
                             .map(|ticket| egui::Id::new(("design_kept_line", id, ticket.order())));
                         let _ = line_ui(ui, scope, |ui| {
-                            body.draw_in(ui, MessagePlace::Footer, Reasons::Planned(&mut room))
+                            body.draw_in(
+                                ui,
+                                MessagePlace::Footer,
+                                Reasons::Planned(&mut room),
+                                IconRoom::Measured,
+                            )
                         });
                     }
                 });
@@ -3754,15 +3788,17 @@ impl Body {
     /// line; the words and the other choices keep the room to its left. A locked `Dismiss` is
     /// disabled, with its reason, as every blocked action is.
     fn draw(&self, ui: &mut Ui, place: MessagePlace) -> Option<Pressed> {
-        self.draw_in(ui, place, Reasons::Body)
+        self.draw_in(ui, place, Reasons::Body, IconRoom::Measured)
     }
 
-    /// `draw`, with its reasons' room as `reasons` says.
+    /// `draw`, with its reasons' room as `reasons` says, and the close icon's target in the
+    /// message's rect (`Measured`) or reaching into the padding around it (`Overhang`).
     fn draw_in(
         &self,
         ui: &mut Ui,
         place: MessagePlace,
         mut reasons: Reasons<'_>,
+        icon_room: IconRoom,
     ) -> Option<Pressed> {
         let Some(at) = self
             .choices
@@ -3775,7 +3811,7 @@ impl Body {
         };
         let lock = self.locks.get(at).and_then(holding);
         let mut pressed = None;
-        let icon = dismiss_at_first_line(ui, lock, IconRoom::Measured, |ui| {
+        let icon = dismiss_at_first_line(ui, lock, icon_room, |ui| {
             self.draw_words(ui, place, &mut pressed, &mut reasons)
         });
         // The words and their controls are drawn before the close icon: they come first.
@@ -3937,6 +3973,14 @@ impl Body {
             .filter(|(_, choice)| !matches!(choice, MessageChoice::Dismiss(_)))
     }
 
+    /// The words' response, with what the system itself said on hover (`words_hover`).
+    fn hovered(&self, words: Response) -> Response {
+        match &self.words_hover {
+            Some(said) => words.on_hover_text(said.as_str()),
+            None => words,
+        }
+    }
+
     /// The words, capped at `LIST_MEASURE`; an Undo alone beside them when it fits, else under
     /// them at their first letter; with choices, the Undo and then the choices on rows under the
     /// words, from their first letter. A locked Undo or choice is disabled, with its reason as
@@ -3957,7 +4001,9 @@ impl Body {
                 if self.row_choices().next().is_none() {
                     match &self.undo {
                         None => {
-                            line = first_line_centre(&tone_message(ui, self.tone, words));
+                            line = first_line_centre(
+                                &self.hovered(tone_message(ui, self.tone, words)),
+                            );
                         }
                         Some(step) => {
                             let form = self.undo_form(ui, step, reasons);
@@ -3980,7 +4026,7 @@ impl Body {
                     self.reasons(ui, reasons);
                     return;
                 }
-                let message = tone_message(ui, self.tone, words);
+                let message = self.hovered(tone_message(ui, self.tone, words));
                 line = first_line_centre(&message);
                 self.file_line(ui);
                 let inset = message.rect.left() - ui.cursor().left();
@@ -4557,14 +4603,16 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
 pub struct BodyMessage<A> {
     form: BodyForm<A>,
     compact: bool,
+    /// Drawn in a banner with padding: the close icon reaches into it (`in_padding`).
+    overhang: bool,
     /// The whole words behind fitted ones: the words' accessible name and hover.
     detail: Option<String>,
 }
 
 enum BodyForm<A> {
     Full(Outcome<A>),
-    /// A finished change with no way back (`result`).
-    Result(Typed<A>),
+    /// A finished change with no way back (`result`). Boxed: a typed message is the largest form.
+    Result(Box<Typed<A>>),
     RowRepair {
         tone: Tone,
         words: Sentence,
@@ -4590,8 +4638,18 @@ impl<A> BodyMessage<A> {
         Self {
             form,
             compact: false,
+            overhang: false,
             detail: None,
         }
+    }
+
+    /// In a banner with padding (the Sessions bottom banner): the close icon's target, taller
+    /// than the words' first line, reaches into the padding, so the message's height stays its
+    /// words' and choices', as `dismiss_on_first_line` places it (`IconRoom::Overhang`). Without
+    /// it, the target is part of the message's rect, as in a footer.
+    pub fn in_padding(mut self) -> Self {
+        self.overhang = true;
+        self
     }
 
     /// A list row with one repair. The button shares the fault's line when both fit.
@@ -4608,12 +4666,12 @@ impl<A> BodyMessage<A> {
     /// in the success tone, with its choices and no way back: it has no Undo and no ticket, so
     /// a result whose Undo the DM may press stays a kept line in its footer.
     pub fn result(words: Sentence, choices: impl IntoIterator<Item = Choice<A>>) -> Self {
-        Self::of(BodyForm::Result(Typed::new(
+        Self::of(BodyForm::Result(Box::new(Typed::new(
             Tone::Success,
             words,
             None,
             choices.into_iter().collect(),
-        )))
+        ))))
     }
 
     /// The compact form, at the size of a row's message (`small_message`): `Small` words with
@@ -4638,7 +4696,7 @@ impl<A> BodyMessage<A> {
     pub fn show(self, ui: &mut Ui) -> Option<A> {
         let typed = match self.form {
             BodyForm::Full(message) => message.parts().1,
-            BodyForm::Result(typed) => typed,
+            BodyForm::Result(typed) => *typed,
             BodyForm::RowRepair {
                 tone,
                 words,
@@ -4655,7 +4713,14 @@ impl<A> BodyMessage<A> {
                 .body
                 .draw_compact(ui, MessagePlace::Page, self.detail.as_deref())?
         } else {
-            typed.body.draw(ui, MessagePlace::Page)?
+            let room = if self.overhang {
+                IconRoom::Overhang
+            } else {
+                IconRoom::Measured
+            };
+            typed
+                .body
+                .draw_in(ui, MessagePlace::Page, Reasons::Body, room)?
         };
         typed.id(pressed)
     }
@@ -6518,6 +6583,34 @@ mod tests {
                 "{width}: each press once"
             );
         }
+
+        // N0 (ruling M21): a fault's words can carry what the system itself said, on hover
+        // (`FaultMessage::hover`: a recorder's own error); the words stay the app's.
+        const SAID: &str = "The recorder said: device busy.";
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(600.0, 300.0))
+            .build_ui(|ui| {
+                let fault = Hp(Severity::CannotRead, None);
+                let _ = BodyMessage::from(
+                    FaultMessage::new(&fault)
+                        .hover(SAID.to_owned())
+                        .choice(Choice::new(MessageChoice::Choice("Record again"), 1_u8)),
+                )
+                .show(ui);
+            });
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(2);
+        let fault_words = fault_words(&Hp(Severity::CannotRead, None));
+        h.get_by_role_and_label(egui::accesskit::Role::Label, fault_words.as_str())
+            .hover();
+        h.run_steps(30);
+        let said = h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == SAID)
+        });
+        assert!(
+            said,
+            "n0-fault-hover: the words' hover says what the system said"
+        );
 
         // Review of PR 332, 4: narrower than the shortest cut, the words wrap inside the row;
         // every fixed word is painted, none is cut.
