@@ -431,7 +431,7 @@ const FRAME_HEIGHT: f32 = 2.0 * (S + super::tokens::HAIRLINE_WIDTH);
 fn region_height(room: f32, rest: Option<f32>) -> f32 {
     (room - rest.unwrap_or(0.0))
         .floor()
-        .max((REGION_LEAST + FRAME_HEIGHT).min(room))
+        .max(REGION_LEAST.min(room) + FRAME_HEIGHT)
 }
 
 fn region_drawn_id(pane: Id) -> Id {
@@ -1859,11 +1859,11 @@ impl Footer<'_> {
     /// footer), the editor scrolls inside it, and what comes after it (a save row) and the
     /// footer stay in view. A body that does not use the region is `Body::Content`.
     ///
-    /// The contract: the region (the editor's fixed frame) is `max(floor(room − rest), min(64 +
-    /// frame, room))` tall, where `frame` is the frame's margin and stroke: the text view keeps
-    /// 64 px. Save stays in view while the rest of the content fits the room less that; else the
-    /// region keeps it and the pane scrolls as a whole, as `Body::Content` does (below it, the
-    /// region is the room).
+    /// The contract: the region (the editor's fixed frame) is `max(floor(room − rest), min(64,
+    /// room) + frame)` tall, where `frame` is the frame's margin and stroke: the text view keeps
+    /// 64 px (below 64 px of room, the room). Save stays in view while the rest of the content
+    /// fits the room less that; else the region keeps it and the pane scrolls as a whole, as
+    /// `Body::Content` does.
     pub fn pane_editor<R>(
         self,
         ui: &mut Ui,
