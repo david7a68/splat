@@ -4416,12 +4416,16 @@ mod editor_region_tests {
             "i10-edge-{case}: the frame {frame:?} and Save {save:?} share their outside right edge"
         );
         let inner = frame.shrink(S + super::super::tokens::HAIRLINE_WIDTH);
+        let lane = super::super::layout::lane_width();
+        // egui's view excludes its bar while the bar shows: it ends at the frame's inside, or
+        // one lane before it.
         let view = record.view();
         assert!(
-            (view.right() - inner.right()).abs() <= 0.5
+            view.right() <= inner.right() + 0.5
+                && view.right() >= inner.right() - lane - 0.5
                 && view.top() >= inner.top() - 0.5
                 && view.bottom() <= inner.bottom() + 0.5,
-            "i10-lane-{case}: the scroll view {view:?} (text and lane) fills the frame's inside {inner:?}"
+            "i10-lane-{case}: the scroll view {view:?} is the frame's inside {inner:?}, its lane included"
         );
         let text = harness
             .output()
@@ -4429,20 +4433,18 @@ mod editor_region_tests {
             .iter()
             .find_map(|clipped| match &clipped.shape {
                 egui::Shape::Text(text) if text.galley.job.text.starts_with("Line 0\nLine 1") => {
-                    Some((clipped.clip_rect, text.pos.x + text.galley.rect.width()))
+                    Some(clipped.clip_rect)
                 }
                 _ => None,
             })
             .expect("the editor's text is painted");
-        // egui paints a text edit's text with a clip one point wider than its rect.
-        let lane = super::super::layout::lane_width();
+        // egui paints a text edit's text with a clip one point wider than its rect. The text
+        // ends one lane (subtracted once) before the frame's inside right edge.
         assert!(
-            view.expand(1.5).contains_rect(text.0)
-                && text.0.right() <= view.right() - lane + 1.5
-                && text.1 <= view.right() - lane + 0.5,
-            "i10-text-{case}: the text (clip {:?}, right {}) is inside the view {view:?}, left of its lane",
-            text.0,
-            text.1
+            view.expand(1.5).contains_rect(text)
+                && (text.right() - 1.0 - (inner.right() - lane)).abs() <= 0.5,
+            "i10-text-{case}: the text (clip {text:?}) is inside the view {view:?}, ending one \
+             lane before the frame's inside {inner:?}"
         );
     }
 
