@@ -75,6 +75,11 @@ const SESSION_TEMPLATE: design::FieldName = crate::field_id!("session_template")
 const CREATE_SESSION: design::Word = crate::word!("Create session");
 const SAVE_DETAILS: design::Word = crate::word!("Save details");
 const CANCEL: design::Word = crate::word!("Cancel");
+/// A session note's text: on the Sessions page, and in the Notes panel beside another page.
+const NOTE_ON_PAGE: design::FieldName = crate::field_id!("session_note_text");
+const NOTE_IN_PANEL: design::FieldName = crate::field_id!("session_note_text_panel");
+/// A template's text in the template editor.
+const TEMPLATE_TEXT: design::FieldName = crate::field_id!("session_template_text");
 const CREATE_TEMPLATE: design::Word = crate::word!("Create template");
 
 crate::create_reasons! {
@@ -771,6 +776,9 @@ pub struct Sessions {
     pub manifest_changed: Option<PathBuf>,
     /// The Sessions page is showing, so a button there need not lead here.
     pub on_page: bool,
+    /// A modal is open over the app (its dialogs, the full-window image, any egui modal: the
+    /// app's one test, `art::modal_open`). Ctrl+S waits for it, as every shortcut does.
+    pub modal: bool,
     pub wants_processing_settings: bool,
     pub wants_speech_key: bool,
     pub wants_recording_input: bool,
@@ -1382,7 +1390,8 @@ fn dated_before_today(note: &Note, today: &str) -> Option<String> {
 }
 
 /// Words at the note's caret. For a new thought after the end of a line of words, they start
-/// a line of their own, and with no words only that break goes in.
+/// a line of their own, and with no words only that break goes in. It is the note's own edit,
+/// so the note's Undo history stays.
 fn insert_at_caret(
     ctx: &egui::Context,
     id: egui::Id,
@@ -1393,7 +1402,7 @@ fn insert_at_caret(
     let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
     let Some(range) = state.cursor.char_range() else {
         if !words.is_empty() {
-            insert_in_note(&mut draft.body, words);
+            design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
             draft.edited();
         }
         return;
@@ -1416,7 +1425,9 @@ fn insert_at_caret(
         .char_indices()
         .nth(at)
         .map_or(draft.body.len(), |(byte, _)| byte);
-    draft.body.insert_str(byte, &added);
+    design::edit_in_place(ctx, id, &mut draft.body, |body| {
+        body.insert_str(byte, &added)
+    });
     draft.edited();
     state
         .cursor
@@ -1424,6 +1435,23 @@ fn insert_at_caret(
             egui::text::CCursor::new(at + added.chars().count()),
         )));
     egui::TextEdit::store_state(ctx, id, state);
+}
+
+/// Words the page adds to the open note (a reading's summary, a plan's link). It is the note's
+/// own edit, so the note's Undo history stays for when the DM goes back to it.
+pub(super) fn add_to_note(
+    ctx: &egui::Context,
+    editor: Option<egui::Id>,
+    draft: &mut Draft,
+    words: &str,
+) {
+    match editor {
+        Some(id) => {
+            design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
+        }
+        None => insert_in_note(&mut draft.body, words),
+    }
+    draft.edited();
 }
 
 /// Session numbers can repeat after a missing note is saved as a new file.
@@ -3062,7 +3090,7 @@ impl Sessions {
         let shown = self.link_updates.get(&self.page())?;
         Some(shown.outcome(frame, |update| {
             Said::new(crate::sentence!("Links now say “{}”.", update.title))
-                .undo(UndoStep::of(Verb::Change, "links").pressed_as(undo))
+                .undo(crate::library::LINK_UPDATE_UNDO.pressed_as(undo))
                 .into()
         }))
     }
@@ -4746,12 +4774,12 @@ impl Sessions {
             let _ = PagePlaceholder::<()>::new(&fault).show(ui);
             return;
         };
-        // Beside a page with its own draft, Ctrl+S goes to where the keyboard is.
-        if (!in_panel || self.note_had_focus)
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
-        {
-            draft.save();
-        }
+        // Beside a page with its own draft, Ctrl+S goes to where the keyboard is. The key is
+        // taken here, before the field, and the save runs after the field took this frame's
+        // input (issue #513): words typed in the same frame are saved with it.
+        let save = (!in_panel || self.note_had_focus)
+            && !self.modal
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
         if draft.state == DraftState::Conflict {
             if draft.on_disk.is_none() {
                 draft.show_disk();
@@ -4876,25 +4904,33 @@ impl Sessions {
                         .show(ui, |ui| {
                             // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
                             // space would press it. Escape still leaves the panel.
-                            let mut layouter = crate::markdown_source::layouter;
-                            let output = egui::TextEdit::multiline(&mut draft.body)
-                                .id(egui::Id::new((
-                                    "session_note_text",
-                                    self.selected,
-                                    in_panel,
-                                )))
-                                .lock_focus(in_panel)
-                                .frame(false)
-                                .font(design::reader::prose_type(ui).font(ui))
-                                .layouter(&mut layouter)
-                                .margin(egui::Vec2::ZERO)
-                                .desired_width(if in_panel {
-                                    ui.available_width().min(design::READER_MEASURE)
-                                } else {
-                                    ui.available_width()
-                                })
-                                .min_size(egui::vec2(0.0, visible_height + heading_offset))
-                                .show(ui);
+                            // The note's text field is its session's (M0468), one on the page
+                            // and one in the panel beside another page.
+                            let field = if in_panel {
+                                NOTE_IN_PANEL
+                            } else {
+                                NOTE_ON_PAGE
+                            };
+                            let width = if in_panel {
+                                ui.available_width().min(design::READER_MEASURE)
+                            } else {
+                                ui.available_width()
+                            };
+                            let font = design::reader::prose_type(ui).font(ui);
+                            let output =
+                                field.of(self.selected).editor(ui, &mut draft.body, |edit| {
+                                    // The layouter is a function item: leaking its box
+                                    // allocates nothing.
+                                    edit.lock_focus(in_panel)
+                                        .frame(false)
+                                        .font(font)
+                                        .layouter(Box::leak(Box::new(
+                                            crate::markdown_source::layouter,
+                                        )))
+                                        .margin(egui::Vec2::ZERO)
+                                        .desired_width(width)
+                                        .min_size(egui::vec2(0.0, visible_height + heading_offset))
+                                });
                             crate::markdown_source::paint_section_rules(ui, &output);
                             pressed_link =
                                 crate::markdown_source::pressed_note_link(ui, &output, None);
@@ -5022,6 +5058,9 @@ impl Sessions {
                 });
             },
         );
+        if save && let Some(draft) = &mut self.draft {
+            draft.save();
+        }
         if let Some(target) = pressed_link {
             self.open_note_link(target);
         }
@@ -6402,6 +6441,7 @@ impl Sessions {
                     .icon(icons::UP)
                     .name("Earlier part")
                     .density(Density::Read)
+                    .line_start()
                     .blocked_if(reading.part == 0, "This is the first part.")
                     .show(ui)
                     .clicked()
@@ -6540,8 +6580,7 @@ impl Sessions {
         if let Some(body) = add_to_notes
             && let Some(draft) = &mut self.draft
         {
-            insert_in_note(&mut draft.body, &body);
-            draft.edited();
+            add_to_note(ui.ctx(), self.note_editor_id, draft, &body);
             self.say(Tone::Success, "Added to the notes.".to_owned(), None);
         }
     }
@@ -7705,50 +7744,62 @@ impl Sessions {
             }
             return;
         }
-        if let Some(draft) = &mut self.template_draft
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
-        {
-            draft.save();
-        }
+        // Ctrl+S is taken before the field and saves after it (issue #513), so words typed in
+        // the same frame are saved with it.
+        let save = self.template_draft.is_some()
+            && !self.modal
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
         let mut pressed_link = None;
-        egui::ScrollArea::vertical()
-            .id_salt(("template_editor", &template.name))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if let Some(draft) = &mut self.template_draft {
-                    let mut layouter = crate::markdown_source::layouter;
-                    let output = egui::TextEdit::multiline(&mut draft.body)
-                        .font(design::reader::prose_type(ui).font(ui))
-                        .layouter(&mut layouter)
+        design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
+            // The template's text field is its file's (M0495, M0496). A template has no typed
+            // owner key yet: its path is the key (`TextKey::from_data`, counted).
+            let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
+                template
+                    .path
+                    .as_deref()
+                    .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
+            ));
+            if let Some(draft) = &mut self.template_draft {
+                let (width, height) = (ui.available_width(), ui.available_height());
+                let font = design::reader::prose_type(ui).font(ui);
+                let output = field.editor(ui, &mut draft.body, |edit| {
+                    // The layouter is a function item: leaking its box allocates nothing.
+                    edit.font(font)
+                        .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
                         .margin(egui::vec2(design::S, design::S))
-                        .desired_width(ui.available_width())
-                        .min_size(egui::vec2(0.0, ui.available_height()))
-                        .show(ui);
-                    crate::markdown_source::paint_section_rules(ui, &output);
-                    pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
-                    let response = output.response;
-                    design::named(ui, &response, "Template text");
-                    if response.changed() {
-                        draft.edited();
-                        self.deleted_templates.owner_changed(&kept::Page {
-                            root: self.folder.clone().unwrap_or_default(),
-                        });
-                    }
-                } else {
-                    let mut body = template.body.clone();
-                    let mut layouter = crate::markdown_source::layouter;
-                    let output = egui::TextEdit::multiline(&mut body)
-                        .font(design::reader::prose_type(ui).font(ui))
-                        .layouter(&mut layouter)
-                        .desired_width(ui.available_width())
-                        .min_size(egui::vec2(0.0, ui.available_height()))
+                        .desired_width(width)
+                        .min_size(egui::vec2(0.0, height))
+                });
+                crate::markdown_source::paint_section_rules(ui, &output);
+                pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
+                let response = output.response;
+                design::named(ui, &response, "Template text");
+                if response.changed() {
+                    draft.edited();
+                    self.deleted_templates.owner_changed(&kept::Page {
+                        root: self.folder.clone().unwrap_or_default(),
+                    });
+                }
+            } else {
+                let mut body = template.body.clone();
+                let (width, height) = (ui.available_width(), ui.available_height());
+                let font = design::reader::prose_type(ui).font(ui);
+                let output = field.editor(ui, &mut body, |edit| {
+                    // The layouter is a function item: leaking its box allocates nothing.
+                    edit.font(font)
+                        .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
+                        .desired_width(width)
+                        .min_size(egui::vec2(0.0, height))
                         .frame(false)
                         .interactive(false)
-                        .show(ui);
-                    design::named(ui, &output.response, "Built-in template text");
-                    crate::markdown_source::paint_section_rules(ui, &output);
-                }
-            });
+                });
+                design::named(ui, &output.response, "Built-in template text");
+                crate::markdown_source::paint_section_rules(ui, &output);
+            }
+        });
+        if save && let Some(draft) = &mut self.template_draft {
+            draft.save();
+        }
         if let Some(target) = pressed_link {
             self.open_note_link(target);
         }
@@ -9411,6 +9462,152 @@ mod tests {
         sessions.selected = Some(a);
         sessions.clear_success();
         assert_eq!(notice(&sessions), None, "its own session ends it");
+    }
+
+    /// M0495 (lane N0): the template editor's field is its template's. Words typed and erased
+    /// in template A do not come back with Ctrl+Z in template B, drawn at the same place, even
+    /// when both hold the same words (the case the field's text guard leaves to the owner key).
+    #[test]
+    fn a_template_field_keeps_its_own_text_history() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let a = create_template(dir.path(), "Downtime", "## Plan\n").unwrap();
+        let b = create_template(dir.path(), "Travel", "## Plan\n").unwrap();
+        let mut sessions = Sessions {
+            templates: vec![a.clone(), b.clone()],
+            ..Sessions::default()
+        };
+        sessions.select_template(&a.name);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(800.0, 600.0))
+            .build_state(
+                |ctx, sessions: &mut Sessions| {
+                    egui::CentralPanel::default().show(ctx, |ui| sessions.template_editor(ui));
+                },
+                sessions,
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Template text").focus();
+        harness.run_steps(2);
+        harness.get_by_label("Template text").type_text("Dusk");
+        harness.run_steps(16);
+        harness.get_by_label("Template text").type_text("!");
+        harness.run_steps(1);
+        for _ in 0.."Dusk!".len() {
+            harness.key_press(egui::Key::Backspace);
+        }
+        harness.run_steps(1);
+        let body = |harness: &egui_kittest::Harness<'_, Sessions>| {
+            harness
+                .state()
+                .template_draft
+                .as_ref()
+                .map(|draft| draft.body.clone())
+        };
+        assert_eq!(body(&harness).as_deref(), Some("## Plan\n"));
+        harness.state_mut().select_template(&b.name);
+        harness.run_steps(2);
+        harness.get_by_label("Template text").focus();
+        harness.run_steps(2);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        harness.run_steps(2);
+        assert_eq!(
+            body(&harness).as_deref(),
+            Some("## Plan\n"),
+            "n0-template-owner: Ctrl+Z in Travel gave it the words typed in Downtime"
+        );
+    }
+
+    /// Issue #513: Ctrl+S is taken before the editor and saves after it, in the note editor and
+    /// in the template editor. Words typed and Ctrl+S in ONE input frame are saved together.
+    #[test]
+    fn ctrl_s_saves_the_words_typed_in_its_frame() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "",
+                date: "2026-01-01",
+                campaign: "Test",
+                template: "## What happened\n",
+            },
+        )
+        .unwrap();
+        let template = create_template(dir.path(), "Short", "## Plan\n").unwrap();
+        let mut sessions = Sessions {
+            draft: Some(Draft::open(&note.path).unwrap()),
+            templates: vec![template.clone()],
+            ..Sessions::default()
+        };
+        sessions.select_template(&template.name);
+        assert!(sessions.template_draft.is_some());
+        // The harness draws the note's editor, or the template's.
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(800.0, 600.0))
+            .build_state(
+                |ctx, (sessions, template): &mut (Sessions, bool)| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        if *template {
+                            sessions.template_editor(ui);
+                        } else {
+                            sessions.note_editor(ui, false);
+                        }
+                    });
+                },
+                (sessions, false),
+            );
+        design::theme::install(&harness.ctx);
+        for (template, field, path) in [
+            (false, "Note text", note.path.clone()),
+            (true, "Template text", template.path.clone().unwrap()),
+        ] {
+            harness.state_mut().1 = template;
+            harness.run_steps(2);
+            harness.get_by_label(field).focus();
+            harness.run_steps(2);
+            let ctrl_s = egui::Event::Key {
+                key: egui::Key::S,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            };
+            // Review of PR 587 (P1): under a modal (the copy dialog, the app's `modal_open`),
+            // Ctrl+S saves nothing in the background.
+            harness.state_mut().0.modal = true;
+            harness
+                .input_mut()
+                .events
+                .extend([egui::Event::Text("Wait.".into()), ctrl_s.clone()]);
+            harness.step();
+            let saved = fs::read_to_string(&path).unwrap();
+            assert!(
+                !saved.contains("Wait."),
+                "n0-ctrl-s-modal: {field}: Ctrl+S under a modal saved: {saved:?}"
+            );
+            harness.state_mut().0.modal = false;
+            harness.run_steps(1);
+            // Both events in ONE frame's raw input (`harness.event` gives each its own frame).
+            let frame = harness.ctx.cumulative_frame_nr();
+            harness
+                .input_mut()
+                .events
+                .extend([egui::Event::Text("Dusk.".into()), ctrl_s]);
+            harness.step();
+            assert_eq!(
+                harness.ctx.cumulative_frame_nr() - frame,
+                1,
+                "one input frame"
+            );
+            let saved = fs::read_to_string(&path).unwrap();
+            assert!(
+                saved.contains("Dusk."),
+                "n0-ctrl-s-one-frame: {field}: Ctrl+S saves the words typed in its frame: {saved:?}"
+            );
+        }
     }
 
     #[test]
