@@ -169,6 +169,8 @@ pub enum Fallback {
     ThisFight,
     /// `that session`
     ThatSession,
+    /// `this scene`: a plan scene whose words are blank (M-N1.4).
+    ThisScene,
 }
 
 impl Name {
@@ -184,6 +186,7 @@ impl Name {
             match fallback {
                 Fallback::ThisFight => "this fight",
                 Fallback::ThatSession => "that session",
+                Fallback::ThisScene => "this scene",
             }
             .to_owned(),
         )
