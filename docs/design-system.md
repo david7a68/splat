@@ -2542,7 +2542,12 @@ choices. The session note's warning and its choices stand in the banner on every
 and they name the note, with each cause and its tone: `The note of <session> changed on disk. …`, `… is gone from
 the folder. …`, `… was moved or renamed. …`, `… was not saved. <reason>` (an error). A template's warning keeps
 `This note`. In the banner they follow the recording alerts, whose order and one primary stay as they are, and each
-wraps at `LIST_MEASURE`. The result of the DM's own action on the page, and the notices about this page, sit in
+wraps at `LIST_MEASURE`. A recording alert is a typed fault with its choices and its close icon; it holds at most
+one primary (`Choose an input` when no input is chosen, else `Continue processing`, else `Record again`), and only the
+alert the banner gives its primary shows it filled. A blocked `Continue processing` says why under the alert, as every
+locked choice does. A plain recorder error keeps what the recorder itself said on hover over the alert's words
+(`FaultMessage::hover`). `“<session>” is processed.` is a result said where it happened (`BodyMessage::result`), in
+the success tone, with its close icon and no way back. The result of the DM's own action on the page, and the notices about this page, sit in
 the session pane's message footer (`design::Footer`), below the pane's body, so the title line, Last time,
 the tabs, the plan's rows and the recording row never move when one comes. With plan and note side by side, that
 footer stands below both columns; the plan's column keeps only the plan's own results; on the narrow Plan tab the

@@ -1038,6 +1038,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "show_form", &[Ban::Body]),
         ("src/sessions/page.rs", "notes_panel", &[Ban::Body]),
         ("src/sessions/page.rs", "show", &[Ban::Body]),
+        // M-N0.10: the record line's warning (M0453).
+        ("src/sessions/page.rs", "record_line_body", &[Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
@@ -1165,7 +1167,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "banner",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Body],
         ),
         ("src/sessions/page.rs", "list_pane", &[Ban::Layout(1)]),
         (
