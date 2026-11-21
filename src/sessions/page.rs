@@ -2064,18 +2064,18 @@ impl Sessions {
             // with no way back (`BodyMessage::result`); a fault keeps its tone.
             let sentence = notice_sentence(&words);
             let dismiss = Choice::new(MessageChoice::Dismiss(Lost::Nothing), ());
-            let closed = match tone {
+            // In the banner's padding, as every banner message with a close icon.
+            let message = match tone {
                 Tone::Error => BodyMessage::from(
                     FaultMessage::new(&PageFault::Failed(sentence)).choice(dismiss),
-                )
-                .show(ui),
+                ),
                 Tone::Warning => BodyMessage::from(
                     FaultMessage::new(&PageFault::Check(sentence)).choice(dismiss),
-                )
-                .show(ui),
-                Tone::Success => BodyMessage::result(sentence, [dismiss]).show(ui),
-                Tone::Info => BodyMessage::from(Notice::new(sentence).choice(dismiss)).show(ui),
+                ),
+                Tone::Success => BodyMessage::result(sentence, [dismiss]),
+                Tone::Info => BodyMessage::from(Notice::new(sentence).choice(dismiss)),
             };
+            let closed = message.in_padding().show(ui);
             if closed.is_some() {
                 self.notice = None;
                 self.notice_session = None;
@@ -2245,7 +2245,7 @@ impl Sessions {
                                 MessageChoice::Choice("Stop recording"),
                                 AlertAct::Stop,
                             ));
-                            match BodyMessage::from(message).show(ui) {
+                            match BodyMessage::from(message).in_padding().show(ui) {
                                 Some(AlertAct::Record) => record_again = session,
                                 Some(AlertAct::Open) => open = session,
                                 Some(AlertAct::Stop) => stop = true,
@@ -2335,7 +2335,7 @@ impl Sessions {
                                 MessageChoice::Dismiss(Lost::Nothing),
                                 AlertAct::Dismiss,
                             ));
-                            match BodyMessage::from(message).show(ui) {
+                            match BodyMessage::from(message).in_padding().show(ui) {
                                 Some(AlertAct::Input) => self.wants_recording_input = true,
                                 Some(AlertAct::Retry) => {
                                     if let Some(path) = &alert.retry {

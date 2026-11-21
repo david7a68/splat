@@ -3151,15 +3151,21 @@ impl<A: 'static> TypedFooter<A> {
                     .data(|data| data.get_temp::<egui::Id>(egui::Id::new("design_footer_drawing")));
                 let id = egui::Id::new(("design_kept_line", pane, ticket.order()));
                 line_ui(ui, Some(id), |ui| {
-                    typed
-                        .body
-                        .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
+                    typed.body.draw_in(
+                        ui,
+                        MessagePlace::Footer,
+                        Reasons::Planned(room),
+                        IconRoom::Measured,
+                    )
                 })
             }
             None => line_ui(ui, None, |ui| {
-                typed
-                    .body
-                    .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
+                typed.body.draw_in(
+                    ui,
+                    MessagePlace::Footer,
+                    Reasons::Planned(room),
+                    IconRoom::Measured,
+                )
             }),
         };
         if let Some(pressed) = pressed
@@ -3263,7 +3269,12 @@ impl<A: 'static> TypedFooter<A> {
                             .as_ref()
                             .map(|ticket| egui::Id::new(("design_kept_line", id, ticket.order())));
                         let _ = line_ui(ui, scope, |ui| {
-                            body.draw_in(ui, MessagePlace::Footer, Reasons::Planned(&mut room))
+                            body.draw_in(
+                                ui,
+                                MessagePlace::Footer,
+                                Reasons::Planned(&mut room),
+                                IconRoom::Measured,
+                            )
                         });
                     }
                 });
@@ -3731,15 +3742,17 @@ impl Body {
     /// line; the words and the other choices keep the room to its left. A locked `Dismiss` is
     /// disabled, with its reason, as every blocked action is.
     fn draw(&self, ui: &mut Ui, place: MessagePlace) -> Option<Pressed> {
-        self.draw_in(ui, place, Reasons::Body)
+        self.draw_in(ui, place, Reasons::Body, IconRoom::Measured)
     }
 
-    /// `draw`, with its reasons' room as `reasons` says.
+    /// `draw`, with its reasons' room as `reasons` says, and the close icon's target in the
+    /// message's rect (`Measured`) or reaching into the padding around it (`Overhang`).
     fn draw_in(
         &self,
         ui: &mut Ui,
         place: MessagePlace,
         mut reasons: Reasons<'_>,
+        icon_room: IconRoom,
     ) -> Option<Pressed> {
         let Some(at) = self
             .choices
@@ -3752,7 +3765,7 @@ impl Body {
         };
         let lock = self.locks.get(at).and_then(holding);
         let mut pressed = None;
-        let icon = dismiss_at_first_line(ui, lock, IconRoom::Measured, |ui| {
+        let icon = dismiss_at_first_line(ui, lock, icon_room, |ui| {
             self.draw_words(ui, place, &mut pressed, &mut reasons)
         });
         // The words and their controls are drawn before the close icon: they come first.
@@ -4544,6 +4557,8 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
 pub struct BodyMessage<A> {
     form: BodyForm<A>,
     compact: bool,
+    /// Drawn in a banner with padding: the close icon reaches into it (`in_padding`).
+    overhang: bool,
     /// The whole words behind fitted ones: the words' accessible name and hover.
     detail: Option<String>,
 }
@@ -4577,8 +4592,18 @@ impl<A> BodyMessage<A> {
         Self {
             form,
             compact: false,
+            overhang: false,
             detail: None,
         }
+    }
+
+    /// In a banner with padding (the Sessions bottom banner): the close icon's target, taller
+    /// than the words' first line, reaches into the padding, so the message's height stays its
+    /// words' and choices', as `dismiss_on_first_line` places it (`IconRoom::Overhang`). Without
+    /// it, the target is part of the message's rect, as in a footer.
+    pub fn in_padding(mut self) -> Self {
+        self.overhang = true;
+        self
     }
 
     /// A list row with one repair. The button shares the fault's line when both fit.
@@ -4642,7 +4667,14 @@ impl<A> BodyMessage<A> {
                 .body
                 .draw_compact(ui, MessagePlace::Page, self.detail.as_deref())?
         } else {
-            typed.body.draw(ui, MessagePlace::Page)?
+            let room = if self.overhang {
+                IconRoom::Overhang
+            } else {
+                IconRoom::Measured
+            };
+            typed
+                .body
+                .draw_in(ui, MessagePlace::Page, Reasons::Body, room)?
         };
         typed.id(pressed)
     }
