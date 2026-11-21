@@ -587,7 +587,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     // Issue #513: Ctrl+S, taken before the page draws and saved after the package list. The
     // built-in package unticked (Space on its focused box) and Ctrl+S in ONE input frame: the
     // save is without it, and the app reads Lookup and Encounters again (#509). Behind a modal
-    // the key saves nothing; the draft it leaves is unticked again with no key.
+    // the key saves nothing (first, while the list can still be saved; Discard ends its draft).
     // A new campaign's first choice, the built-in package (the fixture adds Watch and Toll).
     let builtin = CampaignDocument::load(&first).unwrap().selections[0]
         .package
@@ -620,9 +620,25 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     let space = key(egui::Key::Space, egui::Modifiers::NONE);
     let ctrl_s = key(egui::Key::S, egui::Modifiers::COMMAND);
     assert!(builtin != watch.id && builtin != toll.id && chosen_on_disk(watch.id));
-    harness.get_by_label("Use D&D 2024 · SRD 5.2.1").focus();
-    harness.run_steps(2);
+    let focus_builtin = |harness: &mut egui_kittest::Harness<'_, Page>| {
+        harness.get_by_label("Use D&D 2024 · SRD 5.2.1").focus();
+        harness.run_steps(2);
+    };
+    focus_builtin(&mut harness);
+    harness.state_mut().modal = true;
     one_frame(&mut harness, &[space.clone(), ctrl_s.clone()]);
+    harness.state_mut().modal = false;
+    assert!(
+        chosen_on_disk(builtin)
+            && harness.state().content.selections_changed()
+            && harness.state().refreshed == 0,
+        "behind a modal Ctrl+S saved"
+    );
+    harness.get_by_label("Discard").click();
+    harness.run_steps(2);
+    assert!(!harness.state().content.selections_changed());
+    focus_builtin(&mut harness);
+    one_frame(&mut harness, &[space, ctrl_s]);
     assert!(
         !chosen_on_disk(builtin)
             && chosen_on_disk(watch.id)
@@ -635,18 +651,6 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
         harness.state().content.selections_changed(),
         harness.state().refreshed
     );
-    harness.state_mut().modal = true;
-    one_frame(&mut harness, &[space.clone(), ctrl_s.clone()]);
-    harness.state_mut().modal = false;
-    assert!(
-        !chosen_on_disk(builtin)
-            && harness.state().content.selections_changed()
-            && harness.state().refreshed == 1,
-        "behind a modal Ctrl+S saved"
-    );
-    one_frame(&mut harness, &[space]);
-    harness.run_steps(2);
-    assert!(!harness.state().content.selections_changed());
     // Ruling R21 (G45): the repairs, then the links, then `Remove from this campaign` last
     // with exactly `L` before it. A reading-order test on the message's choices.
     fs::rename(packages.join("watch"), packages.join("watch-moved")).unwrap();
