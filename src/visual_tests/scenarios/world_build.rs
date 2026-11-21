@@ -6925,7 +6925,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     // Round 24 FF6: the warning offers no choice that no control names; its buttons do.
     d.observe(
         "iter-24-L-FF6",
-        d.has(crate::library::MOVED_ON_DISK) && !d.has_containing("keep the disk version"),
+        d.has(crate::library::MOVED_ON_DISK.as_str()) && !d.has_containing("keep the disk version"),
         "The moved-file warning says the draft is safe, and the two buttons name the choices",
     );
     d.state_prepared("draft-file-moved-on-disk", Sizes::All, |d| {

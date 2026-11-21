@@ -9,7 +9,7 @@ is fixed. Full-page and cross-page changes are allowed.
 section 3, and section 5. Sections 4, 6, 7, and 8 are reference tables.
 
 Evidence: `file:line` refers to the working tree on 2026-11-01 (base `7a25305`).
-Another agent is editing `src/`, so line numbers can move by a few lines.
+The README citations refer to [the README at that commit](https://github.com/david7a68/splat/blob/7a25305/README.md).
 No screenshots existed during this research. Layout claims come from the code.
 Items marked *(estimate)* need a check against a screenshot.
 
@@ -36,7 +36,7 @@ conditions, and death. The run stores the result (`src/encounter_run.rs:1`,
   `src/main.rs:255-265`). Automatic combat resolution is also later work.
 
 **The user.** One DM, working alone on one computer, with a D&D Beyond campaign
-and players who keep their own sheets there (`docs/character-viewer.md:43`). See
+and players who keep their own sheets there. See
 assumptions A1 to A3.
 
 **Two contexts of use.** They have opposite needs. Most design disputes come from
@@ -547,11 +547,11 @@ screens and is not reused for decoration.
 | Document | Clean; unsaved; saved; invalid; external change; read-only |
 | Result | Error; warning; success, each with a word as well as a colour |
 
-**Data scale.** Design with real volumes: 2,065 Library rows (`artifacts/list-scrolling/README.md:5`),
+**Data scale.** Design with real volumes: 2,065 Library rows,
 including 339 spells, 415 items, 336 creatures, and 975 rule entries (counted from
 `builtin/dnd2024-definitions`). 51 search results for "dragon". Note bodies across `builtin/` have a median of
 about 270 words and a maximum near 5,600 words. Lists
-must stay virtualised (debug median 2.3 ms per frame today). Encounter creature results must join them.
+must stay virtualised. Encounter creature results must join them.
 Expect a run log of hundreds of lines and an unbounded list of saved runs.
 
 **Long text in tight places.** Handle long names ("Rohan of Unc"), numbered copies ("Goblin 12"), 5 or more

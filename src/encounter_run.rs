@@ -725,13 +725,23 @@ struct State {
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
 /// kept or taken back, and the revisions of the two reads (never an address, which a freed read
 /// can hand to the next one).
-type ArrivalKey = (u64, u64, u64);
+type ArrivalKey = (
+    u64,
+    crate::design::memo::Revision,
+    crate::design::memo::Revision,
+);
 /// The typed totals' revision, the groups' revision, the run's encounter, the count of steps
 /// kept or taken back and the grouping rule, for the Arrivals reasons (a step or the rule can
 /// give a side the initiative that a group without a bonus joins).
-type ReasonsKey = (u64, u64, Option<Uuid>, u64, Grouping);
+type ReasonsKey = (
+    u64,
+    crate::design::memo::Revision,
+    Option<Uuid>,
+    u64,
+    Grouping,
+);
 /// The groups' revision, and the widths and type size a summary was wrapped for.
-type SummaryKey = (u64, u32, u32, u32);
+type SummaryKey = (crate::design::memo::Revision, u32, u32, u32);
 /// A group's member summary in Arrivals: the wrapped words, and whether they take a full-width
 /// line above Initiative and Add because `Will add:` and its first member do not fit beside them.
 #[derive(Clone)]
@@ -886,7 +896,7 @@ pub(crate) struct Run {
     /// The part chooses again when the heading's data or metrics change.
     turn_heading: crate::design::KeptTurnHeading,
     /// The groups' revision that `arrival_lines` was last trimmed to.
-    arrival_lines_seen: Option<u64>,
+    arrival_lines_seen: Option<crate::design::memo::Revision>,
     /// Each pending sync's line in the ended view, by row, with the sync values' revision it
     /// was worked out from (G178).
     pending_lines: BTreeMap<usize, (u64, String)>,
@@ -898,16 +908,13 @@ pub(crate) struct Run {
     arrival_summaries: Option<(SummaryKey, BTreeMap<Uuid, ArrivalSummary>)>,
     /// Bumped by every edit of `group_totals`, so the Arrivals reasons are read again only then.
     totals_revision: u64,
-    /// The groups that `groups_revision` counted last. Held, so their allocation is never freed
-    /// and reused while it is compared: a new read is told apart by identity, not by an address.
-    groups_seen: Option<Arc<Vec<Arc<RunGroup>>>>,
-    /// Bumped whenever `groups` is a read other than `groups_seen` (a reload replaces it, also
-    /// while Arrivals is closed). The Arrivals caches are keyed by it.
-    groups_revision: u64,
-    /// The scale that `scale_revision` counted last, held as `groups_seen` is.
-    scale_seen: Option<Arc<crate::difficulty::Scale>>,
-    /// Bumped whenever `scale` is a read other than `scale_seen`.
-    scale_revision: u64,
+    /// The Encounters page's snapshot that `groups` and `scale` came from (`set_reads`).
+    reads_from: Option<Uuid>,
+    /// A new revision with each new read of `groups` (a reload replaces it, also while
+    /// Arrivals is closed). The Arrivals caches are keyed by it.
+    groups_read: crate::design::memo::Revised<()>,
+    /// A new revision with each new read of `scale`.
+    scale_read: crate::design::memo::Revised<()>,
     /// The Arrivals reasons of each Add that waits for the DM (FI5, R35: a typed total that
     /// cannot be read, a roll with no bonus), for one `ReasonsKey`. Never saved.
     arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
@@ -1028,11 +1035,11 @@ pub(crate) struct Run {
     focus_outcome: bool,
     /// The file changed under this run. Saving stops until the DM chooses what to keep.
     disk_conflict: bool,
-    /// The campaign's encounter groups, as they read from disk, once they have been read. A
-    /// run does not save these.
-    pub groups: Option<Arc<Vec<Arc<RunGroup>>>>,
-    /// The campaign's XP budget table and party, once they have been read.
-    pub scale: Option<Arc<crate::difficulty::Scale>>,
+    /// The campaign's encounter groups, as they read from disk, once they have been read
+    /// (`set_reads`). A run does not save these.
+    groups: Option<Arc<Vec<Arc<RunGroup>>>>,
+    /// The campaign's XP budget table and party, once they have been read (`set_reads`).
+    scale: Option<Arc<crate::difficulty::Scale>>,
     /// The campaign's creatures that can join a fight, once they have been read.
     pub creatures: Option<Arc<Vec<Arc<RunCreature>>>>,
     /// The names linked in tonight's plan. Those groups come first in the panel.
@@ -1437,10 +1444,9 @@ impl Run {
             arrival_counts: (0, 0),
             arrival_summaries: None,
             totals_revision: 0,
-            groups_seen: None,
-            groups_revision: 0,
-            scale_seen: None,
-            scale_revision: 0,
+            reads_from: None,
+            groups_read: crate::design::memo::Revised::new(()),
+            scale_read: crate::design::memo::Revised::new(()),
             arrival_reasons: None,
             tie_choice: None,
             carried: None,
@@ -4483,6 +4489,35 @@ impl Run {
             self.refresh_roster_faults();
         }
     }
+    /// The campaign's reads that the run shows (its encounter groups, its XP budget table and
+    /// party), from the Encounters page's snapshot `from`. The page hands them on every frame;
+    /// only another snapshot gives them new revisions, so the Arrivals caches are worked out
+    /// again once per read, also while Arrivals is closed (not by comparing addresses).
+    pub(crate) fn set_reads(
+        &mut self,
+        from: Uuid,
+        groups: &Arc<Vec<Arc<RunGroup>>>,
+        scale: &Arc<crate::difficulty::Scale>,
+    ) {
+        if self.reads_from == Some(from) {
+            return;
+        }
+        self.reads_from = Some(from);
+        self.set_groups(Arc::clone(groups));
+        self.set_scale(Arc::clone(scale));
+    }
+    /// A new read of the groups: a new revision.
+    fn set_groups(&mut self, groups: Arc<Vec<Arc<RunGroup>>>) {
+        self.groups = Some(groups);
+        self.groups_read
+            .revise(|()| crate::design::memo::Changed::Yes);
+    }
+    /// A new read of the scale: a new revision.
+    fn set_scale(&mut self, scale: Arc<crate::difficulty::Scale>) {
+        self.scale = Some(scale);
+        self.scale_read
+            .revise(|()| crate::design::memo::Changed::Yes);
+    }
     pub(crate) fn set_roster_names(&mut self, revision: Uuid, names: &BTreeMap<String, String>) {
         if self.roster_names_revision != Some(revision) {
             self.roster_names.extend(names.clone());
@@ -4818,10 +4853,9 @@ impl Run {
             arrival_counts: (0, 0),
             arrival_summaries: None,
             totals_revision: 0,
-            groups_seen: None,
-            groups_revision: 0,
-            scale_seen: None,
-            scale_revision: 0,
+            reads_from: None,
+            groups_read: crate::design::memo::Revised::new(()),
+            scale_read: crate::design::memo::Revised::new(()),
             arrival_reasons: None,
             tie_choice: None,
             carried: None,
@@ -5466,6 +5500,15 @@ impl Run {
     }
     pub fn hp_of(&self, index: usize) -> Option<i64> {
         self.state.participants[index].hp
+    }
+    pub(crate) fn simulate_stat_block_edit(&mut self, name: &str, edit: impl FnOnce(&mut String)) {
+        let participant = self
+            .state
+            .participants
+            .iter_mut()
+            .find(|p| p.name == name)
+            .unwrap();
+        edit(&mut Arc::make_mut(&mut participant.definition).body);
     }
     /// Undo, then roll the first loot line that has no result, with no frame between them.
     pub fn simulate_undo_and_roll_first_loot(&mut self) {
@@ -11177,8 +11220,8 @@ mod tests {
         );
         // The group's own total, as the loader sums it, holds both members.
         Arc::get_mut(&mut group).unwrap().xp = 2000;
-        run.groups = Some(Arc::new(vec![group.clone()]));
-        run.scale = Some(Arc::new(crate::difficulty::Scale {
+        run.set_groups(Arc::new(vec![group.clone()]));
+        run.set_scale(Arc::new(crate::difficulty::Scale {
             budgets: Some(crate::difficulty::builtin_budgets()),
             party: heroes.iter().map(|hero| (hero.id, Some(4))).collect(),
         }));
@@ -11190,6 +11233,34 @@ mod tests {
             (rating.word, rating.xp, rating.budgets[0], adds),
             (crate::difficulty::Word::Low, 800, 1250, 200)
         );
+        // M-R0.8 (m-r0-8-reads): the Encounters page hands its reads on every frame with the
+        // snapshot they came from. The same snapshot keeps the words; another one is a new read,
+        // and the words are worked out again (a revision, not an address).
+        let (groups, scale) = (run.groups.clone().unwrap(), run.scale.clone().unwrap());
+        let snapshot = Uuid::new_v4();
+        run.set_reads(snapshot, &groups, &scale);
+        run.arrival_words();
+        let work = run.arrival_counts.1;
+        run.set_reads(snapshot, &groups, &scale);
+        run.arrival_words();
+        assert_eq!(
+            run.arrival_counts.1, work,
+            "m-r0-8-reads: the same snapshot keeps the words"
+        );
+        let mut lower = (*scale).clone();
+        lower.party = heroes.iter().map(|hero| (hero.id, Some(1))).collect();
+        run.set_reads(Uuid::new_v4(), &groups, &Arc::new(lower));
+        let budget = run.arrival_words().unwrap()[&group.id]
+            .0
+            .rating
+            .as_ref()
+            .unwrap()
+            .budgets[0];
+        assert_ne!(
+            budget, 1250,
+            "m-r0-8-reads: another snapshot's party is read again"
+        );
+        run.set_reads(Uuid::new_v4(), &groups, &scale);
         // A step that marks a character or a creature absent changes the budgets and the XP.
         let weigh = |run: &mut Run| {
             run.revision += 1;
@@ -11218,7 +11289,7 @@ mod tests {
         elsewhere.encounter = Some(Uuid::new_v4());
         let elsewhere = Arc::new(elsewhere);
         run.source = Some(Uuid::new_v4());
-        run.groups = Some(Arc::new(vec![group.clone(), elsewhere.clone()]));
+        run.set_groups(Arc::new(vec![group.clone(), elsewhere.clone()]));
         run.arrival_lines.seed(group.id);
         run.arrival_lines.seed(elsewhere.id);
         run.keep_offered_lines();
@@ -11227,7 +11298,7 @@ mod tests {
             "iter-29-R1 point 1: only offered groups keep their lines"
         );
         run.source = None;
-        run.groups = Some(Arc::new(vec![group.clone()]));
+        run.set_groups(Arc::new(vec![group.clone()]));
         // Point 4 (round 29 review): one owner of a group's facts. The Encounters list and the
         // plan (`summary`) and Arrivals' heading with no form start with the same words.
         let facts = group.facts(true);
@@ -11256,7 +11327,7 @@ mod tests {
             "party",
             vec![(cr1.clone(), 1, Overrides::default())],
         );
-        run.groups = Some(Arc::new(vec![group.clone(), allies.clone()]));
+        run.set_groups(Arc::new(vec![group.clone(), allies.clone()]));
         let word = |run: &mut Run, id| {
             run.revision += 1;
             run.arrival_words().unwrap()[&id]
@@ -11303,14 +11374,14 @@ mod tests {
         let hero = format!("Level not known: {}", run.state.participants[0].name);
         let mut scale = (**run.scale.as_ref().unwrap()).clone();
         scale.party.remove(&heroes[0].id);
-        run.scale = Some(Arc::new(scale.clone()));
+        run.set_scale(Arc::new(scale.clone()));
         assert_eq!(
             missing(&mut run, group.id),
             (false, Some(hero.clone())),
             "a missing saved sheet hides the word"
         );
         scale.party.insert(heroes[0].id, None);
-        run.scale = Some(Arc::new(scale));
+        run.set_scale(Arc::new(scale));
         assert_eq!(
             missing(&mut run, group.id),
             (false, Some(hero.clone())),
@@ -11700,7 +11771,7 @@ mod tests {
     fn the_run_card_and_panel_draw_with_changes_and_groups_in_setup_and_in_combat() {
         let ctx = egui::Context::default();
         let mut run = run();
-        run.groups = Some(Arc::new(vec![mixed_group(), guard_group("Wave", 2)]));
+        run.set_groups(Arc::new(vec![mixed_group(), guard_group("Wave", 2)]));
         run.apply(Command::AddGroup(
             group_of(
                 "Rivals",
@@ -11764,7 +11835,7 @@ mod tests {
             begin(&mut run);
             let wave = guard_group("Wave", 1);
             let id = wave.id;
-            run.groups = Some(Arc::new(vec![wave]));
+            run.set_groups(Arc::new(vec![wave]));
             run.group_totals.insert(id, text.into());
             let count = run.state.participants.len();
             let history = run.history.len();
@@ -11785,7 +11856,7 @@ mod tests {
         begin(&mut run);
         let wave = guard_group("Wave", 1);
         let id = wave.id;
-        run.groups = Some(Arc::new(vec![wave]));
+        run.set_groups(Arc::new(vec![wave]));
         run.group_totals.insert(id, "13".into());
         run.add_group_from_panel(id);
         assert_eq!(run.state.participants[3].initiative, Some(13));

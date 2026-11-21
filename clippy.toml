@@ -184,7 +184,6 @@ disallowed-methods = [
     { path = "splat::design::components::group_label", reason = "use design::heading(ui, Heading::Label(…)), which adds the space above it" },
     # Round 29 P-1: an add field shows `Add` and `Cancel` (`design::add_field`). Keys only is staged
     # for the two flows the design system describes so (the loot list's field, the run's Effect).
-    { path = "splat::design::components::add_field_keys", reason = "an add field shows its actions: use design::add_field(id, name, hint).actions(…); keys only is a staged review decision: Ban::Extras" },
     { path = "splat::design::components::AddFieldForm::keys_only", reason = "an add field shows its actions: use design::add_field(id, name, hint).actions(…); keys only is a staged review decision: Ban::Extras" },
     # Package P: the pane places its footer (`Footer::pane`). A footer placed by hand is staged out,
     # and a body that manages its own room is the one named escape; each function that still calls

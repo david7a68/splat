@@ -118,6 +118,8 @@ struct SpellLinks<'a> {
     /// in printed order, which a tile's Ctrl number counts in.
     resolved: std::sync::Arc<spells::Resolved>,
     links: &'a dyn Links,
+    next_list: usize,
+    next_cast: usize,
     shown: Vec<usize>,
     opened: Option<usize>,
 }
@@ -125,17 +127,13 @@ struct SpellLinks<'a> {
 impl SpellLinks<'_> {
     /// A line's spells as a row of tiles: each that rolls with its number after the stat
     /// block's actions, and the spell it opens when the DM reads one.
-    fn draw(&mut self, ui: &mut egui::Ui, line: &spells::SpellLine, actions: usize) {
-        let rolls = &self.resolved.rolls;
+    fn draw(&mut self, ui: &mut egui::Ui, line: &spells::SpellLine) {
         let tiles: Vec<crate::rolls::Tile> = line
             .tiles
             .iter()
             .map(|spell| match &spell.chip {
                 Some(chip) => crate::rolls::Tile::Roll {
-                    place: rolls
-                        .iter()
-                        .position(|known| known.label == chip.label && known.link == chip.link)
-                        .map(|place| actions + place),
+                    place: spell.place,
                     chip: chip.clone(),
                     read: Some(spell.name.clone()),
                 },
@@ -156,13 +154,11 @@ impl SpellLinks<'_> {
 impl creature::Spells for SpellLinks<'_> {
     fn list(&mut self, ui: &mut egui::Ui, spellcasting: &str, paragraph: &str) {
         let caster = spells::caster(self.entry, spellcasting);
-        // A spell's number follows the stat block's own actions.
-        let actions = crate::rolls::actions(&self.entry.body).len();
         for text in paragraph.lines() {
             // Resolved with the entry, unless the reader's words differ from its body's.
             let resolved = std::sync::Arc::clone(&self.resolved);
             let fresh;
-            let line = match resolved.line(text) {
+            let line = match resolved.line(text, caster, &mut self.next_list) {
                 Some(line) => line,
                 None => match spells::line(text, caster, &resolved.references, self.links) {
                     Some(line) => {
@@ -173,7 +169,7 @@ impl creature::Spells for SpellLinks<'_> {
                 },
             };
             design::help(ui, &line.label);
-            self.draw(ui, line, actions);
+            self.draw(ui, line);
             if !line.missing.is_empty() {
                 design::help(
                     ui,
@@ -187,7 +183,7 @@ impl creature::Spells for SpellLinks<'_> {
         let resolved = std::sync::Arc::clone(&self.resolved);
         let fresh;
         // Resolved with the entry, unless the reader's words differ from its body's.
-        let line = match resolved.cast(paragraph) {
+        let line = match resolved.cast(paragraph, &mut self.next_cast) {
             Some(line) => line,
             None => {
                 fresh = spells::cast_line(self.entry, paragraph, &resolved.references, self.links);
@@ -195,8 +191,7 @@ impl creature::Spells for SpellLinks<'_> {
             }
         };
         if let Some(line) = line {
-            let actions = crate::rolls::actions(&self.entry.body).len();
-            self.draw(ui, line, actions);
+            self.draw(ui, line);
         }
     }
 
@@ -434,6 +429,8 @@ fn content(
             entry,
             resolved: spells::resolve(entry, links),
             links,
+            next_list: 0,
+            next_cast: 0,
             shown: Vec::new(),
             opened: None,
         };

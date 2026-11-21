@@ -10,7 +10,7 @@
 //! Every kind but a copy holds one result at a time: a new act of that kind replaces the older
 //! result, whose order (and ticket) ends with it. Copies are several per file, each owned by the
 //! file it linked and the path it copied. Scope is `()`: a campaign switch hides none of them;
-//! each kind's own end events decide (see `docs/notes/library-results.md` §4).
+//! each kind's own end events decide. See `KeptMark::ENDS` and `forget_changed_undos`.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{DependencyUndo, FileId, IdentityUndo, LetGo, OwnerKey, Scope, SelectionUndo};
 use crate::content_workspace::{ContentEdits, ManifestWrite};

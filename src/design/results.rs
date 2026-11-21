@@ -1013,7 +1013,18 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_result_shows_only_in_its_own_scope statement",
             &[Ban::ByOwner(1)],
         ),
-        ("src/library.rs", "editor_pane", &[Ban::Extras(1)]),
+        // M20 (M-L0.6): the disk-change warnings above the comparison, typed placeholders.
+        (
+            "src/library.rs",
+            "editor_pane",
+            &[Ban::Extras(1), Ban::Body],
+        ),
+        // M20 (M-L0.6): a read fault in the reader's body, with `Try again`.
+        ("src/library.rs", "fault_notice", &[Ban::Body]),
+        // M20 (M-L0.6): a copied package folder's warnings in the form, with its repair.
+        ("src/library.rs", "package_form", &[Ban::Body]),
+        // M20 (M-L0.6): a failed load where the page has no pane.
+        ("src/library.rs", "show statement", &[Ban::Body]),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
         ("src/library.rs", "cause", &[Ban::Words]),
@@ -1106,11 +1117,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
-        (
-            "src/encounters.rs",
-            "creature_search_with_summary",
-            &[Ban::Layout(1)],
-        ),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
         (
             "src/encounters/groups.rs",
@@ -1125,9 +1131,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
-        ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
-        ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
+        // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
+        // `line_row`'s lines are; the list has no typed owner yet.
+        (
+            "src/loot_editor.rs",
+            "add_row",
+            &[Ban::Extras(1), Ban::RowKey(1)],
+        ),
         (
             "src/loot_editor.rs",
             "line_row",
@@ -1226,6 +1237,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "duplicate_creature_results",
             &[Ban::Body],
         ),
+        // Ruling M20 (M0192): the page's placeholder while another campaign's encounter is open;
+        // it replaces an untyped `design::message`.
+        ("src/encounters.rs", "show_page", &[Ban::Body]),
+        // M0126 (M-R0.9): a group row's member faults are typed messages in the row they are
+        // about, with their repairs (`BodyMessage`); their words are the loader's, with the
+        // DM's names in them (`Sentence::outside`).
+        ("src/encounters/groups.rs", "cause", &[Ban::Words]),
+        ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
@@ -1303,7 +1322,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "history_summary",
             &[Ban::Extras(2)],
         ),
-        ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
+        // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
+        ("src/library.rs", "repair_notice", &[Ban::Body]),
         ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
@@ -1358,11 +1378,6 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/design/components.rs",
             "iter28_p_the_pane_places_its_footer_for_every_body",
             &[Ban::Layout(1), Ban::Footer],
-        ),
-        (
-            "src/design/components.rs",
-            "add_field_keys",
-            &[Ban::Layout(1)],
         ),
         // The test of the staged keys-only add field itself (`AddFieldForm::keys_only`).
         (
@@ -1606,7 +1621,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaigns.rs", 1),
             ("src/design/components.rs", 1),
             ("src/design/gallery.rs", 2),
-            ("src/encounters.rs", 1),
             ("src/world/edit.rs", 1),
         ],
     ),
@@ -1617,7 +1631,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/content_workspace.rs", 1),
             ("src/design/comparison.rs", 1),
             ("src/encounter_run/undo.rs", 2),
-            ("src/encounter_run/view.rs", 2),
             ("src/library.rs", 2),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
