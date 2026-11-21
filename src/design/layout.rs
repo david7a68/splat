@@ -2658,6 +2658,8 @@ pub struct CreateField<'a> {
     side: Option<SideAction>,
     focus: bool,
     placeholder: Option<&'a str>,
+    /// Words the DM may choose instead of typing them (`suggestions`).
+    suggestions: Option<&'a [String]>,
 }
 
 impl<'a> CreateField<'a> {
@@ -2670,7 +2672,16 @@ impl<'a> CreateField<'a> {
             side: None,
             focus: false,
             placeholder: None,
+            suggestions: None,
         }
+    }
+
+    /// Words the DM may choose instead of typing them (a folder that exists): while the field
+    /// has the keyboard or its words change, a list under it holds the suggestions that contain
+    /// its words; a press fills the field with one. The DM may still type anything.
+    pub fn suggestions(mut self, suggestions: &'a [String]) -> Self {
+        self.suggestions = Some(suggestions);
+        self
     }
 
     /// The field's hint inside it, in place of a caption above it: `label` is then only the
@@ -2919,9 +2930,18 @@ pub struct Empty;
 pub struct AfterChoice;
 /// Typestate of an [`InlineCreate`]: the last part is a text field; Create may follow.
 pub struct AfterField;
-/// Typestate of an [`InlineCreate`]: the last part is the form's one drop-down, after a text
-/// field; only Create may follow, on an action line of its own.
+/// Typestate of an [`InlineCreate`]: the last part is the form's first drop-down, after a text
+/// field: a second drop-down, the last choice and field, or Create may follow.
 pub struct AfterDropdown;
+/// Typestate of an [`InlineCreate`]: the last part is the form's second drop-down: the last
+/// choice and field, or Create may follow; a third drop-down does not compile.
+pub struct AfterDropdowns;
+/// Typestate of an [`InlineCreate`]: a choice after the drop-downs; the last text field follows.
+pub struct AfterLateChoice;
+/// Typestate of an [`InlineCreate`]: the last text field, after the drop-downs; only Create
+/// follows, on that field's line when it fits (Library's New entry: Name, Kind, Destination, a
+/// choice, Folder).
+pub struct AfterLateField;
 /// Typestate of an [`InlineCreate`]: Create is named; the kept line must follow.
 pub struct Named;
 /// Typestate of an [`InlineCreate`]: complete.
@@ -3057,35 +3077,44 @@ pub struct Complete;
 /// }
 /// ```
 ///
-/// A second drop-down, or any part after the drop-down, does not compile (only Create follows):
+/// At most two drop-downs, after the name field; after them, an optional choice and one last
+/// text field, which Create follows (Library's New entry: Name, Kind, Destination, a choice,
+/// Folder). A third drop-down does not compile:
 ///
 /// ```compile_fail,E0599
 /// use splat_design::layout::{CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
-/// fn form(name: &mut String, a: &mut u8, b: &mut u8) {
+/// fn form(name: &mut String, a: &mut u8, b: &mut u8, c: &mut u8) {
 ///     let _ = InlineCreate::<splat_design::layout::Empty, NoReason>::new()
 ///         .field(CreateField::new(splat_design::field_id!("doc_dd_name").once(Once::Example), "Title", name))
 ///         .dropdown(CreateDropdown::new("A", Selection::new(splat_design::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
-///         .dropdown(CreateDropdown::new("B", Selection::new(splat_design::field_id!("doc_dd_b").once(Once::Example), "B", 0, "One"), b));
+///         .dropdown(CreateDropdown::new("B", Selection::new(splat_design::field_id!("doc_dd_b").once(Once::Example), "B", 0, "One"), b))
+///         .dropdown(CreateDropdown::new("C", Selection::new(splat_design::field_id!("doc_dd_c").once(Once::Example), "C", 0, "One"), c));
 /// }
 /// ```
 ///
+/// Nothing follows the last text field but Create:
+///
 /// ```compile_fail,E0599
 /// use splat_design::layout::{CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
-/// fn form(name: &mut String, more: &mut String, a: &mut u8) {
+/// fn form(name: &mut String, folder: &mut String, more: &mut String, a: &mut u8) {
 ///     let _ = InlineCreate::<splat_design::layout::Empty, NoReason>::new()
 ///         .field(CreateField::new(splat_design::field_id!("doc_dd_name").once(Once::Example), "Title", name))
 ///         .dropdown(CreateDropdown::new("A", Selection::new(splat_design::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
+///         .field(CreateField::new(splat_design::field_id!("doc_dd_folder").once(Once::Example), "Folder", folder))
 ///         .field(CreateField::new(splat_design::field_id!("doc_dd_more").once(Once::Example), "More", more));
 /// }
 /// ```
 ///
+/// No drop-down after the choice that follows the drop-downs:
+///
 /// ```compile_fail,E0599
 /// use splat_design::layout::{CreateChoice, CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
-/// fn form(name: &mut String, used: &mut bool, a: &mut u8) {
+/// fn form(name: &mut String, used: &mut bool, a: &mut u8, b: &mut u8) {
 ///     let _ = InlineCreate::<splat_design::layout::Empty, NoReason>::new()
 ///         .field(CreateField::new(splat_design::field_id!("doc_dd_name").once(Once::Example), "Title", name))
 ///         .dropdown(CreateDropdown::new("A", Selection::new(splat_design::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
-///         .choice(CreateChoice::new("Use", used));
+///         .choice(CreateChoice::new("Use", used))
+///         .dropdown(CreateDropdown::new("B", Selection::new(splat_design::field_id!("doc_dd_b").once(Once::Example), "B", 0, "One"), b));
 /// }
 /// ```
 ///
@@ -3174,10 +3203,47 @@ macro_rules! add_parts {
 add_parts!(Empty, AfterChoice, AfterField);
 
 impl<'a, R: CreateReasons> InlineCreate<'a, AfterField, R> {
-    /// The form's one drop-down, after the name field (a text field comes first). Only
-    /// `create` follows it: it is the form's last part.
+    /// The form's first drop-down, after the name field (a text field comes first).
     pub fn dropdown(mut self, dropdown: CreateDropdown<'a>) -> InlineCreate<'a, AfterDropdown, R> {
         self.parts.push(CreatePart::Dropdown(dropdown));
+        self.into()
+    }
+}
+
+impl<'a, R: CreateReasons> InlineCreate<'a, AfterDropdown, R> {
+    /// The form's second and last drop-down.
+    pub fn dropdown(mut self, dropdown: CreateDropdown<'a>) -> InlineCreate<'a, AfterDropdowns, R> {
+        self.parts.push(CreatePart::Dropdown(dropdown));
+        self.into()
+    }
+}
+
+macro_rules! add_late_parts {
+    ($($state:ty),*) => {$(
+        impl<'a, R: CreateReasons> InlineCreate<'a, $state, R> {
+            /// A choice after the drop-downs, before the last text field.
+            pub fn choice(
+                mut self,
+                choice: CreateChoice<'a>,
+            ) -> InlineCreate<'a, AfterLateChoice, R> {
+                self.parts.push(CreatePart::Choice(choice));
+                self.into()
+            }
+
+            /// The last text field, after the drop-downs: Create follows it on its line.
+            pub fn field(mut self, field: CreateField<'a>) -> InlineCreate<'a, AfterLateField, R> {
+                self.parts.push(CreatePart::Text(field));
+                self.into()
+            }
+        }
+    )*};
+}
+add_late_parts!(AfterDropdown, AfterDropdowns);
+
+impl<'a, R: CreateReasons> InlineCreate<'a, AfterLateChoice, R> {
+    /// The last text field, after the choice: Create follows it on its line.
+    pub fn field(mut self, field: CreateField<'a>) -> InlineCreate<'a, AfterLateField, R> {
+        self.parts.push(CreatePart::Text(field));
         self.into()
     }
 }
@@ -3192,7 +3258,7 @@ macro_rules! add_create {
         }
     )*};
 }
-add_create!(AfterField, AfterDropdown);
+add_create!(AfterField, AfterDropdown, AfterDropdowns, AfterLateField);
 
 impl<'a, R: CreateReasons> InlineCreate<'a, Named, R> {
     pub fn kept_line(mut self, kept: KeptLine<'a>) -> InlineCreate<'a, Complete, R> {
@@ -3350,6 +3416,9 @@ struct FieldLine {
     response: Response,
     side: bool,
     create: bool,
+    /// The field's suggestions were open when the frame began: a layer above the form that
+    /// Escape closes first.
+    suggestions_open: bool,
 }
 
 /// One text field with its side action and, when Create follows it, Create: beside the field
@@ -3368,6 +3437,7 @@ fn field_line<R: CreateReasons>(
         response: ui.response(),
         side: false,
         create: false,
+        suggestions_open: false,
     };
     // The actions in order: the side action, then Create (true for the side action).
     let mut actions_in_order: Vec<bool> = Vec::new();
@@ -3445,7 +3515,60 @@ fn field_line<R: CreateReasons>(
     if part.focus {
         line.response.request_focus();
     }
+    if let Some(suggestions) = part.suggestions {
+        line.suggestions_open = suggestion_list(ui, &line.response, part.text, suggestions);
+    }
     line
+}
+
+/// A create field's suggestions (`CreateField::suggestions`): a menu under the field of those
+/// that contain its words, opened when the field takes the keyboard or its words change, closed
+/// by a choice, a press outside it, or Escape (which the form then gives as `closed_above`, not
+/// Cancel). A choice fills the field. Only an open or opening menu reads the suggestions. Whether
+/// the menu was open when the frame began.
+fn suggestion_list(
+    ui: &mut Ui,
+    field: &Response,
+    text: &mut String,
+    suggestions: &[String],
+) -> bool {
+    let id = egui::Popup::default_response_id(field);
+    let was_open = egui::Popup::is_id_open(ui.ctx(), id);
+    let opening = field.gained_focus() || field.changed();
+    if !was_open && !opening {
+        return false;
+    }
+    if was_open && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+        egui::Popup::close_id(ui.ctx(), id);
+        return true;
+    }
+    let typed = text.trim().to_lowercase();
+    // Owned: the menu's content outlives this frame's borrows.
+    let matching: Vec<String> = suggestions
+        .iter()
+        .filter(|suggestion| suggestion.to_lowercase().contains(&typed))
+        .cloned()
+        .collect();
+    let current = text.clone();
+    let command = opening.then_some(egui::SetOpenCommand::Bool(!matching.is_empty()));
+    let mut picked = None;
+    super::menu_popup(&*ui, field)
+        .open_memory(command)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            for suggestion in matching {
+                if super::extras::choice_wrapped(ui, suggestion == current, &suggestion, None)
+                    .clicked()
+                {
+                    picked = Some(suggestion);
+                    ui.close();
+                }
+            }
+        });
+    if let Some(picked) = picked {
+        *text = picked;
+    }
+    was_open
 }
 
 impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
@@ -3557,6 +3680,8 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         }
         let keys_for_the_form = !was_composing && !ime_event;
         let mut last_help = None;
+        // A field's open suggestions are a layer above the form, as a chosen one is.
+        let mut suggestions_open = false;
         for (at, part) in self.parts.into_iter().enumerate() {
             let last = at + 1 == count;
             match part {
@@ -3573,6 +3698,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                     let help = part.help;
                     let line = field_line::<R>(ui, part, help, room, None);
                     out.side |= line.side;
+                    suggestions_open |= line.suggestions_open;
                     out.fields.push(line.response);
                 }
                 CreatePart::Text(part) => {
@@ -3581,6 +3707,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                     let line = field_line(ui, part, None, room, beside);
                     out.side |= line.side;
                     out.create |= line.create;
+                    suggestions_open |= line.suggestions_open;
                     out.fields.push(line.response);
                 }
                 CreatePart::Dropdown(dropdown) => {
@@ -3637,7 +3764,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         }
         // Escape closes the top layer first: a layer above the form (a chosen suggestion), after
         // the input method's guard, so a composition keeps it too.
-        if left && escape && self.above {
+        if left && escape && (self.above || suggestions_open) {
             out.closed_above = true;
             if let Some(field) = out.fields.iter().find(|field| field.lost_focus()) {
                 field.request_focus();
