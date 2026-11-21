@@ -1054,6 +1054,8 @@ mod tests {
                                 },
                             );
                             let row = ui.horizontal(|ui| {
+                                // As the editors' save rows: one control high in every state.
+                                ui.set_min_height(Density::Scan.control());
                                 status(ui, state.status());
                                 if state.discard_shown() {
                                     let _ = Action::quiet("Discard").show(ui);
