@@ -3087,6 +3087,14 @@ impl<'a> Driver<'a> {
         (*self.harness.ctx.style()).clone()
     }
 
+    /// The centre of a `Column`'s splitter (its edge), if that column draws in this frame.
+    pub fn column_edge_if_shown(&self, name: &str) -> Option<f32> {
+        self.harness
+            .ctx
+            .read_response(egui::Id::new(name).with("__resize"))
+            .map(|response| response.rect.center().x)
+    }
+
     pub fn column_edge(&self, name: &str) -> f32 {
         self.harness
             .ctx

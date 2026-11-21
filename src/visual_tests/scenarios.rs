@@ -524,23 +524,40 @@ fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
 }
 
 /// Layout step 7 (`session-header-measure`: SH11, AH8, AP4, SO9, AO10, SQ6, AQ4, SR6, AR5): the
-/// session's title line and its toolbar end at the note frame's right edge, the edge of the
-/// session's content, never at the window's. Record (`Record this session`) and the toolbar's
-/// Read or Write each end there (±1 px), read from the accessibility tree and the painted frame.
+/// session's title line and its toolbar end at the session's content edge, never at the window's.
+/// That edge, read from the frame and not from the part: beside the plan, the note column's
+/// splitter; else the note editor's painted frame; else the plan rows' rules. Record (`Record
+/// this session`) ends there (±1 px), and so does the toolbar's Read while the note is written.
+/// At a scale of 1 (the HiDpi capture repeats the 1200 layout in physical pixels).
 fn session_header_edge(d: &mut Driver<'_>, id: &str) {
+    if d.pixels_per_point() != 1.0 {
+        return;
+    }
     let size = d.window_size();
-    let frame = d.input_frame("Note text").map(|(frame, _)| frame.right());
-    let record = d.place_of("Record this session").map(|rect| rect.right());
-    let toolbar = d
-        .place_of("Read")
-        .or_else(|| d.place_of("Write"))
-        .map(|rect| rect.right());
-    let near = |a: Option<f32>| a.zip(frame).is_some_and(|(a, b)| (a - b).abs() <= 1.0);
+    let record = d.place_of("Record this session");
+    let rules = record.and_then(|record| {
+        d.line_segments_in(egui::Rect::from_min_max(
+            egui::pos2(
+                record.left() - 2.0 * crate::design::XXL,
+                record.bottom() + crate::design::XL,
+            ),
+            egui::pos2(size.0, size.1),
+        ))
+        .into_iter()
+        .map(|rule| rule.right())
+        .reduce(f32::max)
+    });
+    let edge = d
+        .column_edge_if_shown("session_note_frame")
+        .or_else(|| d.input_frame("Note text").map(|(frame, _)| frame.right()))
+        .or(rules);
+    let toolbar = d.place_of("Read").map(|rect| rect.right());
+    let near = |a: f32| edge.is_some_and(|edge| (a - edge).abs() <= 1.0);
     d.observe(
         id,
-        near(record) && near(toolbar),
+        record.is_some_and(|record| near(record.right())) && toolbar.is_none_or(near),
         format!(
-            "At {size:?}, Record ends at {record:?} and the toolbar at {toolbar:?}, the note frame at {frame:?}"
+            "At {size:?}, Record {record:?} and the toolbar's Read {toolbar:?} end at the session's content edge {edge:?}"
         ),
     );
 }
@@ -10600,12 +10617,18 @@ pub mod column_resize {
     fn the_session_fills_its_column(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, "Room to spare");
+        // Layout step 7 (`session-header-measure`, SH11 and AP4): the session's actions end at
+        // its content's edge (the plan and the note's column beside it), not at the page's; the
+        // room the note's column leaves is the DM's to drag into.
         let page = right_of(d, HIDE_LIST);
+        let note = d.column_edge_if_shown("session_note_frame");
         d.observe(
             CHECK,
-            (right_of(d, "Record this session") - page).abs() <= S,
+            note.is_some_and(|note| {
+                (right_of(d, "Record this session") - note).abs() <= 1.0 && note < page - S
+            }),
             format!(
-                "A session's actions reach the edge of its column: {} of {page}",
+                "A session's actions end at its note column's edge {note:?}, inside the page's {page}: {}",
                 right_of(d, "Record this session")
             ),
         );
