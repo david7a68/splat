@@ -11,34 +11,37 @@ uses Nix Mesa for EGL so the app can start on other Linux distributions.
 
 ## Check a change
 
-1. Run formatting and Clippy first.
+Use the [dependency trace in AGENTS.md](../AGENTS.md#choose-code-checks) to
+select checks for the proposed merge source. For prose with no effect on code
+or its inputs, review the text, links and commands as applicable.
 
-   ```sh
-   devenv shell -- check
-   ```
+| Affected domain | Checks |
+| --- | --- |
+| Rust code in the app or workspace crates | Run formatting, Clippy and the tests for the affected packages. Include the callers that the trace reaches. |
+| App workflows, UI, rendering or visual checks | Run `devenv shell -- audit-gate final` and review the affected captures. During edits, use `devenv shell -- visual-test work --only run-lookup,party` with the affected scenarios. |
+| Scripts and command-line tools | Run the affected tests and exercise the changed command through its normal entry point. Check arguments, output, exit codes and file changes that callers depend on. |
+| Generators, schemas and bundled content | Run the relevant generator or verifier, compare the outputs and test the readers the trace reaches. See [SRD conversion checks](srd-definitions.md#reproduce-and-verify). |
+| Build, shell and test setup | Run the changed build, shell or check through its normal entry point. Follow any effect on its users. Use `devenv test` for the devenv setup. |
 
-2. Run the unit and scenario tests in every workspace crate.
+For a package-level Rust check, substitute the affected package name for
+`splat-core` in the Clippy and test commands.
 
-   ```sh
-   devenv shell -- cargo test --locked
-   ```
+```sh
+devenv shell -- cargo fmt --all --check
+devenv shell -- cargo clippy --locked -p splat-core --all-targets -- -D warnings
+devenv shell -- cargo test --locked -p splat-core
+```
 
-3. For a focused visual run, name the scenarios you changed.
+`devenv shell -- check` runs formatting and Clippy for the workspace.
+`audit-gate` runs both, plus all workspace tests and captures in one test run.
+Reuse the results when a gate already covers the checks you need.
 
-   ```sh
-   devenv shell -- visual-test work --only run-lookup,party
-   ```
-
-4. Before merging, run the full gate on the merged source and review the captures.
-
-   ```sh
-   devenv shell -- audit-gate final
-   ```
-
-Use `devenv shell -- cargo check --locked --tests` for quick compiler feedback
-while editing. Run `devenv test` to test the devenv setup. The full gate runs
-formatting, Clippy, all tests and captures. It captures during the test run
-to avoid running the scenarios twice.
+A script may change files that the app embeds through `crates/assets`,
+even when the app has no import of that script. Follow the generated files
+to their readers. To stop at that boundary, show that the build and readers
+get equivalent inputs and behavior, including metadata they use. File extensions
+do not tell you the scope. For example, the tracker tests load
+`docs/design/world-examples/heralds-tournament.md` as a fixture.
 
 ## Build layout
 
@@ -169,7 +172,8 @@ back to back) are report-only. The check code is in
   including counts that fell to zero. App allowances, task costs and other scenarios
   stay as they were. The run must finish without scenario, workflow or app regressions;
   the helper refuses a baseline that changed since the run. A started run clears any
-  earlier observation; incomplete scenarios do not generate one. The full merge gates still run.
+  earlier observation; incomplete scenarios do not generate one. Run the merge checks
+  selected for the change.
 
 ### Diagnose failed or slow runs
 
@@ -244,7 +248,7 @@ back to back) are report-only. The check code is in
 - `plain-evening` (G7) always runs and captures, but compares with
   `src/visual_tests/plain_evening/reference.json` only with the switch `SPLAT_FROZEN=1`, as in
   `SPLAT_FROZEN=1 devenv shell -- audit-gate <label>`: any change of the user interface fails it
-  by design. The pull requests of the session-cycle build plan use the switch, and so can anyone
+  by design. Code changes in the session-cycle build plan use the switch, and so can anyone
   who wants the proof. The reference is written by `devenv shell -- audit-freeze reference` on an
   unchanged commit of `main`, which it records in `frozen_at`; a feature adds its views with
   `devenv shell -- audit-freeze add` and rows in `plain_evening/allowed.json`.
