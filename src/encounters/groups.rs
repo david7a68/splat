@@ -1176,9 +1176,35 @@ pub(super) fn shown_name(block: &Mapping, name: String) -> String {
         .map_or(name, |changed| changed.trim().to_owned())
 }
 
-/// What the DM can do about a member whose creature this campaign cannot find.
-const MISSING_MEMBER_HELP: &str =
-    "Choose a replacement, check the packages it uses, or remove this member.";
+/// A member's fault in its one form (`member_fault`), as a typed fault: its words whole, in the
+/// tone its kind gives (R41): an error is `CannotRead`, a warning `NeedsFixing`.
+struct MemberFaultWords {
+    words: String,
+    severity: design::outcome::Severity,
+}
+
+impl MemberFaultWords {
+    fn new(words: String, tone: Tone) -> Self {
+        let severity = if tone == Tone::Error {
+            design::outcome::Severity::CannotRead
+        } else {
+            design::outcome::Severity::NeedsFixing
+        };
+        Self { words, severity }
+    }
+}
+
+impl design::outcome::Fault for MemberFaultWords {
+    fn severity(&self) -> design::outcome::Severity {
+        self.severity
+    }
+    fn place(&self) -> Option<design::outcome::FaultPlace<'_>> {
+        None
+    }
+    fn cause(&self) -> design::outcome::Sentence {
+        super::outcome_words(&self.words)
+    }
+}
 /// A group's own reason when it has no member fault to show.
 const NONE_CAN_JOIN: &str = "No members can join.";
 /// Why a member with a D&D Beyond sheet cannot join from a group.
@@ -3945,20 +3971,18 @@ fn members(
                     line,
                     cause,
                 );
-                // The actions start under the message's words: the words end there.
-                let mut words_end = None;
+                // M-P0 item 9: one typed body fault, its help under its words, then its repair
+                // at them.
                 let repair = ui.scope(|ui| {
-                    design::message_with_actions(ui, kind.tone(), &words, |ui| {
-                        words_end = Some(ui.min_rect().top());
-                        design::help(ui, MISSING_MEMBER_HELP);
-                        packages_repair(ui)
-                    })
+                    design::outcome::BodyFault::new(&MemberFaultWords::new(words, kind.tone()))
+                        .help(crate::sentence!(
+                            "Choose a replacement, check the packages it uses, or remove this member."
+                        ))
+                        .repair(design::outcome::Repair::new(PACKAGES_LINK, ()))
+                        .show(ui)
+                        .is_some()
                 });
-                let block = repair.response.rect;
-                fault_said = Some(egui::Rect::from_x_y_ranges(
-                    block.x_range(),
-                    block.top()..=words_end.unwrap_or(block.bottom()).min(block.bottom()),
-                ));
+                fault_said = Some(repair.response.rect);
                 repair.response.on_hover_text(member.creature.label());
                 if repair.inner {
                     ui.data_mut(|data| {
@@ -4139,13 +4163,21 @@ fn unread_member(
     );
     let help = member.flag.help();
     // R41: the tone of the fault the list and Arrivals give this row (`FaultKind::Unreadable`).
-    design::message_with_actions(ui, FaultKind::Unreadable.tone(), &words, |ui| {
-        if !help.is_empty() {
-            design::help(ui, help);
-        }
-        ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
-        super::file_line(ui, &snapshot.campaign_root, &draft.path);
-    });
+    // M-P0 item 9: one typed fault, its help and what it blocks under its words, a line each,
+    // then its file.
+    let mut message = design::outcome::FaultMessage::<()>::new(&MemberFaultWords::new(
+        words,
+        FaultKind::Unreadable.tone(),
+    ));
+    if !help.is_empty() {
+        message = message.help(super::outcome_words(help));
+    }
+    let message = message.help(super::outcome_words(blocked)).file(
+        design::outcome::FileLine::new(&snapshot.campaign_root, &draft.path)
+            .edit()
+            .show(),
+    );
+    let _ = design::outcome::BodyMessage::from(message).show(ui);
     let line = member.flag.line;
     let mut remove = false;
     ui.horizontal(|ui| {
@@ -4255,15 +4287,6 @@ fn unread_member(
         body_fault(ui, &editor_fault(Tone::Warning, error));
     }
     design::rule(ui);
-}
-
-/// The repair under a member's warning: a bordered secondary button that starts at the warning
-/// text (FB5), as every message action without an icon is.
-fn packages_repair(ui: &mut egui::Ui) -> bool {
-    Action::secondary(PACKAGES_LINK)
-        .density(Density::Read)
-        .show(ui)
-        .clicked()
 }
 
 /// The repair a member fault's choice asks for.
