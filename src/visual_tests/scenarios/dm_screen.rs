@@ -93,6 +93,111 @@ pub fn run(d: &mut Driver<'_>) {
         assert!(d.visible_passage(THREAD) && d.visible_passage(CLUE));
     });
     d.act_at_size(LARGE, |d| d.click(SHOW_LIST));
+    // The DM's own layout: a column's edge dragged, a tile's edge moved with the keys, a tile
+    // docked by its grip and with its menu, swapped, hidden and shown. No tile goes under its
+    // minimum.
+    d.act_at_size(LARGE, |d| {
+        // A grip starts inside the band along the screen's edge. A short slip of it moves
+        // nothing.
+        let plan = d.place_of("Plan for tonight").unwrap();
+        let grip = d.place_of("Move Plan for tonight").unwrap();
+        let slip = egui::Rect::from_center_size(grip.center() - egui::vec2(8.0, 0.0), grip.size());
+        d.drag_hold("Move Plan for tonight", slip);
+        d.drag_release(slip);
+        assert_eq!(d.place_of("Plan for tonight"), Some(plan));
+        assert!(d.app().sessions.dm_screen_layout().is_none());
+        let happened = d.place_of("What happened").unwrap();
+        let edge = d.place_of("Resize Plan for tonight column").unwrap();
+        d.drag_column_edge(edge.center().x, edge.center().x + 120.0);
+        let moved = d.place_of("What happened").unwrap();
+        assert!(
+            (moved.left() - happened.left() - 120.0).abs() < 2.0,
+            "{happened:?} {moved:?}"
+        );
+        let edge = d.place_of("Resize Plan for tonight column").unwrap();
+        d.drag_column_edge(edge.center().x, plan.left());
+        let narrowest = d.place_of("What happened").unwrap();
+        // The plan's column keeps the room its controls need, and the column gap.
+        assert!(
+            narrowest.left() - plan.left() >= 394.0 + crate::design::L - 1.0,
+            "{plan:?} {narrowest:?}"
+        );
+        let rest = d.place_of("Rest of note").unwrap();
+        assert!(d.tab_to("Resize Open threads tile"));
+        d.press(Key::ArrowDown);
+        let lower = d.place_of("Rest of note").unwrap();
+        assert!(
+            (lower.top() - rest.top() - crate::design::L).abs() < 1.0,
+            "{rest:?} {lower:?}"
+        );
+        // Dragged by its grip to the top edge of the whole screen: the plan goes across the top.
+        let plan = d.place_of("Plan for tonight").unwrap();
+        let happened = d.place_of("What happened").unwrap();
+        let top = egui::Rect::from_center_size(
+            pos2(happened.center().x, plan.top() - 4.0),
+            egui::vec2(2.0, 2.0),
+        );
+        d.drag_hold("Move Plan for tonight", top);
+        d.drag_release(top);
+        let plan = d.place_of("Plan for tonight").unwrap();
+        let happened = d.place_of("What happened").unwrap();
+        assert!(plan.bottom() < happened.top(), "{plan:?} {happened:?}");
+        let plan_menu = d.place_of("More actions for Plan for tonight").unwrap();
+        let rest_menu = d.place_of("More actions for Rest of note").unwrap();
+        assert!((plan_menu.right() - rest_menu.right()).abs() < 1.0);
+        // The same with the keys: the tile's menu puts it beside another.
+        d.click("More actions for Rest of note");
+        d.click("Move to the left of");
+        d.click("Move to the left of What happened");
+        let rest = d.place_of("Rest of note").unwrap();
+        let happened = d.place_of("What happened").unwrap();
+        assert!(rest.right() < happened.left(), "{rest:?} {happened:?}");
+        assert!((rest.top() - happened.top()).abs() < 1.0);
+        d.click("More actions for Plan for tonight");
+        d.click("Swap with");
+        d.click("Swap with Open threads");
+        let threads = d.place_of("Open threads").unwrap();
+        let plan = d.place_of("Plan for tonight").unwrap();
+        let happened = d.place_of("What happened").unwrap();
+        assert!(threads.bottom() < happened.top() && plan.left() > happened.right());
+        d.click("More actions for Open threads");
+        d.click("Hide tile");
+        assert!(!d.has("Open threads"));
+    });
+    // Tabs have no tile menu, so they list a hidden tile too.
+    d.click("Open threads");
+    assert!(d.visible_passage(THREAD));
+    d.click("Plan");
+    d.act_at_size(LARGE, |d| {
+        assert!(!d.has("Open threads"));
+        // A tile shown again goes below the last tile in reading order.
+        d.click("More actions for Plan for tonight");
+        d.click("Show Open threads");
+        let threads = d.place_of("Open threads").unwrap();
+        let plan = d.place_of("Plan for tonight").unwrap();
+        assert!(threads.top() > plan.bottom(), "{threads:?} {plan:?}");
+        assert!(d.app().sessions.dm_screen_layout().is_some());
+    });
+    d.state("own-layout", Sizes::Large);
+    // The layout comes back after a restart.
+    d.restart();
+    if !d.has("Close DM screen") {
+        d.click(NAV_SESSIONS);
+        d.click("DM screen");
+    }
+    d.act_at_size(LARGE, |d| {
+        let threads = d.place_of("Open threads").unwrap();
+        let plan = d.place_of("Plan for tonight").unwrap();
+        assert!(threads.top() > plan.bottom(), "{threads:?} {plan:?}");
+    });
+    d.act_at_size(LARGE, |d| {
+        d.click("More actions for What happened");
+        d.click("Reset layout");
+        assert!(d.app().sessions.dm_screen_layout().is_none());
+        let threads = d.place_of("Open threads").unwrap();
+        let rest = d.place_of("Rest of note").unwrap();
+        assert!(rest.top() > threads.bottom(), "{threads:?} {rest:?}");
+    });
     d.click("Open threads");
     assert!(d.visible_passage(THREAD));
     assert!(!d.visible_passage(CLUE));

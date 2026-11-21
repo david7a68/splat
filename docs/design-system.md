@@ -218,6 +218,8 @@ that hosts reveals (R34, R44, R46); the Settings pane's column (the import form)
 | Per-change cache | `Memo`, `Revised`, `Revision` (`design::memo`) | A cache keyed only by revisions. A revision advances only on a stated change: `Revised::revise` when its closure returns `Changed::Yes`, `Revised::set` when the new value differs (it needs `Eq`). A pointer address, a frame count or an input epoch is not a key: the type does not take one. A `Revised` or `Memo` value is `Sync`, so it holds no `Cell` or `RefCell`. `ptr_eq` calls are counted and can only go down |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
+| Split handle | `split_handle`, `SplitAxis`, `SplitMove` | The edge between two tiles of one page (the DM screen): a 24 px target along the edge, keyboard focus with an accent line, arrows move it by `L`, Home asks for even sides; the caller owns the sizes and their minimums. A column edge keeps its band clear of `line_start` hangs (`pane::reserve`) |
+| Docking | `drag_grip`, `DockSide`, `dock_preview` | A tile that moves by drag: a grip (`XL`, the drag icon, grab cursor, no keyboard focus: a menu does the same) given to `drag_source`; the side of a place nearest the pointer, by its diagonals; and the place the tile will take, tinted with an accent outline over what is there. The caller owns the layout and the drop |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
@@ -2092,16 +2094,47 @@ chosen, or its file went), and the narrow page keeps its own `All sessions` link
 stays for when it shows again. Nothing is only in the list: another session's recording, processing and
 failures are also in the rail and the bottom banner.
 
-`DM screen` opens a fixed preview on the Session page. Play keeps the `Last time` line and puts the
-live plan beside an editor for `What happened`, with `Open threads` and `Rest of note` in the third
-column. The editor fills its tile. In a note without the section, the first words typed add
-`## What happened` at the note's end, as `insert_in_note` does. When the page has room for two more
-columns of reading (a 1440p screen, or 4K at 150 %), `Open threads` and `Rest of note` get a column
-each. The tiles become tabs when the page is too narrow for three columns; hiding the session list
-(`Ctrl+\`) gives its width to the tiles. The Play and Notes buttons below the tiles, or Ctrl+PageUp
-and Ctrl+PageDown, move between the preview and the full session view. An act that shows a tab of the
-full view (a recording opened from the rail or the banner) moves to Notes. Both use the same session
-draft and save state. The preview is opt-in and lasts for the app run.
+`DM screen` opens a preview on the Session page. Play keeps the `Last time` line and puts the
+session in tiles: `Plan for tonight`, an editor for `What happened`, `Open threads` and `Rest of note`.
+The editor fills its tile. In a note without the section, the first words typed add
+`## What happened` at the note's end, as `insert_in_note` does.
+
+The layout is a split tree: the screen, and each part of it, is one tile or a split into
+parts side by side or one above the other, each with its share of the room. The default puts the
+plan beside `What happened`, with `Open threads` over `Rest of note` (a third and two thirds) in the
+third column. When the page has room for two more columns of reading (a 1440p screen, or 4K at
+150 %), `Open threads` and `Rest of note` get a column each.
+
+The DM changes it in two ways. Each tile's title line starts with a grip (`drag_grip`, `⠿`, named
+`Move <tile>`): drag it, and the place the tile will take shows tinted with an accent outline
+(`dock_preview`). Over a tile, the tile goes on the side the pointer is nearest (`DockSide::nearest`)
+and the two share that tile's room; within `XL` of an edge of the whole screen, the tile goes along
+that edge, over all the others, with a third of the room. While the pointer is still over the held
+tile, a drop does nothing, so a short slip of a grip near the screen's edge moves nothing. The grip
+takes no keyboard focus. A layout change has no Undo; `Reset layout` goes back to the default. Each
+tile's `⋯` menu, at the line's end, does the same with the keys: `Swap with`, `Move to the left
+of`, `Move to the right of`, `Move above` and `Move below`, each a submenu of the other tiles and
+`All tiles` (the screen's edge); then `Hide tile`, `Show <tile>` for each hidden tile (below the
+last tile in reading order), and `Reset layout`. One tile always shows. A split that is left with
+one part becomes that part, and a part split the same way as its split joins it.
+
+Tiles side by side are `L` apart; tiles one above the other `S` and the line spacing. Each edge
+between two parts has a handle (`split_handle`): a 24 px (`XL`) target along the whole edge, over
+the gap and the frames' margins, named `Resize <tiles> column` or `Resize <tile> tile`. A handle of
+a split inside another stops short of the outer split's handles. Drag it, or Tab to it and press the
+arrow keys to move it by `L`; Home gives both sides the same room. Sizes are shares of the room, so
+a layout made on one screen fits another. No tile goes under its minimum: 120 px high, 200 px wide,
+and the plan as wide as its controls need (`PLAN_WIDTH + 4L`); a wider plan tile keeps its rows at
+that width, as `Rest of note` keeps the reader's measure. When the minimum widths do not fit, the
+tiles become tabs in reading order, hidden tiles last, since the tabs have no tile menu to show
+them; the default layout becomes tabs when the page is too narrow for its three columns. Hiding the session list (`Ctrl+\`) gives its width to the
+tiles. The DM's layout is saved with the window's state and stays when the DM screen closes; a saved
+tile or split Splat does not know is left out.
+
+The Play and Notes buttons below the tiles, or Ctrl+PageUp and Ctrl+PageDown, move between the
+preview and the full session view. An act that shows a tab of the full view (a recording opened from
+the rail or the banner) moves to Notes. Both use the same session draft and save state. The preview
+is opt-in and lasts for the app run.
 
 ### Notes and templates
 

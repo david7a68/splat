@@ -357,6 +357,8 @@ impl Splat {
         self.sessions.restored_session = saved.playing;
         self.sessions.party_bar = saved.party_bar;
         self.sessions.list_hidden = saved.session_list_hidden;
+        self.sessions
+            .restore_dm_screen_layout(saved.dm_screen_layout.as_ref());
         let active = self.campaigns.active_campaign();
         self.page =
             saved
@@ -387,6 +389,7 @@ impl Splat {
             touchpad_speed: self.touchpad_speed,
             party_bar: self.sessions.party_bar,
             session_list_hidden: self.sessions.list_hidden,
+            dm_screen_layout: self.sessions.dm_screen_layout(),
             // With a run open, the page it began on: Close run goes back there after a restart.
             page: Some(
                 if self.page == Page::Run {

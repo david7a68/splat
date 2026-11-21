@@ -41,6 +41,7 @@ use uuid::Uuid;
 mod carry;
 #[path = "dm_screen.rs"]
 mod dm_screen;
+pub use dm_screen::{DmScreenLayout, SavedNode, SavedPart};
 #[path = "kept.rs"]
 mod kept;
 #[path = "plan.rs"]
@@ -5308,6 +5309,17 @@ impl Sessions {
         } else {
             self.wants_lookup = Some(target);
         }
+    }
+
+    /// The DM screen's layout as the DM left it, for the app's window state; `None` while it is
+    /// the default.
+    pub fn dm_screen_layout(&self) -> Option<DmScreenLayout> {
+        self.dm_screen.saved_layout()
+    }
+
+    /// The DM screen's layout from the app's window state.
+    pub fn restore_dm_screen_layout(&mut self, saved: Option<&DmScreenLayout>) {
+        self.dm_screen.restore_layout(saved);
     }
 
     /// Show one of the session view's tabs. The DM screen's Play has no tabs, so it gives
