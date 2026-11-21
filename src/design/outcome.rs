@@ -23,12 +23,12 @@
 //! from that part.
 use super::components::{
     Action, FooterRank, blocked_reason, first_line_centre, icon_button, link, message_choice_row,
-    number_width, small_tone_message, tone_message, undo_message_line,
+    number_width, single_action_message, small_tone_message, tone_message, undo_message_line,
 };
 pub use super::components::{Footer, ResultOrder, Tone};
 pub use super::results::{ByTicket, Gone, Ticket};
 use super::{extras::space, icons, tokens::*};
-use eframe::egui::{self, Rect, Response, Ui};
+use egui::{self, Rect, Response, Ui};
 use std::borrow::Cow;
 
 // ------------------------------------------------------------------------------------------------
@@ -175,10 +175,10 @@ pub const fn check_literal(template: &'static str) -> &'static str {
 /// A sentence without its end mark does not compile:
 ///
 /// ```
-/// const R: splat::outcome::Sentence = splat::sentence!("Add a creature first.");
+/// const R: splat_design::outcome::Sentence = splat_design::sentence!("Add a creature first.");
 /// ```
 /// ```compile_fail
-/// const R: splat::outcome::Sentence = splat::sentence!("Add a creature first");
+/// const R: splat_design::outcome::Sentence = splat_design::sentence!("Add a creature first");
 /// ```
 ///
 /// Nor one that starts with a small letter, has a straight apostrophe or a code word, or ends
@@ -186,22 +186,22 @@ pub const fn check_literal(template: &'static str) -> &'static str {
 ///
 /// ```
 /// let name = "Cinder Wolf";
-/// let _ = splat::sentence!("Removed {}.", name);
-/// let _ = splat::sentence!("The party’s seal is kept.");
-/// let _ = splat::sentence!("The key is kept.");
+/// let _ = splat_design::sentence!("Removed {}.", name);
+/// let _ = splat_design::sentence!("The party’s seal is kept.");
+/// let _ = splat_design::sentence!("The key is kept.");
 /// ```
 /// ```compile_fail
-/// let _ = splat::sentence!("removed the wolf.");
+/// let _ = splat_design::sentence!("removed the wolf.");
 /// ```
 /// ```compile_fail
-/// let _ = splat::sentence!("The party's seal is kept.");
+/// let _ = splat_design::sentence!("The party's seal is kept.");
 /// ```
 /// ```compile_fail
-/// let _ = splat::sentence!("The keyring is kept.");
+/// let _ = splat_design::sentence!("The keyring is kept.");
 /// ```
 /// ```compile_fail
 /// let name = "Cinder Wolf";
-/// let _ = splat::sentence!("Removed {}", name);
+/// let _ = splat_design::sentence!("Removed {}", name);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Sentence(Cow<'static, str>);
@@ -320,13 +320,13 @@ fn is_data(word: &str) -> bool {
 /// apostrophes, no code word.
 ///
 /// ```
-/// let _ = splat::lead!("Changed on disk:");
+/// let _ = splat_design::lead!("Changed on disk:");
 /// ```
 /// ```compile_fail
-/// let _ = splat::lead!("changed on disk:");
+/// let _ = splat_design::lead!("changed on disk:");
 /// ```
 /// ```compile_fail
-/// let _ = splat::lead!("Changed on disk.");
+/// let _ = splat_design::lead!("Changed on disk.");
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct Lead(&'static str);
@@ -574,10 +574,10 @@ enum Step {
 /// part gives the action the whole form as its name whenever the visible words differ.
 ///
 /// ```
-/// let _ = splat::outcome::UndoStep::act("Undo it");
+/// let _ = splat_design::outcome::UndoStep::act("Undo it");
 /// ```
 /// ```compile_fail
-/// let _ = splat::outcome::UndoStep { label: "Undo it".to_owned() };
+/// let _ = splat_design::outcome::UndoStep { label: "Undo it".to_owned() };
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndoStep {
@@ -617,10 +617,10 @@ impl UndoStep {
     /// `const`.
     ///
     /// ```
-    /// const STEP: splat::outcome::UndoStep = splat::outcome::UndoStep::words("Undo source change");
+    /// const STEP: splat_design::outcome::UndoStep = splat_design::outcome::UndoStep::words("Undo source change");
     /// ```
     /// ```compile_fail
-    /// const STEP: splat::outcome::UndoStep = splat::outcome::UndoStep::words("Source change");
+    /// const STEP: splat_design::outcome::UndoStep = splat_design::outcome::UndoStep::words("Source change");
     /// ```
     pub const fn words(label: &'static str) -> Self {
         let b = label.as_bytes();
@@ -821,32 +821,32 @@ pub const fn check_choice(template: &str, values: usize) -> CheckedChoice {
 /// sentence through `Sentence::outside`, `Ban::Words`).
 ///
 /// ```
-/// use splat::outcome::{Choice, ChoiceWords};
+/// use splat_design::outcome::{Choice, ChoiceWords};
 /// let (a, b) = (String::from("Ghost of the Mill"), String::from("Ember Cultist"));
-/// let words = splat::choice!("Move {} before {}", a, b);
+/// let words = splat_design::choice!("Move {} before {}", a, b);
 /// assert_eq!(words.label(), "Move Ghost of the Mill before Ember Cultist");
 /// let _ = Choice::named(words, 1);
 /// let _: ChoiceWords = "Open in Library".into();
 /// ```
 /// ```compile_fail
-/// use splat::outcome::Choice;
+/// use splat_design::outcome::Choice;
 /// let (a, b) = (String::from("Ghost of the Mill"), String::from("Ember Cultist"));
 /// let _ = Choice::named(format!("Move {a} before {b}"), 1);
 /// ```
 /// ```compile_fail
 /// let a = String::from("Ghost of the Mill");
-/// let _ = splat::choice!("Move {} before {}", a);
+/// let _ = splat_design::choice!("Move {} before {}", a);
 /// ```
 ///
 /// A fixed word is a word: an object behind one letter is not choice words (twin: `Add {}`).
 ///
 /// ```
 /// let label = String::from("Repair Bridge Ambush");
-/// let _ = splat::choice!("Add {}", label);
+/// let _ = splat_design::choice!("Add {}", label);
 /// ```
 /// ```compile_fail
 /// let label = String::from("Repair Bridge Ambush");
-/// let _ = splat::choice!("A{}", label);
+/// let _ = splat_design::choice!("A{}", label);
 /// ```
 #[derive(Clone, Debug)]
 pub struct ChoiceWords {
@@ -978,8 +978,8 @@ impl ChoiceWords {
     }
 
     /// The visible words where `fits` says which words fit, for a caller's test of its forms.
-    #[cfg(test)]
-    pub(crate) fn shown_where(&self, fits: impl Fn(&str) -> bool) -> String {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn shown_where(&self, fits: impl Fn(&str) -> bool) -> String {
         match self.fit(fits) {
             Fitted::Whole(words) | Fitted::Wraps(words) | Fitted::Cut(words, _) => words,
         }
@@ -1077,16 +1077,16 @@ macro_rules! choice {
 /// place. It says what goes with the message ([`Lost`]), so the choice is made on purpose.
 ///
 /// ```
-/// use splat::outcome::{Choice, Lost, MessageChoice, Notice};
-/// let _ = Notice::new(splat::sentence!("Sync is off."))
+/// use splat_design::outcome::{Choice, Lost, MessageChoice, Notice};
+/// let _ = Notice::new(splat_design::sentence!("Sync is off."))
 ///     .choice(Choice::new(MessageChoice::Dismiss(Lost::Nothing), 1));
 /// ```
 ///
 /// What goes is said, never left out:
 ///
 /// ```compile_fail,E0308
-/// use splat::outcome::{Choice, MessageChoice, Notice};
-/// let _ = Notice::new(splat::sentence!("Sync is off."))
+/// use splat_design::outcome::{Choice, MessageChoice, Notice};
+/// let _ = Notice::new(splat_design::sentence!("Sync is off."))
 ///     .choice(Choice::new(MessageChoice::Dismiss, 1));
 /// ```
 pub enum MessageChoice<'a> {
@@ -1146,13 +1146,13 @@ fn first<T>(slot: &mut Option<T>, pressed: T) {
 /// message `words` for one pass (egui gives each activation its own pass), so a test can put
 /// several in one.
 fn activated(ui: &Ui, slot: &mut Option<Pressed>, clicked: bool, words: &str, what: Pressed) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     let clicked = clicked
         || ui.ctx().data(|data| {
             data.get_temp::<Vec<(String, Pressed)>>(egui::Id::new(TEST_ACTIVATIONS))
                 .is_some_and(|list| list.iter().any(|(w, p)| w == words && *p == what))
         });
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let _ = (ui, words);
     if clicked {
         first(slot, what);
@@ -1160,7 +1160,7 @@ fn activated(ui: &Ui, slot: &mut Option<Pressed>, clicked: bool, words: &str, wh
 }
 
 /// Test builds: the controls `activated` treats as pressed in this pass.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 const TEST_ACTIVATIONS: &str = "design_test_activations";
 
 /// A pane with no choice and no Undo in its footer: its presses can never happen.
@@ -1186,18 +1186,18 @@ pub enum NoPress {}
 /// line once.
 ///
 /// ```
-/// use splat::outcome::{Choice, MessageChoice};
+/// use splat_design::outcome::{Choice, MessageChoice};
 /// let waiting = true;
 /// let _ = Choice::new(MessageChoice::Choice("Replace"), 1)
-///     .locked_when(waiting, splat::sentence!("Wait for the read."));
+///     .locked_when(waiting, splat_design::sentence!("Wait for the read."));
 /// let _ = Choice::new(MessageChoice::Choice("Replace"), 1)
-///     .blocked(splat::sentence!("Wait for the read."));
+///     .blocked(splat_design::sentence!("Wait for the read."));
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Choice, MessageChoice};
+/// use splat_design::outcome::{Choice, MessageChoice};
 /// let waiting = true;
 /// let _ = Choice::new(MessageChoice::Choice("Replace"), 1)
-///     .blocked(waiting.then_some(splat::sentence!("Wait for the read.")));
+///     .blocked(waiting.then_some(splat_design::sentence!("Wait for the read.")));
 /// ```
 #[must_use = "give it to a message's `choice`"]
 pub struct Choice<A> {
@@ -1292,14 +1292,14 @@ impl<A> Choice<A> {
 /// two forms of [`Choice`]'s: an optional reason does not fit `blocked`.
 ///
 /// ```
-/// use splat::outcome::{UndoStep, Verb};
+/// use splat_design::outcome::{UndoStep, Verb};
 /// let live = true;
-/// let _ = UndoStep::verb(Verb::Register).pressed_as(1).locked_when(live, splat::sentence!("End the run first."));
+/// let _ = UndoStep::verb(Verb::Register).pressed_as(1).locked_when(live, splat_design::sentence!("End the run first."));
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{UndoStep, Verb};
+/// use splat_design::outcome::{UndoStep, Verb};
 /// let live = true;
-/// let _ = UndoStep::verb(Verb::Register).pressed_as(1).blocked(live.then_some(splat::sentence!("End the run first.")));
+/// let _ = UndoStep::verb(Verb::Register).pressed_as(1).blocked(live.then_some(splat_design::sentence!("End the run first.")));
 /// ```
 #[must_use = "give it to a result's `undo`"]
 pub struct Undo<A> {
@@ -1343,18 +1343,18 @@ impl<A> Undo<A> {
 /// only a `Results` store's view makes.
 ///
 /// ```
-/// use splat::outcome::{Done, Verb};
+/// use splat_design::outcome::{Done, Verb};
 /// let _ = Done::new(Verb::Remove, "Take seal").undo(1);
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Done, Verb};
+/// use splat_design::outcome::{Done, Verb};
 /// let _ = Done::new(Verb::Remove, "Take seal").undo("Undo discard", 1);
 /// ```
 ///
 /// An order made by hand does not go in:
 ///
 /// ```compile_fail
-/// use splat::outcome::{Done, ResultOrder, Verb};
+/// use splat_design::outcome::{Done, ResultOrder, Verb};
 /// let _ = Done::<u8>::new(ResultOrder::default(), Verb::Remove, "Take seal");
 /// ```
 ///
@@ -1362,7 +1362,7 @@ impl<A> Undo<A> {
 /// itself apart by the same place (Open questions' tick):
 ///
 /// ```
-/// use splat::outcome::{Done, Verb};
+/// use splat_design::outcome::{Done, Verb};
 /// let done = Done::new(Verb::Tick, "“Who hired the bandits?”").object_first().within("Horn Rings").undo(1);
 /// assert_eq!(done.words().as_str(), "“Who hired the bandits?” ticked in Horn Rings.");
 /// ```
@@ -1371,15 +1371,15 @@ impl<A> Undo<A> {
 /// `undo_blocked`.
 ///
 /// ```
-/// use splat::outcome::{Done, Verb};
+/// use splat_design::outcome::{Done, Verb};
 /// let live = true;
-/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_locked_when(live, splat::sentence!("End the run first."));
-/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_blocked(splat::sentence!("End the run first."));
+/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_locked_when(live, splat_design::sentence!("End the run first."));
+/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_blocked(splat_design::sentence!("End the run first."));
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Done, Verb};
+/// use splat_design::outcome::{Done, Verb};
 /// let live = true;
-/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_blocked(live.then_some(splat::sentence!("End the run first.")));
+/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_blocked(live.then_some(splat_design::sentence!("End the run first.")));
 /// ```
 #[must_use = "make a `KeptLine` of it with `Shown::outcome`"]
 pub struct Done<A> {
@@ -1486,19 +1486,19 @@ impl<A> Done<A> {
 /// compiles. Only `Done` holds one verb for both; a reviewer checks each `Said`.
 ///
 /// ```
-/// use splat::outcome::{Said, UndoStep};
-/// let _ = Said::new(splat::sentence!("Bell is done.")).undo(UndoStep::act("Done").pressed_as(1));
+/// use splat_design::outcome::{Said, UndoStep};
+/// let _ = Said::new(splat_design::sentence!("Bell is done.")).undo(UndoStep::act("Done").pressed_as(1));
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Said, UndoStep};
-/// let _ = Said::<u8>::new(splat::sentence!("Bell is done.")).undo("Undo: Done");
+/// use splat_design::outcome::{Said, UndoStep};
+/// let _ = Said::<u8>::new(splat_design::sentence!("Bell is done.")).undo("Undo: Done");
 /// ```
 ///
 /// No message takes a tone:
 ///
 /// ```compile_fail
-/// use splat::outcome::{Said, Tone, UndoStep};
-/// let _ = Said::<u8>::new(splat::sentence!("Bell is done.")).tone(Tone::Info);
+/// use splat_design::outcome::{Said, Tone, UndoStep};
+/// let _ = Said::<u8>::new(splat_design::sentence!("Bell is done.")).tone(Tone::Info);
 /// ```
 #[must_use = "make a `KeptLine` of it with `Shown::outcome`"]
 pub struct Said<A> {
@@ -1556,17 +1556,17 @@ impl NoticeTone {
 /// error, which is a fault ([`FaultMessage`]):
 ///
 /// ```
-/// use splat::outcome::{Notice, NoPress};
-/// let _ = Notice::<NoPress>::new(splat::sentence!("Sync is off."));
-/// let _ = Notice::<NoPress>::warning(splat::sentence!("Splat no longer shows these files."));
+/// use splat_design::outcome::{Notice, NoPress};
+/// let _ = Notice::<NoPress>::new(splat_design::sentence!("Sync is off."));
+/// let _ = Notice::<NoPress>::warning(splat_design::sentence!("Splat no longer shows these files."));
 /// ```
 /// ```compile_fail,E0599
-/// use splat::outcome::{Notice, NoPress};
-/// let _ = Notice::<NoPress>::error(splat::sentence!("Splat no longer shows these files."));
+/// use splat_design::outcome::{Notice, NoPress};
+/// let _ = Notice::<NoPress>::error(splat_design::sentence!("Splat no longer shows these files."));
 /// ```
 /// ```compile_fail,E0599
-/// use splat::outcome::{Notice, NoPress, Tone};
-/// let _ = Notice::<NoPress>::new(splat::sentence!("Sync is off.")).tone(Tone::Error);
+/// use splat_design::outcome::{Notice, NoPress, Tone};
+/// let _ = Notice::<NoPress>::new(splat_design::sentence!("Sync is off.")).tone(Tone::Error);
 /// ```
 #[must_use = "give it to `Messages::outcome`"]
 pub struct Notice<A> {
@@ -1671,17 +1671,17 @@ pub const SHOW_FILE: &str = "Show file";
 /// are private (these examples prove only that, not the checks of `new`):
 ///
 /// ```
-/// use splat::outcome::{FileLine, Notice, NoPress};
-/// let _ = Notice::<NoPress>::new(splat::sentence!("Sync is off."))
+/// use splat_design::outcome::{FileLine, Notice, NoPress};
+/// let _ = Notice::<NoPress>::new(splat_design::sentence!("Sync is off."))
 ///     .file(FileLine::new("/vault/Campaign", "Sessions/Timeline.md").edit().show());
 /// ```
 /// ```compile_fail,E0451
-/// use splat::outcome::FileLine;
+/// use splat_design::outcome::FileLine;
 /// let _ = FileLine { root: "/vault".into(), relative: "Timeline.md".into(), openable: true, edit: true, show: true };
 /// ```
 /// ```compile_fail,E0624
-/// use splat::outcome::FileLine;
-/// fn f(ui: &mut eframe::egui::Ui) {
+/// use splat_design::outcome::FileLine;
+/// fn f(ui: &mut egui::Ui) {
 ///     FileLine::new("/vault/Campaign", "Timeline.md").show().draw(ui);
 /// }
 /// ```
@@ -1917,26 +1917,26 @@ pub fn file_url(path: &std::path::Path) -> Option<String> {
 /// `Messages::outcome`. A result is not an `Outcome`:
 ///
 /// ```
-/// use splat::outcome::{Messages, NoPress, Outcome};
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     let frame = splat::outcome::PaneFrame::new(ui);
+/// use splat_design::outcome::{Messages, NoPress, Outcome};
+/// fn f(ui: &mut egui::Ui) {
+///     let frame = splat_design::outcome::PaneFrame::new(ui);
 ///     let mut messages = Messages::<NoPress>::new(&frame, "f", 400.0);
-///     messages.outcome(Outcome::Refused(splat::sentence!("No.")));
-///     let _ = messages.pane(ui, splat::pane::Body::Content, |_| ());
+///     messages.outcome(Outcome::Refused(splat_design::sentence!("No.")));
+///     let _ = messages.pane(ui, splat_design::pane::Body::Content, |_| ());
 /// }
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Done, Messages, NoPress, Verb};
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     let frame = splat::outcome::PaneFrame::new(ui);
+/// use splat_design::outcome::{Done, Messages, NoPress, Verb};
+/// fn f(ui: &mut egui::Ui) {
+///     let frame = splat_design::outcome::PaneFrame::new(ui);
 ///     let mut messages = Messages::<NoPress>::new(&frame, "f", 400.0);
 ///     messages.outcome(Done::new(Verb::Remove, "Bell"));
-///     let _ = messages.pane(ui, splat::pane::Body::Content, |_| ());
+///     let _ = messages.pane(ui, splat_design::pane::Body::Content, |_| ());
 /// }
 /// ```
 /// ```compile_fail
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     splat::outcome::Outcome::<u8>::Refused(splat::sentence!("No.")).draw(ui);
+/// fn f(ui: &mut egui::Ui) {
+///     splat_design::outcome::Outcome::<u8>::Refused(splat_design::sentence!("No.")).draw(ui);
 /// }
 /// ```
 pub enum Outcome<A> {
@@ -1989,16 +1989,16 @@ pub enum KeptOutcome<A> {
 /// Undo.
 ///
 /// ```
-/// use splat::outcome::{Choice, KeptOutcome, MessageChoice, Offer};
+/// use splat_design::outcome::{Choice, KeptOutcome, MessageChoice, Offer};
 /// let offer: KeptOutcome<u8> = Offer::new(
-///     splat::sentence!("Ash is not linked to this campaign."),
+///     splat_design::sentence!("Ash is not linked to this campaign."),
 ///     Choice::new(MessageChoice::Choice("Link to this campaign"), 1),
 /// )
 /// .into();
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Offer, UndoStep, Verb};
-/// let _ = Offer::<u8>::new(splat::sentence!("Ash is not linked."), todo!())
+/// use splat_design::outcome::{Offer, UndoStep, Verb};
+/// let _ = Offer::<u8>::new(splat_design::sentence!("Ash is not linked."), todo!())
 ///     .undo(UndoStep::of(Verb::Change, "Ash").pressed_as(1));
 /// ```
 #[must_use = "give it to `Shown::outcome`"]
@@ -2257,20 +2257,20 @@ impl PaneFrame {
 /// past its frame.
 ///
 /// ```
-/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+/// # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 /// # #[derive(Clone, PartialEq, Eq)] struct Link;
 /// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
 /// # struct Saved;
 /// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
-/// use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
-/// fn frame(ui: &mut eframe::egui::Ui) {
+/// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
+/// fn frame(ui: &mut egui::Ui) {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
 ///     let frame = PaneFrame::new(ui);
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
-///         .outcome(&frame, |_| Said::new(splat::sentence!("Campaign link saved.")).into());
+///         .outcome(&frame, |_| Said::new(splat_design::sentence!("Campaign link saved.")).into());
 ///     // The store is free again while the line lives.
 ///     store.record(Saved);
 ///     let _ = line;
@@ -2280,42 +2280,42 @@ impl PaneFrame {
 /// Not without a store, not cloned, its ticket not read, and not kept in app state:
 ///
 /// ```compile_fail
-/// use splat::outcome::{KeptLine, NoPress};
+/// use splat_design::outcome::{KeptLine, NoPress};
 /// let _ = KeptLine::<NoPress> { ticket: todo!(), typed: todo!(), frame: todo!() };
 /// ```
 /// ```compile_fail
-/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+/// # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 /// # #[derive(Clone, PartialEq, Eq)] struct Link;
 /// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
 /// # struct Saved;
 /// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
-/// use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
-/// fn frame(ui: &mut eframe::egui::Ui) {
+/// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
+/// fn frame(ui: &mut egui::Ui) {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
 ///     let frame = PaneFrame::new(ui);
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
-///         .outcome(&frame, |_| Said::new(splat::sentence!("Campaign link saved.")).into());
+///         .outcome(&frame, |_| Said::new(splat_design::sentence!("Campaign link saved.")).into());
 ///     let _twice = line.clone();
 /// }
 /// ```
 /// ```compile_fail
-/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+/// # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 /// # #[derive(Clone, PartialEq, Eq)] struct Link;
 /// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
 /// # struct Saved;
 /// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
-/// use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
-/// fn frame(ui: &mut eframe::egui::Ui) {
+/// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
+/// fn frame(ui: &mut egui::Ui) {
 ///     let mut store = Results::new();
 ///     store.record(Saved);
 ///     let frame = PaneFrame::new(ui);
 ///     let line: KeptLine<NoPress> = store
 ///         .get(&Link)
 ///         .unwrap()
-///         .outcome(&frame, |_| Said::new(splat::sentence!("Campaign link saved.")).into());
+///         .outcome(&frame, |_| Said::new(splat_design::sentence!("Campaign link saved.")).into());
 ///     let _ticket = line.ticket;
 /// }
 /// ```
@@ -2324,19 +2324,19 @@ impl PaneFrame {
 /// same line used in its frame does (the first example):
 ///
 /// ```compile_fail
-/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+/// # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 /// # #[derive(Clone, PartialEq, Eq)] struct Link;
 /// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
 /// # struct Saved;
 /// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
-/// use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
+/// use splat_design::outcome::{KeptLine, NoPress, PaneFrame, Said};
 /// struct App { store: Results<Link, Saved>, kept: Option<KeptLine<'static, NoPress>> }
-/// fn frame(ui: &mut eframe::egui::Ui, app: &mut App) {
+/// fn frame(ui: &mut egui::Ui, app: &mut App) {
 ///     let frame = PaneFrame::new(ui);
 ///     app.kept = app
 ///         .store
 ///         .get(&Link)
-///         .map(|shown| shown.outcome(&frame, |_| Said::new(splat::sentence!("Saved.")).into()));
+///         .map(|shown| shown.outcome(&frame, |_| Said::new(splat_design::sentence!("Saved.")).into()));
 /// }
 /// ```
 #[must_use = "give it to `Messages::kept`"]
@@ -2514,44 +2514,44 @@ impl<A> PressSink<A> {
 /// A footer entry that borrows the app does not compile:
 ///
 /// ```
-/// use splat::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
+/// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// #[derive(Clone, Copy)] enum Act { Again }
-/// fn f(ui: &mut eframe::egui::Ui) -> Option<Act> {
+/// fn f(ui: &mut egui::Ui) -> Option<Act> {
 ///     let frame = PaneFrame::new(ui);
 ///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
-///         Notice::new(splat::sentence!("Sync is off."))
+///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice("Try again"), Act::Again)),
 ///     );
-///     messages.pane(ui, splat::pane::Body::Content, |_| ()).pressed.map(|press| press.id)
+///     messages.pane(ui, splat_design::pane::Body::Content, |_| ()).pressed.map(|press| press.id)
 /// }
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
+/// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// #[derive(Clone, Copy)] enum Act { Again }
-/// fn f(ui: &mut eframe::egui::Ui, name: String) -> Option<Act> {
+/// fn f(ui: &mut egui::Ui, name: String) -> Option<Act> {
 ///     let frame = PaneFrame::new(ui);
 ///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
-///         Notice::new(splat::sentence!("Sync is off."))
+///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice(&name), Act::Again)),
 ///     );
-///     messages.pane(ui, splat::pane::Body::Content, |_| ()).pressed.map(|press| press.id)
+///     messages.pane(ui, splat_design::pane::Body::Content, |_| ()).pressed.map(|press| press.id)
 /// }
 /// ```
 ///
 /// Nor an id that borrows:
 ///
 /// ```compile_fail
-/// use splat::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
-/// fn f<'a>(ui: &mut eframe::egui::Ui, app: &'a mut u8) {
+/// use splat_design::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
+/// fn f<'a>(ui: &mut egui::Ui, app: &'a mut u8) {
 ///     let frame = PaneFrame::new(ui);
 ///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
-///         Notice::new(splat::sentence!("Sync is off."))
+///         Notice::new(splat_design::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice("Try again"), &*app)),
 ///     );
-///     let _ = messages.pane(ui, splat::pane::Body::Content, |_| ());
+///     let _ = messages.pane(ui, splat_design::pane::Body::Content, |_| ());
 /// }
 /// ```
 pub struct Messages<'f, A: 'static> {
@@ -2957,7 +2957,7 @@ pub(crate) fn kept_footer_plans(ctx: &egui::Context) -> usize {
 
 /// The work of typed footers on this thread, for tests: counted inside the work.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct FooterWork {
+pub struct FooterWork {
     /// Plans made: one sort, one name, one measure each.
     pub plans: usize,
     /// Lines sorted into an order.
@@ -2979,7 +2979,7 @@ pub(crate) struct FooterWork {
     pub compared_bytes: usize,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     pub(crate) static FOOTER_WORK: std::cell::Cell<FooterWork> = const {
         std::cell::Cell::new(FooterWork {
@@ -2998,7 +2998,7 @@ thread_local! {
 }
 
 /// Count typed-footer work, in a test build.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn count(add: impl FnOnce(&mut FooterWork)) {
     FOOTER_WORK.with(|work| {
         let mut now = work.get();
@@ -3007,12 +3007,12 @@ fn count(add: impl FnOnce(&mut FooterWork)) {
     });
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 fn count(_: impl FnOnce(&mut FooterWork)) {}
 
 /// This thread's typed-footer work so far.
-#[cfg(test)]
-pub(crate) fn footer_work() -> FooterWork {
+#[cfg(any(test, feature = "test-support"))]
+pub fn footer_work() -> FooterWork {
     FOOTER_WORK.with(std::cell::Cell::get)
 }
 
@@ -3280,7 +3280,7 @@ const MEASURE_ROOM: f32 = 100_000.0;
 /// The fonts in effect in `ctx`, as one key: each family's fonts, and each font's name and data
 /// (by its shared data, so new fonts under an old name count). Any `set_fonts` that changes what
 /// a family draws with changes it, not only the theme's. Worked out once a pass.
-fn font_key(ctx: &egui::Context) -> u64 {
+pub fn font_key(ctx: &egui::Context) -> u64 {
     use std::hash::{Hash, Hasher};
     let pass = ctx.cumulative_pass_nr();
     let id = egui::Id::new("design_footer_font_key");
@@ -4310,22 +4310,22 @@ impl Severity {
 /// line take one tone from one `severity`.
 ///
 /// ```
-/// use splat::outcome::{FaultStatus, fault_status};
-/// fn f(ui: &mut eframe::egui::Ui) { fault_status(ui, "Ashen Marches", FaultStatus::ManifestDeleted); }
+/// use splat_design::outcome::{FaultStatus, fault_status};
+/// fn f(ui: &mut egui::Ui) { fault_status(ui, "Ashen Marches", FaultStatus::ManifestDeleted); }
 /// ```
 ///
 /// The caller gives no severity and no phrase:
 ///
 /// ```compile_fail
-/// use splat::outcome::{Severity, fault_status};
-/// fn f(ui: &mut eframe::egui::Ui) {
+/// use splat_design::outcome::{Severity, fault_status};
+/// fn f(ui: &mut egui::Ui) {
 ///     fault_status(ui, "Ashen Marches", Severity::NeedsFixing, "Cannot be read");
 /// }
 /// ```
 ///
 /// ```compile_fail
-/// use splat::outcome::{FaultStatus, Severity, fault_status};
-/// fn f(ui: &mut eframe::egui::Ui) {
+/// use splat_design::outcome::{FaultStatus, Severity, fault_status};
+/// fn f(ui: &mut egui::Ui) {
 ///     fault_status(ui, "Ashen Marches", (FaultStatus::CannotRead, Severity::NeedsFixing));
 /// }
 /// ```
@@ -4392,22 +4392,22 @@ pub struct FaultPlace<'a> {
 /// takes its tone from `severity` and its words from `fault_words`. No place takes a `Tone`:
 ///
 /// ```
-/// use splat::outcome::{Fault, Sentence, Severity, Tone};
+/// use splat_design::outcome::{Fault, Sentence, Severity, Tone};
 /// struct Missing;
 /// impl Fault for Missing {
 ///     fn severity(&self) -> Severity { Severity::NeedsFixing }
-///     fn cause(&self) -> Sentence { splat::sentence!("The note is gone.") }
+///     fn cause(&self) -> Sentence { splat_design::sentence!("The note is gone.") }
 /// }
-/// fn f(ui: &mut eframe::egui::Ui) { splat::outcome::row_fault(ui, &Missing); }
+/// fn f(ui: &mut egui::Ui) { splat_design::outcome::row_fault(ui, &Missing); }
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Fault, Sentence, Severity, Tone};
+/// use splat_design::outcome::{Fault, Sentence, Severity, Tone};
 /// struct Missing;
 /// impl Fault for Missing {
 ///     fn severity(&self) -> Severity { Severity::NeedsFixing }
-///     fn cause(&self) -> Sentence { splat::sentence!("The note is gone.") }
+///     fn cause(&self) -> Sentence { splat_design::sentence!("The note is gone.") }
 /// }
-/// fn f(ui: &mut eframe::egui::Ui) { splat::outcome::row_fault(ui, &Missing, Tone::Error); }
+/// fn f(ui: &mut egui::Ui) { splat_design::outcome::row_fault(ui, &Missing, Tone::Error); }
 /// ```
 pub trait Fault {
     fn severity(&self) -> Severity;
@@ -4466,63 +4466,84 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
 /// (the Run's header notice and its setup warnings, a group row's faults): a [`Notice`] or a
 /// [`FaultMessage`], with its choices (a bordered choice, a red one, a link), its close icon
 /// (`Dismiss`) and its file line, drawn as a footer line draws them: the same words, tone,
-/// order and locks, at the cursor in the full form. It gives back the caller's id of the choice
+/// order and locks, at the cursor in the full form. A [list row with one repair](Self::row_repair)
+/// fits the repair beside the fault. Both forms give back the caller's id of the choice
 /// pressed. It holds no Undo and no ticket: a finished change kept in a store goes in its
 /// footer (`Messages::kept`), so a `Said` or a `Done` is not one. A body place: `show` is a
 /// reviewed suppression (`Ban::Body`).
 ///
 /// ```compile_fail
-/// let _ = splat::outcome::BodyMessage::<u8>::from(splat::outcome::Said::new(splat::sentence!("Saved.")));
+/// let _ = splat_design::outcome::BodyMessage::<u8>::from(splat_design::outcome::Said::new(splat_design::sentence!("Saved.")));
 /// ```
 #[must_use = "call show"]
 pub struct BodyMessage<A> {
-    typed: Typed<A>,
+    form: BodyForm<A>,
     compact: bool,
     /// The whole words behind fitted ones: the words' accessible name and hover.
     detail: Option<String>,
 }
 
+enum BodyForm<A> {
+    Full(Outcome<A>),
+    /// A finished change with no way back (`result`).
+    Result(Typed<A>),
+    RowRepair {
+        tone: Tone,
+        words: Sentence,
+        label: &'static str,
+        id: A,
+    },
+}
+
 impl<A> From<Notice<A>> for BodyMessage<A> {
     fn from(notice: Notice<A>) -> Self {
-        Self::of(
-            Typed::new(notice.tone.tone(), notice.words, None, notice.choices)
-                .with_file(notice.file),
-        )
+        Self::of(BodyForm::Full(notice.into()))
     }
 }
 
 impl<A> From<FaultMessage<A>> for BodyMessage<A> {
     fn from(fault: FaultMessage<A>) -> Self {
-        Self::of(Typed::new(fault.tone, fault.words, None, fault.choices).with_file(fault.file))
+        Self::of(BodyForm::Full(fault.into()))
     }
 }
 
 impl<A> BodyMessage<A> {
-    fn of(typed: Typed<A>) -> Self {
+    fn of(form: BodyForm<A>) -> Self {
         Self {
-            typed,
+            form,
             compact: false,
             detail: None,
         }
+    }
+
+    /// A list row with one repair. The button shares the fault's line when both fit.
+    pub fn row_repair(fault: &dyn Fault, label: &'static str, id: A) -> Self {
+        Self::of(BodyForm::RowRepair {
+            tone: fault.severity().tone(),
+            words: fault_words(fault),
+            label,
+            id,
+        })
     }
 
     /// A finished change said where it happened (the Run's header band says its last result),
     /// in the success tone, with its choices and no way back: it has no Undo and no ticket, so
     /// a result whose Undo the DM may press stays a kept line in its footer.
     pub fn result(words: Sentence, choices: impl IntoIterator<Item = Choice<A>>) -> Self {
-        Self::of(Typed::new(
+        Self::of(BodyForm::Result(Typed::new(
             Tone::Success,
             words,
             None,
             choices.into_iter().collect(),
-        ))
+        )))
     }
 
     /// The compact form, at the size of a row's message (`small_message`): `Small` words with
     /// the tone's icon and bar, at its line height and gap; its choices (a link, a bordered
-    /// choice, the close icon) in one band after the words on their line, as wide as the
-    /// choices, never under them; its file line after the words on their last row when it
-    /// fits, else under them at the words. For a run's setup rows and its header band.
+    /// choice, the close icon) in one band one item gap after the words on their line, as wide
+    /// as the choices, never under them; its file line after the words on their last row when
+    /// it fits, else under them at the words. For a run's setup rows and its header band. A
+    /// row repair keeps its own form.
     pub fn compact(mut self) -> Self {
         self.compact = true;
         self
@@ -4537,14 +4558,28 @@ impl<A> BodyMessage<A> {
 
     /// Draw it at the cursor; the caller's id of the choice pressed.
     pub fn show(self, ui: &mut Ui) -> Option<A> {
+        let typed = match self.form {
+            BodyForm::Full(message) => message.parts().1,
+            BodyForm::Result(typed) => typed,
+            BodyForm::RowRepair {
+                tone,
+                words,
+                label,
+                id,
+            } => {
+                let row = single_action_message(ui, tone, words.as_str(), label);
+                register(ui, row.response.rect, MessagePlace::Row, tone);
+                return row.inner.then_some(id);
+            }
+        };
         let pressed = if self.compact {
-            self.typed
+            typed
                 .body
                 .draw_compact(ui, MessagePlace::Page, self.detail.as_deref())?
         } else {
-            self.typed.body.draw(ui, MessagePlace::Page)?
+            typed.body.draw(ui, MessagePlace::Page)?
         };
-        self.typed.id(pressed)
+        typed.id(pressed)
     }
 }
 
@@ -4589,13 +4624,13 @@ impl<A> PagePlaceholder<A> {
 /// A label made at run time is not choice words; the twin gives the object as a value:
 ///
 /// ```
-/// use splat::outcome::Repair;
+/// use splat_design::outcome::Repair;
 /// let name = String::from("Bridge Ambush");
-/// let _ = Repair::new(splat::choice!("Repair {}", name), 1);
+/// let _ = Repair::new(splat_design::choice!("Repair {}", name), 1);
 /// let _ = Repair::new("Open in Library", 2);
 /// ```
 /// ```compile_fail
-/// use splat::outcome::Repair;
+/// use splat_design::outcome::Repair;
 /// let name = String::from("Bridge Ambush");
 /// let _ = Repair::new(format!("Repair {name}"), 1);
 /// ```
@@ -4603,18 +4638,18 @@ impl<A> PagePlaceholder<A> {
 /// Its lock has the two forms of [`Choice`]'s:
 ///
 /// ```
-/// use splat::outcome::Repair;
+/// use splat_design::outcome::Repair;
 /// let unsaved = true;
 /// let _ = Repair::new("Replace with a basic manifest", 1)
-///     .locked_when(unsaved, splat::sentence!("Save or discard campaign changes first."));
+///     .locked_when(unsaved, splat_design::sentence!("Save or discard campaign changes first."));
 /// let _ = Repair::new("Replace with a basic manifest", 1)
-///     .blocked(splat::sentence!("Save or discard campaign changes first."));
+///     .blocked(splat_design::sentence!("Save or discard campaign changes first."));
 /// ```
 /// ```compile_fail
-/// use splat::outcome::Repair;
+/// use splat_design::outcome::Repair;
 /// let unsaved = true;
 /// let _ = Repair::new("Replace with a basic", 1)
-///     .blocked(unsaved.then_some(splat::sentence!("Save or discard campaign changes first.")));
+///     .blocked(unsaved.then_some(splat_design::sentence!("Save or discard campaign changes first.")));
 /// ```
 ///
 /// Named escape: a leaked `String` (`String::leak`, `Box::leak`) is `'static`; a reviewer sees it.
@@ -4777,24 +4812,22 @@ pub enum MessagePlace {
 }
 
 /// Where test builds keep the rect and place of each message drawn in the last pass.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub const MESSAGE_RECTS: &str = "design_message_rects";
 
 fn register(ui: &Ui, rect: Rect, place: MessagePlace, tone: Tone) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     super::components::keep_for_pass(ui, MESSAGE_RECTS, (rect, place, tone));
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let _ = (ui, rect, place, tone);
 }
 
 /// Each message a typed place drew in the last pass that drew one, with its place. Only test
 /// builds keep them; the old message functions register nothing.
-#[cfg(test)]
-pub fn message_rects(ctx: &eframe::egui::Context) -> Vec<(Rect, MessagePlace, Tone)> {
+#[cfg(any(test, feature = "test-support"))]
+pub fn message_rects(ctx: &egui::Context) -> Vec<(Rect, MessagePlace, Tone)> {
     ctx.data(|data| {
-        data.get_temp::<(u64, Vec<(Rect, MessagePlace, Tone)>)>(eframe::egui::Id::new(
-            MESSAGE_RECTS,
-        ))
+        data.get_temp::<(u64, Vec<(Rect, MessagePlace, Tone)>)>(egui::Id::new(MESSAGE_RECTS))
     })
     .map(|(_, rects)| rects)
     .unwrap_or_default()
@@ -4818,7 +4851,7 @@ pub fn chosen_count(chosen: usize, total: usize, unit: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eframe::egui;
+    use egui;
     use egui_kittest::{Harness, kittest::Queryable};
 
     #[allow(
@@ -6364,7 +6397,7 @@ mod tests {
         use crate::design::results::{
             DiskChanged, Ends, Kept, Owner, OwnerChanged, Press as Kind, Results,
         };
-        use eframe::egui;
+        use egui;
         use egui_kittest::{
             Harness,
             kittest::{NodeT, Queryable},

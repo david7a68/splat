@@ -4,119 +4,58 @@
 //! table has shows on its row before play.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::design::{self, Density, Status, Tone, Type, colors, icons};
-use crate::roll_table::{Table, TableRoll};
+use crate::roll_table::Table;
 use eframe::egui;
 use splat::content::loot::{Loot, MAX_ROLLS, SEPARATOR};
 use std::sync::Arc;
 
-/// An item from the Library that a loot line can link to.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Item {
-    pub name: String,
-    pub lower: String,
-    /// The line a loot list keeps: a link that Splat and Obsidian both follow.
-    pub link: String,
-    pub detail: String,
-}
-
-/// What the editor can offer. Built once for each load of the campaign's index.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Sources {
-    pub tables: Vec<Table>,
-    pub items: Vec<Item>,
-}
+pub use splat_campaign::loot::{Item, Sources};
 
 /// The most suggestions of each kind under the add field.
 const MOST_TABLES: usize = 4;
 const MOST_ITEMS: usize = 6;
 const NO_SEPARATOR: &str = "Use one row for each item. A ; separates items in the roster table.";
 
-impl Sources {
-    /// The marked tables in `(path, body)` notes, in that order. The first table with a key
-    /// decides it, so a bad one says why and no later table takes its place by surprise.
-    pub fn tables_from<'a>(notes: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<Table> {
-        let mut tables = crate::roll_table::tables_in(notes);
-        tables.sort_by(|a, b| a.key.cmp(&b.key));
-        tables
-    }
-
-    /// A roll on the table with this key, or why there can be none.
-    pub fn roll(&self, key: &str) -> Result<TableRoll, String> {
-        if let Some(problem) = self.problem(key) {
-            return Err(problem);
+/// Tables, then items, that match what the DM typed. `Roll` before a word looks for tables
+/// only.
+fn matching<'a>(sources: &'a Sources, typed: &str) -> (Vec<&'a Table>, Vec<&'a Item>) {
+    let lower = typed.trim().to_lowercase();
+    let (tables_only, query) = match lower.strip_prefix("roll") {
+        Some(rest) if rest.is_empty() || rest.starts_with(' ') => {
+            let rest = rest.trim();
+            // `roll 2× gems` looks for `gems`.
+            let rest = rest
+                .split_once(' ')
+                .filter(|(count, _)| count.trim_end_matches(['×', 'x']).parse::<u32>().is_ok())
+                .map_or(rest, |(_, key)| key.trim_start_matches(['×', 'x', ' ']));
+            (true, rest.to_owned())
         }
-        self.table(key)
-            .ok_or("No roll table has this key.")?
-            .roll(None)
-    }
-
-    pub fn table(&self, key: &str) -> Option<&Table> {
-        self.tables.iter().find(|table| table.key == key)
-    }
-
-    /// Why a roll on this key cannot happen, or nothing.
-    pub fn problem(&self, key: &str) -> Option<String> {
-        match self.table(key) {
-            None => Some(format!("No roll table has the key “{key}”.")),
-            Some(table) => table.fault(),
-        }
-    }
-
-    /// The keys among these lines that cannot roll.
-    pub fn missing<'a>(&self, lines: impl IntoIterator<Item = &'a str>) -> Vec<String> {
-        let mut keys = Vec::new();
-        for line in lines {
-            if let Loot::Roll { key, .. } = Loot::parse(line)
-                && self.problem(&key).is_some()
-                && !keys.contains(&key)
-            {
-                keys.push(key);
-            }
-        }
-        keys
-    }
-
-    /// Tables, then items, that match what the DM typed. `Roll` before a word looks for tables
-    /// only.
-    fn matching(&self, typed: &str) -> (Vec<&Table>, Vec<&Item>) {
-        let lower = typed.trim().to_lowercase();
-        let (tables_only, query) = match lower.strip_prefix("roll") {
-            Some(rest) if rest.is_empty() || rest.starts_with(' ') => {
-                let rest = rest.trim();
-                // `roll 2× gems` looks for `gems`.
-                let rest = rest
-                    .split_once(' ')
-                    .filter(|(count, _)| count.trim_end_matches(['×', 'x']).parse::<u32>().is_ok())
-                    .map_or(rest, |(_, key)| key.trim_start_matches(['×', 'x', ' ']));
-                (true, rest.to_owned())
-            }
-            _ => (false, lower),
-        };
-        let tables = self
-            .tables
+        _ => (false, lower),
+    };
+    let tables = sources
+        .tables
+        .iter()
+        .filter(|table| table.key.to_lowercase().contains(&query))
+        .take(MOST_TABLES)
+        .collect();
+    let items = if tables_only || query.is_empty() {
+        Vec::new()
+    } else {
+        let mut found: Vec<(u8, &Item)> = sources
+            .items
             .iter()
-            .filter(|table| table.key.to_lowercase().contains(&query))
-            .take(MOST_TABLES)
+            .filter_map(|item| {
+                crate::matching::name_rank(&item.lower, &query).map(|rank| (rank, item))
+            })
             .collect();
-        let items = if tables_only || query.is_empty() {
-            Vec::new()
-        } else {
-            let mut found: Vec<(u8, &Item)> = self
-                .items
-                .iter()
-                .filter_map(|item| {
-                    crate::matching::name_rank(&item.lower, &query).map(|rank| (rank, item))
-                })
-                .collect();
-            found.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
-            found
-                .into_iter()
-                .take(MOST_ITEMS)
-                .map(|(_, item)| item)
-                .collect()
-        };
-        (tables, items)
-    }
+        found.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
+        found
+            .into_iter()
+            .take(MOST_ITEMS)
+            .map(|(_, item)| item)
+            .collect()
+    };
+    (tables, items)
 }
 
 /// The campaign's sources, from the index every page shares. The index keeps them, so they
@@ -250,12 +189,22 @@ pub fn show(
             state.removed = None;
         }
     }
-    add_row(ui, name, lines, &mut state, sources.as_deref(), one_cell);
+    add_row(
+        ui,
+        id,
+        name,
+        lines,
+        &mut state,
+        sources.as_deref(),
+        one_cell,
+    );
     ui.data_mut(|data| data.insert_temp(id, state));
     *lines != before
 }
 
 const LOOT_LINE: design::FieldName = crate::field_id!("loot_line");
+/// The list's own add field (keys only).
+const LOOT_ADD: design::FieldName = crate::field_id!("loot_add");
 
 /// One line. Returns its place when the DM removes it.
 #[allow(clippy::too_many_arguments)]
@@ -451,6 +400,7 @@ const NO_TABLES: &str =
 )]
 fn add_row(
     ui: &mut egui::Ui,
+    owner: egui::Id,
     name: &str,
     lines: &mut Vec<String>,
     state: &mut State,
@@ -459,20 +409,17 @@ fn add_row(
 ) {
     // The gap is the row's item spacing, so the menu ends at the column's right edge.
     let menu = design::menu_button_width(ui, ROLL_MENU) + ui.spacing().item_spacing.x;
-    let added = design::add_field_keys(
-        ui,
-        &mut state.add,
-        &format!("Add loot to {name}"),
-        "Type loot, or find an item or table",
-        menu,
-        |ui| {
-            table_menu(ui, ROLL_MENU, &format!("{ROLL_MENU} for {name}"), sources).map(Pick::Table)
-        },
-        |typed| {
+    // The list's own field (M0404), keyed by the list's owner (its caller's id), as its lines
+    // are (`line_row`).
+    let field = LOOT_ADD.of(design::TextKey::from_data(format!("{owner:?}")));
+    let label = format!("Add loot to {name}");
+    let menu_name = format!("{ROLL_MENU} for {name}");
+    let added = design::add_field(field, &label, "Type loot, or find an item or table")
+        .suggest(|typed| {
             let Some(sources) = sources else {
                 return Vec::new();
             };
-            let (tables, items) = sources.matching(typed);
+            let (tables, items) = matching(sources, typed);
             let times = typed_times(typed);
             vec![
                 design::Suggestions {
@@ -506,8 +453,11 @@ fn add_row(
                         .collect(),
                 },
             ]
-        },
-    );
+        })
+        .keys_only(menu, |ui| {
+            table_menu(ui, ROLL_MENU, &menu_name, sources).map(Pick::Table)
+        })
+        .show(ui, &mut state.add);
     if added.field.changed() {
         state.reason = None;
     }
@@ -609,13 +559,13 @@ mod tests {
     #[test]
     fn typed_words_find_tables_and_items_and_roll_finds_tables_only() {
         let sources = sources();
-        let (tables, items) = sources.matching("po");
+        let (tables, items) = matching(&sources, "po");
         assert!(tables.is_empty());
         assert_eq!(items[0].name, "Potion of Healing");
-        let (tables, items) = sources.matching("Roll 2× ge");
+        let (tables, items) = matching(&sources, "Roll 2× ge");
         assert_eq!(tables[0].key, "gems");
         assert!(items.is_empty());
-        let (tables, _) = sources.matching("roll");
+        let (tables, _) = matching(&sources, "roll");
         assert_eq!(tables.len(), 2);
     }
 
@@ -659,12 +609,12 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(640.0, 400.0))
             .build_state(
-                |ctx, loot: &mut Option<String>| {
+                |ctx, (key, name, loot): &mut (&str, &str, Option<String>)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        show_cell(ui, "goblin", "Goblin", loot);
+                        show_cell(ui, *key, name, loot);
                     });
                 },
-                Some("Iron; Roll gems".to_owned()),
+                ("goblin", "Goblin", Some("Iron; Roll gems".to_owned())),
             );
         crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -675,13 +625,42 @@ mod tests {
             harness.get_by_label("Goblin loot line 1").type_text(typed);
             harness.run_steps(2);
         }
-        assert_eq!(harness.state().as_deref(), Some("Iron key; Roll gems"));
+        assert_eq!(harness.state().2.as_deref(), Some("Iron key; Roll gems"));
         // The cell never holds an empty part, and the row stays while it has focus.
         harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
         harness.key_press(egui::Key::Backspace);
         harness.run_steps(2);
-        assert_eq!(harness.state().as_deref(), Some("Roll gems"));
+        assert_eq!(harness.state().2.as_deref(), Some("Roll gems"));
         assert!(harness.query_by_label("Goblin loot line 1").is_some());
+        // M-R0.7 (m-r0-7-loot-owner): the add field is its list's (`LOOT_ADD` keyed by the
+        // list's owner), not its place's. Words typed and erased in the goblin's field do not
+        // come back with Ctrl+Z in the orc's field, drawn at the same place.
+        let add = "Add loot to Goblin";
+        harness.get_by_label(add).click();
+        harness.run_steps(1);
+        harness.get_by_label(add).type_text("Gem");
+        harness.run_steps(16);
+        harness.get_by_label(add).type_text("s");
+        harness.run_steps(1);
+        for _ in 0.."Gems".len() {
+            harness.key_press(egui::Key::Backspace);
+        }
+        harness.run_steps(1);
+        *harness.state_mut() = ("orc", "Orc", None);
+        harness.run_steps(2);
+        let add = "Add loot to Orc";
+        harness.get_by_label(add).click();
+        harness.run_steps(1);
+        assert!(harness.get_by_label(add).is_focused());
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        harness.run_steps(2);
+        assert!(
+            harness
+                .get_by_label(add)
+                .value()
+                .is_none_or(|words| words.is_empty()),
+            "m-r0-7-loot-owner: Ctrl+Z in the orc's field gave it the goblin's words"
+        );
     }
 
     #[test]

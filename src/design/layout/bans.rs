@@ -500,7 +500,7 @@ fn banned_paths() -> Vec<(String, String)> {
 /// Whether `path` (an import's or an alias's, segment by segment) names a banned owner (a type
 /// whose functions `clippy.toml` bans: `Fills`, `Footer`, `ScrollArea`), a banned method by its
 /// owner (`Fills::because`), or a banned free function by its name through any module: its own
-/// (`outcome::banner`) or one that re-exports it (`design::add_field_keys`, from `components`).
+/// (`outcome::banner`) or one that re-exports it (`design::group_label`, from `components`).
 fn names_a_ban(path: &[String], bans: &[(String, String)]) -> bool {
     let Some(last) = path.last() else {
         return false;
@@ -822,12 +822,12 @@ mod tests {
             "use crate::design::{Body, Fills as Room};",
             "type Fill = crate::design::Fills;",
             "use crate::design::pane::Fills::because as fills;",
-            "use eframe::egui::ScrollArea as Area;",
+            "use egui::ScrollArea as Area;",
             "use crate::design::outcome::banner as notice;",
             "type Hand = splat::design::components::Footer<'static>;",
             // Round 29 P-1: a free function through a module that re-exports it.
-            "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::add_field_keys as keys; }",
-            "use crate::design::{add_field_keys as keys, AddField};",
+            "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::group_label as label; }",
+            "use crate::design::{group_label as label, Heading};",
             // Review of PR 446 (N3): `self` renames the path before its group.
             "use crate::design::Footer::{self as Host};",
         ] {

@@ -1,11 +1,11 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     content_workspace::CampaignDocument,
-    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    design::{self, Action, Density, Status, Tone, Type, colors, icons, memo::Revised},
     persistence::{Campaign, Store, UserData},
 };
 use eframe::egui;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use uuid::Uuid;
 
 /// What a press in the campaign messages of a footer asks for (`Campaigns::footer_messages`,
@@ -47,9 +47,16 @@ pub fn footer_words(words: &str) -> crate::design::outcome::Sentence {
     crate::design::outcome::Sentence::outside(words).unwrap_or(crate::sentence!("It did not work."))
 }
 
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    pub static MODULE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 pub struct Campaigns {
     store: Option<Store>,
     data: UserData,
+    /// Positions in registration order. A new catalogue gets a new revision, including on rename.
+    module_positions: Revised<HashMap<Uuid, usize>>,
     error: Option<String>,
     manifest_errors: std::collections::BTreeMap<Uuid, String>,
     held_manifests: std::cell::RefCell<std::collections::BTreeMap<Uuid, (String, String)>>,
@@ -86,6 +93,16 @@ pub struct Campaigns {
     list_measure: (f32, f32),
 }
 
+fn index_modules(modules: &[crate::persistence::Module]) -> Revised<HashMap<Uuid, usize>> {
+    Revised::new(
+        modules
+            .iter()
+            .enumerate()
+            .map(|(at, module)| (module.id, at))
+            .collect(),
+    )
+}
+
 /// The rail's campaign selector, with a name on two lines.
 const SELECTOR_HEIGHT: f32 = 44.0;
 /// A missing Campaign.md without a copy. The write is a choice the DM makes with the button.
@@ -100,6 +117,7 @@ impl Default for Campaigns {
         let mut result = Self {
             store: None,
             data: UserData::default(),
+            module_positions: Revised::new(HashMap::new()),
             error: None,
             manifest_errors: Default::default(),
             held_manifests: Default::default(),
@@ -298,7 +316,25 @@ impl Campaigns {
     }
 
     pub fn modules(&self) -> &[crate::persistence::Module] {
+        #[cfg(any(test, feature = "test-support"))]
+        MODULE_READS.with(|reads| reads.set(reads.get() + 1));
         &self.data.modules
+    }
+
+    pub fn module_positions(&self) -> &Revised<HashMap<Uuid, usize>> {
+        &self.module_positions
+    }
+
+    fn replace_data(&mut self, data: UserData) {
+        if self.data.modules != data.modules {
+            self.module_positions = index_modules(&data.modules);
+        }
+        self.data = data;
+    }
+
+    /// Validated settings always contain the active campaign, when one is selected.
+    pub fn active_id(&self) -> Option<Uuid> {
+        self.data.active_campaign_id.filter(|_| self.writable)
     }
 
     pub fn unregistered_module(&self, id: Uuid) -> Option<&crate::persistence::Module> {
@@ -385,7 +421,7 @@ impl Campaigns {
         self.persist(data)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
@@ -395,6 +431,7 @@ impl Campaigns {
         let data = store.load().unwrap();
         Self {
             store: Some(store),
+            module_positions: index_modules(&data.modules),
             data,
             error: None,
             manifest_errors: Default::default(),
@@ -421,8 +458,8 @@ impl Campaigns {
     }
 
     /// Add `campaign` if it is new, and make it the active campaign, as the switcher does.
-    #[cfg(test)]
-    pub(crate) fn open_for_test(&mut self, campaign: &Campaign) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn open_for_test(&mut self, campaign: &Campaign) {
         let mut data = self.data.clone();
         if !data.campaigns.iter().any(|known| known.id == campaign.id) {
             data.campaigns.push(campaign.clone());
@@ -432,7 +469,7 @@ impl Campaigns {
     }
 
     /// The same startup load as `default`, from a temporary settings file.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn open_at(path: PathBuf) -> Self {
         let mut campaigns = Self::at(path);
         campaigns.reload();
@@ -491,7 +528,7 @@ impl Campaigns {
                         self.writable = false;
                         return;
                     }
-                    self.data = data;
+                    self.replace_data(data);
                     self.error = (!self.manifest_errors.is_empty()).then(|| {
                         self.manifest_errors
                             .values()
@@ -524,7 +561,7 @@ impl Campaigns {
             }
         }
         store.save_with(&data, changes)?;
-        self.data = data;
+        self.replace_data(data);
         for campaign in &self.data.campaigns {
             if let Ok(document) = CampaignDocument::load(campaign) {
                 self.held_manifests
@@ -673,14 +710,8 @@ impl Campaigns {
     }
 
     pub fn active_campaign(&self) -> Option<Campaign> {
-        if !self.writable {
-            return None;
-        }
-        self.data
-            .campaigns
-            .iter()
-            .find(|c| Some(c.id) == self.data.active_campaign_id)
-            .cloned()
+        let id = self.active_id()?;
+        self.data.campaigns.iter().find(|c| c.id == id).cloned()
     }
 
     /// The always-visible campaign switcher. `blocked` says why it cannot change now.
@@ -1719,7 +1750,7 @@ const IMPORT_FORM: &str = "import form";
 const WILL_CREATE: &str = "Will create ";
 
 /// The result of registering a copied campaign folder, named for the new campaign.
-pub(crate) fn copy_registered(name: &str) -> String {
+pub fn copy_registered(name: &str) -> String {
     format!("{name} is registered as a new campaign. Its D&D Beyond link is off.")
 }
 
@@ -2075,6 +2106,7 @@ mod tests {
         }
         let mut campaigns = Campaigns {
             store: Some(store),
+            module_positions: index_modules(&data.modules),
             data,
             error: None,
             manifest_errors: Default::default(),

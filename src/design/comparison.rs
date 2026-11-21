@@ -64,19 +64,19 @@ impl<'a> Comparison<'a> {
 
     /// The same comparison, aligned only when either text changes. Alignment costs about
     /// n × m line comparisons, too much to repeat every frame for a long note.
-    pub fn cached(ctx: &eframe::egui::Context, slot: eframe::egui::Id, text: [&'a str; 2]) -> Self {
+    pub fn cached(ctx: &egui::Context, slot: egui::Id, text: [&'a str; 2]) -> Self {
         let lines = text.map(|text| text.lines().collect::<Vec<_>>());
         let layout = Self::cached_layout(ctx, slot, text, &lines);
         Self::from_layout(&lines, (*layout).clone())
     }
 
     fn cached_layout(
-        ctx: &eframe::egui::Context,
-        slot: eframe::egui::Id,
+        ctx: &egui::Context,
+        slot: egui::Id,
         text: [&str; 2],
         lines: &[Vec<&str>; 2],
     ) -> std::sync::Arc<Layout> {
-        let texts = eframe::egui::Id::new((text[0], text[1])).value();
+        let texts = egui::Id::new((text[0], text[1])).value();
         let kept = ctx.data(|data| data.get_temp::<(u64, std::sync::Arc<Layout>)>(slot));
         match kept {
             Some((seen, layout)) if seen == texts => layout,
@@ -270,8 +270,8 @@ mod tests {
     }
     #[test]
     fn aligned_row_count_reuses_the_layout_and_invalidates_on_either_source() {
-        let ctx = eframe::egui::Context::default();
-        let slot = eframe::egui::Id::new("source rows");
+        let ctx = egui::Context::default();
+        let slot = egui::Id::new("source rows");
         for (text, expected) in [
             (["removed\nanchor", "anchor\ninserted"], 3),
             (["anchor", "anchor\ninserted"], 2),

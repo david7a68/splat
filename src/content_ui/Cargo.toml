@@ -1,0 +1,40 @@
+[package]
+name = "splat-content-ui"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+splat-campaign = { path = "../../crates/campaign" }
+splat-character = { path = "../../crates/character" }
+splat-content = { path = "../../crates/content" }
+splat-design = { path = "../../src/design" }
+splat-execution = { path = "../../crates/execution" }
+eframe = { version = "0.33", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive", "rc"] }
+zeroize = "1"
+directories = "6"
+serde_json = { version = "1", features = ["raw_value"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+tempfile = "3"
+serde_yaml_ng = "0.10"
+pulldown-cmark = "0.13"
+tungstenite = "0.29"
+base64 = "0.22"
+rfd = "0.15"
+egui-phosphor = "0.11"
+libc = "0.2"
+egui_extras = { version = "0.33", default-features = false, features = ["file", "image"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+
+[features]
+test-support = ["splat-campaign/test-support", "splat-content/test-support", "splat-design/test-support"]
+
+[dev-dependencies]
+splat-campaign = { path = "../../crates/campaign", features = ["test-support"] }
+splat-content = { path = "../../crates/content", features = ["test-support"] }
+splat-design = { path = "../../src/design", features = ["test-support"] }
+splat-trackers = { path = "../../src/trackers", features = ["test-support"] }
+egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }

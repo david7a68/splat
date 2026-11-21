@@ -17,7 +17,7 @@
 //! where a part's doc names one.
 use std::{borrow::Cow, hash::Hash, marker::PhantomData, ops::Range};
 
-use eframe::egui::{
+use egui::{
     self, Align, Id, Layout, Rect, Response, Sense, TextBuffer, TextEdit, Ui, UiBuilder,
     scroll_area::ScrollAreaOutput, vec2,
 };
@@ -41,7 +41,7 @@ pub const NARROWEST_PANE: f32 = PANEL_MIN_WIDTH - 2.0 * M;
 /// when the program compiles.
 ///
 /// ```
-/// const EDIT: splat::layout::Word = splat::word!("Edit");
+/// const EDIT: splat_design::layout::Word = splat_design::word!("Edit");
 /// assert_eq!(EDIT.as_str(), "Edit");
 /// ```
 ///
@@ -49,31 +49,31 @@ pub const NARROWEST_PANE: f32 = PANEL_MIN_WIDTH - 2.0 * M;
 /// longer than the limit do not compile:
 ///
 /// ```compile_fail,E0080
-/// let _ = splat::word!("");
+/// let _ = splat_design::word!("");
 /// ```
 ///
 /// ```compile_fail,E0080
-/// let _ = splat::word!("edit");
+/// let _ = splat_design::word!("edit");
 /// ```
 ///
 /// ```compile_fail,E0080
-/// let _ = splat::word!("Edit ");
+/// let _ = splat_design::word!("Edit ");
 /// ```
 ///
 /// ```compile_fail,E0080
-/// let _ = splat::word!("Add every creature to the fight");
+/// let _ = splat_design::word!("Add every creature to the fight");
 /// ```
 ///
 /// A word made at run time, or held in a constant, is not a literal:
 ///
 /// ```compile_fail
 /// let name = String::from("Edit");
-/// let _ = splat::word!(name.as_str());
+/// let _ = splat_design::word!(name.as_str());
 /// ```
 ///
 /// ```compile_fail
 /// const NAME: &str = "Edit";
-/// let _ = splat::word!(NAME);
+/// let _ = splat_design::word!(NAME);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Word(&'static str);
@@ -173,17 +173,17 @@ impl TextKey {
     /// become one (the trait is sealed):
     ///
     /// ```compile_fail,E0277
-    /// let _ = splat::layout::TextKey::of("journey");
+    /// let _ = splat_design::layout::TextKey::of("journey");
     /// ```
     ///
     /// ```compile_fail,E0277
-    /// let _ = splat::layout::TextKey::of(&format!("row {}", 1));
+    /// let _ = splat_design::layout::TextKey::of(&format!("row {}", 1));
     /// ```
     ///
     /// No public owner type holds a free text (review 1: `DocOwner` did):
     ///
     /// ```compile_fail,E0422
-    /// let _ = splat::layout::TextKey::of(&splat::layout::DocOwner { id: format!("row_{}", 1) });
+    /// let _ = splat_design::layout::TextKey::of(&splat_design::layout::DocOwner { id: format!("row_{}", 1) });
     /// ```
     ///
     /// A caller's own type cannot become an owner (it would turn any text into a key with no
@@ -191,7 +191,7 @@ impl TextKey {
     ///
     /// ```compile_fail,E0277
     /// struct Row(String);
-    /// impl splat::layout::TextOwner for Row {
+    /// impl splat_design::layout::TextOwner for Row {
     ///     fn owner_text(&self) -> &str {
     ///         &self.0
     ///     }
@@ -217,7 +217,7 @@ pub struct ParticipantKey {
 
 impl ParticipantKey {
     /// The key of `participant`'s fields in the run `run`.
-    pub(crate) fn of(run: uuid::Uuid, participant: &crate::encounter_run::Participant) -> Self {
+    pub fn of(run: uuid::Uuid, participant: &splat_campaign::encounter_run::Participant) -> Self {
         Self {
             run,
             participant: participant.key.clone(),
@@ -245,7 +245,7 @@ macro_rules! text_owners {
         }
     )*};
 }
-text_owners!(crate::timeline::Event => |event| &event.id);
+text_owners!(splat_campaign::timeline::Event => |event| &event.id);
 
 macro_rules! row_keys {
     ($($key:ty),*) => {$(
@@ -281,10 +281,10 @@ pub enum Once {
 /// the [`Once`] reasons.
 ///
 /// ```
-/// use splat::layout::{FieldName, Once, RowIndex};
-/// const NAME: FieldName = splat::field_id!("doc_name");
-/// const COOKIE: splat::layout::FieldId = splat::field_id!("doc_cookie").once(Once::Settings);
-/// fn f(ui: &mut eframe::egui::Ui, text: &mut String) {
+/// use splat_design::layout::{FieldName, Once, RowIndex};
+/// const NAME: FieldName = splat_design::field_id!("doc_name");
+/// const COOKIE: splat_design::layout::FieldId = splat_design::field_id!("doc_cookie").once(Once::Settings);
+/// fn f(ui: &mut egui::Ui, text: &mut String) {
 ///     let _ = NAME.of(RowIndex::from_data(1)).single_line(ui, text, |edit| edit);
 ///     let _ = COOKIE.single_line(ui, text, |edit| edit);
 /// }
@@ -293,34 +293,34 @@ pub enum Once {
 /// A name with no owner choice draws nothing:
 ///
 /// ```compile_fail,E0599
-/// fn f(ui: &mut eframe::egui::Ui, text: &mut String) {
-///     let _ = splat::field_id!("doc_name").single_line(ui, text, |edit| edit);
+/// fn f(ui: &mut egui::Ui, text: &mut String) {
+///     let _ = splat_design::field_id!("doc_name").single_line(ui, text, |edit| edit);
 /// }
 /// ```
 ///
 /// ```compile_fail,E0308
-/// fn f(ui: &mut eframe::egui::Ui, text: &mut String) {
-///     let _ = splat::layout::line_field(ui, splat::field_id!("doc_name"), "Name", text, "", 80.0);
+/// fn f(ui: &mut egui::Ui, text: &mut String) {
+///     let _ = splat_design::layout::line_field(ui, splat_design::field_id!("doc_name"), "Name", text, "", 80.0);
 /// }
 /// ```
 ///
 /// A `Once` reason is one of the listed words, not a text:
 ///
 /// ```compile_fail,E0308
-/// let _ = splat::field_id!("doc_name").once("Settings");
+/// let _ = splat_design::field_id!("doc_name").once("Settings");
 /// ```
 ///
 /// An id or a place from the layout is not an owner's key:
 ///
 /// ```compile_fail,E0277
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     let _ = splat::field_id!("doc_name").of(ui.next_auto_id());
+/// fn f(ui: &mut egui::Ui) {
+///     let _ = splat_design::field_id!("doc_name").of(ui.next_auto_id());
 /// }
 /// ```
 ///
 /// ```compile_fail,E0277
-/// fn f(ui: &mut eframe::egui::Ui) {
-///     let _ = splat::field_id!("doc_name").of(ui.cursor().min.y as usize);
+/// fn f(ui: &mut egui::Ui) {
+///     let _ = splat_design::field_id!("doc_name").of(ui.cursor().min.y as usize);
 /// }
 /// ```
 ///
@@ -329,15 +329,15 @@ pub enum Once {
 /// escape `TextKey::from_data`):
 ///
 /// ```compile_fail,E0277
-/// let _ = splat::field_id!("doc_name").of(std::path::Path::new("Groups/Wolves.md"));
+/// let _ = splat_design::field_id!("doc_name").of(std::path::Path::new("Groups/Wolves.md"));
 /// ```
 ///
 /// ```compile_fail,E0277
-/// let _ = splat::field_id!("doc_name").of(std::path::PathBuf::from("Groups/Wolves.md"));
+/// let _ = splat_design::field_id!("doc_name").of(std::path::PathBuf::from("Groups/Wolves.md"));
 /// ```
 ///
 /// ```compile_fail,E0277
-/// let _ = splat::field_id!("doc_name").of("Wolves");
+/// let _ = splat_design::field_id!("doc_name").of("Wolves");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FieldName {
@@ -394,49 +394,49 @@ impl FieldName {
 /// changed since the field last had focus (see [`FieldId::single_line`]).
 ///
 /// ```
-/// use splat::layout::{FieldName, RowIndex};
-/// const NAME: FieldName = splat::field_id!("doc_name");
+/// use splat_design::layout::{FieldName, RowIndex};
+/// const NAME: FieldName = splat_design::field_id!("doc_name");
 /// assert_ne!(NAME.of(RowIndex::from_data(1)).id(), NAME.of(RowIndex::from_data(2)).id());
 /// ```
 ///
 /// A row index is made only by its named constructor:
 ///
 /// ```compile_fail,E0603
-/// let _ = splat::layout::RowIndex(1);
+/// let _ = splat_design::layout::RowIndex(1);
 /// ```
 ///
 /// An `egui::Id` is not a [`RowKey`], and neither is a bare text:
 ///
 /// ```compile_fail,E0277
-/// const NAME: splat::layout::FieldName = splat::field_id!("doc_name");
-/// let _ = NAME.of(eframe::egui::Id::new("place"));
+/// const NAME: splat_design::layout::FieldName = splat_design::field_id!("doc_name");
+/// let _ = NAME.of(egui::Id::new("place"));
 /// ```
 ///
 /// ```compile_fail,E0277
-/// const NAME: splat::layout::FieldName = splat::field_id!("doc_name");
-/// let _ = NAME.of(format!("{:?}", eframe::egui::Id::new("place")));
+/// const NAME: splat_design::layout::FieldName = splat_design::field_id!("doc_name");
+/// let _ = NAME.of(format!("{:?}", egui::Id::new("place")));
 /// ```
 ///
 /// An id from the layout is not a `FieldId`:
 ///
 /// ```compile_fail,E0308
-/// fn take(_: splat::layout::FieldId) {}
-/// take(eframe::egui::Id::new("doc_name"));
+/// fn take(_: splat_design::layout::FieldId) {}
+/// take(egui::Id::new("doc_name"));
 /// ```
 ///
 /// ```compile_fail,E0423
-/// let _ = splat::layout::FieldId(eframe::egui::Id::new("doc_name"));
+/// let _ = splat_design::layout::FieldId(egui::Id::new("doc_name"));
 /// ```
 ///
 /// ```compile_fail,E0080
-/// let _ = splat::field_id!("");
+/// let _ = splat_design::field_id!("");
 /// ```
 ///
 /// A name held in a constant escapes the lint's scan, so it does not compile:
 ///
 /// ```compile_fail
 /// const NAME: &str = "doc_name";
-/// let _ = splat::field_id!(NAME);
+/// let _ = splat_design::field_id!(NAME);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FieldId {
@@ -520,9 +520,9 @@ impl FieldId {
     /// It guards the text history as [`single_line`](Self::single_line) does.
     ///
     /// ```
-    /// fn f(ui: &mut eframe::egui::Ui, note: &mut String) {
-    ///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_note");
-    ///     let id = NOTE.once(splat::layout::Once::Example);
+    /// fn f(ui: &mut egui::Ui, note: &mut String) {
+    ///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_note");
+    ///     let id = NOTE.once(splat_design::layout::Once::Example);
     ///     let editor = id.editor(ui, note, |edit| edit.desired_rows(4));
     ///     let _ = (editor.response, editor.galley, editor.galley_pos, editor.text_clip_rect);
     ///     let _ = editor.cursor_range;
@@ -564,9 +564,9 @@ impl FieldId {
     /// [`search_min_row`] the frame still keeps to `width`; its text area gives way.
     ///
     /// ```
-    /// fn f(ui: &mut eframe::egui::Ui, query: &mut String) {
-    ///     use splat::layout::{FieldId, Once};
-    ///     const SEARCH: FieldId = splat::field_id!("doc_search").once(Once::PageSearch);
+    /// fn f(ui: &mut egui::Ui, query: &mut String) {
+    ///     use splat_design::layout::{FieldId, Once};
+    ///     const SEARCH: FieldId = splat_design::field_id!("doc_search").once(Once::PageSearch);
     ///     let search = SEARCH.search(ui, "Search", query, "Search by name…", 240.0);
     ///     let _ = (search.field, search.cleared);
     /// }
@@ -575,9 +575,9 @@ impl FieldId {
     /// `Clear` is not the caller's to leave out:
     ///
     /// ```compile_fail,E0599
-    /// fn f(ui: &mut eframe::egui::Ui, query: &mut String) {
-    ///     use splat::layout::{FieldId, Once};
-    ///     const SEARCH: FieldId = splat::field_id!("doc_search").once(Once::PageSearch);
+    /// fn f(ui: &mut egui::Ui, query: &mut String) {
+    ///     use splat_design::layout::{FieldId, Once};
+    ///     const SEARCH: FieldId = splat_design::field_id!("doc_search").once(Once::PageSearch);
     ///     let _ = SEARCH.search(ui, "Search", query, "Search by name…", 240.0).without_clear();
     /// }
     /// ```
@@ -677,7 +677,7 @@ impl BoundText {
     /// One hash of the text (egui itself copies a focused field's whole text into its Undo
     /// history every frame it has focus, so this adds less than egui does).
     fn of(text: &str) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         BOUND_TEXT_HASHES.with(|count| count.set(count.get() + 1));
         Self {
             len: text.len(),
@@ -686,7 +686,7 @@ impl BoundText {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a field part hashed its text, for the cost proof.
     pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -1018,8 +1018,8 @@ pub fn lane_width() -> f32 {
 /// (floating bars that take no width) cannot remove the lane. The caller has no lane to keep.
 ///
 /// ```
-/// fn list(ui: &mut eframe::egui::Ui) {
-///     splat::layout::ScrollColumn::new("list")
+/// fn list(ui: &mut egui::Ui) {
+///     splat_design::layout::ScrollColumn::new("list")
 ///         .max_height(200.0)
 ///         .show(ui, |ui| ui.label("Row"));
 /// }
@@ -1028,7 +1028,7 @@ pub fn lane_width() -> f32 {
 /// There is no way to give the lane back:
 ///
 /// ```compile_fail,E0599
-/// let _ = splat::layout::ScrollColumn::new("list").without_lane();
+/// let _ = splat_design::layout::ScrollColumn::new("list").without_lane();
 /// ```
 #[must_use = "call show"]
 pub struct ScrollColumn {
@@ -1311,13 +1311,13 @@ pub fn sideways_scroll<R>(
 /// none does not compile, at run time too.
 ///
 /// ```
-/// use splat::layout::{Slot, SlotType};
+/// use splat_design::layout::{Slot, SlotType};
 /// const SAVES: Slot = Slot::new(&["0 of 3", "3 of 3"], SlotType::Small);
 /// let _ = Slot::new(&["Low"], SlotType::Body);
 /// ```
 ///
 /// ```compile_fail,E0080
-/// use splat::layout::{Slot, SlotType};
+/// use splat_design::layout::{Slot, SlotType};
 /// let _ = Slot::new(&[], SlotType::Small);
 /// ```
 #[derive(Clone, Copy, Debug)]
@@ -1427,23 +1427,23 @@ pub mod doc_parts {
 /// literal; there is no other way, so a key cannot be an empty string chosen at run time.
 ///
 /// ```
-/// const NEXT: splat::layout::KeyName = splat::key!("N");
+/// const NEXT: splat_design::layout::KeyName = splat_design::key!("N");
 /// assert_eq!(NEXT.as_str(), "N");
 /// ```
 ///
 /// ```compile_fail,E0080
-/// let _ = splat::key!("");
+/// let _ = splat_design::key!("");
 /// ```
 ///
 /// ```compile_fail,E0080
-/// let _ = splat::key!(" N");
+/// let _ = splat_design::key!(" N");
 /// ```
 ///
 /// A key chosen at run time is not a literal, so the macro does not take it:
 ///
 /// ```compile_fail
 /// let hide = true;
-/// let _ = splat::key!(if hide { "" } else { "N" });
+/// let _ = splat_design::key!(if hide { "" } else { "N" });
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct KeyName(&'static str);
@@ -1488,14 +1488,14 @@ enum TitleWeight {
 /// One action on a title line. It always shows its [`Word`]; an icon goes before the word.
 ///
 /// ```
-/// use splat::layout::TitleAction;
-/// let _ = TitleAction::quiet(splat::word!("Edit")).name("Edit Cinder Wolf");
+/// use splat_design::layout::TitleAction;
+/// let _ = TitleAction::quiet(splat_design::word!("Edit")).name("Edit Cinder Wolf");
 /// ```
 ///
 /// A word is a checked `Word`, never a plain string:
 ///
 /// ```compile_fail,E0308
-/// let _ = splat::layout::TitleAction::quiet("Edit");
+/// let _ = splat_design::layout::TitleAction::quiet("Edit");
 /// ```
 #[derive(Clone, Copy, Debug)]
 #[must_use]
@@ -1505,6 +1505,7 @@ pub struct TitleAction<'a> {
     icon: Option<&'static str>,
     blocked: Option<&'a str>,
     name: Option<&'a str>,
+    key: Option<KeyName>,
 }
 
 impl<'a> TitleAction<'a> {
@@ -1515,6 +1516,7 @@ impl<'a> TitleAction<'a> {
             icon: None,
             blocked: None,
             name: None,
+            key: None,
         }
     }
 
@@ -1541,6 +1543,13 @@ impl<'a> TitleAction<'a> {
         self
     }
 
+    /// Its keyboard command beside its word (`New entry N`), as an action shows one; the line
+    /// measures the action with it.
+    pub fn key(mut self, key: KeyName) -> Self {
+        self.key = Some(key);
+        self
+    }
+
     fn action(&self) -> Action<'a> {
         let mut action = match self.weight {
             TitleWeight::Quiet => Action::quiet(self.word.as_str()),
@@ -1553,6 +1562,9 @@ impl<'a> TitleAction<'a> {
         }
         if let Some(name) = self.name {
             action = action.name(name);
+        }
+        if let Some(key) = self.key {
+            action = action.key(key.as_str());
         }
         action
     }
@@ -1628,7 +1640,14 @@ pub struct TitleLine<'a> {
     context: Option<&'a str>,
     role: TitleType,
     actions: Vec<TitleAction<'a>>,
+    /// A status link after the actions, and the menu it opens.
+    status: Option<StatusMenu<'a>>,
+    /// A close icon at the right end of the title's line, and its accessible name.
+    close: Option<&'a str>,
 }
+
+/// A title line's status link and the menu it opens.
+type StatusMenu<'a> = (Status<'a>, Box<dyn FnOnce(&mut Ui) + 'a>);
 
 /// The type of a title line's title.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1643,6 +1662,8 @@ pub enum TitleType {
 #[derive(Clone, Debug, Default)]
 pub struct TitleLineResponse {
     pressed: Option<Word>,
+    /// The DM pressed the close icon (`TitleLine::close`).
+    pub closed: bool,
     /// The actions sit under the title.
     pub below: bool,
     /// The rows of actions under the title (0 when they follow the title).
@@ -1669,12 +1690,12 @@ pub struct TitleActionRow {
 }
 
 /// Where test builds keep each title action row of a pass.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 const TITLE_ACTION_ROWS: &str = "design_title_action_rows";
 
 /// Register a row of actions drawn under a title. Only test builds keep it.
 pub fn register_title_row(ui: &Ui, row: TitleActionRow) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     {
         let pass = ui.ctx().cumulative_pass_nr();
         ui.ctx().data_mut(|data| {
@@ -1686,14 +1707,14 @@ pub fn register_title_row(ui: &Ui, row: TitleActionRow) {
             kept.1.push(row);
         });
     }
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let _ = (ui, row);
 }
 
 /// Each action row drawn under a title in the last completed pass, in draw order; empty when
 /// that pass drew none (a row never outlives its title line). Package G reads them through
 /// `Driver::title_action_rows`.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn title_action_rows(ctx: &egui::Context) -> Vec<TitleActionRow> {
     let last = ctx.cumulative_pass_nr().saturating_sub(1);
     ctx.data(|data| data.get_temp::<(u64, Vec<TitleActionRow>)>(Id::new(TITLE_ACTION_ROWS)))
@@ -1724,6 +1745,8 @@ impl<'a> TitleLine<'a> {
             context: None,
             role: TitleType::Title,
             actions: Vec::new(),
+            status: None,
+            close: None,
         }
     }
 
@@ -1741,6 +1764,32 @@ impl<'a> TitleLine<'a> {
     pub fn action(mut self, action: TitleAction<'a>) -> Self {
         self.actions.push(action);
         self
+    }
+
+    /// A status link after the actions (`3 files need fixing`, in its tone), placed and kept as
+    /// an action is, that opens `menu` under it (`menu_popup`); the menu draws its own choices.
+    pub fn status(mut self, status: Status<'a>, menu: impl FnOnce(&mut Ui) + 'a) -> Self {
+        self.status = Some((status, Box::new(menu)));
+        self
+    }
+
+    /// A close icon named `name` at the right end of the title's own line (a panel's title), on
+    /// that line however the actions are placed; the title and the actions beside it keep clear
+    /// of it. Its press is [`TitleLineResponse::closed`].
+    pub fn close(mut self, name: &'a str) -> Self {
+        self.close = Some(name);
+        self
+    }
+
+    /// The status link's width on one line.
+    fn status_width(ui: &Ui, status: &Status<'_>) -> f32 {
+        number_width(
+            ui,
+            &format!("{} {}", status.icon, status.word),
+            &Type::Small.font(ui),
+        )
+        .ceil()
+        .max(24.0)
     }
 
     fn font(&self) -> Type {
@@ -1765,31 +1814,68 @@ impl<'a> TitleLine<'a> {
                 .actions
                 .iter()
                 .map(|action| action.action().natural_width(ui).ceil())
+                .chain(
+                    self.status
+                        .as_ref()
+                        .map(|(status, _)| Self::status_width(ui, status)),
+                )
                 .collect(),
         }
     }
 
-    /// Draw one action in exactly its measured target.
-    fn action_at(&self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+    /// Draw one action in exactly its measured target; past the actions, the status link and
+    /// its menu.
+    fn action_at(&mut self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+        let status = (at >= self.actions.len())
+            .then(|| self.status.take())
+            .flatten();
         ui.scope_builder(
             UiBuilder::new()
                 .max_rect(rect)
                 .layout(Layout::left_to_right(Align::Center)),
-            |ui| self.actions[at].action().show(ui).clicked(),
+            |ui| match status {
+                Some((status, menu)) => {
+                    let link = super::status_link(ui, status);
+                    super::menu_popup(&*ui, &link).show(menu);
+                    false
+                }
+                None => self.actions[at].action().show(ui).clicked(),
+            },
         )
         .inner
     }
 
-    pub fn show(self, ui: &mut Ui) -> TitleLineResponse {
+    /// The close icon at the right end of the line from `top`, `line_height` high.
+    fn close_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) -> bool {
+        let Some(name) = self.close else {
+            return false;
+        };
+        let size = Density::Read.control();
+        let rect = Rect::from_min_size(
+            egui::pos2(right - size, top + (line_height - size) / 2.0),
+            vec2(size, size),
+        );
+        let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
+        super::icon_button(&mut child, super::icons::CLOSE, name).clicked()
+    }
+
+    pub fn show(mut self, ui: &mut Ui) -> TitleLineResponse {
         let metrics = self.metrics(ui);
         let room = ui.available_width();
+        // The close icon keeps its target and a gap at the title line's right end.
+        let close = if self.close.is_some() {
+            Density::Read.control() + ACTION_GAP
+        } else {
+            0.0
+        };
         let placement = title_placement(
             metrics.beside(),
             metrics.lead_in,
             &metrics.widths,
-            room,
+            room - close,
             room,
         );
+        let closed;
         let height = Density::Read.control();
         let mut pressed = None;
         let font = self.font();
@@ -1833,11 +1919,14 @@ impl<'a> TitleLine<'a> {
                         pressed = Some(self.actions[at].word);
                     }
                 }
+                closed = self.close_at(ui, line.right(), line.top(), line_height);
                 0
             }
             TitlePlacement::Under(rows) => {
+                let (line_left, line_top) = (ui.cursor().left(), ui.cursor().top());
                 let title_rect = ui
                     .horizontal_wrapped(|ui| {
+                        ui.set_max_width(room - close);
                         ui.spacing_mut().item_spacing.x = XS;
                         ui.add(title.wrap());
                         if let Some((words, context)) = context {
@@ -1846,6 +1935,8 @@ impl<'a> TitleLine<'a> {
                     })
                     .response
                     .rect;
+                let right = line_left + room;
+                closed = self.close_at(ui, right, line_top, font.line());
                 for row in &rows {
                     let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
                     let mut row_ui = ui.new_child(
@@ -1880,6 +1971,7 @@ impl<'a> TitleLine<'a> {
         };
         TitleLineResponse {
             pressed,
+            closed,
             below: rows > 0,
             rows,
         }
@@ -1923,9 +2015,9 @@ pub enum BackEdge {
 /// finds a wrong choice. Handle the press.
 ///
 /// ```
-/// # use splat::layout::{BackEdge, TitleLine};
-/// # fn draw(ui: &mut eframe::egui::Ui) {
-/// let back = TitleLine::back(splat::word!("All events"), BackEdge::Text).show(ui);
+/// # use splat_design::layout::{BackEdge, TitleLine};
+/// # fn draw(ui: &mut egui::Ui) {
+/// let back = TitleLine::back(splat_design::word!("All events"), BackEdge::Text).show(ui);
 /// # let _ = back;
 /// # }
 /// ```
@@ -1933,7 +2025,7 @@ pub enum BackEdge {
 /// A back link has no form without its word: a plain string or a bare icon does not compile.
 ///
 /// ```compile_fail,E0308
-/// # use splat::layout::{BackEdge, TitleLine};
+/// # use splat_design::layout::{BackEdge, TitleLine};
 /// let _ = TitleLine::back("←", BackEdge::Text);
 /// ```
 #[must_use = "call show"]
@@ -2147,12 +2239,12 @@ impl EditorKind {
 /// gap (34 px) above the name row, and no state reserves more.
 ///
 /// ```
-/// # use splat::layout::{DraftOwner, EditorHead, EditorKind, Unsaved};
+/// # use splat_design::layout::{DraftOwner, EditorHead, EditorKind, Unsaved};
 /// # struct Owner;
 /// # impl DraftOwner for Owner {
 /// #     fn unsaved(&self, _: Unsaved) -> bool { false }
 /// # }
-/// # fn draw(ui: &mut eframe::egui::Ui, owner: &Owner) {
+/// # fn draw(ui: &mut egui::Ui, owner: &Owner) {
 /// let (back, name) = EditorHead::new(EditorKind::Group { in_plan: false }, owner).show(ui, |ui| {
 ///     ui.horizontal(|ui| ui.label("the name field")).inner
 /// });
@@ -2278,21 +2370,21 @@ impl CreateReasons for NoReason {
 /// variant, by construction.
 ///
 /// ```
-/// splat::create_reasons! {
+/// splat_design::create_reasons! {
 ///     pub enum NewEntry {
 ///         NoName => "Enter a name first.",
 ///         Taken => "An entry with this name exists. Choose another name.",
 ///     }
 /// }
-/// use splat::layout::CreateReasons;
+/// use splat_design::layout::CreateReasons;
 /// assert_eq!(NewEntry::ALL.len(), 2);
 /// ```
 ///
 /// ```compile_fail,E0080
-/// splat::create_reasons! {
+/// splat_design::create_reasons! {
 ///     pub enum NewEntry { NoName => "Enter a name first" }
 /// }
-/// let _ = splat::layout::CreateReasons::words(NewEntry::NoName);
+/// let _ = splat_design::layout::CreateReasons::words(NewEntry::NoName);
 /// ```
 #[macro_export]
 macro_rules! create_reasons {
@@ -2327,9 +2419,9 @@ enum CreateWeight {
 /// while the DM types; a blocked Create's reason is one of the form's declared reasons.
 ///
 /// ```compile_fail,E0308
-/// use splat::layout::{Create, NoReason};
+/// use splat_design::layout::{Create, NoReason};
 /// let _: Create<NoReason> =
-///     Create::primary(splat::word!("Create")).blocked(Some("Enter a name first."));
+///     Create::primary(splat_design::word!("Create")).blocked(Some("Enter a name first."));
 /// ```
 #[derive(Clone, Copy, Debug)]
 #[must_use]
@@ -2389,31 +2481,31 @@ impl<R: CreateReasons> Create<R> {
 /// moves nothing.
 ///
 /// ```
-/// use splat::layout::SideAction;
+/// use splat_design::layout::SideAction;
 /// let loading = true;
-/// let _ = SideAction::new(splat::word!("Browse…"))
-///     .locked_when(loading, splat::sentence!("Wait until the Library has loaded."));
+/// let _ = SideAction::new(splat_design::word!("Browse…"))
+///     .locked_when(loading, splat_design::sentence!("Wait until the Library has loaded."));
 /// ```
 ///
 /// A lock without its reason does not compile:
 ///
 /// ```compile_fail,E0308
-/// use splat::layout::SideAction;
-/// let _ = SideAction::new(splat::word!("Browse…")).locked_when(true, None);
+/// use splat_design::layout::SideAction;
+/// let _ = SideAction::new(splat_design::word!("Browse…")).locked_when(true, None);
 /// ```
 ///
 /// Nor does a reason that is not a checked sentence:
 ///
 /// ```compile_fail,E0308
-/// use splat::layout::SideAction;
-/// let _ = SideAction::new(splat::word!("Browse…")).locked_when(true, "Wait.");
+/// use splat_design::layout::SideAction;
+/// let _ = SideAction::new(splat_design::word!("Browse…")).locked_when(true, "Wait.");
 /// ```
 ///
 /// Nor an optional lock, which could be written with no reason:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::SideAction;
-/// let _ = SideAction::new(splat::word!("Browse…")).blocked(Some("Wait."));
+/// use splat_design::layout::SideAction;
+/// let _ = SideAction::new(splat_design::word!("Browse…")).blocked(Some("Wait."));
 /// ```
 #[derive(Clone, Debug)]
 #[must_use]
@@ -2536,9 +2628,9 @@ impl<'a> CreateChoice<'a> {
 /// A command does not exist here:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Once, Selection};
-/// let _ = Selection::new(splat::field_id!("doc_sel").once(Once::Example), "Template", 0_u8, "Standard")
-///     .command(splat::word!("New template"));
+/// use splat_design::layout::{Once, Selection};
+/// let _ = Selection::new(splat_design::field_id!("doc_sel").once(Once::Example), "Template", 0_u8, "Standard")
+///     .command(splat_design::word!("New template"));
 /// ```
 #[must_use]
 pub struct Selection<'a, T> {
@@ -2605,13 +2697,13 @@ impl<'a, T> Selection<'a, T> {
 /// A drop-down with a command row does not fit (its press would have no place):
 ///
 /// ```compile_fail,E0308
-/// use splat::layout::{CreateDropdown, Dropdown, Once};
+/// use splat_design::layout::{CreateDropdown, Dropdown, Once};
 /// let mut value = 0_u8;
 /// let _ = CreateDropdown::new(
 ///     "Template",
-///     Dropdown::new(splat::field_id!("doc_cmd").once(Once::Example), "Template")
+///     Dropdown::new(splat_design::field_id!("doc_cmd").once(Once::Example), "Template")
 ///         .choice(0, "Standard")
-///         .command(splat::word!("New template")),
+///         .command(splat_design::word!("New template")),
 ///     &mut value,
 /// );
 /// ```
@@ -2762,13 +2854,13 @@ pub struct Complete;
 /// a text field, `kept_line` follows `create`, and only a complete form has `show`.
 ///
 /// ```
-/// use splat::layout::{Create, CreateField, InlineCreate, KeptLine};
-/// splat::create_reasons! { enum Reason { NoName => "Enter a name first." } }
-/// fn form(ui: &mut eframe::egui::Ui, name: &mut String) {
+/// use splat_design::layout::{Create, CreateField, InlineCreate, KeptLine};
+/// splat_design::create_reasons! { enum Reason { NoName => "Enter a name first." } }
+/// fn form(ui: &mut egui::Ui, name: &mut String) {
 ///     let reason = name.is_empty().then_some(Reason::NoName);
 ///     let _ = InlineCreate::new()
-///         .field(CreateField::new(splat::field_id!("doc_form_name").once(splat::layout::Once::Example), "Name", name))
-///         .create(Create::primary(splat::word!("Create")).blocked(reason))
+///         .field(CreateField::new(splat_design::field_id!("doc_form_name").once(splat_design::layout::Once::Example), "Name", name))
+///         .create(Create::primary(splat_design::word!("Create")).blocked(reason))
 ///         .kept_line(KeptLine::new())
 ///         .show(ui);
 /// }
@@ -2777,39 +2869,39 @@ pub struct Complete;
 /// Create before any field does not compile:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Create, InlineCreate, NoReason};
-/// let _ = InlineCreate::new().create(Create::<NoReason>::primary(splat::word!("Create")));
+/// use splat_design::layout::{Create, InlineCreate, NoReason};
+/// let _ = InlineCreate::new().create(Create::<NoReason>::primary(splat_design::word!("Create")));
 /// ```
 ///
 /// Create after a choice, with no field after it, does not compile:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Create, CreateChoice, InlineCreate, NoReason};
+/// use splat_design::layout::{Create, CreateChoice, InlineCreate, NoReason};
 /// let mut used = false;
 /// let _ = InlineCreate::new()
 ///     .choice(CreateChoice::new("Use", &mut used))
-///     .create(Create::<NoReason>::primary(splat::word!("Create")));
+///     .create(Create::<NoReason>::primary(splat_design::word!("Create")));
 /// ```
 ///
 /// A field after Create does not compile:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Create, CreateField, InlineCreate, NoReason};
+/// use splat_design::layout::{Create, CreateField, InlineCreate, NoReason};
 /// let (mut a, mut b) = (String::new(), String::new());
 /// let _ = InlineCreate::new()
-///     .field(CreateField::new(splat::field_id!("doc_a").once(splat::layout::Once::Example), "A", &mut a))
-///     .create(Create::<NoReason>::primary(splat::word!("Create")))
-///     .field(CreateField::new(splat::field_id!("doc_b").once(splat::layout::Once::Example), "B", &mut b));
+///     .field(CreateField::new(splat_design::field_id!("doc_a").once(splat_design::layout::Once::Example), "A", &mut a))
+///     .create(Create::<NoReason>::primary(splat_design::word!("Create")))
+///     .field(CreateField::new(splat_design::field_id!("doc_b").once(splat_design::layout::Once::Example), "B", &mut b));
 /// ```
 ///
 /// A form with no kept line has no `show`:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{Create, CreateField, InlineCreate, NoReason};
-/// fn form(ui: &mut eframe::egui::Ui, name: &mut String) {
+/// use splat_design::layout::{Create, CreateField, InlineCreate, NoReason};
+/// fn form(ui: &mut egui::Ui, name: &mut String) {
 ///     let _ = InlineCreate::new()
-///         .field(CreateField::new(splat::field_id!("doc_name").once(splat::layout::Once::Example), "Name", name))
-///         .create(Create::<NoReason>::primary(splat::word!("Create")))
+///         .field(CreateField::new(splat_design::field_id!("doc_name").once(splat_design::layout::Once::Example), "Name", name))
+///         .create(Create::<NoReason>::primary(splat_design::word!("Create")))
 ///         .show(ui);
 /// }
 /// ```
@@ -2817,18 +2909,18 @@ pub struct Complete;
 /// A form that ends with a drop-down, with Create and Cancel on its action line:
 ///
 /// ```
-/// use splat::layout::{Create, CreateDropdown, CreateField, InlineCreate, KeptLine, NoReason, Once, Selection};
-/// fn form(ui: &mut eframe::egui::Ui, name: &mut String, template: &mut u8) {
+/// use splat_design::layout::{Create, CreateDropdown, CreateField, InlineCreate, KeptLine, NoReason, Once, Selection};
+/// fn form(ui: &mut egui::Ui, name: &mut String, template: &mut u8) {
 ///     let _ = InlineCreate::new()
-///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .field(CreateField::new(splat_design::field_id!("doc_dd_name").once(Once::Example), "Title", name))
 ///         .dropdown(CreateDropdown::new(
 ///             "Template",
-///             Selection::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard session")
+///             Selection::new(splat_design::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard session")
 ///                 .choices([(1, "Short notes")]),
 ///             template,
 ///         ))
-///         .create(Create::<NoReason>::primary(splat::word!("Create session")))
-///         .kept_line(KeptLine::new().cancel(splat::word!("Cancel"), true))
+///         .create(Create::<NoReason>::primary(splat_design::word!("Create session")))
+///         .kept_line(KeptLine::new().cancel(splat_design::word!("Cancel"), true))
 ///         .show(ui);
 /// }
 /// ```
@@ -2836,13 +2928,13 @@ pub struct Complete;
 /// A form that ends with a drop-down and has no Create has no kept line and no `show`:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{CreateDropdown, CreateField, InlineCreate, KeptLine, NoReason, Once, Selection};
-/// fn form(ui: &mut eframe::egui::Ui, name: &mut String, template: &mut u8) {
-///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
-///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+/// use splat_design::layout::{CreateDropdown, CreateField, InlineCreate, KeptLine, NoReason, Once, Selection};
+/// fn form(ui: &mut egui::Ui, name: &mut String, template: &mut u8) {
+///     let _ = InlineCreate::<splat_design::layout::Empty, NoReason>::new()
+///         .field(CreateField::new(splat_design::field_id!("doc_dd_name").once(Once::Example), "Title", name))
 ///         .dropdown(CreateDropdown::new(
 ///             "Template",
-///             Selection::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard"),
+///             Selection::new(splat_design::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard"),
 ///             template,
 ///         ))
 ///         .kept_line(KeptLine::new())
@@ -2853,11 +2945,11 @@ pub struct Complete;
 /// A drop-down before any text field does not compile (it follows the name):
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{CreateDropdown, InlineCreate, NoReason, Once, Selection};
+/// use splat_design::layout::{CreateDropdown, InlineCreate, NoReason, Once, Selection};
 /// fn form(template: &mut u8) {
-///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new().dropdown(CreateDropdown::new(
+///     let _ = InlineCreate::<splat_design::layout::Empty, NoReason>::new().dropdown(CreateDropdown::new(
 ///         "Template",
-///         Selection::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard"),
+///         Selection::new(splat_design::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard"),
 ///         template,
 ///     ));
 /// }
@@ -2866,31 +2958,31 @@ pub struct Complete;
 /// A second drop-down, or any part after the drop-down, does not compile (only Create follows):
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
+/// use splat_design::layout::{CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
 /// fn form(name: &mut String, a: &mut u8, b: &mut u8) {
-///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
-///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
-///         .dropdown(CreateDropdown::new("A", Selection::new(splat::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
-///         .dropdown(CreateDropdown::new("B", Selection::new(splat::field_id!("doc_dd_b").once(Once::Example), "B", 0, "One"), b));
+///     let _ = InlineCreate::<splat_design::layout::Empty, NoReason>::new()
+///         .field(CreateField::new(splat_design::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .dropdown(CreateDropdown::new("A", Selection::new(splat_design::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
+///         .dropdown(CreateDropdown::new("B", Selection::new(splat_design::field_id!("doc_dd_b").once(Once::Example), "B", 0, "One"), b));
 /// }
 /// ```
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
+/// use splat_design::layout::{CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
 /// fn form(name: &mut String, more: &mut String, a: &mut u8) {
-///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
-///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
-///         .dropdown(CreateDropdown::new("A", Selection::new(splat::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
-///         .field(CreateField::new(splat::field_id!("doc_dd_more").once(Once::Example), "More", more));
+///     let _ = InlineCreate::<splat_design::layout::Empty, NoReason>::new()
+///         .field(CreateField::new(splat_design::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .dropdown(CreateDropdown::new("A", Selection::new(splat_design::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
+///         .field(CreateField::new(splat_design::field_id!("doc_dd_more").once(Once::Example), "More", more));
 /// }
 /// ```
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{CreateChoice, CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
+/// use splat_design::layout::{CreateChoice, CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
 /// fn form(name: &mut String, used: &mut bool, a: &mut u8) {
-///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
-///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
-///         .dropdown(CreateDropdown::new("A", Selection::new(splat::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
+///     let _ = InlineCreate::<splat_design::layout::Empty, NoReason>::new()
+///         .field(CreateField::new(splat_design::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .dropdown(CreateDropdown::new("A", Selection::new(splat_design::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
 ///         .choice(CreateChoice::new("Use", used));
 /// }
 /// ```
@@ -2898,9 +2990,9 @@ pub struct Complete;
 /// A drop-down is a typed [`Selection`], never a closure that draws:
 ///
 /// ```compile_fail,E0277
-/// use splat::layout::CreateDropdown;
+/// use splat_design::layout::CreateDropdown;
 /// let mut value = 0_u8;
-/// let _ = CreateDropdown::new("Template", |ui: &mut eframe::egui::Ui| ui.label("Mine"), &mut value);
+/// let _ = CreateDropdown::new("Template", |ui: &mut egui::Ui| ui.label("Mine"), &mut value);
 /// ```
 #[must_use = "call show"]
 pub struct InlineCreate<'a, State, R: CreateReasons> {
@@ -3632,14 +3724,14 @@ struct PathLine {
     shown: String,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static PATH_CUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many times `path_help` shortened a path on this thread (test builds).
-#[cfg(test)]
-pub(crate) fn path_cuts() -> usize {
+#[cfg(any(test, feature = "test-support"))]
+pub fn path_cuts() -> usize {
     PATH_CUTS.with(std::cell::Cell::get)
 }
 
@@ -3652,7 +3744,7 @@ impl PathLine {
         font: &egui::FontId,
         scale: f32,
     ) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PATH_CUTS.with(|cuts| cuts.set(cuts.get() + 1));
         let text = path.display().to_string();
         let whole = format!("{lead}{text}");
@@ -3721,8 +3813,8 @@ pub trait MenuPane: menu_pane::Sealed {
 
 mod menu_pane {
     pub trait Sealed {}
-    impl Sealed for eframe::egui::Ui {}
-    impl Sealed for eframe::egui::Context {}
+    impl Sealed for egui::Ui {}
+    impl Sealed for egui::Context {}
 }
 
 impl MenuPane for Ui {
@@ -3750,7 +3842,9 @@ fn menu_side(pane: Rect, control: Rect) -> (egui::RectAlign, f32) {
 }
 
 /// A menu's room in `pane` beside `control` for `align`: from the control's left edge to the
-/// pane's inner right edge (or from its right edge leftward), one lane clear of the edges.
+/// pane's inner right edge (or from its right edge leftward), one lane clear of the edges. It is
+/// never wider than that, also when that is narrower than a control (issue #549): a narrow
+/// room makes a narrow menu, and a room with no space for the menu's frame shows none.
 fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
     let clear = lane_width().max(S);
     let room = if align.parent().x() == egui::Align::Max {
@@ -3758,7 +3852,7 @@ fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
     } else {
         pane.right() - clear - control.left()
     };
-    room.max(Density::Read.control())
+    room.max(0.0)
 }
 
 #[allow(
@@ -3791,9 +3885,18 @@ impl MenuPopup<'_> {
     /// A smaller room owned by the control's layout (as [`Dropdown::within`](super::popups::Dropdown::within)):
     /// a column of a header that spans two panes, the list beside a splitter. The part
     /// intersects it with the pane, then chooses the menu's side and width inside it again, one
-    /// lane clear of its edges. It cannot widen the pane's room.
+    /// lane clear of its edges. It cannot widen the pane's room. A control that reaches past
+    /// the room's inner edges anchors the menu at those edges, so that the menu never starts
+    /// past the room (issue #549); a room too narrow for the menu's frame shows none.
     pub fn within(mut self, room: Rect) -> Self {
         self.pane = self.pane.intersect(room);
+        let clear = lane_width().max(S);
+        let (left, right) = (self.pane.left() + clear, self.pane.right() - clear);
+        self.control.min.x = self.control.min.x.max(left).min(right);
+        self.control.max.x = self.control.max.x.min(right).max(left);
+        self.popup = self
+            .popup
+            .anchor(egui::PopupAnchor::ParentRect(self.control));
         let (align, width) = menu_side(self.pane, self.control);
         self.room = width;
         self.popup = self.popup.align(align).width(width);
@@ -3837,9 +3940,15 @@ impl MenuPopup<'_> {
         } = self;
         let ctx = popup.ctx().clone();
         let key = id.with("splat_menu_width");
+        let style = ctx.style();
+        let frame = style.spacing.menu_margin.sum().x + 2.0 * style.visuals.window_stroke.width;
+        // A room that cannot hold the frame and anything in it shows no menu, rather than one
+        // drawn past the room (issue #549). It opens when the room is there again.
+        if room <= frame {
+            ctx.data_mut(|data| data.remove_temp::<f32>(key));
+            return None;
+        }
         let shown = popup.show(|ui| {
-            let frame = ui.style().spacing.menu_margin.sum().x
-                + 2.0 * ui.style().visuals.window_stroke.width;
             let inner_room = (room - frame).max(0.0);
             let decided = ui.data(|data| data.get_temp::<f32>(key));
             let width = decided.unwrap_or(inner_room).min(inner_room);

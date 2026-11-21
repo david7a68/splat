@@ -107,7 +107,7 @@ fn client() -> Result<Client, Failure> {
 fn get(client: &Client, session: &Session, url: &str, website: bool) -> Result<Vec<u8>, Failure> {
     let request = client.get(url).header("Accept", "application/json");
     let request = if website {
-        session.website_request(request)?
+        crate::auth::website_request(session, request)?
     } else {
         session.authorize(request)
     };
@@ -666,7 +666,7 @@ impl Reader {
         // automatic read must not inherit it.
         let by_hand = std::mem::take(&mut self.by_hand);
         // Test builds have no route to D&D Beyond. A signed-in test keeps its saved sheets.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "test-support")) {
             self.refresh_requested = false;
             self.last_check = Some(Instant::now());
             self.next = Some(Instant::now() + INTERVAL);
@@ -992,12 +992,12 @@ impl Reader {
         }
     }
     /// For tests: the characters whose next read replaces their local edits.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn forced(&self) -> Vec<&str> {
         self.force.iter().map(String::as_str).collect()
     }
     /// For tests: the forced read has finished.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn end_forced_read(&mut self) {
         self.force.clear();
         self.forcing.clear();
@@ -1115,7 +1115,7 @@ mod tests {
                     .count()
             })
         };
-        let record = crate::visual_tests::fixture::sample_sheet();
+        let record = crate::test_support::sheets::sample_sheet();
         let id = record.source.character_id.clone();
         let now = crate::hermetic::now();
         let turn = |device: u128, name: &str| crate::sheet_writer::Holder {
@@ -1141,7 +1141,7 @@ mod tests {
     #[test]
     fn cached_sheets_wait_for_a_new_claim_and_ask_to_be_saved_after_it() {
         let campaign = tempfile::tempdir().unwrap();
-        let record = crate::visual_tests::fixture::sample_sheet();
+        let record = crate::test_support::sheets::sample_sheet();
         let gate = Arc::new(Mutex::new(true));
         let (tx, rx) = mpsc::channel();
         // No note yet: this computer claims the turn, and the claim has not settled.
@@ -1157,7 +1157,7 @@ mod tests {
     #[test]
     fn a_closed_gate_stops_cached_saves_before_they_claim_or_write() {
         let campaign = tempfile::tempdir().unwrap();
-        let record = crate::visual_tests::fixture::sample_sheet();
+        let record = crate::test_support::sheets::sample_sheet();
         let gate = Arc::new(Mutex::new(false));
         let (tx, rx) = mpsc::channel();
         save_cached(std::slice::from_ref(&record), campaign.path(), &gate, &tx);

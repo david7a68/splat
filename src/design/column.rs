@@ -2,7 +2,7 @@
 //! has its natural width, which can follow the window. After that it has the DM's width,
 //! here and after a restart, and the column beside it takes what is left.
 use super::tokens::*;
-use eframe::egui::{
+use egui::{
     self, Context, Id, Rect, Ui,
     containers::panel::{PanelState, Side},
     emath::GuiRounding as _,
@@ -300,7 +300,7 @@ fn finish_handle(ctx: &Context, id: &'static str, shown: &egui::Response) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eframe::egui::{Event, Modifiers, PointerButton, Pos2, pos2};
+    use egui::{Event, Modifiers, PointerButton, Pos2, pos2};
     use egui_kittest::Harness;
     use std::{cell::Cell, rc::Rc};
 

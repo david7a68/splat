@@ -11,43 +11,43 @@ use splat::character::Cache;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn character_cache() -> Result<Cache, String> {
     Cache::user()
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn pick_folder() -> Option<PathBuf> {
     rfd::FileDialog::new().pick_folder()
 }
 
 pub fn pick_folder_from(parent: Option<&std::path::Path>) -> Option<PathBuf> {
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     {
         let dialog = rfd::FileDialog::new();
         parent
             .map_or(dialog.clone(), |parent| dialog.set_directory(parent))
             .pick_folder()
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     {
         let _ = parent;
         pick_folder()
     }
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn new_uuid() -> Uuid {
     Uuid::new_v4()
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn now() -> u64 {
     splat::character::now()
 }
 
 /// When a file last changed, in seconds since the epoch.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn file_time(path: &std::path::Path) -> Option<u64> {
     std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
@@ -57,7 +57,7 @@ pub fn file_time(path: &std::path::Path) -> Option<u64> {
 }
 
 /// Local time, by the system's zone. A session's date is the DM's date, not UTC's.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 fn local_time() -> libc::tm {
     let seconds = now() as libc::time_t;
     // SAFETY: both pointers are valid for this call, and `tm` is plain data.
@@ -69,7 +69,7 @@ fn local_time() -> libc::tm {
 }
 
 /// Today's local date, as `2026-11-01`.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn today() -> String {
     let time = local_time();
     format!(
@@ -81,7 +81,7 @@ pub fn today() -> String {
 }
 
 /// The local date and time, for a file's name.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn local_stamp() -> String {
     let time = local_time();
     format!("{} {:02}-{:02}", today(), time.tm_hour, time.tm_min)
@@ -89,7 +89,7 @@ pub fn local_stamp() -> String {
 
 /// This computer's lasting identity and its name, for `sheet_writer`. The identity lives in the
 /// user's config folder, outside the vault, so each computer keeps its own.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 pub fn device() -> (Uuid, String) {
     static DEVICE: std::sync::OnceLock<(Uuid, String)> = std::sync::OnceLock::new();
     DEVICE
@@ -126,12 +126,12 @@ pub fn device() -> (Uuid, String) {
         .clone()
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub use closed::{
     character_cache, device, file_time, local_stamp, new_uuid, now, pick_folder, today,
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub mod closed {
     use super::*;
     use std::{cell::Cell, sync::OnceLock};
@@ -194,7 +194,7 @@ pub mod closed {
     }
 
     pub fn today() -> String {
-        crate::encounter_run::calendar_date(FIXED_NOW)
+        crate::roster::calendar_date(FIXED_NOW)
     }
 
     pub fn local_stamp() -> String {

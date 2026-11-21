@@ -1,6 +1,6 @@
 //! Typographic parts of the one Reader. `library::view` composes them.
 use super::{extras::space, tokens::*};
-use eframe::egui::{self, Ui, vec2};
+use egui::{self, Ui, vec2};
 
 /// Prose in a side panel is one step smaller than prose at full width.
 pub fn prose_type(ui: &Ui) -> Type {
@@ -175,16 +175,6 @@ pub fn identity(ui: &mut Ui, text: &str) {
     space(ui, S);
 }
 
-/// Scoped to readers: editors and other workspaces keep their own colours.
-pub fn markdown(ui: &mut Ui, text: &str) {
-    crate::markdown_view::show_reader(ui, text);
-}
-
-/// The same, as compact field rows.
-pub fn compact_markdown(ui: &mut Ui, text: &str) {
-    crate::markdown_view::show_compact(ui, text);
-}
-
 /// A named run-in paragraph's title: `Rend.`, `Acid Breath (Recharge 5–6).` Title case,
 /// a few words, and an optional qualifier in brackets. A sentence does not match, so it
 /// never turns bold.
@@ -255,16 +245,6 @@ pub fn run_in_markdown(paragraph: &str) -> String {
     }
 }
 
-/// Imported rules use short named paragraphs for actions and benefits.
-pub fn source_prose(ui: &mut Ui, text: &str) {
-    let text = text
-        .split("\n\n")
-        .map(run_in_markdown)
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    markdown(ui, &text);
-}
-
 pub fn human_label(value: &str) -> String {
     let value = value.replace('_', " ");
     let mut chars = value.chars();
@@ -276,41 +256,6 @@ pub fn human_label(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use splat::content::dice_text::{D20, RollLink};
-
-    /// The baselines of the label and of the value's first word, as painted.
-    fn baselines(row: impl Fn(&mut Ui), label: &str, first_word: &str) -> (f32, f32) {
-        let context = egui::Context::default();
-        super::super::theme::install(&context);
-        let mut found = (None, None);
-        // The second pass draws with the first pass's layout memory, as the app does.
-        for _ in 0..2 {
-            let output = context.run(egui::RawInput::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| row(ui));
-            });
-            found = (None, None);
-            for shape in &output.shapes {
-                let egui::Shape::Text(text) = &shape.shape else {
-                    continue;
-                };
-                for row in &text.galley.rows {
-                    let words: String = row.glyphs.iter().map(|glyph| glyph.chr).collect();
-                    let baseline = |at: usize| text.pos.y + row.pos.y + row.glyphs[at].pos.y;
-                    if words == label && found.0.is_none() {
-                        found.0 = Some(baseline(0));
-                    } else if let Some(at) = words.find(first_word)
-                        && found.1.is_none()
-                    {
-                        found.1 = Some(baseline(words[..at].chars().count()));
-                    }
-                }
-            }
-        }
-        (
-            found.0.expect("the label is painted"),
-            found.1.expect("the first value word is painted"),
-        )
-    }
 
     /// A column near the step between the two prose types, in a scroll area: the content is
     /// long (the bar shows) or short (no bar). Both give one type, so the type cannot hide or
@@ -356,63 +301,6 @@ mod tests {
         assert!(
             found.iter().all(|(_, (compact, _))| *compact),
             "one type with and without the bar: {found:?}"
-        );
-    }
-
-    #[test]
-    fn a_linked_row_label_shares_its_first_value_baseline() {
-        let skills = format!(
-            "{}, {}",
-            RollLink::d20(D20::Skill, 11, "Perception").markdown("Perception +11"),
-            RollLink::d20(D20::Skill, 3, "Stealth").markdown("Stealth +3"),
-        );
-        let (label, value) = baselines(
-            |ui| {
-                linked_detail(ui, "Skills", |ui| {
-                    crate::markdown_view::show_compact(ui, &skills);
-                });
-            },
-            "Skills",
-            "Perception",
-        );
-        assert!(
-            (label - value).abs() <= 0.5,
-            "the Skills label baseline {label} differs from Perception's {value}"
-        );
-    }
-
-    #[test]
-    fn words_far_below_the_row_do_not_pull_the_label_down() {
-        // A value whose first painted words start more than a control height below the row's
-        // top, as a scrolled or wrapped value can: the label stays on its own line.
-        let (label, value) = baselines(
-            |ui| {
-                linked_detail(ui, "Skills", |ui| {
-                    ui.vertical(|ui| {
-                        space(ui, Density::Read.control() * 3.0);
-                        ui.label(Type::Stat.rich(ui, "Perception +11"));
-                    });
-                });
-            },
-            "Skills",
-            "Perception",
-        );
-        assert!(
-            value - label > Density::Read.control() * 2.0,
-            "the Skills label {label} followed words {value} that are not on its line"
-        );
-    }
-
-    #[test]
-    fn a_plain_row_label_shares_its_value_baseline() {
-        let (label, value) = baselines(
-            |ui| detail(ui, "Senses", "Darkvision 60 ft., Passive Perception 15"),
-            "Senses",
-            "Darkvision",
-        );
-        assert!(
-            (label - value).abs() <= 0.5,
-            "the Senses label baseline {label} differs from its value's {value}"
         );
     }
 }

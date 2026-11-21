@@ -619,14 +619,15 @@ pub fn run(d: &mut Driver<'_>) {
         .map(std::path::Path::to_owned);
     d.click(&format!("More actions for {LOW}"));
     d.click("Edit encounter");
+    let faults = back_line_faults(d, "Session", "Back to session", "Encounter name", None);
     let opened = d.app().encounters.draft_path().map(str::to_owned);
     d.observe(
         "W1-D1-edit",
         opened.as_deref() == Some(&format!("Encounters/{LOW}.md")[..])
             && d.has(&format!("Encounter name: {LOW}"))
-            && d.has("Back to session"),
+            && faults.is_empty(),
         format!(
-            "Edit encounter opens {LOW}'s own file with the way back to the session: {opened:?}"
+            "Edit encounter opens {LOW}'s own file with the way back to the session: {opened:?}, {faults:?}"
         ),
     );
     d.click_first("More actions for Ember Cultist");

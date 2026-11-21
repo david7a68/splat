@@ -1,7 +1,7 @@
 //! The popup parts prove their rules here, once. Callers do not repeat these proofs.
 use std::cell::Cell;
 
-use eframe::egui::{self, Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
+use egui::{self, Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 
 use super::*;
 use crate::design::{lane_width, pane, theme};
@@ -1225,7 +1225,7 @@ fn a_known_size_sizes_the_viewer_before_the_texture_loads() {
 #[test]
 fn one_choice_row() {
     let read = |name: &str| {
-        let path = format!("{}/src/design/{name}", env!("CARGO_MANIFEST_DIR"));
+        let path = crate::workspace().join("src/design").join(name);
         syn::parse_file(&std::fs::read_to_string(path).expect("a source file")).expect("it parses")
     };
     let free_fns = |file: &syn::File| -> Vec<syn::ItemFn> {
@@ -1266,9 +1266,8 @@ fn one_choice_row() {
         "`choice_wrapped` calls the same painter as `choice`"
     );
     // The drop-down's file names `choice_wrapped` and draws no row itself.
-    let popups =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/design/popups.rs"))
-            .expect("a source file");
+    let popups = std::fs::read_to_string(crate::workspace().join("src/design/popups.rs"))
+        .expect("a source file");
     assert!(
         popups.contains("choice_wrapped("),
         "the drop-down's rows are the part"
@@ -1384,13 +1383,20 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
 fn a_menu_of_long_choices_stays_beside_its_splitter() {
     const COLUMN: f32 = 316.0;
     const LONG: &str = "Roll initiative for every creature that has not rolled yet, then sort";
-    // The last case: the control's layout gives the menu a smaller room (`within`), as a
-    // header above two panes does; the menu keeps inside that room, clear of its edge.
+    // The last cases: the control's layout gives the menu a smaller room (`within`), as a
+    // header above two panes does; the menu keeps inside that room, clear of its edge, also
+    // when the room is narrower than a control (issue #549), and a room with no space for the
+    // menu's frame shows none.
+    let clear = lane_width().max(crate::design::S);
+    // The room is narrower than the opener, so the menu anchors inside it, and leaves 20 px.
+    let narrow = 2.0 * clear + 20.0;
     for (right, label, within) in [
         (false, LONG, None),
         (true, LONG, None),
         (false, "All", None),
         (false, LONG, Some(200.0)),
+        (false, LONG, Some(narrow)),
+        (false, LONG, Some(clear)),
     ] {
         let ctx = context();
         let size = vec2(960.0, 640.0);
@@ -1431,6 +1437,13 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
         draw(Vec::new());
         let output = draw(Vec::new());
         let id = egui::Popup::default_response_id(&opener);
+        if within == Some(clear) {
+            assert!(
+                rows.borrow().is_empty() && texts(&output).iter().all(|text| text.words != LONG),
+                "a room with no space for the menu shows none"
+            );
+            continue;
+        }
         assert!(egui::Popup::is_id_open(&ctx, id), "open (right: {right})");
         let menu = ctx
             .memory(|memory| memory.area_rect(id))
@@ -1454,6 +1467,10 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
                 menu.width() < (COLUMN - lane_width()) / 2.0,
                 "short choices make a narrow menu: {menu:?}"
             );
+            continue;
+        }
+        if within == Some(narrow) {
+            // Its words are cut to the narrow room; the checks above hold it.
             continue;
         }
         let words: Vec<Text> = texts(&output)
@@ -1951,6 +1968,19 @@ fn closed_dropdowns_measure_no_choice_rows_and_open_metrics_follow_inputs() {
         ROW_METRICS_MADE.with(Cell::get),
         first + 2000,
         "the explicit room width policy invalidates the cache"
+    );
+    let mut fonts = ctx.fonts(|view| view.definitions().clone());
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Proportional)
+        .unwrap()
+        .reverse();
+    ctx.set_fonts(fonts);
+    draw(Vec::new());
+    assert_eq!(
+        ROW_METRICS_MADE.with(Cell::get),
+        first + 2500,
+        "replacing a family under the same font id remeasures the open choices"
     );
     draw(key(Key::Escape));
     draw(Vec::new());

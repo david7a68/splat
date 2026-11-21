@@ -1919,7 +1919,7 @@ the reference of G7.
   For each new write it tests the path of section 4.1: an edit on disk a moment before, unsaved words with a
   changed file, a failed save, and a restart.
 - It runs G6 and G7, with its mutation of G7. It adds its own lines to `docs/design-system.md`,
-  `docs/ux-intent.md`, `CONTEXT.md` and `README.md` from section 5, and its task to
+  `docs/ux-intent.md`, `CONTEXT.md` and the [user guide](../user-guide.md) from section 5, and its task to
   `src/visual_tests/dm_audit.rs` as a **new** task.
 
 | PR | Scope | Files and modules | Depends on | Scenarios |
@@ -1935,7 +1935,7 @@ the reference of G7.
 | **P6** | F6 | `src/world.rs` (the header band and the field), `src/world/lines.rs` (reuse `add_log`, `:459`), `src/sessions/plan.rs` | P1c, P3 | New `log-from-play`. Extend `world-facts` |
 | **P7** | F7. An ordered read of the session notes that keeps an unreadable note in its place | `src/sessions.rs` (the block, the search for the newest block), `src/sessions/plan.rs`, `src/encounter_run/loot.rs`, `src/difficulty.rs` | P2, P3 | Extend `run-loot`, `session-plan` |
 | **P8** | F5, with rows 11, 16 and 18 of section 2.5. The draft's provenance, and the exact inverse of `Undo carry over` | `src/sessions.rs`, `src/sessions/page.rs` (`last_time_block`, `recap_preview`), `src/markdown_view.rs` | P3 | New `session-carry-over`. Extend `session-plan` |
-| **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (P10, which needed it, is dropped), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
+| **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (P10, which needed it, is dropped), and no line about **Make house rule note** | New `src/trackers.rs`, `crates/campaign/src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/campaign`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
 | **P10** | Dropped (section 7): marks that a fight raises | – | – | – |
 | **P11** | Day marks. Built: `at` and `every` with `from`, in days, on the Timeline's day count, `Next` and `Dismiss all` | `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`, `src/lib.rs` (the act reads the day count at the click) | P9 | Extend `trackers` (T19.5) |
 | **P12** | The audit, again. Extend the evening to use every feature, measure it, and add the scripts for J2, J3, J4 and J6. Run G6 and G7 on the whole | `src/visual_tests/dm_audit.rs`, `artifacts/dm-audit/` | All that are built | The audit's captures, and `plain-evening` |

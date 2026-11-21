@@ -25,7 +25,7 @@ use crate::{
     persistence::Campaign,
     processing::{self, Job, Request, settings::ProcessingSettings},
     recording::{Health, Recorder},
-    timeline::{self, Book, page::SessionLink},
+    timeline::{self, Book, EventDisplay, kind_icon, page::SessionLink},
 };
 use eframe::egui::{self, Color32};
 use std::{
@@ -42,8 +42,8 @@ mod carry;
 mod kept;
 #[path = "plan.rs"]
 mod plan;
-#[cfg(test)]
-pub(crate) use plan::scene_fit_counts;
+#[cfg(any(test, feature = "test-support"))]
+pub use plan::scene_fit_counts;
 
 const MOVE_FILES: &str = "Move files and save";
 const SAVED_WORD_FOR: Duration = Duration::from_secs(8);
@@ -135,85 +135,23 @@ struct FolderScan {
     listed: FolderFiles,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// The session folder listing's end events (`refresh`) on this thread.
     static FOLDER_SCAN_ENDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How often `refresh` ended the session folder's listing on this thread.
-#[cfg(test)]
-pub(crate) fn folder_scan_ends() -> usize {
+#[cfg(any(test, feature = "test-support"))]
+pub fn folder_scan_ends() -> usize {
     FOLDER_SCAN_ENDS.with(std::cell::Cell::get)
 }
 
-/// Why the session folder cannot be used, or why a write to it failed. The kind gives the tone,
-/// in the page's own place and in the footer of the Session folder form.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FolderFault {
-    /// The folder the campaign names is gone: the DM chooses it again (routing row 136).
-    Missing(PathBuf),
-    /// The campaign's note or the folder cannot be read, in the system's own words.
-    CannotRead(String),
-    /// A write failed: the folder setting, the move, or the notes' list.
-    NotSaved(String),
-    /// A folder save waited, because the open note could not be saved first.
-    NoteNotSaved,
-    /// Save folder found files in the current folder that the form did not show yet.
-    FilesCame,
-    /// Save without moving found other files in the current folder than its warning named.
-    FilesChanged,
-    /// Save without moving found no file left in the current folder: Save folder is the way on.
-    FilesGone,
-}
-
-impl From<String> for FolderFault {
-    fn from(error: String) -> Self {
-        Self::CannotRead(error)
-    }
-}
-
-impl From<FolderFault> for String {
-    fn from(fault: FolderFault) -> Self {
-        design::outcome::fault_words(&fault).as_str().to_owned()
-    }
-}
-
-impl Fault for FolderFault {
-    fn severity(&self) -> Severity {
-        match self {
-            Self::Missing(_) => Severity::NeedsFixing,
-            Self::CannotRead(_) => Severity::CannotRead,
-            Self::NotSaved(_) | Self::NoteNotSaved => Severity::NotSaved,
-            Self::FilesCame | Self::FilesChanged | Self::FilesGone => Severity::NeedsFixing,
-        }
-    }
-    fn cause(&self) -> Sentence {
-        match self {
-            Self::Missing(folder) => crate::sentence!(
-                "Splat cannot find the session folder {}. It may have been moved or renamed.",
-                folder.display()
-            ),
-            Self::CannotRead(words) | Self::NotSaved(words) => notice_sentence(words),
-            Self::NoteNotSaved => crate::sentence!(
-                "Not changed. Your note could not be saved. Choose what to do with it first."
-            ),
-            Self::FilesCame => crate::sentence!(
-                "Not changed. The current folder now keeps session files. Choose to move them or not."
-            ),
-            Self::FilesChanged => crate::sentence!(
-                "Not changed. The files in the current folder changed. Check the new counts, then choose again."
-            ),
-            Self::FilesGone => crate::sentence!(
-                "Not changed. The current folder has no files now. Use Save folder."
-            ),
-        }
-    }
-}
+pub use splat_content_ui::session_notes::FolderFault;
 
 /// The Session folder's acts: `Save folder` in its save row, and the warning's two choices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FolderAct {
+pub enum FolderAct {
     Save,
     Move,
     WithoutMoving,
@@ -564,11 +502,48 @@ struct LinkWrite {
     id: Option<Uuid>,
 }
 
+impl LinkWrite {
+    /// The session the update wrote, by the note's own words (`Session 2: The Road`).
+    fn within(&self) -> design::results::Name {
+        use design::results::{Fallback, Name};
+        super::parse_note(&self.before.path, &self.bytes)
+            .and_then(|note| Name::new(note.label()))
+            .unwrap_or(Name::fallback(Fallback::ThatSession))
+    }
+}
+
+/// Why the Undo of a link update left one note as it was (M7, lane N0): the note's session, the
+/// typed cause, which also gives the tone (R41), and the one next step. The result's line opens
+/// with its refusal.
+#[derive(Clone, Debug, PartialEq)]
+struct LinkUndoRefused {
+    within: design::results::Name,
+    cause: design::results::Cause,
+    recovery: design::results::Recovery,
+}
+
+impl LinkUndoRefused {
+    /// The refusal of the Undo of the links that now say `title`. A blank title names no
+    /// event, so the links are named by their session.
+    fn refusal(self, title: &str) -> design::results::Refusal {
+        use design::results::{FailedAct, Name, Refusal};
+        let to = Name::new(title).unwrap_or_else(|| self.within.clone());
+        Refusal::new(
+            FailedAct::LinksNotPutBack {
+                to,
+                within: self.within,
+            },
+            self.cause,
+            self.recovery,
+        )
+    }
+}
+
 /// Tests: what runs after a link update writes a note.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 type LinkWriteHook = Box<dyn FnMut(&Path)>;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Tests: runs after a link update writes a note, to change the next one under it.
     static AFTER_LINK_WRITE: std::cell::RefCell<Option<LinkWriteHook>> =
@@ -680,8 +655,8 @@ pub struct Sessions {
     updated_links: Option<Vec<LinkWrite>>,
     link_undo_state: Option<LinkUndoState>,
     link_problem: Option<String>,
-    /// A link update that could not be put back whole: some notes hold the new links. Its Undo
-    /// and its error stay through the usual expiry until Undo puts them back or a new update.
+    /// A partial update or refused Undo keeps its result and remaining writes through the usual
+    /// expiry so the DM can retry.
     link_partial: bool,
     removed_fight: Option<(Option<Uuid>, usize, String, NoteUndo)>,
     /// A journey's encounter checks in the plan.
@@ -691,7 +666,7 @@ pub struct Sessions {
     /// What the removal's owner note looked like; a later edit of it ends the removal.
     removal_note: Option<RemovalNote>,
     /// How often the owner's note was looked for, which only a change may cause.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     removal_scans: usize,
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The plan's scenes: the Scene field and the results of scene acts.
@@ -880,15 +855,7 @@ impl Fault for PageFault {
     }
 }
 
-/// The page's notice slot holds its words as a sentence; an error of the system comes as its
-/// own text and is made a sentence here, the one place the page takes words from outside.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "an error of the system or of a file keeps its own words (design::results::STAGED_ALLOWS)"
-)]
-fn notice_sentence(words: &str) -> Sentence {
-    Sentence::outside(words).unwrap_or(crate::sentence!("Something went wrong."))
-}
+use splat_content_ui::session_notes::notice_sentence;
 
 /// A pane body that manages its own room, for one of the pane's closed reasons.
 #[allow(
@@ -1364,7 +1331,7 @@ fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
 /// system's "the warning that this is not the session being played or that its date has
 /// passed"). This is the one value that the Session footer, the Notes panel's footer, the Record
 /// step and the rail's `Old session` read.
-pub(crate) struct NotTonight;
+pub struct NotTonight;
 
 impl NotTonight {
     /// The tone of every place that says it.
@@ -1379,7 +1346,7 @@ impl NotTonight {
     }
 
     /// The rail's mark while a run files itself under a session dated before today.
-    pub(crate) fn rail() -> Status<'static> {
+    pub fn rail() -> Status<'static> {
         let (icon, color) = match Self::TONE {
             Tone::Warning => (icons::WARN, colors().result.warning),
             _ => (icons::INFO, colors().result.info),
@@ -1698,7 +1665,7 @@ impl Sessions {
         {
             return;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.removal_scans += 1;
         }
@@ -1790,7 +1757,7 @@ impl Sessions {
             .flatten()
         {
             if draft.state == DraftState::Unsaved {
-                #[cfg(not(test))]
+                #[cfg(not(any(test, feature = "test-support")))]
                 if draft.due_at(Instant::now()) {
                     draft.save();
                 }
@@ -2580,7 +2547,7 @@ impl Sessions {
 
     /// The end event of the folder's listing (`FolderScan`): the next draw lists the folder again.
     fn end_folder_listing(&mut self) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         FOLDER_SCAN_ENDS.with(|ends| ends.set(ends.get() + 1));
         self.folder_scan = None;
     }
@@ -3035,16 +3002,24 @@ impl Sessions {
     }
 
     /// `Undo link update`, pressed on the result its ticket names. The result stays, with its
-    /// Undo and the reason, while some notes keep the new links.
+    /// Undo, while some notes keep the new links; it then opens with the typed refusal of the
+    /// first note Undo left as it was (M7, lane N0): what was not put back, where, why, and the
+    /// next step.
     pub fn undo_event_link_update(&mut self, ticket: design::results::Ticket) {
-        if self.link_updates.get(&self.page()).is_none() {
+        if self
+            .link_updates
+            .get_by(&ticket)
+            .is_none_or(|shown| shown.value().page != self.page())
+        {
             return;
         }
-        self.undo_event_link_notes();
-        let done = self.updated_links.is_none();
+        let refused = self.undo_event_link_notes();
         let _ = self
             .link_updates
-            .undo_by(ticket, |_| if done { Ok(()) } else { Err(()) });
+            .undo_or_refuse(ticket, |update| match refused {
+                None => Ok(()),
+                Some(refused) => Err(refused.refusal(&update.title)),
+            });
     }
 
     /// The link update's result with its Undo, from its store, for a pane's typed footer.
@@ -3063,7 +3038,7 @@ impl Sessions {
     }
 
     /// A reveal that waits for its next draw, as one does just after an add or a travel act.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_pending_reveal(&mut self, row: &str, pass: u64) {
         self.row_reveal = Some((row.to_owned(), 0, pass));
     }
@@ -3077,7 +3052,7 @@ impl Sessions {
         self.notes
             .iter()
             .filter_map(|note| {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 NOTE_READS.with(|reads| reads.set(reads.get() + 1));
                 let body = self
                     .draft
@@ -3096,8 +3071,8 @@ impl Sessions {
     }
 
     pub fn expire_event_link_undo(&mut self, on_timeline: bool, book: &Book) {
-        // A partial update keeps its result, its error and its Undo until Undo or a new update,
-        // and reads no note meanwhile: Undo checks its notes when the DM presses it.
+        // A partial update or refused Undo keeps its result while notes still need Undo.
+        // Check those notes when the DM presses Undo.
         if self.link_partial && self.updated_links.is_some() {
             return;
         }
@@ -3189,7 +3164,7 @@ impl Sessions {
             {
                 self.draft = Some(next.clone());
             }
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             AFTER_LINK_WRITE.with(|hook| {
                 if let Some(hook) = hook.borrow_mut().as_mut() {
                     hook(&next.path);
@@ -3224,14 +3199,17 @@ impl Sessions {
         self.last_time = None;
     }
 
-    fn undo_event_link_notes(&mut self) {
+    /// Put back what the last link update wrote, note by note. A note it cannot put back keeps
+    /// the new links and its Undo; the first such note's typed reason comes back (lane N0).
+    fn undo_event_link_notes(&mut self) -> Option<LinkUndoRefused> {
+        use design::results::{Cause, File, Recovery, Step};
         let mut remaining = Vec::new();
-        let mut refused = Vec::new();
+        let mut refused = None;
         for write in self.updated_links.take().unwrap_or_default() {
             // Undo writes only into the file it wrote: the draft it saves through must hold the
             // same bytes and the same session, and `save` checks the file against them again
             // right before writing.
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             BEFORE_UNDO_READ.with(|hook| {
                 if let Some(hook) = hook.borrow_mut().as_mut() {
                     hook(&write.before.path);
@@ -3250,14 +3228,63 @@ impl Sessions {
                         .and_then(|text| super::note_identity(&draft.path, text))
                         == write.id
             };
-            match current.filter(|draft| {
-                same_file(draft) && draft.body == write.after && !draft.needs_attention()
-            }) {
+            // The note's state picks the cause, and so the tone (R41): a save the system refused
+            // is an error; an outside change, a missing file, another note or an edit since the
+            // update is a warning.
+            let by_state = |draft: &Draft| match &draft.state {
+                DraftState::Failed(_) => Some((
+                    Cause::NotSaved(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                )),
+                DraftState::Conflict => Some((
+                    Cause::Conflict(File::SessionNote),
+                    Recovery::First(Step::ChooseWords(File::SessionNote)),
+                )),
+                DraftState::Missing => Some((
+                    Cause::Gone(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                )),
+                _ => None,
+            };
+            let why = match current {
+                None if !write.before.path.exists() => Some((
+                    Cause::Gone(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                )),
+                None => Some((
+                    Cause::Unreadable(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                )),
+                Some(draft) if draft.needs_attention() => by_state(&draft),
+                Some(draft)
+                    if draft
+                        .file_text()
+                        .and_then(|text| super::note_identity(&draft.path, text))
+                        != write.id =>
+                {
+                    Some((
+                        Cause::Replaced(File::SessionNote),
+                        Recovery::First(Step::Check(File::SessionNote)),
+                    ))
+                }
+                Some(draft) if !same_file(&draft) || draft.body != write.after => {
+                    let within = write.within();
+                    Some((
+                        Cause::EditedSince(within.clone()),
+                        Recovery::First(Step::Resolve(within)),
+                    ))
+                }
                 Some(mut current) => {
                     current.body = write.before.body.clone();
                     current.edited();
                     current.save();
-                    let undone = !current.unsaved();
+                    // A save that did not finish says why in the draft's state.
+                    let why = current.unsaved().then(|| {
+                        by_state(&current).unwrap_or((
+                            Cause::NotSaved(File::SessionNote),
+                            Recovery::First(Step::Check(File::SessionNote)),
+                        ))
+                    });
                     if self
                         .draft
                         .as_ref()
@@ -3265,39 +3292,27 @@ impl Sessions {
                     {
                         self.draft = Some(current);
                     }
-                    if !undone {
-                        refused.push(write.before.path.clone());
-                        remaining.push(write);
-                    }
+                    why
                 }
-                None => {
-                    refused.push(write.before.path.clone());
-                    remaining.push(write);
-                }
+            };
+            if let Some((cause, recovery)) = why {
+                refused.get_or_insert(LinkUndoRefused {
+                    within: write.within(),
+                    cause,
+                    recovery,
+                });
+                remaining.push(write);
             }
         }
-        if refused.is_empty() {
-            if self.link_partial {
-                self.link_problem = None;
-            }
-            self.link_partial = false;
-        } else {
-            let names: Vec<String> = refused
-                .iter()
-                .map(|path| {
-                    path.file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned()
-                })
-                .collect();
-            self.link_problem = Some(format!(
-                "Undo did not change {}: it changed after its links were updated. Keep or resolve that edit first.",
-                names.join(", ")
-            ));
+        let still_written = !remaining.is_empty();
+        if self.link_partial || still_written {
+            // The Undo ends the update's warning. Any refusal is on the result itself.
+            self.link_problem = None;
         }
-        self.updated_links = (!remaining.is_empty()).then_some(remaining);
+        self.link_partial = still_written;
+        self.updated_links = still_written.then_some(remaining);
         self.last_time = None;
+        refused
     }
 
     pub fn recording(&self) -> bool {
@@ -4934,7 +4949,7 @@ impl Sessions {
                     ui.data_mut(|data| {
                         data.insert_temp(view_id, (visible_height, at_end, output.content_size.y));
                     });
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "test-support"))]
                     ui.data_mut(|data| {
                         data.insert_temp(
                             egui::Id::new("session_editor_proof"),
@@ -6068,7 +6083,7 @@ impl Sessions {
                 } else {
                     0.0
                 };
-                measure(marker.kind.icon(), Type::Body)
+                measure(kind_icon(marker.kind), Type::Body)
                     + design::S
                     + measure(title, Type::Body).max(time + measure(facts, Type::Small))
             })
@@ -6087,7 +6102,9 @@ impl Sessions {
                         ui.spacing_mut().item_spacing.x = design::S;
                         if cell == 0 {
                             ui.horizontal_top(|ui| {
-                                ui.label(Type::Body.rich(ui, marker.kind.icon()).color(c.muted));
+                                ui.label(
+                                    Type::Body.rich(ui, kind_icon(marker.kind)).color(c.muted),
+                                );
                                 ui.vertical(|ui| {
                                     ui.add(
                                         egui::Label::new(Type::Body.rich(ui, *title).color(c.text))
@@ -8182,7 +8199,7 @@ impl Sessions {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl Sessions {
     pub fn busy(&self) -> bool {
         self.job.as_ref().is_some_and(|(job, _)| !job.is_held())
@@ -9129,14 +9146,20 @@ mod tests {
         let replaced = a_written.replace(&notes[0].id.to_string(), &Uuid::new_v4().to_string());
         assert_ne!(replaced, a_written);
         fs::write(&note_a, &replaced).unwrap();
-        sessions.undo_event_link_notes();
+        let refused = sessions.undo_event_link_notes();
         assert_eq!(fs::read_to_string(&note_a).unwrap(), replaced);
-        let problem = sessions.link_problem.clone().unwrap_or_default();
-        assert!(problem.contains(&a_name), "{problem}");
+        // Lane N0: the typed cause of each refusal, which also gives its tone (R41).
+        use design::results::{Cause, File, Name, Recovery, Step};
+        let replaced_in_a = |refused: Option<LinkUndoRefused>| {
+            refused.is_some_and(|refused| {
+                refused.cause == Cause::Replaced(File::SessionNote)
+                    && refused.within.as_str() == "Session 1"
+            })
+        };
+        assert!(replaced_in_a(refused.clone()), "{refused:?}");
         // (e) Re-check 3: A holds the written bytes again, and is replaced right before Undo
         // reads it. Undo refuses the replacement and names A.
         fs::write(&note_a, &a_written).unwrap();
-        sessions.link_problem = None;
         let a_path = note_a.clone();
         let swap = replaced.clone();
         super::BEFORE_UNDO_READ.with(|hook| {
@@ -9144,11 +9167,10 @@ mod tests {
                 fs::write(&a_path, &swap).unwrap();
             }));
         });
-        sessions.undo_event_link_notes();
+        let refused = sessions.undo_event_link_notes();
         super::BEFORE_UNDO_READ.with(|hook| *hook.borrow_mut() = None);
         assert_eq!(fs::read_to_string(&note_a).unwrap(), replaced);
-        let problem = sessions.link_problem.clone().unwrap_or_default();
-        assert!(problem.contains(&a_name), "{problem}");
+        assert!(replaced_in_a(refused.clone()), "{refused:?}");
         // (c) After A is written, B's folder takes no new file. B is not written, A's result
         // stays, and no temporary file is left in either folder.
         fs::write(&note_a, &original[0]).unwrap();
@@ -9199,14 +9221,35 @@ mod tests {
         // `Cause::NotSaved(File::SessionNote)`, an error, never `Cause::EditedSince` (lane N0).
         fs::write(&note_a, &original[0]).unwrap();
         fs::write(&note_b, &original[1]).unwrap();
-        let mut sessions = Sessions::default();
-        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        let mut sessions = Sessions {
+            folder: Some(dir.path().to_path_buf()),
+            notes: vec![
+                notes[0].clone(),
+                Note {
+                    path: note_b.clone(),
+                    ..notes[1].clone()
+                },
+            ],
+            ..Default::default()
+        };
+        let offer = sessions.event_link_offer(&book, &id).expect("link offer");
+        sessions.accept_event_link_offer(offer, &book);
+        sessions.expire_event_link_undo(true, &book);
         assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(2));
+        let owner = sessions.page();
+        let result = sessions.link_updates.get(&owner).unwrap();
+        let ticket = result.ticket_for_caller_test();
+        let stale_ticket = result.ticket_for_caller_test();
         let b_written = fs::read(&note_b).unwrap();
         assert_ne!(b_written, original[1], "the update wrote B");
         fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o555)).unwrap();
-        sessions.undo_event_link_notes();
+        sessions.undo_event_link_update(ticket);
         let left = temporary_files();
+        let refusal = sessions
+            .link_updates
+            .get(&owner)
+            .and_then(|shown| shown.refusal().cloned());
+        sessions.expire_event_link_undo(true, &book);
         fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(left, Vec::<String>::new());
         assert_eq!(fs::read(&note_a).unwrap(), original[0], "A is put back");
@@ -9221,12 +9264,76 @@ mod tests {
                 .map(|write| write.before.path.clone())
                 .collect()
         });
-        assert_eq!(waiting, Some(vec![note_b.clone()]), "only B's Undo waits");
-        let b_name = note_b.file_name().unwrap().to_string_lossy().into_owned();
-        let problem = sessions.link_problem.clone().unwrap_or_default();
-        assert!(
-            problem.contains(&b_name) && !problem.contains(&a_name),
-            "{problem}"
+        assert_eq!(
+            waiting,
+            Some(vec![note_b.clone()]),
+            "only B's Undo waits after the next expiry check"
+        );
+        // Lane N0 (n0-link-undo-cause): B's folder took no file, an error with its own cause,
+        // words and tone, never `EditedSince`.
+        let refusal = refusal.expect("B's Undo is refused");
+        let expected = LinkUndoRefused {
+            within: Name::new("Session 2").unwrap(),
+            cause: Cause::NotSaved(File::SessionNote),
+            recovery: Recovery::First(Step::Check(File::SessionNote)),
+        }
+        .refusal("Rest at the mill");
+        assert_eq!(refusal, expected);
+        assert_eq!(
+            (refusal.words().as_str(), refusal.tone()),
+            (
+                "The links to Rest at the mill were not put back in Session 2. The session note \
+                 could not be saved. Check the session note first.",
+                Tone::Error
+            ),
+            "n0-link-undo-cause: a locked folder"
+        );
+        let result = sessions.link_updates.get(&owner).unwrap();
+        assert_eq!(result.refusal(), Some(&refusal));
+        sessions.undo_event_link_update(result.ticket_for_caller_test());
+        assert_eq!(fs::read(&note_a).unwrap(), original[0]);
+        assert_eq!(fs::read(&note_b).unwrap(), original[1], "retry restores B");
+        assert!(sessions.updated_links.is_none());
+        assert!(sessions.link_updates.get(&owner).is_none());
+
+        let offer = sessions
+            .event_link_offer(&book, &id)
+            .expect("new link offer");
+        sessions.accept_event_link_offer(offer, &book);
+        sessions.undo_event_link_update(stale_ticket);
+        assert_eq!(
+            fs::read(&note_b).unwrap(),
+            b_written,
+            "stale Undo leaves B alone"
+        );
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(2));
+        // (g) Lane N0: B is the open note, and its file changes outside Splat after the update.
+        // Undo puts A back; B's save finds the outside change and keeps it: a conflict, a
+        // warning, never `EditedSince`.
+        fs::write(&note_a, &original[0]).unwrap();
+        fs::write(&note_b, &original[1]).unwrap();
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(2));
+        sessions.draft = Some(Draft::open(&note_b).unwrap());
+        let b_outside = format!("{}Written outside.\n", fs::read_to_string(&note_b).unwrap());
+        fs::write(&note_b, &b_outside).unwrap();
+        let refused = sessions
+            .undo_event_link_notes()
+            .expect("B's Undo is refused");
+        assert_eq!(fs::read(&note_a).unwrap(), original[0], "A is put back");
+        assert_eq!(fs::read_to_string(&note_b).unwrap(), b_outside);
+        assert_eq!(refused.cause, Cause::Conflict(File::SessionNote));
+        let refusal = refused.refusal("Rest at the mill");
+        assert_eq!(
+            (refusal.words().as_str(), refusal.tone()),
+            (
+                "The links to Rest at the mill were not put back in Session 2. The session note \
+                 has unsaved words, and its file changed on disk. Choose which words to keep in \
+                 the session note first.",
+                Tone::Warning
+            ),
+            "n0-link-undo-cause: an outside change of the open B"
         );
     }
 

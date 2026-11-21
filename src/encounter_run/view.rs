@@ -9,10 +9,9 @@ use super::{
 use crate::{
     combat_sync::SyncState,
     design::{
-        self, Action, Density, HpFonts, RunScale, Status, Tone, Type, colors, icons,
-        reader as style,
+        self, Action, Density, HpFonts, RunScale, Status, Type, colors, icons, reader as style,
     },
-    encounter_settings::Grouping,
+    encounter_settings::{Grouping, GroupingWords},
     library::view,
 };
 use eframe::egui::{
@@ -158,7 +157,7 @@ pub(crate) fn other_effect_field(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
-pub(crate) fn toggle(
+pub fn toggle(
     ui: &mut egui::Ui,
     label: &str,
     icon: &str,
@@ -213,7 +212,7 @@ fn vital_columns(ui: &mut egui::Ui, columns: &[(&str, String)]) {
 
 /// The width `toggle` takes, on or off: its words and the frame's padding.
 pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
     let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
         .into_galley(
@@ -233,13 +232,13 @@ pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
     words + 2.0 * (ui.spacing().button_padding.x + expansion)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a group row scanned the run's participants for that group's joins.
     static GROUP_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often the Arrivals summaries and the Arrivals reasons were worked out (Astra 2): an
     /// unchanged frame works out none of them.
@@ -247,7 +246,7 @@ thread_local! {
         const { std::cell::Cell::new((0, 0)) };
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many toggle widths the conditions grid measured.
     static CONDITION_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -453,7 +452,7 @@ fn arrival_add_word(group: &super::RunGroup) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// Test builds: how often a pending line was worked out (Astra, PR 371: not each frame).
     static PENDING_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -470,7 +469,7 @@ const PENDING_WORDS: &str =
 /// D&D Beyond yet. Splat tries again by itself.` HP has the form of the conflict's buttons.
 /// With nothing to compare, the general words.
 fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     PENDING_WORK.with(|work| work.set(work.get() + 1));
     let max = sync.max_hp().unwrap_or(0);
     let mut changed: Vec<String> = Vec::new();
@@ -1707,7 +1706,7 @@ impl Run {
             // Too tall even at its tightest. It scrolls, at that tight pitch.
             layouts = self.roster_layouts(ui, width - SCROLL_BAR, scale, RowFit::Summary);
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         for (&index, layout) in self.state.order.iter().zip(&layouts) {
             let first = &layouts[0];
             assert_eq!(layout.initiative_right, first.initiative_right);
@@ -3423,33 +3422,15 @@ impl Run {
         }
     }
 
-    /// The revision of the groups' read: it changes whenever `groups` holds another read than
-    /// the one counted last, whatever page was open when it was replaced.
-    fn groups_revision(&mut self) -> u64 {
-        let same = match (&self.groups, &self.groups_seen) {
-            (Some(now), Some(seen)) => Arc::ptr_eq(now, seen),
-            (None, None) => true,
-            _ => false,
-        };
-        if !same {
-            self.groups_revision += 1;
-            self.groups_seen = self.groups.clone();
-        }
-        self.groups_revision
+    /// The revision of the groups' read (`set_reads`): a new one with each read, whatever page
+    /// was open when it came.
+    fn groups_revision(&self) -> design::memo::Revision {
+        self.groups_read.revision()
     }
 
     /// The revision of the scale's read, as `groups_revision` is for the groups.
-    fn scale_revision(&mut self) -> u64 {
-        let same = match (&self.scale, &self.scale_seen) {
-            (Some(now), Some(seen)) => Arc::ptr_eq(now, seen),
-            (None, None) => true,
-            _ => false,
-        };
-        if !same {
-            self.scale_revision += 1;
-            self.scale_seen = self.scale.clone();
-        }
-        self.scale_revision
+    fn scale_revision(&self) -> design::memo::Revision {
+        self.scale_read.revision()
     }
 
     /// Each offered group whose Add waits for the DM: `<group>: <reason>`, in list order, from
@@ -3472,7 +3453,7 @@ impl Run {
         if let Some((_, reasons)) = self.arrival_reasons.as_ref().filter(|(at, _)| *at == key) {
             return reasons.clone();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             let (a, b) = PREPARED.with(std::cell::Cell::get);
             PREPARED.with(|count| count.set((a, b + 1)));
@@ -3535,7 +3516,7 @@ impl Run {
         if let Some(summary) = kept.get(&group.id) {
             return summary.clone();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             let (a, b) = PREPARED.with(std::cell::Cell::get);
             PREPARED.with(|count| count.set((a + 1, b)));
@@ -3562,12 +3543,12 @@ impl Run {
     pub(super) fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
         let key = (self.revision, self.groups_revision(), self.scale_revision());
         let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.arrival_counts.0 += 1;
         }
         if self.arrival_words.as_ref().map(|(at, _)| *at) != Some(key) {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             {
                 self.arrival_counts.1 += 1;
             }
@@ -4014,7 +3995,7 @@ impl Run {
     /// The newest round this group joined in (0 for setup), from one scan of the participants
     /// and no list. Its row's status and its layout both take it from here.
     fn group_joined(&self, group: &super::RunGroup) -> Option<u64> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         GROUP_SCANS.with(|count| count.set(count.get() + 1));
         self.state
             .participants
@@ -4458,32 +4439,23 @@ impl Run {
             .into_iter()
             .map(|line| super::MemberFault::new(super::FaultKind::CannotJoin, line.into()))
             .collect();
-        if !warnings.is_empty() || !own.is_empty() {
-            for fault in warnings.iter().chain(&own) {
-                // The one member-fault row (Contract B, R): the Encounters list draws it too.
-                if crate::encounters::member_fault_row(ui, fault) {
-                    if fault.kind == super::FaultKind::NotInPackages {
-                        self.wants_packages = true;
-                    } else {
-                        self.wants_group_editor = Some(group.path.clone());
-                    }
+        let faults: Vec<&super::MemberFault> = warnings.iter().chain(&own).collect();
+        // Every fault gives one repair; when all point to packages, the last one also offers
+        // the group editor (M0126: a choice of the same typed message), so it stays one click
+        // away.
+        let packages_only = faults
+            .iter()
+            .all(|fault| fault.kind == super::FaultKind::NotInPackages);
+        for (at, fault) in faults.iter().enumerate() {
+            let edit_too = packages_only && at + 1 == faults.len();
+            // The one member-fault row (Contract B, R): the Encounters list draws it too.
+            let view = crate::encounters::MemberFaultView::Arrivals { edit_too };
+            match crate::encounters::member_fault_row(ui, fault, view) {
+                Some(crate::encounters::MemberRepair::Packages) => self.wants_packages = true,
+                Some(crate::encounters::MemberRepair::EditGroup) => {
+                    self.wants_group_editor = Some(group.path.clone());
                 }
-            }
-            // Every fault gives one link; when all point to packages, the group editor
-            // stays one click away.
-            if warnings
-                .iter()
-                .chain(&own)
-                .all(|fault| fault.kind == super::FaultKind::NotInPackages)
-                // The faults' actions start at the message words; this one does too.
-                && design::message_choice_row(ui, Tone::Warning, |ui| {
-                    Action::secondary("Edit group")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                })
-            {
-                self.wants_group_editor = Some(group.path.clone());
+                None => {}
             }
         }
 
@@ -6939,42 +6911,7 @@ pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     }
 }
 
-pub(crate) fn change_preview(row: &Row) -> String {
-    fn numbers(text: &str) -> String {
-        let mut result = String::new();
-        let mut number = String::new();
-        for c in text.chars().chain(std::iter::once('\0')) {
-            if c.is_ascii_digit() || (c == '-' && number.is_empty()) {
-                number.push(c);
-            } else {
-                if !number.is_empty() {
-                    result.push_str(&super::grouped_number(&number));
-                    number.clear();
-                }
-                if c != '\0' {
-                    result.push(c);
-                }
-            }
-        }
-        result
-    }
-    format!(
-        "{} → {}{}",
-        numbers(if row.label == "Speed" {
-            row.base.trim().trim_end_matches('.')
-        } else {
-            &row.base
-        }),
-        numbers(&row.changed),
-        if row.by_hand {
-            " · add by hand"
-        } else if row.in_rolls {
-            " · in Splat’s rolls"
-        } else {
-            ""
-        }
-    )
-}
+pub use splat_content_ui::roster::change_preview;
 
 /// An Arrivals row's status and members for a slot `width` wide. None when a part of the status
 /// cannot fit the slot whole: then the status takes a full-width line of its own.
@@ -7019,7 +6956,7 @@ const STAT_BLOCK_UNREAD: &str = "stat block could not be read";
 
 /// What the DM chose among a close dialog's recovery actions.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
-pub(crate) struct CloseRecovery {
+pub struct CloseRecovery {
     pub review: bool,
     pub connect: bool,
 }
@@ -7029,11 +6966,7 @@ pub(crate) struct CloseRecovery {
 /// buttons on one line, `Connect to sync` before `Review conflict`, and the first one's border
 /// starts at the dialog text. FK2: a message action without an icon has the secondary border, so
 /// the safe action never reads as a label beside `Close now`.
-pub(crate) fn close_recovery_actions(
-    ui: &mut egui::Ui,
-    review: bool,
-    connect: bool,
-) -> CloseRecovery {
+pub fn close_recovery_actions(ui: &mut egui::Ui, review: bool, connect: bool) -> CloseRecovery {
     let mut chosen = CloseRecovery::default();
     if !review && !connect {
         return chosen;
@@ -7086,7 +7019,7 @@ fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
     let forms = shortened_names(group, before)
         .skip(usize::from(group == arrival))
         .inspect(|_| {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             MOVE_FORMS.with(|forms| forms.set(forms.get() + 1));
         });
     whole
@@ -7094,7 +7027,7 @@ fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
 }
 
 // Move forms built on this thread, for a test that an unchanged frame builds none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static MOVE_FORMS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -7684,7 +7617,7 @@ impl TurnMark {
 
 /// Concentration, as a run row marks it and History's Final state repeats it: its icon and
 /// `Conc`, in its own colour.
-pub(crate) fn concentration_mark() -> (String, egui::Color32) {
+pub fn concentration_mark() -> (String, egui::Color32) {
     (
         format!("{} Conc", icons::CONCENTRATING),
         colors().participant.concentrating,
@@ -7783,7 +7716,7 @@ const PICTURE_GAP: f32 = 6.0;
 #[derive(Clone, Default)]
 struct RowCache(std::collections::HashMap<u64, RowLayout>);
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often `fitted` was asked for a row, and how often a row was laid out.
     static ROW_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -8224,7 +8157,7 @@ impl RowLayout {
         fit: RowFit,
         longest_name: f32,
     ) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         ROW_FITS.with(|count| count.set(count.get() + 1));
         let input = RowInput {
             words: RowWords::of(p),
@@ -8458,7 +8391,7 @@ impl RowLayout {
         input: &RowInput,
         (condition_count, bonus_fit, extra): (usize, BonusFit, &Extra),
     ) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         ROW_LAYOUTS.with(|count| count.set(count.get() + 1));
         // The layout reads only its input: the cache of `fitted` is keyed on all of it.
         let RowInput {
@@ -10126,7 +10059,7 @@ mod tests {
                     })
                 })
                 .collect();
-            run.groups = Some(Arc::new(groups));
+            run.set_groups(Arc::new(groups));
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 800.0))
                 .build(move |ctx| {
@@ -10231,7 +10164,7 @@ mod tests {
             );
             let mut run =
                 super::super::Run::new("Road".into(), participants, String::new()).unwrap();
-            run.scale = Some(Arc::new(crate::difficulty::Scale {
+            run.set_scale(Arc::new(crate::difficulty::Scale {
                 budgets: Some(crate::difficulty::builtin_budgets()),
                 party: heroes.iter().map(|hero| (hero.id, Some(3))).collect(),
             }));
@@ -10256,7 +10189,7 @@ mod tests {
                 problem: None,
                 warnings: vec![],
             });
-            run.groups = Some(Arc::new(vec![group.clone()]));
+            run.set_groups(Arc::new(vec![group.clone()]));
             let run = Rc::new(RefCell::new(run));
             let shown = run.clone();
             let mut harness = egui_kittest::Harness::builder()
@@ -10300,7 +10233,7 @@ mod tests {
                 let mut elsewhere = (*group).clone();
                 elsewhere.encounter = Some(Uuid::new_v4());
                 run.source = Some(Uuid::new_v4());
-                run.groups = Some(Arc::new(vec![Arc::new(elsewhere)]));
+                run.set_groups(Arc::new(vec![Arc::new(elsewhere)]));
             }
             harness.run_steps(2);
             assert!(harness.query_by_label(&label).is_none());
@@ -10347,7 +10280,7 @@ mod tests {
             .clone();
             group.name = long.clone();
             let mut run = run;
-            run.groups = Some(Arc::new(vec![Arc::new(group)]));
+            run.set_groups(Arc::new(vec![Arc::new(group)]));
             let floor = std::rc::Rc::new(std::cell::Cell::new(0.0_f32));
             let measured = floor.clone();
             let floor_words = format!("{} {first}…", icons::DRAG);
@@ -10453,7 +10386,7 @@ mod tests {
             // The whole Arrivals tab, so its footer is drawn too. `clean` has no bad total.
             let edge = std::rc::Rc::new(std::cell::Cell::new(0.0));
             let build = |mut run: Run, bad_total: bool| {
-                run.groups = Some(Arc::new(groups.clone()));
+                run.set_groups(Arc::new(groups.clone()));
                 if bad_total {
                     run.group_totals.insert(bad, "1-2".into());
                     run.group_totals.insert(also_bad, "2-5".into());
@@ -10596,7 +10529,7 @@ mod tests {
             for group in &groups {
                 run.group_totals.insert(group.id, "2-5".into());
             }
-            run.groups = Some(Arc::new(groups));
+            run.set_groups(Arc::new(groups));
             let local = egui::Id::new(("arrival_footer", run.id));
             // Migration-32 L2c: the typed footer's id is scoped to the pane's parent `Ui`
             // (`Footer::rescope`), here the panel's.
@@ -10731,9 +10664,9 @@ mod tests {
         for p in &mut run.state.participants {
             p.definition = creature.clone();
         }
-        run.groups = Some(read(&creature, "Pack A", 2));
+        run.set_groups(read(&creature, "Pack A", 2));
         // A scale, so each read has difficulty words (#262), which must follow the read too.
-        run.scale = Some(Arc::new(crate::difficulty::Scale {
+        run.set_scale(Arc::new(crate::difficulty::Scale {
             budgets: Some(crate::difficulty::builtin_budgets()),
             party: [(Uuid::new_v4(), Some(4))].into_iter().collect(),
         }));
@@ -10781,8 +10714,8 @@ mod tests {
         harness.run_steps(2);
         {
             let (run, _) = &mut *shared.borrow_mut();
-            run.groups = Some(read(&creature, "Pack B", 4));
-            run.groups = Some(read(&creature, "Pack D", 3));
+            run.set_groups(read(&creature, "Pack B", 4));
+            run.set_groups(read(&creature, "Pack D", 3));
         }
         harness.run_steps(2);
         shared.borrow_mut().1 = true;
@@ -10867,7 +10800,7 @@ mod tests {
         };
         let riders = group("Mist Riders", Arc::new(wisp));
         let vanguard = group("Vanguard", run.state.participants[0].definition.clone());
-        run.groups = Some(Arc::new(vec![riders.clone(), vanguard.clone()]));
+        run.set_groups(Arc::new(vec![riders.clone(), vanguard.clone()]));
         run.group_totals.insert(vanguard.id, "2-5".into());
         let run = Rc::new(RefCell::new(run));
         let drawn = run.clone();
@@ -11707,7 +11640,7 @@ mod tests {
         let words = "Brannoch Vale’s sheet changed: HP 58 → 54, temp HP 5 → 0";
         let mut harness = egui_kittest::Harness::new(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                design::small_message(ui, Tone::Warning, words);
+                design::small_message(ui, design::Tone::Warning, words);
             });
         });
         design::theme::install(&harness.ctx);
@@ -13174,7 +13107,11 @@ mod tests {
             let shown = fault.clone();
             let mut harness = egui_kittest::Harness::new(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::encounters::member_fault_row(ui, &shown);
+                    crate::encounters::member_fault_row(
+                        ui,
+                        &shown,
+                        crate::encounters::MemberFaultView::Arrivals { edit_too: false },
+                    );
                 });
             });
             design::theme::install(&harness.ctx);
@@ -13218,6 +13155,57 @@ mod tests {
             });
             assert!(bordered, "{fault:?}: the repair {repair:?} has a border");
             assert!(!fills.contains(&other), "{fault:?}: {fills:?}");
+        }
+        // M0126 (m-r0-9-edit-too): a missing creature's fault offers `Edit group` too when
+        // Arrivals asks (`edit_too`), as a choice of the same typed message: on the line under
+        // the words, after `Campaign → Packages`; each press comes back as its repair.
+        use crate::encounters::{MemberFaultView, MemberRepair};
+        use egui_kittest::kittest::Queryable;
+        for view in [
+            MemberFaultView::EncounterList,
+            MemberFaultView::Arrivals { edit_too: false },
+            MemberFaultView::Arrivals { edit_too: true },
+        ] {
+            let edit_too = matches!(view, MemberFaultView::Arrivals { edit_too: true });
+            let fault = super::super::MemberFault::new(
+                super::super::FaultKind::NotInPackages,
+                "Unknown creature · line 13: Not in this campaign’s packages.".into(),
+            );
+            let pressed = std::rc::Rc::new(std::cell::Cell::new(None));
+            let seen = pressed.clone();
+            let mut harness = egui_kittest::Harness::new(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if let Some(repair) = crate::encounters::member_fault_row(ui, &fault, view) {
+                        seen.set(Some(repair));
+                    }
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            assert_eq!(
+                harness.query_by_label("Edit group").is_some(),
+                edit_too,
+                "m-r0-9-edit-too: Edit group shows when Arrivals asks, and only then"
+            );
+            harness.get_by_label("Campaign → Packages").click();
+            harness.run_steps(1);
+            assert_eq!(pressed.get(), Some(MemberRepair::Packages));
+            if edit_too {
+                let packages = harness.get_by_label("Campaign → Packages").rect();
+                let edit = harness.get_by_label("Edit group").rect();
+                assert!(
+                    (edit.center().y - packages.center().y).abs() < 1.0
+                        && edit.left() > packages.right(),
+                    "m-r0-9-edit-too: Edit group follows Packages on its line: {packages:?} {edit:?}"
+                );
+                harness.get_by_label("Edit group").click();
+                harness.run_steps(1);
+                assert_eq!(
+                    pressed.get(),
+                    Some(MemberRepair::EditGroup),
+                    "m-r0-9-edit-too: Edit group opens the group editor"
+                );
+            }
         }
     }
 

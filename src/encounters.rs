@@ -2,6 +2,7 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[cfg(test)]
 use crate::content_workspace::patch_fields;
+use crate::encounter_settings::GroupingWords;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
@@ -199,16 +200,23 @@ fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<S
     Err("Choose another name for this file.".into())
 }
 
+#[path = "encounters/disk.rs"]
 mod disk;
+#[path = "encounters/groups.rs"]
 mod groups;
+#[path = "encounters/history.rs"]
 mod history;
+#[path = "encounters/results_key.rs"]
 mod results_key;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
-pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
-#[cfg(test)]
-pub(crate) use groups::{change_copies, group_checks, member_comparisons};
-pub(crate) use history::{Template, template_of};
+pub(crate) use groups::{
+    ENCOUNTER_DELETED, MemberFaultView, MemberRepair, NO_MAX_HP_CAUSE, member_fault,
+    member_fault_row,
+};
+#[cfg(any(test, feature = "test-support"))]
+pub use groups::{change_copies, group_checks, member_comparisons};
+pub use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Slot {
@@ -275,7 +283,7 @@ pub(crate) struct RosterFault {
 impl RosterFault {
     /// `<name> · line <n>: <problem>`: the one form that the encounter editor, the run setup and
     /// Save's reason give an unread roster row.
-    pub(crate) fn words(&self) -> String {
+    pub fn words(&self) -> String {
         row_fault_words(&self.name, self.line, &self.problem)
     }
 }
@@ -382,14 +390,14 @@ fn owned_groups_key(snapshot: &Snapshot, draft: &Draft) -> (Uuid, Uuid, usize, u
     )
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// (frames that asked for the owned-group check, groups that the check or its key read)
     static OWNED_GROUP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
 /// The counts of the owned-group check, for `CachedWork` (F5).
-#[cfg(test)]
-pub(crate) fn owned_group_work() -> (usize, usize) {
+#[cfg(any(test, feature = "test-support"))]
+pub fn owned_group_work() -> (usize, usize) {
     OWNED_GROUP_WORK.with(std::cell::Cell::get)
 }
 
@@ -410,15 +418,15 @@ fn group_words(name: &str) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// The error the next encounter write gives instead of writing (`fail_next_encounter_write`).
     static FAIL_NEXT_WRITE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 /// A test makes the next Save of an encounter fail at its write, as a full disk would.
-#[cfg(test)]
-pub(crate) fn fail_next_encounter_write(error: &str) {
+#[cfg(any(test, feature = "test-support"))]
+pub fn fail_next_encounter_write(error: &str) {
     FAIL_NEXT_WRITE.with(|next| *next.borrow_mut() = Some(error.to_owned()));
 }
 
@@ -646,42 +654,11 @@ fn unread_note(
     }
 }
 
-/// `N content issues to repair`: the words of a page's collapsing content issue count.
-pub(crate) fn content_issue_count(count: usize) -> String {
-    design::count(count, "content issue to repair", "content issues to repair")
-}
+pub use splat_content_ui::content_actions::content_issue_count;
 
-/// A collapsing content issue count is a status, in one look on every page: the warning icon
-/// and colour, then the count, at the size of a section title.
-pub(crate) fn issue_count_title(ui: &egui::Ui, heading: &str) -> egui::text::LayoutJob {
-    let format = egui::TextFormat {
-        font_id: egui::TextStyle::Button.resolve(ui.style()),
-        color: colors().result.warning,
-        ..Default::default()
-    };
-    let mut job = egui::text::LayoutJob::default();
-    job.append(icons::WARN, 0.0, format.clone());
-    job.append(" ", 0.0, format.clone());
-    job.append(heading, 0.0, format);
-    job
-}
+pub use splat_content_ui::content_actions::issue_count_title;
 
-/// A warning's file line: the path, whole, then `Edit in Obsidian` and `Show file`. A path too
-/// long to share the line with its links wraps on lines of its own above them; it is never cut.
-pub(crate) fn file_line(ui: &mut egui::Ui, root: &std::path::Path, relative: &str) {
-    let links = crate::world::entry_file_links_width(ui, true);
-    let budget = ui.available_width() - links - design::L;
-    if design::number_width(ui, relative, &Type::Small.font(ui)) <= budget {
-        crate::world::entry_file_actions(ui, root, relative, true);
-        return;
-    }
-    let path = root.join(relative);
-    let response =
-        ui.add(egui::Label::new(Type::Small.rich(ui, relative).color(colors().muted)).wrap());
-    design::named(ui, &response, &path.display().to_string());
-    response.on_hover_text(path.display().to_string());
-    ui.horizontal_wrapped(|ui| crate::world::entry_file_links(ui, &path, true));
-}
+pub use splat_content_ui::content_actions::file_line;
 
 /// The encounter file's flags (`unread_notes`), the unread roster rows among them (`faults`) and
 /// the file's path in the campaign.
@@ -767,6 +744,9 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
 }
 
 struct Draft {
+    /// M0205: after `Done` closes a roster row's changes, the least scroll that shows that row
+    /// whole in the roster's column (`design::reveal`): owned by this draft, it ends with it.
+    roster_reveal: design::reveal::Reveal,
     /// The words typed in a field that stores a cleaned value, while it has focus
     /// (`groups::TypedWords`): they end with the draft.
     typed: groups::TypedWords,
@@ -830,6 +810,7 @@ impl Draft {
         Self {
             typed: groups::TypedWords::default(),
             recovery: Default::default(),
+            roster_reveal: Default::default(),
             id,
             path: format!("Encounters/{id}.md"),
             origin: design::save_row::DraftOrigin::New,
@@ -884,6 +865,7 @@ impl Draft {
         Ok(Self {
             typed: groups::TypedWords::default(),
             recovery: Default::default(),
+            roster_reveal: Default::default(),
             id: entry.id,
             path: path.into(),
             origin: design::save_row::DraftOrigin::Saved,
@@ -1162,7 +1144,7 @@ impl Draft {
                 changes.push(group.change(campaign, None)?);
             }
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(error) = FAIL_NEXT_WRITE.with(std::cell::RefCell::take) {
             // A test's failed write: the real save path, refused at its write, before the
             // baseline moves.
@@ -1194,7 +1176,7 @@ impl Draft {
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), Invalid> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         VALIDATIONS.with(|count| count.set(count.get() + 1));
         let entry = Entry::parse(&self.path, &self.source)?;
         if let Some(reason) = roster_fault_reason(
@@ -1511,7 +1493,7 @@ impl CreatureEditor {
     }
 }
 /// Where test builds keep the roster column's scroll id for a draft (`roster_pane`).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn roster_scroll_key(draft: Uuid) -> egui::Id {
     egui::Id::new(("encounter_roster_scroll", draft))
 }
@@ -1544,17 +1526,12 @@ struct Creature {
 const ROSTER_MAX_WIDTH: f32 = design::LIST_MEASURE;
 const ADD_PANE: &str = "encounter_add";
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
-const RESULT_ROW: f32 = design::XL + design::L + design::S;
+const RESULT_ROW: f32 = design::ACTION_ROW;
 /// A result's stats, each in its own place, so that they can be compared down the list. The
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
 /// `hp_missing` comes from the creature's stats: the HP fault is data, never found in the words.
-pub(crate) fn detail_columns(
-    ui: &mut egui::Ui,
-    detail: &str,
-    source: Option<&str>,
-    hp_missing: bool,
-) {
+pub fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>, hp_missing: bool) {
     if hp_missing {
         ui.horizontal_wrapped(|ui| {
             for part in detail_parts(detail, hp_missing) {
@@ -1684,41 +1661,11 @@ fn grouped(value: u64) -> String {
     design::count(value as usize, "", "").trim().to_owned()
 }
 
-pub(crate) fn creature_name_link(ui: &mut egui::Ui, name: &str) -> egui::Response {
-    let galley = design::one_line(
-        ui,
-        name,
-        Type::Body.font(ui),
-        colors().text,
-        ui.available_width(),
-    );
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(galley.size().x, Density::Read.control() - design::XS),
-        egui::Sense::click(),
-    );
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), name));
-    if ui.is_rect_visible(rect) {
-        let y = rect.center().y - galley.size().y / 2.0;
-        if response.hovered() {
-            ui.painter().hline(
-                rect.x_range(),
-                y + galley.size().y - design::HAIRLINE_WIDTH,
-                egui::Stroke::new(design::HAIRLINE_WIDTH, colors().text),
-            );
-        }
-        ui.painter()
-            .galley(egui::pos2(rect.left(), y), galley, colors().text);
-        if response.has_focus() {
-            design::focus_ring(ui, rect);
-        }
-    }
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
-}
+pub use splat_content_ui::content_actions::creature_name_link;
 
 /// `changed` holds this creature's values when a slot or member changes them.
 /// The creature's hit points, after its changes. None is the `HP not set` fault.
-pub(crate) fn max_hp(entry: &Entry, changed: Option<&Resolved>) -> Option<i64> {
+pub fn max_hp(entry: &Entry, changed: Option<&Resolved>) -> Option<i64> {
     changed.map_or_else(
         || {
             entry
@@ -2080,13 +2027,13 @@ const HP_NOT_SET: &str = "HP not set";
 
 /// One part of a creature's detail line, and whether it is the `HP not set` fault.
 pub(crate) struct DetailPart<'a> {
-    pub(crate) words: &'a str,
+    pub words: &'a str,
     pub(crate) hp_fault: bool,
 }
 
 impl DetailPart<'_> {
     /// The fault has the warning status colour, icon and words; every other part is muted.
-    pub(crate) fn color(&self) -> egui::Color32 {
+    pub fn color(&self) -> egui::Color32 {
         if self.hp_fault {
             colors().result.warning
         } else {
@@ -2284,88 +2231,121 @@ fn roster_row(index: usize, slot: &Slot, snapshot: &Snapshot) -> String {
     )
 }
 
-fn creature_result_row(
-    ui: &mut egui::Ui,
-    c: &Creature,
-    action: &str,
-    already: bool,
-) -> (bool, bool) {
-    let (mut chosen, mut read) = (false, false);
-    ui.horizontal(|ui| {
-        ui.set_min_height(RESULT_ROW);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            let controls = if c.unavailable.is_some() {
-                Action::secondary(action)
-                    .density(Density::Read)
-                    .natural_width(ui)
-                    + Action::secondary("Open in World")
-                        .density(Density::Read)
-                        .natural_width(ui)
-                    + design::M
-                    // The gaps between the words and both buttons: the results keep the scroll
-                    // bar's lane (FH3), so nothing may spill into it.
-                    + 2.0 * ui.spacing().item_spacing.x
+/// A creature result's facts (layout PR 4): its name, a link that reads it in Lookup, over its
+/// stats, or over its warning when it cannot be added. Returns whether the name was pressed and
+/// the facts' width (`creature_facts_width`).
+fn creature_facts(ui: &mut egui::Ui, c: &Creature) -> (bool, f32) {
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let read = creature_name_link(ui, &c.name)
+        .on_hover_text("Read this entry in Lookup")
+        .clicked();
+    if let Some(reason) = &c.unavailable {
+        // A status is an icon, a word and a colour, like the other warnings here. It wraps,
+        // because a warning must not be cut to an ellipsis at 960.
+        design::wrapped_status(
+            ui,
+            design::Status {
+                icon: icons::WARN,
+                word: reason,
+                color: colors().result.warning,
+            },
+        );
+    } else {
+        detail_columns(ui, &c.detail, c.source.as_deref(), c.hp_missing);
+    }
+    (read, creature_facts_width(ui, c))
+}
+
+/// The width of a creature result's facts, from the tokens they are drawn with: its name, or its
+/// stats' three columns and its package, or its warning.
+fn creature_facts_width(ui: &egui::Ui, c: &Creature) -> f32 {
+    let (body, small) = (Type::Body.font(ui), Type::Small.font(ui));
+    let name = design::number_width(ui, &c.name, &body);
+    let detail = match &c.unavailable {
+        Some(reason) => {
+            design::number_width(ui, icons::WARN, &body)
+                + ui.spacing().item_spacing.x
+                + design::number_width(ui, reason, &body)
+        }
+        None => {
+            let columns: f32 = [
+                ("CR 1/8", design::M),
+                ("HP 999", design::S),
+                ("AC 25", design::S),
+            ]
+            .into_iter()
+            .map(|(widest, gap)| design::number_width(ui, widest, &small) + gap)
+            .sum();
+            // An NPC's `NPC · as …` follows the columns (`detail_columns`).
+            let parts: Vec<&str> = c.detail.split(" · ").collect();
+            let npc = if c.detail.starts_with("NPC · as ") && parts.len() >= 2 {
+                design::XS + design::number_width(ui, &parts[..2].join(" · "), &small)
             } else {
-                design::S * 12.0
+                0.0
             };
-            ui.set_max_width((ui.available_width() - controls).max(design::S * 10.0));
-            read = creature_name_link(ui, &c.name)
-                .on_hover_text("Read this entry in Lookup")
-                .clicked();
-            if let Some(reason) = &c.unavailable {
-                // A status is an icon, a word and a colour, like the other warnings here. It
-                // wraps, because a warning must not be cut to an ellipsis at 960.
-                design::wrapped_status(
-                    ui,
-                    design::Status {
-                        icon: icons::WARN,
-                        word: reason,
-                        color: colors().result.warning,
-                    },
-                );
-            } else {
-                detail_columns(ui, &c.detail, c.source.as_deref(), c.hp_missing);
-            }
+            columns
+                + npc
+                + c.source.as_deref().map_or(0.0, |source| {
+                    design::XS + design::number_width(ui, source, &small)
+                })
+        }
+    };
+    name.max(detail)
+}
+
+/// A creature result's action: `action` (`Add`, `Use`), blocked with its reason and `Open in
+/// World` beside it when the creature cannot be added, or `In roster` when it is there already.
+fn creature_action<'a>(
+    c: &'a Creature,
+    action: &'a str,
+    name: &'a str,
+    already: bool,
+) -> design::RowAction<'a> {
+    if already {
+        // Round 31 SD10, AD11 (in-roster-check-role): the same checked status as `Party in
+        // roster` above the results: its check, its word and its colour.
+        return design::RowAction::Status(Status {
+            icon: icons::OK,
+            word: "In roster",
+            color: colors().muted,
         });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if already {
-                // Round 31 SD10, AD11 (in-roster-check-role): the same checked status as `Party in
-                // roster` above the results: its check, its word and its colour.
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::OK,
-                        word: "In roster",
-                        color: colors().muted,
-                    },
-                );
-            } else {
-                let name = if action == "Add" {
-                    action.into()
-                } else {
-                    format!("{action} {}", c.name)
-                };
-                chosen = Action::secondary(action)
-                    .name(&name)
-                    .density(Density::Read)
-                    .blocked(c.unavailable.as_deref())
-                    .show(ui)
-                    .clicked();
-                if c.unavailable.is_some()
-                    && Action::secondary("Open in World")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                {
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("reveal_encounter_npc"), c.id)
-                    });
-                }
-            }
-        });
-    });
-    (chosen, read)
+    }
+    design::RowAction::Action {
+        words: action,
+        name,
+        blocked: c.unavailable.as_deref(),
+        recovery: c.unavailable.as_ref().map(|_| OPEN_IN_WORLD),
+    }
+}
+
+/// `Open in World`: the recovery beside a creature that cannot be added.
+const OPEN_IN_WORLD: &str = "Open in World";
+
+/// The widest action recipe of a creature list: `action`, blocked with its recovery, and `In
+/// roster`, so a row whose action changes keeps the column where it was.
+fn creature_actions_width(ui: &egui::Ui, action: &str) -> f32 {
+    [
+        design::RowAction::Action {
+            words: action,
+            name: action,
+            blocked: Some(""),
+            recovery: Some(OPEN_IN_WORLD),
+        },
+        design::RowAction::Status(Status {
+            icon: icons::OK,
+            word: "In roster",
+            color: colors().muted,
+        }),
+    ]
+    .iter()
+    .map(|recipe| recipe.width(ui))
+    .fold(0.0, f32::max)
+}
+
+/// A pressed `Open in World`: the World page opens on that creature.
+fn open_in_world(ui: &egui::Ui, c: &Creature) {
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(egui::Id::new("reveal_encounter_npc"), c.id));
 }
 
 /// FF8: the creature search's separation of a copied note (`Rook Ambry copy.md is now a
@@ -2415,7 +2395,7 @@ impl Separation {
     /// another identity (another program changed it). A note that cannot be read now (moved
     /// away for a moment, locked) keeps its result, so its Undo can be tried again.
     fn holds(&self) -> bool {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         SEPARATION_READS.with(|reads| reads.set(reads.get() + 1));
         match fs::read_to_string(self.owner.root.join(&self.path)) {
             Ok(text) => crate::content_workspace::note_id(&text) == Some(self.owner.note),
@@ -2443,7 +2423,7 @@ struct SeparationFailure {
     words: String,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often the separations' disk check read a note.
     static SEPARATION_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -2472,13 +2452,13 @@ struct IdentityChange(crate::world::Change);
 
 impl Clone for IdentityChange {
     fn clone(&self) -> Self {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         IDENTITY_COPIES.with(|copies| copies.set(copies.get() + 1));
         Self(self.0.clone())
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often a separation's change, with its note text, was copied.
     static IDENTITY_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -2635,10 +2615,37 @@ fn replace_missing_creature(
         }
     };
     let mut replaced = None;
-    for creature in found.iter().filter_map(|&at| snapshot.creatures.get(at)) {
+    // Layout PR 4: the action column starts `L` after the widest facts.
+    let shown: Vec<&Creature> = found
+        .iter()
+        .filter_map(|&at| snapshot.creatures.get(at))
+        .collect();
+    let columns = design::Columns::measure(
+        ui.available_width(),
+        shown.iter().map(|c| creature_facts_width(ui, c)),
+        [creature_actions_width(ui, "Use")],
+    );
+    let height = design::action_rows::row_height(RESULT_ROW, columns);
+    for (row, creature) in shown.into_iter().enumerate() {
         ui.push_id(creature.id, |ui| {
-            let (chosen, read) = creature_result_row(ui, creature, "Use", false);
-            if chosen {
+            let (rect, _) = ui.allocate_exact_size(
+                egui::vec2(columns.width(ui.available_width()), height),
+                egui::Sense::hover(),
+            );
+            let name = format!("Use {}", creature.name);
+            let (read, pressed) = design::action_row(
+                ui,
+                rect,
+                columns,
+                "replacement_picker",
+                row,
+                |ui| creature_facts(ui, creature),
+                creature_action(creature, "Use", &name, false),
+            );
+            if pressed.recovery {
+                open_in_world(ui, creature);
+            }
+            if pressed.action {
                 replaced = Some((creature.id, all));
             }
             if read {
@@ -2680,7 +2687,7 @@ fn replacement_indices(creatures: &[Creature], query: &str) -> Vec<usize> {
         .enumerate()
         .filter(|(_, c)| !c.linked)
         .inspect(|_| {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             REPLACEMENT_NAMES.with(|names| names.set(names.get() + 1));
         });
     if query.is_empty() {
@@ -2727,7 +2734,7 @@ impl ReplacementPickers {
             return;
         }
         self.swept = Some(frame);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         REPLACEMENT_SWEPT.with(|visits| visits.set(visits.get() + self.kept.len()));
         self.kept.retain(|_, kept| kept.drawn + 1 >= frame);
     }
@@ -2749,14 +2756,14 @@ fn kept_replacement_pickers(ctx: &egui::Context) -> usize {
 
 // Creatures the replacement picker visited on this thread, for a test that a repaint visits
 // none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static REPLACEMENT_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // Kept pickers the replacement pickers' sweep visited on this thread, for a test that it runs
 // once per frame (review of PR 473, P3).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static REPLACEMENT_SWEPT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -2856,7 +2863,7 @@ impl SearchRanked {
             .enumerate()
             .filter(|(_, c)| !list.unlinked || !c.linked)
             .filter(|(_, c)| {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 SEARCH_RANKED.with(|ranked| ranked.set(ranked.get() + 1));
                 let facets = c.facets.as_ref();
                 (!parsed.names_facts() || facets.is_some_and(|f| parsed.matches_facts(f)))
@@ -2898,7 +2905,7 @@ impl SearchRanked {
 
 // Creatures the encounter search's ranking visited on this thread, for a test that a repaint
 // visits none.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static SEARCH_RANKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -2930,8 +2937,8 @@ struct Snapshot {
     scale: Arc<crate::difficulty::Scale>,
 }
 /// Load what the Encounters page shows, for the load benchmark.
-#[cfg(test)]
-pub(crate) fn load_for_bench(campaign: &Campaign, modules: &[Module]) -> Result<(), String> {
+#[cfg(any(test, feature = "test-support"))]
+pub fn load_for_bench(campaign: &Campaign, modules: &[Module]) -> Result<(), String> {
     Snapshot::load(campaign, modules).map(drop)
 }
 
@@ -3435,6 +3442,8 @@ enum EncounterFault {
     /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
+    /// The Encounters page waits for the previous campaign's open encounter (`show_page`).
+    PreviousCampaignDraft,
     /// Start fight was refused (ruling M7): no fight started, why, and the next step, in the
     /// tone of its cause.
     StartRefused(design::results::Refusal),
@@ -3462,7 +3471,8 @@ impl design::outcome::Fault for EncounterFault {
             | Self::FileWarning(_)
             | Self::RunsLeft(_)
             | Self::FileFlag(..)
-            | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
+            | Self::Invalid(_)
+            | Self::PreviousCampaignDraft => design::outcome::Severity::NeedsFixing,
             Self::StartRefused(refusal) => match refusal.tone() {
                 Tone::Error => design::outcome::Severity::CannotRead,
                 _ => design::outcome::Severity::NeedsFixing,
@@ -3490,6 +3500,9 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The encounter’s file has a problem.")),
             Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("Save cannot write this draft yet.")),
+            Self::PreviousCampaignDraft => {
+                crate::sentence!("Save or discard the previous campaign’s encounter first.")
+            }
             Self::StartRefused(refusal) => refusal.words(),
         }
     }
@@ -3636,8 +3649,8 @@ pub struct Encounters {
     plan_edited_last_frame: bool,
     /// Test only: while set, `poll` takes no new read of the campaign (a load in flight waits),
     /// so a proof's window of unchanged frames keeps one snapshot revision.
-    #[cfg(test)]
-    pub(crate) hold_reads: bool,
+    #[cfg(any(test, feature = "test-support"))]
+    pub hold_reads: bool,
     /// Bumped on each frame that can change a draft (an editing input) and the frame after it,
     /// because a click's change lands late in its frame.
     edit_epoch: u64,
@@ -3646,7 +3659,7 @@ pub struct Encounters {
     /// with the same key does not check the draft again.
     validated: Option<(Uuid, u64, bool)>,
     /// How often frames reached that key's guard.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     validation_reached: usize,
     /// Save's check of the open group draft (FN5, AI2), with the snapshot revision and the
     /// draft's own revision it was made for. A frame with no change does not check again.
@@ -3659,7 +3672,7 @@ pub struct Encounters {
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
     /// How often frames asked for the draft's difficulty, and how often it was worked out.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     difficulty_counts: (usize, usize),
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
@@ -3755,24 +3768,11 @@ pub struct Encounters {
     /// Each encounter draft's own results (a removed group, a replacement), for its editor.
     editor_results: design::Results<EditorOwner, EditorMark>,
 }
-/// One encounter, as a session's plan offers it.
-pub struct PlanFight {
-    pub saved: Option<crate::encounter_run::SavedRunInfo>,
-    /// The encounter's ID, which `Edit encounter` opens it by.
-    pub id: uuid::Uuid,
-    pub name: String,
-    pub path: String,
-    /// Its roster's typed parts (G118), so the plan's row names a member once.
-    pub summary: crate::difficulty::Summary,
-    /// The roster's line key (`Roster::key`: its parts and its difficulty), for the plan's
-    /// kept line.
-    pub key: u64,
-    pub difficulty: crate::difficulty::Difficulty,
-}
+pub use splat_session_records::encounters::PlanFight;
 /// What the page needs from the story: where each run's event is, and which sessions exist.
 pub struct Story<'a> {
     pub events: &'a [crate::timeline::Event],
-    pub sessions: &'a [crate::timeline::page::SessionLink],
+    pub sessions: &'a [crate::timeline::SessionLink],
 }
 /// What the DM asked for from a row of the list. One press in a frame, so one of these.
 enum ListAction {
@@ -3827,7 +3827,7 @@ const REPEATABLE_HELP: &str = "Lists this encounter under Ready to run while a f
 const LOOT_FIELD: &str = "Loot";
 const ENCOUNTER_LOOT_HELP: &str =
     "What the party finds when this fight ends. A creature’s own loot is in its Changes.";
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How often this thread ran an encounter draft's full check.
     static VALIDATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -3870,11 +3870,11 @@ const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
 /// the refused group's id.
 type PlanRefusalKey = (Option<Uuid>, u64, Uuid);
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// B4b N1, B4c F1: how often a draft was compared for being unsaved (`DraftOwner::unsaved`),
     /// on this thread.
-    pub(crate) static PLAN_BLOCK_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub static PLAN_BLOCK_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// What a plan or run route that opens a draft got (B4 review F1): the caller gives the draft
@@ -3892,7 +3892,7 @@ pub enum PlanOpen {
 /// and the replacement guards read.
 impl design::DraftOwner for Encounters {
     fn unsaved(&self, draft: design::Unsaved) -> bool {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         match draft {
             design::Unsaved::Group => self.group_draft.as_ref().is_some_and(GroupDraft::dirty),
@@ -3931,7 +3931,7 @@ impl Encounters {
         let Some(snapshot) = &self.snapshot else {
             return;
         };
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.validation_reached += 1;
         }
@@ -3998,8 +3998,8 @@ impl Encounters {
     /// changed group's own revision changes.
     /// F5 (B3b): the owned-group check's key inputs now, and whether a campaign read is still
     /// pending: a test holds them fixed and names the input that changed.
-    #[cfg(test)]
-    pub(crate) fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
         let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
         Some((
             snapshot.revision,
@@ -4017,7 +4017,7 @@ impl Encounters {
                 cause: None,
             };
         };
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         OWNED_GROUP_WORK.with(|work| work.set((work.get().0 + 1, work.get().1)));
         let key = owned_groups_key(snapshot, draft);
         if let Some((cached, found)) = &self.owned_group_check
@@ -4025,7 +4025,7 @@ impl Encounters {
         {
             return found.clone();
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         OWNED_GROUP_WORK.with(|work| work.set((work.get().0, work.get().1 + draft.groups.len())));
         let found = owned_groups_found(&draft.groups, snapshot, draft.id);
         self.owned_group_check = Some((key, found.clone()));
@@ -4048,12 +4048,12 @@ impl Encounters {
             Tone::Error
         }
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sync_conflict(&mut self, name: &str) {
         self.run
             .as_mut()
@@ -4061,7 +4061,7 @@ impl Encounters {
             .simulate_sync_conflict(name);
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_connection(&mut self) {
         self.run
             .as_mut()
@@ -4069,7 +4069,7 @@ impl Encounters {
             .simulate_connection();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sync_state(&mut self, name: &str, state: crate::combat_sync::SyncState) {
         self.run
             .as_mut()
@@ -4079,17 +4079,14 @@ impl Encounters {
 
     /// Every row with each time taken away, each effect as its plain words (rule P, X5).
     /// Returns the conditions as they were, for `simulate_conditions`.
-    #[cfg(test)]
-    pub(crate) fn simulate_untimed(&mut self) -> Vec<Vec<crate::encounter_run::Condition>> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn simulate_untimed(&mut self) -> Vec<Vec<crate::encounter_run::Condition>> {
         self.run.as_mut().expect("an open run").simulate_untimed()
     }
 
     /// Give each row back the conditions that `simulate_untimed` returned.
-    #[cfg(test)]
-    pub(crate) fn simulate_conditions(
-        &mut self,
-        conditions: Vec<Vec<crate::encounter_run::Condition>>,
-    ) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn simulate_conditions(&mut self, conditions: Vec<Vec<crate::encounter_run::Condition>>) {
         self.run
             .as_mut()
             .expect("an open run")
@@ -4097,7 +4094,7 @@ impl Encounters {
     }
 
     /// A participant under another name. No fixture has a name this long.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_rename(&mut self, name: &str, to: &str) {
         self.run
             .as_mut()
@@ -4106,7 +4103,7 @@ impl Encounters {
     }
 
     /// A read of this participant's sheet, holding its last matched damage plus `more_damage`.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
         self.run
             .as_mut()
@@ -4115,7 +4112,7 @@ impl Encounters {
     }
 
     /// Running syncs react to the session from now on, as real ones do.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_session_end(&mut self) {
         self.run
             .as_mut()
@@ -4124,7 +4121,7 @@ impl Encounters {
     }
 
     /// Show an error line. An empty message clears it.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_run_error(&mut self, message: &str) {
         self.run
             .as_mut()
@@ -4132,7 +4129,7 @@ impl Encounters {
             .simulate_error(message);
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn simulate_sheet_update(&mut self, name: &str) {
         self.run
             .as_mut()
@@ -4196,12 +4193,12 @@ impl Encounters {
     fn draft_difficulty(&mut self) -> Option<Arc<crate::difficulty::Difficulty>> {
         let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
         let key = (snapshot.revision, self.edit_epoch, draft.id);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.difficulty_counts.0 += 1;
         }
         if self.difficulty.as_ref().map(|(at, _)| *at) != Some(key) {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             {
                 self.difficulty_counts.1 += 1;
             }
@@ -4218,8 +4215,8 @@ impl Encounters {
             .map(|(_, difficulty)| Arc::clone(difficulty))
     }
     /// How often frames asked for the open draft's difficulty, and how often it was worked out.
-    #[cfg(test)]
-    pub(crate) fn difficulty_counts(&self) -> (usize, usize) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn difficulty_counts(&self) -> (usize, usize) {
         self.difficulty_counts
     }
     /// The encounter editor is what the Encounters page shows.
@@ -4567,8 +4564,8 @@ impl Encounters {
         stands
     }
     /// Test only: the campaign read's revision, which keys the plan refusal's check.
-    #[cfg(test)]
-    pub(crate) fn snapshot_revision(&self) -> Option<Uuid> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn snapshot_revision(&self) -> Option<Uuid> {
         self.snapshot.as_ref().map(|snapshot| snapshot.revision)
     }
     /// No plan refusal is stored: its check is forgotten, so a new one compares afresh.
@@ -4588,7 +4585,7 @@ impl Encounters {
     /// The unsaved draft that refuses it says which it is, from the back lines' recipe (R38):
     /// the encounter, its group or a creature, each with its own reason.
     pub fn plan_group_blocked(&self) -> Option<&'static str> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         design::first_unsaved(self)
             .map(design::Unsaved::reason)
@@ -4680,7 +4677,7 @@ impl Encounters {
     }
 
     /// The file the editor holds, for the visual tests.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn draft_path(&self) -> Option<&str> {
         self.draft.as_ref().map(|draft| draft.path.as_str())
     }
@@ -4955,7 +4952,7 @@ impl Encounters {
     }
 
     fn poll_reads(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if self.hold_reads {
             return;
         }
@@ -5021,7 +5018,7 @@ impl Encounters {
     /// after the fields it writes have taken this frame's input (`save_key`): the creature's
     /// in its pane's `then`, the encounter's in the editor's `then`, a group's after its
     /// editor's fields. A digit typed in the frame of Ctrl+S is saved with it (review of PR 499).
-    /// `modal`: the app's one test (`crate::modal_open`: its dialogs, the full-window image, any
+    /// `modal`: the app's one test (`crate::art::modal_open`: its dialogs, the full-window image, any
     /// egui modal). While a modal is open the key is left alone, so nothing saves beneath it
     /// (reviews of PR 499 and PR 525).
     pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool, campaigns: &Campaigns) {
@@ -5608,8 +5605,7 @@ impl Encounters {
         };
         if let Some(snapshot) = &self.snapshot {
             run.set_roster_names(snapshot.revision, &snapshot.known_creature_names);
-            run.groups = Some(snapshot.groups.clone());
-            run.scale = Some(snapshot.scale.clone());
+            run.set_reads(snapshot.revision, &snapshot.groups, &snapshot.scale);
             run.creatures = Some(snapshot.run_creatures.clone());
         }
         run.planned.clone_from(&self.planned_groups);
@@ -5643,8 +5639,8 @@ impl Encounters {
     }
     /// The synchronous refresh that Make it yours, a creature save and a group removal run,
     /// for the scenarios.
-    #[cfg(test)]
-    pub(crate) fn refresh_now(&mut self, active: &Campaign, modules: &[Module]) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn refresh_now(&mut self, active: &Campaign, modules: &[Module]) {
         self.reload_snapshot(active, modules);
     }
     pub fn read_runs_again(&mut self, active: &Campaign) {
@@ -5672,6 +5668,10 @@ impl Encounters {
         self.show_page(ui, campaigns, party, story);
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "ruling M20: the page’s placeholder while another campaign’s encounter is open (`Ban::Body`)"
+    )]
     fn show_page(
         &mut self,
         ui: &mut egui::Ui,
@@ -5689,11 +5689,11 @@ impl Encounters {
             .as_ref()
             .is_none_or(|c| c.id != active.id || c.path != active.path)
         {
-            design::message(
-                ui,
-                Tone::Warning,
-                "Save or discard the previous campaign’s encounter first.",
-            );
+            // M0192 (ruling M20): the page cannot show while another campaign's encounter is
+            // open, so its fault stands in place of its body, in the fault's tone.
+            let _: Option<FooterPress> =
+                design::outcome::PagePlaceholder::new(&EncounterFault::PreviousCampaignDraft)
+                    .show(ui);
             self.save_key = false;
             return;
         }
@@ -7708,10 +7708,6 @@ impl Encounters {
         Self::creature_search_with_summary(ui, list, search, focus_search, peek, roster, "")
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn creature_search_with_summary(
         ui: &mut egui::Ui,
         list: SearchList<'_>,
@@ -7722,8 +7718,8 @@ impl Encounters {
         summary: &str,
     ) -> Option<(Uuid, bool)> {
         let mut chosen = None;
-        // FL3: the field ends at the results' scroll lane, where each row's Add ends, whether or
-        // not the bar shows.
+        // The field ends at the results' scroll lane even when the bar is hidden.
+        // Each Add follows its row's facts.
         let width = scroll_lane(ui);
         let response = crate::field_id!("encounter_creature_search")
             .once(crate::design::Once::PageSearch)
@@ -7871,34 +7867,82 @@ impl Encounters {
             );
         }
         ui.spacing_mut().item_spacing.y = 0.0;
-        let row_height = RESULT_ROW
-            + if ranked.unavailable {
-                Type::Small.line()
-            } else {
-                0.0
-            };
-        // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows, so each
-        // `Add` keeps its x as the DM types and the list grows or shrinks.
-        // Still egui's virtual rows: the group editor draws this search inside a `Content` pane,
-        // where a `ScrollColumn` draws every row, so the move waits for that pane (row M0200).
+        // Layout PR 4: the action column starts `L` after the widest facts of every result
+        // (measured once per query and width), so each `Add` keeps its x as the DM scrolls.
+        // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows.
         let lane = scroll_lane(ui);
-        egui::ScrollArea::vertical()
-            .id_salt(("encounter_results", &query))
-            .auto_shrink([false, false])
-            .show_rows(ui, row_height, matches.len(), |ui, range| {
-                ui.set_max_width(lane);
-                for c in matches[range].iter().map(|&at| &creatures[at]) {
-                    ui.push_id(c.id, |ui| {
-                        let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
-                        if read {
-                            *peek = Some(c.id);
-                        }
-                        if add {
-                            chosen = Some((c.id, c.party));
-                            *focus_search = true;
-                        }
-                    });
-                }
+        let columns_id = egui::Id::new(("encounter_results_columns", &query, matches.len()));
+        let key = (lane.to_bits(), ui.ctx().pixels_per_point().to_bits());
+        let columns = match ui
+            .ctx()
+            .data(|data| data.get_temp::<((u32, u32), design::Columns)>(columns_id))
+        {
+            Some((kept, columns)) if kept == key => columns,
+            _ => {
+                let columns = design::Columns::measure(
+                    lane,
+                    matches
+                        .iter()
+                        .map(|&at| creature_facts_width(ui, &creatures[at])),
+                    [creature_actions_width(ui, "Add")],
+                );
+                ui.ctx()
+                    .data_mut(|data| data.insert_temp(columns_id, (key, columns)));
+                columns
+            }
+        };
+        // The results are blocks of a region (layout 3b): whole rows only, one list box.
+        let block = design::Block::Row(design::Row::Action {
+            status: ranked.unavailable,
+            wrapped: columns.wrapped,
+        });
+        let kept = ui.ctx().data_mut(|data| {
+            data.get_temp_mut_or_insert_with(egui::Id::new("encounter_results_region"), || {
+                std::sync::Arc::new(egui::mutex::Mutex::new((
+                    design::RegionState::new("encounter_results"),
+                    design::memo::Revised::new(Vec::<design::Block>::new()),
+                )))
+            })
+            .clone()
+        });
+        let mut kept = kept.lock();
+        let (region, rows) = &mut *kept;
+        if rows.len() != matches.len() || rows.first() != Some(&block) {
+            rows.revise(|rows| {
+                *rows = vec![block; matches.len()];
+                design::memo::Changed::Yes
+            });
+        }
+        let add_width = columns.width(lane);
+        design::BlockRegion::new(("encounter_results", &query), region, rows)
+            .name("Creature results")
+            .show(ui, |ui, row| {
+                let c = &creatures[matches[row]];
+                let rect = egui::Rect::from_min_size(
+                    ui.max_rect().min,
+                    egui::vec2(add_width.min(ui.max_rect().width()), ui.max_rect().height()),
+                );
+                ui.push_id(c.id, |ui| {
+                    let (read, pressed) = design::action_row(
+                        ui,
+                        rect,
+                        columns,
+                        "encounter_results",
+                        row,
+                        |ui| creature_facts(ui, c),
+                        creature_action(c, "Add", "Add", (roster.already)(c)),
+                    );
+                    if read {
+                        *peek = Some(c.id);
+                    }
+                    if pressed.recovery {
+                        open_in_world(ui, c);
+                    }
+                    if pressed.action {
+                        chosen = Some((c.id, c.party));
+                        *focus_search = true;
+                    }
+                });
             });
         chosen
     }
@@ -7932,29 +7976,31 @@ impl Encounters {
         ui.scope_builder(scope, |ui| {
             // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family):
             // the column keeps it.
-            let shown = design::ScrollColumn::new("encounter_editor").show(ui, |ui| {
-                egui::Frame::new()
-                    .inner_margin(egui::Margin {
-                        left: design::S as i8,
-                        ..egui::Margin::ZERO
-                    })
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width().min(design::LIST_MEASURE));
-                        Self::roster_column(
-                            ui,
-                            draft,
-                            snapshot,
-                            focus_search,
-                            expanded,
-                            linked_party,
-                            make_yours,
-                            heading,
-                        )
-                    })
-                    .inner
-            });
+            let shown = design::ScrollColumn::new("encounter_editor")
+                .hosts_reveals()
+                .show(ui, |ui| {
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin {
+                            left: design::S as i8,
+                            ..egui::Margin::ZERO
+                        })
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                            Self::roster_column(
+                                ui,
+                                draft,
+                                snapshot,
+                                focus_search,
+                                expanded,
+                                linked_party,
+                                make_yours,
+                                heading,
+                            )
+                        })
+                        .inner
+                });
             // Test builds keep the column's scroll id by its draft, for the scroll's tests.
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             ui.data_mut(|data| data.insert_temp(roster_scroll_key(draft.id), shown.id));
             shown.inner
         })
@@ -8436,6 +8482,9 @@ impl Encounters {
                     });
                 });
                 let member_row = member_row.response.rect;
+                draft
+                    .roster_reveal
+                    .mark(ui, draft_id, ("roster_row", &slot.key), member_row);
                 if is_open && missing && unreadable.is_none() {
                     if let Some((creature, all)) =
                         replace_missing_creature(ui, snapshot, missing_counts[i], &name)
@@ -8520,7 +8569,7 @@ impl Encounters {
                         },
                     );
                     if let Some(entry) = definition {
-                        let done = groups::overrides_form(
+                        let end = groups::overrides_form(
                             ui,
                             &format!("{}:{}", draft.id, slot.key),
                             &mut slot.overrides,
@@ -8528,11 +8577,15 @@ impl Encounters {
                             &slot.side,
                             Some(&sides),
                             &mut draft.typed,
-                        )
-                        .done;
-                        if done {
+                        );
+                        if end.done {
                             *expanded = None;
-                            ui.scroll_to_rect(member_row, Some(egui::Align::Min));
+                            // The row comes whole into view, by its column's one reveal.
+                            if let Some(act) = end.done_act {
+                                draft
+                                    .roster_reveal
+                                    .ask(act, draft_id, ("roster_row", &slot.key));
+                            }
                         }
                     }
                 }
@@ -8596,7 +8649,7 @@ impl Encounters {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
-    /// `modal`: the app's one test of an open modal (`crate::modal_open`); Ctrl+S waits for it.
+    /// `modal`: the app's one test of an open modal (`crate::art::modal_open`); Ctrl+S waits for it.
     pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, modal: bool) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
@@ -8741,21 +8794,10 @@ impl Encounters {
             // leaves saved runs, it waits in its place, and the folder warning's two choices (the
             // footer's, `then` below) commit, so a second press where Save was never moves runs.
             let choose_move = run_files > 0 && !run_open;
-            let blocked = if run_open { Some("Close the open run to save run settings.") }
-                else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
-                else if choose_move { Some(CHOOSE_MOVE) }
-                else if !changed && rule_lines.is_empty() { Some(design::save_row::NO_CHANGES) } else { None };
-            // The word by the one rule (`DraftState`): `Unsaved` while changed, `Saved` while the
-            // last Save's settings hold, else `No changes`. A repair of an unread choice names
-            // its write instead (the save row rule in docs/design-system.md), which `DraftState`
-            // cannot say yet, nor a wait that is not the draft's (an open run, the move choice).
-            let state = design::DraftState::new(
-                design::save_row::DraftOrigin::Saved,
-                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
-                design::save_row::Primary::Draft,
-            );
-            let state = if this.options_saved.is_some() { state.just_saved() } else { state };
-            let repair = (!changed && !rule_lines.is_empty()).then(|| {
+            // One rule for the row (`DraftState`): the word (`Unsaved`, `Saved` while the last
+            // Save's settings hold, `No changes`), the repair of an unread choice, Save's weight
+            // and why it waits, Discard and the campaign lock.
+            let repair = (!rule_lines.is_empty()).then(|| {
                 // Save is the repair here: it writes the shown settings over the unread choice.
                 let lines = match rule_lines.split_last() {
                     Some((last, [])) => format!("line {last}"),
@@ -8764,79 +8806,55 @@ impl Encounters {
                 };
                 format!("Save replaces the unread choice on {lines} with these settings")
             });
+            let mut state = design::DraftState::new(
+                design::save_row::DraftOrigin::Saved,
+                if changed { design::save_row::Changed::Yes } else { design::save_row::Changed::No },
+                design::save_row::Primary::Draft,
+            )
+            .locks_campaign();
+            if this.options_saved.is_some() {
+                state = state.just_saved();
+            }
+            if let Some(write) = repair {
+                state = state.repairs(write);
+            }
+            if run_open {
+                state = state.waits("Close the open run to save run settings.");
+            } else if folder_changed && left.is_err() {
+                state = state.waits("Could not read saved runs. Check the old run folder before saving.");
+            } else if choose_move {
+                state = state.commits_elsewhere(CHOOSE_MOVE);
+            }
+            if changed {
+                this.discarded_options = None;
+            }
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
-                // other change too.
-                // Not under a modal (the app's one test) nor the form's lock (review of PR 525).
-                let save_key = blocked.is_none()
+                // other change too. Not under a modal (the app's one test) nor the form's lock
+                // (review of PR 525).
+                let save_key = state.can_save()
                     && !modal
                     && ui.is_enabled()
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                // AF1: the state starts the row and Save ends it, as on every save row; without
-                // room, the state's words and the reasons wrap before Save. One row in every
-                // state (M4), so the commit keeps its place and its job.
-                let pressed = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            // Disabled, the primary loses its fill and keeps its width, so a
-                            // wait moves nothing.
-                            let pressed = Action::primary(SAVE_RUN_SETTINGS)
-                                .key("Ctrl+S")
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked();
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center)
-                                    .with_main_wrap(true),
-                                |ui| {
-                                    if changed {
-                                        this.discarded_options = None;
-                                    }
-                                    let word = match &repair {
-                                        Some(word) => Status {
-                                            icon: icons::WARN,
-                                            word,
-                                            color: colors().result.warning,
-                                        },
-                                        None => state.word().status(),
-                                    };
-                                    if design::save_row_state(ui, word, state.discard_shown(), None) {
-                                        this.discarded_options = Some(std::mem::replace(
-                                            &mut snapshot.options,
-                                            snapshot.saved_options.clone(),
-                                        ));
-                                        Self::record_kept(
-                                            &mut this.kept,
-                                            this.active.as_ref(),
-                                            KeptResult::OptionsDiscarded,
-                                        );
-                                    }
-                                    if snapshot.options != snapshot.saved_options {
-                                        // FB6: while Save is blocked, Discard is the one way
-                                        // out; the move choices also save.
-                                        design::blocked_reason(
-                                            ui,
-                                            Some(if blocked.is_some() && !choose_move {
-                                                blocked_draft_switch_reason()
-                                            } else {
-                                                draft_switch_reason()
-                                            }),
-                                        );
-                                    }
-                                },
-                            );
-                            pressed
-                        },
-                    )
-                    .inner;
-                // Why Save waits, on its own line under the row (as `save_row`'s narrow slot),
-                // while the form has changes: a wrapped label inside the row would cover Discard.
-                if snapshot.options != snapshot.saved_options {
-                    design::blocked_reason(ui, blocked);
+                // The state and Discard start the row, the lock's reason after them, and Save
+                // ends it (`save_row`), in every state (M4).
+                let row = design::save_row(ui, &state, SAVE_RUN_SETTINGS);
+                if row.discard {
+                    this.discarded_options = Some(std::mem::replace(
+                        &mut snapshot.options,
+                        snapshot.saved_options.clone(),
+                    ));
+                    Self::record_kept(
+                        &mut this.kept,
+                        this.active.as_ref(),
+                        KeptResult::OptionsDiscarded,
+                    );
                 }
-                if (pressed || save_key) && blocked.is_none() {
+                // Why Save waits, on its own line under the row, while the form has changes.
+                if snapshot.options != snapshot.saved_options {
+                    design::blocked_reason(ui, state.save_blocked());
+                }
+                if (row.save || save_key) && state.can_save() {
                     commit = Some(commit_options(snapshot, active, OptionsCommit::Save));
                 }
             });
@@ -9080,24 +9098,15 @@ fn options_discarded() -> design::outcome::KeptOutcome<FooterPress> {
 
 /// The widest a list row grows, so that its actions stay near the name they belong to.
 use crate::design::LIST_MEASURE;
+#[path = "encounters/list.rs"]
 mod list;
-pub(crate) use list::run_state_word;
-#[cfg(test)]
-pub(crate) use list::{FIGHT_OPEN, GO_TO_RUN};
+pub use list::run_state_word;
+#[cfg(any(test, feature = "test-support"))]
+pub use list::{FIGHT_OPEN, GO_TO_RUN};
 use list::{
     blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
     ready_list, row_menu, side_control,
 };
-
-pub(crate) fn draft_switch_reason() -> &'static str {
-    "Save or discard to switch campaign."
-}
-
-/// The campaign switch lock of a draft whose Save is blocked: Discard is the one way out, so
-/// the reason does not name Save (round 25 FB6).
-pub(crate) fn blocked_draft_switch_reason() -> &'static str {
-    "Discard to switch campaign."
-}
 
 fn roster_detail(detail: &str) -> String {
     let parts: Vec<_> = detail.split(" · ").collect();
@@ -9128,6 +9137,9 @@ fn roster_detail(detail: &str) -> String {
     );
     result.join(" · ")
 }
+
+#[cfg(any(test, feature = "test-support"))]
+pub use splat_content_ui::content_actions::{blocked_draft_switch_reason, draft_switch_reason};
 
 #[cfg(test)]
 mod tests {
@@ -9190,7 +9202,7 @@ mod tests {
         // words it stops at the fifth it can offer.
         use egui_kittest::kittest::Queryable;
         let visited = || REPLACEMENT_NAMES.with(std::cell::Cell::get);
-        let typos = || crate::matching::TYPO_CHECKS.with(std::cell::Cell::get);
+        let typos = crate::matching::typo_checks;
         let offered = snapshot.creatures.iter().filter(|c| !c.linked).count();
         assert!(offered > 5, "fixture: more creatures than the five");
         let mut harness = egui_kittest::Harness::builder()
@@ -9409,6 +9421,72 @@ mod tests {
         );
         assert!(harness.query_by_label("Open in World").is_some());
         assert!(harness.get_by_label("Add").accesskit_node().is_disabled());
+
+        // Layout PR 4 (I6, §4.1): each row's action starts exactly `L` after the widest facts,
+        // in one column; a row's facts and action lie in its one block; each action is a 24 pt
+        // target at least; each row's gap is measured (a gap above 4L is a counted residual).
+        // An action that becomes `In roster` keeps the column.
+        let records = design::action_rows::row_records(&harness.ctx);
+        let column = |records: &[design::action_rows::RowRecord]| {
+            let widest = records
+                .iter()
+                .map(|record| record.facts.right())
+                .fold(f32::MIN, f32::max);
+            let lefts: Vec<f32> = records.iter().map(|record| record.action.left()).collect();
+            (widest, lefts)
+        };
+        let (widest, lefts) = column(&records);
+        assert!(
+            !records.is_empty()
+                && records.iter().all(|record| !record.wrapped)
+                && lefts
+                    .iter()
+                    .all(|left| (left - (widest + design::L)).abs() <= 0.5),
+            "pr4-column: every action starts L after the widest facts {widest}: {lefts:?}"
+        );
+        assert!(
+            records.iter().all(|record| {
+                record.action.top() >= record.facts.top() - 0.5
+                    && record.action.bottom() <= record.facts.bottom() + 0.5
+                    && record.action.height() >= 24.0
+            }),
+            "pr4-block: each row's action lies in its block, a 24 pt target: {records:?}"
+        );
+        let residuals = records.iter().filter(|record| record.residual()).count();
+        assert!(
+            records.iter().all(|record| record.gap() >= design::L - 0.5),
+            "pr4-gap: each row's gap is measured from its own facts ({residuals} residual): {records:?}"
+        );
+        let in_roster = {
+            let snapshot = Snapshot::load(&active, &[]).unwrap();
+            let mut harness = egui_kittest::Harness::new(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let _ = Encounters::creature_search(
+                        ui,
+                        snapshot.search_list(false),
+                        &mut "Watchkeeper".to_owned(),
+                        &mut false,
+                        &mut None,
+                        SearchRoster {
+                            already: &|_| true,
+                            on_roster: &[],
+                            separated: &std::cell::Cell::new(None),
+                        },
+                    );
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            column(&design::action_rows::row_records(&harness.ctx)).1
+        };
+        assert!(
+            in_roster.len() == lefts.len()
+                && in_roster
+                    .iter()
+                    .zip(&lefts)
+                    .all(|(roster, add)| (roster - add).abs() <= 0.5),
+            "pr4-alternate: In roster keeps the column of Add: {in_roster:?} {lefts:?}"
+        );
     }
     #[test]
     fn editor_save_row_has_one_height_in_every_state() {
@@ -10082,6 +10160,85 @@ mod tests {
         harness.run_steps(2);
         assert_eq!(drafts.borrow()[1].name, "Beta", "B keeps its own text");
         assert_eq!(drafts.borrow()[0].name, "Alpha12", "A is unchanged");
+    }
+
+    /// M0205: `Done` in a roster row's changes brings that row whole into view, through the
+    /// roster column's one reveal (`design::reveal`), when the DM scrolled its top out of view.
+    #[test]
+    fn roster_done_brings_its_row_whole_into_view() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let wolf = creature(dir.path(), "Wolf", false);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut draft = Draft::new();
+        for _ in 0..12 {
+            draft.add(wolf, false);
+        }
+        // The first row: content stays below it, so closing its form clamps no offset.
+        let first_key = draft.setup.roster.first().unwrap().key.clone();
+        let id = draft.id;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build_state(
+                move |ctx, (draft, expanded): &mut (Draft, Option<String>)| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        Encounters::roster_pane(
+                            ui,
+                            draft,
+                            &snapshot,
+                            &mut false,
+                            expanded,
+                            None,
+                            &mut None,
+                            Some(None),
+                        );
+                    });
+                },
+                (draft, Some(first_key)),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let scroll = harness
+            .ctx
+            .data(|data| data.get_temp::<egui::Id>(roster_scroll_key(id)))
+            .expect("the roster column's scroll id");
+        let row = |harness: &egui_kittest::Harness<'_, (Draft, Option<String>)>| {
+            harness
+                .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                    node.value()
+                        .or(node.label())
+                        .is_some_and(|words| words.starts_with("1. Wolf"))
+                }))
+                .map(|node| node.rect())
+                .next()
+        };
+        // The column's top: where its first line (the roster heading) starts before any scroll.
+        let view_top = harness
+            .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                node.value()
+                    .or(node.label())
+                    .is_some_and(|words| words.to_uppercase().starts_with("ROSTER"))
+            }))
+            .map(|node| node.rect().top())
+            .fold(f32::INFINITY, f32::min);
+        // Scroll so the open row's top is cut by the column's top, its Done still in view.
+        let first = row(&harness).expect("the open row");
+        let mut state = egui::scroll_area::State::load(&harness.ctx, scroll).unwrap();
+        state.offset.y += first.top() - view_top + 4.0;
+        state.store(&harness.ctx, scroll);
+        harness.run_steps(2);
+        let cut = row(&harness).is_none_or(|rect| rect.top() < view_top)
+            && harness.query_by_label("Done with changes").is_some();
+        harness.get_by_label("Done with changes").click();
+        harness.run_steps(8);
+        let shown = row(&harness);
+        assert!(
+            cut && harness.state().1.is_none()
+                && shown.is_some_and(|rect| rect.top() >= view_top - 0.5),
+            "Done closed the form ({:?}) and brought row 1 whole into view: cut before {cut}, row {shown:?}, view top {view_top}",
+            harness.state().1
+        );
     }
 
     #[test]
@@ -12190,7 +12347,7 @@ mod tests {
         image::DynamicImage::new_rgb8(40, 20).save(&image).unwrap();
         // The app's frame: the close confirmation (`close`) disables the page (`lib.rs`), the
         // reader's image opens the full-window viewer, and the page's Ctrl+S asks the app's one
-        // modal test (`crate::modal_open`).
+        // modal test (`crate::art::modal_open`).
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
             .build_state(
@@ -12202,7 +12359,7 @@ mod tests {
                         if *close {
                             ui.disable();
                         }
-                        let modal = crate::modal_open(ui.ctx(), *close);
+                        let modal = crate::art::modal_open(ui.ctx(), *close);
                         editor.save_shortcut(ui.ctx(), modal, &campaigns);
                         editor.show(
                             ui,
@@ -12330,6 +12487,38 @@ mod tests {
                 && !harness.state().0.dirty(),
             "with the image closed, a fresh Ctrl+S saves"
         );
+        // M0192 (ruling M20): while the page holds another campaign's encounter, its fault is the
+        // page's typed placeholder, in place of the editor.
+        let mut other = campaign.clone();
+        other.id = Uuid::new_v4();
+        harness.state_mut().0.active = Some(other);
+        harness.state_mut().0.draft.as_mut().unwrap().name = "Hero fight elsewhere".into();
+        harness.step();
+        {
+            use egui_kittest::kittest::Queryable;
+            let placeholder = harness
+                .query_all_by_role_and_label(
+                    egui::accesskit::Role::Label,
+                    "Save or discard the previous campaign’s encounter first.",
+                )
+                .count()
+                + harness
+                    .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                        node.value().is_some_and(|words| {
+                            words.contains(
+                                "Save or discard the previous campaign’s encounter first.",
+                            )
+                        })
+                    }))
+                    .count();
+            let placed = crate::design::outcome::message_rects(&harness.ctx)
+                .into_iter()
+                .any(|(_, place, _)| place == crate::design::outcome::MessagePlace::Page);
+            assert!(
+                placeholder > 0 && placed,
+                "the page's placeholder says why ({placeholder} nodes, typed place {placed})"
+            );
+        }
     }
     #[test]
     fn dm_run_requires_saved_current_template_and_protects_its_memory_state() {

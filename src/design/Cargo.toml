@@ -1,0 +1,26 @@
+[package]
+name = "splat-design"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[features]
+test-support = []
+
+[dependencies]
+egui = { version = "0.33", default-features = false, features = ["accesskit", "default_fonts"] }
+egui-phosphor = "0.11"
+splat-assets = { path = "../../crates/assets" }
+splat-campaign = { path = "../../crates/campaign" }
+unicode-segmentation = "1.13"
+url = "2.5"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+egui_extras = { version = "0.33", default-features = false, features = ["file", "image"] }
+egui_kittest = { version = "0.33", features = ["wgpu"] }
+proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
+serde_json = "1"
+syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
+tempfile = "3"

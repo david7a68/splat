@@ -31,7 +31,9 @@
   );
 
   scripts.dev-run.exec = "cargo run --locked";
-  scripts.check.exec = "cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings";
+  # Test targets unify test-support features from dev dependencies. Lint the normal
+  # build on its own so it also covers the live recording and credentials paths.
+  scripts.check.exec = "cargo fmt --check && cargo clippy --locked --workspace --lib --bins -- -D warnings && cargo clippy --locked --all-targets -- -D warnings";
   # Run once in the seed worktree before copying target/ to implementers.
   scripts.audit-warm.exec = "cargo test --locked --no-run && check";
   # The full merge gate: run visual scenarios once, with captures, among all tests.
@@ -99,7 +101,7 @@
     echo "Output: $out"
     exit "$status"
   '';
-  # G6's counts and G7's plain reference (README.md, Visual tests).
+  # G6's counts and G7's plain reference (docs/development.md, Visual tests).
   #   audit-freeze counts [label]     G6: write every row of the audit's counts from this source.
   #   audit-freeze journeys [label]   G6: write every row of journeys J2, J3, J4 and J6 likewise.
   #   audit-freeze reference [label]  G7: write the plain reference on an unchanged commit of main.

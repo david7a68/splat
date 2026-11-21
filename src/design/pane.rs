@@ -37,8 +37,8 @@
 //! The caller gets no y:
 //!
 //! ```compile_fail,E0308
-//! use splat::pane::{Body, Footer};
-//! fn body_end(ui: &mut eframe::egui::Ui) {
+//! use splat_design::pane::{Body, Footer};
+//! fn body_end(ui: &mut egui::Ui) {
 //!     let footer = Footer::new("pane", 400.0);
 //!     let bottom: f32 = footer.pane(ui, Body::Content, |ui| {
 //!         ui.label("A row");
@@ -49,8 +49,8 @@
 //! What the body returns comes back, and nothing else:
 //!
 //! ```
-//! use splat::pane::{Body, Footer};
-//! fn rows(ui: &mut eframe::egui::Ui) -> usize {
+//! use splat_design::pane::{Body, Footer};
+//! fn rows(ui: &mut egui::Ui) -> usize {
 //!     let footer = Footer::new("pane", 400.0);
 //!     footer.pane(ui, Body::Content, |ui| {
 //!         ui.label("A row");
@@ -62,8 +62,8 @@
 //! A footer is placed once, with its body: it cannot be drawn again, before or after.
 //!
 //! ```compile_fail,E0382
-//! use splat::pane::{Body, Footer};
-//! fn twice(ui: &mut eframe::egui::Ui) {
+//! use splat_design::pane::{Body, Footer};
+//! fn twice(ui: &mut egui::Ui) {
 //!     let footer = Footer::new("pane", 400.0);
 //!     footer.pane(ui, Body::Content, |ui| ui.label("Body"));
 //!     footer.pane(ui, Body::Content, |ui| ui.label("A second body"));
@@ -71,8 +71,8 @@
 //! ```
 //!
 //! ```
-//! use splat::pane::{Body, Footer};
-//! fn once(ui: &mut eframe::egui::Ui) {
+//! use splat_design::pane::{Body, Footer};
+//! fn once(ui: &mut egui::Ui) {
 //!     Footer::new("pane", 400.0).pane(ui, Body::Content, |ui| ui.label("Body"));
 //! }
 //! ```
@@ -81,22 +81,22 @@
 //! Clippy can refuse; no free words, and no way around `Fills::because`:
 //!
 //! ```compile_fail,E0308
-//! use splat::pane::{Body, Footer};
-//! fn editor(ui: &mut eframe::egui::Ui) {
+//! use splat_design::pane::{Body, Footer};
+//! fn editor(ui: &mut egui::Ui) {
 //!     Footer::new("pane", 400.0).pane(ui, Body::Fills("an editor"), |_| ());
 //! }
 //! ```
 //!
 //! ```compile_fail,E0423
-//! use splat::pane::{Body, Fills, FillsReason, Footer};
-//! fn editor(ui: &mut eframe::egui::Ui) {
+//! use splat_design::pane::{Body, Fills, FillsReason, Footer};
+//! fn editor(ui: &mut egui::Ui) {
 //!     Footer::new("pane", 400.0).pane(ui, Body::Fills(Fills(FillsReason::MarkdownEditor)), |_| ());
 //! }
 //! ```
 //!
 //! ```
-//! use splat::pane::{Body, Fills, FillsReason, Footer};
-//! fn editor(ui: &mut eframe::egui::Ui) {
+//! use splat_design::pane::{Body, Fills, FillsReason, Footer};
+//! fn editor(ui: &mut egui::Ui) {
 //!     let body = Body::Fills(Fills::because(FillsReason::MarkdownEditor));
 //!     Footer::new("pane", 400.0).pane(ui, body, |_| ());
 //! }
@@ -105,13 +105,13 @@
 //! A caller cannot change what a pane measured: the record's fields are private, read only.
 //!
 //! ```compile_fail,E0616
-//! fn move_end(record: &mut splat::pane::PaneRecord) {
+//! fn move_end(record: &mut splat_design::pane::PaneRecord) {
 //!     record.offset = 0.0;
 //! }
 //! ```
 //!
 //! ```
-//! fn read_end(record: &mut splat::pane::PaneRecord) {
+//! fn read_end(record: &mut splat_design::pane::PaneRecord) {
 //!     let _ = record.offset();
 //! }
 //! ```
@@ -126,8 +126,8 @@ use super::{layout::ScrollColumn, tokens::S};
 mod plan;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
-use eframe::egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
-pub use plan::{Block, ENTRY_ROW_HEIGHT, Row};
+use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
+pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Row};
 pub use region::{BlockRegion, Navigation, RegionState};
 
 /// What a pane's body is, for the footer's place.
@@ -232,22 +232,22 @@ impl ContentScroll {
 /// A second use does not compile:
 ///
 /// ```compile_fail,E0382
-/// use splat::pane::Footer;
-/// fn two(ui: &mut eframe::egui::Ui, a: &mut String, b: &mut String) {
-///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+/// use splat_design::pane::Footer;
+/// fn two(ui: &mut egui::Ui, a: &mut String, b: &mut String) {
+///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
-///         region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit);
-///         region.editor(ui, NOTE.once(splat::layout::Once::Settings), b, |edit| edit);
+///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit);
+///         region.editor(ui, NOTE.once(splat_design::layout::Once::Settings), b, |edit| edit);
 ///     });
 /// }
 /// ```
 ///
 /// ```
-/// use splat::pane::Footer;
-/// fn one(ui: &mut eframe::egui::Ui, a: &mut String) {
-///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+/// use splat_design::pane::Footer;
+/// fn one(ui: &mut egui::Ui, a: &mut String) {
+///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
-///         region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit);
+///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit);
 ///         ui.label("A save row");
 ///     });
 /// }
@@ -256,20 +256,20 @@ impl ContentScroll {
 /// It cannot leave its closure, to be used after the pane:
 ///
 /// ```compile_fail
-/// use splat::pane::Footer;
-/// fn kept(ui: &mut eframe::egui::Ui, a: &mut String) {
-///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+/// use splat_design::pane::Footer;
+/// fn kept(ui: &mut egui::Ui, a: &mut String) {
+///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     let region = Footer::new("pane", 400.0).pane_editor(ui, |_, region| region);
-///     region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit);
+///     region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit);
 /// }
 /// ```
 ///
 /// ```
-/// use splat::pane::Footer;
-/// fn used(ui: &mut eframe::egui::Ui, a: &mut String) -> bool {
-///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+/// use splat_design::pane::Footer;
+/// fn used(ui: &mut egui::Ui, a: &mut String) -> bool {
+///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     Footer::new("pane", 400.0)
-///         .pane_editor(ui, |ui, region| region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit))
+///         .pane_editor(ui, |ui, region| region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit))
 ///         .response
 ///         .changed()
 /// }
@@ -278,18 +278,18 @@ impl ContentScroll {
 /// Nor can a caller make one, or copy one:
 ///
 /// ```compile_fail,E0451
-/// fn made() -> splat::pane::EditorRegion<'static> {
-///     splat::pane::EditorRegion { pane: eframe::egui::Id::NULL, max: 100.0, _scope: std::marker::PhantomData }
+/// fn made() -> splat_design::pane::EditorRegion<'static> {
+///     splat_design::pane::EditorRegion { pane: egui::Id::NULL, max: 100.0, _scope: std::marker::PhantomData }
 /// }
 /// ```
 ///
 /// ```compile_fail,E0382
-/// use splat::pane::Footer;
-/// fn copied(ui: &mut eframe::egui::Ui, a: &mut String) {
-///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+/// use splat_design::pane::Footer;
+/// fn copied(ui: &mut egui::Ui, a: &mut String) {
+///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
 ///         let copy = region;
-///         region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit);
+///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit);
 ///         let _ = copy;
 ///     });
 /// }
@@ -677,16 +677,7 @@ fn innermost(ui: &Ui) -> Option<OpenPane> {
 /// Debug builds and tests refuse it (a panic, so that its caller is fixed); a release build draws
 /// its content in place (`ScrollColumn::inline`), and the pane scrolls it.
 pub(super) fn column_in_content(ui: &Ui) -> bool {
-    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
-    let inside = ui.ctx().data(|data| {
-        data.get_temp::<Open>(open_id()).is_some_and(|open| {
-            open.pass == pass
-                && open
-                    .panes
-                    .last()
-                    .is_some_and(|pane| pane.layer == layer && pane.content)
-        })
-    });
+    let inside = in_content_pane(ui);
     assert!(
         !(inside && cfg!(debug_assertions)),
         "a ScrollColumn inside a `Body::Content` pane: the pane is the scroll column. Give its \
@@ -694,6 +685,21 @@ pub(super) fn column_in_content(ui: &Ui) -> bool {
          `Body::Fills(Fills::because(FillsReason::Columns))` for columns that each scroll"
     );
     inside
+}
+
+/// Whether `ui` draws in a `Body::Content` pane's body, which scrolls (a region there draws its
+/// blocks in place: `BlockRegion`).
+pub(super) fn in_content_pane(ui: &Ui) -> bool {
+    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
+    ui.ctx().data(|data| {
+        data.get_temp::<Open>(open_id()).is_some_and(|open| {
+            open.pass == pass
+                && open
+                    .panes
+                    .last()
+                    .is_some_and(|pane| pane.layer == layer && pane.content)
+        })
+    })
 }
 
 /// The usable rect of the innermost pane body that `ui` is drawn in, on `ui`'s layer: its room
@@ -830,10 +836,10 @@ fn hold_place(ui: &Ui, mut held: Held, output: ColumnFacts) -> Held {
 
 /// Test builds record why the last hold ended.
 fn hold_ended(ui: &Ui, why: &'static str) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     ui.ctx()
         .data_mut(|data| data.insert_temp(Id::new("design_pane_hold_ended"), why));
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let _ = (ui, why);
 }
 
@@ -940,10 +946,10 @@ impl PaneRecord {
 }
 
 /// Where test builds keep each pane's record of a pass.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 const PANE_RECORDS: &str = "design_pane_records";
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn keep(ui: &Ui, pane: PaneRecord) {
     let pass = ui.ctx().cumulative_pass_nr();
     ui.ctx().data_mut(|data| {
@@ -962,7 +968,7 @@ fn keep(ui: &Ui, pane: PaneRecord) {
 /// checks them against its own accessibility-tree rects, not against the record's placement:
 /// for a pane that is not `Body::Fills`, whose footer shows and whose scroll output `fits()`, a
 /// gap of more than `2 × L` from the last body widget to the footer is a finding.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn pane_records(ctx: &egui::Context) -> Vec<PaneRecord> {
     let last = ctx.cumulative_pass_nr().saturating_sub(1);
     ctx.data(|data| data.get_temp::<(u64, Vec<PaneRecord>)>(Id::new(PANE_RECORDS)))
@@ -973,7 +979,7 @@ pub fn pane_records(ctx: &egui::Context) -> Vec<PaneRecord> {
 
 /// The record of the pane whose footer the caller made with `Footer::new(local, …)`, in the last
 /// completed pass (the first, when several scopes draw one).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn pane_record(ctx: &egui::Context, local: Id) -> Option<PaneRecord> {
     pane_records(ctx)
         .into_iter()
@@ -985,7 +991,7 @@ pub fn pane_record(ctx: &egui::Context, local: Id) -> Option<PaneRecord> {
 /// the last body widget above `footer` (its rect, scaled like `body`) to the footer's top; `Some`
 /// when it is more than `2 × L` (row padding and a frame under the last item end there). `scale`
 /// turns the record's points into the rects' units.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn short_body_gap(
     record: &PaneRecord,
     scale: f32,
@@ -1013,7 +1019,7 @@ pub fn short_body_gap(
 
 /// The rect of the footer that the caller made with `Footer::new(local, …)`, as egui laid out its
 /// focus group in the last pass (the first, when several scopes draw one).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn footer_rect(ctx: &egui::Context, local: Id) -> Option<Rect> {
     let id = pane_record(ctx, local)?.id;
     ctx.read_response(id.with("focus"))
@@ -1111,25 +1117,25 @@ pub(crate) fn reserve(ui: &Ui, band: Rect) {
     // Test builds keep each one (`late_bands`); the part test asserts it. Today: Lookup
     // (`src/lib.rs:2945`) draws before the Library reader reserves its lane
     // (`src/library.rs:8308`); their common layout owner must reserve before Lookup draws.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if let Some((limit, span)) = late {
         ui.ctx().data_mut(|data| {
             data.get_temp_mut_or_default::<Vec<(Rect, f32, Rect)>>(late_id())
                 .push((band, limit, span));
         });
     }
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let _ = late;
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn late_id() -> Id {
     Id::new("design_pane_late_bands")
 }
 
 /// Bands reserved after a column whose hang they cross had drawn (test builds): each band, that
 /// column's hang limit and its hang's span.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn late_bands(ctx: &egui::Context) -> Vec<(Rect, f32, Rect)> {
     ctx.data(|data| data.get_temp::<Vec<(Rect, f32, Rect)>>(late_id()))
         .unwrap_or_default()
@@ -2063,7 +2069,7 @@ impl Footer<'_> {
             }
             if rect.height() > 0.0 {
                 footer = Some(rect);
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 super::components::record_band(ui, room, rect);
             } else {
                 // Not measured yet: this pass is drawn again with the footer's height.
@@ -2081,7 +2087,7 @@ impl Footer<'_> {
             ui.ctx().data_mut(|data| data.insert_temp(held_key, held));
         }
         ui.advance_cursor_after_rect(room);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         keep(
             ui,
             PaneRecord {
@@ -2097,7 +2103,7 @@ impl Footer<'_> {
                 cut,
             },
         );
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test-support")))]
         let _ = (footer, placement, cut, local);
         out
     }
@@ -3791,7 +3797,7 @@ mod row_cut_tests {
                 "gutter-first-pixel-pressure (menu {menu}): the action {choice:?} starts at the clip {clip:?}"
             );
             // The pointer rests outside the room first.
-            crate::visual_tests::input_frame::one_pass(
+            crate::input_frame::one_pass(
                 &mut press,
                 [egui::Event::PointerMoved(pos2(
                     clip.left() - 40.0,
@@ -3800,7 +3806,7 @@ mod row_cut_tests {
             );
             press.run_steps(2);
             let before = press.state().2;
-            crate::visual_tests::input_frame::one_pass(
+            crate::input_frame::one_pass(
                 &mut press,
                 [
                     egui::Event::PointerMoved(first),
@@ -3889,7 +3895,7 @@ mod row_cut_tests {
                     > 0.0,
             "gutter-lane-pressure: the press {on_lane:?} is on the lane, inside the icon action's unrestricted hang, left of the action {rect:?}"
         );
-        crate::visual_tests::input_frame::one_pass(
+        crate::input_frame::one_pass(
             &mut lane,
             [
                 egui::Event::PointerMoved(on_lane),
@@ -3901,11 +3907,11 @@ mod row_cut_tests {
                 },
             ],
         );
-        crate::visual_tests::input_frame::next_pass(
+        crate::input_frame::next_pass(
             &mut lane,
             [egui::Event::PointerMoved(on_lane + vec2(0.0, 60.0))],
         );
-        crate::visual_tests::input_frame::next_pass(
+        crate::input_frame::next_pass(
             &mut lane,
             [egui::Event::PointerButton {
                 pos: on_lane + vec2(0.0, 60.0),
@@ -3987,7 +3993,7 @@ mod row_cut_tests {
         let stop = state.stop.expect("Stop").0;
         let on_band = pos2(band - 2.0, stop.center().y);
         let handle = Id::new("navigation").with("__resize");
-        crate::visual_tests::input_frame::one_pass(
+        crate::input_frame::one_pass(
             &mut flush,
             [
                 egui::Event::PointerMoved(on_band),
@@ -4003,7 +4009,7 @@ mod row_cut_tests {
             .ctx
             .read_response(handle)
             .is_some_and(|response| response.is_pointer_button_down_on());
-        crate::visual_tests::input_frame::next_pass(
+        crate::input_frame::next_pass(
             &mut flush,
             [egui::Event::PointerButton {
                 pos: on_band,
@@ -4345,10 +4351,7 @@ mod editor_region_tests {
             modifiers: egui::Modifiers::SHIFT,
         };
         harness.input_mut().modifiers = egui::Modifiers::SHIFT;
-        crate::visual_tests::input_frame::one_pass(
-            &mut harness,
-            (0..20).flat_map(|_| [key(true), key(false)]),
-        );
+        crate::input_frame::one_pass(&mut harness, (0..20).flat_map(|_| [key(true), key(false)]));
         harness.input_mut().modifiers = egui::Modifiers::NONE;
         let (first, first_offset) = (harness.state().caret, painted_offset(&harness));
         harness.step();

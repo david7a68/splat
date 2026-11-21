@@ -1,0 +1,19 @@
+[package]
+name = "splat-trackers"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[features]
+test-support = ["splat-design/test-support"]
+
+[dependencies]
+egui = { version = "0.33", default-features = false }
+splat-campaign = { path = "../../crates/campaign" }
+splat-content = { path = "../../crates/content" }
+splat-design = { path = "../design" }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.33", features = ["wgpu"] }
