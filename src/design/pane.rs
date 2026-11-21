@@ -4438,10 +4438,12 @@ mod editor_region_tests {
                 _ => None,
             })
             .expect("the editor's text is painted");
-        // egui paints a text edit's text with a clip one point wider than its rect. The text
-        // ends one lane (subtracted once) before the frame's inside right edge.
+        // egui paints a text edit's text with a clip one point wider than its rect, and clips a
+        // scroll's content `clip_rect_margin` outside its view. The text ends one lane
+        // (subtracted once) before the frame's inside right edge.
+        let margin = harness.ctx.style().visuals.clip_rect_margin;
         assert!(
-            view.expand(1.5).contains_rect(text)
+            view.expand(margin + 0.5).contains_rect(text)
                 && (text.right() - 1.0 - (inner.right() - lane)).abs() <= 0.5,
             "i10-text-{case}: the text (clip {text:?}) is inside the view {view:?}, ending one \
              lane before the frame's inside {inner:?}"
