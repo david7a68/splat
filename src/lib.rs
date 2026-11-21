@@ -2053,7 +2053,7 @@ impl Splat {
                         },
                     );
                     if let Some(press) = paned.pressed {
-                        campaigns.into_inner().footer_act(press.id);
+                        campaigns.into_inner().footer_act(press);
                     }
                 });
             }
@@ -2321,7 +2321,7 @@ impl Splat {
                                 },
                             );
                             if let Some(press) = paned.pressed {
-                                campaigns.into_inner().footer_act(press.id);
+                                campaigns.into_inner().footer_act(press);
                             }
                         });
                     }

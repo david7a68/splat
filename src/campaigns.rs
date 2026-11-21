@@ -1047,14 +1047,24 @@ impl Campaigns {
     /// `Undo register campaign`: the copy's own files go back and its registration goes. Other
     /// settings, including changes made since, stay. The active campaign goes back only while
     /// it is still the copy. The result that the Undo followed ends; a failed Undo keeps it.
-    fn undo_campaign_copy(&mut self) -> Result<(), String> {
+    fn undo_campaign_copy(&mut self, ticket: design::results::Ticket) -> Result<(), String> {
         let mut results = std::mem::take(&mut self.results);
-        let undone = results.undo(&FormResult::Added, |_| self.undo_copy_files());
+        let undone = results.undo_by(ticket, |_| self.undo_copy_files());
         self.results = results;
         match undone {
-            Some(undone) => undone.map(drop),
-            None => Err("Nothing to undo.".into()),
+            Ok(_) => Ok(()),
+            Err(design::results::ByTicket::Failed(error)) => Err(error),
+            Err(design::results::ByTicket::Gone) => Err("Nothing to undo.".into()),
         }
+    }
+
+    /// The ticket of the add's or the copy's result line, for tests of its Undo.
+    #[cfg(test)]
+    fn added_ticket(&self) -> design::results::Ticket {
+        self.results
+            .get(&FormResult::Added)
+            .expect("an add or copy result")
+            .ticket_for_caller_test()
     }
 
     fn undo_copy_files(&mut self) -> Result<(), String> {
@@ -1388,27 +1398,28 @@ impl Campaigns {
 
     /// What a press in the campaign messages of a footer asks for (`footer_messages`), done
     /// after the pane is drawn.
-    pub fn footer_act(&mut self, act: CampaignAct) {
-        match act {
-            CampaignAct::UndoDiscard => {
-                let undone = self
-                    .results
-                    .undo(&FormResult::Discarded, |kept| match kept {
-                        FormKept::Discarded { name, path } => Ok((name.clone(), path.clone())),
-                        FormKept::Added(_) => Err(()),
-                    });
-                if let Some(Ok((_, (name, path)))) = undone {
+    /// An Undo names its result by the ticket of the line that was pressed (`Results::undo_by`),
+    /// so it never undoes a newer result of the same kind.
+    pub fn footer_act(&mut self, press: design::outcome::Press<CampaignAct>) {
+        match (press.id, press.ticket) {
+            (CampaignAct::UndoDiscard, Some(ticket)) => {
+                let undone = self.results.undo_by(ticket, |kept| match kept {
+                    FormKept::Discarded { name, path } => Ok((name.clone(), path.clone())),
+                    FormKept::Added(_) => Err(()),
+                });
+                if let Ok((_, (name, path))) = undone {
                     self.name = name;
                     self.path = path;
                 }
             }
-            CampaignAct::UndoRegister => {
-                if let Err(error) = self.undo_campaign_copy() {
+            (CampaignAct::UndoRegister, Some(ticket)) => {
+                if let Err(error) = self.undo_campaign_copy(ticket) {
                     self.error = Some(error);
                 }
             }
-            CampaignAct::BuildEncounter => self.build_encounter(),
-            CampaignAct::RegisterAsNew => {
+            (CampaignAct::UndoDiscard | CampaignAct::UndoRegister, None) => {}
+            (CampaignAct::BuildEncounter, _) => self.build_encounter(),
+            (CampaignAct::RegisterAsNew, _) => {
                 if let Err(error) = self.register_campaign_copy() {
                     self.error = Some(error);
                 }
@@ -1422,7 +1433,7 @@ impl Campaigns {
     /// reason until the form has a name).
     #[allow(
         clippy::disallowed_methods,
-        reason = "the first campaign's form has no footer: its error is the page's body fault (M20)"
+        reason = "the first campaign’s form has no footer: its error is the page’s body fault (M20)"
     )]
     pub fn form_error_inline(&mut self, ui: &mut egui::Ui) {
         let Some(error) = self.error.clone() else {
@@ -1900,7 +1911,9 @@ mod tests {
         std::fs::create_dir(&package.path).unwrap();
         campaigns.register_module(package.clone()).unwrap();
 
-        campaigns.undo_campaign_copy().unwrap();
+        campaigns
+            .undo_campaign_copy(campaigns.added_ticket())
+            .unwrap();
         assert!(
             campaigns.added().is_none() && campaigns.campaign_copy.is_none(),
             "SD2-undo-ends"
@@ -1973,7 +1986,9 @@ mod tests {
         assert!(campaigns.save_form().is_err());
         campaigns.register_campaign_copy().unwrap();
         campaigns.select(Some(first));
-        campaigns.undo_campaign_copy().unwrap();
+        campaigns
+            .undo_campaign_copy(campaigns.added_ticket())
+            .unwrap();
         assert_eq!(
             campaigns.active_campaign().map(|c| c.id),
             Some(first),
