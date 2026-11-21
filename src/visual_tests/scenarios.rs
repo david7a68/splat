@@ -547,6 +547,22 @@ fn group_head_tops(d: &Driver<'_>) -> Vec<(&'static str, Option<f32>)> {
     .collect()
 }
 
+/// Whether the save row shows the campaign-switch reason: its full words, or (where they do not
+/// fit beside the widest word and Discard) its short form, painted, with the full reason in its
+/// accessible description (ruling M24).
+fn switch_reason_shown(d: &Driver<'_>) -> bool {
+    const FULL: &str = "Save or discard to switch campaign.";
+    d.visible_text(FULL)
+        || (d.visible_text(crate::design::save_row::SAVE_OR_DISCARD_SHORT)
+            && d.has_containing(FULL))
+}
+
+/// Whether neither form of the campaign-switch reason is painted.
+fn no_switch_reason(d: &Driver<'_>) -> bool {
+    !d.visible_text("Save or discard to switch campaign.")
+        && !d.visible_text(crate::design::save_row::SAVE_OR_DISCARD_SHORT)
+}
+
 /// Whether two `group_head_tops` readings agree: every field shown in `clean` (the name,
 /// `Default side` and `Belongs to` always) is at the same top (±0.5 px) in `changed`.
 fn group_head_still(
@@ -20258,7 +20274,7 @@ pub mod encounter_groups {
         d.observe_both(
             "iter-18-B-ST1",
             "A dirty group opened in Encounters says why the campaign cannot change",
-            |d| d.visible_text("Unsaved") && d.visible_text("Save or discard to switch campaign."),
+            |d| d.visible_text("Unsaved") && switch_reason_shown(d),
         );
         // FD4 family: the group notes field ends at the members' right edge, as the encounter
         // editor's notes field ends at the roster's.
@@ -20335,7 +20351,7 @@ pub mod encounter_groups {
         let without_member = |tops: &[(&'static str, Option<f32>)]| tops[..4].to_vec();
         d.observe(
             "l6-SL4-AL9",
-            d.visible_text("Save or discard to switch campaign.")
+            switch_reason_shown(d)
                 && clean_head.iter().zip(&dirty_head).all(|(clean, dirty)| {
                     group_head_still(&without_member(clean), &without_member(dirty))
                 }),
@@ -20351,7 +20367,7 @@ pub mod encounter_groups {
         );
         d.observe(
             "iter-18-B-ST1-clean",
-            !d.visible_text("Save or discard to switch campaign."),
+            no_switch_reason(d),
             "A group with nothing to save gives no switch reason",
         );
         d.expect_same("Undo restores the complete group editor with the changed member.");

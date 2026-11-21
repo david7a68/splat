@@ -1282,7 +1282,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
                     && reason.center().y <= discard.bottom() + 0.5 + crate::design::L * 2.0
             })
             && !d.visible_text("Save or discard your edit to add a Log line.")
-            && !d.visible_text("Save or discard to switch campaign."),
+            && no_switch_reason(d),
         format!("Discard stays at {discard:?} → {waiting:?}; the one reason {reason:?} is at the save row"),
     );
     d.state("log-field-blocked-by-edit", Sizes::Default);
