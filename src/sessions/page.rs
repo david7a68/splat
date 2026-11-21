@@ -780,6 +780,9 @@ pub struct Sessions {
     pub manifest_changed: Option<PathBuf>,
     /// The Sessions page is showing, so a button there need not lead here.
     pub on_page: bool,
+    /// A modal is open over the app (its dialogs, the full-window image, any egui modal: the
+    /// app's one test, `art::modal_open`). Ctrl+S waits for it, as every shortcut does.
+    pub modal: bool,
     pub wants_processing_settings: bool,
     pub wants_speech_key: bool,
     pub wants_recording_input: bool,
@@ -4687,6 +4690,7 @@ impl Sessions {
         // taken here, before the field, and the save runs after the field took this frame's
         // input (issue #513): words typed in the same frame are saved with it.
         let save = (!in_panel || self.note_had_focus)
+            && !self.modal
             && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
         if draft.state == DraftState::Conflict {
             if draft.on_disk.is_none() {
@@ -7688,6 +7692,7 @@ impl Sessions {
         // Ctrl+S is taken before the field and saves after it (issue #513), so words typed in
         // the same frame are saved with it.
         let save = self.template_draft.is_some()
+            && !self.modal
             && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
         let mut pressed_link = None;
         egui::ScrollArea::vertical()
@@ -9390,18 +9395,34 @@ mod tests {
             harness.run_steps(2);
             harness.get_by_label(field).focus();
             harness.run_steps(2);
+            let ctrl_s = egui::Event::Key {
+                key: egui::Key::S,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            };
+            // Review of PR 587 (P1): under a modal (the copy dialog, the app's `modal_open`),
+            // Ctrl+S saves nothing in the background.
+            harness.state_mut().0.modal = true;
+            harness
+                .input_mut()
+                .events
+                .extend([egui::Event::Text("Wait.".into()), ctrl_s.clone()]);
+            harness.step();
+            let saved = fs::read_to_string(&path).unwrap();
+            assert!(
+                !saved.contains("Wait."),
+                "n0-ctrl-s-modal: {field}: Ctrl+S under a modal saved: {saved:?}"
+            );
+            harness.state_mut().0.modal = false;
+            harness.run_steps(1);
             // Both events in ONE frame's raw input (`harness.event` gives each its own frame).
             let frame = harness.ctx.cumulative_frame_nr();
-            harness.input_mut().events.extend([
-                egui::Event::Text("Dusk.".into()),
-                egui::Event::Key {
-                    key: egui::Key::S,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: egui::Modifiers::COMMAND,
-                },
-            ]);
+            harness
+                .input_mut()
+                .events
+                .extend([egui::Event::Text("Dusk.".into()), ctrl_s]);
             harness.step();
             assert_eq!(
                 harness.ctx.cumulative_frame_nr() - frame,
