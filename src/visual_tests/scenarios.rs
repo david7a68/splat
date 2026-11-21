@@ -535,6 +535,22 @@ fn session_header_edge(d: &mut Driver<'_>, id: &str) {
     }
     let size = d.window_size();
     let record = d.place_of("Record this session");
+    let edge = session_content_edge(d);
+    let toolbar = d.place_of("Read").map(|rect| rect.right());
+    let near = |a: f32| edge.is_some_and(|edge| (a - edge).abs() <= 1.0);
+    d.observe(
+        id,
+        record.is_some_and(|record| near(record.right())) && toolbar.is_none_or(near),
+        format!(
+            "At {size:?}, Record {record:?} and the toolbar's Read {toolbar:?} end at the session's content edge {edge:?}"
+        ),
+    );
+}
+
+/// The session's content edge, read from the frame (`session_header_edge`).
+fn session_content_edge(d: &Driver<'_>) -> Option<f32> {
+    let size = d.window_size();
+    let record = d.place_of("Record this session");
     let rules = record.and_then(|record| {
         d.line_segments_in(egui::Rect::from_min_max(
             egui::pos2(
@@ -547,19 +563,9 @@ fn session_header_edge(d: &mut Driver<'_>, id: &str) {
         .map(|rule| rule.right())
         .reduce(f32::max)
     });
-    let edge = d
-        .column_edge_if_shown("session_note_frame")
+    d.column_edge_if_shown("session_note_frame")
         .or_else(|| d.input_frame("Note text").map(|(frame, _)| frame.right()))
-        .or(rules);
-    let toolbar = d.place_of("Read").map(|rect| rect.right());
-    let near = |a: f32| edge.is_some_and(|edge| (a - edge).abs() <= 1.0);
-    d.observe(
-        id,
-        record.is_some_and(|record| near(record.right())) && toolbar.is_none_or(near),
-        format!(
-            "At {size:?}, Record {record:?} and the toolbar's Read {toolbar:?} end at the session's content edge {edge:?}"
-        ),
-    );
+        .or(rules)
 }
 
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
@@ -10618,17 +10624,17 @@ pub mod column_resize {
         d.click(NAV_SESSIONS);
         new_session(d, "Room to spare");
         // Layout step 7 (`session-header-measure`, SH11 and AP4): the session's actions end at
-        // its content's edge (the plan and the note's column beside it), not at the page's; the
-        // room the note's column leaves is the DM's to drag into.
+        // its content's edge (the note's frame, or the plan and the note's column beside it),
+        // not at the page's; the room the note leaves is the DM's to drag into.
         let page = right_of(d, HIDE_LIST);
-        let note = d.column_edge_if_shown("session_note_frame");
+        let note = session_content_edge(d);
         d.observe(
             CHECK,
             note.is_some_and(|note| {
                 (right_of(d, "Record this session") - note).abs() <= 1.0 && note < page - S
             }),
             format!(
-                "A session's actions end at its note column's edge {note:?}, inside the page's {page}: {}",
+                "A session's actions end at its content's edge {note:?}, inside the page's {page}: {}",
                 right_of(d, "Record this session")
             ),
         );
