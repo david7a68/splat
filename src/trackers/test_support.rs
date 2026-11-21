@@ -7,11 +7,11 @@ impl Trackers {
 
     pub fn test_kept(&self) -> Option<(crate::design::ResultOrder, Vec<String>)> {
         let shown = self.results.get(&self.played_owner()?)?;
-        Some((shown.order(), shown.value().1.clone()))
+        Some((shown.order_for_caller_test(), shown.value().1.clone()))
     }
 
-    pub fn test_campaign(&self) -> Option<&Campaign> {
-        self.campaign.as_ref()
+    pub fn test_has_played_owner(&self) -> bool {
+        self.played_owner().is_some()
     }
 
     pub fn test_result(&self) -> Option<(String, Sentence)> {

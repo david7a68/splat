@@ -163,29 +163,37 @@ fn parents(path: &str) -> Vec<String> {
 
 /// Does the file at `path` run under an allow of `deprecated` that it did not write itself? Then
 /// the compiler cannot stop an alias, an import or a call of an old function in it.
-fn inherits_allow(path: &str, levels: &BTreeMap<String, FileLevel>) -> bool {
+fn inherits_allow(
+    path: &str,
+    levels: &BTreeMap<String, FileLevel>,
+    crate_root_parents: &BTreeMap<String, Vec<String>>,
+) -> bool {
     if levels.get(path).is_some_and(|level| level.explicit) {
         return false;
     }
-    let mut at = path.to_owned();
-    loop {
-        let Some((parent, level)) = parents(&at)
+    let mut pending = vec![path.to_owned()];
+    let mut visited = std::collections::BTreeSet::new();
+    while let Some(at) = pending.pop() {
+        if !visited.insert(at.clone()) {
+            continue;
+        }
+        let parents = crate_root_parents
+            .get(&at)
+            .cloned()
+            .unwrap_or_else(|| parents(&at));
+        for (parent, level) in parents
             .into_iter()
-            .find_map(|parent| levels.get(&parent).map(|level| (parent, *level)))
-        else {
-            return false;
-        };
-        if parent == at {
-            return false;
+            .filter_map(|parent| levels.get(&parent).map(|level| (parent, *level)))
+        {
+            if level.allows_children {
+                return true;
+            }
+            if !level.explicit {
+                pending.push(parent);
+            }
         }
-        if level.allows_children {
-            return true;
-        }
-        if level.explicit {
-            return false;
-        }
-        at = parent;
     }
+    false
 }
 
 /// Blocked reasons without an end mark, read by `syn`: the last non-empty string literal in the
@@ -418,7 +426,7 @@ fn phrase_owner(path: &str, words: &str) -> bool {
 ///   always show their word (K4b, R38).
 fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     let mut found = Vec::new();
-    let crate_root = path.ends_with("src/lib.rs") || path.ends_with("src/main.rs");
+    let crate_root = legacy::is_crate_root(path);
     for attribute in attributes::read(text).unwrap_or_default() {
         if attribute.line <= last_line && attribute.lets_pass(&DEPRECATED) {
             found.push("allow-deprecated");
@@ -826,9 +834,7 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                         && maximum.is_empty()
                         && (words.contains("HP") || words == "{} / {}"))
             });
-            if fraction
-                && !(self.path.ends_with("src/combat_sync.rs") && self.function == "fraction")
-            {
+            if fraction {
                 self.found.push("hp-fraction-owner");
             }
             if self.path.ends_with("src/party.rs")
@@ -867,6 +873,10 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     formats.found
 }
 
+fn design_or_capture(path: &str) -> bool {
+    path.starts_with("src/design/") || path.starts_with("src/visual_tests/")
+}
+
 /// Counts the rules of every source file under `folder`, and keeps each file's text by its key
 /// in `files` (for the legacy host freeze).
 fn scan(
@@ -893,14 +903,27 @@ fn scan(
             // Unit tests may name colours and sizes. They do not ship.
             // `mod tests;` near the top names a file of its own, so only an inline module ends it.
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
-            // Design and capture code owns raw drawing values. Only the popup classification
-            // marker is restricted there, to its part and the gate that reads it.
-            if key.starts_with("src/design/") || key.starts_with("src/visual_tests/") {
+            let found = attributes::read(&text)
+                .unwrap_or_else(|error| panic!("{key} does not parse: {error}"));
+            levels.insert(key.to_owned(), file_level(&found));
+            // Design and capture code owns raw drawing values. Its crate root can still set
+            // the lint level for other files, and the popup marker belongs to its own part.
+            if design_or_capture(key) {
                 for rule in format_rules(key, &text, code.lines().count())
                     .into_iter()
                     .filter(|rule| *rule == "popup-marker-owner")
                 {
                     *counts.entry(format!("{key} {rule}")).or_default() += 1;
+                }
+                if legacy::is_crate_root(key)
+                    && found.iter().any(|attribute| {
+                        attribute.line <= code.lines().count()
+                            && attribute.inner
+                            && attribute.kind == Kind::File
+                            && attribute.lets_pass(&DEPRECATED)
+                    })
+                {
+                    *counts.entry(format!("{key} crate-wide-allow")).or_default() += 1;
                 }
                 continue;
             }
@@ -921,9 +944,6 @@ fn scan(
             {
                 *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
-            let found = attributes::read(&text)
-                .unwrap_or_else(|error| panic!("{key} does not parse: {error}"));
-            levels.insert(key.to_owned(), file_level(&found));
         }
     }
 }
@@ -950,8 +970,10 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
     }
     // A module under an allow of `deprecated` writes its own level: an allow (counted), or
     // `#![warn(deprecated)]`, so the compiler stops every alias, import and call in it.
-    for key in levels.keys() {
-        if inherits_allow(key, &levels) {
+    let crate_root_parents = legacy::crate_root_parents(&files)
+        .unwrap_or_else(|error| panic!("crate roots do not parse: {error}"));
+    for key in levels.keys().filter(|key| !design_or_capture(key)) {
+        if inherits_allow(key, &levels, &crate_root_parents) {
             *counts.entry(format!("{key} inherited-allow")).or_default() += 1;
         }
     }
@@ -1182,35 +1204,63 @@ fn the_message_rules_find_what_they_should() {
 
     // Levels across files: a child under an allow must write its own level.
     let level = |code: &str| file_level(&attributes::read(code).unwrap());
-    let levels: BTreeMap<String, FileLevel> = [
+    let files: Vec<(String, String)> = [
         (
             "src/lib.rs",
-            level("impl A {\n    #[allow(deprecated)]\n    fn page() {}\n}"),
+            "impl A {\n    #[allow(deprecated)]\n    fn page() {}\n}",
         ),
         (
             "src/a.rs",
-            level("#![allow(\n    deprecated,\n    reason = \"old\"\n)]\nmod b;"),
+            "#![allow(\n    deprecated,\n    reason = \"old\"\n)]\nmod b;",
         ),
-        ("src/a/b.rs", level("use crate::design::message as show;")),
-        ("src/a/c.rs", level("#![warn(deprecated)]")),
-        ("src/a/d.rs", level("#![allow(deprecated)]")),
-        ("src/a/b/e.rs", level("")),
-        ("src/f.rs", level("#[allow(deprecated)]\nmod g;")),
-        ("src/f/g.rs", level("")),
-        ("src/h.rs", level("")),
-        ("src/h/mod.rs", level("")),
+        ("src/a/b.rs", "use crate::design::message as show;"),
+        ("src/a/c.rs", "#![warn(deprecated)]"),
+        ("src/a/d.rs", "#![allow(deprecated)]"),
+        ("src/a/b/e.rs", ""),
+        ("src/f.rs", "#[allow(deprecated)]\nmod g;"),
+        ("src/f/g.rs", ""),
+        ("src/h.rs", ""),
+        ("src/h/mod.rs", ""),
+        (
+            "src/design/src/lib.rs",
+            r#"#![allow(deprecated)]
+               #[path = "../../frame_clock.rs"] mod frame_clock;
+               #[cfg(test)] #[path = "../../capture.rs"] mod capture;"#,
+        ),
+        ("src/frame_clock.rs", ""),
+        ("src/capture.rs", ""),
+        (
+            "src/trackers/src/lib.rs",
+            r#"#[allow(deprecated)] #[path = "../../trackers.rs"] mod trackers;"#,
+        ),
+        ("src/trackers.rs", ""),
     ]
     .into_iter()
-    .map(|(path, level)| (path.to_owned(), level))
+    .map(|(path, code)| (path.to_owned(), code.to_owned()))
     .collect();
+    let crate_root_parents = legacy::crate_root_parents(&files).unwrap();
+    let levels: BTreeMap<String, FileLevel> = files
+        .iter()
+        .map(|(path, text)| (path.clone(), level(text)))
+        .collect();
     let inherits: Vec<&str> = levels
         .keys()
-        .filter(|path| inherits_allow(path, &levels))
+        .filter(|path| inherits_allow(path, &levels, &crate_root_parents))
         .map(String::as_str)
         .collect();
     // An alias in `b` and a grandchild `e` inherit; `c` resets; `d` is counted; an allow on a
-    // function in `lib.rs` covers no module; an allow on `mod g;` covers `g`.
-    assert_eq!(inherits, ["src/a/b.rs", "src/a/b/e.rs", "src/f/g.rs"]);
+    // function in `lib.rs` covers no module; an allow on `mod g;` covers `g`. A module
+    // loaded by path inherits its real root's level, except for the test-only declaration.
+    assert_eq!(
+        inherits,
+        [
+            "src/a/b.rs",
+            "src/a/b/e.rs",
+            "src/f/g.rs",
+            "src/frame_clock.rs",
+            "src/trackers.rs"
+        ]
+    );
 }
 
 #[test]
@@ -1354,12 +1404,13 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
             "the owning file cannot bypass its formatter"
         );
     }
-    assert!(
+    assert_eq!(
         rules(
             "src/combat_sync.rs",
             r##"fn fraction() { format!(r#"{current}/{maximum}"#); }"##
-        )
-        .is_empty()
+        ),
+        ["hp-fraction-owner"],
+        "Combat Sync uses the design formatter",
     );
     assert!(
         rules(

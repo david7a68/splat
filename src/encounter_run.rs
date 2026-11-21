@@ -5316,16 +5316,21 @@ mod tests {
         let mut run = run();
         run.apply(Command::Begin).ok();
         run.apply(Command::Damage(0, 1)).unwrap();
-        let a = run.newest_step_result().map(|shown| shown.order());
+        let a = run
+            .newest_step_result()
+            .map(|shown| shown.order_for_caller_test());
         run.apply(Command::Damage(1, 1)).unwrap();
-        let b = run.newest_step_result().map(|shown| shown.order());
+        let b = run
+            .newest_step_result()
+            .map(|shown| shown.order_for_caller_test());
         assert!(
             a.is_some() && b.is_some() && a != b,
             "iter-28-R-steps: {a:?} {b:?}"
         );
         run.undo();
         assert_eq!(
-            run.newest_step_result().map(|shown| shown.order()),
+            run.newest_step_result()
+                .map(|shown| shown.order_for_caller_test()),
             a,
             "iter-28-R-steps: Undo of B shows A's own result"
         );
@@ -6632,7 +6637,10 @@ mod tests {
         story.record_change(None, &before, None, None);
         // Review of PR 338 (P2): the newest step's result stays with the run through Save as
         // a new run (its file gets a new id; the results keep their scope).
-        let shown = |run: &Run| run.newest_step_result().map(|shown| shown.order());
+        let shown = |run: &Run| {
+            run.newest_step_result()
+                .map(|shown| shown.order_for_caller_test())
+        };
         let result = shown(&run);
         assert!(result.is_some(), "iter-28-R-P2: a result before");
         run.save_as_new_run().unwrap();

@@ -310,6 +310,33 @@ fn module_file(path: &str, declaration: &Declaration, known: &BTreeSet<&str>) ->
         .find(|candidate| known.contains(candidate.as_str()))
 }
 
+pub(super) fn is_crate_root(path: &str) -> bool {
+    let (folder, file) = path.rsplit_once('/').unwrap_or(("", path));
+    (folder == "src" || folder.ends_with("/src")) && matches!(file, "lib.rs" | "main.rs")
+}
+
+/// Production modules loaded by path from a crate root may live outside its source directory.
+pub(super) fn crate_root_parents(
+    files: &[(String, String)],
+) -> Result<BTreeMap<String, Vec<String>>, String> {
+    let known = files.iter().map(|(path, _)| path.as_str()).collect();
+    let mut parents: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (root, text) in files.iter().filter(|(path, _)| is_crate_root(path)) {
+        let file = syn::parse_file(text).map_err(|error| format!("{root}: {error}"))?;
+        let mut items = Items::default();
+        items.visit_file(&file);
+        for declaration in items.declarations {
+            if !declaration.test
+                && declaration.path.is_some()
+                && let Some(child) = module_file(root, &declaration, &known)
+            {
+                parents.entry(child).or_default().push(root.clone());
+            }
+        }
+    }
+    Ok(parents)
+}
+
 /// The files that a production build never compiles: every declaration that loads them is
 /// `cfg(test)`, or sits in a file that is itself never compiled. A crate root (`src/lib.rs`,
 /// `src/main.rs`) is compiled; a file that nothing declares is not proven test-only and counts.
@@ -324,11 +351,11 @@ fn test_only(files: &[(&String, Items)]) -> BTreeSet<String> {
             })
         })
         .collect();
-    let root = |path: &str| {
-        let (folder, file) = path.rsplit_once('/').unwrap_or(("", path));
-        (folder == "src" || folder.ends_with("/src")) && matches!(file, "lib.rs" | "main.rs")
-    };
-    let mut live: BTreeSet<&str> = known.iter().copied().filter(|path| root(path)).collect();
+    let mut live: BTreeSet<&str> = known
+        .iter()
+        .copied()
+        .filter(|path| is_crate_root(path))
+        .collect();
     loop {
         let more: Vec<&str> = loads
             .iter()

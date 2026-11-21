@@ -4341,7 +4341,9 @@ impl Library {
     #[cfg(test)]
     pub(crate) fn open_link_result_order(&self) -> Option<design::ResultOrder> {
         let owner = self.open_link_owner()?;
-        self.link_edits.get(&owner).map(|shown| shown.order())
+        self.link_edits
+            .get(&owner)
+            .map(|shown| shown.order_for_caller_test())
     }
 
     /// The open entry as the owner of its link offer and link result.

@@ -276,7 +276,7 @@ impl LibraryKept {
     pub(super) fn order_of(&self, kind: KeptKind) -> Option<design::ResultOrder> {
         self.marks
             .get(&KeptOwner::of(kind))
-            .map(|shown| shown.order())
+            .map(|shown| shown.order_for_caller_test())
     }
 
     /// How many marks the store holds, for the tests that no mark outlives its data.

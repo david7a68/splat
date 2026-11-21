@@ -273,8 +273,14 @@ pub struct Shown<'a, T> {
 impl<'a, T> Shown<'a, T> {
     /// The order its action issued, for tests only. A caller gives the footer a `KeptLine`
     /// ([`Shown::outcome`]), so it cannot keep an order apart from its result.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn order(&self) -> ResultOrder {
+    #[cfg(test)]
+    pub(crate) fn order(&self) -> ResultOrder {
+        self.order
+    }
+
+    /// The order as seen by a caller's tests in another crate.
+    #[cfg(feature = "test-support")]
+    pub fn order_for_caller_test(&self) -> ResultOrder {
         self.order
     }
     pub fn value(&self) -> &'a T {

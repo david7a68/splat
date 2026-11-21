@@ -1307,7 +1307,7 @@ fn each_write_path_of_the_ledger_holds() {
         Some(TONIGHT),
         &race.timeline,
     );
-    assert!(race.trackers.test_campaign().is_none());
+    assert!(!race.trackers.test_has_played_owner());
     poll(
         &mut race.trackers,
         index,
