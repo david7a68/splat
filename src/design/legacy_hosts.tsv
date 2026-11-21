@@ -136,7 +136,6 @@ scroll-area	src/sessions/page.rs	Sessions::list_pane	1	Sessions
 scroll-area	src/sessions/page.rs	Sessions::note_editor	1	Sessions
 scroll-area	src/sessions/page.rs	Sessions::notes_view	3	Sessions
 scroll-area	src/sessions/page.rs	Sessions::read_tab	1	Sessions
-scroll-area	src/sessions/page.rs	Sessions::template_editor	1	Sessions
 scroll-area	src/sessions/plan.rs	Sessions::fight_block	1	Sessions
 scroll-area	src/sessions/plan.rs	plan_menu	1	Sessions
 scroll-area	src/timeline/page.rs	TimelinePage::detail	1	Timeline

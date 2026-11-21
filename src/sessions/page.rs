@@ -75,6 +75,11 @@ const SESSION_TEMPLATE: design::FieldName = crate::field_id!("session_template")
 const CREATE_SESSION: design::Word = crate::word!("Create session");
 const SAVE_DETAILS: design::Word = crate::word!("Save details");
 const CANCEL: design::Word = crate::word!("Cancel");
+/// A session note's text: on the Sessions page, and in the Notes panel beside another page.
+const NOTE_ON_PAGE: design::FieldName = crate::field_id!("session_note_text");
+const NOTE_IN_PANEL: design::FieldName = crate::field_id!("session_note_text_panel");
+/// A template's text in the template editor.
+const TEMPLATE_TEXT: design::FieldName = crate::field_id!("session_template_text");
 
 crate::create_reasons! {
     /// Why the New session form's Create (or the details form's Save details) waits.
@@ -3032,7 +3037,7 @@ impl Sessions {
         let shown = self.link_updates.get(&self.page())?;
         Some(shown.outcome(frame, |update| {
             Said::new(crate::sentence!("Links now say “{}”.", update.title))
-                .undo(UndoStep::of(Verb::Change, "links").pressed_as(undo))
+                .undo(crate::library::LINK_UPDATE_UNDO.pressed_as(undo))
                 .into()
         }))
     }
@@ -4814,24 +4819,28 @@ impl Sessions {
                             // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
                             // space would press it. Escape still leaves the panel.
                             let mut layouter = crate::markdown_source::layouter;
-                            let output = egui::TextEdit::multiline(&mut draft.body)
-                                .id(egui::Id::new((
-                                    "session_note_text",
-                                    self.selected,
-                                    in_panel,
-                                )))
-                                .lock_focus(in_panel)
-                                .frame(false)
-                                .font(design::reader::prose_type(ui).font(ui))
-                                .layouter(&mut layouter)
-                                .margin(egui::Vec2::ZERO)
-                                .desired_width(if in_panel {
-                                    ui.available_width().min(design::READER_MEASURE)
-                                } else {
-                                    ui.available_width()
-                                })
-                                .min_size(egui::vec2(0.0, visible_height + heading_offset))
-                                .show(ui);
+                            // The note's text field is its session's (M0468), one on the page
+                            // and one in the panel beside another page.
+                            let field = if in_panel {
+                                NOTE_IN_PANEL
+                            } else {
+                                NOTE_ON_PAGE
+                            };
+                            let width = if in_panel {
+                                ui.available_width().min(design::READER_MEASURE)
+                            } else {
+                                ui.available_width()
+                            };
+                            let output =
+                                field.of(self.selected).editor(ui, &mut draft.body, |edit| {
+                                    edit.lock_focus(in_panel)
+                                        .frame(false)
+                                        .font(design::reader::prose_type(ui).font(ui))
+                                        .layouter(&mut layouter)
+                                        .margin(egui::Vec2::ZERO)
+                                        .desired_width(width)
+                                        .min_size(egui::vec2(0.0, visible_height + heading_offset))
+                                });
                             crate::markdown_source::paint_section_rules(ui, &output);
                             pressed_link =
                                 crate::markdown_source::pressed_note_link(ui, &output, None);
@@ -6341,6 +6350,7 @@ impl Sessions {
                     .icon(icons::UP)
                     .name("Earlier part")
                     .density(Density::Read)
+                    .line_start()
                     .blocked_if(reading.part == 0, "This is the first part.")
                     .show(ui)
                     .clicked()
@@ -7689,44 +7699,51 @@ impl Sessions {
             draft.save();
         }
         let mut pressed_link = None;
-        egui::ScrollArea::vertical()
-            .id_salt(("template_editor", &template.name))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if let Some(draft) = &mut self.template_draft {
-                    let mut layouter = crate::markdown_source::layouter;
-                    let output = egui::TextEdit::multiline(&mut draft.body)
-                        .font(design::reader::prose_type(ui).font(ui))
+        design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
+            // The template's text field is its file's (M0495, M0496). A template has no typed
+            // owner key yet: its path is the key (`TextKey::from_data`, counted).
+            let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
+                template
+                    .path
+                    .as_deref()
+                    .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
+            ));
+            if let Some(draft) = &mut self.template_draft {
+                let mut layouter = crate::markdown_source::layouter;
+                let (width, height) = (ui.available_width(), ui.available_height());
+                let output = field.editor(ui, &mut draft.body, |edit| {
+                    edit.font(design::reader::prose_type(ui).font(ui))
                         .layouter(&mut layouter)
                         .margin(egui::vec2(design::S, design::S))
-                        .desired_width(ui.available_width())
-                        .min_size(egui::vec2(0.0, ui.available_height()))
-                        .show(ui);
-                    crate::markdown_source::paint_section_rules(ui, &output);
-                    pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
-                    let response = output.response;
-                    design::named(ui, &response, "Template text");
-                    if response.changed() {
-                        draft.edited();
-                        self.deleted_templates.owner_changed(&kept::Page {
-                            root: self.folder.clone().unwrap_or_default(),
-                        });
-                    }
-                } else {
-                    let mut body = template.body.clone();
-                    let mut layouter = crate::markdown_source::layouter;
-                    let output = egui::TextEdit::multiline(&mut body)
-                        .font(design::reader::prose_type(ui).font(ui))
+                        .desired_width(width)
+                        .min_size(egui::vec2(0.0, height))
+                });
+                crate::markdown_source::paint_section_rules(ui, &output);
+                pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
+                let response = output.response;
+                design::named(ui, &response, "Template text");
+                if response.changed() {
+                    draft.edited();
+                    self.deleted_templates.owner_changed(&kept::Page {
+                        root: self.folder.clone().unwrap_or_default(),
+                    });
+                }
+            } else {
+                let mut body = template.body.clone();
+                let mut layouter = crate::markdown_source::layouter;
+                let (width, height) = (ui.available_width(), ui.available_height());
+                let output = field.editor(ui, &mut body, |edit| {
+                    edit.font(design::reader::prose_type(ui).font(ui))
                         .layouter(&mut layouter)
-                        .desired_width(ui.available_width())
-                        .min_size(egui::vec2(0.0, ui.available_height()))
+                        .desired_width(width)
+                        .min_size(egui::vec2(0.0, height))
                         .frame(false)
                         .interactive(false)
-                        .show(ui);
-                    design::named(ui, &output.response, "Built-in template text");
-                    crate::markdown_source::paint_section_rules(ui, &output);
-                }
-            });
+                });
+                design::named(ui, &output.response, "Built-in template text");
+                crate::markdown_source::paint_section_rules(ui, &output);
+            }
+        });
         if let Some(target) = pressed_link {
             self.open_note_link(target);
         }
@@ -9334,6 +9351,61 @@ mod tests {
                 Tone::Warning
             ),
             "n0-link-undo-cause: an outside change of the open B"
+        );
+    }
+
+    /// M0495 (lane N0): the template editor's field is its template's. Words typed and erased
+    /// in template A do not come back with Ctrl+Z in template B, drawn at the same place, even
+    /// when both hold the same words (the case the field's text guard leaves to the owner key).
+    #[test]
+    fn a_template_field_keeps_its_own_text_history() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let a = create_template(dir.path(), "Downtime", "## Plan\n").unwrap();
+        let b = create_template(dir.path(), "Travel", "## Plan\n").unwrap();
+        let mut sessions = Sessions {
+            templates: vec![a.clone(), b.clone()],
+            ..Sessions::default()
+        };
+        sessions.select_template(&a.name);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(800.0, 600.0))
+            .build_state(
+                |ctx, sessions: &mut Sessions| {
+                    egui::CentralPanel::default().show(ctx, |ui| sessions.template_editor(ui));
+                },
+                sessions,
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Template text").focus();
+        harness.run_steps(2);
+        harness.get_by_label("Template text").type_text("Dusk");
+        harness.run_steps(16);
+        harness.get_by_label("Template text").type_text("!");
+        harness.run_steps(1);
+        for _ in 0.."Dusk!".len() {
+            harness.key_press(egui::Key::Backspace);
+        }
+        harness.run_steps(1);
+        let body = |harness: &egui_kittest::Harness<'_, Sessions>| {
+            harness
+                .state()
+                .template_draft
+                .as_ref()
+                .map(|draft| draft.body.clone())
+        };
+        assert_eq!(body(&harness).as_deref(), Some("## Plan\n"));
+        harness.state_mut().select_template(&b.name);
+        harness.run_steps(2);
+        harness.get_by_label("Template text").focus();
+        harness.run_steps(2);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        harness.run_steps(2);
+        assert_eq!(
+            body(&harness).as_deref(),
+            Some("## Plan\n"),
+            "n0-template-owner: Ctrl+Z in Travel gave it the words typed in Downtime"
         );
     }
 

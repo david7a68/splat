@@ -14567,7 +14567,7 @@ pub mod session_notes {
         d.state("event-link-update-offered", Sizes::All);
         d.click("Update 1 link");
         d.expect("Links now say “Rest at the mill”.");
-        d.expect("Undo change to links");
+        d.expect("Undo link update");
         assert!(!d.has(LINK_OFFER));
         let without_offer = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, kind_top));
         d.observe(
@@ -14583,7 +14583,7 @@ pub mod session_notes {
             ),
         );
         d.state("event-links-updated", Sizes::Default);
-        d.click("Undo change to links");
+        d.click("Undo link update");
         d.expect("Update 1 link");
         d.click("Update 1 link");
         d.click_starting("Rest at the mill ·");
@@ -14591,7 +14591,7 @@ pub mod session_notes {
         d.settle();
         d.observe(
             "iter-4-S2",
-            !d.has("Undo change to links"),
+            !d.has("Undo link update"),
             "Leaving Timeline clears the link-update Undo",
         );
         read_note(d);

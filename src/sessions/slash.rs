@@ -179,12 +179,12 @@ impl Slash {
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
-        output: &egui::text_edit::TextEditOutput,
+        output: &impl crate::markdown_source::Laid,
         body: &mut String,
         place: &Place<'_>,
     ) -> Done {
         let mut done = Done::default();
-        let editor = output.response.id;
+        let editor = output.response().id;
         // `take_keys` finds the popup by this id, too.
         let popup = editor.with("slash");
         let caret = output
@@ -200,8 +200,8 @@ impl Slash {
             self.open = None;
         }
         if self.open.is_none() {
-            if output.response.changed()
-                && output.response.has_focus()
+            if output.response().changed()
+                && output.response().has_focus()
                 && typed_slash(ui)
                 && let Some(caret) = caret
                 && starts_command(body, caret)
@@ -234,9 +234,9 @@ impl Slash {
             return done;
         }
         let anchor = output
-            .galley
+            .galley()
             .pos_from_cursor(egui::text::CCursor::new(open.at))
-            .translate(output.galley_pos.to_vec2());
+            .translate(output.galley_pos().to_vec2());
         let words = open.at + 1;
         let mut result = Outcome::Stay;
         match &mut open.stage {

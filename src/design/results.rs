@@ -1051,10 +1051,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "reading_view", &[Ban::Results]),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
         ("src/sessions/page.rs", "add_dropped", &[Ban::Order]),
+        // M-N0.4: the template's text field is keyed by its file (`TextKey::from_data`): a
+        // template has no typed owner key yet.
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::RowKey(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -1171,7 +1173,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "new_template_form",
             &[Ban::Extras(2)],
         ),
-        ("src/sessions/page.rs", "note_editor", &[Ban::Layout(2)]),
+        ("src/sessions/page.rs", "note_editor", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
