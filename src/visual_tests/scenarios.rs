@@ -28187,20 +28187,24 @@ pub mod share_to_package {
 
 pub mod remove_package_in_use {
     use super::*;
-    /// A creature of the package the steps remove, which the campaign uses.
+    /// An item of the package the steps remove that the campaign chooses and no other entry
+    /// needs: Lookup's loot search holds it only while the package is chosen.
+    const ITEM: &str = "Veilglass Lantern";
+    /// A creature of that package. Every chosen creature of it is needed by an encounter, so
+    /// Encounters lists it whether or not the package is chosen.
     const CREATURE: &str = "Cinder Wolf";
 
-    /// What the two readers give the encounter search for `CREATURE`: whether Lookup's index
-    /// offers it as a creature of a package the campaign does not use (`Use it`), and whether
-    /// Encounters' campaign read lists it.
+    /// What the two readers give back: whether Lookup's loot search holds `ITEM`, and whether
+    /// Encounters' creature search lists `CREATURE`.
     fn readers(d: &Driver<'_>) -> (bool, bool) {
-        let unused = d.app().lookup.index().is_some_and(|index| {
+        let item = d.app().lookup.index().is_some_and(|index| {
             index
-                .unused_creatures("cinder wolf")
+                .loot_sources()
+                .items
                 .iter()
-                .any(|(_, _, name, _)| name == CREATURE)
+                .any(|item| item.name == ITEM)
         });
-        (unused, d.app().encounters.searchable_creature(CREATURE))
+        (item, d.app().encounters.searchable_creature(CREATURE))
     }
 
     pub fn run(d: &mut Driver<'_>) {
@@ -28441,10 +28445,10 @@ pub mod remove_package_in_use {
             "A package removal does not say its creature file was deleted",
         );
         d.state("paused-run-after-package-removal", Sizes::All);
-        // P2 of the review of PR 623 (issue #509): the package comes back (registered again),
-        // while the campaign does not choose it: Lookup offers its creature as unused. Undo of
-        // the removal chooses it again, and both readers give back the results from before
-        // the removal.
+        // P2 of the review of PR 623 (issue #509): the package comes back (registered again,
+        // which Lookup reads at once) while the campaign does not choose it: Lookup's loot search
+        // loses its item. Undo of the removal chooses it again: Lookup gives the item back, and
+        // Encounters reads the campaign again and lists what it listed before the removal.
         d.app_mut().campaigns.register_module(module).unwrap();
         go_campaign(d);
         d.settle();
@@ -28455,12 +28459,13 @@ pub mod remove_package_in_use {
         let undone = readers(d);
         d.observe(
             "m32-C0-509-removal-undo-readers",
-            searched == (false, true)
-                && removed.0
+            searched == (true, true)
+                && !removed.0
                 && undone == searched
                 && d.app().encounters.snapshot_revision() != read,
             format!(
-                "{CREATURE} offered as unused, listed by Encounters: before {searched:?}, removed and registered again {removed:?}, after Undo {undone:?}"
+                "{ITEM} in Lookup's loot search, {CREATURE} listed by Encounters: before {searched:?}, removed and registered again {removed:?}, after Undo {undone:?}; Encounters read again {}",
+                d.app().encounters.snapshot_revision() != read
             ),
         );
     }
