@@ -4434,9 +4434,12 @@ mod editor_region_tests {
                 _ => None,
             })
             .expect("the editor's text is painted");
+        // egui paints a text edit's text with a clip one point wider than its rect.
+        let lane = super::super::layout::lane_width();
         assert!(
-            view.expand(0.5).contains_rect(text.0)
-                && text.1 <= view.right() - super::super::layout::lane_width() + 0.5,
+            view.expand(1.5).contains_rect(text.0)
+                && text.0.right() <= view.right() - lane + 1.5
+                && text.1 <= view.right() - lane + 0.5,
             "i10-text-{case}: the text (clip {:?}, right {}) is inside the view {view:?}, left of its lane",
             text.0,
             text.1
