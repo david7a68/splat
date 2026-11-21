@@ -1591,10 +1591,35 @@ impl<'a> TitleAction<'a> {
     /// Its target's width on one line.
     fn natural_width(&self, ui: &Ui) -> f32 {
         if self.menu {
-            super::menu_button_width(ui, self.word.as_str())
+            self.menu_button(&Self::menu_label(self.word))
+                .natural_width(ui)
         } else {
             self.action().natural_width(ui)
         }
+    }
+
+    /// A menu action's label: its word and the room its caret takes after it.
+    fn menu_label(word: Word) -> String {
+        format!("{}    ", word.as_str())
+    }
+
+    /// A menu action's button (`TitleLine::menu`): its weight, icon, name and lock, at `Read`,
+    /// on `label` (`menu_label`), so its caret fits after the word.
+    fn menu_button<'l>(&self, label: &'l str) -> Action<'l>
+    where
+        'a: 'l,
+    {
+        let mut action = match self.weight {
+            TitleWeight::Quiet => Action::quiet(label),
+            TitleWeight::Secondary => Action::secondary(label),
+        }
+        .density(Density::Read)
+        .blocked(self.blocked)
+        .name(self.name.unwrap_or(self.word.as_str()));
+        if let Some(icon) = self.icon {
+            action = action.icon(icon);
+        }
+        action
     }
 
     fn action(&self) -> Action<'a> {
@@ -1691,6 +1716,10 @@ pub struct TitleLine<'a> {
     menus: Vec<(usize, Menu<'a>)>,
     /// A status link after the actions, and the menu it opens.
     status: Option<StatusMenu<'a>>,
+    /// A status link after that one that acts when pressed (`status_press`).
+    status_press: Option<Status<'a>>,
+    /// The pressed status link's press this frame.
+    status_clicked: bool,
     /// Each menu's room, from its control's rect (`menu_room`).
     menu_room: Option<Box<dyn Fn(Rect) -> Rect + 'a>>,
     /// The page's header (`page`): a rule under the line and `L` before the page's body.
@@ -1718,6 +1747,8 @@ pub enum TitleType {
 #[derive(Clone, Debug, Default)]
 pub struct TitleLineResponse {
     pressed: Option<Word>,
+    /// The DM pressed the status link of `TitleLine::status_press`.
+    pub status_pressed: bool,
     /// The DM pressed the close icon (`TitleLine::close`).
     pub closed: bool,
     /// The actions sit under the title.
@@ -1803,6 +1834,8 @@ impl<'a> TitleLine<'a> {
             actions: Vec::new(),
             menus: Vec::new(),
             status: None,
+            status_press: None,
+            status_clicked: false,
             menu_room: None,
             page: false,
             close: None,
@@ -1878,6 +1911,14 @@ impl<'a> TitleLine<'a> {
         self
     }
 
+    /// A status link after the one with a menu (or after the actions), placed and kept as an
+    /// action is, that acts when pressed (World's `N notes cannot be read` opens its repair):
+    /// [`TitleLineResponse::status_pressed`].
+    pub fn status_press(mut self, status: Status<'a>) -> Self {
+        self.status_press = Some(status);
+        self
+    }
+
     /// The status link's width on one line.
     fn status_width(ui: &Ui, status: &Status<'_>) -> f32 {
         number_width(
@@ -1916,6 +1957,11 @@ impl<'a> TitleLine<'a> {
                         .as_ref()
                         .map(|(status, _)| Self::status_width(ui, status)),
                 )
+                .chain(
+                    self.status_press
+                        .as_ref()
+                        .map(|status| Self::status_width(ui, status)),
+                )
                 .collect(),
         }
     }
@@ -1923,8 +1969,12 @@ impl<'a> TitleLine<'a> {
     /// Draw one action in exactly its measured target; past the actions, the status link and
     /// its menu.
     fn action_at(&mut self, ui: &mut Ui, at: usize, rect: Rect) -> bool {
+        // Past the actions: the status with its menu first, then the pressed one.
         let status = (at >= self.actions.len())
             .then(|| self.status.take())
+            .flatten();
+        let press = (at >= self.actions.len() && status.is_none())
+            .then(|| self.status_press.take())
             .flatten();
         ui.scope_builder(
             UiBuilder::new()
@@ -1936,13 +1986,19 @@ impl<'a> TitleLine<'a> {
                     self.menu_under(ui, &link).show(menu);
                     false
                 }
+                None if let Some(status) = press => {
+                    self.status_clicked |= super::status_link(ui, status).clicked();
+                    false
+                }
                 None if self.actions[at].menu => {
                     let action = self.actions[at];
-                    let button = super::components::title_menu_button(
-                        ui,
-                        action.word.as_str(),
-                        action.blocked,
+                    let label = TitleAction::menu_label(action.word);
+                    let button = action.menu_button(&label).show(ui);
+                    let caret = Rect::from_min_max(
+                        egui::pos2(button.rect.right() - L - XS, button.rect.top()),
+                        button.rect.right_bottom(),
                     );
+                    super::combo_icon(ui, caret, ui.style().interact(&button), false);
                     let menu = self
                         .menus
                         .iter()
@@ -2101,6 +2157,7 @@ impl<'a> TitleLine<'a> {
         }
         TitleLineResponse {
             pressed,
+            status_pressed: self.status_clicked,
             closed,
             below: rows > 0,
             rows,
