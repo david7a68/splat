@@ -5823,6 +5823,81 @@ mod tests {
         ] {
             assert_eq!(parse_grouped(typed), Some(read), "{typed}");
         }
+        // Review of PR 626 (P2): typed, not only painted and parsed. The DM clicks the count,
+        // types `1,000` over it and leaves: the value is 1000. While typing, the field keeps
+        // exactly the typed words (the caret stays at their end), and Undo gives back fewer of
+        // them, not a reformatted number.
+        use egui_kittest::kittest::Queryable;
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(400.0, 120.0))
+            .build_ui_state(
+                |ui, value: &mut i64| {
+                    grouped_stepper(ui, "How many", value, 1..=99_999);
+                },
+                7_i64,
+            );
+        super::super::theme::install(&h.ctx);
+        h.run_steps(2);
+        // A pointer click on the count opens it for typing.
+        let at = h.get_by_label("How many").rect().center();
+        h.hover_at(at);
+        h.run_steps(1);
+        for pressed in [true, false] {
+            h.event(egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.run_steps(1);
+        }
+        h.run_steps(1);
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        h.run_steps(1);
+        // While it is open for typing, the count keeps its typed words under its id (egui's
+        // drag value), and its text edit state holds the caret.
+        let id = h
+            .ctx
+            .memory(|memory| memory.focused())
+            .expect("the count has the keyboard");
+        let field = |h: &egui_kittest::Harness<'_, i64>| {
+            h.ctx
+                .data(|data| data.get_temp::<String>(id))
+                .unwrap_or_default()
+        };
+        let caret = |h: &egui_kittest::Harness<'_, i64>| {
+            egui::text_edit::TextEditState::load(&h.ctx, id)
+                .and_then(|state| state.cursor.char_range())
+                .map(|range| range.primary.index)
+        };
+        let mut typed = String::new();
+        for letter in "1,000".chars() {
+            h.event(egui::Event::Text(letter.to_string()));
+            h.run_steps(1);
+            typed.push(letter);
+            assert_eq!(
+                (field(&h), caret(&h)),
+                (typed.clone(), Some(typed.chars().count())),
+                "the field keeps the typed words while typing, the caret at their end"
+            );
+        }
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        h.run_steps(1);
+        assert_eq!(
+            field(&h),
+            "7",
+            "Undo gives back the words from before the typing, not a reformatted number"
+        );
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        h.run_steps(1);
+        for letter in typed.chars() {
+            h.event(egui::Event::Text(letter.to_string()));
+            h.run_steps(1);
+        }
+        assert_eq!(field(&h), "1,000", "typed again");
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(*h.state(), 1_000, "typed `1,000`, the value is 1000");
     }
 
     #[test]
