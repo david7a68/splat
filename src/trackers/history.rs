@@ -43,6 +43,8 @@ pub struct Removed {
     pub note: Uuid,
     placed: Placed,
     pub words: String,
+    /// What its Undo names: the clicked entry's act (`Undo remove Take seal: Keyring +1`).
+    name: String,
     /// When it was made, for the footer's order.
     order: crate::design::ResultOrder,
 }
@@ -97,7 +99,7 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
 fn amount(entry: &Entry) -> String {
     match (entry.set, entry.add) {
         (Some(set), _) => format!("set to {set}"),
-        (None, Some(add)) => format!("{add:+}"),
+        (None, Some(add)) => crate::design::signed(add),
         (None, None) => String::new(),
     }
 }
@@ -195,7 +197,7 @@ fn removal(
     today: &Today,
     ledger: &Ledger,
     drawn: &Entry,
-) -> Result<(Placed, String), String> {
+) -> Result<(Placed, String, String), String> {
     let found = ledger
         .changes
         .iter()
@@ -239,7 +241,7 @@ fn removal(
     if names.len() > 1 {
         words = words.then(crate::sentence!("With it: {}.", names[1..].join("; ")));
     }
-    Ok((placed, words.to_string()))
+    Ok((placed, words.to_string(), names.swap_remove(0)))
 }
 
 impl Trackers {
@@ -253,18 +255,19 @@ impl Trackers {
         let today = self.today.clone();
         let mut made = None;
         let done = self.commit(|rules, ledger| {
-            let (placed, words) = removal(rules, &today, ledger, drawn)?;
+            let (placed, words, name) = removal(rules, &today, ledger, drawn)?;
             let op = Op::Remove(placed.iter().map(|(_, entry)| entry.clone()).collect());
-            made = Some((placed, words));
+            made = Some((placed, words, name));
             Ok(op)
         });
         match done {
             Ok(()) => {
-                if let Some((placed, words)) = made {
+                if let Some((placed, words, name)) = made {
                     self.removed = Some(Removed {
                         note,
                         placed,
                         words,
+                        name,
                         order: crate::design::ResultOrder::issue(),
                     });
                 }
@@ -320,8 +323,8 @@ enum LineKind {
     Refused,
     /// The save of the history failed, in `view::not_saved`'s words.
     NotSaved(crate::design::outcome::Sentence),
-    /// The last `Remove`, with the order `remove` issued for it.
-    Removed(crate::design::ResultOrder),
+    /// The last `Remove`, with the order `remove` issued for it and what its Undo names.
+    Removed(crate::design::ResultOrder, String),
 }
 
 /// The footer messages of the history of `note`, in the footer's order: why the last `Remove`
@@ -354,7 +357,7 @@ pub fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     if let Some(removed) = trackers.removed.as_ref().filter(|r| r.note == note) {
         lines.push(FooterLine {
             words: removed.words.clone(),
-            kind: LineKind::Removed(removed.order),
+            kind: LineKind::Removed(removed.order, removed.name.clone()),
         });
     }
     lines
@@ -382,11 +385,11 @@ pub fn footer<A: Clone + 'static>(
             LineKind::NotSaved(words) => {
                 messages.outcome(FaultMessage::new(&NotSaved(words)));
             }
-            LineKind::Removed(order) => {
+            LineKind::Removed(order, name) => {
                 messages.outcome_at(
                     order,
                     Said::new(said(&line.words))
-                        .undo(UndoStep::verb(Verb::Remove).pressed_as(undo.clone())),
+                        .undo(UndoStep::of(Verb::Remove, name).pressed_as(undo.clone())),
                 );
             }
         }

@@ -315,6 +315,7 @@ fn closure_follows_a_selection_change() {
             document,
             subtitles: crate::library::catalogue_subtitles(&catalogue),
             catalogue,
+            issues: None,
         }),
         ..Default::default()
     };
@@ -475,6 +476,11 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
         campaigns: Campaigns,
         /// The Campaign page is not drawn (another page is open); its `tick` still runs.
         hidden: bool,
+        /// The app's modal test (`crate::modal_open`), which Ctrl+S waits for.
+        modal: bool,
+        /// How often the app read Lookup and Encounters again for the page's written choices
+        /// (`choices_written`, taken by `Splat::route`).
+        refreshed: usize,
     }
     crate::hermetic::closed::clear_next_folder();
     let temp = tempfile::tempdir().unwrap();
@@ -517,6 +523,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
             |ui, page: &mut Page| {
                 page.content.tick(ui.ctx(), &page.campaigns);
                 if !page.hidden {
+                    page.content.save_shortcut(ui.ctx(), page.modal);
                     page.content.show(ui, &page.campaigns);
                 }
                 // The app's own steps after the page (`lib.rs`).
@@ -528,22 +535,34 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
                     let result = page.campaigns.unregister_module(id);
                     page.content.package_restored(result);
                 }
+                if std::mem::take(&mut page.content.choices_written) {
+                    page.refreshed += 1;
+                }
             },
             Page {
                 content: CampaignContent::default(),
                 campaigns,
                 hidden: false,
+                modal: false,
+                refreshed: 0,
             },
         );
+    // Waits on the loader itself, not on the clock: its answer (or its end) is received here
+    // and handed back for the page to take in its next frame.
     let settle = |harness: &mut egui_kittest::Harness<'_, Page>| {
-        for _ in 0..200 {
+        for _ in 0..50 {
             harness.run_steps(2);
-            let content = &harness.state().content;
-            if content.pending.is_none() && !content.refresh_pending {
+            let content = &mut harness.state_mut().content;
+            if let Some(rx) = content.pending.take() {
+                let (tx, again) = mpsc::channel();
+                if let Ok(loaded) = rx.recv() {
+                    tx.send(loaded).unwrap();
+                }
+                content.pending = Some(again);
+            } else if !content.refresh_pending {
                 harness.run_steps(2);
                 return;
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
         }
         panic!("the page did not load");
     };
@@ -566,6 +585,74 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
             .map(|module| module.path.clone())
     };
     settle(&mut harness);
+    // Issue #513: Ctrl+S, taken before the page draws and saved after the package list. The
+    // built-in package unticked (Space on its focused box) and Ctrl+S in ONE input frame: the
+    // save is without it, and the app reads Lookup and Encounters again (#509). Behind a modal
+    // the key saves nothing (first, while the list can still be saved; Discard ends its draft).
+    // A new campaign's first choice, the built-in package (the fixture adds Watch and Toll).
+    let builtin = CampaignDocument::load(&first).unwrap().selections[0]
+        .package
+        .id
+        .unwrap();
+    let chosen_on_disk = |id: Uuid| {
+        CampaignDocument::load(&first)
+            .unwrap()
+            .selections
+            .iter()
+            .any(|selection| selection.package.id == Some(id))
+    };
+    let key = |key, modifiers| egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    };
+    let one_frame = |harness: &mut egui_kittest::Harness<'_, Page>, events: &[egui::Event]| {
+        let frame = harness.ctx.cumulative_frame_nr();
+        harness.input_mut().events.extend(events.iter().cloned());
+        harness.step();
+        assert_eq!(
+            harness.ctx.cumulative_frame_nr() - frame,
+            1,
+            "one input frame"
+        );
+    };
+    let space = key(egui::Key::Space, egui::Modifiers::NONE);
+    let ctrl_s = key(egui::Key::S, egui::Modifiers::COMMAND);
+    assert!(builtin != watch.id && builtin != toll.id && chosen_on_disk(watch.id));
+    let focus_builtin = |harness: &mut egui_kittest::Harness<'_, Page>| {
+        harness.get_by_label("Use D&D 2024 · SRD 5.2.1").focus();
+        harness.run_steps(2);
+    };
+    focus_builtin(&mut harness);
+    harness.state_mut().modal = true;
+    one_frame(&mut harness, &[space.clone(), ctrl_s.clone()]);
+    harness.state_mut().modal = false;
+    assert!(
+        chosen_on_disk(builtin)
+            && harness.state().content.selections_changed()
+            && harness.state().refreshed == 0,
+        "behind a modal Ctrl+S saved"
+    );
+    harness.run_steps(2);
+    harness.get_by_label("Discard").click();
+    harness.run_steps(2);
+    assert!(!harness.state().content.selections_changed());
+    focus_builtin(&mut harness);
+    one_frame(&mut harness, &[space, ctrl_s]);
+    assert!(
+        !chosen_on_disk(builtin)
+            && chosen_on_disk(watch.id)
+            && chosen_on_disk(toll.id)
+            && !harness.state().content.selections_changed()
+            && harness.state().refreshed == 1,
+        "Ctrl+S in the frame of the untick saves it: built-in on disk {}, draft left {}, \
+         refreshed {}",
+        chosen_on_disk(builtin),
+        harness.state().content.selections_changed(),
+        harness.state().refreshed
+    );
     // Ruling R21 (G45): the repairs, then the links, then `Remove from this campaign` last
     // with exactly `L` before it. A reading-order test on the message's choices.
     fs::rename(packages.join("watch"), packages.join("watch-moved")).unwrap();
@@ -733,8 +820,14 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
         .name = Some("Toll of the old road".into());
     fs::write(&file, &outside).unwrap();
     harness.run_steps(2);
+    let refreshed = harness.state().refreshed;
     harness.get_by_label("Save selections").click();
     settle(&mut harness);
+    assert_eq!(
+        harness.state().refreshed,
+        refreshed,
+        "a failed save wrote no choices"
+    );
     let failed = answer(&harness).expect("the failed save is the newest answer");
     let error = message(&harness, &failed).expect("the failed save says why");
     let kept = harness.get_by_label("Undo remove Gone").rect();
@@ -748,6 +841,11 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     assert!(
         answer(&harness).is_none() && message(&harness, &failed).is_none(),
         "the successful save did not end its failed try"
+    );
+    assert_eq!(
+        harness.state().refreshed,
+        refreshed + 1,
+        "the save refreshed"
     );
     // A removal's Undo that fails (the file changed outside Splat), then its successful retry
     // (the file put back): the success ends the failure it stored.
@@ -775,13 +873,24 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     }
     fs::write(&file, format!("{text}\nA line written outside Splat.\n")).unwrap();
     harness.run_steps(2);
+    let refreshed = harness.state().refreshed;
     harness.get_by_label("Undo remove Gone").click();
     settle(&mut harness);
     let failed = answer(&harness).expect("the failed Undo is the newest answer");
     assert!(message(&harness, &failed).is_some());
+    assert_eq!(
+        harness.state().refreshed,
+        refreshed,
+        "a failed Undo wrote no choices"
+    );
     fs::write(&file, &text).unwrap();
     harness.get_by_label("Undo remove Gone").click();
     settle(&mut harness);
+    assert_eq!(
+        harness.state().refreshed,
+        refreshed + 1,
+        "the Undo refreshed"
+    );
     assert!(
         answer(&harness).is_none()
             && message(&harness, &failed).is_none()
@@ -814,12 +923,12 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     pick(&mut harness, "toll-a");
     assert!(
         harness
-            .query_by_label("Undo recover packages/watch-a")
+            .query_by_label("Undo recover Watch in packages/watch-a/")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label("Undo recover packages/toll-a")
+            .query_by_label("Undo recover Toll in packages/toll-a/")
             .is_some()
     );
     // B: Watch moved again, and B finds it in watch-b/.
@@ -828,15 +937,15 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     find(&mut harness, "watch-a", "watch-b");
     assert!(
         harness
-            .query_by_label("Undo recover packages/watch-b")
+            .query_by_label("Undo recover Watch in packages/watch-b/")
             .is_some()
     );
     // Back in A: no line names B's folder, and A's Watch result ended with B's recovery.
     harness.state_mut().campaigns.open_for_test(&first);
     settle(&mut harness);
     for gone in [
-        "Undo recover packages/watch-b",
-        "Undo recover packages/watch-a",
+        "Undo recover Watch in packages/watch-b/",
+        "Undo recover Watch in packages/watch-a/",
     ] {
         assert!(
             harness.query_by_label(gone).is_none(),
@@ -845,7 +954,9 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     }
     // A's Toll line names A's folder, and its Undo acts on A's data: Toll's registration
     // goes back to toll/; Watch stays where B found it.
-    harness.get_by_label("Undo recover packages/toll-a").click();
+    harness
+        .get_by_label("Undo recover Toll in packages/toll-a/")
+        .click();
     settle(&mut harness);
     assert_eq!(registered(&harness, toll.id), Some(toll.path.clone()));
     assert_eq!(
@@ -854,7 +965,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     );
     assert!(
         harness
-            .query_by_label("Undo recover packages/toll-a")
+            .query_by_label("Undo recover Toll in packages/toll-a/")
             .is_none()
     );
     // B keeps its result and its Undo.
@@ -862,7 +973,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     settle(&mut harness);
     assert!(
         harness
-            .query_by_label("Undo recover packages/watch-b")
+            .query_by_label("Undo recover Watch in packages/watch-b/")
             .is_some()
     );
 }
