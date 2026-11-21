@@ -11091,7 +11091,13 @@ mod tests {
         );
         // M-L0.4b: the typed footer's checked words are the shared words of World and the
         // workspace, which other pages still draw.
-        assert_eq!(DUPLICATE_ENTRY.as_str(), crate::world::DUPLICATE_ENTRY);
+        assert_eq!(
+            design::outcome::Fault::cause(&crate::world::DuplicateIdentity(
+                crate::world::IdentityNoun::Entry
+            ))
+            .as_str(),
+            crate::world::DUPLICATE_ENTRY
+        );
         assert_eq!(
             manifest_replace_help("Package.md").as_str(),
             crate::content_workspace::manifest_replace_consequence("Package.md")

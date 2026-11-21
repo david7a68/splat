@@ -2471,6 +2471,10 @@ pub(crate) fn identity_copies() -> usize {
 }
 
 /// A copied note is still a search result, with the same repair used by Lookup.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "ruling M20: the duplicate repair in the search results (`Ban::Body`)"
+)]
 fn duplicate_creature_results(
     ui: &mut egui::Ui,
     query: &str,
@@ -2510,40 +2514,45 @@ fn duplicate_creature_results(
             .map(|other| other.entry.name.clone())
             .collect();
         let noun = crate::world::IdentityNoun::of(&item.entry);
-        design::message_with_actions(ui, Tone::Warning, noun.duplicate_warning(), |ui| {
-            for (position, path) in paths.iter().enumerate() {
-                let filename = path.rsplit('/').next().unwrap_or(path);
-                let action = noun.action(filename);
-                if Action::secondary(&action).hint(&action).show(ui).clicked() {
-                    // FF8: the result, its Undo or the failure goes to the page's store, which
-                    // the editor's footer shows. A new separation of another note is a result
-                    // of its own; a failed one keeps the last change and its Undo.
-                    separated.set(Some(match crate::world::new_identity(campaign, path) {
-                        Ok((change, note)) => {
-                            note_identity_changed(ui.ctx());
-                            Separated::Done {
-                                change,
-                                path: path.clone(),
-                                note,
-                            }
-                        }
-                        Err(error) => Separated::Failed {
-                            path: path.clone(),
-                            error,
-                        },
-                    }));
-                }
-                if let Some(remaining) = paths.iter().find(|other| *other != path) {
-                    crate::library::duplicate_repair_consequence(
-                        ui,
-                        &users,
-                        remaining.rsplit('/').next().unwrap_or(remaining),
-                        position == 0,
-                    );
-                }
-                design::gap(ui, design::Gap::XS);
+        // M0178: the duplicate repair's one form (`world::DuplicateIdentity`), as Library and
+        // World say it: each file's repair, with what it leaves the encounters that use it.
+        let mut fault = design::outcome::BodyFault::new(&crate::world::DuplicateIdentity(noun));
+        for (position, path) in paths.iter().enumerate() {
+            let filename = path.rsplit('/').next().unwrap_or(path);
+            let mut repair = design::outcome::Repair::new(
+                crate::world::separate_choice(noun, filename),
+                position,
+            );
+            if let Some(remaining) = paths.iter().find(|other| *other != path)
+                && !users.is_empty()
+            {
+                repair = repair.help(crate::world::duplicate_consequence(
+                    crate::world::KeptBy::Encounters(&users),
+                    remaining.rsplit('/').next().unwrap_or(remaining),
+                    position == 0,
+                ));
             }
-        });
+            fault = fault.repair(repair);
+        }
+        if let Some(path) = fault.show(ui).and_then(|at| paths.get(at)) {
+            // FF8: the result, its Undo or the failure goes to the page's store, which the
+            // editor's footer shows. A new separation of another note is a result of its own; a
+            // failed one keeps the last change and its Undo.
+            separated.set(Some(match crate::world::new_identity(campaign, path) {
+                Ok((change, note)) => {
+                    note_identity_changed(ui.ctx());
+                    Separated::Done {
+                        change,
+                        path: path.clone(),
+                        note,
+                    }
+                }
+                Err(error) => Separated::Failed {
+                    path: path.clone(),
+                    error,
+                },
+            }));
+        }
     }
     !seen.is_empty()
 }
@@ -8505,14 +8514,23 @@ impl Encounters {
                         *expanded = None;
                     }
                 } else if is_open && !missing {
+                    // The row's fields, keyed by the draft and the row.
+                    let row_key = design::TextKey::from_data(&slot.key);
                     ui.horizontal(|ui| {
                         ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
-                        side_control(ui, "Side", &mut slot.side, &sides);
+                        side_control(
+                            ui,
+                            (
+                                list::SIDE_CHOICE.of(draft_id).with(&row_key),
+                                list::SIDE_OTHER.of(draft_id).with(&row_key),
+                            ),
+                            "Side",
+                            &mut slot.side,
+                            &sides,
+                        );
                     });
                     ui.horizontal_wrapped(|ui| {
-                        let field = INITIATIVE_GROUP
-                            .of(draft_id)
-                            .with(design::TextKey::from_data(&slot.key));
+                        let field = INITIATIVE_GROUP.of(draft_id).with(&row_key);
                         const GROUP_LABEL: &str = "Initiative group (optional)";
                         // While the field has focus it keeps the exact words typed (a lone
                         // space too): the field part drops its text Undo when the bound text is
@@ -9885,6 +9903,17 @@ mod tests {
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
         harness.get_by_label("These two files claim to be the same entry.");
+        // M0178: the repair is the shared typed body fault (`world::DuplicateIdentity`), in the
+        // warning tone, as World draws it.
+        assert!(
+            design::outcome::message_rects(&harness.ctx)
+                .into_iter()
+                .any(
+                    |(_, place, tone)| place == design::outcome::MessagePlace::Page
+                        && tone == Tone::Warning
+                ),
+            "the duplicate repair is a typed body fault"
+        );
         harness
             .get_by_label("Make Rook copy.md a separate entry")
             .click();

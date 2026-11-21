@@ -1137,7 +1137,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
@@ -1230,6 +1229,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "cause", &[Ban::Words]),
         ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
         ("src/encounters.rs", "outcome_words", &[Ban::Words]),
+        // Ruling M20 (M0178): the duplicate repair in the search results; it replaces an
+        // untyped `design::message_with_actions`.
+        (
+            "src/encounters.rs",
+            "duplicate_creature_results",
+            &[Ban::Body],
+        ),
         // Ruling M20 (M0192): the page's placeholder while another campaign's encounter is open;
         // it replaces an untyped `design::message`.
         ("src/encounters.rs", "show_page", &[Ban::Body]),
@@ -1350,7 +1356,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        ("src/world.rs", "draw", &[Ban::Extras(4)]),
+        // Ruling M20 (M0178): the reader's duplicate repair (`Ban::Body`); it replaces an
+        // untyped `design::message_with_actions`.
+        ("src/world.rs", "draw", &[Ban::Extras(3), Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
