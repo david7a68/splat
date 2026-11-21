@@ -604,10 +604,10 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
             },
         ));
         if let Some((_, feature)) = &profile.background_feature {
-            sheet_label(ui, "Feature", [&feature.name]);
+            design::fact::line(ui, "Feature", [&feature.name]);
         }
         if !background.feats.is_empty() {
-            sheet_label(ui, "Feats", &background.feats);
+            design::fact::line(ui, "Feats", &background.feats);
         }
         if !background.description.is_empty() || profile.background_feature.is_some() {
             design::quiet_section(ui, "Background text", |ui| {
@@ -624,7 +624,7 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
         sheet_section(ui, "Details");
         sheet_columns(ui, details.len(), |ui, at| {
             let (label, value) = &details[at];
-            sheet_label(ui, label, [value]);
+            design::fact::line(ui, label, [value]);
         });
     }
     for (title, rows) in [("Characteristics", characteristics), ("Notes", story)] {
@@ -673,20 +673,6 @@ pub fn text(v: &Value) -> &str {
 pub fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
-/// One sheet fact: its label, then its values. No caller chooses a separator.
-fn sheet_label(
-    ui: &mut egui::Ui,
-    label: &str,
-    values: impl IntoIterator<Item = impl std::fmt::Display>,
-) {
-    let values = values
-        .into_iter()
-        .map(|value| value.to_string())
-        .collect::<Vec<_>>()
-        .join(" · ");
-    ui.add(egui::Label::new(format!("{label}: {values}")).wrap());
-}
-
 fn sheet_section(ui: &mut egui::Ui, title: &str) {
     sheet_heading(ui, title, 0);
 }
@@ -756,11 +742,7 @@ fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
 /// A tile whose number rolls.
 fn roll_metric(ui: &mut egui::Ui, label: &str, value: &str, link: &RollLink) {
     tile(ui, |ui| {
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            ui.add(egui::Label::new(Type::Small.rich(ui, label).color(colors().muted)).truncate());
-            crate::rolls::link(ui, value, Type::NumeralLarge, link);
-        });
+        design::fact::roll_tile(ui, label, value, link);
     });
 }
 /// A tile's room, the same for every tile in a row.
@@ -872,11 +854,10 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
     sheet_section(ui, "Ability scores");
     tiles(ui, |ui| {
         for ability in ABILITIES {
-            let label = format!(
-                "{}{} {}",
-                ability[..1].to_uppercase(),
-                &ability[1..3],
-                val(record, ability)
+            // `Str: 8` over its modifier: the shared fact form (ruling M5).
+            let label = design::fact::tile_label(
+                &format!("{}{}", ability[..1].to_uppercase(), &ability[1..3]),
+                val(record, ability),
             );
             let key = format!("{ability}_modifier");
             let value = signed(record, &key);
@@ -968,7 +949,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
         ui.weak("No limited-use pools returned.");
     }
     for (key, pool) in &record.definition.splat_resources {
-        sheet_label(
+        design::fact::line(
             ui,
             &pool.name,
             [format!(
@@ -990,7 +971,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
         for group in &record.character.proficiencies {
             let values = text(&group["values"]);
             if !values.is_empty() {
-                sheet_label(ui, text(&group["group"]), values.split(", "));
+                design::fact::line(ui, text(&group["group"]), values.split(", "));
             }
         }
     };
@@ -1002,11 +983,11 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
             ("Vulnerability", &record.character.vulnerabilities),
         ] {
             if !values.is_empty() {
-                sheet_label(ui, label, values.iter().map(|value| text(&value["name"])));
+                design::fact::line(ui, label, values.iter().map(|value| text(&value["name"])));
             }
         }
         for sense in &record.character.senses {
-            sheet_label(ui, text(&sense["name"]), [text(&sense["distance"])]);
+            design::fact::line(ui, text(&sense["name"]), [text(&sense["distance"])]);
         }
         if let Some(words) = overview_death_saves(record, live) {
             sheet_section(ui, "Death saves");
@@ -1348,7 +1329,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                     } else {
                         value["value"].to_string()
                     };
-                    sheet_label(
+                    design::fact::line(
                         ui,
                         label,
                         std::iter::once(number.as_str())
@@ -1360,7 +1341,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                 if pool.kind.as_deref() != Some("spell_slot") {
                     continue;
                 }
-                sheet_label(
+                design::fact::line(
                     ui,
                     &pool.name,
                     [format!(
@@ -1408,7 +1389,7 @@ pub fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: 
     }
     if page == 3 {
         use splat::character::profile;
-        sheet_label(
+        design::fact::line(
             ui,
             "Coins",
             [profile::coins(&record.source.raw)
@@ -1509,7 +1490,7 @@ pub fn calendar_time(seconds: u64) -> String {
 
 #[cfg(test)]
 mod sheet_now_tests {
-    use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line, sheet_label};
+    use super::{EntitySnapshot, SheetNow, SlotsLeft, design, egui, overview, party_line};
     use serde_json::json;
     #[test]
     fn iter7_b_overflow_tabs_have_no_button_border_and_keep_selected_underline() {
@@ -1690,9 +1671,9 @@ mod sheet_now_tests {
     fn sheet_labels_use_a_colon_then_dot_separated_values() {
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::new_ui(|ui| {
-            sheet_label(ui, "Resistance", ["Fire", "Cold"]);
-            sheet_label(ui, "Darkvision", ["60 ft."]);
-            sheet_label(ui, "Coins", ["12 cp", "40 sp"]);
+            design::fact::line(ui, "Resistance", ["Fire", "Cold"]);
+            design::fact::line(ui, "Darkvision", ["60 ft."]);
+            design::fact::line(ui, "Coins", ["12 cp", "40 sp"]);
         });
         harness.run();
         for words in [
@@ -1701,6 +1682,22 @@ mod sheet_now_tests {
             "Coins: 12 cp · 40 sp",
         ] {
             harness.get_by_label(words);
+        }
+        // M-Y0.1 (M0416, ruling M5): an ability tile's label holds its score in the same fact
+        // form, `Str: 14` over its rolling modifier, in a narrow pane and a wide one.
+        for width in [320.0, 900.0] {
+            let record = wizard(10);
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(width, 900.0))
+                .build_ui(|ui| overview(ui, &record, None));
+            design::theme::install(&harness.ctx);
+            harness.run();
+            for ability in ["Str", "Dex", "Con", "Int", "Wis", "Cha"] {
+                assert!(
+                    harness.query_by_label(&format!("{ability}: 14")).is_some(),
+                    "m-y0-1-ability-fact: {width} px: no `{ability}: 14` tile label"
+                );
+            }
         }
     }
 
