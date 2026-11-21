@@ -4212,16 +4212,15 @@ impl Sessions {
         };
         match pressed {
             Some(DraftAct::Overwrite) => draft.overwrite(),
-            Some(DraftAct::Reload) => {
-                if draft.reload_keeping_undo().is_err() {
-                    draft.state = DraftState::Missing;
-                }
+            Some(DraftAct::Reload) if draft.reload_keeping_undo().is_err() => {
+                draft.state = DraftState::Missing;
             }
             Some(DraftAct::SaveAgain) => draft.save_again(),
             Some(DraftAct::SaveMoved) => draft.save_moved(),
             Some(DraftAct::Discard) => draft.discard(),
             Some(DraftAct::Save) => draft.save(),
-            None => {}
+            // A reload that worked left the draft as the file is.
+            Some(DraftAct::Reload) | None => {}
         }
     }
 
