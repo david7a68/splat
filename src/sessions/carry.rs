@@ -864,8 +864,8 @@ impl Sessions {
 
     /// The result of the open session's act, in the Session page's message footer, so that the
     /// Last time line, the tabs and the plan never move when it comes or goes: its words and
-    /// `Undo: Carry over`, or why it wrote nothing. It is that note's, so it shows also when the
-    /// last session can no longer be found. A save that failed says so, and the Undo still works.
+    /// `Undo carry over from <session>`, or why it wrote nothing. It is that note's, so it shows
+    /// also when the last session can no longer be found. A save that failed says so, and the Undo still works.
     /// The result keeps the order its act issued in the page's store (`Carries::record`); its
     /// Undo stays in `Carries::results`, which follows the note to a moved file.
     pub(super) fn carry_in_messages<'f>(
@@ -914,9 +914,9 @@ impl Sessions {
         }
     }
 
-    /// `Undo carry over`: the act's own Undo, on this session's note, by its line's `ticket`: a
-    /// result replaced or ended since is gone, and nothing changes. When it cannot apply, the
-    /// footer says why.
+    /// `Undo carry over from <session>`: the act's own Undo, on this session's note, by its
+    /// line's `ticket`: a result replaced or ended since is gone, and nothing changes. When it
+    /// cannot apply, the footer says why.
     pub(super) fn undo_carry(&mut self, session: Uuid, ticket: Option<design::results::Ticket>) {
         let Some(ticket) = ticket else {
             return;
@@ -1729,18 +1729,20 @@ mod tests {
         rescan(&mut harness);
         assert!(
             harness
-                .query_all_by_label("Undo carry over")
+                .query_all_by_label("Undo carry over from Session 1")
                 .next()
                 .is_some()
         );
         fs::write(&last.path, &last_text).unwrap();
         rescan(&mut harness);
-        harness.get_by_label("Undo carry over").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         assert!(
             harness
-                .query_all_by_label("Undo carry over")
+                .query_all_by_label("Undo carry over from Session 1")
                 .next()
                 .is_none()
         );
@@ -1793,7 +1795,9 @@ mod tests {
                 .body
                 .contains("Who burned the ropes?")
         );
-        harness.get_by_label("Undo carry over").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         let draft = harness.state().0.draft.as_ref().unwrap();
         assert!(!draft.text().contains("carried_"));
@@ -1823,9 +1827,35 @@ mod tests {
                 .next()
                 .is_some()
         );
-        harness.get_by_label("Undo carry over").click();
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
         harness.run_steps(2);
         assert_eq!(read(), changed);
+
+        // M-N1.3: the Undo acts by its line's ticket. A press left over on a result that a later
+        // act of this session replaced reaches nothing: the later result stays.
+        let page = &mut harness.state_mut().0;
+        let refused = || Outcome::Refused {
+            refusal: carry_refusal(&ActFault::Missing, "Session 1", "Session 2", false),
+            seen: 0,
+        };
+        page.carries.record(tonight.id, refused());
+        let stale = page
+            .carries
+            .marks
+            .get(&CarryOwner {
+                session: tonight.id,
+            })
+            .expect("the result is in the page's store")
+            .ticket_for_caller_test();
+        page.carries.record(tonight.id, refused());
+        page.undo_carry(tonight.id, Some(stale));
+        assert!(
+            page.carries.results.contains_key(&tonight.id),
+            "a press on the replaced result's line leaves the newer result alone"
+        );
+        page.carries.end(tonight.id);
 
         // A restart: the note holds what the act wrote, and every part is done.
         let mut draft = Draft::open(&tonight.path).unwrap();
