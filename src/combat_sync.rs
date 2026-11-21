@@ -1455,7 +1455,7 @@ impl CombatSync {
     pub fn conflicts(&mut self, ui: &mut egui::Ui) {
         self.conflicts_inner(ui, None, true);
     }
-    pub(crate) fn conflicts_for(&mut self, ui: &mut egui::Ui, name: &str) {
+    pub fn conflicts_for(&mut self, ui: &mut egui::Ui, name: &str) {
         self.conflicts_inner(ui, Some(name), false);
     }
     fn conflicts_inner(&mut self, ui: &mut egui::Ui, name: Option<&str>, explanation: bool) {
@@ -2468,7 +2468,7 @@ fn group_label(key: &str) -> &str {
 /// A character's sync block heading in the ended view, one form for every state (FK3): the
 /// name in `Heading` and the text colour, ` · `, then the status's icon and word in its colour.
 /// A status is an icon, a word and a colour; the name never takes the status colour.
-pub(crate) fn sync_heading(
+pub fn sync_heading(
     ui: &mut egui::Ui,
     name: &str,
     status: &str,

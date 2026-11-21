@@ -57,5 +57,5 @@ src/encounter_run/notice.rs heading-owner 1
 # moves them. The run's `turn_reminders` builds `Reminders for <name>: a · b` (lane R0). World's
 # `line` builds `<label>: <cells>` as a line's search words, not drawn (lane W0 decides).
 src/encounter_run/notice.rs fact-owner 1
-src/party.rs fact-owner 3
+src/party_support/sheets.rs fact-owner 3
 src/world/lines.rs fact-owner 1

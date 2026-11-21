@@ -170,6 +170,7 @@ struct Splat {
     campaigns: campaigns::Campaigns,
     dndbeyond: dndbeyond::DndBeyond,
     party: party::Party,
+    party_page: splat_party_page::PartyPage,
     encounters: encounters::Encounters,
     lookup: lookup::Lookup,
     /// The house rules' trackers and the ledger; Lookup shows them, and the rail counts them.
@@ -214,6 +215,7 @@ impl Default for Splat {
             campaigns: Default::default(),
             dndbeyond: Default::default(),
             party: Default::default(),
+            party_page: Default::default(),
             encounters: Default::default(),
             lookup: Default::default(),
             trackers: trackers::Trackers::with_ids(hermetic::new_uuid),
@@ -2203,9 +2205,10 @@ impl Splat {
                 }
             }
             Page::Party => {
-                self.party.run_open = self.run_fact.is_some();
+                self.party_page.run_open = self.run_fact.is_some();
                 if active.is_some() {
-                    self.party.show(
+                    self.party_page.show(
+                        &mut self.party,
                         ui,
                         session,
                         active.is_some_and(|c| c.dndbeyond_campaign_id.is_some()),
@@ -2731,14 +2734,14 @@ impl Splat {
                 self.page = Page::Encounters;
             }
         }
-        if std::mem::take(&mut self.party.wants_settings) {
+        if std::mem::take(&mut self.party_page.wants_settings) {
             self.settings_tab = SettingsTab::Account;
             self.settings.focus_sign_in();
             self.page = Page::Settings;
             self.settings_tab = SettingsTab::Account;
             self.settings.focus_sign_in();
         }
-        if std::mem::take(&mut self.party.wants_link_page) {
+        if std::mem::take(&mut self.party_page.wants_link_page) {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Link;
         }

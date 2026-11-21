@@ -4228,15 +4228,7 @@ pub(crate) fn saved_time(at: u64, now: u64) -> String {
     }
 }
 
-/// A UTC date and time, so two runs saved on one day can be told apart.
-pub fn calendar_time(seconds: u64) -> String {
-    format!(
-        "{} {:02}:{:02}",
-        calendar_date(seconds),
-        (seconds / 3600) % 24,
-        (seconds / 60) % 60
-    )
-}
+pub use splat_party::party::calendar_time;
 
 pub use splat_content_ui::roster::calendar_date;
 

@@ -60,7 +60,9 @@ do not tell you the scope. For example, the tracker tests load
 | `src/world_page` | World page (`splat-world-page`) |
 | `src/campaign_packages` | Campaign Packages page (`splat-campaign-packages`) |
 | `src/session_records` | Saved fight records, difficulty summaries, and the Timeline book (`splat-session-records`) |
-| `src/encounters_ui` | Encounter planning, fight runs, and party sheets and sync (`splat-encounters-ui`) |
+| `src/encounters_ui` | Encounter planning and fight runs (`splat-encounters-ui`) |
+| `src/party_support` | Live party sheets, sync, and sheet UI shared with runs (`splat-party`) |
+| `src/party_page` | Party page (`splat-party-page`) |
 | `src/sessions_ui` | Sessions and Timeline pages, recording, and processing (`splat-sessions-ui`) |
 | `src` | Desktop app and public content, character and execution APIs |
 
@@ -73,6 +75,8 @@ A World page, Campaign Packages, Library page, or Trackers edit rebuilds that fe
 An edit to the catalogue, Lookup, or a shared reader rebuilds Content UI and the crates that use it.
 Encounters UI and Sessions UI share the saved fight records and the Timeline book.
 Edits to either UI crate rebuild that crate and the desktop.
+Party page edits rebuild that page and the desktop. Edits to the shared sheets or
+sync also rebuild the Encounters UI that uses them.
 
 Development and test builds use 16 code-generation units and include file and
 line information in backtraces. They disable incremental compilation by

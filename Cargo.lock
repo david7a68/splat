@@ -3853,6 +3853,7 @@ dependencies = [
  "splat-encounters-ui",
  "splat-execution",
  "splat-library-page",
+ "splat-party-page",
  "splat-sessions-ui",
  "splat-trackers",
  "splat-world-page",
@@ -4002,27 +4003,23 @@ dependencies = [
 name = "splat-encounters-ui"
 version = "0.1.0"
 dependencies = [
- "directories",
  "eframe",
  "egui_kittest",
  "image",
- "keyring",
  "reqwest",
  "serde",
  "serde_json",
  "serde_yaml_ng",
- "sha2",
  "splat-campaign",
  "splat-character",
  "splat-content",
  "splat-content-ui",
  "splat-design",
  "splat-execution",
+ "splat-party",
  "splat-session-records",
  "tempfile",
- "tungstenite",
  "uuid",
- "zeroize",
 ]
 
 [[package]]
@@ -4055,6 +4052,44 @@ dependencies = [
  "splat-design",
  "splat-execution",
  "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "splat-party"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "eframe",
+ "egui_kittest",
+ "keyring",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "splat-campaign",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "tempfile",
+ "tungstenite",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "splat-party-page"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_kittest",
+ "serde_yaml_ng",
+ "splat-character",
+ "splat-content",
+ "splat-content-ui",
+ "splat-design",
+ "splat-party",
+ "url",
  "uuid",
 ]
 

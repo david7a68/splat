@@ -15,6 +15,8 @@ members = [
     "src/encounters_ui",
     "src/library_page",
     "src/session_records",
+    "src/party_support",
+    "src/party_page",
     "src/sessions_ui",
     "src/trackers",
     "src/world_page",
@@ -28,6 +30,8 @@ default-members = [
     "src/encounters_ui",
     "src/library_page",
     "src/session_records",
+    "src/party_support",
+    "src/party_page",
     "src/sessions_ui",
     "src/trackers",
     "src/world_page",
@@ -35,6 +39,7 @@ default-members = [
 resolver = "3"
 
 [dependencies]
+splat-party-page = { path = "src/party_page" }
 splat-library-page = { path = "src/library_page" }
 splat-campaign-packages = { path = "src/campaign_packages" }
 splat-world-page = { path = "src/world_page" }
@@ -135,6 +140,12 @@ opt-level = 2
 opt-level = 2
 
 [profile.test.package.splat-session-records]
+opt-level = 2
+
+[profile.test.package.splat-party]
+opt-level = 2
+
+[profile.test.package.splat-party-page]
 opt-level = 2
 
 [profile.test.package.splat-sessions-ui]

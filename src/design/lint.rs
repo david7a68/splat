@@ -837,7 +837,9 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
             if fraction {
                 self.found.push("hp-fraction-owner");
             }
-            if self.path.ends_with("src/party.rs")
+            if ["src/party.rs", "src/party_support/sheets.rs"]
+                .iter()
+                .any(|path| self.path.ends_with(path))
                 && ["overview", "detail_intro", "background", "details"]
                     .contains(&self.function.as_str())
                 && (["{label}: ", "{label} · ", "{}: ", "{} · {}"]
@@ -1433,11 +1435,13 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
     ] {
         for function in ["background", "overview", "detail_intro", "details"] {
             let code = format!("fn {function}() {{ ui.label(format!({words:?}, 1, 2)); }}");
-            assert_eq!(
-                rules("src/party.rs", &code),
-                ["sheet-label-owner"],
-                "{function}: {words}"
-            );
+            for path in ["src/party.rs", "src/party_support/sheets.rs"] {
+                assert_eq!(
+                    rules(path, &code),
+                    ["sheet-label-owner"],
+                    "{function}: {words}"
+                );
+            }
         }
     }
     assert!(
