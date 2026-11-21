@@ -1997,9 +1997,13 @@ impl Splat {
                         // Round 26 AG1: the account column starts an `XL` gap after the campaign
                         // list, which is as wide as its rows need.
                         let half = (ui.available_width() - design::XL) / 2.0;
+                        // Each pane keeps its scroll lane, inside its own width: the list keeps its
+                        // measured width and the account column its place, an `XL` gap after the
+                        // list's last word.
+                        let lane = design::lane_width();
                         design::PaneColumns::independent("settings_columns")
-                            .fixed(0.0, campaigns.list_width(half))
-                            .rest(design::XL)
+                            .fixed(0.0, campaigns.list_width(half) + lane)
+                            .rest(design::XL - lane)
                             .edges(ui)
                             .show_children(ui, |ui, place| {
                                 ui.spacing_mut().item_spacing.x = 8.0;
