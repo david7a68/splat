@@ -1993,7 +1993,7 @@ pub mod library_author {
             "ctrl-s",
             "library, dirty note",
             saved,
-            "Ctrl+S saves a dirty note, as artifacts/ui-review.md says".into(),
+            "Ctrl+S saves a dirty note".into(),
         );
         d.expect("Saved");
         assert!(
