@@ -3,10 +3,48 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Command, NOBODY_PRESENT, Panel, Phase, Run, SHEET_SOURCE,
-    view::{dock_name, log_link, undo_forms},
+    view::{dock_name, outside_words, undo_forms},
 };
-use crate::design::{self, Density, RunScale, Status, Tone, Type, colors, icons};
+use crate::design::{self, Density, RunScale, Status, Type, colors, icons};
 use eframe::egui::{self, Align, Layout, vec2};
+
+/// What the DM pressed on the header's sheet notice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HeaderNotice {
+    Log,
+    Dismiss,
+}
+
+/// The header's sheet notice (M0091, M0092): a warning in the compact form with `Log` and its
+/// close icon beside its fitted words; `detail` is the whole notice.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a body place: the run’s header band says its notice where it is (Ban::Body)"
+)]
+fn header_notice(
+    ui: &mut egui::Ui,
+    words: design::outcome::Sentence,
+    detail: String,
+) -> Option<HeaderNotice> {
+    use design::outcome::{BodyMessage, Choice, Lost, MessageChoice, Notice};
+    BodyMessage::from(
+        Notice::warning(words)
+            .choice(Choice::new(
+                MessageChoice::Link {
+                    word: "Log",
+                    hover: None,
+                },
+                HeaderNotice::Log,
+            ))
+            .choice(Choice::new(
+                MessageChoice::Dismiss(Lost::Nothing),
+                HeaderNotice::Dismiss,
+            )),
+    )
+    .compact()
+    .detail(detail)
+    .show(ui)
+}
 
 /// What sync needs from the DM, on the line above the roster.
 struct SyncAlert {
@@ -472,35 +510,23 @@ impl Run {
                     }
                     if let Some(summary) = &sheet {
                         design::gap(ui, design::Gap::S);
-                        // The compact message's own top alignment is useful in stacked
-                        // notices. Here its text-height box is centred by the control row.
-                        let width =
-                            design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
-                                + design::S
-                                + design::HAIRLINE_WIDTH
-                                + design::XS;
-                        let response = ui
-                            .allocate_ui_with_layout(
-                                vec2(width, Type::Small.line()),
-                                Layout::left_to_right(Align::Center),
-                                |ui| {
-                                    ui.spacing_mut().item_spacing.x = design::S;
-                                    design::small_message(ui, Tone::Warning, summary)
-                                },
-                            )
-                            .inner;
-                        let detail = self.notice.as_deref().unwrap_or(summary);
-                        design::named(ui, &response, detail);
-                        response.on_hover_text(detail);
-                        let log = log_link(ui);
-                        design::named(ui, &log, "Log");
-                        if log.clicked() {
-                            self.panel = Panel::Log;
-                            self.close_lookup = true;
-                        }
-                        if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
-                            self.notice = None;
-                            self.notice_summary = None;
+                        // M-P0 item 7: the sheet notice is one typed compact message: its
+                        // fitted words, `Log` and its close icon in one band on the header's
+                        // line, one control high, so the band does not grow when it comes. The
+                        // whole notice is its words' name and hover.
+                        let detail = self.notice.clone().unwrap_or_else(|| summary.clone());
+                        if let Some(words) = outside_words(summary.clone()) {
+                            match header_notice(ui, words, detail) {
+                                Some(HeaderNotice::Log) => {
+                                    self.panel = Panel::Log;
+                                    self.close_lookup = true;
+                                }
+                                Some(HeaderNotice::Dismiss) => {
+                                    self.notice = None;
+                                    self.notice_summary = None;
+                                }
+                                None => {}
+                            }
                         }
                     }
                     if let Some((words, _, full)) = &reminder {
@@ -565,6 +591,47 @@ mod tests {
     fn iter8_b_sheet_notice_centres_with_next_and_log_and_has_a_gap() {
         use egui_kittest::kittest::Queryable;
         for width in [1200.0, 1920.0] {
+            // M-P0 item 7: the notice is one compact message, so the header band keeps its
+            // height when the notice comes, and the notice's `Log` and close icon lie inside
+            // that band, beside its words.
+            let height = |notice: bool| {
+                let mut run = super::super::tests::run();
+                for (index, total) in [20, 15, 10].into_iter().enumerate() {
+                    run.apply(Command::Initiative(index, Some(total))).unwrap();
+                }
+                run.apply(Command::Begin).unwrap();
+                if notice {
+                    run.notice =
+                        Some("Guard 1’s sheet changed: HP 17 → 15. Undo stops here.".into());
+                    run.notice_summary = Some("Guard 1: HP 17 → 15".into());
+                }
+                let used = std::rc::Rc::new(std::cell::Cell::new((0.0, 0.0)));
+                let kept = used.clone();
+                let mut harness = egui_kittest::Harness::builder()
+                    .with_size(vec2(width, 800.0))
+                    .build(move |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let top = ui.cursor().top();
+                            run.live_header(ui, design::RUN_REGULAR);
+                            kept.set((top, ui.cursor().top()));
+                        });
+                    });
+                design::theme::install(&harness.ctx);
+                harness.run_steps(2);
+                let (top, bottom) = used.get();
+                let inside = !notice
+                    || ["Log", "Dismiss this message"].iter().all(|name| {
+                        let rect = harness.get_by_label(name).rect();
+                        rect.top() >= top - 0.5 && rect.bottom() <= bottom + 0.5
+                    });
+                (bottom - top, inside)
+            };
+            let ((without, _), (with, inside)) = (height(false), height(true));
+            assert!(
+                (with - without).abs() < 0.5 && inside,
+                "the header band does not grow when the notice comes, and holds its Log and \
+                 close icon, at {width}: {without} then {with}, inside {inside}"
+            );
             let mut run = super::super::tests::run();
             for (index, total) in [20, 15, 10].into_iter().enumerate() {
                 run.apply(Command::Initiative(index, Some(total))).unwrap();

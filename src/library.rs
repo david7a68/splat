@@ -376,6 +376,80 @@ fn file_at(notes: &[Note], (owner, path): (OwnerKey, &str)) -> Option<usize> {
         .iter()
         .position(|note| note.owner.key() == owner && note.path == path)
 }
+/// The issues count's menu: the faults, then a link for each file with broken links that opens
+/// it (as in World). Round 26 FB1: as wide as its content, up to the reader measure, and never
+/// more than its room (a longer link is cut and a message wraps). M0330: its scroll column is as
+/// tall as its lines up to six controls, so one link leaves no empty band and a long list
+/// scrolls. M0331: while a draft holds the open entry (`open_lock`), no other entry opens; the
+/// menu says why and lists the files as text.
+fn issues_menu(
+    ui: &mut egui::Ui,
+    loaded: &Loaded,
+    broken: &[(usize, usize)],
+    stopped_reading: &Option<(FileId, String)>,
+    open_lock: Option<&str>,
+    open_broken: &mut Option<usize>,
+) {
+    let link_label = |at: usize, count: usize| {
+        format!(
+            "{}: {}",
+            loaded.file_label(&loaded.notes[at]),
+            design::count(count, "broken link", "broken links")
+        )
+    };
+    let font = Type::Small.font(ui);
+    let natural = |text: &str| {
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), font.clone(), colors().text)
+            .size()
+            .x
+    };
+    let width = loaded
+        .diagnostics
+        .iter()
+        .map(|message| natural(&message.text))
+        .chain(stopped_reading.as_ref().map(|(_, text)| natural(text)))
+        .chain(
+            broken
+                .iter()
+                .map(|&(at, count)| natural(&link_label(at, count))),
+        )
+        .fold(design::XL, f32::max)
+        .min(design::READER_MEASURE)
+        .ceil();
+    // The scroll column keeps its lane beside the widest line.
+    ui.set_width((width + design::lane_width()).min(ui.available_width()));
+    design::ScrollColumn::new("library_file_issues")
+        .max_height(design::XXL * 6.0)
+        .fit_height()
+        .show(ui, |ui| {
+            for message in loaded
+                .diagnostics
+                .iter()
+                .map(|message| message.text.as_str())
+                .chain(stopped_reading.as_ref().map(|(_, text)| text.as_str()))
+            {
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, message).color(colors().muted)).wrap(),
+                );
+            }
+            if !broken.is_empty() {
+                design::blocked_reason(ui, open_lock);
+            }
+            for &(at, count) in broken {
+                let label = link_label(at, count);
+                if open_lock.is_some() {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, &label).color(colors().muted)).wrap(),
+                    );
+                } else if design::small_link(ui, &label).clicked() {
+                    *open_broken = Some(at);
+                    ui.close();
+                }
+            }
+        });
+}
+
 impl Library {
     /// The typed outcome of the Library's kept result `kind` (M-L0.4b), made from its data in
     /// the store: its words and its Undo, with the lock the open draft puts on it (`results`).
@@ -1597,26 +1671,47 @@ impl Library {
         )
     }
 
-    /// The reader's room on the page that `ui` lays out next: right of the section rows and
-    /// the entry list when they show. The header asks the columns for their widths before
-    /// they draw (`Column::width_within`), so its issues menu keeps to the reader, clear of
-    /// the splitter and the list's scroll bar (issue #504). With no columns (a load, an
-    /// empty scope) it is the whole page.
-    fn reader_room(&self, ui: &egui::Ui, compact: bool, dirty: bool, total: usize) -> egui::Rect {
+    /// The page's columns that `ui` lays out next, left to right: the section rows and the
+    /// entry list when they show, then the reader. The header asks the columns for their widths
+    /// before they draw (`Column::width_within`), so each menu of the header keeps inside the
+    /// column under its control, clear of its splitters and the list's scroll bar (issue
+    /// #504). Each column is its content: `S` inside its panel's edges, where its frame's
+    /// margin ends and its scroll bar starts. With no columns (a load, an empty scope) the page
+    /// is one column.
+    fn page_columns(
+        &self,
+        ui: &egui::Ui,
+        compact: bool,
+        dirty: bool,
+        total: usize,
+    ) -> Vec<egui::Rect> {
         let mut room = ui.available_rect_before_wrap();
-        if self.pending.is_some()
-            || self.loaded.is_none()
-            || (self.scope == Scope::Campaign && total == 0)
+        let mut columns = Vec::new();
+        if self.pending.is_none()
+            && self.loaded.is_some()
+            && !(self.scope == Scope::Campaign && total == 0)
         {
-            return room;
+            let mut split = |room: &mut egui::Rect, width: f32| {
+                columns.push(egui::Rect::from_x_y_ranges(
+                    room.left()..=room.left() + width,
+                    room.y_range(),
+                ));
+                room.min.x += width;
+            };
+            if let Some(column) = self.sections_column(compact) {
+                let width = column.width_within(ui.ctx(), room);
+                split(&mut room, width);
+            }
+            if let Some(column) = self.entries_column(ui, room.width(), dirty) {
+                let width = column.width_within(ui.ctx(), room);
+                split(&mut room, width);
+            }
         }
-        if let Some(column) = self.sections_column(compact) {
-            room.min.x += column.width_within(ui.ctx(), room);
-        }
-        if let Some(column) = self.entries_column(ui, room.width(), dirty) {
-            room.min.x += column.width_within(ui.ctx(), room);
-        }
-        room
+        columns.push(room);
+        columns
+            .into_iter()
+            .map(|column| column.shrink2(egui::vec2(design::S, 0.0)))
+            .collect()
     }
 
     fn draft_reason(&self) -> Option<&'static str> {
@@ -1768,8 +1863,7 @@ impl Library {
                 .filter(|n| loaded.in_scope(n, self.scope))
                 .count()
         });
-        let mut new_entry = false;
-        let reader_room = self.reader_room(ui, compact, dirty, total);
+        let columns = self.page_columns(ui, compact, dirty, total);
         let link_index = ui.ctx().data(|data| {
             data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
                 "reader_link_index",
@@ -1802,167 +1896,91 @@ impl Library {
                     ),
                 )
             });
-        design::page_header(
-            ui,
-            "Library",
-            (total > 0 && ui.available_width() >= design::READER_MEASURE)
-                .then(|| design::count(total, "entry", "entries"))
-                .as_deref(),
-            |ui| {
-                // The places policy that `Copy to…` shares; the page line under the header
-                // paints its reason.
-                let no_place = Places::of(campaigns).create();
-                if !(self.scope == Scope::Campaign && total == 0) {
-                    new_entry = Action::secondary("New entry")
-                        .icon(icons::ADD)
-                        .blocked(locked.or(no_place.as_ref().map(|reason| reason.as_str())))
-                        .show(ui)
-                        .clicked();
-                }
-                design::locked(ui, locked, |ui| {
-                    let response = design::menu_button(ui, "Packages", false);
-                    design::menu_popup(&*ui, &response).show(|ui| {
-                        if Action::quiet("Reload from disk")
-                            .icon(icons::REFRESH)
-                            .show(ui)
-                            .clicked()
-                        {
-                            reload = true;
-                            ui.close();
-                        }
-                        if Action::quiet("Manage packages…")
-                            .icon(icons::SETTINGS)
-                            .show(ui)
-                            .clicked()
-                        {
-                            open_form = true;
-                            ui.close();
-                        }
-                    });
-                });
-                let broken = self
-                    .loaded
-                    .as_ref()
-                    .zip(link_index.as_ref())
-                    .map(|(loaded, index)| loaded.broken_link_notes(index))
-                    .unwrap_or_default();
-                if let Some(loaded) = &self.loaded
-                    && (!loaded.diagnostics.is_empty()
-                        || !broken.is_empty()
-                        || stopped_reading.is_some())
-                {
-                    let word = design::count(
-                        loaded
-                            .files_to_fix(&broken, stopped_reading.as_ref().map(|(file, _)| file)),
-                        "file needs fixing",
-                        "files need fixing",
-                    );
-                    // The count has the tone of the most severe fault it counts: a file that
-                    // cannot be read is an error.
-                    let unreadable = loaded.unreadable_counted || stopped_reading.is_some();
-                    let response = design::status_link(
-                        ui,
-                        Status {
-                            icon: if unreadable {
-                                icons::ERROR
-                            } else {
-                                icons::WARN
-                            },
-                            word: &word,
-                            color: if unreadable {
-                                colors().result.error
-                            } else {
-                                colors().result.warning
-                            },
-                        },
-                    );
-                    // Round 26 FB1: the menu is as wide as its content, up to the reader
-                    // measure, and ends at the count's right edge. Its room is the reader's
-                    // (issue #504), so a long line stays clear of the splitter between the
-                    // list and the reader, and of the list's scroll bar.
-                    design::menu_popup(&*ui, &response)
-                        .within(reader_room)
-                        .align(egui::RectAlign::BOTTOM_END)
-                        .show(|ui| {
-                            let link_label = |at: usize, count: usize| {
-                                format!(
-                                    "{}: {}",
-                                    loaded.file_label(&loaded.notes[at]),
-                                    design::count(count, "broken link", "broken links")
-                                )
-                            };
-                            let font = Type::Small.font(ui);
-                            let natural = |text: &str| {
-                                ui.painter()
-                                    .layout_no_wrap(text.to_owned(), font.clone(), colors().text)
-                                    .size()
-                                    .x
-                            };
-                            let width = loaded
-                                .diagnostics
-                                .iter()
-                                .map(|message| natural(&message.text))
-                                .chain(stopped_reading.as_ref().map(|(_, text)| natural(text)))
-                                .chain(
-                                    broken
-                                        .iter()
-                                        .map(|&(at, count)| natural(&link_label(at, count))),
-                                )
-                                .fold(design::XL, f32::max)
-                                .min(design::READER_MEASURE)
-                                .ceil();
-                            // The scroll column keeps its lane beside the widest line. It is as
-                            // tall as its lines up to six controls, so one link leaves no empty
-                            // band below it (M0330) and a long list scrolls.
-                            // It never asks for more than the menu's room (the reader's): a longer
-                            // link is cut and a message wraps.
-                            ui.set_width((width + design::lane_width()).min(ui.available_width()));
-                            design::ScrollColumn::new("library_file_issues")
-                                .max_height(design::XXL * 6.0)
-                                .fit_height()
-                                .show(ui, |ui| {
-                                    for message in loaded
-                                        .diagnostics
-                                        .iter()
-                                        .map(|message| message.text.as_str())
-                                        .chain(
-                                            stopped_reading.as_ref().map(|(_, text)| text.as_str()),
-                                        )
-                                    {
-                                        ui.add(
-                                            egui::Label::new(
-                                                Type::Small.rich(ui, message).color(colors().muted),
-                                            )
-                                            .wrap(),
-                                        );
-                                    }
-                                    // As in World, each entry with a broken link opens from here.
-                                    // M0331: while a draft holds the open entry, no other one
-                                    // opens; the menu says why and lists the files as text.
-                                    if !broken.is_empty() {
-                                        design::blocked_reason(ui, open_lock);
-                                    }
-                                    for &(at, count) in &broken {
-                                        let label = link_label(at, count);
-                                        if open_lock.is_some() {
-                                            ui.add(
-                                                egui::Label::new(
-                                                    Type::Small
-                                                        .rich(ui, &label)
-                                                        .color(colors().muted),
-                                                )
-                                                .wrap(),
-                                            );
-                                        } else if design::small_link(ui, &label).clicked() {
-                                            open_broken = Some(at);
-                                            ui.close();
-                                        }
-                                    }
-                                });
-                        });
-                }
-            },
-        );
+        // M0327-M0329 (ruling M21): the header is the shared title line: the title and its
+        // count, `New entry`, the `Packages` menu and the issues count, placed by measure.
+        const NEW_ENTRY: design::Word = crate::word!("New entry");
+        const PACKAGES: design::Word = crate::word!("Packages");
+        let context = (total > 0 && ui.available_width() >= design::READER_MEASURE)
+            .then(|| design::count(total, "entry", "entries"));
+        // The places policy that `Copy to…` shares; the page line under the header paints its
+        // reason.
+        let no_place = Places::of(campaigns).create();
+        let broken = self
+            .loaded
+            .as_ref()
+            .zip(link_index.as_ref())
+            .map(|(loaded, index)| loaded.broken_link_notes(index))
+            .unwrap_or_default();
+        let issues = self.loaded.as_ref().filter(|loaded| {
+            !loaded.diagnostics.is_empty() || !broken.is_empty() || stopped_reading.is_some()
+        });
+        let word = issues.map(|loaded| {
+            design::count(
+                loaded.files_to_fix(&broken, stopped_reading.as_ref().map(|(file, _)| file)),
+                "file needs fixing",
+                "files need fixing",
+            )
+        });
+        let mut line = design::TitleLine::new("Library").context(context.as_deref());
+        if !(self.scope == Scope::Campaign && total == 0) {
+            line = line.action(
+                design::TitleAction::secondary(NEW_ENTRY)
+                    .icon(icons::ADD)
+                    .blocked(locked.or(no_place.as_ref().map(|reason| reason.as_str()))),
+            );
+        }
+        line = line.menu(design::TitleAction::quiet(PACKAGES).blocked(locked), |ui| {
+            if Action::quiet("Reload from disk")
+                .icon(icons::REFRESH)
+                .show(ui)
+                .clicked()
+            {
+                reload = true;
+                ui.close();
+            }
+            if Action::quiet("Manage packages…")
+                .icon(icons::SETTINGS)
+                .show(ui)
+                .clicked()
+            {
+                open_form = true;
+                ui.close();
+            }
+        });
+        if let Some((loaded, word)) = issues.zip(word.as_deref()) {
+            // The count has the tone of the most severe fault it counts: a file that cannot be
+            // read is an error.
+            let unreadable = loaded.unreadable_counted || stopped_reading.is_some();
+            let status = Status {
+                icon: if unreadable {
+                    icons::ERROR
+                } else {
+                    icons::WARN
+                },
+                word,
+                color: if unreadable {
+                    colors().result.error
+                } else {
+                    colors().result.warning
+                },
+            };
+            let broken = &broken;
+            let stopped_reading = &stopped_reading;
+            let open_broken = &mut open_broken;
+            line = line.status(status, move |ui| {
+                issues_menu(ui, loaded, broken, stopped_reading, open_lock, open_broken);
+            });
+        }
+        // Issue #504: each menu of the line keeps inside the column under its control, clear of
+        // its splitters and the list's scroll bar.
+        let line = line.page().menu_room(move |control| {
+            columns
+                .iter()
+                .copied()
+                .find(|column| column.x_range().contains(control.center().x))
+                .unwrap_or_else(|| columns[columns.len() - 1])
+        });
+        let new_entry = line.show(ui).clicked(NEW_ENTRY);
         if let Some(at) = open_broken {
             self.open_entry(at);
             self.reveal_row = true;
@@ -6451,9 +6469,9 @@ mod tests {
                     // notice, the dependencies, the recovery choice) and the old waiting
                     // controls left in the page's body. A typed lock is not debt, but this count
                     // reads text.
-                    (".blocked(", 11),
+                    (".blocked(", 12),
                     ("blocked_if(", 0),
-                    ("design::locked(", 1),
+                    ("design::locked(", 0),
                     ("undo_message(", 0),
                 ],
             ),
