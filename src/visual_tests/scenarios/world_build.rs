@@ -3005,6 +3005,27 @@ pub fn round_trip(d: &mut Driver<'_>) {
     );
     d.state("after-disk-edit", Sizes::All);
     d.click("New ▾");
+    // M0609: the New menu's choices are the shared quiet actions: each choice's words start
+    // `S` inside its target (egui's own button padded them 10 px).
+    let choices = ["Note…", "NPC…", "Location…", "Generate NPC"].map(|word| {
+        let target = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == word && node.role == Role::Button && node.in_view())
+            .map(|node| node.rect);
+        let words = d.painted_rect_in(word, egui::Rect::EVERYTHING);
+        (word, target, words)
+    });
+    d.observe(
+        "M0609-new-menu-choices",
+        choices.iter().all(|(_, target, words)| {
+            target.zip(*words).is_some_and(|(target, words)| {
+                (words.left() - target.left() - design::S).abs() <= 1.0
+                    && target.height() >= design::XL
+            })
+        }),
+        format!("Each New choice's words start S inside its target: {choices:?}"),
+    );
     d.click("Note…");
     d.type_into("Name", "Ashfall Faction");
     d.type_into("Type (optional)", "faction");
@@ -4022,6 +4043,36 @@ pub fn held_npc(d: &mut Driver<'_>) {
         ),
     );
     d.state("held-npc-row-over-problems", Sizes::All);
+    // M0602: the row above the view shows the held NPC with the shared draft status, as the
+    // rail does: the draft icon and the unsaved colour. The row's status is on Show's line (the
+    // rail's copy is elsewhere).
+    let show = d.place_of("Show");
+    let mut status = None;
+    d.each_painted_text(|text, clip| {
+        let rect = text.visual_bounding_rect();
+        let job = &text.galley.job;
+        if job.text
+            == format!(
+                "{} {}",
+                design::icons::DRAFT,
+                crate::world::page::UNSAVED_NPC
+            )
+            && clip.intersects(rect)
+            && show.is_some_and(|show| (rect.center().y - show.center().y).abs() < design::S)
+        {
+            status = Some((
+                rect,
+                job.sections
+                    .iter()
+                    .all(|section| section.format.color == design::colors().document.unsaved),
+            ));
+        }
+    });
+    d.observe(
+        "M0602-held-npc-draft-status",
+        status.is_some_and(|(_, unsaved)| unsaved) && d.in_view(&row),
+        format!("The held NPC's row has the draft status in the unsaved colour: {status:?}"),
+    );
     // FD1: the rail names the held NPC once, with the draft word, and leads to its card from
     // another page.
     let rail = d.rail_words();
@@ -10697,6 +10748,63 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             gaps,
             format!("An L gap separates the two choices and an M gap ends them at {size:?}"),
         );
+    }
+    // M0583 (W0's pressure caller): in Lookup's narrow reader a repair action whose words do
+    // not fit wraps inside the shared action (`Action::wraps`): it grows taller, the whole
+    // filename shows, and its words sit `M` inside its border, as the one-line action's do.
+    look_up(d, "Rook Ambry");
+    const SEPARATE: &str = "Make Rook Ambry copy.md a separate note";
+    d.expect(SEPARATE);
+    // Each shown action with its own words (World's reader behind Lookup shows one too): at
+    // 960 the words wrap; at every size they sit `M` inside the border.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let pairs = d.at_size(size, |d| {
+            let actions: Vec<egui::Rect> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.role == Role::Button && node.name == SEPARATE && node.in_view())
+                .map(|node| node.rect)
+                .collect();
+            let mut words = Vec::new();
+            d.each_painted_text(|text, clip| {
+                let rect = text.visual_bounding_rect();
+                if text.galley.job.text == SEPARATE && clip.intersects(rect) {
+                    words.push((rect, text.galley.elided, text.galley.rows.len()));
+                }
+            });
+            actions
+                .iter()
+                .map(|action| {
+                    let own = words
+                        .iter()
+                        .copied()
+                        .find(|(rect, _, _)| action.contains(rect.center()));
+                    (*action, own)
+                })
+                .collect::<Vec<_>>()
+        });
+        let wrapped = pairs
+            .iter()
+            .filter(|(_, own)| own.is_some_and(|(_, _, rows)| rows > 1))
+            .count();
+        d.observe(
+            "M0583-wrapped-repair",
+            !pairs.is_empty()
+                && (size != SMALL || wrapped > 0)
+                && pairs.iter().all(|(action, own)| {
+                    own.is_some_and(|(words, elided, _)| {
+                        !elided
+                            && action.expand(0.5).contains_rect(words)
+                            && (words.left() - action.left() - design::M).abs() <= 1.0
+                    })
+                }),
+            format!(
+                "At {size:?} the repair action keeps its whole words `M` inside its border, wrapped where they do not fit (at 960 in Lookup): {pairs:?} (action, (words, cut, rows))"
+            ),
+        );
+    }
+    if d.has(SEARCH_LOOKUP) {
+        d.press_ctrl(Key::K);
     }
     for size in [SMALL, DEFAULT, LARGE] {
         let (aligned, detail) = d.at_size(size, |d| duplicate_choices_at_text(d, 0.0));
