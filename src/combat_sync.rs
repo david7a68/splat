@@ -2359,11 +2359,7 @@ fn step_field(group: &mut Value, field: &str, edit: impl FnOnce(&mut i64) -> boo
 fn current_hp(hp: &Value, max_hp: i64) -> i64 {
     (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0)
 }
-/// A displayed current/maximum fraction. Presentation only: stored values and service
-/// payloads keep their existing representation. Callers supply their own unknown-value words.
-pub(crate) fn fraction(current: impl std::fmt::Display, maximum: impl std::fmt::Display) -> String {
-    format!("{current}/{maximum}")
-}
+pub(crate) use crate::design::fraction;
 
 fn describe(key: &str, value: Option<&Value>, max_hp: i64) -> String {
     let Some(value) = value else {

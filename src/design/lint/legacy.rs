@@ -512,7 +512,7 @@ fn growth(found: &Counts, base: &Counts, raises: &str, base_name: &str) -> Vec<S
 fn git(args: &[&str]) -> Result<String, String> {
     let out = Command::new("git")
         .args(args)
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .current_dir(crate::workspace())
         .output()
         .map_err(|error| format!("git {}: {error}", args.join(" ")))?;
     if !out.status.success() {

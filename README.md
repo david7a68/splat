@@ -60,6 +60,12 @@ execution, and campaign can compile in parallel once content metadata is ready.
 The desktop library depends on each logic crate directly and can start when
 their metadata is ready. The verification tools use the content, character,
 and execution crates.
+
+The desktop builds the shared widgets as `splat-design` and the Trackers panel
+and history as `splat-trackers`. Their source stays under `src/` so the design
+checks follow the same files. The campaign crate supplies the tracker rules
+and ledger operations. A Tracker edit rebuilds the feature and the desktop.
+
 `cargo test --locked` runs tests in all workspace crates.
 
 Development and test builds use 16 code-generation units, disable incremental

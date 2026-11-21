@@ -1,6 +1,7 @@
 //! Campaign data and actions shared by the desktop app and command-line tools.
 use splat_content::content;
 
+pub mod campaign;
 pub mod encounter_run;
 pub mod file_batch;
 pub mod folder_check;

@@ -2955,7 +2955,13 @@ impl Lookup {
             ui.available_width(),
         );
         reader.footer(&frame, &mut messages, current, &index, campaign);
-        crate::trackers::history::footer(trackers, current.entry.id, &mut messages);
+        crate::trackers::history::footer(
+            trackers,
+            current.entry.id,
+            &mut messages,
+            world::said,
+            world::FooterAct::Trackers,
+        );
         // The results list above sets its own row spacing. The reader keeps the app's, so an
         // entry reads the same whether a search or a link opened it. The pane is always the
         // editor form (P2), so an edit form's text gives way and Save stays in view from the

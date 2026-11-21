@@ -1,6 +1,6 @@
 //! Fonts and the global `egui::Style`. Plain egui widgets inherit all of this.
 use super::tokens::*;
-use eframe::egui::{
+use egui::{
     self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Margin, Shadow,
     Stroke, TextStyle, Theme, ThemePreference, Vec2, style::ScrollStyle, style::WidgetVisuals,
     vec2,

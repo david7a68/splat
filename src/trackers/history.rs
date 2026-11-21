@@ -12,20 +12,19 @@ use super::{
     result_words, with_dependents,
 };
 use crate::design::outcome::PagePlaceholder;
-use crate::design::outcome::{FaultMessage, Messages, Outcome, Said, UndoStep, Verb};
+use crate::design::outcome::{FaultMessage, Messages, Outcome, Said, Sentence, UndoStep, Verb};
 use crate::design::{self, Action, Density, Gap, Type, colors};
-use crate::world::FooterAct;
-use eframe::egui;
+use egui;
 use ledger::{Entry, Ledger, Op, Placed};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-#[cfg(test)]
+#[cfg(feature = "test-support")]
 thread_local! {
     /// Rows worked out by `rows`: the work that grows with the ledger.
-    pub(super) static PREPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub static PREPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Open sections drawn, and rows drawn in them.
-    pub(super) static DRAWN: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    pub static DRAWN: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
 }
 
 /// One row of a member's history: the entry as the file held it, its words, and the value it
@@ -73,7 +72,7 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         if rules.def(&key).is_none() && rules.day_mark(&key).is_none() {
             continue;
         }
-        #[cfg(test)]
+        #[cfg(feature = "test-support")]
         PREPARED.with(|n| n.set(n.get() + 1));
         let one = std::slice::from_ref(entry);
         let words = if entry.notice.is_some() {
@@ -311,7 +310,7 @@ impl Trackers {
 }
 
 /// One footer message of a note's history, as `footer_lines` selects it: its words, and its kind.
-pub(crate) struct FooterLine {
+pub struct FooterLine {
     pub words: String,
     kind: LineKind,
 }
@@ -328,7 +327,7 @@ enum LineKind {
 /// The footer messages of the history of `note`, in the footer's order: why the last `Remove`
 /// or its Undo wrote nothing, and the last `Remove` with `Undo remove`. A note turned off shows
 /// nothing. The one selection: `footer` draws exactly these, and the checks read them.
-pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
+pub fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     let mut lines = Vec::new();
     if !in_play(&trackers.rules, note) {
         return lines;
@@ -368,11 +367,17 @@ pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     clippy::disallowed_methods,
     reason = "staged: the last Remove keeps the order `remove` issued (design::results::STAGED_ALLOWS)"
 )]
-pub(crate) fn footer(trackers: &Trackers, note: Uuid, messages: &mut Messages<'_, FooterAct>) {
+pub fn footer<A: Clone + 'static>(
+    trackers: &Trackers,
+    note: Uuid,
+    messages: &mut Messages<'_, A>,
+    said: fn(&str) -> Sentence,
+    undo: A,
+) {
     for line in footer_lines(trackers, note) {
         match line.kind {
             LineKind::Refused => {
-                messages.outcome(Outcome::Refused(crate::world::said(&line.words)));
+                messages.outcome(Outcome::Refused(said(&line.words)));
             }
             LineKind::NotSaved(words) => {
                 messages.outcome(FaultMessage::new(&NotSaved(words)));
@@ -380,8 +385,8 @@ pub(crate) fn footer(trackers: &Trackers, note: Uuid, messages: &mut Messages<'_
             LineKind::Removed(order) => {
                 messages.outcome_at(
                     order,
-                    Said::new(crate::world::said(&line.words))
-                        .undo(UndoStep::verb(Verb::Remove).pressed_as(FooterAct::Trackers)),
+                    Said::new(said(&line.words))
+                        .undo(UndoStep::verb(Verb::Remove).pressed_as(undo.clone())),
                 );
             }
         }
@@ -406,7 +411,7 @@ impl crate::design::outcome::Fault for NotSaved {
     clippy::disallowed_methods,
     reason = "the history cannot show: a page placeholder; a member’s problem: a row fault"
 )]
-pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::Entry) {
+pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat_content::content::Entry) {
     if !super::is_house_rule_note(note) || !trackers.in_play() {
         return;
     }
@@ -509,7 +514,7 @@ fn rows_in_view(
         egui::Sense::hover(),
     );
     let seen = area.intersect(ui.clip_rect());
-    #[cfg(test)]
+    #[cfg(feature = "test-support")]
     DRAWN.with(|n| n.set((n.get().0 + 1, n.get().1)));
     if !seen.is_positive() {
         return;
@@ -517,7 +522,7 @@ fn rows_in_view(
     let first = ((seen.top() - area.top()) / pitch).floor().max(0.0) as usize;
     let last = (((seen.bottom() - area.top()) / pitch).ceil() as usize).min(rows.len());
     for (at, row) in rows.iter().enumerate().take(last).skip(first) {
-        #[cfg(test)]
+        #[cfg(feature = "test-support")]
         DRAWN.with(|n| n.set((n.get().0, n.get().1 + 1)));
         let rect = egui::Rect::from_min_size(
             egui::pos2(area.left(), area.top() + at as f32 * pitch),
@@ -537,7 +542,7 @@ fn rows_in_view(
 }
 
 /// Why `Remove` is off on a row of the session being played: its own Undo takes it back.
-pub(crate) const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this session.";
+pub const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this session.";
 
 /// A row, laid out from its right end: its menu with `Remove` (off, with its reason painted under
 /// it, on a row of the session being played), so every row looks alike and the values stand in one column; the

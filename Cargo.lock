@@ -3847,7 +3847,9 @@ dependencies = [
  "splat-campaign",
  "splat-character",
  "splat-content",
+ "splat-design",
  "splat-execution",
+ "splat-trackers",
  "syn 2.0.119",
  "tempfile",
  "tikv-jemallocator",
@@ -3927,6 +3929,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "splat-design"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "egui-phosphor",
+ "egui_extras",
+ "egui_kittest",
+ "proc-macro2",
+ "serde_json",
+ "splat-assets",
+ "splat-campaign",
+ "syn 2.0.119",
+ "tempfile",
+ "unicode-segmentation",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "splat-execution"
 version = "0.1.0"
 dependencies = [
@@ -3937,6 +3958,18 @@ dependencies = [
  "sha2",
  "splat-assets",
  "splat-content",
+ "uuid",
+]
+
+[[package]]
+name = "splat-trackers"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "egui_kittest",
+ "splat-campaign",
+ "splat-content",
+ "splat-design",
  "uuid",
 ]
 

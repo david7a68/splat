@@ -430,6 +430,10 @@ pub fn clock_now(events: &[Event]) -> Option<u64> {
     walk(events).1
 }
 
+/// The Timeline page's words when the file changed on disk under the DM's unsaved edit.
+pub const CHANGED_UNDER_DRAFT: &str =
+    "Timeline.md changed on disk. Your draft is safe until you choose.";
+
 /// The day the story is on now. Nothing, before the first day.
 pub fn day_now(events: &[Event]) -> Option<u64> {
     clock_now(events).map(|minute| minute / DAY + 1)

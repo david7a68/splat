@@ -2794,8 +2794,9 @@ line's reminders.
 ## Tests
 
 - `design::tokens::tests` checks WCAG contrast over token pairs.
-- `design::lint` rejects raw colours or type sizes outside `src/design/`, and a straight apostrophe inside a word
-  in a string of the desktop app or the campaign, character, content and execution crates.
+- `design::lint` rejects raw colours or type sizes outside `src/design/`. It checks for straight apostrophes
+  inside words across the desktop sources under `src/`, including the Trackers crate, and the campaign,
+  character, content and execution crates.
   The shrink-only allowlist is in `src/design/lint_allowlist.txt`.
 - `design::lint::legacy` freezes the layout and host paths that the pane mechanism replaces (migration 32,
   ruling L12): closure pane hosts (`Footer::pane` and `Messages::pane` and kin), hand-placed footers, `Fills`

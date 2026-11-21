@@ -882,8 +882,8 @@ fn scan(
             scan(&path, counts, levels, files);
         } else if path.extension().is_some_and(|e| e == "rs") {
             let text = fs::read_to_string(&path).expect("read source file");
-            let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
-            let key = relative.strip_prefix(root).unwrap_or(&relative);
+            let root = format!("{}/", crate::workspace().display());
+            let key = relative.strip_prefix(&root).unwrap_or(&relative);
             // The legacy host freeze reads every file: a name does not make a file test-only.
             files.push((key.to_owned(), text.clone()));
             // A file of unit tests, such as `formats_tests.rs`, does not ship either.
@@ -942,7 +942,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
         "/crates/execution/src",
     ] {
         scan(
-            Path::new(&format!("{}{folder}", env!("CARGO_MANIFEST_DIR"))),
+            &crate::workspace().join(folder.trim_start_matches('/')),
             &mut counts,
             &mut levels,
             &mut files,
@@ -1269,10 +1269,7 @@ fn each_field_id_name_is_used_once() {
         }
     }
     let mut found = BTreeMap::new();
-    names(
-        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src")),
-        &mut found,
-    );
+    names(&crate::workspace().join("src"), &mut found);
     assert!(
         found.contains_key("campaign_name"),
         "the scan finds field ids"
@@ -1292,13 +1289,15 @@ fn each_field_id_name_is_used_once() {
 /// Package K: no Clippy level is set outside the source, where no row could count it.
 #[test]
 fn no_lint_level_frees_raw_calls_outside_the_source() {
-    let root = env!("CARGO_MANIFEST_DIR");
+    let root = crate::workspace().display();
     for file in [
         "Cargo.toml",
         "crates/campaign/Cargo.toml",
         "crates/character/Cargo.toml",
         "crates/content/Cargo.toml",
         "crates/execution/Cargo.toml",
+        "src/design/Cargo.toml",
+        "src/trackers/Cargo.toml",
         ".cargo/config.toml",
     ] {
         let text = fs::read_to_string(format!("{root}/{file}")).unwrap_or_default();

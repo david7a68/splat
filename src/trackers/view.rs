@@ -12,7 +12,7 @@ use crate::design::outcome::{
 };
 use crate::design::pane::{Body, ContentScroll, held_seen, hold_press};
 use crate::design::{self, Action, Density, Gap, Heading, TextKey, Type, colors, icons};
-use eframe::egui;
+use egui;
 use std::collections::HashSet;
 
 /// What the view keeps between frames: a typed amount and the DM's unticked proposals.
@@ -39,7 +39,7 @@ pub(crate) struct ViewState {
     /// when the definitions are read again (`Trackers::rules` replaced) or the campaign changes.
     pub(super) widest_value: f32,
     /// How many times the columns were measured.
-    #[cfg(test)]
+    #[cfg(feature = "test-support")]
     pub(super) measured: usize,
 }
 
@@ -88,7 +88,7 @@ fn value_slot(value: i64, goal: Option<i64>) -> String {
 /// so opening `More trackers` moves no pinned value. Only `columns` calls it, when the
 /// trackers' revision or the width changed.
 fn measure_columns(ui: &egui::Ui, rules: &Rules, state: &State, view: &mut ViewState) -> Columns {
-    #[cfg(test)]
+    #[cfg(feature = "test-support")]
     {
         view.measured += 1;
     }
@@ -178,14 +178,14 @@ impl ViewState {
     }
 
     /// The words in the amount field, while it is open.
-    #[cfg(test)]
+    #[cfg(feature = "test-support")]
     pub(super) fn typed(&self) -> Option<&str> {
         self.asking.as_ref().map(|(_, _, _, typed)| typed.as_str())
     }
 }
 
 /// The empty state's route to the switches of the house rules in play.
-pub(crate) const RULES_ROUTE: &str = "Campaign → Rules and runs";
+pub const RULES_ROUTE: &str = "Campaign → Rules and runs";
 
 /// The Due list's words after the Timeline's own, while the day count is not known.
 pub(crate) const DAY_MARKS_WAIT: Sentence =
@@ -231,8 +231,8 @@ impl Trackers {
     }
 
     /// `Done` pressed on this row, as a click in the view leaves it for the shell.
-    #[cfg(test)]
-    pub(crate) fn press_done_in_view(&mut self, notice: &super::Notice, ticked: Vec<bool>) {
+    #[cfg(feature = "test-support")]
+    pub fn press_done_in_view(&mut self, notice: &super::Notice, ticked: Vec<bool>) {
         self.view.pressed = Some(Act::Done(notice.clone(), ticked));
     }
 }
@@ -349,9 +349,9 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             Some(TrackerPress::ReadAgain) => *act = Some(Act::ReadAgain),
             Some(TrackerPress::ShowFile) => {
                 if let Some(path) = path
-                    && let Ok(url) = reqwest::Url::from_file_path(&path)
+                    && let Some(url) = crate::design::outcome::file_url(&path)
                 {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(url.to_string()));
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(url));
                 }
             }
             _ => {}
@@ -1056,7 +1056,7 @@ fn footer_press(trackers: &Trackers, pressed: Option<TrackerPress>, act: &mut Op
 const ADD_TO_TIMELINE: &str = "Add to Timeline";
 
 /// The words of a failed save: the file, the reason, and that nothing was recorded.
-pub(super) fn not_saved(error: &str) -> Sentence {
+pub fn not_saved(error: &str) -> Sentence {
     TrackerFault::NotSaved(error.to_owned()).cause()
 }
 

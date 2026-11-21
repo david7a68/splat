@@ -879,7 +879,13 @@ impl WorldPage {
                 self.reader
                     .footer(&frame, &mut messages, item, index, Some(campaign));
                 self.page_messages(&frame, &mut messages, Some(item.entry.id));
-                crate::trackers::history::footer(trackers, item.entry.id, &mut messages);
+                crate::trackers::history::footer(
+                    trackers,
+                    item.entry.id,
+                    &mut messages,
+                    super::said,
+                    super::FooterAct::Trackers,
+                );
                 // As in Library, a wide table may use the pane; prose keeps its measure.
                 // The reader pane is always the editor form (P2): an edit form's text draws in its
                 // region and gives way, so Save stays in view under a long note from the first

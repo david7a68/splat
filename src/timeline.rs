@@ -311,10 +311,6 @@ fn event_parts(event: &Event, session: Option<&str>, result: &str, warning: bool
     parts.join(" · ")
 }
 
-/// The Timeline page's words when the file changed on disk under the DM's unsaved edit.
-pub const CHANGED_UNDER_DRAFT: &str =
-    "Timeline.md changed on disk. Your draft is safe until you choose.";
-
 /// A length the clock cannot count says so in these words, after the warning icon.
 pub const TIME_NOT_COUNTED: &str = "Not counted in the day’s time";
 

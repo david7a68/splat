@@ -33,6 +33,7 @@ mod content_workspace;
 mod copy_dialog;
 mod creature_filter;
 mod credentials;
+#[path = "design/app.rs"]
 mod design;
 // The layout parts are public only so that their `compile_fail` doc tests can name them.
 #[doc(hidden)]
@@ -67,7 +68,7 @@ mod encounter_run;
 mod encounter_settings;
 mod encounters;
 mod file_batch;
-mod frame_clock;
+use splat_design::frame_clock;
 mod hermetic;
 mod history;
 mod library;
@@ -95,6 +96,7 @@ mod sheet_writer;
 mod test_support;
 mod timeline;
 mod touchpad;
+#[path = "trackers/app.rs"]
 mod trackers;
 mod ui_state;
 #[cfg(test)]
@@ -103,6 +105,7 @@ mod world;
 
 use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
+pub use splat_design::{choice, create_reasons, field_id, key, lead, sentence, word};
 
 pub fn run() -> eframe::Result {
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -205,7 +208,7 @@ impl Default for Splat {
             party: Default::default(),
             encounters: Default::default(),
             lookup: Default::default(),
-            trackers: Default::default(),
+            trackers: trackers::Trackers::with_ids(hermetic::new_uuid),
             sessions: Default::default(),
             timeline: Default::default(),
             timeline_page: Default::default(),
@@ -1516,7 +1519,7 @@ impl Splat {
             // When the file changed or cannot be read under an edit that waits for its pause,
             // the Timeline says so, and the day count is not known: no day act records.
             self.timeline.read_if_changed();
-            self.trackers.follow_clock(&self.timeline);
+            self.trackers.follow_clock(trackers::clock(&self.timeline));
             self.trackers.apply_pressed();
         }
     }
@@ -2922,8 +2925,13 @@ impl eframe::App for Splat {
             sessions::page::Played::Session(id) => Some(id),
             _ => None,
         };
-        self.trackers
-            .poll(self.lookup.index(), open.as_ref(), played, &self.timeline);
+        trackers::poll(
+            &mut self.trackers,
+            self.lookup.index(),
+            open.as_ref(),
+            played,
+            &self.timeline,
+        );
         self.old_session = self.sessions.current_dated().is_some();
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {

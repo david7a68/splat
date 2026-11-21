@@ -16,12 +16,12 @@ use super::{
     Action, Density, Status,
     tokens::{L, Type},
 };
-#[cfg(test)]
-use eframe::egui::Id;
-use eframe::egui::{self, Rect, Ui, UiBuilder, pos2, vec2};
+#[cfg(any(test, feature = "test-support"))]
+use egui::Id;
+use egui::{self, Rect, Ui, UiBuilder, pos2, vec2};
 
 /// The largest gap between a row's facts and its action that is not a residual (ruling L2).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub const RESIDUAL_GAP: f32 = 4.0 * L;
 
 /// A row's action: a secondary action with its words, its accessible name, the reason it is
@@ -138,7 +138,7 @@ impl Columns {
 }
 
 /// A row's measured facts and action, as the gate reads them (test builds).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RowRecord {
     pub owner: &'static str,
@@ -148,7 +148,7 @@ pub struct RowRecord {
     pub wrapped: bool,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl RowRecord {
     /// The row's gap: from its facts to its action; zero for a wrapped row.
     pub fn gap(&self) -> f32 {
@@ -165,18 +165,18 @@ impl RowRecord {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 const ROW_RECORDS: &str = "design_action_row_records";
 
 /// The rows the part drew in the last pass that drew one, for the gate and the part's checks.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn row_records(ctx: &egui::Context) -> Vec<RowRecord> {
     ctx.data(|data| data.get_temp::<(u64, Vec<RowRecord>)>(Id::new(ROW_RECORDS)))
         .map(|(_, rows)| rows)
         .unwrap_or_default()
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn keep(ui: &Ui, record: RowRecord) {
     let pass = ui.ctx().cumulative_pass_nr();
     ui.ctx().data_mut(|data| {
@@ -227,7 +227,7 @@ pub fn action_row<R>(
     let pressed = action.show(&mut action_ui);
     let drawn = action_ui.min_rect();
     let _ = (facts_width, drawn, owner);
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     keep(
         ui,
         RowRecord {

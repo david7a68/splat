@@ -1,7 +1,7 @@
 //! The popup parts prove their rules here, once. Callers do not repeat these proofs.
 use std::cell::Cell;
 
-use eframe::egui::{self, Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
+use egui::{self, Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 
 use super::*;
 use crate::design::{lane_width, pane, theme};
@@ -1225,7 +1225,7 @@ fn a_known_size_sizes_the_viewer_before_the_texture_loads() {
 #[test]
 fn one_choice_row() {
     let read = |name: &str| {
-        let path = format!("{}/src/design/{name}", env!("CARGO_MANIFEST_DIR"));
+        let path = crate::workspace().join("src/design").join(name);
         syn::parse_file(&std::fs::read_to_string(path).expect("a source file")).expect("it parses")
     };
     let free_fns = |file: &syn::File| -> Vec<syn::ItemFn> {
@@ -1266,9 +1266,8 @@ fn one_choice_row() {
         "`choice_wrapped` calls the same painter as `choice`"
     );
     // The drop-down's file names `choice_wrapped` and draws no row itself.
-    let popups =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/design/popups.rs"))
-            .expect("a source file");
+    let popups = std::fs::read_to_string(crate::workspace().join("src/design/popups.rs"))
+        .expect("a source file");
     assert!(
         popups.contains("choice_wrapped("),
         "the drop-down's rows are the part"

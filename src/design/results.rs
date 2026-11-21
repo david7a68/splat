@@ -31,7 +31,7 @@
 //! cause). The setup is shared:
 //!
 //! ```
-//! use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! #[derive(Clone, PartialEq, Eq)]
 //! struct Entry { id: u32, root: String }
 //! impl Owner for Entry {
@@ -63,7 +63,7 @@
 //! A draw gets `&Results`, so it cannot record a result or issue its order:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -76,7 +76,7 @@
 //! Nor change a kept value in place (round 28, M3); the action does, with `&mut`:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -90,7 +90,7 @@
 //! store, so it cannot keep one per kind and give A's result B's order:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -105,14 +105,14 @@
 //! An order is never made by hand:
 //!
 //! ```compile_fail
-//! let order = splat::ownership::ResultOrder(7); // <- an order from a number
+//! let order = splat_design::ownership::ResultOrder(7); // <- an order from a number
 //! ```
 //!
 //! There is no way to take an entry out except its end events and its press, so a failed Undo
 //! cannot drop the change (review of PR 299):
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -125,7 +125,7 @@
 //! An Undo result is not used up by its press, and an offer has no Undo:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! # struct Done { entry: Entry, words: String }
@@ -136,7 +136,7 @@
 //! ```
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # use splat_design::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
 //! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
 //! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
 //! struct Offer { entry: Entry }
@@ -150,7 +150,7 @@
 //! so a new end event makes every kind decide:
 //!
 //! ```compile_fail
-//! # use splat::ownership::{DiskChanged, Ends, OwnerChanged};
+//! # use splat_design::ownership::{DiskChanged, Ends, OwnerChanged};
 //! const ENDS: Ends = Ends {
 //!     owner_changed: OwnerChanged::Ends,
 //!     disk_changed: DiskChanged::Checked,
@@ -160,13 +160,13 @@
 use super::components::ResultOrder;
 use super::memo::Revision;
 use super::outcome::Sentence;
-use eframe::egui;
+use egui;
 use std::time::Duration;
 
 mod projection;
 mod refusal;
-#[cfg(test)]
-pub(crate) use projection::work as projection_work;
+#[cfg(any(test, feature = "test-support"))]
+pub use projection::work as projection_work;
 pub use projection::{Mismatch, Projection, Retained};
 pub use refusal::{
     AtLimit, Cause, Change, FailedAct, Fallback, File, Folder, Kind, Limit, Name, Part, Recovery,
@@ -273,8 +273,8 @@ pub struct Shown<'a, T> {
 impl<'a, T> Shown<'a, T> {
     /// The order its action issued, for tests only. A caller gives the footer a `KeptLine`
     /// ([`Shown::outcome`]), so it cannot keep an order apart from its result.
-    #[cfg(test)]
-    pub(crate) fn order(&self) -> ResultOrder {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn order(&self) -> ResultOrder {
         self.order
     }
     pub fn value(&self) -> &'a T {
@@ -357,8 +357,8 @@ impl<T> Shown<'_, T> {
     }
 
     /// This entry's ticket, for a caller's tests of its press.
-    #[cfg(test)]
-    pub(crate) fn ticket_for_caller_test(&self) -> Ticket {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn ticket_for_caller_test(&self) -> Ticket {
         Ticket { order: self.order }
     }
 }
@@ -2481,8 +2481,8 @@ mod tests {
     #[test]
     fn staged_calls_only_shrink() {
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
-        collect(std::path::Path::new("crates/campaign/src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
+        collect(&crate::workspace().join("crates/campaign/src"), &mut files);
         let mut faults = Vec::new();
         for (pattern, instead, allowed) in STAGED {
             for (path, text) in &files {
@@ -2514,7 +2514,7 @@ mod tests {
     #[test]
     fn legacy_footer_lines_only_shrink() {
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
         let mut found: Vec<(String, usize)> = files
             .iter()
             .map(|(path, text)| (path.clone(), suppressions::footer_line_uses(text)))
@@ -2537,7 +2537,7 @@ mod tests {
     #[test]
     fn staged_allows_only_shrink() {
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
         for (file, item, bans) in OWNED_ALLOWS {
             assert!(
                 (file.starts_with("src/design/") || file.starts_with("src/visual_tests/"))
@@ -2568,7 +2568,7 @@ mod tests {
     #[test]
     fn results_are_never_behind_interior_mutability() {
         let mut files = Vec::new();
-        collect(std::path::Path::new("src"), &mut files);
+        collect(&crate::workspace().join("src"), &mut files);
         let wrappers: Vec<String> = ["Cell", "RefCell", "OnceCell", "Mutex", "RwLock"]
             .into_iter()
             .flat_map(|w| {
@@ -2627,7 +2627,13 @@ mod tests {
                 collect(&path, files);
             } else if path.extension().is_some_and(|ext| ext == "rs") {
                 let text = std::fs::read_to_string(&path).expect("read source file");
-                files.push((path.to_string_lossy().replace('\\', "/"), text));
+                files.push((
+                    path.strip_prefix(crate::workspace())
+                        .expect("path in workspace")
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                    text,
+                ));
             }
         }
     }

@@ -7,8 +7,8 @@ publish = false
 default-run = "splat"
 
 [workspace]
-members = ["crates/*"]
-default-members = [".", "crates/*"]
+members = ["crates/*", "src/design", "src/trackers"]
+default-members = [".", "crates/*", "src/design", "src/trackers"]
 resolver = "3"
 
 [dependencies]
@@ -16,7 +16,9 @@ splat-assets = { path = "crates/assets" }
 splat-campaign = { path = "crates/campaign" }
 splat-character = { path = "crates/character" }
 splat-content = { path = "crates/content" }
+splat-design = { path = "src/design" }
 splat-execution = { path = "crates/execution" }
+splat-trackers = { path = "src/trackers" }
 eframe = { version = "0.33", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 serde = { version = "1", features = ["derive", "rc"] }
@@ -45,6 +47,8 @@ unicode-segmentation = "1.13"
 rayon = "1.11"
 splat-campaign = { path = "crates/campaign", features = ["test-support"] }
 splat-content = { path = "crates/content", features = ["test-support"] }
+splat-design = { path = "src/design", features = ["test-support"] }
+splat-trackers = { path = "src/trackers", features = ["test-support"] }
 # The source checks read Rust with a real parser (`design::attributes`), never by hand.
 syn = { version = "2.0.119", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
@@ -81,5 +85,11 @@ opt-level = 2
 [profile.test.package.splat-content]
 opt-level = 2
 
+[profile.test.package.splat-design]
+opt-level = 2
+
 [profile.test.package.splat-execution]
+opt-level = 2
+
+[profile.test.package.splat-trackers]
 opt-level = 2

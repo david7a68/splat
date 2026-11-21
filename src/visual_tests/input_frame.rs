@@ -4,7 +4,7 @@
 //! doing so would apply part of the action before the frame the proof observes. Instead,
 //! verify the actual first input batch and the frame count, including implicit key repeats.
 //! One input frame can contain several egui layout passes; keep those real semantics.
-use eframe::egui::{self, Event};
+use crate::egui::{self, Event};
 use egui_kittest::Harness;
 use std::sync::{Arc, Mutex};
 
@@ -120,6 +120,25 @@ pub(crate) fn next_pass<State>(
     events: impl IntoIterator<Item = Event>,
 ) -> FrameReceipt {
     one_pass(harness, events)
+}
+
+/// The painted text shapes of a harness: each galley's words and where they are drawn.
+pub(crate) fn painted_texts(harness: &egui_kittest::Harness<'_>) -> Vec<(String, egui::Rect)> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match shape {
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            egui::Shape::Text(text) => out.push((
+                text.galley.job.text.clone(),
+                egui::Rect::from_min_size(text.pos, text.galley.size()),
+            )),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for shape in &harness.output().shapes {
+        walk(&shape.shape, &mut out);
+    }
+    out
 }
 
 #[cfg(test)]

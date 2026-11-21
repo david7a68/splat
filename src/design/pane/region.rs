@@ -26,7 +26,7 @@
 use super::plan::Work;
 use super::plan::{Block, BlockPlan, MeasureEnv, PlanState};
 use crate::design::{layout::ScrollColumn, memo::Revised, tokens};
-use eframe::egui::{self, Id, Key, Rect, Ui, UiBuilder, vec2};
+use egui::{self, Id, Key, Rect, Ui, UiBuilder, vec2};
 use std::ops::Range;
 
 /// A programmatic move of a region's offset (ruling M18): typed, never a raw offset.
