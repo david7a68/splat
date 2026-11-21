@@ -476,12 +476,14 @@ fn reference(
 ) {
     design::gap(ui, design::Gap::M);
     // M0387 (round 31 reader-end-section-pitch): the end sections are one group at the Read
-    // row pitch: each header is one `Read` row (egui's header is at least `interact_size` high)
-    // right under the one before. An open section's body gets the page's spacing back.
+    // row pitch. A header keeps egui's height (its `Small` words and button padding, at least
+    // `interact_size`), and the gap after it is the rest of one `Read` row, so a reader that
+    // fits its pane still does. An open section's body gets the page's spacing back.
     let page = ui.spacing().clone();
+    let header =
+        (design::Type::Small.line() + 2.0 * page.button_padding.y).max(page.interact_size.y);
     ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        ui.spacing_mut().interact_size.y = design::Density::Read.control();
+        ui.spacing_mut().item_spacing.y = (design::Density::Read.control() - header).max(0.0);
         end_sections(ui, &page, entry, sections, styled, origin);
     });
 }
