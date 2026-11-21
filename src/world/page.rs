@@ -1,10 +1,12 @@
 //! The World page: what is true in this world. One list of notes and entries, and the Reader.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::world::{Nav, Reader, checks::tick_file, file_fault::FileFault};
 use crate::{
     design::{
         self, Type, colors, icons,
-        outcome::{Done, FaultMessage, Messages, Notice, PaneFrame, Said, Verb},
+        outcome::{
+            Choice, Done, FaultMessage, MessageChoice, Messages, Notice, PagePlaceholder,
+            PaneFrame, Said, Verb,
+        },
         pane::Body,
     },
     lookup::{ContentIndex, WorldGroups},
@@ -15,6 +17,21 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 const ROW: f32 = 40.0;
+/// Draws `add`, a page's fault, with its words at the reader measure (round 24 AG2: recovery
+/// steps are prose), past the message's bar and icon (`design::message_choice_row`'s inset).
+/// The Library's unreadable reader keeps the same measure (`library::at_reader_measure`).
+fn at_reader_measure<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let inset = design::S
+        + 1.0
+        + design::number_width(ui, design::icons::ERROR, &Type::Body.font(ui))
+        + design::XS;
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(design::READER_MEASURE + inset));
+        add(ui)
+    })
+    .inner
+}
+
 const WORLD_SEARCH: design::FieldId =
     crate::field_id!("world_search").once(design::Once::PageSearch);
 const NEW_NAME: design::FieldId = crate::field_id!("world_new_name").once(design::Once::CreateForm);
@@ -1060,38 +1077,30 @@ impl WorldPage {
         design::reader::title(ui, fault.path.rsplit('/').next().unwrap_or(&fault.path));
         // No editor link: an editor cannot open a file that Splat cannot read either.
         crate::world::folder_file_line(ui, &campaign.path, &fault.path, false);
-        // The title and file line name the file, so the error says `this note` (FG6).
-        let (again, cancel) =
-            design::message_with_actions(ui, design::Tone::Error, &fault.pane_headline(), |ui| {
-                // The recovery is prose: it keeps the reader measure inside the message's
-                // list measure, so its last step does not wrap across a long return.
-                ui.scope(|ui| {
-                    ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                    ui.add(
-                        egui::Label::new(
-                            Type::Body
-                                .rich(ui, fault.recovery_with_try_again())
-                                .color(colors().text),
-                        )
-                        .wrap(),
-                    );
-                });
-                ui.horizontal_wrapped(|ui| {
-                    // Message actions without an icon have the secondary border, which starts
-                    // at the message text. `L` between them: the layout's own gap is part of it.
-                    let again = design::Action::secondary("Try again")
-                        .density(design::Density::Read)
-                        .show(ui)
-                        .clicked();
-                    ui.add_space(design::L - ui.spacing().item_spacing.x);
-                    let cancel = design::Action::secondary("Close note")
-                        .density(design::Density::Read)
-                        .show(ui)
-                        .clicked();
-                    (again, cancel)
-                })
-                .inner
-            });
+        // The title and file line name the file, so the error says `this note` (FG6). M0604
+        // (rulings M20, M23): the note's fault in place of its page, its recovery steps in its
+        // words, then `Try again` and `Close note` with the shared gap (round 18's `L` apart
+        // gives way). The recovery is prose: the words keep the reader measure (round 24 AG2).
+        #[derive(Clone, Copy, PartialEq)]
+        enum Pane {
+            Again,
+            Close,
+        }
+        let words = format!(
+            "{} {}",
+            fault.pane_headline(),
+            fault.recovery_with_try_again()
+        );
+        let chosen = at_reader_measure(ui, |ui| {
+            PagePlaceholder::new(&crate::world::ReaderFault::Unreadable(words))
+                .choice(Choice::new(MessageChoice::Choice("Try again"), Pane::Again))
+                .choice(Choice::new(
+                    MessageChoice::Choice("Close note"),
+                    Pane::Close,
+                ))
+                .show(ui)
+        });
+        let (again, cancel) = (chosen == Some(Pane::Again), chosen == Some(Pane::Close));
         design::gap(ui, design::Gap::S);
         design::quiet_section(ui, "Technical details", |ui| {
             ui.add(
@@ -1338,14 +1347,12 @@ impl WorldPage {
             && self.new_kind.is_none()
             && !self.card_shown()
         {
-            // Cancel starts at the message text, as every message's choices do. A message
-            // action without an icon has the secondary border (round 25 family).
-            let cancel = design::message_with_actions(ui, design::Tone::Error, &error, |ui| {
-                design::Action::secondary("Cancel")
-                    .density(design::Density::Read)
-                    .show(ui)
-                    .clicked()
-            });
+            // M0607 (ruling M20): the error in place of the page's body, with its Cancel at the
+            // message text.
+            let cancel = PagePlaceholder::new(&crate::world::ReaderFault::Action(error))
+                .choice(Choice::new(MessageChoice::Choice("Cancel"), ()))
+                .show(ui)
+                .is_some();
             if cancel {
                 self.error = None;
             }
