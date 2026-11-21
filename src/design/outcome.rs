@@ -4935,6 +4935,9 @@ impl<'o> FormOpener<'o> {
             title,
             open,
         } = self;
+        // Review of PR 612 (P2): when the form closes, the keyboard goes back to the choice that
+        // opened it, from the frame after (kept under the opener's own key).
+        let give_back = ui.make_persistent_id(("form_opener_focus", words.as_str()));
         if !*open {
             let repair = Repair {
                 words: choice,
@@ -4942,14 +4945,19 @@ impl<'o> FormOpener<'o> {
                 lock,
                 id: (),
             };
-            let opened = BodyFault {
+            let (pressed, controls) = BodyFault {
                 tone,
                 words,
                 repairs: vec![repair],
                 whole: None,
             }
-            .draw(ui)
-            .is_some();
+            .draw_repairs(ui);
+            let opened = pressed.is_some();
+            if ui.data_mut(|data| data.remove_temp::<bool>(give_back)) == Some(true)
+                && let Some(choice) = controls.first()
+            {
+                choice.request_focus();
+            }
             *open = opened;
             return Opened { opened, form: None };
         }
@@ -4966,6 +4974,7 @@ impl<'o> FormOpener<'o> {
         let response = form.show(ui);
         if response.cancel {
             *open = false;
+            ui.data_mut(|data| data.insert_temp(give_back, true));
         }
         Opened {
             opened: false,
@@ -5020,6 +5029,12 @@ impl<A> BodyFault<A> {
 
     /// `show`'s drawing, for the design's own body places (`FormOpener`).
     fn draw(self, ui: &mut Ui) -> Option<A> {
+        self.draw_repairs(ui).0
+    }
+
+    /// `draw`, with each repair's control, in order (to give one the keyboard back).
+    fn draw_repairs(self, ui: &mut Ui) -> (Option<A>, Vec<Response>) {
+        let mut controls = Vec::new();
         let Self {
             tone,
             words,
@@ -5065,14 +5080,16 @@ impl<A> BodyFault<A> {
                     if let Some(help) = &repair.help {
                         action_help(ui, tone, help, &action, lock);
                     }
+                    controls.push(action);
                 }
             })
             .response;
         register(ui, response.rect, MessagePlace::Page, tone);
-        match pressed? {
-            Pressed::Choice(at) => repairs.into_iter().nth(at).map(|repair| repair.id),
-            Pressed::Undo => None,
-        }
+        let pressed = match pressed {
+            Some(Pressed::Choice(at)) => repairs.into_iter().nth(at).map(|repair| repair.id),
+            Some(Pressed::Undo) | None => None,
+        };
+        (pressed, controls)
     }
 }
 
@@ -6721,12 +6738,36 @@ mod tests {
             !h.state().open && has(&h, "Register as a new package") && !has(&h, "New package name"),
             "Cancel closes the form"
         );
+        // Review of PR 612 (P2): the keyboard goes back to the choice that opened the form,
+        // after Cancel and after Escape in the form's field.
+        let choice_focused = |h: &Harness<'_, Form>| {
+            h.get_by_label("Register as a new package")
+                .accesskit_node()
+                .is_focused()
+        };
+        assert!(
+            choice_focused(&h),
+            "after Cancel, the choice has the keyboard"
+        );
+        h.get_by_label("Register as a new package").click();
+        h.run_steps(3);
+        h.get_all_by_label("New package name")
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::TextInput)
+            .expect("the form's field")
+            .click();
+        h.run_steps(2);
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        assert!(
+            !h.state().open && choice_focused(&h),
+            "Escape in the field closes the form and gives the keyboard back to the choice"
+        );
         h.state_mut().locked = true;
         h.run_steps(2);
         h.get_by_label("Register as a new package").click();
         h.run_steps(3);
         assert!(
-            !h.state().open && h.state().opened == 1,
+            !h.state().open && h.state().opened == 2,
             "locked, the choice opens nothing"
         );
     }
