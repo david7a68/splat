@@ -15,7 +15,7 @@ use crate::{
     lookup::ContentIndex,
     sessions::{
         ActFault, Apply, NoteUndo, PlanLine, TaskLine, add_scene, change_line, each_linked_name,
-        insert_in_note, insert_in_plan, linked_names, plain_links, plan_lines, ticked,
+        insert_in_plan, linked_names, plain_links, plan_lines, ticked,
     },
     timeline::{
         self, Book, EventDisplay, Kind, checks,
@@ -4882,11 +4882,12 @@ impl Sessions {
             ));
             self.open_event = None;
         }
-        if let (Some(link), Some(draft), Some(session)) = (insert, &mut self.draft, session) {
-            insert_in_note(&mut draft.body, &link);
-            draft.edited();
+        if let (Some(link), Some(session)) = (insert, session)
+            && self.add_to_note(ui.ctx(), &link)
+        {
+            let body = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
             self.mentions
-                .insert(session, timeline::referenced_ids(&draft.body));
+                .insert(session, timeline::referenced_ids(body));
             self.end_plan_add();
         }
     }

@@ -1057,10 +1057,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Body],
         ),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
+        // M-N0.4: the template's text field is keyed by its file (`TextKey::from_data`): a
+        // template has no typed owner key yet.
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::RowKey(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -1171,11 +1173,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "note_editor",
-            &[Ban::Layout(2), Ban::Body],
+            &[Ban::Layout(1), Ban::Body],
         ),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
-        ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         (
             "src/timeline/page.rs",
@@ -1361,16 +1362,21 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        // M20 (M-W0.4): the index's warnings on this note, in the reader's body (were `message`).
-        ("src/world.rs", "draw", &[Ban::Extras(4), Ban::Body]),
+        // M20 (M-W0.4, M-W0.5): the index's warnings on this note and the renamed-file warning
+        // with its two repairs, in the reader's body (were `message`, `message_with_actions`).
+        ("src/world.rs", "draw", &[Ban::Extras(3), Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
-        ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
+        // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
+        // `message` and a link).
+        ("src/world.rs", "unread_groups_message", &[Ban::Body]),
         ("src/world.rs", "value_row", &[Ban::Extras(1)]),
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
+        // M20 (M-W0.5): a note that cannot be read, in place of its page (was
+        // `message_with_actions`).
+        ("src/world/page.rs", "unread_pane", &[Ban::Body]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
