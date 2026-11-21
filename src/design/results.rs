@@ -1061,14 +1061,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/sessions/plan.rs",
             "plan_pane",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Results, Ban::ByOwner(1)],
+            &[Ban::ByOwner(1)],
         ),
-        (
-            "src/sessions/plan.rs",
-            "record_deleted_run",
-            &[Ban::Results],
-        ),
-        ("src/sessions/plan.rs", "scene_act", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
         // M-N1.1 (ruling M20): a result with the note's Undo at its own place
@@ -1624,7 +1618,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/dndbeyond.rs", 1),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 1),
-            ("src/sessions/plan.rs", 4),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],

@@ -644,10 +644,9 @@ pub struct Sessions {
     /// When the link update's result was made.
     /// The link update's result, with its Undo.
     link_updates: design::Results<kept::Page, kept::LinkUpdate>,
-    /// When the group removal in `removed_group` was done.
-    pub(super) removed_group_order: design::ResultOrder,
-    /// When the run deletion in `deleted_run` was done.
-    pub(super) deleted_run_order: design::ResultOrder,
+    /// The plan's results whose data its own fields hold (a scene act, the removed group, the
+    /// deleted run), by kind: their footer order and press tickets (`kept::PlanMark`).
+    plan_marks: design::Results<kept::PlanOwner, kept::PlanMark>,
     folder_text: String,
     view: View,
     tab: Tab,
