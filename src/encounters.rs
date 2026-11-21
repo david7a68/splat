@@ -7092,17 +7092,8 @@ impl Encounters {
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
-        // FA9, FI9: in a wide window the name field ends at the roster column's edge and the
-        // header's actions at the Add participants column's edge, so neither stretches to the
-        // window's edge. The roster's edge is the one its pane drew last.
-        // The edges the panes drew last; with the panes as tabs, the header takes the line.
-        let edge = |pane: &str| {
-            ui.ctx()
-                .data(|data| data.get_temp::<f32>(pane_right_id(draft_ref.id, pane)))
-                .filter(|_| !compact)
-                .unwrap_or(f32::INFINITY)
-        };
-        let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
+        // Layout PR 6 (I7): the name field is bounded by the form measure, and the header's
+        // actions follow it; no edge a pane drew last decides them (FA9, FI9 before).
         let (back, ()) = head.show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 // X51, SB1: Save and Start keep their width on line one, and the name field takes
@@ -7155,11 +7146,9 @@ impl Encounters {
                 } else {
                     rest
                 }
-                // The field's margins are outside its desired width.
-                .min(
-                    (roster_right - ui.cursor().left() - 2.0 * design::S)
-                        .max(Density::Scan.control()),
-                );
+                // Layout PR 6 (I7): bounded by the form measure and the room, not by another
+                // pane's edge.
+                .min(design::FORM_WIDTH);
                 let response = name_field(ui, draft_ref, width);
                 design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
                 if std::mem::take(focus_name) {
@@ -7168,14 +7157,13 @@ impl Encounters {
                 if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     *focus_search_after_name = true;
                 }
-                let action_width = if stack_actions {
-                    ui.max_rect().width()
-                } else {
-                    ui.available_rect_before_wrap()
-                        .width()
-                        .min(header_right - ui.cursor().left())
-                        .max(0.0)
-                };
+                // Layout PR 6 (I7): Save and the run's actions begin `L` after the name field (the
+                // item spacing and `S`), or at the text edge of their own line; drawn from the
+                // right in their measured width, so their order stays.
+                if !stack_actions {
+                    design::gap(ui, design::Gap::S);
+                }
+                let action_width = actions;
                 ui.allocate_ui_with_layout(
                     egui::vec2(action_width, Density::Scan.control()),
                     egui::Layout::right_to_left(egui::Align::Center),

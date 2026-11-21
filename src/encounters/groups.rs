@@ -2882,7 +2882,9 @@ impl Encounters {
         let (back, ()) = head.show(ui, |ui| {
             ui.horizontal(|ui| {
                 let gap = ui.spacing().item_spacing.x;
-                let room = (block_right.min(title_right - button.natural_width(ui) - gap)
+                // Layout PR 6 (I7): the field leaves room for Save `L` after it.
+                let _ = gap;
+                let room = (block_right.min(title_right - button.natural_width(ui) - design::L)
                     - ui.cursor().left())
                 .min(ui.available_width());
                 let width = (room - 2.0 * design::S).max(Density::Scan.control());
@@ -2899,14 +2901,10 @@ impl Encounters {
                 if focus_name {
                     design::focus_and_select(ui, response.id, &draft.name);
                 }
-                ui.allocate_ui_with_layout(
-                    egui::vec2(
-                        (title_right - ui.cursor().left()).max(0.0),
-                        Density::Scan.control(),
-                    ),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| save = button.show(ui).clicked(),
-                );
+                // Layout PR 6 (I7): Save begins `L` after the name field (the item spacing and
+                // `S`), not at the editor's far edge.
+                design::gap(ui, design::Gap::S);
+                save = button.show(ui).clicked();
             });
         });
         // The save row: the state and Discard at its start, Save group at the block's edge. A
