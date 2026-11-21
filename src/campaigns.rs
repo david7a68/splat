@@ -2359,7 +2359,11 @@ mod tests {
             |harness: &mut egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>| {
                 harness.get_by_label("Edit details").click();
                 harness.run_steps(3);
-                harness.get_by_label("Campaign name").focus();
+                harness
+                    .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Campaign name")
+                    .next()
+                    .expect("the name field")
+                    .focus();
                 harness.run_steps(1);
                 harness.event(egui::Event::Text(" A".into()));
                 harness.run_steps(3);
