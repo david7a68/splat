@@ -1975,10 +1975,17 @@ mod tests {
         harness.run_steps(2);
         let npc = held(harness.state()).expect("the generator rolled an NPC");
         let rolled = harness.state().generated.clone().unwrap();
+        // M0602: the row is the draft status, then the name, which the row's sentence names
+        // (the name's label; kittest's label queries read a text's value, its name alone).
         let row = format!("Unsaved NPC: {npc}");
+        fn row_shown(harness: &Harness<'_, WorldPage>, npc: &str, row: &str) -> bool {
+            harness
+                .query_all_by_label_contains(npc)
+                .any(|node| node.accesskit_node().label().as_deref() == Some(row))
+        }
         assert!(harness.query_by_label("Save NPC").is_some());
         assert!(
-            harness.query_by_label(&row).is_none(),
+            !row_shown(&harness, &npc, &row),
             "no row while the card shows"
         );
 
@@ -2090,12 +2097,10 @@ mod tests {
         for (id, path) in &paths {
             let reached = path(&mut harness);
             let kept = held(harness.state()).as_deref() == Some(npc.as_str());
-            let row_shown = harness.query_by_label(&row).is_some()
-                && harness.query_by_label("Save NPC").is_none();
-            if !(reached && kept && row_shown) {
-                failed.push(format!(
-                    "{id}: reached {reached}, kept {kept}, row {row_shown}"
-                ));
+            let shown =
+                row_shown(&harness, &npc, &row) && harness.query_by_label("Save NPC").is_none();
+            if !(reached && kept && shown) {
+                failed.push(format!("{id}: reached {reached}, kept {kept}, row {shown}"));
                 // Hold the same NPC again so the next path starts from the same state.
                 let page = harness.state_mut();
                 page.generated = Some(rolled.clone());
@@ -2105,9 +2110,7 @@ mod tests {
             }
             harness.get_by_label("Show").click();
             harness.run_steps(2);
-            if harness.query_by_label("Save NPC").is_none()
-                || harness.query_by_label(&row).is_some()
-            {
+            if harness.query_by_label("Save NPC").is_none() || row_shown(&harness, &npc, &row) {
                 failed.push(format!("{id}: Show did not bring the card back"));
             }
         }
@@ -2142,7 +2145,7 @@ mod tests {
             "AD1-saved: the held NPC saves to one file, beside the New form's note"
         );
         assert!(held(harness.state()).is_none());
-        assert!(harness.query_by_label(&row).is_none());
+        assert!(!row_shown(&harness, &npc, &row));
     }
 
     /// Discard lets the NPC go with `Undo discard`, which brings the same NPC back. Moving on
