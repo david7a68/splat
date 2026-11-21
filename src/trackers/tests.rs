@@ -8,6 +8,42 @@ fn today(book: &crate::timeline::Book) -> Today {
 use crate::{content_workspace::CampaignDocument, encounter_settings::Options};
 use std::fs;
 
+/// M-S0.3: an act that wrote nothing, as the footer answers it: the act, the domain's cause
+/// (`Refused`) and the one next step (`refusal`).
+fn refused(act: crate::design::results::FailedAct, cause: Refused) -> Unrecorded {
+    Unrecorded::Refused(refusal(act, cause))
+}
+
+/// A tracker's act by its label or notice name: `Nothing was recorded for <act>.`
+fn recorded(act: &str) -> crate::design::results::FailedAct {
+    crate::design::results::FailedAct::NotRecorded { act: named(act) }
+}
+
+/// The Undo of a tracker's act: `Nothing was undone for <act>.`
+fn undone(act: &str) -> crate::design::results::FailedAct {
+    crate::design::results::FailedAct::NotUndone { act: named(act) }
+}
+
+/// A history entry's Remove, or its Undo (`back`), by the entry's label.
+fn history(label: &str, back: bool) -> crate::design::results::FailedAct {
+    use crate::design::results::{FailedAct, Kind, Thing};
+    let what = Thing::new(Kind::Entry, named(label));
+    let file = named(ledger::FILE);
+    if back {
+        FailedAct::NotPutBack { what, into: file }
+    } else {
+        FailedAct::NotRemoved { what, from: file }
+    }
+}
+
+/// The words of the act's refusal, as the footer says them.
+fn refused_words(reason: &Option<Unrecorded>) -> Option<String> {
+    match reason {
+        Some(Unrecorded::Refused(refusal)) => Some(refusal.words().to_string()),
+        _ => None,
+    }
+}
+
 const EXAMPLE: &str = include_str!("../../docs/design/world-examples/heralds-tournament.md");
 
 /// Review of PR 284, finding 3: the day count that day marks use is the clock's, so a fight
@@ -240,7 +276,12 @@ fn the_tournament_note_is_read_as_written_and_a_race_runs_between_fights() {
     t.roll_notice(&bell, "rival_track");
     assert_eq!(
         t.reason,
-        Some(Unrecorded::Refused("Each name has its roll.".into()))
+        Some(refused(
+            crate::design::results::FailedAct::NotRolled {
+                table: named(t.rules.table_name("rival_track")),
+            },
+            Refused::EveryNameRolled
+        ))
     );
     assert_eq!(file(&race), before, "a refused act writes nothing");
     // A table with no names rolls as often as it is pressed.
@@ -260,9 +301,10 @@ fn the_tournament_note_is_read_as_written_and_a_race_runs_between_fights() {
     let before = file(&race);
     let t = &mut race.trackers;
     t.press("favor", None, "Throw a gift", None);
+    // The tracker's own limit ends at its cause (M13).
     assert_eq!(
-        t.reason,
-        Some(Unrecorded::Refused("Crowd Favor cannot go below 0.".into()))
+        refused_words(&t.reason).as_deref(),
+        Some("Nothing was recorded for Throw a gift. Crowd Favor cannot go below 0.")
     );
     assert_eq!(file(&race), before);
     let t = &mut race.trackers;
@@ -311,8 +353,9 @@ fn the_tournament_note_is_read_as_written_and_a_race_runs_between_fights() {
     t.dismiss(&drawn);
     assert_eq!(
         t.reason,
-        Some(Unrecorded::Refused(
-            "That notice changed on disk. Nothing was recorded.".into()
+        Some(refused(
+            recorded(&drawn.name(&t.rules)),
+            Refused::Changed(Part::Notice)
         ))
     );
     assert_eq!(
@@ -392,12 +435,12 @@ fn the_tournament_note_is_read_as_written_and_a_race_runs_between_fights() {
     fs::write(&note, text.replace("at: 1\n", "at: 2\n")).unwrap();
     let before = file(&race);
     let t = &mut race.trackers;
+    // The refusal names the notice as the view drew it, before the act read the changed note.
+    let shown = drawn.name(&t.rules);
     t.done(&drawn, &[]);
     assert_eq!(
         t.reason,
-        Some(Unrecorded::Refused(
-            "A house rule note changed on disk. Nothing was recorded.".into()
-        ))
+        Some(refused(recorded(&shown), Refused::RulesChanged))
     );
     assert_eq!(file(&race), before);
     fs::remove_file(&note).unwrap();
@@ -405,9 +448,7 @@ fn the_tournament_note_is_read_as_written_and_a_race_runs_between_fights() {
     t.press("favor", None, "Crowd loves it", None);
     assert_eq!(
         t.reason,
-        Some(Unrecorded::Refused(
-            "A house rule note changed on disk. Nothing was recorded.".into()
-        ))
+        Some(refused(recorded("Crowd loves it"), Refused::RulesChanged))
     );
     assert_eq!(file(&race), before);
 }
@@ -577,8 +618,9 @@ fn day_marks_follow_the_campaigns_day_count() {
     race.trackers.dismiss_all(&month);
     assert_eq!(
         race.trackers.reason,
-        Some(Unrecorded::Refused(
-            "The day count changed. Nothing was recorded.".into()
+        Some(refused(
+            recorded(&month.name(&race.trackers.rules)),
+            Refused::Changed(Part::DayCount)
         ))
     );
     assert_eq!(file(&race), before);
@@ -613,8 +655,9 @@ fn day_marks_follow_the_campaigns_day_count() {
     race.trackers.done(&month, &[true]);
     assert_eq!(
         race.trackers.reason,
-        Some(Unrecorded::Refused(
-            "That notice is no longer due. Nothing was recorded.".into()
+        Some(refused(
+            recorded(&month.name(&race.trackers.rules)),
+            Refused::NoLongerDue
         ))
     );
     assert_eq!(file(&race), outside);
@@ -651,7 +694,10 @@ fn day_marks_follow_the_campaigns_day_count() {
     race.trackers.dismiss(&month);
     assert_eq!(
         race.trackers.reason,
-        Some(Unrecorded::Refused(format!("{why} Nothing was recorded.")))
+        Some(refused(
+            recorded(&month.name(&race.trackers.rules)),
+            Refused::TimelineUnreadable
+        ))
     );
     assert_eq!(file(&race), outside);
     fs::set_permissions(&timeline, fs::Permissions::from_mode(0o644)).unwrap();
@@ -731,9 +777,10 @@ fn day_marks_follow_the_campaigns_day_count() {
         assert!(shown.starts_with(why), "{shown}");
         assert_eq!(
             t.reason,
-            Some(Unrecorded::Refused(format!(
-                "{shown} Nothing was recorded."
-            )))
+            Some(refused(
+                recorded(&month.name(&t.rules)),
+                Refused::TimelineUnreadable
+            ))
         );
         assert_eq!((day_rows(t), t.due()), (0, value_rows), "{why}");
         assert_eq!(file(&race), before);
@@ -765,8 +812,9 @@ fn day_marks_follow_the_campaigns_day_count() {
     app.apply_tracker_act();
     assert_eq!(
         app.trackers.reason,
-        Some(Unrecorded::Refused(
-            "That notice is no longer due. Nothing was recorded.".into()
+        Some(refused(
+            recorded(&month.name(&app.trackers.rules)),
+            Refused::NoLongerDue
         ))
     );
     assert_eq!(file(&race), before);
@@ -889,7 +937,10 @@ fn a_linked_change_names_a_line_its_tracker_has() {
             None,
             crate::hermetic::new_uuid
         ),
-        Err("Rivals has no line for Party. Nothing was recorded.".into())
+        Err(Refused::NoLine {
+            tracker: "Rivals".into(),
+            line: Some("Party".into())
+        })
     );
     // A change that names its line with `for:` goes there, from whichever line is pressed.
     let pressed = "Score for Old Guard";
@@ -1077,9 +1128,12 @@ fn undo_and_remove_of_a_change_that_raised_a_notice_take_the_notice_and_its_entr
         t.test_history_reason(),
         Some((
             note,
-            Unrecorded::Refused(
-                "Wandering, 0:00 to 0:39 roll depends on this entry. Remove that first. Nothing was removed."
-                    .into()
+            refused(
+                history(
+                    &label(&t.rules, &t.ledger, std::slice::from_ref(&first)),
+                    false
+                ),
+                Refused::DependsOn("Wandering, 0:00 to 0:39 roll".into())
             )
         ))
     );
@@ -1117,9 +1171,9 @@ fn undo_and_remove_of_a_change_that_raised_a_notice_take_the_notice_and_its_entr
         t.test_history_reason(),
         Some((
             note,
-            Unrecorded::Refused(
-                "Wandering, 0:00 to 0:39 roll depends on the removal. Remove that first. Nothing was put back."
-                    .into()
+            refused(
+                history(&t.test_removed_name(), true),
+                Refused::DependsOn("Wandering, 0:00 to 0:39 roll".into())
             )
         ))
     );
@@ -1239,8 +1293,9 @@ fn undo_and_remove_of_a_change_that_raised_a_notice_take_the_notice_and_its_entr
     t.undo(&newest);
     assert_eq!(
         t.reason,
-        Some(Unrecorded::Refused(
-            "Wandering, 0:40 to 1:19 roll depends on this act. Nothing was undone.".into()
+        Some(refused(
+            undone(&label(&t.rules, &t.ledger, &newest)),
+            Refused::DependsOn("Wandering, 0:40 to 1:19 roll".into())
         ))
     );
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
@@ -1353,7 +1408,13 @@ fn each_write_path_of_the_ledger_holds() {
         t.test_history_reason(),
         Some((
             note,
-            Unrecorded::Refused("That entry changed on disk. Nothing was removed.".into())
+            refused(
+                history(
+                    &label(&t.rules, &t.ledger, std::slice::from_ref(&older)),
+                    false
+                ),
+                Refused::Changed(Part::Entry)
+            )
         ))
     );
     assert_eq!(t.reason, None);
@@ -1394,12 +1455,13 @@ fn each_write_path_of_the_ledger_holds() {
     let outside = fs::read_to_string(&path).unwrap();
     let t = &mut race.trackers;
     t.read_disk();
+    let removed_name = t.test_removed_name();
     t.undo_remove();
     assert_eq!(
         t.test_history_reason(),
         Some((
             note,
-            Unrecorded::Refused("That entry changed on disk. Nothing was put back.".into())
+            refused(history(&removed_name, true), Refused::Changed(Part::Entry))
         ))
     );
     assert_eq!(
@@ -1423,13 +1485,15 @@ fn each_write_path_of_the_ledger_holds() {
         .replace("row: A healing potion.", "row: A healing potion, edited.");
     fs::write(&path, &edited).unwrap();
     t.read_disk();
+    let removed_name = t.test_removed_name();
     t.undo_remove();
     assert_eq!(
         t.test_history_reason(),
         Some((
             note,
-            Unrecorded::Refused(
-                "The entry before it changed on disk. Nothing was put back.".into()
+            refused(
+                history(&removed_name, true),
+                Refused::Changed(Part::EntryBefore)
             )
         ))
     );
@@ -1600,8 +1664,9 @@ fn each_write_path_of_the_ledger_holds() {
     race.trackers.undo(&stale);
     assert_eq!(
         race.trackers.reason,
-        Some(Unrecorded::Refused(
-            "The ledger changed on disk. Nothing was undone.".into()
+        Some(refused(
+            undone(&label(&race.trackers.rules, &race.trackers.ledger, &stale)),
+            Refused::LedgerChanged
         ))
     );
     assert_eq!(fs::read(&path).unwrap(), before);
@@ -1616,13 +1681,16 @@ fn each_write_path_of_the_ledger_holds() {
     t.press("favor", None, "Crowd loves it", None);
     fs::set_permissions(&manifest, fs::Permissions::from_mode(0o644)).unwrap();
     assert_eq!(fs::read(&path).unwrap(), readable);
-    let Some(Unrecorded::Refused(why)) = &t.reason else {
-        panic!("{:?}", t.reason);
-    };
-    assert!(
-        why.starts_with("Campaign.md cannot be read: ") && why.ends_with("Nothing was recorded."),
-        "{why}"
+    assert_eq!(
+        t.reason,
+        Some(refused(
+            recorded("Crowd loves it"),
+            Refused::RulesUnreadable
+        ))
     );
+    // The reader's words stay with the notes' own fault (`TrackerFault::NotesUnreadable`).
+    let why = t.rules.unreadable.clone().unwrap_or_default();
+    assert!(why.starts_with("Campaign.md cannot be read: "), "{why}");
     assert!(t.in_play() && t.rules.unreadable.is_some());
     assert_eq!((t.due(), value(&race, "favor", None)), (0, 0));
 
@@ -1864,7 +1932,11 @@ fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
         .map(|line| line.words)
         .collect();
     assert!(
-        words.contains(&"A house rule note changed on disk. Nothing was recorded.".to_owned()),
+        words.contains(
+            &"The entry “Crowd loves it” was not removed from Trackers.md. A house rule note \
+              changed on disk. Check the house rule notes first."
+                .to_owned()
+        ),
         "{words:?}"
     );
     assert!(t.test_problems().contains(&(

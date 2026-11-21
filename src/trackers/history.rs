@@ -12,7 +12,7 @@ use super::{
     result_words, with_dependents,
 };
 use crate::design::outcome::PagePlaceholder;
-use crate::design::outcome::{FaultMessage, Messages, Outcome, Said, Sentence, UndoStep, Verb};
+use crate::design::outcome::{FaultMessage, Messages, Said, Sentence, UndoStep, Verb};
 use crate::design::{self, Action, Density, Gap, Type, colors};
 use egui;
 use ledger::{Entry, Ledger, Op, Placed};
@@ -197,22 +197,21 @@ fn removal(
     today: &Today,
     ledger: &Ledger,
     drawn: &Entry,
-) -> Result<(Placed, String, String), String> {
+) -> Result<(Placed, String, String), super::Refused> {
+    use super::{Part, Refused};
     let found = ledger
         .changes
         .iter()
         .find(|entry| entry.id == drawn.id)
-        .ok_or("That entry is no longer in Trackers.md. Nothing was removed.")?;
+        .ok_or(Refused::Gone(Part::Entry))?;
     if found != drawn {
-        return Err("That entry changed on disk. Nothing was removed.".into());
+        return Err(Refused::Changed(Part::Entry));
     }
     let target = with_dependents(ledger, found);
     let next = ledger.apply(&Op::Remove(target.clone()))?;
     // A later change can cross a mark only because of this entry's value.
     if let Some(name) = orphaned(rules, today, ledger, &next) {
-        return Err(format!(
-            "{name} depends on this entry. Remove that first. Nothing was removed."
-        ));
+        return Err(Refused::DependsOn(name));
     }
     let placed = target
         .iter()
@@ -254,7 +253,16 @@ impl Trackers {
     pub fn remove(&mut self, note: Uuid, drawn: &Entry) {
         let today = self.today.clone();
         let mut made = None;
-        let done = self.commit(|rules, ledger| {
+        // What the act was, for its refusal: the entry by its row's label, from `Trackers.md`.
+        let failed = crate::design::results::FailedAct::NotRemoved {
+            what: entry_thing(&label(
+                &self.rules,
+                &self.ledger,
+                std::slice::from_ref(drawn),
+            )),
+            from: super::named(ledger::FILE),
+        };
+        let done = self.commit(failed, |rules, ledger| {
             let (placed, words, name) = removal(rules, &today, ledger, drawn)?;
             let op = Op::Remove(placed.iter().map(|(_, entry)| entry.clone()).collect());
             made = Some((placed, words, name));
@@ -286,16 +294,18 @@ impl Trackers {
         };
         let today = self.today.clone();
         let mut stale = false;
-        let done = self.commit(|rules, ledger| {
+        let failed = crate::design::results::FailedAct::NotPutBack {
+            what: entry_thing(&removed.name),
+            into: super::named(ledger::FILE),
+        };
+        let done = self.commit(failed, |rules, ledger| {
             super::restore_op(rules, &today, ledger, removed.placed.clone()).map_err(
                 |why| match why {
-                    super::RestoreFault::Stale(words) => {
+                    super::RestoreFault::Stale(cause) => {
                         stale = true;
-                        words
+                        cause
                     }
-                    super::RestoreFault::Dependent(name) => format!(
-                        "{name} depends on the removal. Remove that first. Nothing was put back."
-                    ),
+                    super::RestoreFault::Dependent(name) => super::Refused::DependsOn(name),
                 },
             )
         });
@@ -312,6 +322,18 @@ impl Trackers {
     }
 }
 
+impl Removed {
+    /// What its Undo names, and the name a refused Undo gives the entry.
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+}
+
+/// A history entry as a refusal names it: `entry “Take seal”`.
+fn entry_thing(label: &str) -> crate::design::results::Thing {
+    crate::design::results::Thing::new(crate::design::results::Kind::Entry, super::named(label))
+}
+
 /// One footer message of a note's history, as `footer_lines` selects it: its words, and its kind.
 pub struct FooterLine {
     pub words: String,
@@ -319,8 +341,8 @@ pub struct FooterLine {
 }
 
 enum LineKind {
-    /// Why the last `Remove` or its Undo wrote nothing: the files refused it.
-    Refused,
+    /// Why the last `Remove` or its Undo wrote nothing: the act, its cause and the next step.
+    Refused(crate::design::results::Refusal),
     /// The save of the history failed, in `view::not_saved`'s words.
     NotSaved(crate::design::outcome::Sentence),
     /// The last `Remove`, with the order `remove` issued for it and what its Undo names.
@@ -341,9 +363,9 @@ pub fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
         .filter(|(owner, _)| *owner == note)
     {
         lines.push(match reason {
-            Unrecorded::Refused(why) => FooterLine {
-                words: why.clone(),
-                kind: LineKind::Refused,
+            Unrecorded::Refused(refusal) => FooterLine {
+                words: refusal.words().to_string(),
+                kind: LineKind::Refused(refusal.clone()),
             },
             Unrecorded::NotSaved(error) => {
                 let words = super::view::not_saved(error);
@@ -379,8 +401,8 @@ pub fn footer<A: Clone + 'static>(
 ) {
     for line in footer_lines(trackers, note) {
         match line.kind {
-            LineKind::Refused => {
-                messages.outcome(Outcome::Refused(said(&line.words)));
+            LineKind::Refused(refusal) => {
+                messages.outcome(FaultMessage::new(&super::TrackerFault::Refused(refusal)));
             }
             LineKind::NotSaved(words) => {
                 messages.outcome(FaultMessage::new(&NotSaved(words)));

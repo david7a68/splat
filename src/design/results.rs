@@ -1291,7 +1291,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers/view.rs", "body", &[Ban::Body]),
         // Package T (PR 328 review): a repeated amount field's problem stands at its line.
         ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
-        ("src/trackers/view.rs", "messages", &[Ban::Words]),
         (
             "src/content_ui/src/session_notes.rs",
             "notice_sentence",
@@ -1631,8 +1630,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/sessions/carry.rs", 1),
             ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 1),
-            ("src/trackers/history.rs", 1),
-            ("src/trackers/view.rs", 1),
             ("src/world.rs", 1),
         ],
     ),

@@ -1356,13 +1356,13 @@ pub fn run(d: &mut Driver<'_>) {
         );
 
         // A press whose note went away from disk: its row goes, and the words stay in view on
-        // the result line, with what the DM can do.
+        // the result line, with what the DM can do (M-S0.3: the act, its cause, the next step).
         fs::remove_file(root(d).join("Tournament.md")).unwrap();
         d.app_mut().trackers.press("favor", None, "Crowd loves it", None);
         d.settle();
         d.observe(
             "T19.2",
-            d.has_containing("A house rule note changed on disk. Nothing was recorded.")
+            d.has_containing("Nothing was recorded for Crowd loves it. A house rule note changed on disk. Check the house rule notes first.")
                 && d.has_containing("Splat reads the notes again when its window gets focus.")
                 && !d.has("Crowd loves it"),
             "A refused press says so on the result line when its row went away",
@@ -1370,7 +1370,7 @@ pub fn run(d: &mut Driver<'_>) {
         d.act_at_size(SMALL, |d| {
             d.observe(
                 "T19.2",
-                d.in_view_containing("A house rule note changed on disk. Nothing was recorded."),
+                d.in_view_containing("Nothing was recorded for Crowd loves it. A house rule note changed on disk. Check the house rule notes first."),
                 "The refusal is in view at 960x640 with Lookup narrow",
             );
         });
