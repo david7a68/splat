@@ -592,20 +592,6 @@ struct LinkUndoState {
     events: Vec<timeline::Event>,
 }
 
-/// A notice the page just made: it takes a new footer order in `order`, so it lists as the
-/// newest result.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
-fn new_notice(
-    order: &mut Option<design::ResultOrder>,
-    notice: (Tone, String),
-) -> Option<(Tone, String)> {
-    *order = Some(design::ResultOrder::issue());
-    Some(notice)
-}
-
 #[derive(Default)]
 pub struct Sessions {
     /// G118: the plan's kept lines, one per planned fight (`plan::PlanLines`), and the
@@ -719,15 +705,10 @@ pub struct Sessions {
     recordings: Vec<Recording>,
     live: Option<Live>,
     confirm_record: bool,
-    notice: Option<(Tone, String)>,
-    /// When `notice` was made (`new_notice`), for its footer order.
-    notice_order: Option<design::ResultOrder>,
-    /// A copy of a notice that arrived on its own (processing finished). While `notice` still
-    /// equals it, the notice sits in the bottom banner; any later notice replaces it and keeps
-    /// its own place above the tabs, as the result of the DM's action.
-    arrived_notice: Option<(Tone, String)>,
-    /// The session a notice is about. None means whichever is open now.
-    notice_session: Option<Uuid>,
+    /// The page's one notice (#597): what the last act or a job said, in its tone, the session
+    /// it is about and whether it arrived by itself (`kept::PageNotice`). The store issues its
+    /// order; a new notice replaces it.
+    notices: design::Results<kept::Page, kept::PageNotice>,
     /// A job ended while the DM may be elsewhere.
     job_done: bool,
     /// The latest result stays after its completion notice is acknowledged.
@@ -2005,7 +1986,7 @@ impl Sessions {
 
     /// The notice that arrived on its own is still the one to show.
     fn notice_arrived(&self) -> bool {
-        self.notice.is_some() && self.notice == self.arrived_notice
+        self.notice().is_some_and(|notice| notice.arrived)
     }
 
     /// Round 26 FM7: the session's own Recordings tab shows the processed row, so the DM has
@@ -2016,7 +1997,7 @@ impl Sessions {
             && self.form.is_none()
             && self.tab == Tab::Recordings
             && self.notice_arrived()
-            && self.notice_session == self.selected
+            && self.notice_session() == self.selected
     }
 
     fn has_banner_notices(&self) -> bool {
@@ -2028,7 +2009,7 @@ impl Sessions {
             || (notes
                 && self.notice_arrived()
                 && !self.processed_notice_read_here()
-                && (self.notice_session.is_none() || self.notice_session == self.selected))
+                && (self.notice_session().is_none() || self.notice_session() == self.selected))
             || (notes && selected.is_some_and(|note| !note.also.is_empty()))
             || (notes && !self.unreadable.is_empty())
             || self.draft.as_ref().is_some_and(Draft::needs_attention)
@@ -2056,8 +2037,10 @@ impl Sessions {
         if notes
             && self.notice_arrived()
             && !self.processed_notice_read_here()
-            && (self.notice_session.is_none() || self.notice_session == self.selected)
-            && let Some((tone, words)) = self.notice.clone()
+            && (self.notice_session().is_none() || self.notice_session() == self.selected)
+            && let Some((tone, words)) = self
+                .notice()
+                .map(|notice| (notice.tone, notice.words.clone()))
         {
             // N6: the close icon on the words' first line, placed by the message part (M0441).
             // Work that finished by itself (`is processed`) is a result said where it happened,
@@ -2077,8 +2060,7 @@ impl Sessions {
             };
             let closed = message.in_padding().show(ui);
             if closed.is_some() {
-                self.notice = None;
-                self.notice_session = None;
+                self.end_notice();
             }
         }
         if notes
@@ -2108,9 +2090,7 @@ impl Sessions {
                             });
                             self.refresh();
                         }
-                        Err(error) => {
-                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error))
-                        }
+                        Err(error) => self.say(Tone::Error, error, None),
                     }
                 }
             }
@@ -2480,23 +2460,19 @@ impl Sessions {
             .iter()
             .find(|note| note.id == session)
             .map_or_else(|| "this session".to_owned(), Note::label);
-        self.notice_session = Some(session);
         match result {
             Ok(None) => {
                 self.processed_session = Some(session);
                 self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = false;
-                self.notice = new_notice(
-                    &mut self.notice_order,
-                    (
-                        Tone::Success,
-                        format!(
-                            "“{label}” is processed. Read the result, and add the events you want to the timeline."
-                        ),
+                self.say_arrived(
+                    Tone::Success,
+                    format!(
+                        "“{label}” is processed. Read the result, and add the events you want to the timeline."
                     ),
+                    Some(session),
                 );
-                self.arrived_notice.clone_from(&self.notice);
             }
             Ok(Some(warning)) => {
                 self.processed_session = Some(session);
@@ -2505,10 +2481,10 @@ impl Sessions {
                 self.job_warned = true;
                 // The recording's row has the words, for as long as the result stands.
                 let _ = warning;
-                self.notice = None;
+                self.end_notice();
             }
             Err(error) if error == processing::CANCELLED => {
-                self.notice = None;
+                self.end_notice();
                 self.raise(Alert {
                     session,
                     can_record: false,
@@ -2519,7 +2495,7 @@ impl Sessions {
                 });
             }
             Err(error) => {
-                self.notice = None;
+                self.end_notice();
                 self.raise(Alert {
                     session,
                     can_record: false,
@@ -2544,7 +2520,7 @@ impl Sessions {
         self.template = None;
         self.reading = None;
         self.form = None;
-        self.notice = None;
+        self.end_notice();
         self.deleted_run = None;
         self.removed_group = None;
         self.plan_notice_state = None;
@@ -2591,8 +2567,7 @@ impl Sessions {
         self.job_done = false;
         self.job_warned = false;
         // A folder move's result stays its campaign's (`folder_moves`): this campaign's scope
-        // hides it, and coming back shows it again.
-        self.notice_session = None;
+        // hides it, and coming back shows it again. So does the page's notice (`notices`).
         self.select(self.current().or(self.notes.first().map(|note| note.id)));
     }
 
@@ -2727,8 +2702,8 @@ impl Sessions {
         self.open_event = None;
         self.fight = None;
         self.reading_note = session != self.current();
-        if self.notice_session.is_none() {
-            self.notice = None;
+        if self.notice().is_some_and(|notice| notice.session.is_none()) {
+            self.end_notice();
         }
         self.confirm_record = false;
         self.confirm_again = None;
@@ -2871,8 +2846,7 @@ impl Sessions {
                 self.focus_notes = self.notes_open;
             }
             Err(error) => {
-                self.notice_session = None;
-                self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
+                self.say(Tone::Error, error, None);
             }
         }
     }
@@ -2981,7 +2955,7 @@ impl Sessions {
             .or_else(|| self.job.as_ref().map(|(_, session)| *session))
             .or_else(|| self.alerts.last().map(|alert| alert.session))
             .or(self.processed_session)
-            .or(self.notice_session)
+            .or(self.notice_session())
             .or_else(|| {
                 let root = self.folder.clone().unwrap_or_default();
                 self.saved
@@ -3667,13 +3641,10 @@ impl Sessions {
                 path: path.clone(),
             });
         } else if tell {
-            self.notice_session = Some(session);
-            self.notice = new_notice(
-                &mut self.notice_order,
-                (
-                    Tone::Warning,
-                    format!("Nothing was recorded for “{label}”."),
-                ),
+            self.say(
+                Tone::Warning,
+                format!("Nothing was recorded for “{label}”."),
+                Some(session),
             );
         }
         self.refresh_recordings();
@@ -3700,8 +3671,7 @@ impl Sessions {
                 self.processed_recording = None;
                 self.job_done = false;
                 self.job_warned = false;
-                self.notice = None;
-                self.notice_session = None;
+                self.end_notice();
                 // A new recording answers an old failure of this session.
                 self.alerts
                     .retain(|alert| !(alert.can_record && alert.session == session));
@@ -3740,12 +3710,10 @@ impl Sessions {
         session: Uuid,
     ) {
         if !recording.exists() {
-            self.notice = new_notice(
-                &mut self.notice_order,
-                (
-                    Tone::Warning,
-                    "Audio removed. Restore the WAV file to process it.".into(),
-                ),
+            self.say(
+                Tone::Warning,
+                "Audio removed. Restore the WAV file to process it.".into(),
+                None,
             );
             return;
         }
@@ -3779,8 +3747,7 @@ impl Sessions {
             events.join("\n")
         );
         let (speech_key, llm_key) = settings.held_keys();
-        self.notice = None;
-        self.notice_session = None;
+        self.end_notice();
         let _ = fs::remove_file(recording.with_extension("state.txt"));
         self.processed_session = None;
         self.processed_recording = None;
@@ -4083,8 +4050,7 @@ impl Sessions {
                     if let Some(session) = self.selected
                         && let Err(error) = self.start_recording(settings, session)
                     {
-                        self.notice_session = None;
-                        self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
+                        self.say(Tone::Error, error, None);
                     }
                 }
                 Some(RecordAct::NotNow) => self.confirm_record = false,
@@ -4458,12 +4424,9 @@ impl Sessions {
         let Some(note) = self.notes.iter().find(|note| note.id == session) else {
             return;
         };
-        self.notice = new_notice(
-            &mut self.notice_order,
-            (Tone::Info, format!("{name} stays in {}.", note.label())),
-        );
-        self.notice_session = Some(new);
-        self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
+        let words = format!("{name} stays in {}.", note.label());
+        self.move_run_here = Some((new, words.clone()));
+        self.say(Tone::Info, words, Some(new));
     }
 
     /// `Move it here`: the open run's event moves to `session`, and its result with `Undo move`
@@ -4493,8 +4456,7 @@ impl Sessions {
             .map_or(1, |note| note.number);
         let name = name.to_owned();
         // The `stays in` notice is answered: the result takes its place.
-        self.notice = None;
-        self.notice_session = None;
+        self.end_notice();
         let moved = kept::Moved {
             page: self.page(),
             session,
@@ -4547,6 +4509,48 @@ impl Sessions {
         kept::Page {
             root: self.folder.clone().unwrap_or_default(),
         }
+    }
+
+    /// The page's one notice, while it stands (#597).
+    fn notice(&self) -> Option<&kept::PageNotice> {
+        self.notices.get(&self.page()).map(|shown| shown.value())
+    }
+
+    /// The session the page's notice is about: `None` for whichever is open, or no notice.
+    fn notice_session(&self) -> Option<Uuid> {
+        self.notice().and_then(|notice| notice.session)
+    }
+
+    /// Say `words` in `tone`, about `session` (`None`: whichever is open). It replaces the
+    /// page's notice and takes a new order, as the newest result.
+    fn say(&mut self, tone: Tone, words: String, session: Option<Uuid>) {
+        let page = self.page();
+        self.notices.record(kept::PageNotice {
+            page,
+            tone,
+            words,
+            session,
+            arrived: false,
+        });
+    }
+
+    /// What a job said when it finished while the DM was elsewhere: it stands in the bottom
+    /// banner until the DM reads it where it happened.
+    fn say_arrived(&mut self, tone: Tone, words: String, session: Option<Uuid>) {
+        let page = self.page();
+        self.notices.record(kept::PageNotice {
+            page,
+            tone,
+            words,
+            session,
+            arrived: true,
+        });
+    }
+
+    /// The page's notice ends.
+    fn end_notice(&mut self) {
+        let page = self.page();
+        self.notices.owner_changed(&page);
     }
 
     /// One session of this campaign's folder.
@@ -5335,11 +5339,7 @@ impl Sessions {
 
     /// A note's link that no entry answers to. Saying so is better than a link that does nothing.
     pub fn no_entry_named(&mut self, name: &str) {
-        self.notice = new_notice(
-            &mut self.notice_order,
-            (Tone::Info, format!("No entry is named {name}.")),
-        );
-        self.notice_session = None;
+        self.say(Tone::Info, format!("No entry is named {name}."), None);
     }
 
     /// Words at the end of the plan in this session's note, so that the file holds the plan.
@@ -5967,7 +5967,7 @@ impl Sessions {
                 self.finish_recording(ui.ctx());
             }
             if let Err(error) = self.start_recording(settings, session) {
-                self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
+                self.say(Tone::Error, error, None);
             }
         }
         if again {
@@ -6031,11 +6031,12 @@ impl Sessions {
     fn clear_success(&mut self) {
         self.saved.owner_changed(&self.of_session(self.selected));
         // News of another session's job waits until the DM has seen it.
-        if matches!(self.notice, Some((Tone::Success, _)))
-            && (self.notice_session.is_none() || self.notice_session == self.selected)
+        if self
+            .notice()
+            .is_some_and(|notice| notice.tone == Tone::Success)
+            && (self.notice_session().is_none() || self.notice_session() == self.selected)
         {
-            self.notice = None;
-            self.notice_session = None;
+            self.end_notice();
         }
     }
 
@@ -6541,11 +6542,7 @@ impl Sessions {
         {
             insert_in_note(&mut draft.body, &body);
             draft.edited();
-            self.notice_session = None;
-            self.notice = new_notice(
-                &mut self.notice_order,
-                (Tone::Success, "Added to the notes.".to_owned()),
-            );
+            self.say(Tone::Success, "Added to the notes.".to_owned(), None);
         }
     }
 
@@ -6681,7 +6678,6 @@ impl Sessions {
             self.confirm_delete = None;
             ctx.data_mut(|data| data.remove::<bool>(focus_id));
             self.reading = None;
-            self.notice_session = None;
             // A deleted recording takes its result with it, so the rail stops saying Processed.
             if self.processed_recording.as_deref() == Some(path.as_path()) {
                 self.processed_session = None;
@@ -6689,14 +6685,12 @@ impl Sessions {
                 self.job_done = false;
                 self.job_warned = false;
             }
-            self.notice = new_notice(
-                &mut self.notice_order,
-                match delete_recording(&path) {
-                    Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
-                    // `delete_recording` says it in plain words (`not_deleted`).
-                    Err(error) => (Tone::Error, error),
-                },
-            );
+            let (tone, words) = match delete_recording(&path) {
+                Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
+                // `delete_recording` says it in plain words (`not_deleted`).
+                Err(error) => (Tone::Error, error),
+            };
+            self.say(tone, words, None);
             self.refresh_recordings();
         }
     }
@@ -6740,7 +6734,7 @@ impl Sessions {
     ) -> Messages<'f, SessionAct> {
         self.expire_move(book);
         self.end_carry_results();
-        let shown = self.notice_session.is_none() || self.notice_session == self.selected;
+        let shown = self.notice_session().is_none() || self.notice_session() == self.selected;
         if shown && self.job_done() {
             self.job_done = false;
         }
@@ -6750,9 +6744,9 @@ impl Sessions {
             add_dropped(frame, &mut messages, draft, &self.dropped);
         }
         if let Some((tone, words)) = self
-            .notice
-            .clone()
+            .notice()
             .filter(|_| shown && !self.notice_arrived())
+            .map(|notice| (notice.tone, notice.words.clone()))
         {
             let here = self
                 .move_run_here
@@ -6780,11 +6774,14 @@ impl Sessions {
                         );
                     }
                     Tone::Success => {
-                        // Every success notice is made with its order (`new_notice`).
-                        messages.outcome_at(
-                            self.notice_order.unwrap_or_default(),
-                            Said::new(sentence).choice(dismiss()),
-                        );
+                        // A success is a kept line: its order and its ticket are the store's.
+                        if let Some(shown) = self.notices.get(&self.page()) {
+                            messages.kept(
+                                shown.outcome(frame, |_| {
+                                    Said::new(sentence).choice(dismiss()).into()
+                                }),
+                            );
+                        }
                     }
                     Tone::Info => {
                         messages.outcome(Notice::new(sentence).choice(dismiss()));
@@ -6947,7 +6944,7 @@ impl Sessions {
                         Ok(_) => self.refresh(),
                         // The result stays, with its Undo, beside the reason.
                         Err(ByTicket::Failed(error)) => {
-                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
+                            self.say(Tone::Error, error, None);
                         }
                         Err(ByTicket::Gone) => {}
                     }
@@ -6987,10 +6984,14 @@ impl Sessions {
             | SessionAct::UndoIdentity
             | SessionAct::UndoMarker
             | SessionAct::DismissSaved => {}
-            SessionAct::Dismiss => {
-                self.notice = None;
-                self.notice_session = None;
-            }
+            // A success's close icon uses its kept line up, by its ticket; another notice's ends
+            // the page's notice.
+            SessionAct::Dismiss => match press.ticket {
+                Some(ticket) => {
+                    let _ = self.notices.use_press_by(ticket);
+                }
+                None => self.end_notice(),
+            },
             SessionAct::PlayThisOne => self.play_this_one(),
             SessionAct::Open(session) => self.select(session),
             SessionAct::OpenSettings => self.wants_processing_settings = true,
@@ -7284,8 +7285,7 @@ impl Sessions {
             }),
             Tab::Recordings => {
                 if self.processed_notice_read_here() {
-                    self.notice = None;
-                    self.notice_session = None;
+                    self.end_notice();
                 }
                 self.recordings_tab(ui, settings, book);
             }
@@ -8340,8 +8340,7 @@ impl Sessions {
 
     /// A job that stays in progress, for a capture of that state.
     pub fn simulate_job(&mut self, progress: processing::Progress) {
-        self.notice = None;
-        self.notice_session = None;
+        self.end_notice();
         self.processed_session = None;
         self.processed_recording = None;
         self.job_done = false;
@@ -9372,6 +9371,46 @@ mod tests {
             ),
             "n0-link-undo-cause: an outside change of the open B"
         );
+    }
+
+    /// #597: the page's notice is one entry of its store. A newer notice replaces the older one
+    /// (also its arrived flag), and a success about one session ends when the DM moves on in
+    /// that session, never in another.
+    #[test]
+    fn the_page_notice_is_one_entry_of_its_store() {
+        let folder = tempfile::tempdir().unwrap();
+        let (a, b) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        let mut sessions = Sessions {
+            folder: Some(folder.path().to_path_buf()),
+            ..Sessions::default()
+        };
+        let notice = |sessions: &Sessions| {
+            sessions
+                .notice()
+                .map(|notice| (notice.tone, notice.words.clone(), notice.session))
+        };
+        sessions.say_arrived(Tone::Success, "“Session 1” is processed.".into(), Some(a));
+        assert!(
+            sessions.notice_arrived(),
+            "a job's notice arrived by itself"
+        );
+        sessions.say(Tone::Error, "Not saved.".into(), None);
+        assert_eq!(
+            notice(&sessions),
+            Some((Tone::Error, "Not saved.".to_owned(), None)),
+            "n0-notice-one-entry: the newer notice replaces the older"
+        );
+        assert!(
+            !sessions.notice_arrived(),
+            "n0-notice-one-entry: the newer notice is the page's, not the job's"
+        );
+        sessions.say(Tone::Success, "Recording deleted.".into(), Some(a));
+        sessions.selected = Some(b);
+        sessions.clear_success();
+        assert!(notice(&sessions).is_some(), "another session keeps it");
+        sessions.selected = Some(a);
+        sessions.clear_success();
+        assert_eq!(notice(&sessions), None, "its own session ends it");
     }
 
     #[test]

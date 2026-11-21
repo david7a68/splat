@@ -1052,7 +1052,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "markers",
             &[Ban::Results, Ban::Extras(1)],
         ),
-        ("src/sessions/page.rs", "new_notice", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "reading_view",
@@ -1619,7 +1618,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/dndbeyond.rs", 1),
             ("src/encounters/groups.rs", 1),
             ("src/sessions/carry.rs", 1),
-            ("src/sessions/page.rs", 1),
             ("src/sessions/plan.rs", 4),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),

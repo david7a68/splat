@@ -106,6 +106,34 @@ impl Kept for FolderMoved {
     }
 }
 
+/// The Sessions page's one notice (#597): what the last act or a job said, in its tone, for one
+/// session or for whichever is open (`session: None`), and whether it arrived by itself (a
+/// recording processed while the DM was elsewhere), which places it in the bottom banner. The
+/// page holds one: a new one replaces it (`record`), and a press of its close icon, an act that
+/// answers it or a change of what it was about ends it (`Sessions::end_notice`). A success is a
+/// kept line by the store's order and ticket; the other tones are notices with no order.
+pub(super) struct PageNotice {
+    pub page: Page,
+    pub tone: crate::design::Tone,
+    pub words: String,
+    pub session: Option<Uuid>,
+    pub arrived: bool,
+}
+
+impl Kept for PageNotice {
+    type Owner = Page;
+    const ENDS: Ends = Ends {
+        // The page ends it where its rules say (`end_notice`).
+        owner_changed: OwnerChanged::Ends,
+        disk_changed: DiskChanged::Stays,
+        // Its close icon uses it up.
+        press: Press::Use,
+    };
+    fn owner(&self) -> Page {
+        self.page.clone()
+    }
+}
+
 /// A draft's file: the session note or the template a draft edits. A result of that draft is
 /// its file's; another draft's file hides it.
 #[derive(Clone, Debug, PartialEq, Eq)]
