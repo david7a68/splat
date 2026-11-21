@@ -178,7 +178,7 @@ pub(super) fn side_control(
                 *side = text.trim().to_lowercase();
             }
         }
-        let named: Vec<&str> = ["party", "enemies"]
+        let mut named: Vec<&str> = ["party", "enemies"]
             .into_iter()
             .chain(
                 choices
@@ -187,6 +187,11 @@ pub(super) fn side_control(
                     .filter(|choice| !matches!(*choice, "party" | "enemies")),
             )
             .collect();
+        // A side typed before (`rivals`) is the current value: the control shows it, and the menu
+        // keeps it among the named sides.
+        if custom && !other && !side.trim().is_empty() {
+            named.push(side.as_str());
+        }
         let mut chosen = if other {
             SideChoice::Other
         } else {
