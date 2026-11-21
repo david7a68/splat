@@ -7541,6 +7541,11 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Open in Library has a secondary border");
         d.observe("iter-7-C-FD5", d.visible_text("Package.md cannot be read (line 4). Entries are still available."),
             "The manifest fault and availability sentence have a full stop between them");
+        // Ruling M8 (migration-32 C0, M0001/M0012): what Replace keeps and replaces is that
+        // choice's own help line, painted under it, not part of the fault's words above it.
+        let help_line = d.painted_rect_in("This keeps the package name and its links.", egui::Rect::EVERYTHING);
+        d.observe("m32-C0-M8-replace-help", help_line.is_some_and(|line| line.top() >= replace.bottom() - 0.5),
+            format!("Replace's help {help_line:?} is under Replace {replace:?}"));
         d.observe("iter-6-C-AD1", d.visible_text("This keeps the package name and its links.")
             && d.visible_text("including its description.")
             && d.visible_text("The entries stay unchanged."),
