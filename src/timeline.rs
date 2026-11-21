@@ -165,11 +165,6 @@ impl crate::design::results::Kept for Removal {
 /// Each removal action gets a number unique in this run of the app, across reloaded books.
 static REMOVAL_ACTIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
-/// An event belongs to a session's story there, and to the session that continued it.
-fn owned_by(event: &Event, session: Option<Uuid>) -> bool {
-    event.session == session || (session.is_some() && event.continued_in == session)
-}
-
 /// The removal notice on the plan and on Timeline. It names which event went, by its result or
 /// state, and says when another event with the same name stays in this session. The plan passes
 /// its own fights in `planned`; Timeline passes the removed event's own session and none.
@@ -595,7 +590,7 @@ impl Book {
     fn owned_events(&self, session: Option<Uuid>) -> Vec<Event> {
         self.events
             .iter()
-            .filter(|event| owned_by(event, session))
+            .filter(|event| event.is_in(session))
             .cloned()
             .collect()
     }
@@ -1271,9 +1266,10 @@ impl Book {
         };
         // The removed event's own run back on the timeline also ends it: its Undo would give
         // that run a second event.
-        if entered.as_ref().is_some_and(|event| {
-            owned_by(event, session) || (event.run.is_some() && event.run == run)
-        }) {
+        if entered
+            .as_ref()
+            .is_some_and(|event| event.is_in(session) || (event.run.is_some() && event.run == run))
+        {
             self.results.removal.owner_changed(&file);
             return;
         }
@@ -1390,18 +1386,7 @@ impl Book {
                 // Opening a fight to read it is not playing it.
                 if played {
                     let next = self.next_order();
-                    let event = &mut self.events[index];
-                    let moved = session.is_some()
-                        && event.session != session
-                        && event.continued_in != session;
-                    if moved {
-                        event.continued_in = session;
-                    }
-                    // Zero is from a file older than this order, and is never the latest.
-                    if event.played_order == 0 || event.played_order + 1 != next {
-                        event.played_order = next;
-                        self.touch();
-                    } else if moved {
+                    if self.events[index].record_play(session, next) {
                         self.touch();
                     }
                 }

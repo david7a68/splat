@@ -7,14 +7,16 @@ mod notice;
 mod rolling;
 use splat_core::encounter_run::undo;
 pub(crate) mod view;
-use crate::encounter_settings::{Grouping, Initiative};
+use crate::encounter_settings::{Grouping, GroupingWords, Initiative};
 #[cfg(test)]
 use splat_core::encounter_run::Changes;
 pub(crate) use splat_core::encounter_run::{
     AddedFrom, Carry, FightRow, MAX_PARTICIPANTS, NOBODY_PRESENT, Participant, Phase,
 };
 pub(crate) use splat_core::encounter_run::{FightSummary, fight_summary, party_at_end};
-use splat_core::encounter_run::{Recovery, SheetShadow, is_player, roll_initiative, valid_state};
+use splat_core::encounter_run::{
+    Recovery, SheetShadow, is_player, read_saved_bytes, roll_initiative,
+};
 
 const UNDO_FILE_BYTES: usize = if cfg!(test) {
     1024 * 1024
@@ -4199,20 +4201,8 @@ impl Run {
         path: &Path,
         campaign: Uuid,
     ) -> Result<(Self, Option<Box<serde_json::value::RawValue>>), String> {
-        if fs::metadata(path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
-            return Err("Saved run exceeds the size limit.".into());
-        }
-        let bytes = fs::read(path).map_err(|e| e.to_string())?;
-        if bytes.len() > 64 * 1024 * 1024 {
-            return Err("Saved run exceeds the size limit.".into());
-        }
-        let mut saved = SavedRun::parse(&bytes, Some(campaign))?;
-        if saved.id.is_nil() {
-            return Err("Unsupported run version or wrong campaign.".into());
-        }
-        if !valid_state(&saved.state) {
-            return Err("Saved run state is invalid; its file has not been changed.".into());
-        }
+        let bytes = read_saved_bytes(path)?;
+        let mut saved = SavedRun::reopen(&bytes, Some(campaign))?;
         let saved_undo = saved.undo.take();
         let panel = if saved.state.phase == Phase::Setup {
             Panel::Encounter
@@ -6015,6 +6005,23 @@ mod tests {
         run.apply(Command::Next).unwrap();
         assert!(run.save().is_err());
         assert_eq!(fs::read(&path).unwrap(), external);
+
+        // The folder check and reopen both reject a valid JSON run with a broken turn order.
+        let mut broken: serde_json::Value = serde_json::from_slice(&external).unwrap();
+        for row in broken["state"]["participants"].as_array_mut().unwrap() {
+            row["definition"]["flags"] = serde_json::json!([]);
+        }
+        broken["undo"] = serde_json::Value::Null;
+        broken["state"]["order"][1] = broken["state"]["order"][0].clone();
+        let broken = serde_json::to_vec(&broken).unwrap();
+        fs::write(&path, &broken).unwrap();
+        let why = "Saved run state is invalid; its file has not been changed.";
+        assert_eq!(Run::open(&path, campaign).err().as_deref(), Some(why));
+        let (problems, count) = splat_core::folder_check::check(dir.path()).unwrap();
+        assert_eq!(count, 0);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].ends_with(why), "{problems:?}");
+        assert_eq!(fs::read(&path).unwrap(), broken);
         assert!(Run::open(&path, Uuid::new_v4()).is_err());
     }
     /// 20 participants with a printed stat block each, and a full Undo of 100 steps of play:

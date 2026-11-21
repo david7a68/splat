@@ -152,8 +152,11 @@ pub enum Op {
     /// Entries that a `Remove` took go back, each after the entry it followed then, as that
     /// entry was read (`None`: at the top), so the acts made since keep their places. Its order
     /// is the list's.
-    Restore(Vec<(Option<Entry>, Entry)>),
+    Restore(Placed),
 }
+
+/// Removed entries with the entry each one followed when it was removed.
+pub type Placed = Vec<(Option<Entry>, Entry)>;
 
 impl Ledger {
     /// The file's text. A missing file is an empty ledger; a file that cannot be read is an

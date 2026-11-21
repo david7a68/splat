@@ -2,6 +2,7 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[cfg(test)]
 use crate::content_workspace::patch_fields;
+use crate::encounter_settings::GroupingWords;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},

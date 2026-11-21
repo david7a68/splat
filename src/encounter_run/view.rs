@@ -12,7 +12,7 @@ use crate::{
         self, Action, Density, HpFonts, RunScale, Status, Tone, Type, colors, icons,
         reader as style,
     },
-    encounter_settings::Grouping,
+    encounter_settings::{Grouping, GroupingWords},
     library::view,
 };
 use eframe::egui::{

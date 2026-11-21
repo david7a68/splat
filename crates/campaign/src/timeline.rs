@@ -188,6 +188,20 @@ impl Event {
         self.session == session || (session.is_some() && self.continued_in == session)
     }
 
+    /// Record a fight played again. An already latest fight keeps its place.
+    pub fn record_play(&mut self, session: Option<Uuid>, next_order: u64) -> bool {
+        let moved = session.is_some() && !self.is_in(session);
+        if moved {
+            self.continued_in = session;
+        }
+        // Zero is from a file older than this order, and is never the latest.
+        let changed_order = self.played_order == 0 || self.played_order + 1 != next_order;
+        if changed_order {
+            self.played_order = next_order;
+        }
+        moved || changed_order
+    }
+
     /// The event's own name: its title, unless that is empty or only says its kind (the plan
     /// gives a new event its kind as its title, `Day` or `Travel`). Every place that shows the
     /// kind beside the name asks this one question, so no line says the kind twice (round 28
@@ -354,9 +368,6 @@ fn walk(events: &[Event]) -> (Vec<Option<u64>>, Option<u64>) {
     (starts, now)
 }
 
-/// A fight inside a journey starts at its check: while it is a fight that names a journey
-/// before it in the list, and that journey still covers the check. Any other event, or a fight
-/// whose journey no longer holds it, is an ordinary event in the sequence.
 /// Whether the journey covers a check at this offset, in hours: before its end, or the one
 /// check of a journey whose length the clock cannot read. The checks block, Begin combat and
 /// the clock all ask this.
@@ -370,6 +381,9 @@ pub fn check_fits(at: u64, every: u64, length: Option<u64>) -> bool {
     at.is_multiple_of(every) && length.map_or(at == 0, |minutes| at * HOUR < minutes)
 }
 
+/// A fight inside a journey starts at its check: while it is a fight that names a journey
+/// before it in the list, and that journey still covers the check. Any other event, or a fight
+/// whose journey no longer holds it, is an ordinary event in the sequence.
 fn inside_journey(before: &[Event], starts: &[Option<u64>], event: &Event) -> Option<Option<u64>> {
     let within = event
         .within

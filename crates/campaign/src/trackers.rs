@@ -1130,3 +1130,24 @@ pub fn undo_op(
     }
     Ok(op)
 }
+
+/// Why entries removed from a tracker history cannot go back.
+pub enum RestoreFault {
+    Stale(String),
+    Dependent(String),
+}
+
+/// Put removed entries back only while their places and later acts still allow it.
+pub fn restore_op(
+    rules: &Rules,
+    today: &Today,
+    ledger: &Ledger,
+    placed: ledger::Placed,
+) -> Result<Op, RestoreFault> {
+    let op = Op::Restore(placed);
+    let next = ledger.apply(&op).map_err(RestoreFault::Stale)?;
+    if let Some(name) = orphaned(rules, today, ledger, &next) {
+        return Err(RestoreFault::Dependent(name));
+    }
+    Ok(op)
+}

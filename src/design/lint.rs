@@ -438,11 +438,13 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
     }
     // M5 (lead's ruling 3): the run's old ways to cut words, and the turn heading's owners.
     // `fitting-escape` counts raw `.truncate()` and the old fitting primitives (and any alias,
-    // which names them) in `src/encounter_run/`; `heading-owner` counts the makers of the run's
+    // which names them) in the desktop and campaign Run modules; `heading-owner` counts the makers of the run's
     // kept heading and of a `TurnName`, so a second heading or a cut name is a raised line.
+    let run_source = path.starts_with("src/encounter_run")
+        || path.starts_with("crates/campaign/src/encounter_run");
     for line in text.lines().take(last_line) {
         let line = line.split("//").next().unwrap_or("");
-        if path.starts_with("src/encounter_run") {
+        if run_source {
             for escape in [
                 ".truncate()",
                 "words_that_fit",
@@ -1020,6 +1022,17 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
 #[test]
 fn the_message_rules_find_what_they_should() {
     let rules = |path: &str, code: &str| message_rules(path, code, code.lines().count());
+    for path in [
+        "src/encounter_run.rs",
+        "crates/campaign/src/encounter_run.rs",
+        "crates/campaign/src/encounter_run/effect.rs",
+    ] {
+        assert_eq!(
+            rules(path, "fn f() { one_line(name); }"),
+            ["fitting-escape"],
+            "{path}"
+        );
+    }
     assert_eq!(
         rules("src/a.rs", "#![allow(deprecated)]"),
         ["allow-deprecated"]

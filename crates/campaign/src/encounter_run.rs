@@ -14,6 +14,7 @@ use splat_content::dice::Random;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    io::Read,
     path::Path,
     sync::Arc,
 };
@@ -43,31 +44,6 @@ impl Grouping {
         Self::BySide,
         Self::Explicit,
     ];
-    /// Reads on from "Roll NPC initiative".
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Identical => "In groups of identical NPCs (D&D default)",
-            Self::Individual => "Individually",
-            Self::BySide => "In one group per side",
-            Self::Explicit => "In the encounter’s initiative groups",
-        }
-    }
-    /// How an encounter group takes its initiative under this rule. A typed total is the
-    /// DM's ruling, and it applies to every member under any rule.
-    pub fn arrival_rule(self) -> &'static str {
-        match self {
-            Self::Identical => {
-                "A group rolls once, with the first member’s bonus, even with different creatures."
-            }
-            Self::Individual => "Each member of a group rolls alone, by the campaign’s rule.",
-            Self::BySide => {
-                "A group takes the initiative its side already has. A side with none rolls once."
-            }
-            Self::Explicit => {
-                "A group rolls once, with the first member’s bonus, as its own initiative group."
-            }
-        }
-    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Initiative {
@@ -702,7 +678,7 @@ pub struct SavedRun<C = ()> {
 impl<C> SavedRun<C> {
     /// A run file's text as a run: of this campaign, or of any campaign when a folder is
     /// checked with no campaign open. Every reader of a run file comes through here.
-    pub fn parse(bytes: &[u8], campaign: Option<Uuid>) -> Result<Self, String> {
+    fn parse(bytes: &[u8], campaign: Option<Uuid>) -> Result<Self, String> {
         let saved: Self =
             serde_json::from_slice(bytes).map_err(|e| format!("Invalid saved run: {e}"))?;
         if campaign.is_none() && saved.version != 1 {
@@ -722,9 +698,21 @@ impl<C> SavedRun<C> {
         }
         Ok(saved)
     }
+
+    /// Read a run that can be reopened, of the given campaign when one is open.
+    pub fn reopen(bytes: &[u8], campaign: Option<Uuid>) -> Result<Self, String> {
+        let saved = Self::parse(bytes, campaign)?;
+        if saved.id.is_nil() {
+            return Err("Unsupported run version or wrong campaign.".into());
+        }
+        if !valid_state(&saved.state) {
+            return Err("Saved run state is invalid; its file has not been changed.".into());
+        }
+        Ok(saved)
+    }
 }
 /// What `Run::open` requires of a saved state, and of each state an Undo step gives back.
-pub fn valid_state<C>(state: &State<C>) -> bool {
+fn valid_state<C>(state: &State<C>) -> bool {
     let count = state.participants.len();
     let order: BTreeSet<_> = state.order.iter().copied().collect();
     count > 0
@@ -802,16 +790,29 @@ impl From<&Participant> for FightRow {
 
 /// Check the same saved-run model as normal loading, without opening a campaign.
 pub fn check_saved_text(text: &str) -> Result<(), String> {
-    SavedRun::<()>::parse(text.as_bytes(), None).map(drop)
+    SavedRun::<()>::reopen(text.as_bytes(), None).map(drop)
 }
 
-/// A saved run's file, within the size limit.
-pub fn read_saved<C>(path: &Path, campaign: Uuid) -> Result<SavedRun<C>, String> {
-    if fs::metadata(path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
-        return Err("Saved run exceeds the size limit.".into());
+/// A saved run's file, within the size limit, including a file that grows during the read.
+pub fn read_saved_bytes(path: &Path) -> Result<Vec<u8>, String> {
+    const LIMIT: u64 = 64 * 1024 * 1024;
+    let too_large = "Saved run exceeds the size limit.";
+    let file = fs::File::open(path).map_err(|error| error.to_string())?;
+    if file.metadata().map_err(|error| error.to_string())?.len() > LIMIT {
+        return Err(too_large.into());
     }
-    let bytes = fs::read(path).map_err(|e| e.to_string())?;
-    SavedRun::parse(&bytes, Some(campaign))
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 > LIMIT {
+        return Err(too_large.into());
+    }
+    Ok(bytes)
+}
+
+pub fn read_saved<C>(path: &Path, campaign: Uuid) -> Result<SavedRun<C>, String> {
+    SavedRun::reopen(&read_saved_bytes(path)?, Some(campaign))
 }
 
 /// How the players stood when this run was last saved.

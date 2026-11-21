@@ -152,8 +152,10 @@ pub fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             .to_string();
         let mut run_problems = Vec::new();
         let mut entry_flags = Vec::new();
-        let result = fs::read_to_string(&path)
-            .map_err(|e| e.to_string())
+        let result = crate::encounter_run::read_saved_bytes(&path)
+            .and_then(|bytes| {
+                String::from_utf8(bytes).map_err(|_| "stream did not contain valid UTF-8".into())
+            })
             .and_then(|text| {
                 let value: serde_json::Value =
                     serde_json::from_str(&text).map_err(|e| e.to_string())?;

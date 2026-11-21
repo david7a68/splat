@@ -270,27 +270,29 @@ pub fn recharge<C>(
 }
 
 /// The official name for these words, when they are one: `frightened` is `Frightened`.
-pub const CONDITION_NAMES: [&str; 15] = [
-    "Blinded",
-    "Charmed",
-    "Deafened",
-    "Exhaustion",
-    "Frightened",
-    "Grappled",
-    "Incapacitated",
-    "Invisible",
-    "Paralyzed",
-    "Petrified",
-    "Poisoned",
-    "Prone",
-    "Restrained",
-    "Stunned",
-    "Unconscious",
+/// The official names with the stable IDs used by sheet sync.
+pub const CONDITIONS: [(u64, &str); 15] = [
+    (1, "Blinded"),
+    (2, "Charmed"),
+    (3, "Deafened"),
+    (4, "Exhaustion"),
+    (5, "Frightened"),
+    (6, "Grappled"),
+    (7, "Incapacitated"),
+    (8, "Invisible"),
+    (9, "Paralyzed"),
+    (10, "Petrified"),
+    (11, "Poisoned"),
+    (12, "Prone"),
+    (13, "Restrained"),
+    (14, "Stunned"),
+    (15, "Unconscious"),
 ];
 
 fn official_name(name: &str) -> Option<&'static str> {
-    CONDITION_NAMES
+    CONDITIONS
         .into_iter()
+        .map(|(_, official)| official)
         .find(|official| same_condition(official, name))
 }
 

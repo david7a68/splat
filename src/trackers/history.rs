@@ -16,7 +16,7 @@ use crate::design::outcome::{FaultMessage, Messages, Outcome, Said, UndoStep, Ve
 use crate::design::{self, Action, Density, Gap, Type, colors};
 use crate::world::FooterAct;
 use eframe::egui;
-use ledger::{Entry, Ledger, Op};
+use ledger::{Entry, Ledger, Op, Placed};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -36,9 +36,6 @@ pub struct Row {
     pub words: String,
     pub value: Option<i64>,
 }
-
-/// Each entry a `Remove` took, with the entry it followed then, as read.
-type Placed = Vec<(Option<Entry>, Entry)>;
 
 /// The last `Remove`: the entries it took, each with the entry it followed, for its one Undo.
 #[derive(Clone, Debug, PartialEq)]
@@ -288,14 +285,17 @@ impl Trackers {
         let today = self.today.clone();
         let mut stale = false;
         let done = self.commit(|rules, ledger| {
-            let op = Op::Restore(removed.placed.clone());
-            let next = ledger.apply(&op).inspect_err(|_| stale = true)?;
-            if let Some(name) = orphaned(rules, &today, ledger, &next) {
-                return Err(format!(
-                    "{name} depends on the removal. Remove that first. Nothing was put back."
-                ));
-            }
-            Ok(op)
+            super::restore_op(rules, &today, ledger, removed.placed.clone()).map_err(
+                |why| match why {
+                    super::RestoreFault::Stale(words) => {
+                        stale = true;
+                        words
+                    }
+                    super::RestoreFault::Dependent(name) => format!(
+                        "{name} depends on the removal. Remove that first. Nothing was put back."
+                    ),
+                },
+            )
         });
         match done {
             Ok(()) => self.removed = None,
