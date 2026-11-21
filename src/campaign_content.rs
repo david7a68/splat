@@ -520,7 +520,8 @@ pub struct CampaignContent {
     pub found_package: Option<Module>,
     pub forget_package: Option<Uuid>,
     /// Issue #509: this frame wrote the open campaign's package choices (Save selections,
-    /// Remove from this campaign, Undo of a removal, Campaign.md written again or its Undo).
+    /// Remove from this campaign, Undo of a removal). Campaign.md written again from Splat's copy,
+    /// and its Undo, recover the file and reload this page only, as before.
     /// The app takes it after the page (`Splat::route`) and reads Lookup and Encounters again,
     /// so their searches follow what the campaign uses now.
     pub choices_written: bool,
@@ -1652,10 +1653,7 @@ impl CampaignContent {
     fn undo_result(&mut self, payload: &Payload) -> Result<(), ()> {
         match payload {
             Payload::CampaignWrite(write) => match write.undo() {
-                Ok(_) => {
-                    self.refresh_pending = true;
-                    self.wrote_choices();
-                }
+                Ok(_) => self.refresh_pending = true,
                 Err(error) => {
                     self.fail(Cause::Failed, undo_failed(&error));
                     return Err(());
@@ -1734,7 +1732,6 @@ impl CampaignContent {
             Ok(write) => {
                 new_result!(self, Payload::CampaignWrite(write));
                 self.refresh_pending = true;
-                self.wrote_choices();
             }
             Err(error) => self.fail_or_content(error),
         }
