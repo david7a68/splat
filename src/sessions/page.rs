@@ -770,7 +770,9 @@ pub struct Sessions {
     words_new_line: bool,
     /// A step of the run came between. The next word typed starts a line of its own.
     break_before_words: bool,
-    note_editor_id: Option<egui::Id>,
+    /// The note editor drawn last, and whose note it edits. Read it through
+    /// `note_editor_id`, which gives it only for the open note.
+    last_note_editor: Option<NoteEditor>,
     move_run_here: Option<(Uuid, String)>,
     /// The open run moved to another session, with `Undo move`.
     moves: design::Results<kept::Page, kept::Moved>,
@@ -1458,19 +1460,12 @@ fn insert_at_caret(
 
 /// Words the page adds to the open note (a reading's summary, a plan's link). It is the note's
 /// own edit, so the note's Undo history stays for when the DM goes back to it.
-pub(super) fn add_to_note(
-    ctx: &egui::Context,
-    editor: Option<egui::Id>,
-    draft: &mut Draft,
-    words: &str,
-) {
-    match editor {
-        Some(id) => {
-            design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
-        }
-        None => insert_in_note(&mut draft.body, words),
-    }
-    draft.edited();
+/// A note editor's id and its owner, the session whose note it edits (`Sessions::selected`
+/// when it drew). The page keeps the last one drawn.
+#[derive(Clone, Copy)]
+struct NoteEditor {
+    session: Option<Uuid>,
+    id: egui::Id,
 }
 
 /// Session numbers can repeat after a missing note is saved as a new file.
@@ -4765,6 +4760,8 @@ impl Sessions {
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn note_editor(&mut self, ui: &mut egui::Ui, in_panel: bool) {
+        // The cached editor, only while it is this note's.
+        let editor_id = self.note_editor_id();
         let Some(draft) = &mut self.draft else {
             let fault = PageFault::Failed(crate::sentence!("This note could not be opened."));
             let _ = PagePlaceholder::<()>::new(&fault).show(ui);
@@ -4812,7 +4809,7 @@ impl Sessions {
             }
         }
         if self.break_before_words
-            && let Some(id) = self.note_editor_id
+            && let Some(id) = editor_id
             && ui.ctx().memory(|memory| memory.has_focus(id))
         {
             let (typed, correcting) = ui.input(|i| {
@@ -4855,7 +4852,7 @@ impl Sessions {
             ))
             .corner_radius(design::RADIUS_CONTROL)
             .inner_margin(design::S);
-        self.slash.take_keys(ui, self.note_editor_id);
+        self.slash.take_keys(ui, editor_id);
         let index = ui.ctx().data(|data| {
             data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
                 "reader_link_index",
@@ -4967,7 +4964,10 @@ impl Sessions {
                             {
                                 self.tab = Tab::Plan;
                             }
-                            self.note_editor_id = Some(response.id);
+                            self.last_note_editor = Some(NoteEditor {
+                                session: self.selected,
+                                id: response.id,
+                            });
                             // A click chooses the place, so what is typed goes exactly there.
                             if focus || response.clicked() {
                                 self.break_before_words = false;
@@ -5048,7 +5048,10 @@ impl Sessions {
                     ui.data_mut(|data| {
                         data.insert_temp(
                             egui::Id::new("session_editor_proof"),
-                            (self.note_editor_id.unwrap(), output.state.offset),
+                            (
+                                self.last_note_editor.map(|editor| editor.id).unwrap(),
+                                output.state.offset,
+                            ),
                         )
                     });
                 });
@@ -5068,6 +5071,33 @@ impl Sessions {
 
     /// A button took the keyboard. It goes back to the panel, or to the page's editor if
     /// the DM was typing there.
+    /// The last drawn note editor's id, only while it edits the open note (`selected`). A
+    /// cached editor of another note (the DM moved to a note whose editor has not drawn yet)
+    /// is none, so this note's edit never moves another note's text guard (review of PR 594).
+    fn note_editor_id(&self) -> Option<egui::Id> {
+        self.last_note_editor
+            .filter(|editor| editor.session == self.selected)
+            .map(|editor| editor.id)
+    }
+
+    /// Words the page adds to the open note (a reading's summary, a plan's link). It is the
+    /// note's own edit, so the note's Undo history stays: its own editor's guard moves with it,
+    /// and no other note's (`note_editor_id`). False with no note open.
+    pub(super) fn add_to_note(&mut self, ctx: &egui::Context, words: &str) -> bool {
+        let editor = self.note_editor_id();
+        let Some(draft) = &mut self.draft else {
+            return false;
+        };
+        match editor {
+            Some(id) => {
+                design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
+            }
+            None => insert_in_note(&mut draft.body, words),
+        }
+        draft.edited();
+        true
+    }
+
     /// Words the DM typed in the run's Amount, going on with the note.
     pub fn words_for_note(&mut self, words: String) {
         self.words_for_note = words;
@@ -6577,9 +6607,8 @@ impl Sessions {
             self.reading = None;
         }
         if let Some(body) = add_to_notes
-            && let Some(draft) = &mut self.draft
+            && self.add_to_note(ui.ctx(), &body)
         {
-            add_to_note(ui.ctx(), self.note_editor_id, draft, &body);
             self.notice_session = None;
             self.notice = new_notice(
                 &mut self.notice_order,
@@ -9477,6 +9506,99 @@ mod tests {
             body(&harness).as_deref(),
             Some("## Plan\n"),
             "n0-template-owner: Ctrl+Z in Travel gave it the words typed in Downtime"
+        );
+    }
+
+    /// Review of PR 594 (Astra, second P1): words typed and erased in note A come back with
+    /// Ctrl+Z in A after the page added words to note B, whose body was A's and whose editor
+    /// had not drawn. The page's cached editor was still A's; B's edit must not move A's text
+    /// guard, and B keeps its words.
+    #[test]
+    fn a_note_keeps_its_undo_when_the_page_adds_words_to_another_note() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let new = |number| {
+            create_note(
+                dir.path(),
+                &NewNote {
+                    number,
+                    title: "",
+                    date: "2026-01-01",
+                    campaign: "Test",
+                    template: "## What happened\n",
+                },
+            )
+            .unwrap()
+        };
+        let (a, b) = (new(1), new(2));
+        let mut sessions = Sessions {
+            folder: Some(dir.path().to_path_buf()),
+            notes: vec![a.clone(), b.clone()],
+            ..Sessions::default()
+        };
+        sessions.select(Some(a.id));
+        // The harness draws the open note's editor, or no editor.
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(800.0, 600.0))
+            .build_state(
+                |ctx, (sessions, draw): &mut (Sessions, bool)| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        if *draw {
+                            sessions.note_editor(ui, false);
+                        }
+                    });
+                },
+                (sessions, true),
+            );
+        design::theme::install(&harness.ctx);
+        let body = |harness: &egui_kittest::Harness<'_, (Sessions, bool)>| {
+            harness
+                .state()
+                .0
+                .draft
+                .as_ref()
+                .map(|draft| draft.body.clone())
+                .unwrap_or_default()
+        };
+        harness.run_steps(2);
+        let left = body(&harness);
+        harness.get_by_label("Note text").focus();
+        harness.run_steps(2);
+        harness.get_by_label("Note text").type_text("Lost words");
+        harness.run_steps(8);
+        for _ in 0.."Lost words".len() {
+            harness.key_press(egui::Key::Backspace);
+        }
+        harness.run_steps(2);
+        assert_eq!(body(&harness), left, "A's words are typed and erased");
+        // To B without drawing its editor; B's body is what A's is now.
+        harness.state_mut().1 = false;
+        harness.state_mut().0.select(Some(b.id));
+        harness.run_steps(1);
+        assert_eq!(body(&harness), left, "the case: B's body is A's");
+        let ctx = harness.ctx.clone();
+        assert!(harness.state_mut().0.add_to_note(&ctx, "B’s summary."));
+        // Back to A, and Ctrl+Z in its editor.
+        harness.state_mut().0.select(Some(a.id));
+        harness.state_mut().1 = true;
+        harness.run_steps(2);
+        harness.get_by_label("Note text").focus();
+        harness.run_steps(2);
+        let mut undone = Vec::new();
+        while undone.len() < 4 && !body(&harness).contains("Lost words") {
+            harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+            harness.run_steps(2);
+            undone.push(body(&harness));
+        }
+        assert!(
+            body(&harness).contains("Lost words"),
+            "n0-note-owner: B’s edit kept A’s Undo history: {undone:?}"
+        );
+        assert!(
+            fs::read_to_string(&b.path)
+                .unwrap()
+                .contains("B’s summary."),
+            "n0-note-owner: B keeps its words"
         );
     }
 

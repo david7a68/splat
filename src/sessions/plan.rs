@@ -4882,10 +4882,12 @@ impl Sessions {
             ));
             self.open_event = None;
         }
-        if let (Some(link), Some(draft), Some(session)) = (insert, &mut self.draft, session) {
-            super::add_to_note(ui.ctx(), self.note_editor_id, draft, &link);
+        if let (Some(link), Some(session)) = (insert, session)
+            && self.add_to_note(ui.ctx(), &link)
+        {
+            let body = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
             self.mentions
-                .insert(session, timeline::referenced_ids(&draft.body));
+                .insert(session, timeline::referenced_ids(body));
             self.end_plan_add();
         }
     }
