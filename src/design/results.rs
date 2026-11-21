@@ -1238,6 +1238,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // DM's names in them (`Sentence::outside`).
         ("src/encounters/groups.rs", "cause", &[Ban::Words]),
         ("src/encounters/groups.rs", "member_fault_row", &[Ban::Body]),
+        // Ruling M20 (lane E1): the group editor's faults, typed; each replaces an untyped
+        // `design::message` or `small_message`.
+        ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
+        ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
@@ -1297,12 +1301,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "group_fields",
-            &[Ban::Extras(2)],
+            &[Ban::Extras(1)],
         ),
         (
             "src/encounters/groups.rs",
             "overrides_form",
-            &[Ban::Extras(1), Ban::RowKey(2)],
+            &[Ban::RowKey(2)],
         ),
         (
             "src/encounters/groups.rs",
