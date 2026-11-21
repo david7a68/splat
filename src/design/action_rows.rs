@@ -16,9 +16,7 @@ use super::{
     Action, Density, Status,
     tokens::{L, Type},
 };
-#[cfg(any(test, feature = "test-support"))]
-use egui::Id;
-use egui::{self, Rect, Ui, UiBuilder, pos2, vec2};
+use egui::{self, Id, Rect, Ui, UiBuilder, pos2, vec2};
 
 /// The largest gap between a row's facts and its action that is not a residual (ruling L2).
 #[cfg(any(test, feature = "test-support"))]

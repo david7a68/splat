@@ -4822,7 +4822,10 @@ mod tests {
             "A's draft was typed"
         );
         harness.get_by_label("Done with changes").click();
-        harness.run_steps(2);
+        // Layout PR 5b: closing A's form changes its facts; the members' column follows on the
+        // next frame (it is measured in the list's last pass, and egui draws again at once), so
+        // B's Changes is pressed once the column has settled.
+        harness.run_steps(3);
         harness.get_by_label("Changes for Wolf").click();
         harness.run_steps(2);
         harness.get_by_label("Other effect").click();

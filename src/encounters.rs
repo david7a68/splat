@@ -10571,11 +10571,17 @@ mod tests {
             })
             .reduce(f32::max)
             .expect("the roster draws a row rule");
-        for name in [
-            "More actions for Cinder Wolf",
-            "Roll on a table for the encounter",
-            "Read-aloud and notes",
-        ] {
+        // Layout PR 5b (I6): the row menu follows the roster's facts, within its rule.
+        let menu = harness
+            .query_all_by_label("More actions for Cinder Wolf")
+            .map(|node| node.rect().right())
+            .reduce(f32::max)
+            .unwrap();
+        assert!(
+            menu <= rule + 0.5,
+            "iter18-B-FD4: the row menu ends at {menu}, within the roster rule at {rule}"
+        );
+        for name in ["Roll on a table for the encounter", "Read-aloud and notes"] {
             // The field's caption carries the same name; the widest node is the control.
             let right = harness
                 .query_all_by_label(name)
