@@ -7,7 +7,6 @@ src/npc_generator.rs straight-apostrophe 3
 # the compiler finds every call, import and alias. Wave 2 moves each file to `design::outcome` and
 # deletes its line. When none is left, the old functions become private. A count raised together
 # with its allowance passes this test: a reviewer reads every raised line.
-src/campaigns.rs allow-deprecated 1
 src/copy_dialog.rs allow-deprecated 1
 src/dndbeyond.rs allow-deprecated 1
 src/encounter_run/notice.rs allow-deprecated 1
@@ -20,16 +19,13 @@ src/library/view.rs allow-deprecated 1
 src/lookup.rs allow-deprecated 1
 src/loot_editor.rs allow-deprecated 1
 src/sessions/carry.rs allow-deprecated 1
-src/sessions/page.rs allow-deprecated 1
 src/sessions/plan.rs allow-deprecated 1
 src/sessions/slash.rs allow-deprecated 1
 src/timeline/page.rs allow-deprecated 1
 src/world.rs allow-deprecated 1
-src/world/page.rs allow-deprecated 1
 # Phrases outside their owner: the stat block's printed XP (core) is the creature's, not an
 # encounter's; the others move to their owner in Wave 2.
 crates/content/src/content/stat_blocks.rs phrase-owner 2
-src/campaign_content.rs phrase-owner 1
 src/content_ui/src/roster.rs phrase-owner 2
 src/session_records/src/rewards.rs phrase-owner 2
 src/sessions/plan.rs phrase-owner 1

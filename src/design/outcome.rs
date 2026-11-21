@@ -1068,8 +1068,21 @@ macro_rules! choice {
 // Choices and presses
 
 /// An action that follows a message's words, by what it does. The weight comes from the kind:
-/// a `Choice` is bordered, a `Lose` is red with exactly `L` before it, a `Link` is a link. An
-/// Undo is not a choice: it is the message's `UndoStep`, always quiet with its icon, and first.
+/// a `Choice` is bordered, a `Primary` is filled, a `Lose` is red with exactly `L` before it, a
+/// `Link` is a link. An Undo is not a choice: it is the message's `UndoStep`, always quiet with
+/// its icon, and first.
+///
+/// `Primary` is the one act the DM most likely takes next where nothing else on the screen is
+/// primary (a recording alert's `Record again`, an empty panel's `New session`). A message has at
+/// most one; it stands among the safe choices in the caller's order. Which message of a place
+/// holds the screen's one primary is the caller's choice; the others say the same act with
+/// `Choice`.
+///
+/// ```
+/// use splat_design::outcome::{Choice, MessageChoice, Notice};
+/// let _ = Notice::new(splat_design::sentence!("No session yet."))
+///     .choice(Choice::new(MessageChoice::Primary("New session"), 1));
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 ///
 /// `Dismiss` is the close icon. The part puts it at the right end of the message's first line,
@@ -1091,6 +1104,7 @@ macro_rules! choice {
 /// ```
 pub enum MessageChoice<'a> {
     Choice(&'a str),
+    Primary(&'a str),
     Lose(&'a str),
     Link {
         word: &'a str,
@@ -1616,6 +1630,7 @@ pub struct FaultMessage<A> {
     words: Sentence,
     choices: Vec<Choice<A>>,
     file: Option<FileLine>,
+    hover: Option<String>,
 }
 
 impl<A> FaultMessage<A> {
@@ -1625,11 +1640,20 @@ impl<A> FaultMessage<A> {
             words: fault_words(fault),
             choices: Vec::new(),
             file: None,
+            hover: None,
         }
     }
 
     pub fn choice(mut self, choice: Choice<A>) -> Self {
         self.choices.push(choice);
+        self
+    }
+
+    /// What the system itself said (a recorder's own error), on hover over the fault's words:
+    /// the words stay the app's plain ones, and the DM can still read the system's. Data, never
+    /// instructions to the DM (N0, ruling M21).
+    pub fn hover(mut self, said: String) -> Self {
+        self.hover = Some(said);
         self
     }
 
@@ -2059,6 +2083,8 @@ struct Body {
     helps: Vec<Option<Sentence>>,
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
+    /// What the system itself said, on hover over the words (`FaultMessage::hover`).
+    words_hover: Option<String>,
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
     /// paints `UndoStep::alone` for its room, else `UndoStep::fit`.
     undo_alone: bool,
@@ -2122,6 +2148,15 @@ impl<A> Typed<A> {
         // Safe first: a choice that loses something follows every other (a stable order).
         let mut choices = choices;
         choices.sort_by_key(|choice| matches!(choice.what, MessageChoice::Lose(_)));
+        // One primary at most: it is the message's one commit (a test build refuses a second).
+        debug_assert!(
+            choices
+                .iter()
+                .filter(|choice| matches!(choice.what, MessageChoice::Primary(_)))
+                .count()
+                <= 1,
+            "a message has at most one primary choice"
+        );
         for choice in choices {
             whats.push(choice.what);
             named.push(choice.named);
@@ -2142,6 +2177,7 @@ impl<A> Typed<A> {
                 hovers,
                 helps,
                 file: None,
+                words_hover: None,
                 undo_alone: false,
             },
             undo: undo_id,
@@ -2152,6 +2188,12 @@ impl<A> Typed<A> {
     /// With the file it is about.
     fn with_file(mut self, file: Option<FileLine>) -> Self {
         self.body.file = file;
+        self
+    }
+
+    /// With what the system itself said, on hover over the words.
+    fn with_hover(mut self, hover: Option<String>) -> Self {
+        self.body.words_hover = hover;
         self
     }
 
@@ -2179,7 +2221,9 @@ impl<A> Outcome<A> {
             ),
             Self::Fault(fault) => (
                 FooterRank::Reason,
-                Typed::new(fault.tone, fault.words, None, fault.choices).with_file(fault.file),
+                Typed::new(fault.tone, fault.words, None, fault.choices)
+                    .with_file(fault.file)
+                    .with_hover(fault.hover),
             ),
         }
     }
@@ -2216,7 +2260,9 @@ impl<A> KeptOutcome<A> {
             }
             Self::Offer(offer) => Typed::new(Tone::Info, offer.words, None, offer.choices),
             Self::Fault(fault, undo) => {
-                Typed::new(fault.tone, fault.words, Some(undo), fault.choices).with_file(fault.file)
+                Typed::new(fault.tone, fault.words, Some(undo), fault.choices)
+                    .with_file(fault.file)
+                    .with_hover(fault.hover)
             }
         }
     }
@@ -2482,6 +2528,20 @@ pub struct Press<A> {
     pub ticket: Option<Ticket>,
 }
 
+/// The footer line a press came from, for an answer to that press (`Messages::answer`): a copy
+/// of the line's identity that cannot act, kept by the answer's owner while the answer stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PressedLine(ResultOrder);
+
+impl<A> Press<A> {
+    /// The kept line this press came from, if it came from one.
+    pub fn line(&self) -> Option<PressedLine> {
+        self.ticket
+            .as_ref()
+            .map(|ticket| PressedLine(ticket.order()))
+    }
+}
+
 /// What a pane's body returned, and the one footer press of this frame. At most one press
 /// comes back per pane and frame: the first in the footer's drawing order (newest result first,
 /// then reasons, then notices) wins, and a second in the same frame is dropped.
@@ -2580,6 +2640,8 @@ struct FooterLine<A> {
     ticket: Option<Ticket>,
     /// A refused attempt's line, whose place waits for the footer's newest act order.
     refused: bool,
+    /// The answer to a press of a kept line: that line's order (`Messages::answer`).
+    under: Option<ResultOrder>,
 }
 
 impl<'f, A: 'static> Messages<'f, A> {
@@ -2606,6 +2668,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             typed,
             ticket: None,
             refused: false,
+            under: None,
         });
         self
     }
@@ -2614,7 +2677,14 @@ impl<'f, A: 'static> Messages<'f, A> {
     /// holds as its newest answer and ends at the next act. It comes first in the footer, before
     /// every kept result, which are answers to older acts. One per footer (a second is refused in
     /// debug builds and tests); Clippy refuses it outside a counted use (`Ban::Answer`).
-    pub fn answer(&mut self, fault: FaultMessage<A>) -> &mut Self {
+    ///
+    /// `under`: the act was a press of a kept line of this footer (`Press::line`). While the
+    /// footer follows its content (its top stays and it grows down), the answer stands directly
+    /// under that line, so the line the DM pressed keeps its place under the pointer (layout step
+    /// 7, Astra's P1 on PR 619); pinned (its bottom stays and it grows up), it comes first. Give
+    /// `under` only when no answer stood in this footer before the press: an answer that replaces
+    /// one takes its first place, so the lines below move by no more than the change of height.
+    pub fn answer(&mut self, fault: FaultMessage<A>, under: Option<PressedLine>) -> &mut Self {
         debug_assert!(
             !self.answered,
             "a footer holds one answer to the DM's last act"
@@ -2627,6 +2697,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             typed,
             ticket: None,
             refused: false,
+            under: under.map(|line| line.0),
         });
         self
     }
@@ -2650,6 +2721,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             typed,
             ticket: Some(ticket),
             refused: refused.is_some(),
+            under: None,
         });
         self
     }
@@ -2841,6 +2913,9 @@ struct PlanEnv {
     style: std::sync::Arc<egui::Style>,
     /// The fonts in effect (`font_key`): new fonts, or a family's font replaced, plan again.
     fonts: u64,
+    /// The footer followed its content in the last pass (`pane::footer_follows`): an answer to a
+    /// pressed line stands under it (`Messages::answer`).
+    follows: bool,
 }
 
 /// One line as the plan sees it: what decides its place and its size. A press's id is not in
@@ -2851,6 +2926,7 @@ struct PlanLine {
     rank: FooterRank,
     order: Option<ResultOrder>,
     ticket: Option<ResultOrder>,
+    under: Option<ResultOrder>,
     body: Body,
     file_gone: bool,
 }
@@ -2860,6 +2936,7 @@ impl PlanLine {
         self.rank == line.rank
             && self.order == line.order
             && self.ticket == line.ticket.as_ref().map(Ticket::order)
+            && self.under == line.under
             && self.file_gone == file_gone
             && self.body == line.typed.body
     }
@@ -3055,6 +3132,7 @@ impl<A: 'static> TypedFooter<A> {
                             rank: line.rank,
                             order: line.order,
                             ticket: line.ticket.as_ref().map(Ticket::order),
+                            under: line.under,
                             body: line.typed.body.clone(),
                             file_gone,
                         })
@@ -3069,13 +3147,14 @@ impl<A: 'static> TypedFooter<A> {
         })
     }
 
-    fn env(ui: &Ui, lines: super::memo::Revision, width: f32) -> PlanEnv {
+    fn env(ui: &Ui, id: egui::Id, lines: super::memo::Revision, width: f32) -> PlanEnv {
         PlanEnv {
             lines,
             width: width.to_bits(),
             scale: ui.ctx().pixels_per_point().to_bits(),
             style: ui.style().clone(),
             fonts: font_key(ui.ctx()),
+            follows: super::pane::footer_follows(ui.ctx(), id),
         }
     }
 
@@ -3105,15 +3184,21 @@ impl<A: 'static> TypedFooter<A> {
                     .data(|data| data.get_temp::<egui::Id>(egui::Id::new("design_footer_drawing")));
                 let id = egui::Id::new(("design_kept_line", pane, ticket.order()));
                 line_ui(ui, Some(id), |ui| {
-                    typed
-                        .body
-                        .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
+                    typed.body.draw_in(
+                        ui,
+                        MessagePlace::Footer,
+                        Reasons::Planned(room),
+                        IconRoom::Measured,
+                    )
                 })
             }
             None => line_ui(ui, None, |ui| {
-                typed
-                    .body
-                    .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
+                typed.body.draw_in(
+                    ui,
+                    MessagePlace::Footer,
+                    Reasons::Planned(room),
+                    IconRoom::Measured,
+                )
             }),
         };
         if let Some(pressed) = pressed
@@ -3132,7 +3217,7 @@ impl<A: 'static> TypedFooter<A> {
             Some(retained) => retained,
             None => self.revision(ui.ctx(), id),
         };
-        let env = Self::env(ui, retained.revision, width);
+        let env = Self::env(ui, id, retained.revision, width);
         if let Some(plan) = retained.plan.as_ref().filter(|plan| plan.env == env) {
             let plan = plan.clone();
             self.retained = Some(retained);
@@ -3163,6 +3248,19 @@ impl<A: 'static> TypedFooter<A> {
         let lines = &self.lines;
         let mut order: Vec<usize> = (0..lines.len()).collect();
         order.sort_by_key(|&at| (lines[at].rank, lines[at].order.map(std::cmp::Reverse)));
+        // An answer to a press of a kept line, in a footer that follows its content, stands
+        // directly under that line, so the pressed line keeps its place (`Messages::answer`).
+        if env.follows
+            && let Some(answer) = order.iter().position(|&at| lines[at].under.is_some())
+            && let Some(pressed) = lines[order[answer]].under
+            && let Some(line) = order
+                .iter()
+                .position(|&at| lines[at].ticket.as_ref().map(Ticket::order) == Some(pressed))
+        {
+            let moved = order.remove(answer);
+            let after = if line > answer { line } else { line + 1 };
+            order.insert(after, moved);
+        }
         count(|work| {
             work.plans += 1;
             work.sorted += order.len();
@@ -3217,7 +3315,12 @@ impl<A: 'static> TypedFooter<A> {
                             .as_ref()
                             .map(|ticket| egui::Id::new(("design_kept_line", id, ticket.order())));
                         let _ = line_ui(ui, scope, |ui| {
-                            body.draw_in(ui, MessagePlace::Footer, Reasons::Planned(&mut room))
+                            body.draw_in(
+                                ui,
+                                MessagePlace::Footer,
+                                Reasons::Planned(&mut room),
+                                IconRoom::Measured,
+                            )
                         });
                     }
                 });
@@ -3685,15 +3788,17 @@ impl Body {
     /// line; the words and the other choices keep the room to its left. A locked `Dismiss` is
     /// disabled, with its reason, as every blocked action is.
     fn draw(&self, ui: &mut Ui, place: MessagePlace) -> Option<Pressed> {
-        self.draw_in(ui, place, Reasons::Body)
+        self.draw_in(ui, place, Reasons::Body, IconRoom::Measured)
     }
 
-    /// `draw`, with its reasons' room as `reasons` says.
+    /// `draw`, with its reasons' room as `reasons` says, and the close icon's target in the
+    /// message's rect (`Measured`) or reaching into the padding around it (`Overhang`).
     fn draw_in(
         &self,
         ui: &mut Ui,
         place: MessagePlace,
         mut reasons: Reasons<'_>,
+        icon_room: IconRoom,
     ) -> Option<Pressed> {
         let Some(at) = self
             .choices
@@ -3706,7 +3811,7 @@ impl Body {
         };
         let lock = self.locks.get(at).and_then(holding);
         let mut pressed = None;
-        let icon = dismiss_at_first_line(ui, lock, IconRoom::Measured, |ui| {
+        let icon = dismiss_at_first_line(ui, lock, icon_room, |ui| {
             self.draw_words(ui, place, &mut pressed, &mut reasons)
         });
         // The words and their controls are drawn before the close icon: they come first.
@@ -3868,6 +3973,14 @@ impl Body {
             .filter(|(_, choice)| !matches!(choice, MessageChoice::Dismiss(_)))
     }
 
+    /// The words' response, with what the system itself said on hover (`words_hover`).
+    fn hovered(&self, words: Response) -> Response {
+        match &self.words_hover {
+            Some(said) => words.on_hover_text(said.as_str()),
+            None => words,
+        }
+    }
+
     /// The words, capped at `LIST_MEASURE`; an Undo alone beside them when it fits, else under
     /// them at their first letter; with choices, the Undo and then the choices on rows under the
     /// words, from their first letter. A locked Undo or choice is disabled, with its reason as
@@ -3888,7 +4001,9 @@ impl Body {
                 if self.row_choices().next().is_none() {
                     match &self.undo {
                         None => {
-                            line = first_line_centre(&tone_message(ui, self.tone, words));
+                            line = first_line_centre(
+                                &self.hovered(tone_message(ui, self.tone, words)),
+                            );
                         }
                         Some(step) => {
                             let form = self.undo_form(ui, step, reasons);
@@ -3911,7 +4026,7 @@ impl Body {
                     self.reasons(ui, reasons);
                     return;
                 }
-                let message = tone_message(ui, self.tone, words);
+                let message = self.hovered(tone_message(ui, self.tone, words));
                 line = first_line_centre(&message);
                 self.file_line(ui);
                 let inset = message.rect.left() - ui.cursor().left();
@@ -4111,6 +4226,9 @@ impl Body {
             MessageChoice::Choice(word) => Action::secondary(word)
                 .density(Density::Read)
                 .natural_width(ui),
+            MessageChoice::Primary(word) => Action::primary(word)
+                .density(Density::Read)
+                .natural_width(ui),
             MessageChoice::Lose(word) => {
                 Action::destructive(word)
                     .density(Density::Read)
@@ -4176,6 +4294,12 @@ impl Body {
             }
             (MessageChoice::Choice(word), None) => Some(
                 Action::secondary(word)
+                    .density(Density::Read)
+                    .blocked(lock)
+                    .show(ui),
+            ),
+            (MessageChoice::Primary(word), None) => Some(
+                Action::primary(word)
                     .density(Density::Read)
                     .blocked(lock)
                     .show(ui),
@@ -4479,14 +4603,16 @@ pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
 pub struct BodyMessage<A> {
     form: BodyForm<A>,
     compact: bool,
+    /// Drawn in a banner with padding: the close icon reaches into it (`in_padding`).
+    overhang: bool,
     /// The whole words behind fitted ones: the words' accessible name and hover.
     detail: Option<String>,
 }
 
 enum BodyForm<A> {
     Full(Outcome<A>),
-    /// A finished change with no way back (`result`).
-    Result(Typed<A>),
+    /// A finished change with no way back (`result`). Boxed: a typed message is the largest form.
+    Result(Box<Typed<A>>),
     RowRepair {
         tone: Tone,
         words: Sentence,
@@ -4512,8 +4638,18 @@ impl<A> BodyMessage<A> {
         Self {
             form,
             compact: false,
+            overhang: false,
             detail: None,
         }
+    }
+
+    /// In a banner with padding (the Sessions bottom banner): the close icon's target, taller
+    /// than the words' first line, reaches into the padding, so the message's height stays its
+    /// words' and choices', as `dismiss_on_first_line` places it (`IconRoom::Overhang`). Without
+    /// it, the target is part of the message's rect, as in a footer.
+    pub fn in_padding(mut self) -> Self {
+        self.overhang = true;
+        self
     }
 
     /// A list row with one repair. The button shares the fault's line when both fit.
@@ -4530,12 +4666,12 @@ impl<A> BodyMessage<A> {
     /// in the success tone, with its choices and no way back: it has no Undo and no ticket, so
     /// a result whose Undo the DM may press stays a kept line in its footer.
     pub fn result(words: Sentence, choices: impl IntoIterator<Item = Choice<A>>) -> Self {
-        Self::of(BodyForm::Result(Typed::new(
+        Self::of(BodyForm::Result(Box::new(Typed::new(
             Tone::Success,
             words,
             None,
             choices.into_iter().collect(),
-        )))
+        ))))
     }
 
     /// The compact form, at the size of a row's message (`small_message`): `Small` words with
@@ -4560,7 +4696,7 @@ impl<A> BodyMessage<A> {
     pub fn show(self, ui: &mut Ui) -> Option<A> {
         let typed = match self.form {
             BodyForm::Full(message) => message.parts().1,
-            BodyForm::Result(typed) => typed,
+            BodyForm::Result(typed) => *typed,
             BodyForm::RowRepair {
                 tone,
                 words,
@@ -4577,7 +4713,14 @@ impl<A> BodyMessage<A> {
                 .body
                 .draw_compact(ui, MessagePlace::Page, self.detail.as_deref())?
         } else {
-            typed.body.draw(ui, MessagePlace::Page)?
+            let room = if self.overhang {
+                IconRoom::Overhang
+            } else {
+                IconRoom::Measured
+            };
+            typed
+                .body
+                .draw_in(ui, MessagePlace::Page, Reasons::Body, room)?
         };
         typed.id(pressed)
     }
@@ -4720,6 +4863,117 @@ fn action_help(
     line.rect
 }
 
+/// A message whose one choice opens an inline creation form in its place (Library's "This folder
+/// is a copy of …" with `Register as a new package`, then `Register a copy`). Closed, the fault
+/// and its choice, drawn as a [`BodyFault`] with one [`Repair`]; a press opens it. Open, the fault
+/// stays, the title (if any) and the form follow under it, in place, and the form's Cancel closes
+/// it. The caller keeps `open` and gives the form as a typed
+/// [`InlineCreate`](super::layout::InlineCreate), never a closure that draws. A body place: `show`
+/// is a reviewed suppression (`Ban::Body`).
+#[must_use = "call show"]
+pub struct FormOpener<'o> {
+    tone: Tone,
+    words: Sentence,
+    choice: ChoiceWords,
+    lock: Lock,
+    title: Option<&'static str>,
+    open: &'o mut bool,
+}
+
+/// What the DM did with a [`FormOpener`] this frame.
+#[derive(Debug, Default)]
+pub struct Opened {
+    /// The choice opened the form (it draws from the next frame).
+    pub opened: bool,
+    /// The open form's response; `None` while it is closed.
+    pub form: Option<super::layout::InlineCreateResponse>,
+}
+
+impl<'o> FormOpener<'o> {
+    /// The fault, the choice's words that open the form, and the caller's open state.
+    pub fn new(fault: &dyn Fault, choice: impl Into<ChoiceWords>, open: &'o mut bool) -> Self {
+        Self {
+            tone: fault.severity().tone(),
+            words: fault_words(fault),
+            choice: choice.into(),
+            lock: None,
+            title: None,
+            open,
+        }
+    }
+
+    /// The open form's title, a group heading above it (`Register a copy`).
+    pub fn title(mut self, title: &'static str) -> Self {
+        self.title = Some(title);
+        self
+    }
+
+    /// The choice is locked for as long as it is drawn, for `reason`.
+    pub fn blocked(mut self, reason: Sentence) -> Self {
+        self.lock = Some((reason, true));
+        self
+    }
+
+    /// The choice is locked while `locked`, for `reason`; the reason's line is kept while open.
+    pub fn locked_when(mut self, locked: bool, reason: Sentence) -> Self {
+        self.lock = Some((reason, locked));
+        self
+    }
+
+    /// Draw it at the cursor: closed, the fault and its choice; open, the fault, the title and
+    /// `form`.
+    pub fn show<R: super::layout::CreateReasons>(
+        self,
+        ui: &mut Ui,
+        form: super::layout::InlineCreate<'_, super::layout::Complete, R>,
+    ) -> Opened {
+        let Self {
+            tone,
+            words,
+            choice,
+            lock,
+            title,
+            open,
+        } = self;
+        if !*open {
+            let repair = Repair {
+                words: choice,
+                help: None,
+                lock,
+                id: (),
+            };
+            let opened = BodyFault {
+                tone,
+                words,
+                repairs: vec![repair],
+                whole: None,
+            }
+            .draw(ui)
+            .is_some();
+            *open = opened;
+            return Opened { opened, form: None };
+        }
+        let _ = BodyFault::<()> {
+            tone,
+            words,
+            repairs: Vec::new(),
+            whole: None,
+        }
+        .draw(ui);
+        if let Some(title) = title {
+            super::heading(ui, super::Heading::Group { title, count: 0 });
+        }
+        let response = form.show(ui);
+        if response.cancel {
+            *open = false;
+        }
+        Opened {
+            opened: false,
+            form: Some(response),
+        }
+    }
+}
+
 /// A fault in a page's body that the DM can repair from where it is (Campaign content's package
 /// and dependency faults): the fault's words and tone, then each [`Repair`] on its own line from
 /// the words, with its lock's reason and its help line under it. Its tone and words come from the
@@ -4732,6 +4986,8 @@ pub struct BodyFault<A> {
     tone: Tone,
     words: Sentence,
     repairs: Vec<Repair<A>>,
+    /// The whole sentence when the words quote a value cut around `…` (`whole`).
+    whole: Option<String>,
 }
 
 impl<A> BodyFault<A> {
@@ -4740,7 +4996,16 @@ impl<A> BodyFault<A> {
             tone: fault.severity().tone(),
             words: fault_words(fault),
             repairs: Vec::new(),
+            whole: None,
         }
+    }
+
+    /// The whole sentence when the fault's words quote a value cut around `…` (World's unread
+    /// values, round 25 FD4): the words' hover and accessible description, so a screen reader
+    /// and the pointer reach the value whole.
+    pub fn whole(mut self, whole: impl Into<String>) -> Self {
+        self.whole = Some(whole.into());
+        self
     }
 
     pub fn repair(mut self, repair: Repair<A>) -> Self {
@@ -4750,17 +5015,29 @@ impl<A> BodyFault<A> {
 
     /// Draw it at the cursor, capped at `LIST_MEASURE`; the caller's id of the repair pressed.
     pub fn show(self, ui: &mut Ui) -> Option<A> {
+        self.draw(ui)
+    }
+
+    /// `show`'s drawing, for the design's own body places (`FormOpener`).
+    fn draw(self, ui: &mut Ui) -> Option<A> {
         let Self {
             tone,
             words,
             repairs,
+            whole,
         } = self;
         let mut pressed = None;
         let response = ui
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
                 let text = words.as_str();
-                tone_message(ui, tone, text);
+                let message = tone_message(ui, tone, text);
+                if let Some(whole) = whole.filter(|whole| whole != text) {
+                    ui.ctx().accesskit_node_builder(message.id, |node| {
+                        node.set_description(whole.clone())
+                    });
+                    let _ = message.on_hover_text(whole);
+                }
                 for (at, repair) in repairs.iter().enumerate() {
                     let lock = holding(&repair.lock);
                     let action = message_choice_row(ui, tone, |ui| {
@@ -5972,6 +6249,27 @@ mod tests {
     /// data. A press comes back once, as the caller's id; a locked repair paints its reason and
     /// gives nothing back; a long object is cut inside the fault's width at 320 px while the
     /// accessible name keeps the whole words; each help line sits under its repair.
+    /// N0 (ruling M21): a message holds at most one primary choice.
+    #[test]
+    #[should_panic(expected = "a message has at most one primary choice")]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the body place `BodyMessage::show` itself"
+    )]
+    fn a_message_has_at_most_one_primary_choice() {
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let _ = BodyMessage::from(
+                    Notice::new(crate::sentence!("No session yet."))
+                        .choice(Choice::new(MessageChoice::Primary("New session"), 1))
+                        .choice(Choice::new(MessageChoice::Primary("Record again"), 2)),
+                )
+                .show(ui);
+            });
+        });
+    }
+
     #[test]
     #[allow(
         clippy::disallowed_methods,
@@ -5984,6 +6282,7 @@ mod tests {
             Open,
             Replace,
             Repair(u8),
+            Record,
             Log,
             Dismiss,
         }
@@ -6028,10 +6327,14 @@ mod tests {
                                 ))
                                 .show(ui);
                             state.pressed.extend(pressed);
-                            // A typed message in the body (`BodyMessage`): a warning with a
-                            // link and its close icon.
+                            // A typed message in the body (`BodyMessage`): a warning with its
+                            // primary choice, a link and its close icon.
                             let pressed = BodyMessage::from(
                                 Notice::warning(crate::sentence!("Kaya’s sheet changed."))
+                                    .choice(Choice::new(
+                                        MessageChoice::Primary("Record again"),
+                                        Fix::Record,
+                                    ))
                                     .choice(Choice::new(
                                         MessageChoice::Link {
                                             word: "Log",
@@ -6144,13 +6447,27 @@ mod tests {
             .map(|(_, _, tone)| tone)
             .collect();
         assert_eq!(tones, [Tone::Warning], "the notice's tone");
+        // N0 (ruling M21): its primary choice is filled, under the words at their first letter.
+        let record = h.get_by_label("Record again").rect();
+        let filled = h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Rect(rect)
+                if rect.fill == colors().accent_fill && rect.rect.expand(1.0).contains_rect(record))
+        });
+        assert!(
+            filled
+                && record.top() >= words.bottom() - 1.0
+                && (record.left() - words.left()).abs() <= 1.0,
+            "n0-primary-choice: the primary is filled, under the words at their first letter: {record:?} {words:?}"
+        );
+        h.get_by_label("Record again").click();
+        h.run_steps(2);
         h.get_by_label("Log").click();
         h.run_steps(2);
         h.get_by_label(DISMISS_NAME).click();
         h.run_steps(2);
         assert_eq!(
             h.state().pressed,
-            [Fix::Log, Fix::Dismiss],
+            [Fix::Record, Fix::Log, Fix::Dismiss],
             "each press once"
         );
 
@@ -6267,6 +6584,34 @@ mod tests {
             );
         }
 
+        // N0 (ruling M21): a fault's words can carry what the system itself said, on hover
+        // (`FaultMessage::hover`: a recorder's own error); the words stay the app's.
+        const SAID: &str = "The recorder said: device busy.";
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(600.0, 300.0))
+            .build_ui(|ui| {
+                let fault = Hp(Severity::CannotRead, None);
+                let _ = BodyMessage::from(
+                    FaultMessage::new(&fault)
+                        .hover(SAID.to_owned())
+                        .choice(Choice::new(MessageChoice::Choice("Record again"), 1_u8)),
+                )
+                .show(ui);
+            });
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(2);
+        let fault_words = fault_words(&Hp(Severity::CannotRead, None));
+        h.get_by_role_and_label(egui::accesskit::Role::Label, fault_words.as_str())
+            .hover();
+        h.run_steps(30);
+        let said = h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == SAID)
+        });
+        assert!(
+            said,
+            "n0-fault-hover: the words' hover says what the system said"
+        );
+
         // Review of PR 332, 4: narrower than the shortest cut, the words wrap inside the row;
         // every fixed word is painted, none is cut.
         const WHOLE: &str = "Repair Ravenholm in Library";
@@ -6300,6 +6645,90 @@ mod tests {
         });
         assert!(wrapped, "the whole words, wrapped, nothing cut");
         assert!(node.right() <= *h.state() + 0.5, "inside the row: {node:?}");
+
+        // M-P0 item 6 (Library's `Register a copy`, M0346): a fault whose one choice opens an
+        // inline creation form in its place. Closed, its choice and no form; the choice opens
+        // the form under the fault and its title; the form's Cancel closes it; locked, the
+        // choice opens nothing.
+        #[derive(Default)]
+        struct Form {
+            open: bool,
+            locked: bool,
+            name: String,
+            opened: usize,
+        }
+        const REGISTER: crate::design::layout::Word = crate::word!("Register");
+        const CANCEL: crate::design::layout::Word = crate::word!("Cancel");
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(960.0, 600.0))
+            .build_ui_state(
+                |ui, form: &mut Form| {
+                    let fault = Hp(Severity::NeedsFixing, None);
+                    let mut opener =
+                        FormOpener::new(&fault, "Register as a new package", &mut form.open)
+                            .title("Register a copy");
+                    if form.locked {
+                        opener = opener.blocked(LOCK);
+                    }
+                    let shown = opener.show(
+                        ui,
+                        crate::design::layout::InlineCreate::new()
+                            .field(crate::design::layout::CreateField::new(
+                                crate::field_id!("test_opener_name")
+                                    .once(crate::design::layout::Once::Example),
+                                "New package name",
+                                &mut form.name,
+                            ))
+                            .create(
+                                crate::design::layout::Create::primary(REGISTER)
+                                    .blocked(None::<crate::design::layout::NoReason>),
+                            )
+                            .kept_line(crate::design::layout::KeptLine::new().cancel(CANCEL, true)),
+                    );
+                    form.opened += usize::from(shown.opened);
+                },
+                Form::default(),
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(3);
+        // A caption and its field share a name: any node with it.
+        let has = |h: &Harness<'_, Form>, name: &str| h.query_all_by_label(name).next().is_some();
+        assert!(
+            has(&h, "Register as a new package") && !has(&h, "New package name"),
+            "closed: the choice, no form"
+        );
+        h.get_by_label("Register as a new package").click();
+        h.run_steps(3);
+        assert!(
+            h.state().open
+                && h.state().opened == 1
+                && has(&h, "New package name")
+                && has(&h, "Register")
+                && !has(&h, "Register as a new package"),
+            "the choice opens the form in its place"
+        );
+        assert!(
+            h.query_by_role_and_label(
+                egui::accesskit::Role::Label,
+                "Cinder Wolf: The HP is missing."
+            )
+            .is_some(),
+            "the fault stays above the open form"
+        );
+        h.get_by_label("Cancel").click();
+        h.run_steps(3);
+        assert!(
+            !h.state().open && has(&h, "Register as a new package") && !has(&h, "New package name"),
+            "Cancel closes the form"
+        );
+        h.state_mut().locked = true;
+        h.run_steps(2);
+        h.get_by_label("Register as a new package").click();
+        h.run_steps(3);
+        assert!(
+            !h.state().open && h.state().opened == 1,
+            "locked, the choice opens nothing"
+        );
     }
 
     /// The pane's one press: the first in the footer's drawing order wins, and a second press

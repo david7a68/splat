@@ -23,8 +23,8 @@ use crate::{
     design::{
         self, Action, Density, Tone, Type, colors,
         outcome::{
-            Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice, Outcome,
-            PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+            BodyFault, Choice, ChoiceWords, Fault, FaultMessage, KeptOutcome, MessageChoice,
+            Messages, Notice, Outcome, PaneFrame, Repair, Said, Sentence, Severity, UndoStep, Verb,
         },
         reader as style,
     },
@@ -760,10 +760,12 @@ fn empty_optional(value: &Value) -> bool {
     value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty())
 }
 
-/// The message's action starts at its words, below them, as every message action does.
+/// An unread value's warning with its repair, `Edit in Obsidian`, in the reader's body (M0580,
+/// rulings M20 and M23: round 9 FD4's quiet link beside the words is now a repair under them).
+/// Its words keep the whole sentence on hover and for a screen reader (round 25 FD4).
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    reason = "a body fault in the reader, with its repair (ruling M20)"
 )]
 fn unread_groups_message(
     ui: &mut egui::Ui,
@@ -772,21 +774,11 @@ fn unread_groups_message(
     reason: &str,
     whole: &str,
 ) {
-    // `design::message_with_actions`'s layout, with the message's own response kept: its words
-    // carry the whole sentence's hover and description (round 25 FD4).
-    let open = ui
-        .scope(|ui| {
-            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            let response = design::message(ui, Tone::Warning, reason);
-            whole_value(ui, &response, reason, whole);
-            let inset = response.rect.left() - ui.cursor().left();
-            ui.horizontal_top(|ui| {
-                ui.add_space(inset);
-                design::link(ui, "Edit in Obsidian").clicked()
-            })
-            .inner
-        })
-        .inner;
+    let open = BodyFault::new(&ReaderFault::Fix(said(reason)))
+        .whole(whole)
+        .repair(Repair::new("Edit in Obsidian", ()))
+        .show(ui)
+        .is_some();
     if open {
         ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
             &campaign.path.join(path),
@@ -794,20 +786,17 @@ fn unread_groups_message(
     }
 }
 
-/// A warning that quotes an unread value cut around `…` (round 25 FD4): its hover and its
-/// accessible description keep the sentence with the value whole.
-fn whole_value(ui: &egui::Ui, response: &egui::Response, shown: &str, whole: &str) {
-    if shown != whole {
-        response.clone().on_hover_text(whole);
-        ui.ctx()
-            .accesskit_node_builder(response.id, |node| node.set_description(whole));
-    }
-}
-
-/// An unread-value warning, cut as `whole_value` says.
+/// An unread-value warning in the reader's body (M0582, ruling M20): its words keep the whole
+/// sentence on hover and for a screen reader (round 25 FD4), as `whole_value` does for the
+/// warning with its link.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a body fault in the reader (ruling M20)"
+)]
 fn unread_warning(ui: &mut egui::Ui, shown: &str, whole: &str) {
-    let response = design::message(ui, Tone::Warning, shown);
-    whole_value(ui, &response, shown, whole);
+    let _ = BodyFault::<()>::new(&ReaderFault::Fix(said(shown)))
+        .whole(whole)
+        .show(ui);
 }
 
 fn reference(value: &Value) -> Option<Reference> {
@@ -2813,18 +2802,25 @@ pub enum ReaderFault {
     Action(String),
     /// Typed words that wait: a Log line whose entry is gone, a draft whose note is gone.
     Waiting(String),
+    /// What the DM fixes before it counts, in the reader's body (M20): an unread value, a name
+    /// that is not its file's, the index's warning on this note.
+    Fix(Sentence),
+    /// A note that cannot be read, in place of its page (its fault and the recovery steps).
+    Unreadable(String),
 }
 
 impl Fault for ReaderFault {
     fn severity(&self) -> Severity {
         match self {
             Self::Action(_) => Severity::NotSaved,
-            Self::Waiting(_) => Severity::NeedsFixing,
+            Self::Waiting(_) | Self::Fix(_) => Severity::NeedsFixing,
+            Self::Unreadable(_) => Severity::CannotRead,
         }
     }
     fn cause(&self) -> Sentence {
         match self {
-            Self::Action(words) | Self::Waiting(words) => said(words),
+            Self::Action(words) | Self::Waiting(words) | Self::Unreadable(words) => said(words),
+            Self::Fix(words) => words.clone(),
         }
     }
 }
@@ -3317,50 +3313,34 @@ impl Reader {
                 // its name while one is open.
                 let file = renamed_path(&item.entry.path, &item.entry.name)
                     .filter(|_| !self.editing(id, campaign));
+                // M0589 (rulings M20, M23: round 24 FD5's two choices `L` apart on one line are
+                // now two repairs, one per line under the words). Each cuts its name where its
+                // words do not fit (the warning names it), or says only its verb; the accessible
+                // name keeps the whole repair.
+                #[derive(Clone, Copy, PartialEq)]
+                enum Rename {
+                    Note,
+                    File,
+                }
+                let mut fault =
+                    BodyFault::new(&ReaderFault::Fix(said(&message))).repair(Repair::new(
+                        crate::choice!("Rename the note to {}", stem)
+                            .or_shorter([ChoiceWords::from("Rename the note")]),
+                        Rename::Note,
+                    ));
+                if let Some(to) = &file {
+                    fault = fault.repair(Repair::new(
+                        crate::choice!(
+                            "Rename the file to {}",
+                            to.rsplit('/').next().unwrap_or(to)
+                        )
+                        .or_shorter([ChoiceWords::from("Rename the file")]),
+                        Rename::File,
+                    ));
+                }
+                let chosen = fault.show(ui);
                 let (note, rename_file) =
-                    design::message_with_actions(ui, Tone::Warning, &message, |ui| {
-                        // A choice whose words do not fit the message's width says only
-                        // its verb; the warning above names the name, and the accessible
-                        // name keeps the whole choice.
-                        let room = ui.available_width();
-                        let choice = |full: String, short: &'static str| {
-                            let action = Action::secondary(&full).density(Density::Read);
-                            if action.natural_width(ui) <= room {
-                                (full.clone(), full)
-                            } else {
-                                (short.to_owned(), full)
-                            }
-                        };
-                        let (note_words, note_name) =
-                            choice(format!("Rename the note to {stem}"), "Rename the note");
-                        let file_words = file.as_ref().map(|to| {
-                            choice(
-                                format!(
-                                    "Rename the file to {}",
-                                    to.rsplit('/').next().unwrap_or(to)
-                                ),
-                                "Rename the file",
-                            )
-                        });
-                        ui.horizontal_wrapped(|ui| {
-                            let note = Action::secondary(&note_words)
-                                .name(&note_name)
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked();
-                            let rename_file = file_words.as_ref().is_some_and(|(words, name)| {
-                                // The layout's own gap after a control, with this, is `L`.
-                                ui.add_space(design::L - ui.spacing().item_spacing.x);
-                                Action::secondary(words)
-                                    .name(name)
-                                    .density(Density::Read)
-                                    .show(ui)
-                                    .clicked()
-                            });
-                            (note, rename_file)
-                        })
-                        .inner
-                    });
+                    (chosen == Some(Rename::Note), chosen == Some(Rename::File));
                 if rename_file && let Some(to) = &file {
                     // The whole file must still be the whole file the index read, which
                     // produced the reader: a changed comment, line end or byte order mark
@@ -3474,8 +3454,9 @@ impl Reader {
         // Only a warning gets the scope: an empty one would still add an item gap.
         if !warnings.is_empty() {
             design::reader::measure(ui, |ui| {
+                // M0594 (ruling M20): the index's warning on this note, in the reader's body.
                 for warning in warnings {
-                    design::message(ui, Tone::Warning, warning);
+                    let _ = BodyFault::<()>::new(&ReaderFault::Fix(said(warning))).show(ui);
                 }
             });
         }
