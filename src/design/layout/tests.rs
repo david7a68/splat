@@ -1762,6 +1762,168 @@ fn inline_create_moves_nothing_while_the_dm_types() {
             );
         }
     }
+
+    // M-P0 item 5 (Library's New entry, M0349, M0352): a name field, two drop-downs, a choice,
+    // then the last field with its suggestions; Create follows that last field on its line.
+    // The field's suggestions open when it takes the keyboard, narrow to its words, and a press
+    // fills the field.
+    const CREATE_ENTRY: Word = crate::word!("Create entry");
+    const FOLDER: FieldId = crate::field_id!("test_create_entry_folder").once(Once::Example);
+    let suggestions: Vec<String> = ["Creatures", "Creatures/Undead", "Spells"]
+        .map(String::from)
+        .to_vec();
+    let folder = std::cell::RefCell::new(String::new());
+    // What the form gave back in the last frame: Cancel, and Escape closing the layer above.
+    let answered = std::cell::Cell::new((false, false));
+    let entry_form = |events: Vec<egui::Event>| {
+        let mut name = String::from("Barrow Wight");
+        let (mut kind, mut place, mut used) = (0_u8, 0_u8, false);
+        let mut words = folder.borrow().clone();
+        let drawn = frame_with(&ctx, vec2(800.0, 700.0), events, |ui| {
+            let out = InlineCreate::new()
+                .field(CreateField::new(
+                    crate::field_id!("test_create_entry_name").once(Once::Example),
+                    "Entry name",
+                    &mut name,
+                ))
+                .dropdown(CreateDropdown::new(
+                    "Kind",
+                    Selection::new(
+                        crate::field_id!("test_create_kind").once(Once::Example),
+                        "Kind of entry",
+                        0,
+                        "Creature",
+                    ),
+                    &mut kind,
+                ))
+                .dropdown(CreateDropdown::new(
+                    "Destination",
+                    Selection::new(
+                        crate::field_id!("test_create_place").once(Once::Example),
+                        "Destination",
+                        0,
+                        "Ashen Marches",
+                    ),
+                    &mut place,
+                ))
+                .choice(CreateChoice::new("Use in this campaign", &mut used))
+                .field(CreateField::new(FOLDER, "Folder", &mut words).suggestions(&suggestions))
+                .create(Create::primary(CREATE_ENTRY).blocked(None::<TestReason>))
+                .kept_line(KeptLine::new().cancel(CANCEL, true))
+                .show(ui);
+            answered.set((out.cancel, out.closed_above));
+        });
+        *folder.borrow_mut() = words;
+        drawn
+    };
+    let (nodes, _) = entry_form(Vec::new());
+    // A drop-down's node is named with its name and its chosen value.
+    let starting = |name: &str| {
+        nodes
+            .iter()
+            .filter(|(_, node)| {
+                node.label().is_some_and(|label| label.starts_with(name))
+                    && node.role() != egui::accesskit::Role::Label
+            })
+            .find_map(|(_, node)| node.bounds())
+            .map(|b| {
+                Rect::from_min_max(
+                    pos2(b.x0 as f32, b.y0 as f32),
+                    pos2(b.x1 as f32, b.y1 as f32),
+                )
+            })
+            .unwrap_or_else(|| panic!("a control named {name:?}…"))
+    };
+    let (kind, place, create) = (
+        starting("Kind of entry"),
+        starting("Destination"),
+        bounds(&nodes, CREATE_ENTRY.as_str()),
+    );
+    let field = nodes
+        .iter()
+        .filter(|(_, node)| {
+            node.label() == Some("Folder") && node.role() == egui::accesskit::Role::TextInput
+        })
+        .find_map(|(_, node)| node.bounds())
+        .map(|b| {
+            Rect::from_min_max(
+                pos2(b.x0 as f32, b.y0 as f32),
+                pos2(b.x1 as f32, b.y1 as f32),
+            )
+        })
+        .expect("the folder field");
+    assert!(
+        kind.bottom() <= place.top() + 0.5 && place.bottom() <= field.top() + 0.5,
+        "in order: Kind {kind:?}, Destination {place:?}, Folder {field:?}"
+    );
+    assert!(
+        (create.center().y - field.center().y).abs() < 2.0 && create.left() >= field.right(),
+        "Create follows the last field on its line: {field:?} {create:?}"
+    );
+    // The DM clicks into the field.
+    let click = |at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        vec![egui::Event::PointerMoved(at), press(true), press(false)]
+    };
+    let _ = entry_form(click(field.center()));
+    let (_, painted) = entry_form(Vec::new());
+    let shown = |painted: &[Painted], words: &str| painted.iter().any(|text| text.text == words);
+    assert!(
+        ["Creatures", "Creatures/Undead", "Spells"]
+            .iter()
+            .all(|words| shown(&painted, words)),
+        "the field takes the keyboard: every suggestion shows"
+    );
+    let _ = entry_form(vec![egui::Event::Text("und".into())]);
+    let (_, painted) = entry_form(Vec::new());
+    assert!(
+        shown(&painted, "Creatures/Undead") && !shown(&painted, "Spells"),
+        "the suggestions narrow to the field's words"
+    );
+    // Review of PR 602 (P1): Escape closes the open suggestions first, not the form; a second
+    // Escape cancels.
+    let escape = || {
+        vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]
+    };
+    let _ = entry_form(escape());
+    assert_eq!(
+        answered.get(),
+        (false, true),
+        "the first Escape closes only the suggestions (no Cancel)"
+    );
+    let (_, painted) = entry_form(Vec::new());
+    assert!(
+        !shown(&painted, "Creatures/Undead") && *folder.borrow() == "und",
+        "the suggestions are closed and the words stay"
+    );
+    let _ = entry_form(escape());
+    assert_eq!(answered.get(), (true, false), "a second Escape cancels");
+    // Into the field again: its suggestions narrow to its words, and a press fills it.
+    let _ = entry_form(click(field.center()));
+    let (_, painted) = entry_form(Vec::new());
+    let at = painted
+        .iter()
+        .find(|text| text.text == "Creatures/Undead")
+        .map(|text| text.rect.center())
+        .expect("the suggestion's words");
+    let _ = entry_form(click(at));
+    let _ = entry_form(Vec::new());
+    assert_eq!(
+        *folder.borrow(),
+        "Creatures/Undead",
+        "a press fills the field with the suggestion"
+    );
 }
 
 /// Whether `after` is `before` with `letter` inserted at one place: every letter of `before`
