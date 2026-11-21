@@ -4545,7 +4545,6 @@ pub fn side_panel_width(available: f32) -> f32 {
     (available * 0.36).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
 }
 
-
 fn phosphor_icon(ui: &Ui, rect: Rect, icon: &str, color: Color32) {
     ui.painter().text(
         rect.center(),
