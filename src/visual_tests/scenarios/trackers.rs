@@ -1087,7 +1087,8 @@ pub fn run(d: &mut Driver<'_>) {
         d.has_containing(forced) && ledger(d).contains("add: -4"),
         "A value below its min is named in the note's reader and changed by nothing",
     );
-    d.click("More actions for Crowd Favor change: -4");
+    // M-S0.1 (M0565): the history row says the change with a true minus.
+    d.click("More actions for Crowd Favor change: \u{2212}4");
     d.click("Remove");
     d.observe(
         "T19.6",
