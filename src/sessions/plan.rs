@@ -7,7 +7,8 @@ use crate::{
         self, Action, Density, Status, Tone, Type, colors, icons,
         outcome::{
             Choice, Fault as MessageFault, FaultMessage, KeptLine, KeptOutcome, MessageChoice,
-            Messages, Notice, Outcome, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+            Messages, Notice, Outcome, PaneFrame, PlacedResult, Said, Sentence, Severity, UndoStep,
+            Verb,
         },
     },
     encounter_run::fight_summary,
@@ -3995,8 +3996,10 @@ impl Sessions {
         kept_at(
             messages,
             self.removed_group_order,
-            Said::new(crate::sentence!("Removed “{}” from tonight.", name))
-                .undo(UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::UndoGroupRemove))),
+            Said::new(crate::sentence!("Removed “{}” from tonight.", name)).undo(
+                UndoStep::of(Verb::Remove, name.as_str())
+                    .pressed_as(pressed(FooterAct::UndoGroupRemove)),
+            ),
         );
     }
 
@@ -4270,20 +4273,9 @@ impl Sessions {
                 )),
             );
         }
-        if plan.group_discarded
-            && here
-            && let Some(order) = plan.group_discarded_order
-        {
-            let name = plan.group_discarded_name.clone();
-            kept_at(
-                &mut messages,
-                order,
-                KeptOutcome::Notice(
-                    Notice::new(crate::sentence!("{} draft discarded.", name)),
-                    UndoStep::of(Verb::Discard, name)
-                        .pressed_as(pressed(FooterAct::UndoGroupDiscard)),
-                ),
-            );
+        // M0244: the Encounters store's own line of the discard, with its order and ticket.
+        if here && let Some(line) = (plan.group_discard)(&frame) {
+            messages.kept(line.map(|()| pressed(FooterAct::UndoGroupDiscard)));
         }
         if let Some(problem) = &self.rename_problem {
             messages.outcome(Outcome::Refused(as_sentence(problem)));
@@ -4734,7 +4726,7 @@ impl Sessions {
             match press.id {
                 super::SessionAct::Plan(act) => match act {
                     FooterAct::GoToGroup => self.select(self.group_session),
-                    FooterAct::UndoGroupDiscard => self.wants_group_undo = true,
+                    FooterAct::UndoGroupDiscard => self.wants_group_undo = press.ticket,
                     FooterAct::UndoGroupRemove => self.undo_group_remove(session),
                     FooterAct::UndoDeletedRun => self.undo_deleted_run(),
                     FooterAct::UndoAdd => {
@@ -5032,8 +5024,13 @@ impl Sessions {
         Arc::clone(cache.model.as_ref().expect("the model was just built"))
     }
 
-    /// `Removed “…” from tonight.` with `Undo remove`, at `place`, while the note is as the
-    /// removal left it. A finished change: the success tone.
+    /// `Removed “…” from tonight.` with `Undo remove …`, at `place`, while the note is as the
+    /// removal left it. A finished change: the success tone. Its Undo is the note's, held with
+    /// the scene's data (`Scenes::removed`), so it is a placed result, not a kept line.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a removed scene: its result and its Undo where its row was (Ban::Body)"
+    )]
     fn removed_scene_message(&self, ui: &mut egui::Ui, place: Place, act: &mut Option<SceneAct>) {
         let Some((_, words, undo)) = &self.scenes.removed else {
             return;
@@ -5042,13 +5039,13 @@ impl Sessions {
             return;
         }
         design::gap(ui, design::Gap::S);
-        if design::undo_message(
-            ui,
-            Tone::Success,
-            &format!("Removed “{words}” from tonight."),
-            "Undo remove",
-        ) {
-            *act = Some(SceneAct::UndoRemove(place));
+        if let Some(pressed) = PlacedResult::new(
+            crate::sentence!("Removed “{}” from tonight.", words),
+            UndoStep::of(Verb::Remove, words.as_str()).pressed_as(SceneAct::UndoRemove(place)),
+        )
+        .show(ui)
+        {
+            *act = Some(pressed);
         }
     }
 
@@ -5082,9 +5079,9 @@ impl Sessions {
                 messages,
                 self.scenes.removed_order,
                 Said::new(crate::sentence!("Removed “{}” from tonight.", words)).undo(
-                    UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::Scene(
-                        SceneAct::UndoRemove(Place::Footer),
-                    ))),
+                    UndoStep::of(Verb::Remove, words.as_str()).pressed_as(pressed(
+                        FooterAct::Scene(SceneAct::UndoRemove(Place::Footer)),
+                    )),
                 ),
             );
         }
@@ -5155,9 +5152,14 @@ impl Sessions {
         }
     }
 
-    /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, in the room the
-    /// open field keeps for its result (R30), so neither the field nor `Add` moves for it.
-    /// `undo`: Undo was pressed.
+    /// The Scene field's fault, and `Scene added to tonight.` with `Undo add scene`, in the room
+    /// the open field keeps for its result (R30), so neither the field nor `Add` moves for it.
+    /// `undo`: Undo was pressed. Its Undo is the note's (`Scenes::added`), as the footer's
+    /// line of the same result says it (`scene_messages`).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "an added scene: its result and its Undo under the open Scene field (Ban::Body)"
+    )]
     fn field_result(&self, ui: &mut egui::Ui, shown: Shown, undo: &mut bool) {
         self.row_fault(ui, Place::Field, shown);
         if shown.added == Some(Place::Field)
@@ -5165,12 +5167,12 @@ impl Sessions {
             && self.draft.as_ref().is_some_and(|draft| added.live(draft))
         {
             design::gap(ui, design::Gap::XS);
-            *undo |= design::undo_message(
-                ui,
-                Tone::Success,
-                "Scene added to tonight.",
-                "Undo add scene",
-            );
+            *undo |= PlacedResult::new(
+                crate::sentence!("Scene added to tonight."),
+                UndoStep::of(Verb::Add, "scene").pressed_as(()),
+            )
+            .show(ui)
+            .is_some();
         }
     }
 
@@ -5254,6 +5256,13 @@ impl Sessions {
         }
     }
 
+    /// `Removed “…” from tonight.` with `Undo remove …`, at the removed fight's place, while
+    /// the note is as the removal left it. Its Undo is the note's, held with the fight's data
+    /// (`removed_fight`), so it is a placed result, not a kept line.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a removed fight: its result and its Undo where its row was (Ban::Body)"
+    )]
     fn removed_fight_message(&mut self, ui: &mut egui::Ui, session: Option<Uuid>, position: usize) {
         let Some((id, at, name, undo)) = &self.removed_fight else {
             return;
@@ -5265,12 +5274,13 @@ impl Sessions {
             return;
         }
         design::gap(ui, design::Gap::S);
-        if design::undo_message(
-            ui,
-            Tone::Success,
-            &format!("Removed “{name}” from tonight."),
-            "Undo remove",
-        ) {
+        if PlacedResult::new(
+            crate::sentence!("Removed “{}” from tonight.", name),
+            UndoStep::of(Verb::Remove, name.as_str()).pressed_as(()),
+        )
+        .show(ui)
+        .is_some()
+        {
             if let Some(draft) = &mut self.draft {
                 let _ = undo.undo(draft);
             }
@@ -7192,9 +7202,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -7787,9 +7795,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -8039,9 +8045,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -8122,9 +8126,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -8233,7 +8235,8 @@ mod tests {
         );
         harness.state_mut().1.add(Kind::Day, Some(note.id));
         harness.run_steps(2);
-        harness.get_by_label("Undo remove").click();
+        // M-N1.1: the Undo names the scene (`UndoStep::of`), as every place showing it does.
+        harness.get_by_label("Undo remove Captain Varra").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         assert_eq!(harness.state().1.events.len(), 1, "the other act stays");
@@ -8318,7 +8321,12 @@ mod tests {
             harness.query_all_by_label(removed).next().is_some(),
             "the removal's Undo stays in reach after the fight before it began"
         );
-        harness.get_by_label("Undo remove").click();
+        // Ruling M9: the only Undo at its place shows its whole form where it fits.
+        assert!(
+            !painted(&harness, "Undo remove Captain Varra").is_empty(),
+            "the removal's Undo shows the scene it puts back"
+        );
+        harness.get_by_label("Undo remove Captain Varra").click();
         harness.run_steps(2);
         assert_eq!(read(), outside, "Undo remove puts back only the scene");
         assert!(
@@ -8345,7 +8353,8 @@ mod tests {
             harness.query_all_by_label(removed).next().is_some(),
             "the removal's Undo stays in reach while the scenes fold"
         );
-        harness.get_by_label("Undo remove").click();
+        // The footer's line of the same result names the scene too.
+        harness.get_by_label("Undo remove Captain Varra").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         // Review of PR 280: the closed rows decide the fold, and a result in the footer never
@@ -8458,7 +8467,11 @@ mod tests {
         harness.run_steps(2);
         harness.get_by_label("Open: Pay the toll").click();
         harness.run_steps(2);
-        assert!(harness.query_by_label("Undo remove").is_none());
+        assert!(
+            harness
+                .query_by_label("Undo remove Captain Varra")
+                .is_none()
+        );
         assert!(read().contains("- [x] Pay the toll") && !read().contains("Captain Varra"));
 
         // Scene, in the strip's More list: Enter adds a task line at the end of the plan, keeps
@@ -8905,9 +8918,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,

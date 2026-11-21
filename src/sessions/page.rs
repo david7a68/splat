@@ -354,6 +354,10 @@ enum Tab {
     Recordings,
 }
 
+/// The Encounters store's line of a plan group's discard, for one frame's footer.
+pub type GroupDiscardLine<'a> = dyn for<'f> Fn(&'f design::outcome::PaneFrame) -> Option<design::outcome::KeptLine<'f, ()>>
+    + 'a;
+
 /// What the rest of the app tells this page about fights.
 pub struct Plan<'a> {
     pub fights: &'a [PlanFight],
@@ -366,11 +370,10 @@ pub struct Plan<'a> {
     pub group_blocked: Option<&'a str>,
     /// A group being assembled takes the plan's place, beside the note.
     pub group_open: bool,
-    /// A new group started in the plan was discarded there.
-    pub group_discarded: bool,
-    pub group_discarded_name: String,
-    /// When that discard was made, for the plan footer's newest-first order.
-    pub group_discarded_order: Option<design::ResultOrder>,
+    /// A new group started in the plan was discarded there: the Encounters store's own line
+    /// of that discard for this frame's footer (`Encounters::group_discard_line`), with the
+    /// store's words, order and ticket.
+    pub group_discard: &'a GroupDiscardLine<'a>,
     /// A fight is open that something can still join.
     pub arrivals_open: bool,
     pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
@@ -806,7 +809,9 @@ pub struct Sessions {
     pub wants_runs_refresh: bool,
     pub wants_new_fight: bool,
     pub wants_new_group: bool,
-    pub wants_group_undo: bool,
+    /// The plan footer's `Undo discard` of a plan group, by its line's ticket
+    /// (`Encounters::undo_group_discard_in_plan`).
+    pub wants_group_undo: Option<design::results::Ticket>,
     /// The session whose plan a group is being assembled in. It is the one that gets the link.
     group_session: Option<Uuid>,
     /// B4 review F1: the plan's group whose name the DM pressed while an unsaved draft refuses

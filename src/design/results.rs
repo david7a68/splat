@@ -973,11 +973,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/encounters/groups.rs",
-            "discard_group_draft",
-            &[Ban::Results],
-        ),
-        (
-            "src/encounters/groups.rs",
             "group_editor_view",
             &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
         ),
@@ -1076,6 +1071,19 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "scene_act", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
+        // M-N1.1 (ruling M20): a result with the note's Undo at its own place
+        // (`PlacedResult`), replacing three `undo_message` calls.
+        (
+            "src/sessions/plan.rs",
+            "removed_scene_message",
+            &[Ban::Body],
+        ),
+        ("src/sessions/plan.rs", "field_result", &[Ban::Body]),
+        (
+            "src/sessions/plan.rs",
+            "removed_fight_message",
+            &[Ban::Body],
+        ),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),
         ("src/trackers/history.rs", "footer", &[Ban::Order]),
         (
@@ -1245,6 +1253,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
+            &[Ban::Body],
+        ),
+        (
+            "src/design/outcome.rs",
+            "a_placed_result_shows_its_undo_whole_where_it_fits",
             &[Ban::Body],
         ),
         ("src/processing/settings.rs", "cause", &[Ban::Words]),
@@ -1609,7 +1622,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaigns.rs", 9),
             ("src/design/components.rs", 15),
             ("src/dndbeyond.rs", 1),
-            ("src/encounters/groups.rs", 1),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 1),
             ("src/sessions/plan.rs", 4),
@@ -1669,7 +1681,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/encounters.rs", 4),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 6),
-            ("src/sessions/plan.rs", 4),
+            ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 3),
             ("src/timeline/test_support.rs", 2),
             ("src/trackers/history.rs", 1),

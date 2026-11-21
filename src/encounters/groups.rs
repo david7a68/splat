@@ -3163,10 +3163,6 @@ impl Encounters {
 
     /// `Discard` in the group editor: the saved group opens clean, and the discarded draft
     /// waits for `Undo discard` with its results.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn discard_group_draft(&mut self, active: &Campaign) {
         self.clear_notice();
         let draft = self.group_draft.take().expect("the editor has a draft");
@@ -3177,8 +3173,7 @@ impl Encounters {
             }
         }
         self.discarded_group = Some(draft);
-        // The Session plan's footer reads this order (package S's caller).
-        self.discarded_group_order = Some(design::ResultOrder::issue());
+        // The Session plan's footer shows this store's line (`group_discard_line`).
         self.stamp_kept(super::KeptResult::GroupDiscarded);
         self.discarded = None;
     }
@@ -5297,23 +5292,62 @@ mod tests {
         // B4, E1: a new group is refused over an unsaved encounter, so the encounter draft is
         // opened after the group; what is tested is the Undo with both open.
         encounters.draft = Some(Draft::new());
-        encounters.discarded_group = encounters.group_draft.take();
+        encounters.active = Some(campaign(std::path::Path::new("arena")));
+        let ticket = discard_in_plan(&mut encounters);
         assert!(encounters.group_discarded_in_plan());
-        encounters.undo_group_discard_in_plan();
+        encounters.undo_group_discard_in_plan(ticket);
         assert!(encounters.group_open_in_plan());
+    }
+
+    /// A plan group's discard as the page's kept store holds it, and the ticket of its line
+    /// (`group_discard_line`), as the Session plan's footer gets it.
+    fn discard_in_plan(encounters: &mut Encounters) -> design::results::Ticket {
+        encounters.discarded_group = encounters.group_draft.take();
+        encounters.stamp_kept(super::super::KeptResult::GroupDiscarded);
+        discard_ticket(encounters)
+    }
+
+    /// The ticket of the line of the discard the page's store holds now.
+    fn discard_ticket(encounters: &Encounters) -> design::results::Ticket {
+        let root = encounters.active.as_ref().unwrap().path.clone();
+        encounters
+            .kept
+            .get(&super::super::KeptOwner {
+                root,
+                kind: super::super::KeptResult::GroupDiscarded,
+            })
+            .expect("the discard is in the page's store")
+            .ticket_for_caller_test()
     }
 
     #[test]
     fn a_group_discarded_in_the_plan_can_come_back_there() {
-        let mut encounters = Encounters::default();
+        let mut encounters = Encounters {
+            active: Some(campaign(std::path::Path::new("arena"))),
+            ..Encounters::default()
+        };
         encounters.new_group_in_plan();
         encounters.group_draft.as_mut().unwrap().name = "Ash Pack".into();
-        encounters.discarded_group = encounters.group_draft.take();
+        let ticket = discard_in_plan(&mut encounters);
         assert!(encounters.group_discarded_in_plan());
         assert!(!encounters.group_open_in_plan());
-        encounters.undo_group_discard_in_plan();
+        encounters.undo_group_discard_in_plan(ticket);
         assert!(encounters.group_open_in_plan());
         assert_eq!(encounters.group_draft.as_ref().unwrap().name, "Ash Pack");
+        // M0244: the plan's Undo acts by its line's ticket. A line of the first discard
+        // pressed after its Undo and a second discard reaches nothing; the second discard's
+        // line brings the draft back.
+        let first = discard_in_plan(&mut encounters);
+        let first_again = discard_ticket(&encounters);
+        encounters.undo_group_discard_in_plan(first);
+        let second = discard_in_plan(&mut encounters);
+        encounters.undo_group_discard_in_plan(first_again);
+        assert!(
+            encounters.group_discarded_in_plan(),
+            "a press on the first discard's line leaves the second discard alone"
+        );
+        encounters.undo_group_discard_in_plan(second);
+        assert!(encounters.group_open_in_plan());
     }
 
     #[test]
