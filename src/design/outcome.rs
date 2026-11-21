@@ -1068,8 +1068,21 @@ macro_rules! choice {
 // Choices and presses
 
 /// An action that follows a message's words, by what it does. The weight comes from the kind:
-/// a `Choice` is bordered, a `Lose` is red with exactly `L` before it, a `Link` is a link. An
-/// Undo is not a choice: it is the message's `UndoStep`, always quiet with its icon, and first.
+/// a `Choice` is bordered, a `Primary` is filled, a `Lose` is red with exactly `L` before it, a
+/// `Link` is a link. An Undo is not a choice: it is the message's `UndoStep`, always quiet with
+/// its icon, and first.
+///
+/// `Primary` is the one act the DM most likely takes next where nothing else on the screen is
+/// primary (a recording alert's `Record again`, an empty panel's `New session`). A message has at
+/// most one; it stands among the safe choices in the caller's order. Which message of a place
+/// holds the screen's one primary is the caller's choice; the others say the same act with
+/// `Choice`.
+///
+/// ```
+/// use splat_design::outcome::{Choice, MessageChoice, Notice};
+/// let _ = Notice::new(splat_design::sentence!("No session yet."))
+///     .choice(Choice::new(MessageChoice::Primary("New session"), 1));
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 ///
 /// `Dismiss` is the close icon. The part puts it at the right end of the message's first line,
@@ -1091,6 +1104,7 @@ macro_rules! choice {
 /// ```
 pub enum MessageChoice<'a> {
     Choice(&'a str),
+    Primary(&'a str),
     Lose(&'a str),
     Link {
         word: &'a str,
@@ -2122,6 +2136,15 @@ impl<A> Typed<A> {
         // Safe first: a choice that loses something follows every other (a stable order).
         let mut choices = choices;
         choices.sort_by_key(|choice| matches!(choice.what, MessageChoice::Lose(_)));
+        // One primary at most: it is the message's one commit (a test build refuses a second).
+        debug_assert!(
+            choices
+                .iter()
+                .filter(|choice| matches!(choice.what, MessageChoice::Primary(_)))
+                .count()
+                <= 1,
+            "a message has at most one primary choice"
+        );
         for choice in choices {
             whats.push(choice.what);
             named.push(choice.named);
@@ -4111,6 +4134,9 @@ impl Body {
             MessageChoice::Choice(word) => Action::secondary(word)
                 .density(Density::Read)
                 .natural_width(ui),
+            MessageChoice::Primary(word) => Action::primary(word)
+                .density(Density::Read)
+                .natural_width(ui),
             MessageChoice::Lose(word) => {
                 Action::destructive(word)
                     .density(Density::Read)
@@ -4176,6 +4202,12 @@ impl Body {
             }
             (MessageChoice::Choice(word), None) => Some(
                 Action::secondary(word)
+                    .density(Density::Read)
+                    .blocked(lock)
+                    .show(ui),
+            ),
+            (MessageChoice::Primary(word), None) => Some(
+                Action::primary(word)
                     .density(Density::Read)
                     .blocked(lock)
                     .show(ui),
@@ -4806,6 +4838,7 @@ impl<'o> FormOpener<'o> {
                 tone,
                 words,
                 repairs: vec![repair],
+                whole: None,
             }
             .draw_repairs(ui);
             let opened = pressed.is_some();
@@ -4821,6 +4854,7 @@ impl<'o> FormOpener<'o> {
             tone,
             words,
             repairs: Vec::new(),
+            whole: None,
         }
         .draw(ui);
         if let Some(title) = title {
@@ -4850,6 +4884,8 @@ pub struct BodyFault<A> {
     tone: Tone,
     words: Sentence,
     repairs: Vec<Repair<A>>,
+    /// The whole sentence when the words quote a value cut around `…` (`whole`).
+    whole: Option<String>,
 }
 
 impl<A> BodyFault<A> {
@@ -4858,7 +4894,16 @@ impl<A> BodyFault<A> {
             tone: fault.severity().tone(),
             words: fault_words(fault),
             repairs: Vec::new(),
+            whole: None,
         }
+    }
+
+    /// The whole sentence when the fault's words quote a value cut around `…` (World's unread
+    /// values, round 25 FD4): the words' hover and accessible description, so a screen reader
+    /// and the pointer reach the value whole.
+    pub fn whole(mut self, whole: impl Into<String>) -> Self {
+        self.whole = Some(whole.into());
+        self
     }
 
     pub fn repair(mut self, repair: Repair<A>) -> Self {
@@ -4883,13 +4928,20 @@ impl<A> BodyFault<A> {
             tone,
             words,
             repairs,
+            whole,
         } = self;
         let mut pressed = None;
         let response = ui
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
                 let text = words.as_str();
-                tone_message(ui, tone, text);
+                let message = tone_message(ui, tone, text);
+                if let Some(whole) = whole.filter(|whole| whole != text) {
+                    ui.ctx().accesskit_node_builder(message.id, |node| {
+                        node.set_description(whole.clone())
+                    });
+                    let _ = message.on_hover_text(whole);
+                }
                 for (at, repair) in repairs.iter().enumerate() {
                     let lock = holding(&repair.lock);
                     let action = message_choice_row(ui, tone, |ui| {
@@ -6103,6 +6155,27 @@ mod tests {
     /// data. A press comes back once, as the caller's id; a locked repair paints its reason and
     /// gives nothing back; a long object is cut inside the fault's width at 320 px while the
     /// accessible name keeps the whole words; each help line sits under its repair.
+    /// N0 (ruling M21): a message holds at most one primary choice.
+    #[test]
+    #[should_panic(expected = "a message has at most one primary choice")]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the body place `BodyMessage::show` itself"
+    )]
+    fn a_message_has_at_most_one_primary_choice() {
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let _ = BodyMessage::from(
+                    Notice::new(crate::sentence!("No session yet."))
+                        .choice(Choice::new(MessageChoice::Primary("New session"), 1))
+                        .choice(Choice::new(MessageChoice::Primary("Record again"), 2)),
+                )
+                .show(ui);
+            });
+        });
+    }
+
     #[test]
     #[allow(
         clippy::disallowed_methods,
@@ -6115,6 +6188,7 @@ mod tests {
             Open,
             Replace,
             Repair(u8),
+            Record,
             Log,
             Dismiss,
         }
@@ -6159,10 +6233,14 @@ mod tests {
                                 ))
                                 .show(ui);
                             state.pressed.extend(pressed);
-                            // A typed message in the body (`BodyMessage`): a warning with a
-                            // link and its close icon.
+                            // A typed message in the body (`BodyMessage`): a warning with its
+                            // primary choice, a link and its close icon.
                             let pressed = BodyMessage::from(
                                 Notice::warning(crate::sentence!("Kaya’s sheet changed."))
+                                    .choice(Choice::new(
+                                        MessageChoice::Primary("Record again"),
+                                        Fix::Record,
+                                    ))
                                     .choice(Choice::new(
                                         MessageChoice::Link {
                                             word: "Log",
@@ -6275,13 +6353,27 @@ mod tests {
             .map(|(_, _, tone)| tone)
             .collect();
         assert_eq!(tones, [Tone::Warning], "the notice's tone");
+        // N0 (ruling M21): its primary choice is filled, under the words at their first letter.
+        let record = h.get_by_label("Record again").rect();
+        let filled = h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Rect(rect)
+                if rect.fill == colors().accent_fill && rect.rect.expand(1.0).contains_rect(record))
+        });
+        assert!(
+            filled
+                && record.top() >= words.bottom() - 1.0
+                && (record.left() - words.left()).abs() <= 1.0,
+            "n0-primary-choice: the primary is filled, under the words at their first letter: {record:?} {words:?}"
+        );
+        h.get_by_label("Record again").click();
+        h.run_steps(2);
         h.get_by_label("Log").click();
         h.run_steps(2);
         h.get_by_label(DISMISS_NAME).click();
         h.run_steps(2);
         assert_eq!(
             h.state().pressed,
-            [Fix::Log, Fix::Dismiss],
+            [Fix::Record, Fix::Log, Fix::Dismiss],
             "each press once"
         );
 

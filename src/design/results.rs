@@ -1057,10 +1057,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Body],
         ),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
+        // M-N0.4: the template's text field is keyed by its file (`TextKey::from_data`): a
+        // template has no typed owner key yet.
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::RowKey(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -1081,9 +1083,15 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world/edit.rs",
             "edit_form",
-            &[Ban::Results, Ban::Extras(2)],
+            &[Ban::Results, Ban::Extras(1)],
         ),
-        ("src/world/page.rs", "creation_body", &[Ban::Extras(1)]),
+        // M20 (M-W0.4): the creation error in place of the page's body (was
+        // `message_with_actions`).
+        (
+            "src/world/page.rs",
+            "creation_body",
+            &[Ban::Extras(1), Ban::Body],
+        ),
         // Package K: raw egui calls that a layout part replaces.
         (
             "src/campaigns.rs",
@@ -1137,7 +1145,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
@@ -1166,11 +1173,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "note_editor",
-            &[Ban::Layout(2), Ban::Body],
+            &[Ban::Layout(1), Ban::Body],
         ),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
-        ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         (
             "src/timeline/page.rs",
@@ -1245,6 +1251,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
+            &[Ban::Body],
+        ),
+        // N0 (ruling M21): a message holds at most one primary choice.
+        (
+            "src/design/outcome.rs",
+            "a_message_has_at_most_one_primary_choice",
             &[Ban::Body],
         ),
         ("src/processing/settings.rs", "cause", &[Ban::Words]),
@@ -1350,13 +1362,21 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        ("src/world.rs", "draw", &[Ban::Extras(4)]),
+        // M20 (M-W0.4, M-W0.5): the index's warnings on this note and the renamed-file warning
+        // with its two repairs, in the reader's body (were `message`, `message_with_actions`).
+        ("src/world.rs", "draw", &[Ban::Extras(3), Ban::Body]),
+        // M20 (M-W0.4): an unread value's warning (was `message`).
+        ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
-        ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
+        // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
+        // `message` and a link).
+        ("src/world.rs", "unread_groups_message", &[Ban::Body]),
         ("src/world.rs", "value_row", &[Ban::Extras(1)]),
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
+        // M20 (M-W0.5): a note that cannot be read, in place of its page (was
+        // `message_with_actions`).
+        ("src/world/page.rs", "unread_pane", &[Ban::Body]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
@@ -1625,7 +1645,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaigns.rs", 1),
             ("src/design/components.rs", 1),
             ("src/design/gallery.rs", 2),
-            ("src/world/edit.rs", 1),
         ],
     ),
     (
