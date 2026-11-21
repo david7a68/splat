@@ -1034,18 +1034,29 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/party.rs", "sheet_view", &[Ban::Body]),
         // R24: a value block's save row shows its own messages (the Session folder's).
         ("src/sessions/page.rs", "folder_block", &[Ban::Body]),
+        // M-N0.6 (M20): typed body places, each in place of an untyped body message.
+        ("src/sessions/page.rs", "show_form", &[Ban::Body]),
+        ("src/sessions/page.rs", "notes_panel", &[Ban::Body]),
+        ("src/sessions/page.rs", "show", &[Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
-        ("src/sessions/page.rs", "banner_notices", &[Ban::Results]),
+        (
+            "src/sessions/page.rs",
+            "banner_notices",
+            &[Ban::Results, Ban::Body],
+        ),
         (
             "src/sessions/page.rs",
             "markers",
             &[Ban::Results, Ban::Extras(1)],
         ),
         ("src/sessions/page.rs", "new_notice", &[Ban::Results]),
-        ("src/sessions/page.rs", "reading_view", &[Ban::Results]),
+        (
+            "src/sessions/page.rs",
+            "reading_view",
+            &[Ban::Results, Ban::Body],
+        ),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
-        ("src/sessions/page.rs", "add_dropped", &[Ban::Order]),
         (
             "src/sessions/page.rs",
             "template_editor",
@@ -1112,7 +1123,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(3), Ban::Pane(1)],
+            &[Ban::Layout(1), Ban::Extras(1), Ban::Pane(1), Ban::Body],
         ),
         ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(7)]),
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
@@ -1151,20 +1162,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
+        ("src/sessions/page.rs", "banner", &[Ban::Extras(2)]),
         (
             "src/sessions/page.rs",
-            "banner",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            "note_editor",
+            &[Ban::Layout(2), Ban::Body],
         ),
-        ("src/sessions/page.rs", "list_pane", &[Ban::Layout(1)]),
-        (
-            "src/sessions/page.rs",
-            "new_template_form",
-            &[Ban::Extras(2)],
-        ),
-        ("src/sessions/page.rs", "note_editor", &[Ban::Layout(2)]),
-        ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
-        ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
@@ -1286,13 +1289,15 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/encounter_run/view.rs", "live_view", &[Ban::Pane(1)]),
+        // M-P0 item 7: the run's notices in the compact typed form, where they stand.
+        ("src/encounter_run/view.rs", "live_notice", &[Ban::Body]),
+        ("src/encounter_run/notice.rs", "header_notice", &[Ban::Body]),
         ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
         (
             "src/encounter_run/view.rs",
             "setup_tie_controls",
             &[Ban::Extras(1)],
         ),
-        ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
@@ -1337,9 +1342,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
-        ("src/sessions/page.rs", "draft_warning", &[Ban::Extras(2)]),
+        ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),
-        ("src/sessions/page.rs", "recording_row", &[Ban::Extras(2)]),
+        (
+            "src/sessions/page.rs",
+            "recording_row",
+            &[Ban::Extras(1), Ban::Body],
+        ),
         (
             "src/sessions/plan.rs",
             "gone_scene_words",
@@ -1564,11 +1573,6 @@ mod suppressions;
 ///   editor uses `design::EditorHead` (R38).
 /// - `BackEdge::Segments`: the Recordings row's named escape (its back link in one row with
 ///   `Add to notes`); its one use is counted, so a second row back link fails.
-/// - `LEGACY_BACK`: the bare back arrow (`design::icons`). An editor's back is
-///   `design::EditorHead` (R38); a back link that starts a line is `design::TitleLine::back`,
-///   whose word is always shown (K4b, FL7). The lint's `arrow-label` finds the arrow given as
-///   an action's whole label, by name or as a literal. The name is spelled at
-///   each use, also in an alias or a grouped import, so the text count sees every one.
 /// - `UndoStep::verb(`: an Undo with no object (`Undo remove`), whose words cannot name what it
 ///   takes back even where the line has room (ruling M9). The 23 production calls move to
 ///   `UndoStep::of` in their caller lanes, or stay as named exceptions; `outcome.rs` keeps its
@@ -1645,15 +1649,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
             ("src/trackers.rs", 1),
-        ],
-    ),
-    (
-        "LEGACY_BACK",
-        "An editor's back is `design::EditorHead` above its name row; a back link that starts a line is `design::TitleLine::back(word!(…), BackEdge)`.",
-        &[
-            ("src/design/icons.rs", 1),
-            ("src/library.rs", 1),
-            ("src/lookup.rs", 2),
         ],
     ),
     (
