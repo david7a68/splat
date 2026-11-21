@@ -1066,8 +1066,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             // `Body` (M-N1.5, M20): a planned group's member faults in its row, typed.
             &[Ban::Body, Ban::ByOwner(1)],
         ),
-        ("src/timeline.rs", "next_result_order", &[Ban::Results]),
-        ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
         // M-N1.3 (ruling M20): Read's embed whose source is gone, typed (`BodyMessage`), in
         // place of a `small_message`.
         ("src/sessions/carry.rs", "show_prepared", &[Ban::Body]),
@@ -1660,7 +1658,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/components.rs", 15),
             ("src/dndbeyond.rs", 1),
             ("src/sessions/page.rs", 1),
-            ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],
     ),
