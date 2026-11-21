@@ -1660,12 +1660,17 @@ impl CampaignContent {
         let design::outcome::Press { id, ticket } = press;
         match (id, ticket) {
             (ContentPress::Undo, Some(ticket)) => {
+                // An answer that already stands first in the footer (a refused pick) keeps that
+                // place for the next one, so the lines below it move by no more than the change
+                // of its height.
+                let answered = self.answer.is_some();
                 let mut results = std::mem::take(&mut self.results);
                 let undone = results.undo_by(ticket, |kept| self.undo_result(&kept.payload));
                 self.results = results;
-                // A failed Undo keeps its result and its Undo; the failure answers that press,
-                // under its line.
+                // A failed Undo keeps its result and its Undo; with no answer standing before
+                // it, its failure answers that press under its line (`Messages::answer`).
                 if undone.is_err()
+                    && !answered
                     && let Some(answer) = &mut self.answer
                 {
                     answer.under = line;

@@ -2658,7 +2658,9 @@ impl<'f, A: 'static> Messages<'f, A> {
     /// `under`: the act was a press of a kept line of this footer (`Press::line`). While the
     /// footer follows its content (its top stays and it grows down), the answer stands directly
     /// under that line, so the line the DM pressed keeps its place under the pointer (layout step
-    /// 7, Astra's P1 on PR 619); pinned (its bottom stays and it grows up), it comes first.
+    /// 7, Astra's P1 on PR 619); pinned (its bottom stays and it grows up), it comes first. Give
+    /// `under` only when no answer stood in this footer before the press: an answer that replaces
+    /// one takes its first place, so the lines below move by no more than the change of height.
     pub fn answer(&mut self, fault: FaultMessage<A>, under: Option<PressedLine>) -> &mut Self {
         debug_assert!(
             !self.answered,
