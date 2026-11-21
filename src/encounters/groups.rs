@@ -4959,6 +4959,17 @@ mod tests {
         );
         harness.get_by_label("Maximum HP: how it changes");
         harness.get_by_label("AC: amount");
+        // Lane E1 (ruling M20): the unread Changes cell is a typed fault at its row, in the
+        // error tone (R41), not an untyped small message.
+        assert!(
+            design::outcome::message_rects(&harness.ctx)
+                .into_iter()
+                .any(
+                    |(_, place, tone)| place == design::outcome::MessagePlace::Row
+                        && tone == Tone::Error
+                ),
+            "the unread Changes cell is a typed row fault"
+        );
         harness.get_by_label("Done with changes").click();
         harness.run_steps(2);
         harness.state_mut().0.save(&active, &[]).unwrap();
