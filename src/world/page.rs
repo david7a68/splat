@@ -1810,7 +1810,8 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
             ("Location…", "location"),
             ("Generate NPC", "generate"),
         ] {
-            if ui.button(word).clicked() {
+            // M0609: a menu's choices are the shared quiet actions, as in the Library's menus.
+            if design::Action::quiet(word).show(ui).clicked() {
                 choice = Some(kind);
                 ui.close();
             }

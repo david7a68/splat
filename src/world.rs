@@ -5281,11 +5281,19 @@ pub const UNSAVED_NPC: &str = "Unsaved NPC";
 pub fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
     let mut show = false;
     ui.horizontal_wrapped(|ui| {
-        ui.label(
-            Type::Body
-                .rich(ui, format!("{UNSAVED_NPC}: {name}"))
-                .color(colors().text),
+        // M0602: the held NPC has the shared draft status, as the rail shows it (the draft icon
+        // and the unsaved colour), then its name and Show.
+        design::status(
+            ui,
+            design::Status {
+                icon: design::icons::DRAFT,
+                word: UNSAVED_NPC,
+                color: colors().document.unsaved,
+            },
         );
+        // The name reads as the row's sentence, `Unsaved NPC: <name>`.
+        let words = ui.label(Type::Body.rich(ui, name).color(colors().text));
+        design::named(ui, &words, &format!("{UNSAVED_NPC}: {name}"));
         ui.label(Type::Body.rich(ui, "·").color(colors().muted));
         show = design::link(ui, "Show").clicked();
     });
