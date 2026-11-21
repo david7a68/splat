@@ -7115,6 +7115,8 @@ impl Encounters {
                         .max(Action::secondary(word).natural_width(ui))
                         .ceil()
                 };
+                // Layout PR 6 (I7): each button is drawn at this width too.
+                let (save_width, start_width) = (button("Save encounter"), button(start_word));
                 let actions = button("Save encounter")
                     + gap
                     + button(start_word)
@@ -7209,6 +7211,9 @@ impl Encounters {
                         } else {
                             "Save this encounter and start a run."
                         })
+                        // Layout PR 6 (I7): its widest weight's width, as measured, so the
+                        // actions keep their place in every state.
+                        .min_width(start_width)
                         .show(ui)
                         .clicked();
                         if has_run {
@@ -7224,6 +7229,7 @@ impl Encounters {
                             }
                         }
                         .blocked(state.save_blocked())
+                        .min_width(save_width)
                         .show(ui)
                         .clicked();
                     },

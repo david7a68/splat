@@ -27703,7 +27703,7 @@ pub mod session_plan {
                     && start.is_some()
                     && creature.is_some(),
                 format!(
-                    "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Start fight {start:?}, Save creature {creature:?}"
+                    "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Save encounter {save:?}, Start fight {start:?}, Save creature {creature:?}"
                 ),
             );
         }
