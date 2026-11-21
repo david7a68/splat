@@ -1684,6 +1684,7 @@ pub(super) struct Fault {
 }
 
 /// What a scene act could not do.
+#[derive(Debug)]
 pub(super) enum SceneFault {
     /// It was refused and wrote nothing: what was not done to which scene, why, and the next
     /// step (ruling M7).
