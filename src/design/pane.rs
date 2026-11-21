@@ -967,8 +967,9 @@ fn widget_count(ui: &Ui) -> usize {
 /// help, a reason comes, the content above it moves it): it then scrolls only when the field is
 /// not whole in view. The DM's own wheel moves neither the room nor the field's place in the
 /// content, so it is never pulled back. Only a control that the body added (`widgets`, on the
-/// pane's layer) is scrolled to; a change of focus with a pointer press, hold or release is not,
-/// as `scroll_part` does for the footer.
+/// pane's layer) is scrolled to. A focus that comes with a pointer press, hold or release waits
+/// for the release, so the pressed control never moves under the pointer; a block that is not
+/// whole then comes into view (a click on a half-hidden field, a drop-down's chosen row).
 fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
     let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
@@ -1002,6 +1003,16 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     if before == Some((focused, room, place)) {
         return;
     }
+    let pointer = ui.input(|input| {
+        let pointer = &input.pointer;
+        pointer.any_down() || pointer.any_pressed() || pointer.any_released()
+    });
+    // A press does not scroll its own control away under the pointer. A focused block that is
+    // not whole waits, unseen, for the pointer's release: a click (a drop-down's chosen row that
+    // gives the focus back to its control) then brings it whole above the footer (I9).
+    if pointer && block.is_some_and(|block| !visible.contains_rect(block)) {
+        return;
+    }
     ui.ctx()
         .data_mut(|data| data.insert_temp(seen, (focused, room, place)));
     // The same control, a new room or a changed field: scroll only when it is not whole in view.
@@ -1009,10 +1020,6 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     // types) keeps its own caret follow: its top is not pulled into view.
     let same = before.is_some_and(|(was, _, _)| was == focused);
     let same_room = before.is_some_and(|(_, was, _)| was == room);
-    let pointer = ui.input(|input| {
-        let pointer = &input.pointer;
-        pointer.any_down() || pointer.any_pressed() || pointer.any_released()
-    });
     // A reveal that runs in this column owns its scroll (`design::reveal`).
     if let Some(rect) = block.filter(|_| !pointer)
         && !(same
