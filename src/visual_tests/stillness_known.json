@@ -20,6 +20,8 @@
     ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1]
   ],
   "encounter-build": [
+    ["G3/far-action","10-saved-roster-sync-off","1920x1080","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
+    ["G3/far-action","09-saved-roster","1920x1080","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
     ["G1b/pressed-control-moved","05-saved","960x640","Button \"Save encounter\"",1]
   ],
   "encounter-difficulty": [
@@ -48,6 +50,7 @@
     ["G3/far-action","14-group-removed","1920x1080","Button \"Start fight\"",1]
   ],
   "encounter-history": [
+    ["G3/far-action","07-draft-during-run","1920x1080","Button \"Options: starting HP, temporary HP, initiative group and changes\"",2],
     ["G3/far-action","01-encounters-with-history","1920x1080","Button \"Resume\"",1],
     ["G3/far-action","01-encounters-with-history","1920x1080","Button \"Start fight\"",1],
     ["G3/far-action","02-history-open","1920x1080","Button \"Open the run of Goblin Crossing, Party won · Ended · Round 1 · Saved just now\"",1],
@@ -220,6 +223,7 @@
     ["G3/far-action","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1]
   ],
   "run-overrides": [
+    ["G3/far-action","02-slot-with-changes","1920x1080","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
     ["G1b/pressed-control-moved","03-slot-changes-open","960x640","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1]
   ],
   "run-restart": [
@@ -260,6 +264,8 @@
     ["G3/far-action","28-session-long-title","1920x1080","Button \"Add to notes: Major event\"",1]
   ],
   "session-plan": [
+    ["G3/far-action","42-read-aloud-field","1920x1080","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
+    ["G3/far-action","41-make-it-yours","1920x1080","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
     ["G3/far-action","27-plan-rest-ruling-off","1920x1080","Button \"Add to notes: Long rest\"",1],
     ["G3/far-action","28-closed-plan-rest-ruling-off","1920x1080","Button \"Add to notes: Long rest\"",1],
