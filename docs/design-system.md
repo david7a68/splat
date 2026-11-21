@@ -682,7 +682,7 @@ typed or plain; a session note has neither) and the close icon share the title l
 match. Generate NPC appears only for empty search. When no creation action shows, their row takes no room: the rule
 above the entry follows the results or `Show N results` at the normal gap. While Lookup holds an unsaved generated
 NPC, its card is the view until an entry or a found note opens (a result, a link, typed words, `Back`). That view then
-shows below the World page's own row, `Unsaved NPC: <name> · Show` (`world::page::unsaved_npc_row`), and Show makes the
+shows below the World page's own row, `<name> ✎ Unsaved NPC · Show` (`world::page::unsaved_npc_row`), and Show makes the
 card the view again. Lookup's place and its NPC are not kept across a restart.
 
 **Trackers** is a view of Lookup, never a third panel (F4). Ctrl+T shows it in the Lookup panel and Ctrl+T again
@@ -1064,13 +1064,15 @@ while Lookup holds that NPC, so each of the two NPCs has its name. It is a state
 its icon and bar.
 An unsaved generated NPC on the World page is a held draft. Only Save NPC and Discard end it. Every other path keeps
 it: Things to check, Open questions, another note, a repair, New, a reveal from another page and Lookup's link. While another
-view is open, one row above that view says `Unsaved NPC: <name> · Show`, so the view stays usable. Show, Generate NPC
+view is open, one row above that view names it, `<name> ✎ Unsaved NPC · Show`: the NPC's name at the text edge, then the
+shared draft status (the draft icon and the unsaved colour, as the rail shows it), then `Show`; the name reads as the
+row's sentence, `Unsaved NPC: <name>`. The view stays usable. Show, Generate NPC
 and Lookup's link open its card again; Reroll on the card replaces it. Discard says `<name> draft discarded.` with
 `Undo discard of <name>`, which brings back the same NPC until another view opens. Closing the app or changing the campaign
 asks about the NPC as it does for other drafts. The rail shows `Unsaved NPC` with the draft icon while the NPC is held;
 it is a link that opens the NPC's card on World from any page. An NPC that Lookup holds (generated there, not saved) is
 named in the rail the same way, also while Lookup is closed; its link opens Lookup, which shows the NPC's card or its
-`Unsaved NPC: <name> · Show` row.
+`<name> ✎ Unsaved NPC · Show` row.
 
 Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) and every
 edit form with its `Undo reload` belong to the campaign that made them: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
