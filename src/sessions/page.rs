@@ -889,11 +889,13 @@ fn fills_body(reason: design::pane::FillsReason) -> design::pane::Body {
 
 /// The words a draft dropped (reloaded from disk, or discarded) and their Undo, in the footer
 /// of the pane that holds the draft: the result its store keeps (M0437), with the store's order,
-/// taken at the act, and its ticket.
+/// taken at the act, and its ticket. The Undo names the draft's note or template (`name`,
+/// M0438, M0440).
 fn add_dropped<'f>(
     frame: &'f PaneFrame,
     messages: &mut Messages<'f, SessionAct>,
     draft: &Draft,
+    name: &str,
     dropped: &design::Results<kept::DraftFile, kept::Dropped>,
 ) {
     if draft.dropped.is_none() {
@@ -910,12 +912,12 @@ fn add_dropped<'f>(
                 Notice::new(crate::sentence!(
                     "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
                 )),
-                UndoStep::verb(Verb::Reload).pressed_as(SessionAct::UndoDrop),
+                UndoStep::of(Verb::Reload, name).pressed_as(SessionAct::UndoDrop),
             )
         } else {
             KeptOutcome::Notice(
                 Notice::new(crate::sentence!("Draft discarded.")),
-                UndoStep::verb(Verb::Discard).pressed_as(SessionAct::UndoDrop),
+                UndoStep::of(Verb::Discard, name).pressed_as(SessionAct::UndoDrop),
             )
         }
     }));
@@ -4148,14 +4150,26 @@ impl Sessions {
             self.draft.as_ref()
         };
         if let Some(draft) = draft {
-            add_dropped(frame, &mut messages, draft, &self.dropped);
+            let name = if template {
+                self.template.clone()
+            } else {
+                self.note_name()
+            };
+            add_dropped(
+                frame,
+                &mut messages,
+                draft,
+                &name.unwrap_or_default(),
+                &self.dropped,
+            );
         }
         if template {
             if let Some(shown) = self.deleted_templates.get(&self.page()) {
                 messages.kept(shown.outcome(frame, |deleted| {
                     Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
                         .undo(
-                            UndoStep::verb(Verb::Delete).pressed_as(SessionAct::UndoDeleteTemplate),
+                            UndoStep::of(Verb::Delete, deleted.name.clone())
+                                .pressed_as(SessionAct::UndoDeleteTemplate),
                         )
                         .into()
                 }));
@@ -5240,7 +5254,8 @@ impl Sessions {
                 let mut messages =
                     Messages::new(&frame, "notes_panel_footer", ui.available_width());
                 if let Some(draft) = &self.draft {
-                    add_dropped(&frame, &mut messages, draft, &self.dropped);
+                    let name = self.note_name().unwrap_or_default();
+                    add_dropped(&frame, &mut messages, draft, &name, &self.dropped);
                 }
                 if let Some(date) = dated {
                     messages.outcome(
@@ -6819,7 +6834,8 @@ impl Sessions {
         let mut messages = Messages::new(frame, ("session_footer", self.selected), width);
         let dismiss = || Choice::new(MessageChoice::Dismiss(Lost::Nothing), SessionAct::Dismiss);
         if let Some(draft) = &self.draft {
-            add_dropped(frame, &mut messages, draft, &self.dropped);
+            let name = self.note_name().unwrap_or_default();
+            add_dropped(frame, &mut messages, draft, &name, &self.dropped);
         }
         if let Some((tone, words)) = self
             .notice()
@@ -6957,7 +6973,7 @@ impl Sessions {
                     moved.name,
                     moved.number
                 ))
-                .undo(UndoStep::verb(Verb::Move).pressed_as(SessionAct::UndoMove))
+                .undo(UndoStep::of(Verb::Move, moved.name.clone()).pressed_as(SessionAct::UndoMove))
                 .into()
             }));
         }
@@ -6991,7 +7007,10 @@ impl Sessions {
                     None => crate::sentence!("{} added.", added.title),
                 };
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Add).pressed_as(SessionAct::UndoMarker))
+                    .undo(
+                        UndoStep::of(Verb::Add, added.title.clone())
+                            .pressed_as(SessionAct::UndoMarker),
+                    )
                     .into()
             }));
         }
@@ -7607,7 +7626,10 @@ impl Sessions {
         if let Some(shown) = self.deleted_templates.get(&self.page()) {
             messages.kept(shown.outcome(frame, |deleted| {
                 Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
-                    .undo(UndoStep::verb(Verb::Delete).pressed_as(SessionAct::UndoDeleteTemplate))
+                    .undo(
+                        UndoStep::of(Verb::Delete, deleted.name.clone())
+                            .pressed_as(SessionAct::UndoDeleteTemplate),
+                    )
                     .into()
             }));
         }
@@ -8432,6 +8454,11 @@ impl Sessions {
     pub fn simulate_job_finished(&mut self) {
         let session = self.selected.expect("an open session");
         self.finish_job(Ok(None), session);
+    }
+
+    /// The open note's name, as its warnings and its draft's Undo name it.
+    pub fn open_note_name(&self) -> Option<String> {
+        self.note_name()
     }
 
     /// The open note's draft, to put back after a step that a scenario proves aside.
@@ -10053,7 +10080,8 @@ mod tests {
         }
         harness.run_steps(2);
         // The footer's own Undo, by its ticket.
-        harness.get_by_label("Undo move").click();
+        // M0483: the Undo names the run it moves back.
+        harness.get_by_label("Undo move Bridge Ambush").click();
         harness.run_steps(2);
         {
             let (page, book) = harness.state_mut();

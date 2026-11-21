@@ -15062,10 +15062,15 @@ pub mod session_notes {
             "Opening the session again keeps the words that could not be saved",
         );
         // Reload names itself as World does, and Undo reload brings the draft back. A new outside
-        // change then brings the same choices back, so the step below starts where it did.
+        // change then brings the same choices back, so the step below starts where it did. The
+        // Undo names its note (M0438).
+        let undo_reload = format!(
+            "Undo reload {}",
+            d.app().sessions.open_note_name().expect("the open note")
+        );
         d.aside(|d| {
             d.click("Reload and lose my draft");
-            d.expect("Undo reload");
+            d.expect(&undo_reload);
             d.observe(
                 "iter-15-C-FT4-reload",
                 d.visible_text("Reloaded from disk.")
@@ -15074,10 +15079,10 @@ pub mod session_notes {
                         .is_some_and(|text| !text.contains("My words during the conflict.")),
                 "Reload says Reloaded from disk. with Undo reload, and the editor shows the file",
             );
-            d.click("Undo reload");
+            d.click(&undo_reload);
             d.observe(
                 "iter-15-C-FT4-undo-reload",
-                !d.has("Undo reload")
+                !d.has(&undo_reload)
                     && d.editor_text()
                         .is_some_and(|text| text.contains("My words during the conflict.")),
                 "Undo reload puts the draft's words back in the editor",
@@ -15191,7 +15196,7 @@ pub mod session_notes {
         d.expect("Downtime");
         d.click("More actions for Downtime");
         d.click("Delete this template");
-        d.expect("Undo delete");
+        d.expect("Undo delete Downtime");
         // Round 27 FI4: the result is in the template page's footer, not under the list.
         let result = d.place_of("Deleted “Downtime”.");
         let last_row = d
@@ -15210,7 +15215,7 @@ pub mod session_notes {
             format!("The delete result {result:?} is in the footer, below the list {last_row:?}"),
         );
         d.state("templates-deleted", Sizes::Default);
-        d.click("Undo delete");
+        d.click("Undo delete Downtime");
         d.expect("Downtime");
         // Review of PR 335: beside Lookup the templates page is narrow, and `All templates` shows
         // the list alone, its rows in the pane's own scroll column (a second column inside the
@@ -16074,8 +16079,8 @@ pub mod session_notes {
         );
         d.state("run-moved-to-session", Sizes::Default);
         d.expect("Bridge Ambush moved to Session 3.");
-        d.expect("Undo move");
-        d.click("Undo move");
+        d.expect("Undo move Bridge Ambush");
+        d.click("Undo move Bridge Ambush");
         let restored = d
             .app_mut()
             .timeline
@@ -16304,13 +16309,17 @@ pub mod session_notes {
         d.expect("Short break");
         d.click("More actions for Short break");
         d.click("Delete this template");
-        d.expect("Undo delete");
+        d.expect("Undo delete Short break");
         d.state_prepared("note-gone-beside-a-pinned-result", Sizes::Small, |d| {
             banner_whole(
                 d,
                 "round-30-note-warning-beside-a-pinned-result",
                 "is gone from the folder.",
-                &["Save my draft as a new file", "Discard", "Undo delete"],
+                &[
+                    "Save my draft as a new file",
+                    "Discard",
+                    "Undo delete Short break",
+                ],
             );
             let result = d.nodes().into_iter().find(|node| {
                 node.fully_in_view() && node.name.starts_with("Deleted “Short break”.")
@@ -16321,7 +16330,7 @@ pub mod session_notes {
                 .find(|node| node.fully_in_view() && node.name.starts_with("The note of Session "));
             // Review F1 of PR 411: the result's Undo stands whole above the banner too.
             let undo = d.nodes().into_iter().find(|node| {
-                node.name == "Undo delete"
+                node.name == "Undo delete Short break"
                     && node.role == egui::accesskit::Role::Button
                     && node.fully_in_view()
             });
@@ -18681,7 +18690,7 @@ pub mod session_recording {
             let presses = [SMALL, DEFAULT, LARGE].map(|size| {
                 d.act_at_size(size, |d| {
                     let shown = d.has(WOLVES_ADDED);
-                    d.click("Undo add");
+                    d.click("Undo add Wolves at the bridge");
                     let emptied = events(d) == start_events
                         && d.has(WOLVES_ADD)
                         && !d.has(WOLVES_ADDED)
@@ -18691,11 +18700,11 @@ pub mod session_recording {
                         && d.has(WOLVES_ADDED)
                         && lower(d).is_some()
                         && !d.has_containing("Rest at the mill added");
-                    let tab = d.tab_to("Undo add");
+                    let tab = d.tab_to("Undo add Wolves at the bridge");
                     (size, shown, emptied, appeared, tab)
                 })
             });
-            d.click("Undo add");
+            d.click("Undo add Wolves at the bridge");
             (before, after, presses)
         });
         d.observe(
@@ -18732,7 +18741,7 @@ pub mod session_recording {
             format!("The other marker's Add keeps its y: {next_before:?} {next_after:?}"),
         );
         d.observe_both("H1 recording add", "The recording row owns one Undo", |d| {
-            d.has("Undo add")
+            d.has("Undo add Rest at the mill")
                 && d.nodes()
                     .iter()
                     .filter(|node| node.in_view() && node.name.starts_with("Undo"))
@@ -18753,7 +18762,7 @@ pub mod session_recording {
             // follows its words on the message line.
             // iter-25-S FK7: the marker's Add result names the session, as every Add result does.
             let words = d.place_of("Rest at the mill added to Session 1.");
-            let undo = d.place_of("Undo add");
+            let undo = d.place_of("Undo add Rest at the mill");
             d.observe(
                 "iter-24-S-FK5",
                 words.zip(undo).is_some_and(|(words, undo)| {
@@ -19263,15 +19272,20 @@ pub mod session_recording {
         let old_path = snapshot.path.clone();
         let moved_path = snapshot.moved_to.clone().expect("the note was found renamed");
         let moved_before = std::fs::read_to_string(&moved_path).unwrap();
+        // The Undo names its note (M0440).
+        let undo_discard = format!(
+            "Undo discard of {}",
+            d.app().sessions.open_note_name().expect("the open note")
+        );
         d.click(DISCARD);
         // The folder scan, which follows the renamed file every few seconds, keeps the Undo.
         d.app_mut().sessions.simulate_folder_scan();
         d.settle();
-        d.expect("Undo discard");
+        d.expect(&undo_discard);
         d.observe(
             "iter-15-C-FT4",
             d.visible_text("Draft discarded.")
-                && !d.has("Undo reload")
+                && !d.has(&undo_discard.replacen("Undo discard of", "Undo reload", 1))
                 && !d.has_containing("dropped")
                 && d.editor_text()
                     .is_some_and(|text| !text.contains("Words typed after the rename.")),
@@ -19305,7 +19319,7 @@ pub mod session_recording {
             });
             (
                 editor.zip(band).is_some_and(|(editor, band)| {
-                    band.right() > editor.left() + crate::design::L && d.in_view("Undo discard")
+                    band.right() > editor.left() + crate::design::L && d.in_view(&undo_discard)
                 }),
                 format!("editor {editor:?}, result {result:?}, its footer {band:?}"),
             )
@@ -19316,10 +19330,10 @@ pub mod session_recording {
             format!("Draft discarded. and Undo discard in the footer under the note: {detail}"),
         );
         d.state("note-discarded", Sizes::Default);
-        d.click("Undo discard");
+        d.click(&undo_discard);
         d.observe(
             "iter-15-C-FT4-undo",
-            !d.has("Undo discard")
+            !d.has(&undo_discard)
                 && d.editor_text()
                     .is_some_and(|text| text.contains("Words typed after the rename.")),
             "Undo discard brings the draft's words back",

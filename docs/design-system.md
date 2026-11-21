@@ -1043,7 +1043,7 @@ two choices in the tab's footer, offered only while no run and no encounter draf
 save stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
 run-settings saves while a run is open. Folder changes name hidden unfinished runs and their states. A move
-result gives counts and destination without another Saved label. A moved run has confirmation and Undo move
+result gives counts and destination without another Saved label. A moved run has confirmation and `Undo move <fight>`
 until the next note or plan edit.
 
 ## World
@@ -2193,7 +2193,7 @@ creation form with its actions under the field (`InlineCreate::actions_under`): 
 `Create template` and quiet `Cancel` together on the action line, then the kept line with `Type a name first.`. Enter
 in the field creates, Escape cancels. Built-ins leave one blank line below each heading.
 Template editors use the note's styled source face, no input well, full column width and height. `Deleted
-“<name>”.` with `Undo delete` is a result in the template editor's message footer (in a narrow window with the
+“<name>”.` with `Undo delete <name>` is a result in the template editor's message footer (in a narrow window with the
 list alone, in the list's footer), never under the list. A campaign change or an edit to a template ends it.
 
 ### The session's plan
@@ -2550,8 +2550,9 @@ A new file takes a new identity only once it exists: if a file arrived at that p
 keeps its identity and the File gone state, and the warning says why above the choices. Discarded or reloaded
 words stay recoverable when the draft follows a later outside edit; their Undo then meets the conflict choice. When Splat found the note under a new name, the warning
 says so: `The note of <session> was moved or renamed. It is now <file>. Your draft is still here.`; `gone from the folder`
-is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard`. After
-`Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
+is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard of <note>`. After
+`Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload <note>`, as World does; each Undo
+names the note (or template) whose draft it brings back, as its warnings name it. Missing session and run folders offer Choose folder.
 
 A session notice that arrives on its own, not as the result of the DM's action on this page, sits in the bottom
 banner where the recording banners sit, never above the tabs or the note: processing finished (`“<session>” is
@@ -2583,7 +2584,7 @@ typed footer until a footer notice can colour a state word.) The plan has its ow
 footer below its rows for its Add, Remove, ruling and deleted-run results with their Undo, the file's notices, the
 group being assembled elsewhere and a rename problem, and each fight's `Add rewards` result and fault, naming the
 fight; no result sits under a row. The row keeps its own state word (`✓ In notes`). The marker `Add` result
-(`<event> added to <session>.` with `Undo add`) is in the session pane's footer; the marker row keeps `✓ On the
+(`<event> added to <session>.` with `Undo add <event>`) is in the session pane's footer; the marker row keeps `✓ On the
 timeline`. The Notes panel beside a run and the Templates editor have one footer each for their draft's result,
 the panel's date warning, the template action's error and the delete result. When the
 banner makes the note's view shorter and the view was at the note's end, it stays at the end, so the line being
@@ -2729,7 +2730,7 @@ session list shows the warning icon and Processed in warning colour, then ` · P
 its sibling states do. A clean result is a status too: the check icon and Processed in the success colour, as
 on the recording row; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
 and transcript markers. Marker text takes its content width, capped at READER_MEASURE. A marker's Add
-result (`<event> added to <session>.` with `Undo add`), from the list or the marked transcript, is in the session
+result (`<event> added to <session>.` with `Undo add <event>`), from the list or the marked transcript, is in the session
 pane's message footer, newest first among its results; the row keeps On the timeline. One action column
 sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line is kept on every marker row, empty until the marker is added, so an Add moves no row below it. It does not affect that column’s width and wraps below the facts.
 
