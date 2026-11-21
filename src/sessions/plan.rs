@@ -8754,7 +8754,7 @@ mod tests {
         assert!(
             harness
                 .query_by_label(
-                    "The scene “Pay the toll” was not ticked in Session 2: The Crossing. The \
+                    "The scene “Pay the toll” was not unticked in Session 2: The Crossing. The \
                      session note has unsaved words, and its file changed on disk. Choose which \
                      words to keep in the session note first."
                 )
