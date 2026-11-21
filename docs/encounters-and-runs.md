@@ -158,6 +158,5 @@ resumes sync if it was on.
   when you close the run.
 
 Live writes have yet to be verified with an authenticated character.
-[Sync endpoints and limits](research/dndbeyond-combat-writes.md)
 
 [Back to the user guide](user-guide.md).

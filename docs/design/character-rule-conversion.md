@@ -51,8 +51,6 @@ Additional typed contracts cover:
   the revised Rope has different checks and binding behavior.
 - Character-creation grants and optional campaign-system prompts. Their 95
   selectable variants now have a separate source-pinned option catalogue.
-  See [optional character systems](../research/character-campaign-options.md)
-  for the primary sources and the state contract below.
 
 Rage recovery overrides the provider's coarse reset category with the actual
 2024 contract: restore one use on a Short Rest and all uses on a Long Rest.

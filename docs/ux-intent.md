@@ -36,7 +36,7 @@ conditions, and death. The run stores the result (`src/encounter_run.rs:1`,
   `src/main.rs:255-265`). Automatic combat resolution is also later work.
 
 **The user.** One DM, working alone on one computer, with a D&D Beyond campaign
-and players who keep their own sheets there (`docs/character-viewer.md:43`). See
+and players who keep their own sheets there. See
 assumptions A1 to A3.
 
 **Two contexts of use.** They have opposite needs. Most design disputes come from
