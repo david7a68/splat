@@ -1690,6 +1690,8 @@ pub struct TitleLine<'a> {
     page: bool,
     /// A close icon at the right end of the title's line, and its accessible name.
     close: Option<&'a str>,
+    /// A view toggle left of the close icon: its icon, its accessible name and its hint.
+    toggle: Option<(&'static str, &'a str, &'a str)>,
 }
 
 /// A menu's content: the caller draws its own choices.
@@ -1713,6 +1715,8 @@ pub struct TitleLineResponse {
     pressed: Option<Word>,
     /// The DM pressed the close icon (`TitleLine::close`).
     pub closed: bool,
+    /// The DM pressed the view toggle (`TitleLine::toggle`).
+    pub toggled: bool,
     /// The actions sit under the title.
     pub below: bool,
     /// The rows of actions under the title (0 when they follow the title).
@@ -1799,6 +1803,7 @@ impl<'a> TitleLine<'a> {
             menu_room: None,
             page: false,
             close: None,
+            toggle: None,
         }
     }
 
@@ -1807,7 +1812,8 @@ impl<'a> TitleLine<'a> {
         self
     }
 
-    /// One muted `Small` state or count after the title, `XS` after it.
+    /// One muted `Small` state, count or date after the title (the Notes panel's note date),
+    /// `XS` after it.
     pub fn context(mut self, context: Option<&'a str>) -> Self {
         self.context = context;
         self
@@ -1868,6 +1874,16 @@ impl<'a> TitleLine<'a> {
     /// of it. Its press is [`TitleLineResponse::closed`].
     pub fn close(mut self, name: &'a str) -> Self {
         self.close = Some(name);
+        self
+    }
+
+    /// A view toggle at the right end of the title's own line, left of a close icon (the
+    /// session list's show and hide): an icon target, `name` its accessible name and `hint`
+    /// (with its key) on hover. It is not an action: it changes what the page shows beside it,
+    /// never its data, and it keeps one place however the actions come, go or wrap. The title
+    /// and the actions beside it keep clear of it. Its press is [`TitleLineResponse::toggled`].
+    pub fn toggle(mut self, icon: &'static str, name: &'a str, hint: &'a str) -> Self {
+        self.toggle = Some((icon, name, hint));
         self
     }
 
@@ -1966,30 +1982,45 @@ impl<'a> TitleLine<'a> {
         super::icon_button(&mut child, super::icons::CLOSE, name).clicked()
     }
 
+    /// The view toggle, its right edge at `right` (left of the close icon), on the line from
+    /// `top`, `line_height` high.
+    fn toggle_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) -> bool {
+        let Some((icon, name, hint)) = self.toggle else {
+            return false;
+        };
+        let size = Density::Read.control();
+        let rect = Rect::from_min_size(
+            egui::pos2(right - size, top + (line_height - size) / 2.0),
+            vec2(size, size),
+        );
+        let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
+        super::icon_button_with_hint(&mut child, icon, name, hint).clicked()
+    }
+
     pub fn show(mut self, ui: &mut Ui) -> TitleLineResponse {
         let metrics = self.metrics(ui);
         let room = ui.available_width();
-        // The close icon keeps its target and a gap at the title line's right end.
-        let close = if self.close.is_some() {
-            Density::Read.control() + ACTION_GAP
-        } else {
-            0.0
-        };
+        // The close icon and the view toggle keep their targets and a gap each at the title
+        // line's right end; `close` is the close icon's part, `end` both.
+        let end_icon = Density::Read.control() + ACTION_GAP;
+        let close = if self.close.is_some() { end_icon } else { 0.0 };
+        let end = close + if self.toggle.is_some() { end_icon } else { 0.0 };
         // Issue #567: a title with no actions that is wider than its line (less the close
         // icon) wraps under nothing, as the `Under` form wraps it; it never paints past the
         // line or under the close icon.
-        let placement = if metrics.widths.is_empty() && metrics.beside() > room - close {
+        let placement = if metrics.widths.is_empty() && metrics.beside() > room - end {
             TitlePlacement::Under(Vec::new())
         } else {
             title_placement(
                 metrics.beside(),
                 metrics.lead_in,
                 &metrics.widths,
-                room - close,
+                room - end,
                 room,
             )
         };
         let closed;
+        let toggled;
         let height = Density::Read.control();
         let mut pressed = None;
         let font = self.font();
@@ -2039,13 +2070,14 @@ impl<'a> TitleLine<'a> {
                     }
                 }
                 closed = self.close_at(ui, line.right(), line.top(), line_height);
+                toggled = self.toggle_at(ui, line.right() - close, line.top(), line_height);
                 0
             }
             TitlePlacement::Under(rows) => {
                 let (line_left, line_top) = (ui.cursor().left(), ui.cursor().top());
                 let title_rect = ui
                     .horizontal_wrapped(|ui| {
-                        ui.set_max_width(room - close);
+                        ui.set_max_width(room - end);
                         ui.spacing_mut().item_spacing.x = XS;
                         ui.add(title.wrap());
                         if let Some((words, context)) = context {
@@ -2056,6 +2088,7 @@ impl<'a> TitleLine<'a> {
                     .rect;
                 let right = line_left + room;
                 closed = self.close_at(ui, right, line_top, font.line());
+                toggled = self.toggle_at(ui, right - close, line_top, font.line());
                 for row in &rows {
                     let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
                     let mut row_ui = ui.new_child(
@@ -2095,6 +2128,7 @@ impl<'a> TitleLine<'a> {
         TitleLineResponse {
             pressed,
             closed,
+            toggled,
             below: rows > 0,
             rows,
         }

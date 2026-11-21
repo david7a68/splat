@@ -4545,18 +4545,6 @@ pub fn side_panel_width(available: f32) -> f32 {
     (available * 0.36).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
 }
 
-/// A panel's title row with its close control.
-pub fn panel_header(ui: &mut Ui, title: &str, close: &str) -> bool {
-    let mut closed = false;
-    // The control first, and the title in what is left. A long title wraps.
-    ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-        closed = icon_button(ui, icons::CLOSE, close).clicked();
-        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
-            ui.add(egui::Label::new(Type::Heading.rich(ui, title).color(colors().text)).wrap());
-        });
-    });
-    closed
-}
 
 fn phosphor_icon(ui: &Ui, rect: Rect, icon: &str, color: Color32) {
     ui.painter().text(

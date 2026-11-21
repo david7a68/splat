@@ -472,6 +472,11 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             )
             .menu_room(move |_| room)
             .close("Close Library")
+            .toggle(
+                crate::design::icons::SESSION_LIST,
+                "Hide the list",
+                "Hide the list (Ctrl+\\)",
+            )
     }
     for (width, beside, blocked) in [
         (900.0, true, false),
@@ -483,6 +488,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         let packages = std::cell::Cell::new(false);
         let lock = std::cell::Cell::new(blocked);
         let closed = std::cell::Cell::new(false);
+        let toggled = std::cell::Cell::new(false);
         let left = std::cell::Cell::new(0.0);
         // The column under the link: the line's right half, as a reader beside a list.
         let room = std::cell::Cell::new(Rect::NOTHING);
@@ -495,17 +501,14 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                     rect.right_bottom(),
                 ));
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                    if header(&opened, &packages, lock.get(), room.get())
-                        .show(ui)
-                        .closed
-                    {
-                        closed.set(true);
-                    }
+                    let line = header(&opened, &packages, lock.get(), room.get()).show(ui);
+                    closed.set(closed.get() || line.closed);
+                    toggled.set(toggled.get() || line.toggled);
                 });
             })
         };
         let (nodes, painted) = draw(Vec::new());
-        let (title, new, status, close) = (
+        let (title, new, status, close, toggle) = (
             painted
                 .iter()
                 .find(|text| text.text == "Library")
@@ -514,6 +517,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             bounds(&nodes, "New entry"),
             bounds(&nodes, "3 files need fixing"),
             bounds(&nodes, "Close Library"),
+            bounds(&nodes, "Hide the list"),
         );
         assert!(
             painted_whole(&painted, "N"),
@@ -528,6 +532,18 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         assert!(
             new.right() <= close.left() && status.right() <= close.left() || !beside,
             "{width}: the actions keep clear of the close icon: {new:?} {status:?} {close:?}"
+        );
+        // N0 (ruling M21): the view toggle, an icon target, stands left of the close icon on
+        // the title's line, wherever the actions go, and the actions keep clear of it.
+        assert!(
+            (toggle.right() - (close.left() - ACTION_GAP)).abs() <= 0.5
+                && (toggle.center().y - close.center().y).abs() <= 0.5
+                && toggle.width() >= 24.0,
+            "n0-title-toggle: {width}: the toggle left of the close icon, on its line: {toggle:?}, close {close:?}"
+        );
+        assert!(
+            new.right() <= toggle.left() && status.right() <= toggle.left() || !beside,
+            "n0-title-toggle: {width}: the actions keep clear of the toggle: {new:?} {status:?} {toggle:?}"
         );
         assert_eq!(
             (new.center().y - title.center().y).abs() < 4.0,
@@ -615,6 +631,15 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         lock.set(blocked);
         draw(click(close.center()));
         assert!(closed.get(), "{width}: the close icon's press comes back");
+        assert!(
+            !toggled.get(),
+            "{width}: the close icon's press is not the toggle's"
+        );
+        draw(click(toggle.center()));
+        assert!(
+            toggled.get(),
+            "n0-title-toggle: {width}: the toggle's press comes back"
+        );
     }
 
     // Issue #567: a close icon and no actions: a title wider than its line wraps clear of the
