@@ -4568,6 +4568,14 @@ impl Encounters {
     pub fn snapshot_revision(&self) -> Option<Uuid> {
         self.snapshot.as_ref().map(|snapshot| snapshot.revision)
     }
+    /// Test only: whether the campaign read offers a creature of this name to the encounter
+    /// search (the creatures the campaign's package choices use).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn searchable_creature(&self, name: &str) -> bool {
+        self.snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.creatures.iter().any(|c| c.name == name))
+    }
     /// No plan refusal is stored: its check is forgotten, so a new one compares afresh.
     pub fn forget_plan_refusal(&mut self) {
         self.plan_refusal_check = None;

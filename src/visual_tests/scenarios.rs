@@ -28187,8 +28187,28 @@ pub mod share_to_package {
 
 pub mod remove_package_in_use {
     use super::*;
+    /// A creature of the package the steps remove, which the campaign uses.
+    const CREATURE: &str = "Cinder Wolf";
+
+    /// What the two readers give the encounter search for `CREATURE`: whether Lookup's index
+    /// offers it as a creature of a package the campaign does not use (`Use it`), and whether
+    /// Encounters' campaign read lists it.
+    fn readers(d: &Driver<'_>) -> (bool, bool) {
+        let unused = d.app().lookup.index().is_some_and(|index| {
+            index
+                .unused_creatures("cinder wolf")
+                .iter()
+                .any(|(_, _, name, _)| name == CREATURE)
+        });
+        (unused, d.app().encounters.searchable_creature(CREATURE))
+    }
+
     pub fn run(d: &mut Driver<'_>) {
-        let package = d.app_mut().campaigns.modules()[0].id;
+        let module = d.app_mut().campaigns.modules()[0].clone();
+        let package = module.id;
+        // P2 of the review of PR 623: the search results before any change, for the Undo of
+        // the removal at the end.
+        let before = readers(d);
         go_library(d);
         d.click("Packages");
         d.click("Manage packages…");
@@ -28421,6 +28441,28 @@ pub mod remove_package_in_use {
             "A package removal does not say its creature file was deleted",
         );
         d.state("paused-run-after-package-removal", Sizes::All);
+        // P2 of the review of PR 623 (issue #509): the package comes back (registered again),
+        // while the campaign does not choose it: Lookup offers its creature as unused. Undo of
+        // the removal chooses it again, and both readers give back the results from before
+        // the removal.
+        d.app_mut().campaigns.register_module(module).unwrap();
+        go_campaign(d);
+        d.settle();
+        let removed = readers(d);
+        let read = d.app().encounters.snapshot_revision();
+        d.click("Undo remove Ashen Marches");
+        d.settle();
+        let undone = readers(d);
+        d.observe(
+            "m32-C0-509-removal-undo-readers",
+            before == (false, true)
+                && removed.0
+                && undone == before
+                && d.app().encounters.snapshot_revision() != read,
+            format!(
+                "{CREATURE} offered as unused, listed by Encounters: before {before:?}, removed and registered again {removed:?}, after Undo {undone:?}"
+            ),
+        );
     }
 }
 
