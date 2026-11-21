@@ -293,8 +293,7 @@
     ["G3/far-action","09-plan-groups-fight-open","1920x1080","Button \"More actions for Bridge Ambush\"",1],
     ["G3/far-action","15-plan-group-no-member-can-join","1920x1080","Button \"Add Ash Pack to fight\"",1],
     ["G3/far-action","15-plan-group-no-member-can-join","1920x1080","Button \"More actions for Bridge Ambush\"",1],
-    ["G3/far-action","15-plan-group-no-member-can-join","1920x1080","Button \"More actions for Mill Watch\"",1],
-    ["N2/icon-off-text-centre","15-plan-group-no-member-can-join","960x640","Button \"More actions for Ash Pack\"",1]
+    ["G3/far-action","15-plan-group-no-member-can-join","1920x1080","Button \"More actions for Mill Watch\"",1]
   ],
   "session-plan-scenes": [
     ["G1b/pressed-control-moved","07-scene-removed","1200x800","Button \"Add\"",1],
