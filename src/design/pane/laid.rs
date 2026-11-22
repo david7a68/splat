@@ -372,6 +372,11 @@ mod tests {
         bring: Option<usize>,
         /// What `dm_scrolls` (a retry's rule, PR 780) said in the pane's column in the last pass.
         scrolls: bool,
+        /// A block whose control is a multi-line text field that indents (it keeps Tab), its
+        /// text and its id.
+        field: Option<usize>,
+        field_text: String,
+        field_id: Option<Id>,
     }
 
     impl Page {
@@ -395,6 +400,9 @@ mod tests {
                 jumps: (None, None),
                 bring: None,
                 scrolls: false,
+                field: None,
+                field_text: String::new(),
+                field_id: None,
             }
         }
     }
@@ -475,6 +483,9 @@ mod tests {
                         clicked,
                         overflow,
                         stray,
+                        field,
+                        field_text,
+                        field_id,
                         ..
                     } = page;
                     let top_of = |at: usize| top + laid[..at].iter().map(Laid::height).sum::<f32>();
@@ -496,7 +507,18 @@ mod tests {
                         ui,
                         |at| &laid[at],
                         |ui, at| {
-                            if ui.put(0, egui::Button::new(format!("Act {at}"))).clicked() {
+                            if *field == Some(at) {
+                                let size = ui.slot(0).size();
+                                let edit = ui.in_slot(0, |ui| {
+                                    ui.add_sized(
+                                        size,
+                                        egui::TextEdit::multiline(field_text)
+                                            .desired_rows(1)
+                                            .lock_focus(true),
+                                    )
+                                });
+                                *field_id = Some(edit.id);
+                            } else if ui.put(0, egui::Button::new(format!("Act {at}"))).clicked() {
                                 clicked.push(at);
                             }
                             for slot in 1..ui.slots() {
@@ -1215,6 +1237,24 @@ mod tests {
             !shown(&harness, 2),
             "Page Down in this column ends the request"
         );
+        // Review of PR 787 (P2): the focus moves from the other column into this one in a pass
+        // where the other column recorded first: Page Down in the next frame still ends this
+        // column's queued request.
+        harness.get_by_label("Beside button").focus();
+        harness.run_steps(2);
+        let here = (0..40)
+            .find(|at| shown(&harness, *at))
+            .expect("a whole block");
+        let far = if here > 20 { 2 } else { 36 };
+        show(&mut harness, far);
+        harness.get_by_label(&format!("Act {here}")).focus();
+        harness.step();
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(
+            !shown(&harness, far),
+            "Page Down ends the request of the column the focus moved into"
+        );
     }
 
     /// Review of PR 757 (P2): two measured blocks of one region may not share a key.
@@ -1607,14 +1647,20 @@ mod tests {
         };
         let rows = [
             ("wheel", None, true),
+            // Review of PR 787 (P2): the pointer moves from the inner column to the outer one in
+            // the frame of the wheel.
+            ("wheel, moved in from the inner column", None, false),
             ("Page Down", Some((Key::PageDown, Modifiers::NONE)), true),
             ("ArrowDown", Some((Key::ArrowDown, Modifiers::NONE)), true),
             ("Ctrl+Home", Some((Key::Home, Modifiers::CTRL)), true),
             ("Tab", Some((Key::Tab, Modifiers::NONE)), true),
         ];
         let mut wrong = Vec::new();
-        for (name, key, _) in rows {
+        for (name, key, plain) in rows {
             for at_inner in [true, false] {
+                if !plain && at_inner {
+                    continue;
+                }
                 // From the outer column's top, the focus and the pointer where the input aims.
                 harness.run_steps(10);
                 harness.state_mut().top = true;
@@ -1628,13 +1674,25 @@ mod tests {
                     )
                 };
                 harness.get_by_label(focus).focus();
+                // The moved row starts over the inner column.
+                let start = if plain {
+                    point
+                } else {
+                    harness.state().inner.center()
+                };
                 harness
                     .input_mut()
                     .events
-                    .push(egui::Event::PointerMoved(point));
+                    .push(egui::Event::PointerMoved(start));
                 harness.run_steps(2);
                 harness.state_mut().jump = true;
                 harness.step();
+                if !plain {
+                    harness
+                        .input_mut()
+                        .events
+                        .push(egui::Event::PointerMoved(point));
+                }
                 match key {
                     None => harness.input_mut().events.push(egui::Event::MouseWheel {
                         unit: egui::MouseWheelUnit::Point,
@@ -1749,6 +1807,70 @@ mod tests {
         if shown(&harness, 30) {
             wrong.push("the older request survived the Tab".to_owned());
         }
+        // Review of PR 787 (P2): the DM's wheel cancels a routed Tab's request, and its focus
+        // with it: the target that the wheel brings into view does not take the focus.
+        let (_, last) = edge(&harness);
+        harness.get_by_label(&format!("Act {last}")).focus();
+        harness.run_steps(2);
+        for pressed in [true, false] {
+            harness.input_mut().events.push(egui::Event::Key {
+                key: Key::Tab,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            });
+        }
+        harness.step();
+        let at = harness.state().clip.center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -120.0),
+            modifiers: Modifiers::NONE,
+        });
+        harness.run_steps(8);
+        if focused(&harness, last + 1) {
+            wrong.push(format!(
+                "a cancelled Tab's target Act {} took the focus (whole {})",
+                last + 1,
+                shown(&harness, last + 1)
+            ));
+        }
         assert!(wrong.is_empty(), "keyboard routing: {wrong:#?}");
+        // Review of PR 787 (P2): a focused text field keeps its keys. In a field that indents, at
+        // the drawn edge, Home, End, the arrows and Tab move its caret or indent: the focus stays
+        // in it and the view stays.
+        let mut harness = self::harness(Page::new(texts(40)), egui::vec2(960.0, 420.0));
+        let (_, last) = edge(&harness);
+        harness.state_mut().field = Some(last);
+        harness.run_steps(2);
+        let field = harness.state().field_id.expect("the field");
+        harness.ctx.memory_mut(|memory| memory.request_focus(field));
+        harness.run_steps(2);
+        for (name, key, modifiers) in [
+            ("Home", Key::Home, Modifiers::NONE),
+            ("End", Key::End, Modifiers::NONE),
+            ("ArrowDown", Key::ArrowDown, Modifiers::NONE),
+            ("ArrowUp", Key::ArrowUp, Modifiers::NONE),
+            ("Tab", Key::Tab, Modifiers::NONE),
+        ] {
+            press(&mut harness, key, modifiers);
+            let kept = harness.ctx.memory(|memory| memory.has_focus(field));
+            let page = harness.state();
+            let whole = page.clip.expand(0.5).contains_rect(block_rect(page, last));
+            if !kept || !whole {
+                wrong.push(format!(
+                    "{name} in a text field: the field kept the focus {kept}, its block whole {whole}"
+                ));
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "keyboard routing in a text field: {wrong:#?}"
+        );
     }
 }
