@@ -5359,7 +5359,9 @@ mod editor_region_tests {
             let other = doc.copy_as_new();
             *doc = other;
         });
-        relaid(&mut h, "resize", &mut |h| h.set_size(vec2(520.0, 400.0)));
+        relaid(&mut h, "resize", &mut |h| {
+            h.set_size(vec2(520.0, 400.0));
+        });
         relaid(&mut h, "atlas", &mut |h| {
             // The same fonts, set again: egui makes its fonts and atlas again; the app's own
             // font generation does not change.
