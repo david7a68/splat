@@ -508,9 +508,9 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, Words::Plain(text));
+        let guard = TextGuard::before(ui, id, Words::Plain(text.as_str()));
         let response = ui.add(style(TextEdit::singleline(text).id(id)));
-        guard.after(ui, Words::Plain(text), &response);
+        guard.after(ui, Words::Plain(text.as_str()), &response);
         record_field(ui, &response);
         response
     }
@@ -653,9 +653,9 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, Words::Plain(text));
+        let guard = TextGuard::before(ui, id, Words::Plain(text.as_str()));
         let response = ui.add(style(TextEdit::multiline(text).id(id)));
-        guard.after(ui, Words::Plain(text), &response);
+        guard.after(ui, Words::Plain(text.as_str()), &response);
         record_field(ui, &response);
         response
     }
