@@ -129,9 +129,11 @@ pub struct Campaigns {
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
-    /// Edit details was pressed on Link and folder: the details form comes into view once, with
-    /// its Save, in that pane (round 28: the session folder's save row stands above the pane).
-    reveal_details: bool,
+    /// The details form's fields as the last frame drew them (name, folder): while one of them
+    /// has the keyboard, the whole form with its Save is that field's block, which the pane's
+    /// focus clearance brings whole into view (round 28: the session folder's save row stands
+    /// above the form; layout step 11c, L11c-C.2).
+    details_fields: [egui::Id; 2],
     form_open: bool,
     add_name: String,
     add_path: String,
@@ -179,7 +181,7 @@ impl Default for Campaigns {
             writable: false,
             editing: None,
             focus_name: false,
-            reveal_details: false,
+            details_fields: [egui::Id::NULL; 2],
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -482,7 +484,7 @@ impl Campaigns {
             writable: true,
             editing: None,
             focus_name: false,
-            reveal_details: false,
+            details_fields: [egui::Id::NULL; 2],
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -952,7 +954,6 @@ impl Campaigns {
             // The keyboard goes to the form's first field, and the form comes whole into view
             // with it (`show_form_if_editing`).
             self.focus_name = true;
-            self.reveal_details = true;
             self.name = campaign.name.clone();
             self.path = campaign.path.to_string_lossy().into_owned();
         }
@@ -1538,10 +1539,13 @@ impl Campaigns {
         if open {
             design::gap(ui, design::Gap::S);
             let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
-            // Once, when Edit details opened it: the name field has the keyboard, and the whole
-            // form with its Save is that focused field's block, which the pane brings whole into
-            // view (its focus clearance, layout step 10; layout step 11c, L11c-C.2).
-            if std::mem::take(&mut self.reveal_details) {
+            // Edit details gives the name field the keyboard. While a field of the form has it,
+            // the whole form with its Save is that field's block, which the pane brings whole
+            // into view (its focus clearance, layout step 10; layout step 11c, L11c-C.2). Every
+            // frame, not once: the clearance waits for the press of Edit details to end, and
+            // brings in the block it has then.
+            let focused = ui.ctx().memory(|memory| memory.focused());
+            if focused.is_some_and(|id| self.details_fields.contains(&id)) {
                 design::pane::reveal_with_focus(ui, form);
             }
         }
@@ -1689,6 +1693,7 @@ impl Campaigns {
                             }
                         },
                     );
+                    self.details_fields = [name.id, field.id];
                     design::help(ui, FOLDER_HELP);
                     let action = if primary {
                         Action::primary("Save details")
@@ -2212,7 +2217,7 @@ mod tests {
             writable: true,
             editing: None,
             focus_name: false,
-            reveal_details: false,
+            details_fields: [egui::Id::NULL; 2],
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
