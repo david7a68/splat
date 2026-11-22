@@ -273,6 +273,9 @@ struct Maps {
     /// The whole document's height in the last draw (layout PR 9b-R2), with `offsets` the room
     /// of every block, so one out of view is not laid out.
     height: Option<f32>,
+    /// What else sets a block's height in the last draw: a wide table's room (the pane's right
+    /// edge and the clip's), which the key does not hold. When it changes, every block draws.
+    room: Option<(Option<f32>, f32)>,
 }
 
 /// One link control of a prepared document.
@@ -367,9 +370,17 @@ fn show_kept(ui: &mut egui::Ui, source: ReaderSource<'_>) {
             jump = None;
         }
         // The view, from the reader's top (layout PR 9b-R2): a block wholly outside it is not
-        // laid out; its room is kept.
+        // laid out; its room is kept. A new room for wide tables lays every block out again.
         let top = ui.cursor().top();
         let clip = ui.clip_rect();
+        let room = (
+            ui.ctx()
+                .data(|data| data.get_temp::<f32>(egui::Id::new(TABLE_ROOM))),
+            clip.right(),
+        );
+        if kept.maps.room.replace(room) != Some(room) {
+            kept.maps.height = None;
+        }
         let view = (clip.top() - top, clip.bottom() - top);
         draw(
             ui,
@@ -411,6 +422,28 @@ pub fn kept_galleys(ctx: &egui::Context) -> Vec<Arc<egui::Galley>> {
         }
     }
     galleys
+}
+
+/// Each kept document's block tops from its last draw (layout PR 9b-R2's checks).
+#[cfg(test)]
+pub(crate) fn kept_offsets(ctx: &egui::Context) -> Vec<Vec<f32>> {
+    let readers = ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<KeptReaders>(egui::Id::new("markdown_kept_readers"))
+            .clone()
+    });
+    let readers = readers
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    readers
+        .values()
+        .filter_map(|(_, kept)| {
+            let kept = kept
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            kept.as_ref().map(|kept| kept.maps.offsets.clone())
+        })
+        .collect()
 }
 
 /// How many blocks the documents the readers keep have (layout PR 9b-R2's checks).
@@ -3978,6 +4011,66 @@ mod tests {
             next_id(&harness.ctx),
             next,
             "9b-R2-ids: the widgets after the reader keep their ids with nothing skipped"
+        );
+        // 9b-R2: a new pane width reflows a wide table far below the view, while the prose keeps
+        // its measure (so the key stands). The table is not laid out, but every block's kept top
+        // is where a first layout at the new width puts it: a new room lays every block out.
+        let wide_text: &'static str = Box::leak(
+            format!(
+                "{}| Watch | Words |\n| --- | --- |\n{}\n## The gate\n\n{}",
+                "A line of the night.\n\n".repeat(30),
+                "| First | Ash road and cinder pass, the ferry hands and the pier at dusk, \
+                 the bells and the long walk home |\n"
+                    .repeat(12),
+                "A line after the gate.\n\n".repeat(10),
+            )
+            .into_boxed_str(),
+        );
+        let wide = |width: f32| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(width, 320.0))
+                .themed_ui_state(
+                    move |ui, (): &mut ()| {
+                        design::layout::ScrollColumn::new("reader")
+                            .hosts_reveals()
+                            .show(ui, |ui| {
+                                with_wide_tables(ui, |ui| {
+                                    ui.scope(|ui| {
+                                        ui.set_max_width(360.0);
+                                        show_document(
+                                            ui,
+                                            ReaderSource {
+                                                doc: DocumentId::Entry(uuid::Uuid::from_u128(11)),
+                                                revision: 1,
+                                                text: wide_text,
+                                            },
+                                        );
+                                    });
+                                });
+                            });
+                    },
+                    (),
+                );
+            harness.run_steps(4);
+            harness
+        };
+        let mut resized = wide(1000.0);
+        let before = kept_offsets(&resized.ctx);
+        resized.set_size(egui::vec2(560.0, 320.0));
+        resized.run_steps(3);
+        let after = kept_offsets(&resized.ctx);
+        let first = kept_offsets(&wide(560.0).ctx);
+        let same = |a: &[Vec<f32>], b: &[Vec<f32>]| {
+            a.len() == b.len()
+                && a.iter().zip(b).all(|(a, b)| {
+                    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a - b).abs() < 0.5)
+                })
+        };
+        assert!(
+            !same(&before, &first) && same(&after, &first),
+            "9b-R2-room: after a resize that reflows a wide table out of view, the kept tops \
+             are a first layout's at the new width (the table moved them: {})",
+            !same(&before, &first)
         );
     }
 
