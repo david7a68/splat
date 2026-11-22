@@ -249,6 +249,8 @@ impl PlanRow<'_> {
     /// The row's facts (its title and every summary line, from its words' column) and its
     /// action recipe, at `width`: what the shared column is made of.
     pub fn facts(&self, ui: &Ui, width: f32) -> (f32, f32) {
+        #[cfg(any(test, feature = "test-support"))]
+        crate::design::components::text_measured();
         // The title's press target, at least 24 px wide (review of PR 840): a short title's
         // target is its facts, so no action stands on it.
         let title = Self::target_width(self.title(ui, width).size().x);
@@ -260,6 +262,8 @@ impl PlanRow<'_> {
 
     /// The row laid out at `width` with the plan's shared column.
     pub fn lay(&self, ui: &Ui, width: f32, columns: PlanColumns) -> Laid {
+        #[cfg(any(test, feature = "test-support"))]
+        crate::design::components::text_measured();
         let x0 = Self::x0();
         let lead = ui.fonts_mut(|fonts| {
             fonts.layout_no_wrap(self.lead.to_owned(), Type::Body.font(ui), colors().muted)

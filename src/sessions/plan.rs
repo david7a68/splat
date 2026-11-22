@@ -470,6 +470,8 @@ fn plan_group_summary(ui: &mut egui::Ui, summary: &str, max_rows: usize) {
 
 /// A group's summary laid out in `room`, in at most `max_rows` rows (`plan_group_summary`).
 fn plan_group_part(ui: &egui::Ui, summary: &str, max_rows: usize, room: f32) -> RowPart {
+    #[cfg(any(test, feature = "test-support"))]
+    design::text_measured();
     let font = Type::Small.font(ui);
     let text = without_loose_separators(ui, summary.replace(" · ", FACT_SEPARATOR), &font, room);
     let mut job = egui::text::LayoutJob::simple(text, font, colors().muted, room);
@@ -900,8 +902,12 @@ struct RowsKey {
     open_run: Option<(Uuid, String)>,
     arrivals_open: bool,
     refused: Option<(Option<Uuid>, Uuid)>,
-    /// The rows' width, the font generation and the scale.
-    env: (f32, u64, f32),
+    /// The rows' width, the font generation, the scale and the font atlas's epoch (a kept galley
+    /// holds places in the atlas).
+    env: (f32, u64, f32, u64),
+    /// The column the rows drawn by `plan_row_with` measured (scenes, a group with warnings):
+    /// the shared column takes it, so a wider scene lays the rows out again (review of PR 841).
+    legacy: (f32, f32),
 }
 
 /// The plan's laid rows, kept by their inputs (`RowsKey`).
@@ -1269,6 +1275,8 @@ fn prepare_plan_line(
 ) -> KeptPlanLine {
     #[cfg(any(test, feature = "test-support"))]
     PLAN_FITS.with(|fits| fits.set(fits.get() + 1));
+    #[cfg(any(test, feature = "test-support"))]
+    design::text_measured();
     // G118: the roster's typed parts; its words only for the layout and the name.
     let words = typed.text();
     let roster = words.as_str();
@@ -1762,6 +1770,50 @@ struct Scene {
     /// words and the done mark are this model's, so only the room can change it
     /// (`Scene::log_keeps_rows`).
     fit: std::sync::Mutex<Vec<(f32, f32, bool)>>,
+    /// Its words' lines as last measured, by the room, the font generation and the scale: a
+    /// quiet frame measures none (layout 11c A2c).
+    words: Box<std::sync::Mutex<Option<(SceneRoom, SceneLines)>>>,
+}
+
+/// The room a scene's words were measured in: its width, the font generation and the scale; and
+/// whether they were measured with `Not found` after them.
+type SceneRoom = (u32, u64, u32, bool);
+
+/// A scene's words as measured: how many lines they take alone; for a scene whose entry is gone,
+/// also the words that fit with `Not found` in those lines.
+#[derive(Clone)]
+struct SceneLines {
+    alone: usize,
+    gone: Option<String>,
+}
+
+impl Scene {
+    /// The scene's words measured in `width`, or as last measured there.
+    fn lines(
+        &self,
+        ui: &egui::Ui,
+        (width, gone): (f32, bool),
+        measure: impl FnOnce() -> SceneLines,
+    ) -> SceneLines {
+        let room = (
+            width.to_bits(),
+            design::theme::font_generation(ui.ctx()),
+            ui.ctx().pixels_per_point().to_bits(),
+            gone,
+        );
+        let mut kept = self
+            .words
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match &*kept {
+            Some((at, lines)) if *at == room => lines.clone(),
+            _ => {
+                let lines = measure();
+                *kept = Some((room, lines.clone()));
+                lines
+            }
+        }
+    }
 }
 
 impl Scene {
@@ -1962,6 +2014,7 @@ impl PlanModel {
                             not_found,
                             second_line: false,
                             fit: std::sync::Mutex::new(Vec::new()),
+                            words: Box::default(),
                         })
                     }
                     None => ModelLine::Fights(
@@ -2529,9 +2582,9 @@ fn scene_row(
             },
             |ui| {
                 if scene.not_found && !scene.second_line {
-                    gone_scene_words(ui, task, &plain);
+                    gone_scene_words(ui, scene, &plain);
                 } else {
-                    scene_words(ui, task, &plain);
+                    scene_words(ui, scene, &plain);
                 }
             },
             |ui| {
@@ -2611,17 +2664,25 @@ fn scene_row(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
-fn scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
+fn scene_words(ui: &mut egui::Ui, scene: &Scene, plain: &str) {
+    let task = &scene.task;
     let font = Type::Body.font(ui);
     let width = ui.available_width();
-    let (rows, row_height) = ui.fonts_mut(|fonts| {
-        let rows = fonts
-            .layout(plain.to_owned(), font.clone(), colors().text, width)
-            .rows
-            .len();
-        (rows, fonts.row_height(&font))
+    let lines = scene.lines(ui, (width, false), || {
+        #[cfg(any(test, feature = "test-support"))]
+        design::text_measured();
+        SceneLines {
+            alone: ui.fonts_mut(|fonts| {
+                fonts
+                    .layout(plain.to_owned(), font.clone(), colors().text, width)
+                    .rows
+                    .len()
+            }),
+            gone: None,
+        }
     });
-    if rows == 1 {
+    if lines.alone == 1 {
+        let row_height = ui.fonts_mut(|fonts| fonts.row_height(&font));
         ui.add_space(((design::XL - row_height) / 2.0).max(0.0));
     }
     crate::markdown_view::show_row_words(ui, &task.words, task.done);
@@ -2635,7 +2696,8 @@ fn scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
-fn gone_scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
+fn gone_scene_words(ui: &mut egui::Ui, scene: &Scene, plain: &str) {
+    let task = &scene.task;
     let c = colors();
     let width = ui.available_width();
     let words_color = if task.done { c.muted } else { c.text };
@@ -2656,27 +2718,38 @@ fn gone_scene_words(ui: &mut egui::Ui, task: &TaskLine, plain: &str) {
         job.wrap.max_width = width;
         job
     };
-    let rows = |job: egui::text::LayoutJob| ui.fonts_mut(|fonts| fonts.layout_job(job).rows.len());
-    let alone = ui.fonts_mut(|fonts| {
-        fonts
-            .layout(plain.to_owned(), Type::Body.font(ui), words_color, width)
-            .rows
-            .len()
-    });
     let all: Vec<&str> = plain.split_whitespace().collect();
     let whole = all.join(" ");
-    let fitted = (1..=all.len())
-        .rev()
-        .map(|kept| {
-            let words = all[..kept].join(" ");
-            if kept == all.len() {
-                words
-            } else {
-                format!("{words}…")
-            }
-        })
-        .find(|words| rows(job(words)) <= alone)
-        .unwrap_or_else(|| format!("{}…", all.first().copied().unwrap_or_default()));
+    let lines = scene.lines(ui, (width, true), || {
+        #[cfg(any(test, feature = "test-support"))]
+        design::text_measured();
+        let rows =
+            |job: egui::text::LayoutJob| ui.fonts_mut(|fonts| fonts.layout_job(job).rows.len());
+        let alone = ui.fonts_mut(|fonts| {
+            fonts
+                .layout(plain.to_owned(), Type::Body.font(ui), words_color, width)
+                .rows
+                .len()
+        });
+        let fitted = (1..=all.len())
+            .rev()
+            .map(|kept| {
+                let words = all[..kept].join(" ");
+                if kept == all.len() {
+                    words
+                } else {
+                    format!("{words}…")
+                }
+            })
+            .find(|words| rows(job(words)) <= alone)
+            .unwrap_or_else(|| format!("{}…", all.first().copied().unwrap_or_default()));
+        SceneLines {
+            alone,
+            gone: Some(fitted),
+        }
+    });
+    let alone = lines.alone;
+    let fitted = lines.gone.unwrap_or_else(|| whole.clone());
     let shown = job(&fitted);
     if alone == 1 {
         let row_height = ui.fonts_mut(|fonts| fonts.row_height(&body));
@@ -2722,6 +2795,8 @@ fn lead_width() -> f32 {
 /// beside an action place `with_log` wide, each with the same words as beside the menu alone
 /// (`menu` wide), so no word moves.
 fn log_keeps_rows(ui: &egui::Ui, plain: &str, menu: f32, with_log: f32) -> bool {
+    #[cfg(any(test, feature = "test-support"))]
+    design::text_measured();
     #[cfg(any(test, feature = "test-support"))]
     FIT_COUNTS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
     // The words' room beside the action place, as `plan_row_with` gives it after the leading
@@ -3478,6 +3553,8 @@ impl Rewards {
         row: f32,
         action: f32,
     ) -> RewardsAt {
+        #[cfg(any(test, feature = "test-support"))]
+        design::text_measured();
         let key = (
             title.to_owned(),
             icon,
@@ -5153,12 +5230,6 @@ impl Sessions {
                 let ui = &mut rows;
                 ui.set_max_width(lane_width - hang);
                 let width = lane_width.min(ui.available_width()) - design::M;
-                let action_width = [Action::primary("Start fight").icon(icons::RUN), Action::primary("Resume").icon(icons::RUN), Action::quiet("Add to notes"), Action::secondary("Arrivals").icon(icons::GROUP)]
-                    .into_iter().map(|action| action.density(Density::Read).natural_width(ui)).fold(0.0, f32::max)
-                    + Density::Read.control() + design::S;
-                let widths = [width - action_width - design::S, action_width];
-                let rewards_width = Action::quiet(ADD_REWARDS).density(Density::Read).natural_width(ui)
-                    + Density::Read.control() + design::S;
                 // Layout 11c A2c: every closed row is laid out before any row draws, so the
                 // plan's shared column is known first, with no measure kept from the last pass
                 // (the scenes and a group with warnings keep theirs until scope B). The laid rows
@@ -5168,7 +5239,7 @@ impl Sessions {
                     ui,
                     book,
                     (session, plan, &projection),
-                    (row_width, widths[1], rewards_width),
+                    row_width,
                     days,
                 );
                 let columns = rows.columns;
@@ -5807,7 +5878,7 @@ impl Sessions {
         ui: &egui::Ui,
         book: &Book,
         (session, plan, projection): (Option<Uuid>, &Plan<'_>, &PlanProjection),
-        (row_width, plain_actions, rewards_width): (f32, f32, f32),
+        row_width: f32,
         days: &[u32],
     ) -> Arc<KeptRows> {
         let fight_days = self.planned_days(book, session, plan, &projection.planned);
@@ -5834,7 +5905,9 @@ impl Sessions {
                 row_width,
                 design::theme::font_generation(ui.ctx()),
                 ui.ctx().pixels_per_point(),
+                design::theme::atlas_epoch(ui.ctx()),
             ),
+            legacy: design::action_rows::MeasuredColumn::kept(ui, PLAN_COLUMNS),
         };
         self.plan_rows.reached += 1;
         if let Some((kept, rows)) = &self.plan_rows.kept
@@ -5843,6 +5916,24 @@ impl Sessions {
             return Arc::clone(rows);
         }
         self.plan_rows.builds += 1;
+        // The action places' widths: the widest of a row's actions with their alternates, and
+        // Add rewards (measured here, behind the key, so a quiet frame measures none).
+        let plain_actions = [
+            Action::primary("Start fight").icon(icons::RUN),
+            Action::primary("Resume").icon(icons::RUN),
+            Action::quiet("Add to notes"),
+            Action::secondary("Arrivals").icon(icons::GROUP),
+        ]
+        .into_iter()
+        .map(|action| action.density(Density::Read).natural_width(ui))
+        .fold(0.0, f32::max)
+            + Density::Read.control()
+            + design::S;
+        let rewards_width = Action::quiet(ADD_REWARDS)
+            .density(Density::Read)
+            .natural_width(ui)
+            + Density::Read.control()
+            + design::S;
         let room = design::PlanRow::summary_room(row_width);
         let mut events = Vec::new();
         for (at, event) in book.events.iter().enumerate() {
@@ -5999,7 +6090,7 @@ impl Sessions {
                 .chain(fights.iter().map(|row| &row.2))
                 .chain(groups.iter().filter_map(|row| row.2.as_ref()))
                 .map(|words| words.facts(ui, row_width))
-                .chain([design::action_rows::MeasuredColumn::kept(ui, PLAN_COLUMNS)]),
+                .chain([key.legacy]),
         );
         let lay = |key: egui::Id, rule: bool, words: RowWords| {
             let part = words.part();
@@ -9495,6 +9586,7 @@ mod tests {
                         not_found: state.0,
                         second_line: false,
                         fit: std::sync::Mutex::new(Vec::new()),
+                        words: Box::default(),
                     };
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.set_width(330.0);
@@ -9657,6 +9749,47 @@ mod tests {
             shown(harness, "Bridge")
         })
         .expect("plan-rows-steady");
+        // Review of PR 841 (P3): from the plan's entry through its paint, a quiet frame measures
+        // no text at all: no action's natural width, no recipe's facts or layout, no fit, no
+        // scene's lines (`design::TEXT_MEASURES`). Red: the rows' action widths measured outside
+        // the guard.
+        let measures = crate::test_support::CachedWork::start(
+            "Plan text measures",
+            &mut harness,
+            |harness: &mut egui_kittest::Harness<'_, (Sessions, Book)>| {
+                crate::test_support::Counts {
+                    reached: harness.state().0.plan_rows.reached,
+                    work: design::TEXT_MEASURES.with(std::cell::Cell::get),
+                }
+            },
+        );
+        harness.run_steps(2);
+        let warm = shown(&harness, "Bridge");
+        measures
+            .warm(&mut harness, warm, 0)
+            .expect("plan-measures-warm");
+        measures
+            .steady(&mut harness, |harness| {
+                harness.run_steps(3);
+                shown(harness, "Bridge")
+            })
+            .expect("plan-measures-steady");
+        // Review of PR 841 (P2): a new font atlas at the same width, scale and theme lays the
+        // rows out again, so no kept galley draws from the old atlas. egui makes its atlas again
+        // for a new text alpha mode, and again when it comes back. Red: the key without it.
+        rows.refresh(&mut harness, 1, |harness| {
+            let alpha = harness.ctx.style().visuals.text_alpha_from_coverage;
+            harness.ctx.all_styles_mut(|style| {
+                style.visuals.text_alpha_from_coverage = egui::epaint::AlphaFromCoverage::Linear;
+            });
+            harness.step();
+            harness
+                .ctx
+                .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
+            harness.run_steps(2);
+            shown(harness, "Bridge")
+        })
+        .expect("plan-rows-atlas");
         // Review of PR 703: the planned fights' days are worked out once for each change of
         // the note, the Timeline or the fights, never on a quiet frame or a resize.
         let days = || DAYS_BY_PLACE.with(std::cell::Cell::get);
@@ -10659,6 +10792,74 @@ mod tests {
             harness.query_all_by_label("Bridge").count() == bridges + 1
                 && harness.get_by_label("Mill").is_focused(),
             "a fight planned above Mill keeps Mill's title focused"
+        );
+        // Review of PR 841 (P2): the kept rows are keyed by the column the scenes measured too.
+        // A scene wider than every row moves every kept row's action in the frame it widens (its
+        // redraw pass): all stand in one column, `L` after the scene's facts. Red: the key
+        // without the scenes' column.
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(2).unwrap());
+        let (_, before, _) = column(&harness);
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            let body = draft.body.as_str().replacen(
+                "- [ ] [[Captain Varra]]",
+                "- [ ] [[Captain Varra]] waits at the ford with the toll collectors, the miller's ledger and the ferryman's boat",
+                1,
+            );
+            let _ = draft.body.replace(body);
+            draft.edited();
+        }
+        harness.step();
+        let (holds, after, records) = column(&harness);
+        assert!(
+            holds && after > before + design::L,
+            "a wider scene moves every row's action in the frame it widens ({before} to \
+             {after}): {records:?}"
+        );
+        // The same for a group with a member fault, drawn by `plan_row_with` until scope B: its
+        // wider title moves every row's action in the frame it joins the plan.
+        let before = after;
+        {
+            let mut inputs = inputs.borrow_mut();
+            inputs.groups.push(Arc::new(crate::encounter_run::RunGroup {
+                id: Uuid::new_v4(),
+                path: "Encounter Groups/Watch.md".into(),
+                name: "The watch at the ford, with the toll collectors, the ferryman, the miller's two sons, their dogs and the old bridge keeper".into(),
+                side: "enemies".into(),
+                encounter: None,
+                encounter_name: None,
+                members: vec![],
+                notes: String::new(),
+                xp: 0,
+                xp_unknown: vec![],
+                unavailable: 1,
+                unavailable_members: vec![],
+                problem: Some("Wolf: this campaign's packages have no such creature.".into()),
+                warnings: vec![splat_content_ui::roster::MemberFault::new(
+                    splat_content_ui::roster::FaultKind::NotInPackages,
+                    "Wolf: this campaign's packages have no such creature.".into(),
+                )],
+            }));
+            inputs.fights_revision = crate::design::memo::Revised::new(()).revision();
+        }
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            let body = draft.body.as_str().replacen(
+                "- [[Empty Watch]]\n",
+                "- [[Empty Watch]]\n- [[The watch at the ford, with the toll collectors, the ferryman, the miller's two sons, their dogs and the old bridge keeper]]\n",
+                1,
+            );
+            let _ = draft.body.replace(body);
+            draft.edited();
+        }
+        harness.step();
+        let (holds, after, records) = column(&harness);
+        assert!(
+            holds && after > before + design::L,
+            "a wider group with a member fault moves every row's action in the frame it joins \
+             ({before} to {after}): {records:?}"
         );
     }
 
