@@ -544,7 +544,7 @@ struct DueParts {
     /// Each check's place in the DM's unticked set: its notice and its change's own key.
     ticks: Vec<Tick>,
     /// The words each roll and `Done` paint, laid before paint in their places (Astra's P2 on
-    /// PR 897): a quiet frame lays no action's words. A roll with no place has none.
+    /// PR 897): a quiet frame lays no action's words.
     roll_words: Vec<Option<design::LaidAction>>,
     done_words: Option<design::LaidAction>,
 }
@@ -668,7 +668,6 @@ fn due_rows(
                     .map(|((label, reason), table)| design::NoticeRoll {
                         key: egui::Id::new(("trackers_due_roll", &notice.id, table.key())),
                         width: roll_action(label).natural_width(ui),
-                        least: roll_action(label).least_width(ui),
                         reason: *reason,
                     })
                     .collect();
@@ -727,8 +726,7 @@ fn due_rows(
         design::draw_laid(ui, laid, |ui| {
             for (at, (label, reason)) in parts.rolls.iter().enumerate() {
                 let slot = design::notice_slot::FIRST_ROLL + at;
-                // A roll with no place (a row narrower than it can be) draws nothing; one with a
-                // place paints the words laid for it.
+                // Each roll paints the words laid for it with its parts.
                 let Some(words) = &parts.roll_words[at] else {
                     continue;
                 };
@@ -754,12 +752,9 @@ fn due_rows(
                     }
                 }
             }
-            // Finish actions with no place (a row narrower than they are) draw nothing.
-            if ui.slot(design::notice_slot::FINISH).width() > 0.5 {
-                ui.actions(design::notice_slot::FINISH, |ui| {
-                    finish(ui, parts, notice, unticked, act);
-                });
-            }
+            ui.actions(design::notice_slot::FINISH, |ui| {
+                finish(ui, parts, notice, unticked, act);
+            });
         });
     }
 }

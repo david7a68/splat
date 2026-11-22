@@ -43,9 +43,6 @@ use std::sync::Arc;
 pub struct NoticeRoll<'a> {
     pub key: Id,
     pub width: f32,
-    /// The narrowest its action paints (`Action::least_width`): a row narrower than this gives
-    /// it no place, and the host draws nothing there.
-    pub least: f32,
     pub reason: Option<&'a str>,
 }
 
@@ -267,12 +264,10 @@ impl NoticeRow<'_> {
                     }
                     placed = true;
                     let roll = &self.rolls[at];
-                    // Cut to the row, unless the row is narrower than the action can be: then it
-                    // has no place (a slot of no width, which the host leaves empty), so nothing
-                    // paints outside the block.
-                    let cut = roll.width.min(width);
-                    let shown = if cut + 0.5 < roll.least { 0.0 } else { cut };
-                    slots.push(Rect::from_min_size(pos2(0.0, y), vec2(shown, control)));
+                    slots.push(Rect::from_min_size(
+                        pos2(0.0, y),
+                        vec2(roll.width.min(width), control),
+                    ));
                     y += control;
                     if let Some(reason) = roll.reason {
                         let galley = ui.fonts_mut(|fonts| {
@@ -306,16 +301,11 @@ impl NoticeRow<'_> {
             slots.push(Rect::from_min_size(pos2(0.0, y), vec2(width, height)));
             y += height;
         }
-        // The finish actions on a line of their own, at its right end; a row narrower than they
-        // are gives them no place and no line (a slot of no width, which the host leaves empty).
-        if !fits && self.finish <= width + 0.5 {
+        if !fits {
             y += LINE_GAP;
             slots[slot::FINISH] =
                 Rect::from_min_size(pos2(width - self.finish, y), vec2(self.finish, control));
             y += control;
-        } else if !fits {
-            // No place and no line: a slot of no width at the row's end.
-            slots[slot::FINISH] = Rect::from_min_size(pos2(width, y), vec2(0.0, 0.0));
         }
         // Each roll's and check's slot follows its own key, not its place.
         let keys = [None; slot::FIRST_ROLL]
@@ -431,7 +421,6 @@ mod tests {
                                 .map(|(words, reason)| NoticeRoll {
                                     key: Id::new(("roll", *words)),
                                     width: roll_action(words).natural_width(ui),
-                                    least: roll_action(words).least_width(ui),
                                     reason: *reason,
                                 })
                                 .collect();
@@ -684,7 +673,7 @@ mod tests {
             let mut h = Harness::builder()
                 .with_size(vec2(1200.0, 300.0))
                 .themed_ui_state(
-                    move |ui, widths: &mut (f32, f32, f32)| {
+                    move |ui, widths: &mut (f32, f32)| {
                         let reason = ui
                             .fonts_mut(|fonts| {
                                 fonts.layout_no_wrap(
@@ -695,9 +684,9 @@ mod tests {
                             })
                             .size()
                             .x;
-                        *widths = (action().natural_width(ui), reason, action().least_width(ui));
+                        *widths = (action().natural_width(ui), reason);
                     },
-                    (0.0, 0.0, 0.0),
+                    (0.0, 0.0),
                 );
             h.run_steps(2);
             *h.state()
@@ -708,8 +697,6 @@ mod tests {
             (threshold + 1.0, "beside"),
             (threshold - 1.0, "under"),
             (widths.0 - 30.0, "cut"),
-            // Narrower than the action can be (one control and its icon): it has no place.
-            (widths.2 - 6.0, "refused"),
         ] {
             let mut h = Harness::builder()
                 .with_size(vec2(1200.0, 400.0))
@@ -718,7 +705,6 @@ mod tests {
                         let rolls = [NoticeRoll {
                             key: Id::new("roll"),
                             width: action().natural_width(ui),
-                            least: action().least_width(ui),
                             reason: Some(REASON),
                         }];
                         let laid = NoticeRow {
@@ -735,19 +721,12 @@ mod tests {
                         .lay(ui, width);
                         let mut controls = Vec::new();
                         let block = draw_laid(ui, &laid, |ui| {
-                            // The host leaves a slot of no width empty.
-                            if ui.slot(slot::FIRST_ROLL).width() > 0.5 {
-                                controls.push(ui.in_slot(slot::FIRST_ROLL, |ui| {
-                                    action().blocked(Some(REASON)).show(ui).rect
-                                }));
-                            } else {
-                                controls.push(Rect::NOTHING);
-                            }
-                            if ui.slot(slot::FINISH).width() > 0.5 {
-                                controls.push(ui.actions(slot::FINISH, |ui| {
-                                    Action::quiet("Done").density(Density::Read).show(ui).rect
-                                }));
-                            }
+                            controls.push(ui.in_slot(slot::FIRST_ROLL, |ui| {
+                                action().blocked(Some(REASON)).show(ui).rect
+                            }));
+                            controls.push(ui.actions(slot::FINISH, |ui| {
+                                Action::quiet("Done").density(Density::Read).show(ui).rect
+                            }));
                         });
                         *drawn = (block, controls[0], controls);
                     },
@@ -771,7 +750,6 @@ mod tests {
             let parts: Vec<Rect> = controls
                 .iter()
                 .copied()
-                .filter(|rect| *rect != Rect::NOTHING)
                 .chain(texts.iter().map(|(_, text)| *text))
                 .collect();
             if let Err(why) = crate::design::pane::painted_in_block(block, TAIL, &parts) {
@@ -789,8 +767,7 @@ mod tests {
             let ok = match place {
                 "beside" => beside,
                 "under" => under,
-                "cut" => under && roll.width() <= width + 0.5,
-                _ => roll == Rect::NOTHING && reason.is_some(),
+                _ => under && roll.width() <= width + 0.5,
             };
             assert!(
                 ok,
@@ -798,7 +775,7 @@ mod tests {
             );
             seen.push(place);
         }
-        assert_eq!(seen, ["beside", "under", "cut", "refused"]);
+        assert_eq!(seen, ["beside", "under", "cut"]);
     }
 
     /// Astra's P2 on PR 885: a check box's control is keyed by its own key, not its place. The
