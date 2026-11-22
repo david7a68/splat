@@ -1336,27 +1336,12 @@ impl ScrollColumn {
 pub struct Sideways {
     fit: bool,
     no_bar: bool,
-    lane: bool,
-}
-
-/// The lane a [`Sideways::keeps_lane`] scroll keeps below its content: the bar and its margin, in
-/// the `Ui`'s scroll style.
-pub fn sideways_lane(ui: &Ui) -> f32 {
-    let scroll = ui.spacing().scroll;
-    scroll.bar_width + scroll.bar_outer_margin
 }
 
 impl Sideways {
     /// As wide as its content, up to the width it is given (a reader's table).
     pub fn fit(mut self) -> Self {
         self.fit = true;
-        self
-    }
-
-    /// Keep the bar's lane below the content ([`sideways_lane`]), so the bar never covers it (a
-    /// reader's table: its last row's text).
-    pub fn keeps_lane(mut self) -> Self {
-        self.lane = true;
         self
     }
 
@@ -1369,7 +1354,8 @@ impl Sideways {
 }
 
 /// A sideways scroll for one wide table or strip: it never scrolls up and down, so it sits
-/// inside a page's own `ScrollColumn`. Its offset is egui's, kept under its own id: a caller
+/// inside a page's own `ScrollColumn`. Its bar is solid: it has its own lane below the content
+/// and never covers it (a reader's table keeps its last row's text clear of the bar). Its offset is egui's, kept under its own id: a caller
 /// writes none (`id_salt` names whose content it is, so another document or surface has its
 /// own offset).
 #[allow(
@@ -1390,14 +1376,7 @@ pub fn sideways_scroll<R>(
         } else {
             egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
         })
-        .show(ui, |ui| {
-            let inner = add(ui);
-            if view.lane {
-                let lane = sideways_lane(ui);
-                super::extras::space(ui, lane);
-            }
-            inner
-        })
+        .show(ui, add)
 }
 
 /// Fixed room for a text value that changes in place: as wide as the widest example in its

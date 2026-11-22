@@ -849,10 +849,11 @@ fn reader_table(
                 .color(colors().muted),
         );
     }
-    // The sideways scroll bar has its own lane below the last row (`Sideways::keeps_lane`), so
-    // it never covers cell text.
+    // The sideways scroll bar has its own lane below the last row (the part's solid bar), so it
+    // never covers cell text.
     let lane = if scrolls {
-        design::sideways_lane(ui)
+        let scroll = ui.spacing().scroll;
+        scroll.bar_width + scroll.bar_outer_margin
     } else {
         0.0
     };
@@ -923,7 +924,6 @@ fn reader_table(
                     ("reader_table", surface, document, rows),
                     design::Sideways::default()
                         .fit()
-                        .keeps_lane()
                         .without_bar(top >= outer_clip.bottom()),
                     &mut show,
                 );
@@ -2297,32 +2297,36 @@ mod tests {
                 }),
                 "the last column must be readable after horizontal scrolling at {width}px: {last_column:?}"
             );
-            // Layout PR 10c (M0406): the sideways scroll keeps its bar's lane below the last row
-            // (`Sideways::keeps_lane`), so the bar never covers the row's text.
-            let bottom = |words: &str| {
-                output.shapes.iter().find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == words => {
-                        Some((text.pos.y, text.pos.y + text.galley.size().y))
+            // Layout PR 10c (M0406): the sideways part's solid bar has its own lane below the last
+            // row, so it never covers the row's text (the reader adds no space for it).
+            let row = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    // The last row's label, in the table's fixed first column (always painted).
+                    egui::Shape::Text(text) if text.galley.job.text == "5" => {
+                        Some(text.pos.y + text.galley.size().y)
                     }
                     _ => None,
                 })
-            };
-            let (row, after) = (
-                // The last row's label, in the table's fixed first column (always painted).
-                bottom("5").expect("the last row is painted").1,
-                bottom("After the table.")
-                    .expect("the paragraph after is painted")
-                    .0,
-            );
-            let lane = {
-                let scroll = design::theme::scroll_style();
-                scroll.bar_width + scroll.bar_outer_margin
-            };
+                .expect("the last row is painted");
+            let scroll = design::theme::scroll_style();
+            let bars: Vec<egui::Rect> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect)
+                        if rect.rect.width() > 2.0 * scroll.bar_width
+                            && (rect.rect.height() - scroll.bar_width).abs() <= 1.0 =>
+                    {
+                        Some(rect.rect)
+                    }
+                    _ => None,
+                })
+                .collect();
             assert!(
-                after - row >= lane + design::S - 0.5,
-                "lane at {width}px: {} from the last row's text to the next paragraph keeps the \
-                 bar's lane {lane}",
-                after - row
+                !bars.is_empty() && bars.iter().all(|bar| bar.top() >= row - 0.5),
+                "lane at {width}px: the sideways bar {bars:?} is below the last row's text {row}"
             );
         }
         // Round 27 FC3 (review repair): a cell that wraps taller than the reader, scrolled until
