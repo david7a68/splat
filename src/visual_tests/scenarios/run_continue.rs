@@ -346,6 +346,33 @@ fn ended_fresh_at_1920(d: &mut Driver<'_>) {
         }),
         format!("Opened first at 1920, the ended pane: {pane:?}"),
     );
+    // Review of PR 750 (P2): with Prep and the Combat log open, closing Prep leaves only the
+    // log's lines, and the log is as tall as they are: the columns shrink, so the footer follows
+    // the now shorter content again, not empty space kept from Prep.
+    d.click("Prep");
+    d.click("Combat log");
+    let both = ended_pane(d);
+    d.click("Prep");
+    let after = ended_pane(d);
+    d.click("Combat log");
+    d.observe(
+        "m32-L11c-ended-log-follows",
+        both.as_ref()
+            .zip(after.as_ref())
+            .is_some_and(|(both, after)| {
+                both.height
+                    .zip(after.height)
+                    .is_some_and(|(both_height, height)| {
+                        after.content
+                            && !after.pinned
+                            && height < both_height
+                            && height < after.view
+                    })
+            }),
+        format!(
+            "At 1920, with Prep and the Combat log open: {both:?}; then with Prep closed: {after:?}"
+        ),
+    );
     // A refused Undo of the saved ending puts its message, with Dismiss, in the footer. The
     // caller's restart then starts from the saved run again, with no focus or scroll from here.
     d.app_mut().encounters.run_mut().unwrap().wants_unend = Some(crate::encounter_run::Unend::Undo);
