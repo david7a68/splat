@@ -2409,6 +2409,9 @@ pub struct Reader {
     pub form_shown_elsewhere: Option<Uuid>,
     /// The note whose edit form this reader drew, and the pass it drew it in.
     form_drawn: Option<(Uuid, u64)>,
+    /// The open Status field as this pass drew it, for its Log room's reveal at the end of the
+    /// draw (layout step 11b). Taken there, so nothing of it is kept after its pass.
+    status_field: Option<egui::Response>,
 }
 
 /// A reader's `Add to fight`: what joins the open run, by the run's own add
@@ -3523,17 +3526,17 @@ impl Reader {
             }
             go = go.or(Some(followed));
         }
-        // Layout step 11b (R30, D-2): while Status is open, its room and, below it, the room its
-        // result and Undo will take in the footer belong to the focused field. The pane's focus
-        // arbiter brings the field and both into view above the footer when the keyboard comes
-        // to it, so the entry and the result land in room already in view and nothing moves. A
-        // picker (Place, Part of) closes with its act and gives back more than the room, so its
-        // room is not brought into view: the scroll area's clamp would undo it.
-        if self.status_editing
-            && let Some(room) = room_at
-        {
+        // Layout step 11b (R30, D-2): while the Status field has the keyboard, its room and,
+        // below it, the room its result and Undo will take in the footer belong to it. The
+        // pane's focus arbiter brings the field and both into view above the footer when the
+        // keyboard comes to it, so the entry and the result land in room already in view and
+        // nothing moves. Save status, or any other control, is revealed alone. A picker (Place,
+        // Part of) closes with its act and gives back more than the room, so its room is not
+        // brought into view: the scroll area's clamp would undo it.
+        if let (Some(field), Some(room)) = (self.status_field.take(), room_at) {
             design::pane::reveal_with_focus_and_growth(
                 ui,
+                &field,
                 room,
                 design::pane::Growth::ResultWithUndo,
             );
@@ -4963,6 +4966,7 @@ impl Reader {
                 None,
                 None,
             );
+            self.status_field = Some(response.clone());
             // Change puts the keyboard in the field with its words selected, so the DM types
             // the new value at once. A pass that still holds Change's click takes the keyboard
             // from a field that was not clicked, so the request waits for a pass with no click.

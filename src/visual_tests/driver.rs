@@ -1380,6 +1380,27 @@ impl<'a> Driver<'a> {
         (first, next)
     }
 
+    /// One input frame of `events`, with egui's own layout passes, and the `frames` frames after
+    /// it with no input: `look` at what each presented frame painted and named, the act's own
+    /// frame first, before the app settles; then the app settles. A move or a cut that lasts a
+    /// frame and is gone when the app settles shows here (Astra's review of PR 736).
+    pub fn each_frame_after<T>(
+        &mut self,
+        events: impl IntoIterator<Item = egui::Event>,
+        frames: usize,
+        look: impl Fn(&Self) -> T,
+    ) -> Vec<T> {
+        super::input_frame::one_pass(&mut self.harness, events);
+        let mut seen = vec![look(self)];
+        for _ in 0..frames {
+            self.harness.step();
+            seen.push(look(self));
+        }
+        self.interactions += 1;
+        self.settle();
+        seen
+    }
+
     /// A screen reader's Click on the visible control named `name`, as one input event.
     pub fn click_event(&self, name: &str) -> egui::Event {
         let target = self

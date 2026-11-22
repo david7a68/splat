@@ -1062,15 +1062,54 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         .into_iter()
         .find(|node| node.name == "Status" && node.role == egui::accesskit::Role::TextInput)
         .map(|node| node.rect);
-    d.press(Key::Enter);
+    // Layout step 11b, from the act's own frame on (Astra's review of PR 736): Enter in one
+    // input frame, then each frame until the app settles. In each: the title's top (the witness
+    // of any scroll), whether the new entry is painted cut by the pane's clip, and whether the
+    // result's Undo is whole, when it is there.
+    let enter = |pressed| egui::Event::Key {
+        key: Key::Enter,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let frames = d.each_frame_after([enter(true), enter(false)], 6, |d| {
+        let pane = lookup_pane(d);
+        (
+            pane.and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane))
+                .map(|title| title.top()),
+            pane.is_some_and(|pane| {
+                d.cut_texts_in(pane)
+                    .iter()
+                    .any(|text| text.contains(STATUS_ENTRY))
+            }),
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == "Undo change to Status")
+                .map(|node| node.fully_in_view()),
+        )
+    });
     d.expect("Undo change to Status");
     let title_after = lookup_pane(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
     let change_after = d.place_of("Change Status");
-    // Layout step 11b, in the act's own frame: the new entry is whole in the body room
-    // (`design::pane::keep_room`), and the result's Undo is whole in the footer, which grew into
-    // room the arbiter kept clear (`reveal_with_focus_and_growth`).
-    let entry_at_act = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY));
-    let undo_at_act = d.in_view("Undo change to Status");
+    // The new entry lands whole in the body room (`design::pane::keep_room`) and is never cut on
+    // the way; the result's Undo is whole in the footer in the act's own frame and after it, as
+    // the footer grew into room the arbiter kept clear (`reveal_with_focus_and_growth`); and the
+    // title keeps its place in every frame.
+    let entry_at_act = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY))
+        && frames.iter().all(|(_, cut, _)| !cut);
+    let undo_at_act = frames
+        .first()
+        .is_some_and(|(_, _, undo)| *undo == Some(true))
+        && frames.iter().all(|(_, _, undo)| undo.unwrap_or(true))
+        && d.nodes()
+            .into_iter()
+            .any(|node| node.name == "Undo change to Status" && node.fully_in_view());
+    let title_kept = title_before.is_some_and(|before| {
+        frames
+            .iter()
+            .all(|(top, _, _)| top.is_some_and(|top| (top - before.top()).abs() <= 0.5))
+    });
     let changed = fs::read_to_string(&path).unwrap();
     d.observe(
         "T15.4",
@@ -1110,21 +1149,22 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         at_capture.push((named(d), entry));
     });
     // D-2 (a), before and after the act at 960: `Change` stands where the focused field stood,
-    // the title does not move (nothing scrolls when the entry and the result come), and the
-    // entry and the Undo are whole in the act's frame.
+    // the title does not move in any frame (nothing scrolls when the entry and the result come),
+    // the entry is never cut, and the Undo is whole from the act's own frame on.
     let still = field_before
         .zip(change_after)
         .is_some_and(|(field, change)| {
             change.top() >= field.top() - 0.5
                 && change.bottom() <= field.bottom() + crate::design::L
         })
+        && title_kept
         && title_before
             .zip(title_after)
             .is_some_and(|(before, after)| (before.top() - after.top()).abs() <= 0.5);
     d.observe(
         "iter-29-D2-status-still",
         still && entry_at_act && undo_at_act,
-        format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}; entry whole {entry_at_act}, Undo whole {undo_at_act}"),
+        format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}; entry whole {entry_at_act}, Undo whole {undo_at_act}; each frame from the act (title top, entry cut, Undo whole) {frames:?}"),
     );
     for (size, ((fits, detail), entry)) in [SMALL, DEFAULT, LARGE].into_iter().zip(at_capture) {
         d.observe(
