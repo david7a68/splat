@@ -623,6 +623,10 @@ pub(super) fn list_row(
                             facts_rect.min,
                             egui::vec2(whole.min(facts), text),
                         ),
+                        line: egui::Rect::from_min_size(
+                            facts_rect.min,
+                            egui::vec2(whole.min(facts), text),
+                        ),
                         action: actions_ui.min_rect(),
                         column: start,
                         wrapped: columns.wrapped,

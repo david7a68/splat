@@ -144,6 +144,9 @@ pub struct RowRecord {
     pub owner: &'static str,
     pub row: usize,
     pub facts: Rect,
+    /// The facts on the actions' own line (a plan row's title above its summary); the same as
+    /// `facts` where all the facts share that line.
+    pub line: Rect,
     pub action: Rect,
     /// Where the action column starts, as planned: `L` after the widest facts.
     pub column: f32,
@@ -237,6 +240,7 @@ pub fn action_row<R>(
             owner,
             row,
             facts: Rect::from_min_size(facts_rect.min, vec2(facts_width, facts_rect.height())),
+            line: Rect::from_min_size(facts_rect.min, vec2(facts_width, facts_rect.height())),
             action: drawn,
             column: action_rect.left(),
             wrapped: columns.wrapped,

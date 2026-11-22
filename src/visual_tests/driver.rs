@@ -2391,6 +2391,10 @@ impl<'a> Driver<'a> {
             .iter()
             .map(|record| record.facts.right())
             .fold(f32::MIN, f32::max);
+        let end = records
+            .iter()
+            .map(|record| record.action.right())
+            .fold(f32::MIN, f32::max);
         let holds = !records.is_empty()
             && records.iter().all(|record| record.wrapped != column)
             && records.iter().all(|record| {
@@ -2399,15 +2403,19 @@ impl<'a> Driver<'a> {
                         && record.action.left() >= record.column - 0.5
                         && record.action.left() <= record.column + L
                 } else {
-                    // The far edge, as on main: the facts' summary lines lie below the actions'
-                    // line and may reach under them (PR 605 review: every line is measured).
-                    true
+                    // The far edge, as on main (PR 605 review, P1): each row's actions end at
+                    // the one far edge, and start `S` or more after the title on their line.
+                    // Only the summary lines below may reach under them; no control lies over
+                    // text on its own line.
+                    (record.action.right() - end).abs() <= 0.5
+                        && record.action.left() >= record.line.right() + crate::design::S - 0.5
                 }
             });
         let rows: Vec<_> = records
             .iter()
             .map(|record| {
                 (
+                    record.line.right().round(),
                     record.facts.right().round(),
                     record.column.round(),
                     record.action.left().round(),
@@ -2420,7 +2428,7 @@ impl<'a> Driver<'a> {
             holds,
             column,
             format!(
-                "the widest title ends at {widest:.1}; rows (title end, column, actions start, actions end, far edge): {rows:?}"
+                "the widest facts end at {widest:.1}; rows (title end, facts end, column, actions start, actions end, far edge): {rows:?}"
             ),
         )
     }
