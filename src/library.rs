@@ -6391,7 +6391,7 @@ mod tests {
         let mut library = Library {
             loaded: Some(loaded),
             selected: Some(selected),
-            draft: format!("{text}\nMy draft.\n"),
+            draft: (format!("{text}\nMy draft.\n")).into(),
             ..Default::default()
         };
         fs::rename(first.path.join("Wolf.md"), second.path.join("Moved.md")).unwrap();
@@ -6400,7 +6400,7 @@ mod tests {
         assert!(!first.path.join("Wolf.md").exists());
         assert_eq!(
             fs::read_to_string(second.path.join("Moved.md")).unwrap(),
-            library.draft
+            library.draft.as_str()
         );
     }
 
@@ -6419,7 +6419,7 @@ mod tests {
         let mut library = Library {
             loaded: Some(loaded),
             selected: Some(selected),
-            draft: format!("{text}\nMy draft.\n"),
+            draft: (format!("{text}\nMy draft.\n")).into(),
             ..Default::default()
         };
         fs::rename(module.path.join("Wolf.md"), module.path.join("Moved.md")).unwrap();
@@ -6677,14 +6677,14 @@ mod tests {
         let mut library = Library {
             loaded: Some(loaded),
             selected: Some(selected),
-            draft: format!("{text}\nEdited original.\n"),
+            draft: (format!("{text}\nEdited original.\n")).into(),
             ..Default::default()
         };
         library.save_selected(false);
         assert!(library.error.is_none());
         assert_eq!(
             fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
-            library.draft
+            library.draft.as_str()
         );
         assert_eq!(
             fs::read_to_string(module.path.join("Wolf copy.md")).unwrap(),
@@ -6867,7 +6867,7 @@ mod tests {
         let mut library = Library {
             loaded: Some(loaded),
             selected: Some(selected),
-            draft: format!("{text}\nMy draft.\n"),
+            draft: (format!("{text}\nMy draft.\n")).into(),
             ..Default::default()
         };
         fs::remove_file(module.path.join("Wolf.md")).unwrap();
@@ -6886,7 +6886,7 @@ mod tests {
         library.save_selected(true);
         assert_eq!(
             fs::read_to_string(module.path.join("Wolf.md")).unwrap(),
-            library.draft
+            library.draft.as_str()
         );
         assert_eq!(
             fs::read_to_string(module.path.join("Wolf copy.md")).unwrap(),
@@ -6909,7 +6909,7 @@ mod tests {
         let mut library = Library {
             loaded: Some(loaded),
             selected: Some(selected),
-            draft: format!("{text}\nMy draft.\n"),
+            draft: (format!("{text}\nMy draft.\n")).into(),
             ..Default::default()
         };
         fs::create_dir(module.path.join("Moved")).unwrap();
@@ -6975,7 +6975,7 @@ mod tests {
         let mut library = Library {
             loaded: Some(loaded),
             selected: Some(selected),
-            draft: text.clone(),
+            draft: (text.clone()).into(),
             ..Default::default()
         };
         library.save_selected(false);
@@ -7647,7 +7647,7 @@ mod tests {
                     owner: Owner::Builtin,
                 }])),
                 selected: Some(0),
-                draft: text,
+                draft: (text).into(),
                 ..Default::default()
             };
             let ctx = egui::Context::default();
@@ -7750,7 +7750,7 @@ mod tests {
         );
 
         let mut library = Library {
-            draft: loaded.notes[0].text.clone(),
+            draft: (loaded.notes[0].text.clone()).into(),
             loaded: Some(loaded),
             selected: Some(0),
             section: Section::Creatures,
@@ -8280,7 +8280,7 @@ mod tests {
                 }])),
                 selected: Some(0),
                 source: true,
-                draft: source,
+                draft: (source).into(),
                 ..Default::default()
             };
             let ctx = egui::Context::default();
@@ -9100,7 +9100,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let (text, entry, a, shared) = fix_fixture();
         let mut kept = LibraryKept::default();
-        let mut after = text.clone();
+        let mut after = crate::design::text_draft::TextDraft::new(text.clone());
         assert!(HeadingChoice::new(Some(&entry), &text, None, &a).apply(
             (true, false),
             &a,
@@ -9149,7 +9149,7 @@ mod tests {
         let (text, entry, a, shared) = fix_fixture();
         let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
         let mut fixed = Library {
-            draft: text,
+            draft: (text).into(),
             ..Default::default()
         };
         Library::fix_stat(
@@ -9195,7 +9195,7 @@ mod tests {
         let (text, entry, a, _) = fix_fixture();
         let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
         let mut library = Library {
-            draft: text,
+            draft: (text).into(),
             ..Default::default()
         };
         Library::fix_stat(
@@ -9211,7 +9211,7 @@ mod tests {
         );
         let stat_after = library.draft.as_str().to_owned();
         let stat_entry = Entry::parse("Rules/X.md", &stat_after).unwrap();
-        let mut heading_after = stat_after.clone();
+        let mut heading_after = crate::design::text_draft::TextDraft::new(stat_after.clone());
         HeadingChoice::new(Some(&stat_entry), &stat_after, None, &a).apply(
             (true, false),
             &a,
@@ -9219,7 +9219,8 @@ mod tests {
             &mut library.kept,
         );
         assert_ne!(
-            stat_after, heading_after,
+            stat_after,
+            heading_after.as_str(),
             "fixture: the heading fix changed it"
         );
         let _ = library.draft.replace(stat_after);
@@ -9227,7 +9228,7 @@ mod tests {
             library.stat_undo_applies(&a),
             "a heading fix keeps the stat Undo"
         );
-        let _ = library.draft.replace(heading_after);
+        let _ = library.draft.replace(heading_after.into_string());
         assert!(
             library.heading_undo_applies(&a),
             "the heading Undo stands beside the stat Undo"
@@ -9397,7 +9398,7 @@ mod tests {
         let reload = |library: &mut Library, name: &str, text: Option<&str>| {
             let index = at(library, name);
             library.selected = Some(index);
-            let _ = library.draft.replace("An unsaved draft.".into());
+            let _ = library.draft.replace("An unsaved draft.");
             library.disk_change = Some(DiskChange {
                 text: text.map(str::to_owned),
                 moved_to: None,
@@ -9450,7 +9451,7 @@ mod tests {
         let file: FileId = (OwnerKey::Package(m.id), "Rules/X.md".into());
         for _ in 0..2 {
             let before = library.kept.order_of(KeptKind::Heading);
-            let mut draft = text.clone();
+            let mut draft = crate::design::text_draft::TextDraft::new(text.clone());
             HeadingChoice::new(Some(&entry), &text, None, &file).apply(
                 (true, false),
                 &file,
@@ -9754,7 +9755,7 @@ mod tests {
             .position(|note| note.path == format!("{entry}.md"))
             .unwrap();
         library.selected = Some(index);
-        let _ = library.draft.replace("An unsaved draft.".into());
+        let _ = library.draft.replace("An unsaved draft.");
         library.disk_change = Some(DiskChange {
             text: None,
             moved_to: None,
@@ -10315,7 +10316,7 @@ mod tests {
         Library {
             loaded: Some(loaded),
             selected: Some(selected),
-            draft,
+            draft: draft.into(),
             ..Default::default()
         }
     }
@@ -10717,7 +10718,8 @@ mod tests {
             .refresh(&mut library, 0, |library| {
                 sd1_type(library, "More.");
                 assert_ne!(
-                    library.draft, accepted,
+                    library.draft.as_str(),
+                    accepted,
                     "fixture: the editor took the words"
                 );
                 let painted = sd1_painted(library);
@@ -10749,7 +10751,8 @@ mod tests {
             ],
         );
         assert_eq!(
-            library.draft, accepted,
+            library.draft.as_str(),
+            accepted,
             "fixture: Undo gave back the failed words"
         );
         let painted = sd1_painted(&mut library);

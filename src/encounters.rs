@@ -10631,7 +10631,7 @@ mod tests {
         harness.event(egui::Event::Text("Unsent tactics.\n".repeat(60)));
         harness.run_steps(2);
         let focus = harness.ctx.memory(|memory| memory.focused()).unwrap();
-        let text = draft.borrow().body.clone();
+        let text = draft.borrow().body.as_str().to_owned();
         assert!(text.contains("Unsent tactics."));
         // Outer scroll moves down to the caret; keep that same scroll state when the parent changes.
         let scroll_id = harness
