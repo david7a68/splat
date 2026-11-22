@@ -3667,11 +3667,12 @@ fn group_fields(
                 design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
             let rows = if open.is_some() { 2 } else { 4 };
             // Keyed by the group draft, so two groups never share its text or its Undo.
-            let output = GROUP_NOTES
-                .of(draft.id())
-                .editor(ui, &mut draft.notes, super::plain_face(ui), |edit| {
-                    super::notes_style(edit, rows).hint_text(hint)
-                });
+            let output = GROUP_NOTES.of(draft.id()).editor(
+                ui,
+                &mut draft.notes,
+                super::plain_face(ui),
+                |edit| super::notes_style(edit, rows).hint_text(hint),
+            );
             design::named(
                 ui,
                 &output.response,

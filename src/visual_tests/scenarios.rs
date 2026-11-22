@@ -29038,7 +29038,9 @@ pub mod session_plan {
         d.observe(
             "9b-quiet-creature-text",
             d.has("Creature text") && work == (0, 0),
-            format!("Creature text shown; layouts made and bytes hashed on settled frames: {work:?}"),
+            format!(
+                "Creature text shown; layouts made and bytes hashed on settled frames: {work:?}"
+            ),
         );
         // Review of PR 499 (P1): the page's Ctrl+S saves the creature after its fields took the
         // frame's input. The last digit and Ctrl+S in ONE input frame (one pass): the creature
