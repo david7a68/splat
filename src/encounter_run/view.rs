@@ -7736,9 +7736,15 @@ fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
 /// The fixed columns of a run row, and its second line, which grows rather than cuts.
 const PICTURE_GAP: f32 = 6.0;
 
-/// Each row's finished layout, by the hash of its whole input: `RowLayout::fitted`.
+/// Each row's finished layout, by its whole input: `RowLayout::fitted`. A layout is found
+/// only for an input equal to its own, field by field (never by a hash of it alone), and the
+/// input holds the `Measure` it was laid out in, so new fonts or a new scale lay it out again.
+/// `fewer` keeps the forms of `with_fewer_conditions` by their row's input, then the count.
 #[derive(Clone, Default)]
-struct RowCache(std::collections::HashMap<u64, RowLayout>);
+struct RowCache {
+    whole: std::collections::HashMap<RowInput, RowLayout>,
+    fewer: std::collections::HashMap<RowInput, std::collections::HashMap<usize, RowLayout>>,
+}
 
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
@@ -7748,7 +7754,7 @@ thread_local! {
 }
 
 /// What a row's layout shows of its participant: every word and state it reads.
-#[derive(Clone, Hash)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 struct RowWords {
     name: String,
     side: String,
@@ -7798,8 +7804,39 @@ struct RowInput {
     fit: RowFit,
     width: f32,
     longest_name: f32,
-    pixels_per_point: f32,
+    /// The row's width in the name's font, with the theme's font generation and the scale.
+    measure: crate::design::memo::Measure,
 }
+
+impl PartialEq for RowInput {
+    fn eq(&self, other: &Self) -> bool {
+        let bits = |input: &Self| {
+            let s = input.scale;
+            [
+                input.width,
+                input.longest_name,
+                s.row,
+                s.name,
+                s.hp,
+                s.hp_max,
+                s.stat,
+                s.condition,
+                s.mark,
+                s.max_width,
+            ]
+            .map(f32::to_bits)
+        };
+        self.words == other.words
+            && self.sync == other.sync
+            && self.conc_dc == other.conc_dc
+            && self.turn == other.turn
+            && self.fit == other.fit
+            && self.measure == other.measure
+            && bits(self) == bits(other)
+    }
+}
+
+impl Eq for RowInput {}
 
 impl std::hash::Hash for RowInput {
     fn hash<H: std::hash::Hasher>(&self, hash: &mut H) {
@@ -7812,7 +7849,7 @@ impl std::hash::Hash for RowInput {
             fit,
             width,
             longest_name,
-            pixels_per_point,
+            measure,
         } = self;
         let RunScale {
             row,
@@ -7829,10 +7866,10 @@ impl std::hash::Hash for RowInput {
         conc_dc.hash(hash);
         turn.hash(hash);
         fit.hash(hash);
+        measure.hash(hash);
         for value in [
             width,
             longest_name,
-            pixels_per_point,
             row,
             name,
             hp,
@@ -8095,19 +8132,13 @@ impl RowLayout {
         // Keyed by this row's input and the count, so a frame that changes nothing lays out no
         // form. State marks (Bloodied, Conc) are not condition words: they never give way.
         (0..shown).rev().find_map(|count| {
-            let key = {
-                use std::hash::{Hash, Hasher};
-                let mut hash = std::collections::hash_map::DefaultHasher::new();
-                ("fewer conditions", count).hash(&mut hash);
-                input.hash(&mut hash);
-                hash.finish()
-            };
             let cache = egui::Id::new("run_row_layouts");
             let layout = ui
                 .data_mut(|data| {
                     data.get_temp_mut_or_default::<RowCache>(cache)
-                        .0
-                        .get(&key)
+                        .fewer
+                        .get(&**input)
+                        .and_then(|forms| forms.get(&count))
                         .cloned()
                 })
                 .unwrap_or_else(|| {
@@ -8118,9 +8149,14 @@ impl RowLayout {
                     let mut layout = Self::measured(ui, input, (count, BonusFit::All, &extra));
                     layout.input = Some(Arc::clone(input));
                     ui.data_mut(|data| {
-                        data.get_temp_mut_or_default::<RowCache>(cache)
-                            .0
-                            .insert(key, layout.clone());
+                        let fewer = &mut data.get_temp_mut_or_default::<RowCache>(cache).fewer;
+                        if fewer.len() > 512 {
+                            fewer.clear();
+                        }
+                        fewer
+                            .entry(RowInput::clone(input))
+                            .or_default()
+                            .insert(count, layout.clone());
                     });
                     layout
                 });
@@ -8192,31 +8228,26 @@ impl RowLayout {
             fit,
             width,
             longest_name,
-            pixels_per_point: ui.ctx().pixels_per_point(),
-        };
-        let key = {
-            use std::hash::{Hash, Hasher};
-            let mut hash = std::collections::hash_map::DefaultHasher::new();
-            input.hash(&mut hash);
-            hash.finish()
+            measure: crate::design::memo::Measure::of(ui, width, &Type::Name.sized(ui, scale.name)),
         };
         let cache = egui::Id::new("run_row_layouts");
         if let Some(layout) = ui.data_mut(|data| {
             data.get_temp_mut_or_default::<RowCache>(cache)
-                .0
-                .get(&key)
+                .whole
+                .get(&input)
                 .cloned()
         }) {
             return layout;
         }
         let mut layout = Self::laid_out(ui, &input);
+        let key = input.clone();
         let input = std::sync::Arc::new(input);
         layout.input = Some(input.clone());
         if let Some(base) = layout.without_effects.as_mut() {
             base.input = Some(input);
         }
         ui.data_mut(|data| {
-            let layouts = &mut data.get_temp_mut_or_default::<RowCache>(cache).0;
+            let layouts = &mut data.get_temp_mut_or_default::<RowCache>(cache).whole;
             if layouts.len() > 512 {
                 layouts.clear();
             }
@@ -11462,7 +11493,7 @@ mod tests {
     /// Reviews of PR 276: a frame that changes nothing in a row lays it out no more, also
     /// across the roster's passes and a resize back to a width it had; a change of the row's
     /// input, here the same words with another kind of time, lays it out again and shows the
-    /// new words. The work is counted inside `RowLayout::measured`.
+    /// new words, and so do new fonts. The work is counted inside `RowLayout::measured`.
     #[test]
     fn a_row_is_laid_out_again_only_when_its_input_changes() {
         use super::super::Condition;
@@ -11525,6 +11556,15 @@ mod tests {
                 lines.iter().any(|line| line == "Bless 2")
             })
             .expect("row-layout-refresh");
+        // Fonts installed again under the same sizes are a new font generation: each row is
+        // laid out again (ruling M6; before, the key had only the scale).
+        check
+            .refresh(&mut run, 3, |run| {
+                design::theme::install(&ctx);
+                let lines = frame(run, 900.0);
+                lines.iter().any(|line| line == "Bless 2")
+            })
+            .expect("row-layout-fonts");
     }
 
     #[test]

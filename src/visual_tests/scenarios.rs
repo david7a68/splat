@@ -25427,13 +25427,37 @@ pub mod session_plan_groups {
         d.click(NAV_CAMPAIGN);
         d.expect("1 content issue to repair");
         d.click("1 content issue to repair");
-        d.expect("Lost Patrol needs a creature that cannot be found.");
         let missing_id = splat::character::stable_id("visual:group:lost:creature").to_string();
+        // M0044 (SD3, AD4): the shared fault form: the owner and the line of its missing
+        // member's row, then what it needs and why that cannot be had.
+        let group_text = std::fs::read_to_string(
+            d.app_mut()
+                .campaigns
+                .active_campaign()
+                .unwrap()
+                .path
+                .join("Encounter Groups/Lost Patrol.md"),
+        )
+        .unwrap();
+        let members = group_text
+            .lines()
+            .position(|line| line.trim() == "## Members")
+            .expect("the group's Members");
+        let member_line = group_text
+            .lines()
+            .enumerate()
+            .find(|(at, line)| *at > members && line.contains(&missing_id))
+            .map(|(at, _)| at + 1)
+            .expect("the missing member's row");
+        let missing_words = format!(
+            "Lost Patrol · line {member_line}: Needs a creature that is not in this campaign’s packages."
+        );
+        d.expect(&missing_words);
         d.observe_both(
             "iter-2-C-missing-member",
             "The missing member names its owner and keeps its reference folded",
             |d| {
-                d.visible_text("Lost Patrol needs a creature that cannot be found.")
+                d.visible_text(&missing_words)
                     && d.has("Repair Lost Patrol")
                     && !d.visible_text(&missing_id)
             },
@@ -25444,10 +25468,7 @@ pub mod session_plan_groups {
         for size in [SMALL, DEFAULT] {
             let (tones, words, link, bordered) = d.at_size(size, |d| {
                 let words = d
-                    .painted_rect_in(
-                        "Lost Patrol needs a creature that cannot be found.",
-                        egui::Rect::EVERYTHING,
-                    )
+                    .painted_rect_in(&missing_words, egui::Rect::EVERYTHING)
                     .map(|rect| rect.left());
                 let link = d.place_of("Repair Lost Patrol").map(|rect| rect.left());
                 let bordered = d
@@ -25458,12 +25479,7 @@ pub mod session_plan_groups {
                         frame.stroke.width > 0.0
                             && frame.stroke.color == crate::design::colors().field_border
                     });
-                (
-                    tones_beside(d, "Lost Patrol needs a creature that cannot be found."),
-                    words,
-                    link,
-                    bordered,
-                )
+                (tones_beside(d, &missing_words), words, link, bordered)
             });
             d.observe(
                 "iter-23-Q-FA6",

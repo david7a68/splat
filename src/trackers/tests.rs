@@ -1493,6 +1493,40 @@ fn each_write_path_of_the_ledger_holds() {
         "{words}"
     );
     assert_eq!(t.due(), due - 1);
+    // Review of PR 703: of two seals, Remove of the first leaves the first seal due, now
+    // raised by the second, and says nothing of it.
+    let t = &mut race.trackers;
+    t.press("seals", Some("Old Guard"), "Take seal", None);
+    t.press("seals", Some("Old Guard"), "Take seal", None);
+    let first = t.test_history()["seals"]
+        .iter()
+        .find(|row| row.entry.instance.as_deref() == Some("Old Guard"))
+        .unwrap()
+        .entry
+        .clone();
+    t.remove(note, &first);
+    let words = t.test_removed().map(|removed| removed.words).unwrap();
+    assert!(
+        !words.contains("First seal for Old Guard is no longer due"),
+        "{words}"
+    );
+    assert_eq!(value(&race, "seals", Some("Old Guard")), 1);
+    let t = &mut race.trackers;
+    assert!(
+        t.state
+            .due
+            .iter()
+            .any(|notice| notice.name(&t.rules) == "First seal for Old Guard"),
+        "the first seal stays due"
+    );
+    let rest: Vec<_> = t.test_history()["seals"]
+        .iter()
+        .filter(|row| row.entry.instance.as_deref() == Some("Old Guard"))
+        .map(|row| row.entry.clone())
+        .collect();
+    for entry in rest {
+        race.trackers.remove(note, &entry);
+    }
     // An Undo whose place changed on disk: the entry before the removed one was edited in
     // Obsidian. It puts nothing back, says so, and ends.
     let t = &mut race.trackers;

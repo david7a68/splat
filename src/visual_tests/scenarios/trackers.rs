@@ -882,17 +882,28 @@ pub fn run(d: &mut Driver<'_>) {
         whole,
         format!("Case D beside the Session page: three notices, four rolls and the result line in view. {detail}"),
     );
-    // A Due row's last line, with Done, keeps the words' line pitch; the result line's Undo
-    // starts at its message's words.
+    // M0574 (SH15, AH12; replaces the round's rule that the last line keeps the words'
+    // pitch): a Due row's lines above the last keep the words' pitch; the last line, with
+    // Done, stands under them with no gap, and Done's centre is the last line's centre within
+    // a pixel, its target never over the line above. The result line's Undo starts at its
+    // message's words.
     let seal_words =
         "Old Guard: First seal. The party reaches level 2. A rival uses its 1-2 seals group.";
     let pitch = |d: &Driver<'_>| {
+        let done = d.place_of("Done: First seal for Old Guard");
         let (tops, line) = notice_line_tops(d, seal_words, "Done: First seal for Old Guard");
-        let even = tops.len() > 1
-            && tops
-                .windows(2)
-                .all(|pair| (pair[1] - pair[0] - line).abs() < 0.5);
-        (even, tops)
+        let even = match (tops.as_slice(), done) {
+            ([above @ .., before, last], Some(done)) => {
+                let head = [above, &[*before]].concat();
+                head.windows(2)
+                    .all(|pair| (pair[1] - pair[0] - line).abs() < 0.5)
+                    && *last >= before + line - 0.5
+                    && (done.center().y - (last + line / 2.0)).abs() <= 1.0
+                    && done.top() >= before + line - 0.5
+            }
+            _ => false,
+        };
+        (even, (tops, done.map(|done| done.center().y)))
     };
     let undo_at_words = |d: &Driver<'_>| {
         let (undo, words) = (
@@ -910,7 +921,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.observe(
         "T19.4",
         small_even && wide_even,
-        format!("A Due row's lines, with Done on the last, keep one pitch: {small_tops:?} at 960x640, {wide_tops:?} at 1200x800"),
+        format!("A Due row's lines keep one pitch, and Done stands on the last line's centre, clear of the line above: (line tops, Done's centre) {small_tops:?} at 960x640, {wide_tops:?} at 1200x800"),
     );
     d.observe(
         "T19.2",

@@ -2676,7 +2676,7 @@ pub(super) struct Travel {
     planned: design::Results<PlanLineOwner, PlannedLine>,
     /// The fights still to come with their days on the road, while the note, the Timeline and
     /// the campaign's fights are as they were.
-    days: Option<(RoadKey, Arc<RoadDays>)>,
+    days: Option<(RoadKey, Arc<PlannedDays>)>,
     /// Row 123: the plan that Timeline's open journey offers to, while its session, its note,
     /// the Timeline and the campaign's names are as they were.
     journey_plan: Option<(JourneyKey, Arc<JourneyPlan>)>,
@@ -2748,21 +2748,38 @@ type RoadKey = (Option<Uuid>, u64, u64, usize);
 /// Each fight still to come, by its name, with its day on the road when it has one.
 type RoadDays = Vec<(String, Option<String>)>;
 
-/// The day of the planned fight at this place: that fight's own turn among the rows to come.
-fn planned_day(
-    days: &[(String, Option<String>)],
-    planned: &[&PlanFight],
-    position: usize,
-) -> Option<String> {
-    let name = planned[position].name.to_lowercase();
-    let turn = planned[..position]
+/// The planned fights' days, worked out once for each key of the road's days (`planned_days`):
+/// the day of each planned fight by its place in the plan (`None` with no day).
+#[derive(Default)]
+struct PlannedDays {
+    at: Vec<Option<String>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How often the planned fights' days were worked out (`days_by_place`).
+    static DAYS_BY_PLACE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The day of each planned fight, by its place: that fight's own turn among the rows to come.
+/// One pass: each name's days are taken in order as its rows come.
+fn days_by_place(days: &[(String, Option<String>)], planned: &[&PlanFight]) -> Vec<Option<String>> {
+    #[cfg(test)]
+    DAYS_BY_PLACE.with(|count| count.set(count.get() + 1));
+    let mut by_name: std::collections::HashMap<&str, std::collections::VecDeque<&Option<String>>> =
+        std::collections::HashMap::new();
+    for (name, day) in days {
+        by_name.entry(name.as_str()).or_default().push_back(day);
+    }
+    planned
         .iter()
-        .filter(|fight| fight.name.eq_ignore_ascii_case(&name))
-        .count();
-    days.iter()
-        .filter(|(known, _)| *known == name)
-        .nth(turn)
-        .and_then(|(_, day)| day.clone())
+        .map(|fight| {
+            by_name
+                .get_mut(fight.name.to_lowercase().as_str())
+                .and_then(std::collections::VecDeque::pop_front)
+                .and_then(Clone::clone)
+        })
+        .collect()
 }
 
 /// F7's action and its words.
@@ -3412,12 +3429,17 @@ impl Sessions {
 
     /// The days on the road of the fights still to come, read again only when what they are
     /// read from changed.
+    /// The planned fights' days, worked out again only when the session, its draft, the
+    /// Timeline or the campaign's fights change; each new answer also ends the plan lines of
+    /// fights no longer planned and gives the kept lines a new days' revision
+    /// (`forget_plan_lines`). An unchanged frame does neither.
     fn planned_days(
         &mut self,
         book: &Book,
         session: Option<Uuid>,
         plan: &Plan<'_>,
-    ) -> Arc<RoadDays> {
+        planned: &[&PlanFight],
+    ) -> Arc<PlannedDays> {
         let Some(draft) = &self.draft else {
             return Arc::default();
         };
@@ -3427,8 +3449,20 @@ impl Sessions {
         {
             return Arc::clone(days);
         }
-        let days = Arc::new(road_days(&draft.body, &book.events, session, plan.fights));
+        let road = road_days(&draft.body, &book.events, session, plan.fights);
+        let days = Arc::new(PlannedDays {
+            at: days_by_place(&road, planned),
+        });
         self.travel.days = Some((key, Arc::clone(&days)));
+        let seen: Vec<_> = planned
+            .iter()
+            .zip(&days.at)
+            .enumerate()
+            .map(|(at, (fight, day))| ((session, at, fight.id), day.clone()))
+            .collect();
+        if seen != *self.plan_lines_seen {
+            self.forget_plan_lines(seen);
+        }
         days
     }
 
@@ -4793,12 +4827,10 @@ impl Sessions {
                     }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
-                let days = self.planned_days(book, session, plan);
-                let seen: Vec<_> = planned.iter().enumerate().map(|(at, fight)| ((session, at, fight.id), planned_day(&days, &planned, at))).collect();
-                if seen != *self.plan_lines_seen { self.forget_plan_lines(seen); }
+                let days = self.planned_days(book, session, plan, &planned);
                 let plan_days = self.plan_lines_seen.revision();
                 for (position, fight) in planned.iter().enumerate() {
-                    let day = planned_day(&days, &planned, position);
+                    let day = days.at.get(position).cloned().flatten();
                     self.removed_fight_message(ui, session, position);
                     if !folded {
                         closed_scenes += self.scene_rows(ui, width, &scenes[position], position, shown, plan, &mut scene_act);
@@ -8537,6 +8569,14 @@ mod tests {
                 shown(harness, "Open: Captain Varra")
             })
             .expect("scene-model-steady");
+        // Review of PR 703: the planned fights' days are worked out once for each change of
+        // the note, the Timeline or the fights, never on a quiet frame or a resize.
+        let days = || DAYS_BY_PLACE.with(std::cell::Cell::get);
+        let before = days();
+        harness.run_steps(3);
+        harness.set_size(egui::vec2(design::FORM_WIDTH + 200.0, 800.0));
+        harness.run_steps(3);
+        assert_eq!(days(), before, "quiet frames work out no planned day");
         // Two scenes, each with its box; the plain list line has no row. Round 28 FD3: the
         // heading counts every row under it, a done scene too (it said 2 for these 3 rows).
         assert!(harness.query_by_label("Open: Captain Varra").is_some());
