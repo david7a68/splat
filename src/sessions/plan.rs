@@ -852,8 +852,11 @@ fn planned_event_run<'a>(
 struct KeptRow {
     words: RowWords,
     laid: design::Laid,
-    /// Its facts' width and whether its actions stand in the shared column.
+    /// Its facts' width and whether its actions stand in the shared column: the gate's record
+    /// of the row (test builds).
+    #[cfg(any(test, feature = "test-support"))]
     facts: f32,
+    #[cfg(any(test, feature = "test-support"))]
     in_column: bool,
 }
 
@@ -878,8 +881,12 @@ pub(super) struct KeptRows {
 /// the measuring environment. A quiet frame compares these and lays out nothing.
 #[derive(Clone, PartialEq)]
 struct RowsKey {
+    /// The projection the rows read (the planned fights and groups at their places): its
+    /// revision follows each of its inputs, the content index's too.
+    projection: Option<design::memo::Revision>,
     session: Option<Uuid>,
     draft: u64,
+    /// The Timeline as it stands at the rows (an Add frame's new event is in it).
     book: design::memo::Revision,
     fights: design::memo::Revision,
     saved: design::memo::Revision,
@@ -2044,6 +2051,14 @@ pub(super) struct ProjectionCache {
     /// quiet-frame proof counts both).
     pub(super) reached: usize,
     pub(super) builds: usize,
+}
+
+impl ProjectionCache {
+    /// The revision of the projection last asked for: it changes whenever the projection's
+    /// inputs do (`ProjectionInputs`).
+    fn revision(&self) -> Option<design::memo::Revision> {
+        self.inputs.as_ref().map(design::memo::Revised::revision)
+    }
 }
 
 /// What the plan's closed rows read from their data (layout 11c A2a, the v2 review's item 5),
@@ -5795,6 +5810,7 @@ impl Sessions {
         let fight_days = self.planned_days(book, session, plan, &projection.planned);
         let plan_days = self.plan_lines_seen.revision();
         let key = RowsKey {
+            projection: self.plan_projection.revision(),
             session,
             draft: self
                 .draft
@@ -5981,12 +5997,12 @@ impl Sessions {
             let part = words.part();
             let row = words.row(key, part.as_slice(), rule);
             let laid = row.lay(ui, row_width, columns);
-            let facts = row.facts(ui, row_width).0;
-            let in_column = row.in_column(ui, row_width, columns);
             KeptRow {
+                #[cfg(any(test, feature = "test-support"))]
+                facts: row.facts(ui, row_width).0,
+                #[cfg(any(test, feature = "test-support"))]
+                in_column: row.in_column(ui, row_width, columns),
                 laid,
-                facts,
-                in_column,
                 words,
             }
         };
