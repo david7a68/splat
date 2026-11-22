@@ -91,6 +91,7 @@ row-register	src/campaign_content.rs	whole_row	1	Campaign
 row-register	src/design/components.rs	row	1	design	design implementation boundary
 row-register	src/dndbeyond.rs	DndBeyond::show_import	1	Settings
 row-register	src/encounter_run/view.rs	Run::group_list	1	Run
+row-register	src/encounters/groups.rs	register_whole	1	Encounters	a group form's whole block (its name row, a choice row, a member with its count line, its notes) for the pane's whole-row cut (layout 11c, SB1/AB1; raised)
 row-register	src/encounters/list.rs	list_row	1	Encounters
 row-register	src/loot_editor.rs	line_row	1	Encounters
 row-register	src/party_support/sheets.rs	sheet_rect	1	Party	a sheet row (a tile, a fact line, a line of columns) with the heading above it is one block for the pane's whole-row cut (layout 11a; raised)

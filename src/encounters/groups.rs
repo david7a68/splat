@@ -1738,86 +1738,102 @@ pub(super) fn of_encounter(
                 .inner_margin(design::S + design::FOCUS_WIDTH - stroke.width)
                 .show(ui, |ui| {
                     let mut name_right = f32::INFINITY;
-                    ui.horizontal(|ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            super::row_menu(ui, &group.name.clone(), |ui| {
-                                design::menu_submenu(ui, "Move to", inside, |ui| {
-                                    for (id, name) in
-                                        snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
+                    whole_row(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    super::row_menu(ui, &group.name.clone(), |ui| {
+                                        design::menu_submenu(ui, "Move to", inside, |ui| {
+                                            for (id, name) in snapshot
+                                                .encounter_choices()
+                                                .filter(|(id, _)| *id != this.0)
+                                            {
+                                                if super::menu_action(ui, name, None) {
+                                                    group.setup.encounter = Some(EntryRef::id(id));
+                                                    // N1: who owns the group is checked by Save.
+                                                    group.touch();
+                                                }
+                                            }
+                                        });
+                                        if super::menu_action(
+                                            ui,
+                                            "Make available to any encounter",
+                                            None,
+                                        ) {
+                                            discard = Some((index, false));
+                                        }
+                                        if super::menu_action(ui, "Delete group", None) {
+                                            discard = Some((index, true));
+                                        }
+                                    });
+                                    // The slot keeps the wider word's width, so every frame's name
+                                    // field ends at one edge and does not move with the Add target.
+                                    let slot = Action::quiet("Adding here")
+                                        .icon(icons::OK)
+                                        .density(Density::Read)
+                                        .natural_width(ui);
+                                    if Action::quiet(if adding {
+                                        "Adding here"
+                                    } else {
+                                        "Add here"
+                                    })
+                                    .icon(if adding { icons::OK } else { icons::ADD })
+                                    .density(Density::Read)
+                                    .min_width(slot)
+                                    .name(&format!("Add creatures to {}", group.name))
+                                    .selected(adding)
+                                    .show(ui)
+                                    .clicked()
                                     {
-                                        if super::menu_action(ui, name, None) {
-                                            group.setup.encounter = Some(EntryRef::id(id));
-                                            // N1: who owns the group is checked by Save.
-                                            group.touch();
+                                        if adding {
+                                            *add_to = None;
+                                        } else {
+                                            *add_to = Some(path.clone());
+                                            *focus_search = true;
+                                            go_to_search = true;
                                         }
                                     }
-                                });
-                                if super::menu_action(ui, "Make available to any encounter", None) {
-                                    discard = Some((index, false));
-                                }
-                                if super::menu_action(ui, "Delete group", None) {
-                                    discard = Some((index, true));
-                                }
-                            });
-                            // The slot keeps the wider word's width, so every frame's name
-                            // field ends at one edge and does not move with the Add target.
-                            let slot = Action::quiet("Adding here")
-                                .icon(icons::OK)
-                                .density(Density::Read)
-                                .natural_width(ui);
-                            if Action::quiet(if adding { "Adding here" } else { "Add here" })
-                                .icon(if adding { icons::OK } else { icons::ADD })
-                                .density(Density::Read)
-                                .min_width(slot)
-                                .name(&format!("Add creatures to {}", group.name))
-                                .selected(adding)
-                                .show(ui)
-                                .clicked()
-                            {
-                                if adding {
-                                    *add_to = None;
-                                } else {
-                                    *add_to = Some(path.clone());
-                                    *focus_search = true;
-                                    go_to_search = true;
-                                }
-                            }
-                            // The name starts at the frame's left edge, as the fields below do,
-                            // and ends at FORM_WIDTH or before the actions.
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    let width = (ui.available_width() - 2.0 * design::S)
-                                        .min(design::FORM_WIDTH);
-                                    let font = Type::Heading.font(ui);
-                                    let response = ENCOUNTER_GROUP_NAME.of(group.id).single_line(
-                                        ui,
-                                        &mut group.name,
-                                        |edit| {
-                                            edit.desired_width(width)
-                                                .margin(egui::vec2(design::S, 4.0))
-                                                .font(font)
+                                    // The name starts at the frame's left edge, as the fields below do,
+                                    // and ends at FORM_WIDTH or before the actions.
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            let width = (ui.available_width() - 2.0 * design::S)
+                                                .min(design::FORM_WIDTH);
+                                            let font = Type::Heading.font(ui);
+                                            let response = ENCOUNTER_GROUP_NAME
+                                                .of(group.id)
+                                                .single_line(ui, &mut group.name, |edit| {
+                                                    edit.desired_width(width)
+                                                        .margin(egui::vec2(design::S, 4.0))
+                                                        .font(font)
+                                                });
+                                            design::named(
+                                                ui,
+                                                &response,
+                                                &format!("Group name: {}", group.name),
+                                            );
+                                            // F1: a name edit is an edit of the group: its revision
+                                            // keys Save's checks, as in the group's own editor.
+                                            if response.changed() {
+                                                group.touch();
+                                            }
+                                            name_right = response.rect.right();
+                                            if focus_group.as_deref() == Some(path.as_str()) {
+                                                *focus_group = None;
+                                                design::focus_and_select(
+                                                    ui,
+                                                    response.id,
+                                                    &group.name,
+                                                );
+                                                response.scroll_to_me(Some(egui::Align::Center));
+                                            }
                                         },
                                     );
-                                    design::named(
-                                        ui,
-                                        &response,
-                                        &format!("Group name: {}", group.name),
-                                    );
-                                    // F1: a name edit is an edit of the group: its revision
-                                    // keys Save's checks, as in the group's own editor.
-                                    if response.changed() {
-                                        group.touch();
-                                    }
-                                    name_right = response.rect.right();
-                                    if focus_group.as_deref() == Some(path.as_str()) {
-                                        *focus_group = None;
-                                        design::focus_and_select(ui, response.id, &group.name);
-                                        response.scroll_to_me(Some(egui::Align::Center));
-                                    }
                                 },
                             );
-                        });
+                        })
                     });
                     group_fields(
                         ui,
@@ -1896,31 +1912,33 @@ fn belongs_to(
             .find(|(known, _)| *known == id)
             .map_or(MISSING_ENCOUNTER, |(_, name)| name)
     });
-    ui.horizontal(|ui| {
-        choice_label(ui, BELONGS_TO, |ui| {
-            // The choice ends where the name field ends, inside the column. The part's list is as
-            // wide as its control at every size (FB8), and a long name wraps in it.
-            let right = name_right.min(ui.max_rect().right());
-            let width = (right - ui.cursor().left()).max(Density::Scan.control());
-            let mut chosen = current;
-            let mut dropdown = design::Dropdown::new(BELONGS.of(draft.id), BELONGS_TO)
-                .width(width)
-                .choice(None, ANY_ENCOUNTER)
-                .choices(choices.iter().map(|(id, name)| (Some(*id), *name)));
-            // An encounter that is gone stays the value, as words the list cannot choose again.
-            if current.is_some_and(|id| !choices.iter().any(|(known, _)| *known == id)) {
-                dropdown = dropdown.blocked_choice(
-                    current,
-                    MISSING_ENCOUNTER,
-                    "Its encounter was deleted. Choose another.",
-                );
-            }
-            if dropdown.show(ui, &mut chosen).changed {
-                // The same choice again keeps a link that the note gives: only a change writes.
-                draft.setup.encounter = chosen.map(EntryRef::id);
-                draft.touch();
-            }
-        });
+    whole_row(ui, |ui| {
+        ui.horizontal(|ui| {
+            choice_label(ui, BELONGS_TO, |ui| {
+                // The choice ends where the name field ends, inside the column. The part's list is as
+                // wide as its control at every size (FB8), and a long name wraps in it.
+                let right = name_right.min(ui.max_rect().right());
+                let width = (right - ui.cursor().left()).max(Density::Scan.control());
+                let mut chosen = current;
+                let mut dropdown = design::Dropdown::new(BELONGS.of(draft.id), BELONGS_TO)
+                    .width(width)
+                    .choice(None, ANY_ENCOUNTER)
+                    .choices(choices.iter().map(|(id, name)| (Some(*id), *name)));
+                // An encounter that is gone stays the value, as words the list cannot choose again.
+                if current.is_some_and(|id| !choices.iter().any(|(known, _)| *known == id)) {
+                    dropdown = dropdown.blocked_choice(
+                        current,
+                        MISSING_ENCOUNTER,
+                        "Its encounter was deleted. Choose another.",
+                    );
+                }
+                if dropdown.show(ui, &mut chosen).changed {
+                    // The same choice again keeps a link that the note gives: only a change writes.
+                    draft.setup.encounter = chosen.map(EntryRef::id);
+                    draft.touch();
+                }
+            });
+        })
     });
     // In an encounter's editor, belonging to it goes without saying.
     if current.is_some() && current == open.map(|(id, _)| id) {
@@ -3464,6 +3482,19 @@ fn members_pane(
 }
 
 /// FB4: `Default side` and `Belongs to` share one label column, the wider label plus `S`, so
+/// Layout 11c (SB1, AB1): a whole block of a group's form, registered, so a `Fills` pane's
+/// footer ends the column above it, with a hairline, and never cuts through it.
+fn register_whole(ui: &egui::Ui, block: egui::Rect) {
+    design::register_row(ui, block);
+}
+
+/// `add` as one whole block of a group's form (`register_whole`).
+fn whole_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let block = ui.scope(add);
+    register_whole(ui, block.response.rect);
+    block.inner
+}
+
 /// their controls start at one x.
 fn choice_label<R>(ui: &mut egui::Ui, text: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let font = Type::Small.font(ui);
@@ -3565,24 +3596,26 @@ fn group_fields(
     refused: Option<RefusalPlace>,
 ) -> bool {
     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-    ui.horizontal(|ui| {
-        choice_label(ui, SIDE_FIELD, |ui| {
-            let name = format!("{SIDE_FIELD} for {}", draft.name);
-            let side = draft.setup.side.clone();
-            super::side_control(
-                ui,
-                (
-                    super::list::SIDE_CHOICE.of(draft.id),
-                    super::list::SIDE_OTHER.of(draft.id),
-                ),
-                &name,
-                &mut draft.setup.side,
-                &[],
-            );
-            if draft.setup.side != side {
-                draft.touch();
-            }
-        });
+    whole_row(ui, |ui| {
+        ui.horizontal(|ui| {
+            choice_label(ui, SIDE_FIELD, |ui| {
+                let name = format!("{SIDE_FIELD} for {}", draft.name);
+                let side = draft.setup.side.clone();
+                super::side_control(
+                    ui,
+                    (
+                        super::list::SIDE_CHOICE.of(draft.id),
+                        super::list::SIDE_OTHER.of(draft.id),
+                    ),
+                    &name,
+                    &mut draft.setup.side,
+                    &[],
+                );
+                if draft.setup.side != side {
+                    draft.touch();
+                }
+            });
+        })
     });
     if open.is_none() {
         design::help(ui, "Party, enemies, or any other name, such as rivals.");
@@ -3639,24 +3672,27 @@ fn group_fields(
             design::Gap::M
         },
     );
-    design::field(ui, NOTES_FIELD, None, None, |ui| {
-        let hint = design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
-        let rows = if open.is_some() { 2 } else { 4 };
-        // Keyed by the group draft, so two groups never share its text or its Undo.
-        let output = GROUP_NOTES
-            .of(draft.id())
-            .editor(ui, &mut draft.notes, |edit| {
-                super::notes_style(edit, rows).hint_text(hint)
-            });
-        design::named(
-            ui,
-            &output.response,
-            &format!("{NOTES_FIELD} for {}", draft.name),
-        );
-        // F1: notes make a group changed, so Save checks it: an edit of them is an edit.
-        if output.response.changed() {
-            draft.touch();
-        }
+    whole_row(ui, |ui| {
+        design::field(ui, NOTES_FIELD, None, None, |ui| {
+            let hint =
+                design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
+            let rows = if open.is_some() { 2 } else { 4 };
+            // Keyed by the group draft, so two groups never share its text or its Undo.
+            let output = GROUP_NOTES
+                .of(draft.id())
+                .editor(ui, &mut draft.notes, |edit| {
+                    super::notes_style(edit, rows).hint_text(hint)
+                });
+            design::named(
+                ui,
+                &output.response,
+                &format!("{NOTES_FIELD} for {}", draft.name),
+            );
+            // F1: notes make a group changed, so Save checks it: an edit of them is an edit.
+            if output.response.changed() {
+                draft.touch();
+            }
+        })
     });
     gone_shown || member_shown
 }
@@ -3912,7 +3948,7 @@ fn members(
                 member_row
             });
             let (member_row, facts) = (facts.inner, facts.response.rect);
-            ui.horizontal(|ui| {
+            let count_line = ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                 let count = ui.add(
                     egui::DragValue::new(&mut member.count)
@@ -4019,7 +4055,11 @@ fn members(
                         wrapped: !column,
                     },
                 );
-            });
+            })
+            .response
+            .rect;
+            // The member's facts and its count line are one whole block.
+            register_whole(ui, facts.union(count_line));
             // FA1, FJ6: every member fault is in the one member-fault form, with its line while
             // the members are the saved ones (a draft's lines can move).
             let line = saved_members

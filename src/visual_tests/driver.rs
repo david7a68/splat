@@ -865,6 +865,45 @@ impl<'a> Driver<'a> {
             .min_by(|a, b| a.0.area().total_cmp(&b.0.area()))
     }
 
+    /// Rect shapes in `area` (control frames, fields, row backgrounds; in points) that the clip
+    /// painting them cuts from below: part shows above the clip's bottom, the rest is under it.
+    /// Only shapes no taller than `tallest` count, as a card or a column frame may run under a
+    /// cut, and only shapes taller than a hairline.
+    pub fn frames_cut_from_below(&self, area: egui::Rect, tallest: f32) -> Vec<egui::Rect> {
+        fn visit(
+            shape: &egui::Shape,
+            clip: egui::Rect,
+            (area, tallest): (egui::Rect, f32),
+            found: &mut Vec<egui::Rect>,
+        ) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        visit(shape, clip, (area, tallest), found);
+                    }
+                }
+                egui::Shape::Rect(rect) => {
+                    let r = rect.rect;
+                    if r.height() > 2.0
+                        && r.height() <= tallest
+                        && area.intersects(r)
+                        && r.top() < clip.bottom() - 1.0
+                        && r.bottom() > clip.bottom() + 1.0
+                        && clip.x_range().intersects(r.x_range())
+                    {
+                        found.push(r);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for shape in &self.harness.output().shapes {
+            visit(&shape.shape, shape.clip_rect, (area, tallest), &mut found);
+        }
+        found
+    }
+
     /// The painted frame of a named control, for fill and border checks.
     pub fn control_frame(&self, name: &str) -> Option<egui::epaint::RectShape> {
         self.control_frame_at(self.place_of(name)?)
