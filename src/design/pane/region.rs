@@ -48,6 +48,14 @@ pub enum Navigation {
 /// The frames a request may wait (a held press) before it ends.
 const REQUEST_FRAMES: u64 = 8;
 
+/// The block (by key) whose first control, or last, takes the focus once it draws, and the
+/// frame a key asked it in.
+type FocusTo = Option<(Id, bool, u64)>;
+
+/// A Tab in a focused text field at the drawn edge: the field, the block it routes to if the
+/// field gives Tab up, and whether to that block's last control.
+type TabAfter = Option<(Id, usize, bool)>;
+
 /// What the highest request wants shown.
 enum Want {
     Block(usize),
@@ -156,10 +164,10 @@ pub struct RegionState {
     arrow: Option<(Id, bool)>,
     /// A Tab in a focused text field at the drawn edge in this pass: the field, the block it
     /// routes to if the field gives Tab up, and whether to its last control.
-    tab_after: Option<(Id, usize, bool)>,
+    tab_after: TabAfter,
     /// The block (by key) whose first control, or last, takes the focus once it draws; the frame
     /// it was asked in.
-    focus_to: Option<(Id, bool, u64)>,
+    focus_to: FocusTo,
 }
 
 impl RegionState {
@@ -741,7 +749,7 @@ impl<'s> BlockRegion<'s> {
 /// request; a press held still in it makes them wait, up to `REQUEST_FRAMES`. Whether one waits.
 fn cancel_in_place(
     ui: &Ui,
-    (pending, asked, focus_to): (&mut Pending, &mut Option<u64>, &mut Option<(Id, bool, u64)>),
+    (pending, asked, focus_to): (&mut Pending, &mut Option<u64>, &mut FocusTo),
 ) -> bool {
     let frame = ui.ctx().cumulative_frame_nr();
     let (cancel, held) = crate::design::reveal::column_view(ui)
@@ -809,8 +817,8 @@ struct KeyStand {
 struct Keys<'s> {
     stand: &'s mut Option<KeyStand>,
     arrow: &'s mut Option<(Id, bool)>,
-    tab_after: &'s mut Option<(Id, usize, bool)>,
-    focus_to: &'s mut Option<(Id, bool, u64)>,
+    tab_after: &'s mut TabAfter,
+    focus_to: &'s mut FocusTo,
     pending: &'s mut Pending,
 }
 
@@ -932,9 +940,9 @@ fn keyboard_after_draw(
     ctx: &egui::Context,
     layer: egui::LayerId,
     (focus_to, stand, tab_after, pending): (
-        &mut Option<(Id, bool, u64)>,
+        &mut FocusTo,
         &mut Option<KeyStand>,
-        &mut Option<(Id, usize, bool)>,
+        &mut TabAfter,
         &mut Pending,
     ),
     plan: &BlockPlan,

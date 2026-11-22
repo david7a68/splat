@@ -510,12 +510,14 @@ mod tests {
                             if *field == Some(at) {
                                 let size = ui.slot(0).size();
                                 let edit = ui.in_slot(0, |ui| {
-                                    ui.add_sized(
-                                        size,
-                                        egui::TextEdit::multiline(field_text)
-                                            .desired_rows(1)
-                                            .lock_focus(true),
-                                    )
+                                    ui.set_min_size(size);
+                                    crate::field_id!("laid_test_field")
+                                        .once(crate::design::layout::Once::Example)
+                                        .multi_line(ui, field_text, |edit| {
+                                            edit.desired_rows(1)
+                                                .desired_width(size.x)
+                                                .lock_focus(true)
+                                        })
                                 });
                                 *field_id = Some(edit.id);
                             } else if ui.put(0, egui::Button::new(format!("Act {at}"))).clicked() {
