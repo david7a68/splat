@@ -20,6 +20,7 @@ pub mod results;
 pub mod reveal;
 pub mod save_row;
 pub mod status;
+pub mod text_draft;
 pub mod theme;
 pub mod tokens;
 pub mod turn_heading;

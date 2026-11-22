@@ -191,6 +191,59 @@ pub(crate) fn font_generation(ctx: &egui::Context) -> u64 {
         .unwrap_or_default()
 }
 
+/// The last pass's atlas probe: a small galley egui's own galley cache keeps while it is asked
+/// for in every pass, and the epoch it stands for.
+#[derive(Clone)]
+struct AtlasProbe {
+    pass: u64,
+    galley: std::sync::Arc<egui::Galley>,
+    epoch: u64,
+}
+
+fn atlas_probe_id() -> egui::Id {
+    egui::Id::new("design_theme_atlas_probe")
+}
+
+/// An epoch that changes whenever egui may have made its fonts or their atlas again (layout PR
+/// 9b): a kept galley holds places in the font atlas, so it is laid out again in a new epoch.
+/// epaint keeps no generation for its atlas (it recreates it when nearly full, for a new texture
+/// side or alpha mode, and for new font definitions), and a size or fill ratio can come back
+/// equal. The probe is reliable: egui's galley cache gives the same galley for the probe's job
+/// as long as the fonts and the cache live, and loses it when either is made again. The probe is
+/// kept here, so its galley cannot be freed and an address cannot come back. A pass that does
+/// not ask (no document editor drawn) lets the cache drop it: the next ask is a new epoch, which
+/// only lays out once more. One small layout lookup per pass, whatever the documents.
+pub(crate) fn atlas_epoch(ctx: &egui::Context) -> u64 {
+    let pass = ctx.cumulative_pass_nr();
+    let kept = ctx.data(|data| data.get_temp::<AtlasProbe>(atlas_probe_id()));
+    if let Some(kept) = kept.as_ref().filter(|kept| kept.pass == pass) {
+        return kept.epoch;
+    }
+    let galley = ctx.fonts_mut(|fonts| {
+        fonts.layout_job(egui::text::LayoutJob::simple_singleline(
+            "Ag".to_owned(),
+            egui::FontId::proportional(10.0),
+            egui::Color32::WHITE,
+        ))
+    });
+    let epoch = match kept {
+        Some(kept) if std::sync::Arc::ptr_eq(&kept.galley, &galley) => kept.epoch,
+        Some(kept) => kept.epoch + 1,
+        None => 0,
+    };
+    ctx.data_mut(|data| {
+        data.insert_temp(
+            atlas_probe_id(),
+            AtlasProbe {
+                pass,
+                galley,
+                epoch,
+            },
+        );
+    });
+    epoch
+}
+
 pub fn install(ctx: &egui::Context) {
     // The app reads focused widgets' roles, and assistive technology can attach at any time.
     ctx.enable_accesskit();

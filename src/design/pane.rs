@@ -323,46 +323,76 @@ enum Host {
 pub enum Face {
     /// Plain text in one font (a note's source in monospace, prose).
     Font(egui::TextStyle),
-    /// Text laid out by a styling layouter (Markdown's source).
-    Laid(fn(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley>),
+    /// Text laid out by a styling layouter (Markdown's source). `folds`: the layout depends on
+    /// where the caret and the selection are (a fold opens on their lines), so the kept layout
+    /// is keyed by them too.
+    Laid {
+        layout: fn(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley>,
+        folds: bool,
+    },
 }
 
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a document editor laid out its text (layout PR 9b's quiet-frame proof).
-    pub(crate) static KEPT_LAYOUTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub static KEPT_LAYOUTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// The layouter of a document editor: the laid-out text kept for its revision and measure.
-/// egui calls it once with the text it was given, and again only after an edit in its own
-/// pass: only the first call reads and writes the kept text, so a text that an edit changed
-/// is laid out fresh and kept under its new revision in the next frame.
-fn kept_layouter(
+/// Everything a kept layout of a document was made from (layout PR 9b, note v2 §3): the
+/// draft's identity and revision, the measure (width, font, fonts' generation, which the theme's
+/// installation also raises, scale), the font atlas's epoch, the light or dark visuals, the face,
+/// and for a face that folds, the caret and the selection of a focused field.
+#[derive(Clone, PartialEq)]
+struct LaidKey {
+    draft: super::text_draft::DraftKey,
+    measure: super::memo::Measure,
+    atlas: u64,
+    dark: bool,
+    face: (Option<egui::TextStyle>, usize),
+    caret: Option<(bool, Option<(usize, usize)>)>,
+}
+
+/// The layouter of a document editor: the laid-out text kept for its [`LaidKey`]. egui calls
+/// it with the text it was given and again after each edit in its own pass (several in one
+/// frame too); each call reads the draft's live key (`text_draft::Lent`), so an edited text is
+/// never answered with the galley of another revision.
+fn kept_layouter<'a>(
     field: Id,
     face: Face,
-    revision: super::memo::Revision,
-) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> {
-    let key = field.with("kept_layout");
-    let mut first = true;
+    live: &'a std::cell::Cell<super::text_draft::DraftKey>,
+) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> + 'a {
+    let store = field.with("kept_layout");
     move |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| {
-        let fresh = std::mem::take(&mut first);
         let font = match &face {
             Face::Font(style) => style.resolve(ui.style()),
-            Face::Laid(_) => super::tokens::Type::Body.font(ui),
+            Face::Laid { .. } => super::tokens::Type::Body.font(ui),
         };
-        let measure = super::memo::Measure::of(ui, wrap, &font);
-        if fresh
-            && let Some(galley) = ui
-                .ctx()
-                .data(|data| {
-                    data.get_temp::<(
-                        super::memo::Revision,
-                        super::memo::Measure,
-                        std::sync::Arc<egui::Galley>,
-                    )>(key)
-                })
-                .filter(|(kept, at, _)| *kept == revision && *at == measure)
-                .map(|(_, _, galley)| galley)
+        let caret = match &face {
+            Face::Laid { folds: true, .. } => {
+                let focused = ui.memory(|memory| memory.has_focus(field));
+                let range = egui::TextEdit::load_state(ui.ctx(), field)
+                    .and_then(|state| state.cursor.char_range())
+                    .map(|range| (range.primary.index, range.secondary.index));
+                Some((focused, range))
+            }
+            _ => None,
+        };
+        let key = LaidKey {
+            draft: live.get(),
+            measure: super::memo::Measure::of(ui, wrap, &font),
+            atlas: super::theme::atlas_epoch(ui.ctx()),
+            dark: ui.visuals().dark_mode,
+            face: match &face {
+                Face::Font(style) => (Some(style.clone()), 0),
+                Face::Laid { layout, .. } => (None, *layout as usize),
+            },
+            caret,
+        };
+        if let Some(galley) = ui
+            .ctx()
+            .data(|data| data.get_temp::<(LaidKey, std::sync::Arc<egui::Galley>)>(store))
+            .filter(|(kept, _)| *kept == key)
+            .map(|(_, galley)| galley)
         {
             return galley;
         }
@@ -378,29 +408,11 @@ fn kept_layouter(
                     egui::text::LayoutJob::simple(text.as_str().to_owned(), font, color, wrap);
                 ui.fonts_mut(|fonts| fonts.layout_job(job))
             }
-            Face::Laid(layout) => layout(ui, text, wrap),
+            Face::Laid { layout, .. } => layout(ui, text, wrap),
         };
-        if fresh {
-            ui.ctx().data_mut(|data| {
-                data.insert_temp(key, (revision, measure, galley.clone()));
-            });
-        }
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(store, (key, galley.clone())));
         galley
-    }
-}
-
-/// The text edit of an editor viewport: the caller's `style`, then the part's own frame (none:
-/// the viewport draws it), margin and width, and its least height.
-fn viewport_text(
-    style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
-    least: f32,
-) -> impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t> {
-    move |edit| {
-        style(edit)
-            .frame(false)
-            .margin(egui::Vec2::ZERO)
-            .desired_width(f32::INFINITY)
-            .min_size(vec2(0.0, least))
     }
 }
 
@@ -437,13 +449,13 @@ pub fn editor_view<T: super::layout::GuardedText>(
     .editor(ui, field, text, style)
 }
 
-/// [`editor_view`] for a document with a trusted revision: the same viewport, with its laid-out
-/// text kept by revision as [`EditorRegion::document`] keeps it.
+/// [`editor_view`] for a document (`text_draft::TextDraft`): the same viewport, with its laid-out
+/// text kept by its key as [`EditorRegion::document`] keeps it.
 pub fn document_view(
     ui: &mut Ui,
     height: ViewHeight,
     field: super::layout::FieldId,
-    text: &mut super::memo::Revised<String>,
+    text: &mut super::text_draft::TextDraft,
     face: Face,
     style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
 ) -> super::layout::Editor {
@@ -585,20 +597,26 @@ impl EditorRegion<'_> {
         self.draw(ui, field, text, None, style)
     }
 
-    /// [`editor`](Self::editor) for a document with a trusted revision (layout PR 9b, ruling
-    /// L8). The part lays the text out in `face` and keeps the laid-out text by the document's
-    /// revision and its measure (width, font, fonts' generation, scale): a quiet frame lays out,
-    /// hashes and copies none of it. `style` sets the rest of the text edit, not its font.
+    /// [`editor`](Self::editor) for a document (`text_draft::TextDraft`, layout PR 9b, rulings
+    /// L8 and M25). The part lays the text out in `face` and keeps the laid-out text by its full
+    /// key (the draft's identity and revision, the measure, the font atlas's epoch, the visuals,
+    /// the face, and the caret for a face that folds): a quiet frame lays out, hashes and copies
+    /// none of it in the app. egui's own per-frame text copies stay, counted (M25). `style` sets
+    /// the rest of the text edit, not its font.
     pub fn document(
         self,
         ui: &mut Ui,
         field: super::layout::FieldId,
-        text: &mut super::memo::Revised<String>,
+        text: &mut super::text_draft::TextDraft,
         face: Face,
         style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
     ) -> super::layout::Editor {
-        let revision = text.revision();
-        self.draw(ui, field, text, Some((face, revision)), style)
+        let live = std::cell::Cell::new(text.key());
+        let mut lent = super::text_draft::Lent {
+            draft: text,
+            live: &live,
+        };
+        self.draw(ui, field, &mut lent, Some((face, &live)), style)
     }
 
     fn draw<T: super::layout::GuardedText>(
@@ -606,7 +624,7 @@ impl EditorRegion<'_> {
         ui: &mut Ui,
         field: super::layout::FieldId,
         text: &mut T,
-        laid: Option<(Face, super::memo::Revision)>,
+        laid: Option<(Face, &std::cell::Cell<super::text_draft::DraftKey>)>,
         style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
     ) -> super::layout::Editor {
         let pane = innermost(ui);
@@ -710,8 +728,8 @@ impl EditorRegion<'_> {
                 let shaped = viewport_text(style, least_text);
                 let editor = match laid {
                     None => field.editor(ui, text, shaped),
-                    Some((face, revision)) => {
-                        let mut layouter = kept_layouter(field.id(), face, revision);
+                    Some((face, live)) => {
+                        let mut layouter = kept_layouter(field.id(), face, live);
                         field.editor_laid(ui, text, &mut layouter, shaped)
                     }
                 };

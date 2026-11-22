@@ -702,11 +702,12 @@ pub struct Editor {
 }
 
 /// What the bound text was when the field last drew with focus: its length and a hash, or the
-/// revision of a revised document (`Revised<String>`, layout PR 9b), which needs no hash.
+/// key of a document (`text_draft::TextDraft`, layout PR 9b), which needs no hash: another
+/// draft has another identity, and the program's replacement is always a new revision.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BoundText {
     Hash { len: usize, hash: u64 },
-    Revision(super::memo::Revision),
+    Draft(super::text_draft::DraftKey),
 }
 
 impl BoundText {
@@ -739,7 +740,8 @@ pub struct Bound(BoundText);
 mod guarded {
     pub trait Sealed {}
     impl Sealed for String {}
-    impl Sealed for super::super::memo::Revised<String> {}
+    impl Sealed for super::super::text_draft::TextDraft {}
+    impl Sealed for super::super::text_draft::Lent<'_> {}
 }
 
 impl GuardedText for String {
@@ -748,9 +750,15 @@ impl GuardedText for String {
     }
 }
 
-impl GuardedText for super::memo::Revised<String> {
+impl GuardedText for super::text_draft::TextDraft {
     fn bound(&self) -> Bound {
-        Bound(BoundText::Revision(self.revision()))
+        Bound(BoundText::Draft(self.key()))
+    }
+}
+
+impl GuardedText for super::text_draft::Lent<'_> {
+    fn bound(&self) -> Bound {
+        Bound(BoundText::Draft(self.draft.key()))
     }
 }
 
@@ -759,7 +767,7 @@ thread_local! {
     /// How many times a field part hashed its text, for the cost proof.
     pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many bytes of text the field parts hashed (layout PR 9b's quiet-frame proof).
-    pub(crate) static BOUND_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub static BOUND_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many fields keep a record. The oldest record goes first, and egui's Undo history for
