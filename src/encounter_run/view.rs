@@ -4762,11 +4762,13 @@ impl Run {
             // action's hang (`Roll for them`, `Stop`) is inside its scroll column (P3a). The
             // pane's id is the sheet's and its page, so each keeps its own scroll.
             let frame = design::outcome::PaneFrame::new(ui);
-            let messages = design::outcome::Messages::<design::outcome::NoPress>::new(
+            let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new(
                 &frame,
                 ("run_sheet", record.definition.splat_id, page),
                 ui.available_width(),
             );
+            // SM5, AM16: the sheet ends at its last whole row at the panel's bottom too.
+            messages.rows_end_whole();
             let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
                 crate::rolls::set_roller(ui.ctx(), Some(index));
                 self.armed_tiles_begin(ui.ctx());

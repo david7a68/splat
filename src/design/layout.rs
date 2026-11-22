@@ -2112,7 +2112,13 @@ impl<'a> TitleLine<'a> {
                     false
                 }
                 None if matches!(self.actions[at].weight, TitleWeight::Link) => {
-                    super::title_link(ui, self.actions[at].word.as_str()).clicked()
+                    // Review of PR 730: a link keeps its hint, as the other forms do.
+                    let link = super::title_link(ui, self.actions[at].word.as_str());
+                    match self.actions[at].hint {
+                        Some(hint) => link.on_hover_text(hint),
+                        None => link,
+                    }
+                    .clicked()
                 }
                 None => self.actions[at].action().show(ui).clicked(),
             },

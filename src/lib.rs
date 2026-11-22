@@ -1692,10 +1692,9 @@ impl Splat {
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     if strip.running {
-                        ui.label(
-                            Type::Heading
-                                .rich(ui, format!("Round {}", strip.round))
-                                .color(c.text),
+                        design::heading(
+                            ui,
+                            design::Heading::Panel(&format!("Round {}", strip.round)),
                         );
                         ui.add(
                             egui::Label::new(
@@ -1722,20 +1721,14 @@ impl Splat {
                             );
                         }
                     } else {
-                        ui.label(
-                            Type::Heading
-                                .rich(
-                                    ui,
-                                    format!(
-                                        "{} · {}",
-                                        self.encounters
-                                            .run()
-                                            .map(|run| run.state_words(false))
-                                            .unwrap_or_default(),
-                                        strip.name
-                                    ),
-                                )
-                                .color(c.text),
+                        let state = self
+                            .encounters
+                            .run()
+                            .map(|run| run.state_words(false))
+                            .unwrap_or_default();
+                        design::heading(
+                            ui,
+                            design::Heading::Panel(&format!("{state} · {}", strip.name)),
                         );
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -2291,21 +2284,20 @@ impl Splat {
                     self.no_campaign(ui);
                     return;
                 };
-                let mut open_entries = false;
-                design::page_header(
-                    ui,
-                    "Campaign",
-                    (self.campaign_tab == CampaignTab::Packages)
-                        .then(|| self.campaign_content.context())
-                        .as_deref(),
-                    |ui| {
-                        open_entries = Action::quiet("Campaign entries")
+                // The page's header (M0280): the title, its package count, then its action.
+                const ENTRIES: design::Word = crate::word!("Campaign entries");
+                let context = (self.campaign_tab == CampaignTab::Packages)
+                    .then(|| self.campaign_content.context());
+                let header = design::TitleLine::new("Campaign")
+                    .context(context.as_deref())
+                    .action(
+                        design::TitleAction::quiet(ENTRIES)
                             .icon(icons::DOCUMENT)
-                            .hint("This campaign’s own entries, in the Library")
-                            .show(ui)
-                            .clicked();
-                    },
-                );
+                            .hint("This campaign’s own entries, in the Library"),
+                    )
+                    .page()
+                    .show(ui);
+                let open_entries = header.clicked(ENTRIES);
                 if open_entries {
                     self.library.show_campaign_entries();
                     self.page = Page::Library;

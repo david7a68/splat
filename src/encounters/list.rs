@@ -75,25 +75,29 @@ fn menu_icon(word: &str) -> Option<&'static str> {
 /// words, after the quiet action's padding and any icon, and it ends the quiet action's padding
 /// before the menu's edge. The menu asks for its width with both, so the note keeps the menu's
 /// right margin and wraps before it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
     if note.is_none() {
         return;
     }
     let inset = design::S + menu_slot_icon(ui, word).map_or(0.0, |_| design::ICON_SLOT);
-    ui.horizontal(|ui| {
-        ui.add_space(inset);
-        let gap = ui.spacing().item_spacing.x;
-        ui.scope(|ui| {
-            ui.set_max_width(ui.available_width() - design::S);
-            blocked_reason(ui, note);
-        });
-        // The layout adds its item gap after the note; together they make the padding `S`.
-        ui.add_space(design::S - gap);
-    });
+    // Layout 11c (M0260, M0261): the note is placed by its rect, at the choice's words (`inset`
+    // from the line's start) and ending `S` before the menu's edge.
+    let room = ui.available_rect_before_wrap();
+    let column = egui::Rect::from_min_max(
+        egui::pos2(room.left() + inset, room.top()),
+        egui::pos2(room.right() - design::S, room.bottom()),
+    );
+    let note = ui
+        .scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(column)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+            |ui| blocked_reason(ui, note),
+        )
+        .response
+        .rect;
+    // The menu takes its width from what it holds: the note keeps the padding `S` after it.
+    ui.expand_to_include_x(note.right() + design::S);
 }
 
 pub(super) fn menu_action(ui: &mut egui::Ui, word: &str, blocked: Option<&str>) -> bool {
@@ -1328,10 +1332,6 @@ pub(super) fn history_list(
 /// An ended fight, read in place. Returns true when the DM chooses to go on with it, and the
 /// screen y where its Final state ends. `not_last` says why this fight cannot go on, when it is
 /// not the fight that was played last: then its sentence stands where the control would be.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn history_summary(
     ui: &mut egui::Ui,
     summary: &FightSummary,
@@ -1343,7 +1343,6 @@ fn history_summary(
     ui.indent("history_summary", |ui| {
         // The line under Read-only is `S` below it and `M` above Final state, so it reads as
         // the run's own line and not as part of Final state.
-        let spacing = ui.spacing().item_spacing.y;
         // The line is as tall as its words, so the gap below it is the gap that shows. A
         // wrapped row takes its height from the spacing when it starts.
         ui.scope(|ui| {
@@ -1364,7 +1363,7 @@ fn history_summary(
                 );
             });
         });
-        ui.add_space(design::S - spacing);
+        design::gap_to_next(ui, design::Gap::S);
         // The one way on from a fight that ended by mistake. Undo puts the ending back.
         match not_last {
             Some(reason) => blocked_reason(ui, Some(reason)),
@@ -1384,7 +1383,6 @@ fn history_summary(
         // inside the last column. Every value sits on its name's baseline.
         let strong = Type::Strong.font(ui);
         let small = Type::Small.font(ui);
-        let gap = ui.spacing().item_spacing.x;
         let names = summary
             .rows
             .iter()
@@ -1438,7 +1436,7 @@ fn history_summary(
                         );
                     },
                 );
-                ui.add_space(design::M - gap);
+                design::gap_to_next(ui, design::Gap::M);
                 // The values are one line of cells, each a top-down block, so they share the
                 // name's first line (a wrapping flow put them 4 px below it).
                 ui.vertical(|ui| {
