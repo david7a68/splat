@@ -897,5 +897,24 @@ mod tests {
             shown(&harness, 12),
             "a raw scroll_to_rect does not move the view after it"
         );
+        // One pass a frame: a request queued in one frame and a wheel in the next: the column
+        // cancels it.
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        show(&mut harness, 33);
+        harness.step();
+        let at = harness.state().clip.center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(4);
+        assert!(!shown(&harness, 33), "the wheel cancels a queued request");
     }
 }
