@@ -422,8 +422,14 @@ fn draw(
                 }
             }
             Op::Paragraph(paragraph) => {
-                let links = reader.with(("markdown_block", block));
-                draw_paragraph(ui, paragraph, links, short_links, row, &mut quotes);
+                draw_paragraph(
+                    ui,
+                    paragraph,
+                    (reader, block),
+                    short_links,
+                    row,
+                    &mut quotes,
+                );
             }
             Op::QuoteStart => quotes.tops.push(ui.cursor().top()),
             Op::QuoteEnd => {
@@ -503,11 +509,35 @@ fn laid<'a>(ui: &egui::Ui, paragraph: &'a mut Paragraph, short_links: ShortLinks
     })
 }
 
+/// The id of a paragraph's links: its reader and its block's place, never its words. Two
+/// readers of one document (or of none) in one pass count up in drawing order, so their links
+/// never share an id, and a reader's own ids stay while its preparation stands.
+fn block_id(ctx: &egui::Context, (reader, block): (egui::Id, usize)) -> egui::Id {
+    #[derive(Clone, Default)]
+    struct Seen {
+        pass: u64,
+        count: std::collections::HashMap<egui::Id, u32>,
+    }
+    let base = reader.with(("markdown_block", block));
+    let pass = ctx.cumulative_pass_nr();
+    let nth = ctx.data_mut(|data| {
+        let seen = data.get_temp_mut_or_default::<Seen>(egui::Id::new("markdown_block_seen"));
+        if seen.pass != pass {
+            seen.pass = pass;
+            seen.count.clear();
+        }
+        let nth = seen.count.entry(base).or_default();
+        *nth += 1;
+        *nth
+    });
+    base.with(nth)
+}
+
 /// One paragraph: its words, its links, a task's box, inside the quotes it is in.
 fn draw_paragraph(
     ui: &mut egui::Ui,
     paragraph: &mut Paragraph,
-    links: egui::Id,
+    links: (egui::Id, usize),
     short_links: ShortLinks,
     row: bool,
     quotes: &mut Quotes,
@@ -527,7 +557,8 @@ fn draw_paragraph(
                     ui.add(egui::Label::new(galley.clone()));
                 }
                 Laid::Linked(laid) => {
-                    draw_laid_links(ui, laid, links);
+                    let id = block_id(ui.ctx(), links);
+                    draw_laid_links(ui, laid, id);
                 }
             });
         });
@@ -537,7 +568,7 @@ fn draw_paragraph(
     let mut draw = |ui: &mut egui::Ui| {
         let rect = match laid(ui, paragraph, short_links) {
             Laid::Plain(galley) => ui.add(egui::Label::new(galley.clone())).rect,
-            Laid::Linked(laid) => draw_laid_links(ui, laid, links),
+            Laid::Linked(laid) => draw_laid_links(ui, laid, block_id(ui.ctx(), links)),
         };
         if let Some((done, indent, role)) = task {
             let icon_rect = egui::Rect::from_min_size(
