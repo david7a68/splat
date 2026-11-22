@@ -12289,10 +12289,27 @@ pub mod run_sync_states {
             );
         }
         for size in [SMALL, LARGE] {
-            let (row_edge, undo_edge) = d.at_size(size, |d| {
+            let (row_edge, undo_edge, pane) = d.at_size(size, |d| {
+                let first = roster_places(d).first().map(|(_, rect)| *rect);
+                // Layout 11c (M0153): the ended view's pane, the one whose scroll viewport holds
+                // the first Final state row, from the pane solver's own record.
+                let pane = first.and_then(|row| {
+                    d.pane_records().into_iter().find_map(|record| {
+                        let viewport = record.viewport()?;
+                        viewport.contains(row.center()).then(|| {
+                            (
+                                matches!(record.body(), crate::design::pane::Body::Content),
+                                record.placement() == crate::design::pane::Placement::Pinned,
+                                viewport.height(),
+                                record.content_height(),
+                            )
+                        })
+                    })
+                });
                 (
-                    roster_places(d).first().map(|(_, rect)| rect.right()),
+                    first.map(|rect| rect.right()),
                     d.place_of("Undo: end encounter").map(|rect| rect.right()),
+                    pane,
                 )
             });
             d.observe(
@@ -12301,6 +12318,16 @@ pub mod run_sync_states {
                     .zip(undo_edge)
                     .is_some_and(|(row, undo)| (row - undo).abs() <= 1.0),
                 format!("At {size:?}, Undo ends at {undo_edge:?} and the roster at {row_edge:?}"),
+            );
+            // The final state and the panel are one shared task in a `Content` pane, each
+            // filling its room: the content is the viewport's whole height, so the footer stands
+            // at the pane's bottom (docs/design-system.md, the run's message footer).
+            d.observe(
+                "m32-L11c-ended-columns-fill",
+                pane.is_some_and(|(content, pinned, view, height)| {
+                    content && pinned && height.is_some_and(|height| (height - view).abs() <= 1.0)
+                }),
+                format!("At {size:?}, the ended pane (Content, pinned, viewport height, content height): {pane:?}"),
             );
         }
         // A pair of choices is never cut: both are in view, at the minimum window too.
