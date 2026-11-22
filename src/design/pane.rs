@@ -2485,7 +2485,16 @@ mod hold_tests {
                 });
             }
             if let Some(text) = state.clip.as_mut() {
-                let _ = crate::design::text_field(ui, "Clip caption", text, None, None);
+                const CLIP: crate::design::layout::FieldName =
+                    crate::field_id!("hold_test_clip_text");
+                let _ = crate::design::labelled_field(
+                    ui,
+                    CLIP.once(crate::design::layout::Once::Example),
+                    "Clip caption",
+                    text,
+                    None,
+                    None,
+                );
             }
             for row in 0..state.below {
                 ui.label(format!("Row below {row}"));
