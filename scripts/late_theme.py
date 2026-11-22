@@ -23,7 +23,7 @@ import re
 import sys
 
 ALLOWLIST = "src/design/lint_allowlist.txt"
-INSTALL = re.compile(r"^\s*(?:crate::)?(?:design::)?theme::install\(&(\w+)\.ctx\);\s*$")
+INSTALL = re.compile(r"^\s*(?:[\w:]*::)?theme::install\(&(\w+)\.ctx\);\s*$")
 # `Harness::new*` is `Harness::builder()` with its defaults and the same first draw.
 SWAP = [("Harness::new_ui_state(", "Harness::builder().themed_ui_state("),
         ("Harness::new_state(", "Harness::builder().themed_state("),
@@ -47,7 +47,7 @@ def rewrite(path, write):
         var = m.group(1)
         # The statement that binds VAR, above.
         start = None
-        for j in range(i - 1, max(-1, i - 120), -1):
+        for j in range(i - 1, max(-1, i - 400), -1):
             if re.search(rf"\blet\s+(mut\s+)?{var}\b\s*(:[^=]*)?=", lines[j]):
                 start = j
                 break
@@ -70,7 +70,8 @@ def rewrite(path, write):
             continue
         del lines[i]
         # A helper that binds the harness only to return it returns the builder directly.
-        if lines[i].strip() == var and lines[i - 1].rstrip().endswith(";"):
+        if (lines[i].strip() == var and lines[i - 1].rstrip().endswith(";")
+                and i + 1 < len(lines) and lines[i + 1].strip().startswith("}")):
             del lines[i]
             lines[i - 1] = lines[i - 1].rstrip()[:-1]
             lines[start] = re.sub(rf"let\s+(mut\s+)?{var}\b\s*(:[^=]*)?=\s*", "", lines[start], count=1)
