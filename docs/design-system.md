@@ -2109,10 +2109,10 @@ with text, the text is selected, so that Enter keeps it and typing replaces it.
 
 The run has one message footer, pinned below the roster in the live and setup views (`design::Footer`). In the ended
 view the footer's pane is a `Body::Content` pane, and its content is one task of two columns
-(`PaneColumns::shared_task`): Final state, and the panel's column (the sync block, Prep and Combat log) beside it. Each
-column fills its room: the Final state rows scale to it, and the log takes what the sync block leaves. So the two
-columns are the pane's whole room, and the footer stands at the pane's bottom, `S` below them, as before (layout 11c,
-M23: the shared columns' rule replaces the ended view's own `Fills` body). The
+(`PaneColumns::shared_task`): Final state, and the panel's column (the sync block, Prep and Combat log) beside it. The
+footer follows the taller column, `S` below it, when both fit the room, and is pinned at the pane's bottom when one is
+taller; each column then scrolls on its own. A message that comes below short columns moves nothing in them (layout
+11c, M23: the shared columns' rule replaces the ended view's own `Fills` body, whose footer was always pinned). The
 notices that come by themselves sit in it: the changed-on-disk choices, an error, and the warning that the saved Undo
 steps cannot be read; in setup also the carry-over warning and the long-rest offer, whose result (`Party HP set to the
 saved values.` with `Undo use saved HP`) leads the footer while its step is the newest. The roster sizes its rows from

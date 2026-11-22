@@ -12319,13 +12319,20 @@ pub mod run_sync_states {
                     .is_some_and(|(row, undo)| (row - undo).abs() <= 1.0),
                 format!("At {size:?}, Undo ends at {undo_edge:?} and the roster at {row_edge:?}"),
             );
-            // The final state and the panel are one shared task in a `Content` pane, each
-            // filling its room: the content is the viewport's whole height, so the footer stands
-            // at the pane's bottom (docs/design-system.md, the run's message footer).
+            // The final state and the panel are one shared task in a `Content` pane: its footer
+            // follows the taller column when both fit (the short ended view at 1920) and is
+            // pinned when one is taller (960). The pane solver's record is the reference.
             d.observe(
-                "m32-L11c-ended-columns-fill",
+                "m32-L11c-ended-columns-pane",
                 pane.is_some_and(|(content, pinned, view, height)| {
-                    content && pinned && height.is_some_and(|height| (height - view).abs() <= 1.0)
+                    content
+                        && height.is_some_and(|height| {
+                            if size == LARGE {
+                                !pinned && height < view
+                            } else {
+                                pinned == (height >= view - 0.5)
+                            }
+                        })
                 }),
                 format!("At {size:?}, the ended pane (Content, pinned, viewport height, content height): {pane:?}"),
             );

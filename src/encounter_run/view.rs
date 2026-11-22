@@ -6103,10 +6103,9 @@ impl Run {
         // FI2: errors and a changed file sit in the message footer at the bottom of the view,
         // below the final state and the panel, so neither moves when one comes or goes.
         // The ended view is the footer's pane, and its content is one task of two columns
-        // (`PaneColumns::shared_task`): the final state, and the panel's column beside it. Each
-        // column fills its room (the final state's rows scale to it, and the log takes what the
-        // sync block leaves), so the composite is the pane's whole room and the footer stays
-        // at the pane's bottom, `S` below the columns.
+        // (`PaneColumns::shared_task`): the final state, and the panel's column beside it. The
+        // footer follows the taller column by `S` when both fit, and is pinned at the pane's
+        // bottom when one is taller (each column then scrolls on its own).
         let frame = design::outcome::PaneFrame::new(ui);
         let messages = self.run_messages(&frame, false, ui.available_width());
         // Where the final state's rows end, for Undo's edge in the header.
