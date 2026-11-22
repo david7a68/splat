@@ -17,10 +17,12 @@
 //!   in the app animates a programmatic scroll (R43, [`super::theme::install`]); the part's own
 //!   offset is not an egui request at all.
 //! - **It ends for good** ([`End`]): the target whole in view; a frame with no progress; a form
-//!   taller than the view after one scroll to its top (Q2.1); any input of the DM's, read where
-//!   the column starts (a wheel, a press or drag, a key, typed, pasted or composed text, an
-//!   accessibility action), of which only the input that made the act is exempt, in the act's
-//!   frame; a focus change after the ask other than the opener's one focus inside the form; the
+//!   taller than the view after one scroll to its top (Q2.1); the DM's input to its column, read
+//!   where the column starts by the one cancel rule ([`cancel`]: a wheel over it, a press or drag
+//!   in it, a key, text or accessibility action that goes to it), of which only the input that
+//!   made the act is exempt, in the act's frame; input to another column never ends it (Sol
+//!   2-011); a focus change after the ask other than the opener's one focus inside the form,
+//!   unless it went to a control outside its column or input to another column moved it; the
 //!   owner's end (the `Reveal` dropped or [`Reveal::end`]; another visit; a pass of its column
 //!   that does not draw a target it drew before; a frame in which its column was not drawn); a
 //!   new ask (`Replaced`); [`PASSES`] scroll frames; and a deadline of `DEADLINE` frames from the
@@ -243,6 +245,11 @@ struct Run {
     /// It waits for the result of the work its act started (`Reveal::ask_on_result`): it moves
     /// nothing and has no deadline until `Reveal::result_came`.
     waiting: bool,
+    /// Its column's view (screen points) in the last pass that resolved it: where its owner's
+    /// input is judged at the column's start (`take_offset`).
+    view: Option<Rect>,
+    /// The last frame in which the DM's input went to another column (`cancel::Read::elsewhere`).
+    elsewhere: Option<u64>,
 }
 
 impl Run {
@@ -335,6 +342,8 @@ impl Reveal {
             edge: false,
             pending: None,
             waiting: false,
+            view: None,
+            elsewhere: None,
         };
         let Some(column) = act.column else {
             run.end(End::Unowned);
@@ -442,6 +451,26 @@ impl Reveal {
     }
 }
 
+/// Sol 2-011 (reviews of #838): after its act's frame, a focus that went to a control outside
+/// the request's column, or that the DM's input to another column moved (in this pass or the
+/// last: egui moves the focus at the end of the pass of the key), is that column's, so the
+/// request takes it as its own and keeps running. A focus that moves into its own column with
+/// no such input still ends it (`focus_allowed`).
+fn take_foreign_focus(ui: &Ui, run: &mut Run, key: Id, view: Rect) {
+    let frame = ui.ctx().cumulative_frame_nr();
+    if frame == run.act_frame {
+        return;
+    }
+    let focused = focus(ui.ctx(), run.act_id);
+    if focused.is_none() || focused == run.focus {
+        return;
+    }
+    let moved_elsewhere = run.elsewhere.is_some_and(|at| frame <= at + 1);
+    if moved_elsewhere || !keys_in(ui, key, view) {
+        run.focus = focused;
+    }
+}
+
 /// The keyboard focus, other than the pressed control's own (which the press may give it, and
 /// which ends when the opened form replaces the control).
 fn focus(ctx: &Context, act: Id) -> Option<Id> {
@@ -494,83 +523,6 @@ pub(super) fn holds(ui: &Ui) -> bool {
         let run = lock(run);
         run.column == region.key && !run.waiting
     })
-}
-
-/// The DM's input of a pass, read before any child can consume a key.
-struct Facts {
-    frame: u64,
-    events: Vec<egui::Event>,
-    /// A wheel turn or a drag.
-    moved: bool,
-}
-
-fn facts(ui: &Ui) -> Facts {
-    let frame = ui.ctx().cumulative_frame_nr();
-    ui.input(|input| Facts {
-        frame,
-        events: input.events.clone(),
-        moved: input.raw_scroll_delta != Vec2::ZERO
-            || input.smooth_scroll_delta != Vec2::ZERO
-            || input.pointer.is_decidedly_dragging(),
-    })
-}
-
-/// Whether `facts` hold input of the DM's for `run`. In the act's frame, each event that made
-/// the act is exempt once; any other press, key, text, wheel or accessibility action counts.
-fn dm_input(facts: &Facts, run: &Run) -> bool {
-    if facts.moved {
-        return true;
-    }
-    let mut exempt: Vec<&egui::Event> = if facts.frame == run.act_frame {
-        run.exempt.iter().collect()
-    } else {
-        Vec::new()
-    };
-    for event in &facts.events {
-        if let Some(at) = exempt.iter().position(|made| *made == event) {
-            exempt.remove(at);
-            continue;
-        }
-        if matches!(
-            event,
-            egui::Event::Text(_)
-                | egui::Event::Paste(_)
-                | egui::Event::Ime(_)
-                | egui::Event::MouseWheel { .. }
-                | egui::Event::PointerButton { .. }
-                | egui::Event::Key { pressed: true, .. }
-                | egui::Event::AccessKitActionRequest(_)
-        ) {
-            return true;
-        }
-    }
-    false
-}
-
-/// Whether the DM's input in this pass goes to the column of `region` (review of #838): the
-/// rule of the column's queue (`column_input`: a wheel over it, a press or drag that started in
-/// it, a key that moves its view), and any key, text or accessibility action while the keys go
-/// to it (`keys_in`: the focused control is in it, or, with nothing focused, the pointer is over
-/// it). A request that waits for a result (`Reveal::ask_on_result`) ends only on this, so the
-/// DM's input to another column, for seconds while the work runs, leaves it waiting.
-fn waiting_input(ui: &Ui, region: &Region) -> bool {
-    let column = column_input(ui, region.key, region.view, None);
-    if column.moved || column.held || column.other {
-        return true;
-    }
-    keys_in(ui, region.key, region.view)
-        && ui.input(|input| {
-            input.events.iter().any(|event| {
-                matches!(
-                    event,
-                    egui::Event::Text(_)
-                        | egui::Event::Paste(_)
-                        | egui::Event::Ime(_)
-                        | egui::Event::Key { pressed: true, .. }
-                        | egui::Event::AccessKitActionRequest(_)
-                )
-            })
-        })
 }
 
 /// A `ScrollColumn`: its persistent key, whether it may host a reveal (R46,
@@ -648,7 +600,14 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
     let mut queued = ui.ctx().data(|data| data.get_temp::<Queued>(id))?;
     let _ = queued.why;
     let frame = ui.ctx().cumulative_frame_nr();
-    let input = column_input(ui, key, queued.view, Some(area));
+    let input = cancel::input(
+        ui,
+        cancel::Owner {
+            key,
+            view: queued.view,
+            area: Some(area),
+        },
+    );
     // Review of PR 757 (P2): a key or another input during a held press ends the request as at
     // any other time; only a press held still makes it wait.
     if !input.moved && !input.other && input.held && frame <= queued.made + QUEUED_FRAMES {
@@ -662,93 +621,207 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
         .then_some(queued.offset)
 }
 
-/// The DM's input to one column in this pass (reviews of PRs 757, 770 and 780): the one rule
-/// every request that moves a column by itself answers to (a region's request, a jump,
-/// `bring_into_view`, a retry).
-#[derive(Clone, Copy, Debug)]
-pub(in crate::design) struct ColumnInput {
-    /// The DM scrolls it: a wheel with the pointer over its view or its bar, a drag begun there, or (with
-    /// its area's id) its own fling after a drag.
-    pub moved: bool,
-    /// A press that began in it is held.
-    pub held: bool,
-    /// Another input to it: a press in it, or a key that moves a view or a caret
-    /// (`moves_view`) that goes to it (`keys_in`).
-    pub other: bool,
-}
+/// The one place the DM's input ends a pending request (Sol 2-011; reviews of PRs 757, 770,
+/// 780 and 838). Every request that moves a column by itself answers to it, by its owner
+/// column: the column's queued request (a region's request, a [`jump`], [`bring_into_view`]),
+/// a retry ([`dm_scrolls`]), a measured body's request in place, an asked reveal and one that
+/// waits for a result. The raw reader is private here, so no other code can judge cancel input:
+/// input to another column never ends a request, and every kind passes the same two-column case
+/// table (`pane::laid` tests).
+pub(in crate::design) mod cancel {
+    use super::*;
 
-/// The DM's input in this pass to the column whose view (screen points) is `view`.
-pub(in crate::design) fn column_input(
-    ui: &Ui,
-    key: Id,
-    view: Rect,
-    area: Option<Id>,
-) -> ColumnInput {
-    let fling = area
-        .and_then(|area| egui::scroll_area::State::load(ui.ctx(), area))
-        .is_some_and(|state| state.velocity() != Vec2::ZERO);
-    let keys = keys_in(ui, key, view);
-    let pointer = pointer_in(ui, key, view);
-    // The content's view and the scroll bar's lane right of it: a press on the bar is the DM's.
-    let reach = Rect::from_min_max(
-        view.min,
-        egui::pos2(view.right() + super::layout::lane_width(), view.bottom()),
-    );
-    let pointer_here = pointer;
-    ui.input(|input| {
-        let pointer = &input.pointer;
-        let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| reach.contains(pos));
-        let wheel = input.raw_scroll_delta != Vec2::ZERO
-            || input.smooth_scroll_delta != Vec2::ZERO
-            || input
-                .events
-                .iter()
-                .any(|event| matches!(event, egui::Event::MouseWheel { .. }));
-        let held = pointer.any_down() && over(pointer.press_origin());
-        let dragged = held && pointer.is_decidedly_dragging();
-        let other = input.events.iter().any(|event| match event {
-            egui::Event::PointerButton {
-                pos, pressed: true, ..
-            } => reach.contains(*pos) && !held,
-            event => keys && moves_view(event),
+    /// The column a request belongs to: its persistent key, its view (screen points), and its
+    /// scroll area's id when its own fling after a drag counts.
+    #[derive(Clone, Copy, Debug)]
+    pub(in crate::design) struct Owner {
+        pub key: Id,
+        pub view: Rect,
+        pub area: Option<Id>,
+    }
+
+    /// The DM's input to one column in this pass.
+    #[derive(Clone, Copy, Debug, Default)]
+    pub(in crate::design) struct ColumnInput {
+        /// The DM scrolls it: a wheel with the pointer over its view or its bar, a drag begun
+        /// there, or its own fling after a drag.
+        pub moved: bool,
+        /// A press that began in it is held.
+        pub held: bool,
+        /// Another input to it: a press in it, a key that moves a view or a caret
+        /// (`moves_view`) or activates a control (Enter, Space) while the keys go to it
+        /// (`keys_in`), or an accessibility action on a control in it.
+        pub other: bool,
+    }
+
+    impl ColumnInput {
+        /// Any input to it at all.
+        pub(in crate::design) fn any(self) -> bool {
+            self.moved || self.held || self.other
+        }
+    }
+
+    /// A pass's input as it goes to one column, read where the column starts, before a child
+    /// can consume a key. Its fields are private: it is judged only by [`Read::input`].
+    pub(in crate::design) struct Read {
+        frame: u64,
+        moved: bool,
+        held: bool,
+        /// Each event of the pass, and whether it is input to this column.
+        events: Vec<(egui::Event, bool)>,
+        /// A press, key, text or accessibility action went to another column: a focus it moves
+        /// is that column's (`Read::elsewhere`).
+        elsewhere: bool,
+    }
+
+    /// The one reader: this pass's input to `owner`'s column.
+    pub(in crate::design) fn read(ui: &Ui, owner: Owner) -> Read {
+        let Owner { key, view, area } = owner;
+        let fling = area
+            .and_then(|area| egui::scroll_area::State::load(ui.ctx(), area))
+            .is_some_and(|state| state.velocity() != Vec2::ZERO);
+        let keys = keys_in(ui, key, view);
+        let pointer_here = pointer_in(ui, key, view);
+        // The content's view and the scroll bar's lane right of it: a press on the bar is the
+        // DM's.
+        let reach = Rect::from_min_max(
+            view.min,
+            egui::pos2(
+                view.right() + super::super::layout::lane_width(),
+                view.bottom(),
+            ),
+        );
+        let frame = ui.ctx().cumulative_frame_nr();
+        let (moved, held, events) = ui.input(|input| {
+            let pointer = &input.pointer;
+            let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| reach.contains(pos));
+            let wheel = input.raw_scroll_delta != Vec2::ZERO
+                || input.smooth_scroll_delta != Vec2::ZERO
+                || input
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, egui::Event::MouseWheel { .. }));
+            let held = pointer.any_down() && over(pointer.press_origin());
+            let dragged = held && pointer.is_decidedly_dragging();
+            let moved = (wheel && pointer_here && over(pointer.hover_pos())) || dragged || fling;
+            (moved, held, input.events.clone())
         });
-        ColumnInput {
-            moved: (wheel && pointer_here && over(pointer.hover_pos())) || dragged || fling,
+        let mut elsewhere = false;
+        let events = events
+            .into_iter()
+            .map(|event| {
+                let (input, here) = match &event {
+                    egui::Event::PointerButton {
+                        pos, pressed: true, ..
+                    } => (true, reach.contains(*pos) && !held),
+                    egui::Event::AccessKitActionRequest(request) => {
+                        (true, action_in(ui, request.target, reach))
+                    }
+                    event if moves_view(event) || activates(event) => (true, keys),
+                    _ => (false, false),
+                };
+                elsewhere |= input && !here;
+                (event, here)
+            })
+            .collect();
+        Read {
+            frame,
+            moved,
             held,
-            other,
+            events,
+            elsewhere,
         }
-    })
-}
+    }
 
-/// The DM's keyboard input that moves a view or a caret (reviews of PR 757): an arrow, Home or
-/// End with any modifiers (Ctrl+Home moves the caret too); Tab, Page Up or Page Down with Shift
-/// or none; typed text, a paste, an input method event. A shortcut (Ctrl+S, Ctrl+Page Down: the
-/// next tab) moves nothing.
-pub(in crate::design) fn moves_view(event: &egui::Event) -> bool {
-    use egui::Key;
-    match event {
-        egui::Event::Key {
-            key,
-            pressed: true,
-            modifiers,
-            ..
-        } => {
-            let shortcut =
-                modifiers.ctrl || modifiers.command || modifiers.mac_cmd || modifiers.alt;
-            // A caret key moves the caret with any modifier (Ctrl+Home, Ctrl+Left: review of PR
-            // 757); Tab and the page keys with Ctrl, Cmd or Alt are shortcuts (the next tab).
-            matches!(
-                key,
-                Key::ArrowUp
-                    | Key::ArrowDown
-                    | Key::ArrowLeft
-                    | Key::ArrowRight
-                    | Key::Home
-                    | Key::End
-            ) || (!shortcut && matches!(key, Key::Tab | Key::PageUp | Key::PageDown))
+    /// This pass's input to `owner`'s column (`read`, then `Read::input` with nothing exempt).
+    pub(in crate::design) fn input(ui: &Ui, owner: Owner) -> ColumnInput {
+        read(ui, owner).input(None)
+    }
+
+    impl Read {
+        /// Whether this pass's input went to another column (a press outside this one, a key
+        /// or text while the keys go elsewhere): a focus it moves is not this column's.
+        pub(in crate::design) fn elsewhere(&self) -> bool {
+            self.elsewhere
         }
-        egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Ime(_) => true,
-        _ => false,
+
+        /// The input to the column. In the frame of an act (`act`: its frame and the events
+        /// that made it), each of those events is exempt once.
+        pub(in crate::design) fn input(&self, act: Option<(u64, &[egui::Event])>) -> ColumnInput {
+            let mut exempt: Vec<&egui::Event> = match act {
+                Some((frame, events)) if frame == self.frame => events.iter().collect(),
+                _ => Vec::new(),
+            };
+            let mut other = false;
+            for (event, here) in &self.events {
+                if let Some(at) = exempt.iter().position(|made| *made == event) {
+                    exempt.remove(at);
+                    continue;
+                }
+                other |= *here;
+            }
+            ColumnInput {
+                moved: self.moved,
+                held: self.held,
+                other,
+            }
+        }
+    }
+
+    /// Whether an accessibility action's target is a control drawn in `reach` in the last pass.
+    fn action_in(ui: &Ui, target: egui::accesskit::NodeId, reach: Rect) -> bool {
+        ui.ctx().viewport(|viewport| {
+            viewport.prev_pass.widgets.layers().any(|(_, widgets)| {
+                widgets.iter().any(|widget| {
+                    egui::accesskit::NodeId::from(widget.id.value()) == target
+                        && reach.intersects(widget.rect)
+                })
+            })
+        })
+    }
+
+    /// A key that activates the focused control: a press of it.
+    fn activates(event: &egui::Event) -> bool {
+        matches!(
+            event,
+            egui::Event::Key {
+                key: egui::Key::Enter | egui::Key::Space,
+                pressed: true,
+                ..
+            }
+        )
+    }
+
+    /// The DM's keyboard input that moves a view or a caret (reviews of PR 757): an arrow, Home or
+    /// End with any modifiers (Ctrl+Home moves the caret too); Tab, Page Up or Page Down with Shift
+    /// or none; typed text, a paste, an input method event. A shortcut (Ctrl+S, Ctrl+Page Down: the
+    /// next tab) moves nothing.
+    fn moves_view(event: &egui::Event) -> bool {
+        use egui::Key;
+        match event {
+            egui::Event::Key {
+                key,
+                pressed: true,
+                modifiers,
+                ..
+            } => {
+                let shortcut =
+                    modifiers.ctrl || modifiers.command || modifiers.mac_cmd || modifiers.alt;
+                // A caret key moves the caret with any modifier (Ctrl+Home, Ctrl+Left: review of PR
+                // 757); Tab and the page keys with Ctrl, Cmd or Alt are shortcuts (the next tab).
+                matches!(
+                    key,
+                    Key::ArrowUp
+                        | Key::ArrowDown
+                        | Key::ArrowLeft
+                        | Key::ArrowRight
+                        | Key::Home
+                        | Key::End
+                ) || (!shortcut && matches!(key, Key::Tab | Key::PageUp | Key::PageDown))
+            }
+            egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Ime(_) => true,
+            _ => false,
+        }
     }
 }
 
@@ -990,7 +1063,7 @@ pub fn bring_into_view(ui: &Ui, rect: Rect, why: JumpTo) -> bool {
 }
 
 /// Whether the DM's own input scrolls, holds or keys the `ScrollColumn` that holds `ui` in this
-/// pass (reviews of PRs 770 and 780): its column's one rule (`column_input`), the rule its queued
+/// pass (reviews of PRs 770 and 780): its column's one rule ([`cancel`]), the rule its queued
 /// request answers to. A retry that would move the column by itself (a row menu's bring-back
 /// after a resize, M0259) ends on it, so the column stays where the DM leaves it, and input to
 /// another column never ends it. Outside a `ScrollColumn` it is false.
@@ -998,8 +1071,15 @@ pub fn dm_scrolls(ui: &Ui) -> bool {
     let Some((_, region)) = owning_region(ui) else {
         return false;
     };
-    let input = column_input(ui, region.key, region.view, None);
-    input.moved || input.held || input.other
+    cancel::input(
+        ui,
+        cancel::Owner {
+            key: region.key,
+            view: region.view,
+            area: None,
+        },
+    )
+    .any()
 }
 
 /// The offset the reveal of the column `key` queued for this pass, taken once, after this pass's
@@ -1020,10 +1100,21 @@ pub(super) fn take_offset(ui: &Ui, column: Column) -> Option<f32> {
     if !(written == frame || written + 1 == frame) {
         return None;
     }
-    if dm_input(&facts(ui), &run) {
+    // The column's input to its own request ([`cancel`]), in the view it had when it asked.
+    let owner = cancel::Owner {
+        key,
+        view: run.view.unwrap_or(Rect::EVERYTHING),
+        area: Some(column.area),
+    };
+    let read = cancel::read(ui, owner);
+    if read.input(Some((run.act_frame, &run.exempt))).any() {
         run.end(End::ByTheDm);
         return None;
     }
+    if read.elsewhere() {
+        run.elsewhere = Some(frame);
+    }
+    take_foreign_focus(ui, &mut run, owner.key, owner.view);
     // A control that took the focus since the last pass, other than the opener's field.
     let form = run.marked.map(|(form, ..)| form);
     if !focus_allowed(ui.ctx(), &mut run, form) {
@@ -1069,8 +1160,15 @@ pub(super) fn region<R>(
         settle_queued(ui, column, view);
         return inner;
     }
-    // The DM's input, read before any child can consume a key.
-    let facts = facts(ui);
+    // The DM's input to this column ([`cancel`]), read before any child can consume a key.
+    let read = cancel::read(
+        ui,
+        cancel::Owner {
+            key,
+            view,
+            area: Some(column.area),
+        },
+    );
     let inner = add(ui);
     record_keys(ui, key, layer, from..count(ui), view);
     settle_queued(ui, column, view);
@@ -1081,11 +1179,10 @@ pub(super) fn region<R>(
         .find(|run| lock(run).column == key);
     if let Some(run) = run {
         let mut run = lock(&run);
-        let input = if run.waiting && facts.frame != run.act_frame {
-            waiting_input(ui, &region)
-        } else {
-            dm_input(&facts, &run)
-        };
+        let input = read.input(Some((run.act_frame, &run.exempt))).any();
+        if read.elsewhere() {
+            run.elsewhere = Some(ui.ctx().cumulative_frame_nr());
+        }
         resolve(ui, &mut run, &region, content, input);
     }
     inner
@@ -1100,6 +1197,7 @@ fn resolve(ui: &Ui, run: &mut Run, region: &Region, content: Id, input: bool) {
     if run.phase.is_err() {
         return;
     }
+    run.view = Some(region.view);
     if input {
         run.end(End::ByTheDm);
         return;
@@ -1119,14 +1217,7 @@ fn resolve(ui: &Ui, run: &mut Run, region: &Region, content: Id, input: bool) {
         .marked
         .filter(|&(_, at, marked)| at == content && marked == pass)
         .map(|(rect, ..)| rect);
-    // A waiting request takes a focus that went to another column as its own (review of #838):
-    // that is input to another column, which never ends it.
-    if run.waiting && frame != run.act_frame {
-        let focused = focus(ui.ctx(), run.act_id);
-        if focused.is_some() && focused != run.focus && !keys_in(ui, region.key, region.view) {
-            run.focus = focused;
-        }
-    }
+    take_foreign_focus(ui, run, region.key, region.view);
     // A control that took the focus since the ask, other than the opener's field.
     if !focus_allowed(ui.ctx(), run, target) {
         run.end(End::Focus);
@@ -1861,7 +1952,9 @@ mod tests {
         assert!(at.top() >= -0.5 && at.bottom() <= HEIGHT + 0.5, "{at:?}");
     }
 
-    /// Input in the act's own frame ends the reveal, also another press; nothing moves.
+    /// Input in the act's own frame ends the reveal, also another press; nothing moves. Sol
+    /// 2-011: the input goes to the reveal's column (the pointer over it, nothing focused), as
+    /// the one cancel rule asks (`cancel`); the two-column case table checks input elsewhere.
     #[test]
     fn input_in_the_acts_frame_cancels() {
         let events = [
@@ -1889,7 +1982,9 @@ mod tests {
             let mut h = harness(quiet());
             let before = top(&h, "Target top");
             h.state_mut().ask = true;
-            h.event(event.clone());
+            let events = &mut h.input_mut().events;
+            events.push(egui::Event::PointerMoved(egui::pos2(WIDTH / 2.0, 100.0)));
+            events.push(event.clone());
             h.run_steps(8);
             assert!(
                 (top(&h, "Target top") - before).abs() < 0.5
@@ -2109,13 +2204,16 @@ mod tests {
         h.step();
         assert_eq!(h.state().reveal.ended(), Some(End::Whole), "(a)");
         still_after(&mut h, "(a)");
-        // (b) A running reveal, cancelled by text in its own pass, after a raw request.
+        // (b) A running reveal, cancelled by text in its own pass, after a raw request: the text
+        // goes to its column (the pointer over it, nothing focused; Sol 2-011).
         let mut h = harness(quiet());
         h.state_mut().after = 400.0;
         h.state_mut().jump = true;
         h.step();
         h.state_mut().ask = true;
-        h.event(egui::Event::Text("s".into()));
+        let events = &mut h.input_mut().events;
+        events.push(egui::Event::PointerMoved(egui::pos2(WIDTH / 2.0, 100.0)));
+        events.push(egui::Event::Text("s".into()));
         h.step();
         assert_eq!(h.state().reveal.ended(), Some(End::ByTheDm), "(b)");
         still_after(&mut h, "(b)");

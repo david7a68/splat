@@ -744,7 +744,7 @@ impl<'s> BlockRegion<'s> {
 
 /// The first step of the resolver of a measured body in a `Body::Content` pane (layout 11c),
 /// whose column is the pane's: run once per pass after that pass's input, before any block
-/// draws. The column's one rule (`reveal::column_input`): the DM's movement over the column, or
+/// draws. The column's one rule (`reveal::cancel`): the DM's movement over the column, or
 /// another input to it (a press, a key that moves a view or a caret), cancels every OLDER
 /// request; a press held still in it makes them wait, up to `REQUEST_FRAMES`. Whether one waits.
 fn cancel_in_place(
@@ -753,7 +753,17 @@ fn cancel_in_place(
 ) -> bool {
     let frame = ui.ctx().cumulative_frame_nr();
     let (cancel, held) = crate::design::reveal::column_view(ui)
-        .map(|(key, view)| crate::design::reveal::column_input(ui, key, view, None))
+        .map(|(key, view)| {
+            use crate::design::reveal::cancel;
+            cancel::input(
+                ui,
+                cancel::Owner {
+                    key,
+                    view,
+                    area: None,
+                },
+            )
+        })
         .map_or((false, false), |input| {
             (
                 input.moved || input.other,

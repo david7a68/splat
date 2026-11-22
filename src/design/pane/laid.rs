@@ -383,7 +383,7 @@ mod tests {
     use crate::design::{
         memo::Revised,
         outcome::{Messages, NoPress, PaneFrame},
-        pane::{BlockRegion, Body, Navigation, RegionState},
+        pane::{BlockRegion, Navigation, RegionState},
         reveal::JumpTo,
     };
     use egui_kittest::{Harness, kittest::Queryable};
@@ -427,6 +427,16 @@ mod tests {
         field: Option<usize>,
         field_text: String,
         field_id: Option<Id>,
+        /// The pane's column hosts reveals (`ContentScroll::hosts_reveals`).
+        hosts: bool,
+        /// A reveal of a block (`reveal`'s target), asked once in the pane's column with a test
+        /// act: `Some(false)` asks (`Reveal::ask`), `Some(true)` asks on a result
+        /// (`Reveal::ask_on_result`).
+        reveal: crate::design::reveal::Reveal,
+        ask: Option<bool>,
+        target: usize,
+        /// The awaited result comes in the next pass (`Reveal::result_came`).
+        came: bool,
     }
 
     impl Page {
@@ -453,6 +463,11 @@ mod tests {
                 field: None,
                 field_text: String::new(),
                 field_id: None,
+                hosts: false,
+                reveal: crate::design::reveal::Reveal::default(),
+                ask: None,
+                target: 0,
+                came: false,
             }
         }
     }
@@ -483,7 +498,12 @@ mod tests {
                 let ui = &mut ui;
                 let frame = PaneFrame::new(ui);
                 let messages = Messages::<NoPress>::new(&frame, "laid_test", ui.available_width());
-                let _ = messages.pane(ui, Body::Content, |ui| {
+                let scroll = if page.hosts {
+                    crate::design::pane::ContentScroll::default().hosts_reveals()
+                } else {
+                    crate::design::pane::ContentScroll::default()
+                };
+                let _ = messages.pane_content(ui, scroll, |ui| {
                     let width = ui.available_width();
                     if page.laid.is_empty() || std::mem::take(&mut page.stale) {
                         let (split, controls, duplicate) =
@@ -526,6 +546,8 @@ mod tests {
                     // A jump asked in this pass before the region draws, or after it.
                     let jumps = std::mem::take(&mut page.jumps);
                     let bring = page.bring.take();
+                    let (ask, came, target) =
+                        (page.ask.take(), std::mem::take(&mut page.came), page.target);
                     let Page {
                         laid,
                         rows,
@@ -536,6 +558,7 @@ mod tests {
                         field,
                         field_text,
                         field_id,
+                        reveal,
                         ..
                     } = page;
                     let top_of = |at: usize| top + laid[..at].iter().map(Laid::height).sum::<f32>();
@@ -605,6 +628,26 @@ mod tests {
                     );
                     if let Some(at) = jumps.1 {
                         crate::design::reveal::jump(ui, top_of(at), JumpTo::LinkedHeading);
+                    }
+                    // A reveal of the target block, asked with a test act in the pane's column,
+                    // and its mark in every pass.
+                    if let Some(waits) = ask {
+                        let act = crate::design::reveal::Act::test(ui, 0);
+                        if waits {
+                            reveal.ask_on_result(act, 0, "laid_target");
+                        } else {
+                            reveal.ask(act, 0, "laid_target");
+                        }
+                    }
+                    if came {
+                        reveal.result_came(ui.ctx());
+                    }
+                    if !laid.is_empty() {
+                        let block = Rect::from_min_size(
+                            egui::pos2(ui.max_rect().left(), top_of(target)),
+                            egui::vec2(ui.max_rect().width(), laid[target].height()),
+                        );
+                        reveal.mark(ui, 0, "laid_target", block);
                     }
                 });
             },
@@ -1422,6 +1465,11 @@ mod tests {
     /// bring-back of PR 780) is the same rule: in A it says the DM scrolls for exactly the inputs
     /// that end A's request. (A press on A's scroll bar sets A's offset in
     /// egui's own pass, after a queued one, so the bar always wins; its row checks that.)
+    ///
+    /// Sol 2-011: every kind of pending request runs the same rows (`Kind`): the region's
+    /// request, a jump, `bring_into_view`, an asked reveal and one that waits for a result. They
+    /// all answer to the one cancel entry point (`reveal::cancel`), so a new kind gets a row here
+    /// and must pass every input at A and at B.
     #[test]
     fn the_resolver_cancels_only_on_its_own_columns_input() {
         use egui::{Key, Modifiers};
@@ -1471,152 +1519,189 @@ mod tests {
             ),
             ("Page Down while held", Input::HeldKey(Key::PageDown), true),
             ("text", Input::Text, true),
+            // A key that activates the focused control is a press of it (Sol 2-011).
+            ("Enter", Input::Key(Key::Enter, Modifiers::NONE), true),
+            ("Space", Input::Key(Key::Space, Modifiers::NONE), true),
             ("Ctrl+S", Input::Key(Key::S, Modifiers::CTRL), false),
         ];
-        let mut page = Page::new(texts(40));
-        page.beside = Some(Rect::NOTHING);
-        let mut harness = harness(page, egui::vec2(1200.0, 420.0));
-        let button = |at: egui::Pos2, pressed| egui::Event::PointerButton {
-            pos: at,
-            button: egui::PointerButton::Primary,
-            pressed,
-            modifiers: Modifiers::NONE,
-        };
-        // Whether the view is near block 35 now (the request applied, even for one frame).
-        let near = |harness: &Harness<'_, Page>| {
-            let page = harness.state();
-            let target = block_rect(page, 20);
-            target.top() < page.clip.bottom() + 100.0 && target.bottom() > page.clip.top() - 100.0
-        };
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        enum Kind {
+            Region,
+            Jump,
+            Bring,
+            Reveal,
+            Waiting,
+        }
         let mut wrong = Vec::new();
-        for (name, input, cancels) in rows {
-            for in_a in [false, true] {
-                // From the top, nothing pending, the focus and the pointer where the input aims.
-                harness.state_mut().region.navigate(Navigation::Reset);
-                harness.run_steps(10);
-                let beside = harness.state().beside.expect("the other column");
-                let clip = harness.state().clip;
-                let (point, bar, focus) = if in_a {
-                    (
-                        clip.left_center() + egui::vec2(100.0, 0.0),
-                        egui::pos2(beside.left() - 5.0, clip.top() + 12.0),
-                        "Act 0",
-                    )
-                } else {
-                    (
-                        beside.center(),
-                        egui::pos2(beside.right() - 5.0, beside.top() + 12.0),
-                        "Beside button",
-                    )
-                };
-                harness.get_by_label(focus).focus();
-                harness
-                    .input_mut()
-                    .events
-                    .push(egui::Event::PointerMoved(point));
-                harness.run_steps(2);
-                // A's request, queued (one pass a frame: it applies in the next frame).
-                harness
-                    .state_mut()
-                    .region
-                    .navigate(Navigation::Show(Id::new(20usize)));
-                harness.step();
-                // Whether A's request applied in any frame of the input, and whether a retry's rule
-                // (`dm_scrolls`) said the DM scrolls A in any frame.
-                let (mut seen, mut scrolls) = (false, false);
-                let mut observe = |harness: &Harness<'_, Page>| {
-                    seen |= near(harness);
-                    scrolls |= harness.state().scrolls;
-                };
-                let events = &mut harness.input_mut().events;
-                match input {
-                    Input::Wheel => events.push(egui::Event::MouseWheel {
-                        unit: egui::MouseWheelUnit::Point,
-                        delta: egui::vec2(0.0, -10.0),
-                        modifiers: Modifiers::NONE,
-                    }),
-                    Input::ContentDrag | Input::BarDrag => {
-                        let from = if matches!(input, Input::BarDrag) {
-                            bar
-                        } else {
-                            point
-                        };
-                        events.push(egui::Event::PointerMoved(from));
-                        events.push(button(from, true));
-                        harness.step();
-                        observe(&harness);
-                        for step in 1..4 {
-                            let to = from + egui::vec2(0.0, 12.0 * step as f32);
+        for kind in [
+            Kind::Region,
+            Kind::Jump,
+            Kind::Bring,
+            Kind::Reveal,
+            Kind::Waiting,
+        ] {
+            let mut page = Page::new(texts(40));
+            page.beside = Some(Rect::NOTHING);
+            page.hosts = matches!(kind, Kind::Reveal | Kind::Waiting);
+            page.target = 20;
+            let mut harness = harness(page, egui::vec2(1200.0, 420.0));
+            let button = |at: egui::Pos2, pressed| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            };
+            // Whether the view is near block 35 now (the request applied, even for one frame).
+            let near = |harness: &Harness<'_, Page>| {
+                let page = harness.state();
+                let target = block_rect(page, 20);
+                target.top() < page.clip.bottom() + 100.0
+                    && target.bottom() > page.clip.top() - 100.0
+            };
+            for (name, input, cancels) in rows {
+                for in_a in [false, true] {
+                    // From the top, nothing pending, the focus and the pointer where the input aims.
+                    harness.state_mut().region.navigate(Navigation::Reset);
+                    harness.state_mut().reveal = crate::design::reveal::Reveal::default();
+                    harness.run_steps(10);
+                    let beside = harness.state().beside.expect("the other column");
+                    let clip = harness.state().clip;
+                    let (point, bar, focus) = if in_a {
+                        (
+                            clip.left_center() + egui::vec2(100.0, 0.0),
+                            egui::pos2(beside.left() - 5.0, clip.top() + 12.0),
+                            "Act 0",
+                        )
+                    } else {
+                        (
+                            beside.center(),
+                            egui::pos2(beside.right() - 5.0, beside.top() + 12.0),
+                            "Beside button",
+                        )
+                    };
+                    harness.get_by_label(focus).focus();
+                    harness
+                        .input_mut()
+                        .events
+                        .push(egui::Event::PointerMoved(point));
+                    harness.run_steps(2);
+                    // A's request, queued or asked (one pass a frame: it applies in the next frame).
+                    match kind {
+                        Kind::Region => harness
+                            .state_mut()
+                            .region
+                            .navigate(Navigation::Show(Id::new(20usize))),
+                        Kind::Jump => harness.state_mut().jumps.0 = Some(20),
+                        Kind::Bring => harness.state_mut().bring = Some(20),
+                        Kind::Reveal => harness.state_mut().ask = Some(false),
+                        Kind::Waiting => harness.state_mut().ask = Some(true),
+                    }
+                    harness.step();
+                    // Whether A's request applied in any frame of the input, and whether a retry's rule
+                    // (`dm_scrolls`) said the DM scrolls A in any frame.
+                    let (mut seen, mut scrolls) = (false, false);
+                    let mut observe = |harness: &Harness<'_, Page>| {
+                        seen |= near(harness);
+                        scrolls |= harness.state().scrolls;
+                    };
+                    let events = &mut harness.input_mut().events;
+                    match input {
+                        Input::Wheel => events.push(egui::Event::MouseWheel {
+                            unit: egui::MouseWheelUnit::Point,
+                            delta: egui::vec2(0.0, -10.0),
+                            modifiers: Modifiers::NONE,
+                        }),
+                        Input::ContentDrag | Input::BarDrag => {
+                            let from = if matches!(input, Input::BarDrag) {
+                                bar
+                            } else {
+                                point
+                            };
+                            events.push(egui::Event::PointerMoved(from));
+                            events.push(button(from, true));
+                            harness.step();
+                            observe(&harness);
+                            for step in 1..4 {
+                                let to = from + egui::vec2(0.0, 12.0 * step as f32);
+                                harness
+                                    .input_mut()
+                                    .events
+                                    .push(egui::Event::PointerMoved(to));
+                                harness.step();
+                                observe(&harness);
+                            }
                             harness
                                 .input_mut()
                                 .events
-                                .push(egui::Event::PointerMoved(to));
+                                .push(button(from + egui::vec2(0.0, 36.0), false));
+                        }
+                        Input::Press => {
+                            events.push(button(point, true));
+                            events.push(button(point, false));
+                        }
+                        Input::Key(key, modifiers) => {
+                            for pressed in [true, false] {
+                                events.push(egui::Event::Key {
+                                    key,
+                                    physical_key: None,
+                                    pressed,
+                                    repeat: false,
+                                    modifiers,
+                                });
+                            }
+                        }
+                        Input::Text => events.push(egui::Event::Text("x".to_owned())),
+                        Input::HeldKey(key) => {
+                            events.push(button(point, true));
+                            harness.step();
+                            observe(&harness);
+                            for pressed in [true, false] {
+                                harness.input_mut().events.push(egui::Event::Key {
+                                    key,
+                                    physical_key: None,
+                                    pressed,
+                                    repeat: false,
+                                    modifiers: Modifiers::NONE,
+                                });
+                            }
+                            harness.step();
+                            observe(&harness);
+                            harness.input_mut().events.push(button(point, false));
+                        }
+                        Input::Ime => {
+                            events.push(egui::Event::Ime(egui::ImeEvent::Commit("x".to_owned())));
+                        }
+                    }
+                    for _ in 0..3 {
+                        harness.step();
+                        observe(&harness);
+                    }
+                    // A waiting reveal's result comes after the input.
+                    if kind == Kind::Waiting {
+                        harness.state_mut().came = true;
+                        for _ in 0..8 {
                             harness.step();
                             observe(&harness);
                         }
-                        harness
-                            .input_mut()
-                            .events
-                            .push(button(from + egui::vec2(0.0, 36.0), false));
                     }
-                    Input::Press => {
-                        events.push(button(point, true));
-                        events.push(button(point, false));
+                    // Survived: its block is whole in view. Ended: the view came nowhere near its block
+                    // in any frame (a request that applied for one frame, then was scrolled past by the
+                    // input, was not ended).
+                    let expected = !(in_a && cancels);
+                    let survived = if expected { shown(&harness, 20) } else { seen };
+                    if kind == Kind::Region && scrolls == expected {
+                        wrong.push(format!(
+                            "{name} at {}: dm_scrolls {scrolls}, expected {}",
+                            if in_a { "A" } else { "B" },
+                            !expected
+                        ));
                     }
-                    Input::Key(key, modifiers) => {
-                        for pressed in [true, false] {
-                            events.push(egui::Event::Key {
-                                key,
-                                physical_key: None,
-                                pressed,
-                                repeat: false,
-                                modifiers,
-                            });
-                        }
+                    if survived != expected {
+                        wrong.push(format!(
+                            "{kind:?}: {name} at {}: survived {survived}, expected {expected}",
+                            if in_a { "A" } else { "B" }
+                        ));
                     }
-                    Input::Text => events.push(egui::Event::Text("x".to_owned())),
-                    Input::HeldKey(key) => {
-                        events.push(button(point, true));
-                        harness.step();
-                        observe(&harness);
-                        for pressed in [true, false] {
-                            harness.input_mut().events.push(egui::Event::Key {
-                                key,
-                                physical_key: None,
-                                pressed,
-                                repeat: false,
-                                modifiers: Modifiers::NONE,
-                            });
-                        }
-                        harness.step();
-                        observe(&harness);
-                        harness.input_mut().events.push(button(point, false));
-                    }
-                    Input::Ime => {
-                        events.push(egui::Event::Ime(egui::ImeEvent::Commit("x".to_owned())));
-                    }
-                }
-                for _ in 0..3 {
-                    harness.step();
-                    observe(&harness);
-                }
-                // Survived: its block is whole in view. Ended: the view came nowhere near its block
-                // in any frame (a request that applied for one frame, then was scrolled past by the
-                // input, was not ended).
-                let expected = !(in_a && cancels);
-                let survived = if expected { shown(&harness, 20) } else { seen };
-                if scrolls == expected {
-                    wrong.push(format!(
-                        "{name} at {}: dm_scrolls {scrolls}, expected {}",
-                        if in_a { "A" } else { "B" },
-                        !expected
-                    ));
-                }
-                if survived != expected {
-                    wrong.push(format!(
-                        "{name} at {}: survived {survived}, expected {expected}",
-                        if in_a { "A" } else { "B" }
-                    ));
                 }
             }
         }

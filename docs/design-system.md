@@ -174,13 +174,18 @@ A press whose result comes later asks with `Reveal::ask_on_result` (issue #698):
 and moving nothing, until the owner calls `Reveal::result_came`, and every other end applies while it waits, judged by
 its own column: the DM's input to that column (the column queue's rule: the focused control is in it, or, with nothing
 focused, the pointer is over it), a focus that moves into it, the owner's end, leaving the page. Input to another column,
-for the seconds the work runs, leaves it waiting. A failed Connect in Settings brings its kept cookie, its
+for the seconds the work runs, leaves it waiting. Every request that moves a column by itself (a region's request, a jump,
+`bring_into_view`, a retry, a measured body's request, an asked reveal, a waiting one) is judged by one entry point,
+`reveal::cancel` (Sol 2-011): the DM's input to its own column ends it (a wheel over it, a press or drag in it, a key
+that moves a view or a caret or activates a control, text, an accessibility action on a control in it), input to
+another column never does, and a focus that such input moved or that went to another column is not an end. The raw
+reader is private to that module, and a two-column case table runs every request kind through the same inputs. A failed Connect in Settings brings its kept cookie, its
 cause and Connect whole into view this way (M0279).
 A column that moves by itself with no press in it does so only through a typed jump, `reveal::jump(ui, top,
 JumpTo::…)` (ruling M18, layout PR 10c), from a closed list: `LinkedHeading` (a reader opened at a linked section,
 its heading at the view's top; the World and Lookup reader and the Library reader) and `ListedRow` (a list's row
 the page opened at, with the row before it at the view's top; the Timeline's list, M0556). The column writes the jump as its
-own offset at its next pass, where it writes a reveal's; the DM's own input in between drops it, and so does the DM's scroll that is still going on (a drag of the column, the wheel's smooth rest, a fling after a drag). No raw
+own offset at its next pass, where it writes a reveal's; the DM's own input to that column in between drops it, and so does the DM's scroll that is still going on (a drag of the column, the wheel's smooth rest, a fling after a drag). No raw
 `scroll_to_cursor` or `scroll_to_rect` does this.
 Its least-scroll form, `reveal::bring_into_view(ui, rect, JumpTo::…)` (M-P0.25), keeps a whole control in view with
 no press: nothing when it is whole in view; else its nearer edge at the view's edge, and its top at the view's top
