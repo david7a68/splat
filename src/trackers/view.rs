@@ -477,7 +477,13 @@ struct DueKey {
 thread_local! {
     /// How many times the host made a Due row's parts (its words, names, labels, widths and
     /// layout): from its entry through paint, a quiet frame makes none.
-    pub(super) static DUE_PARTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static DUE_PARTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread's host made a Due row's parts (test builds).
+#[cfg(feature = "test-support")]
+pub(super) fn due_parts_made() -> usize {
+    DUE_PARTS_MADE.with(std::cell::Cell::get)
 }
 
 /// A Due row's parts, as `design::NoticeRow` lays them: its words, each roll's label with why
