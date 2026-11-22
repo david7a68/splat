@@ -344,6 +344,16 @@ pub struct Ticket {
     order: ResultOrder,
 }
 
+/// The owner's hold on the entry it just recorded ([`Results::record_held`], M0543): it revises
+/// that entry, and only that one, on an event that is no press (a run's update, a file read),
+/// with [`Results::revise_held`]. It is not a [`Ticket`]: no press, Undo or use goes by it, and
+/// a replaced or ended entry is [`Gone`], so late work never changes a newer result of the same
+/// owner, as a revision by owner (`revise`) can.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Hold {
+    order: ResultOrder,
+}
+
 impl Ticket {
     /// For the staged path (`Messages::outcome_at`) and the footer's control ids.
     pub(in crate::design) fn of(order: ResultOrder) -> Self {
@@ -469,6 +479,42 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             )
         };
         self.keep(value);
+    }
+
+    /// `record`, and the owner's [`Hold`] on the entry, for a later revision on an event that is
+    /// no press ([`Results::revise_held`]): the Timeline's removal follows the run's updates.
+    pub fn record_held(&mut self, value: T) -> Hold {
+        const {
+            assert!(
+                T::LIFE.is_none(),
+                "this kind has a life: record it with `record_timed`, which arms its end"
+            )
+        };
+        self.keep(value);
+        let order = self
+            .entries
+            .last()
+            .map(|entry| entry.order)
+            .expect("the entry just kept");
+        Hold { order }
+    }
+
+    /// Change the value of the entry `hold` names, in place, as `revise_by` does for a ticket:
+    /// the same entry, place and owner; only the value changes, and no order is issued. An
+    /// entry replaced or ended since is [`Gone`], and `change` does not run.
+    pub fn revise_held<R>(
+        &mut self,
+        hold: &Hold,
+        change: impl FnOnce(&mut T) -> R,
+    ) -> Result<R, Gone> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.order == hold.order)
+            .ok_or(Gone)?;
+        let done = change(&mut entry.value);
+        self.changed();
+        Ok(done)
     }
 
     /// `record` for a kind with a [`Kept::LIFE`]: it also asks `ctx` for a repaint at its end
@@ -1253,7 +1299,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/timeline/checks.rs", "cause", &[Ban::Words]),
         ("src/timeline/page.rs", "as_sentence", &[Ban::Words]),
         ("src/sessions/plan.rs", "as_sentence", &[Ban::Words]),
-        ("src/timeline.rs", "removal_follows_run", &[Ban::ByOwner(1)]),
         ("src/timeline/checks.rs", "check_fault", &[Ban::Body]),
         ("src/timeline/checks.rs", "check_notice", &[Ban::Body]),
         // Ruling M20 (lane T0): Timeline.md's problems in the page's place and the session date
@@ -2278,6 +2323,28 @@ mod tests {
         assert_eq!(
             results.get(&a).map(|shown| shown.value().words),
             Some("B for the same note")
+        );
+        // M0543: the owner's hold revises the entry it recorded, on an event that is no press
+        // (the Timeline's removal follows the run's updates). After a newer record for the same
+        // owner, the hold is `Gone` and the newer entry stays as it is.
+        let mut results = Results::<Note, Done>::new();
+        let hold = results.record_held(done(A, "A"));
+        results.record(done(B, "B"));
+        assert_eq!(
+            results.revise_held(&hold, |v| v.words = "A followed"),
+            Ok(()),
+            "m-p0-hold: the hold revises its entry"
+        );
+        assert_eq!(words(&results, "Tidewater"), ["B", "A followed"]);
+        results.record(done(A, "newer A"));
+        assert_eq!(
+            results.revise_held(&hold, |v| v.words = "late"),
+            Err(Gone),
+            "m-p0-hold: a newer entry of the owner is not the held one"
+        );
+        assert_eq!(
+            results.get(&a).map(|shown| shown.value().words),
+            Some("newer A")
         );
     }
 
