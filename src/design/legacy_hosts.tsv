@@ -137,10 +137,7 @@ scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes
 scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
 scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
-scroll-request	src/encounters/groups.rs	members	1	Encounters
 scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters
-scroll-request	src/encounters/groups.rs	overrides_form	1	Encounters
-scroll-request	src/encounters/groups.rs	unread_member	1	Encounters
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
 scroll-request	src/sessions/plan.rs	Reveal::show	1	Sessions

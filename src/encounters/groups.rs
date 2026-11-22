@@ -178,6 +178,9 @@ pub(super) struct GroupDraft {
     repair: Option<(usize, Mapping)>,
     /// The words typed in a change form's field while it has focus ([`TypedWords`]).
     typed: TypedWords,
+    /// M0237, M0251, M0254: the reveal of a form the DM opens here, or of the member row that
+    /// `Done` closes, in the editor's column (`design::reveal`): owned by this draft.
+    reveal: DraftReveal,
     /// A member result just made, with what its Undo gives back. The draft keeps none: the page
     /// moves it into its store (`Encounters::record_member_results`), which issues its order and
     /// holds it with its ticket, so an Undo applies only its own data.
@@ -541,6 +544,7 @@ impl GroupDraft {
         };
         Self {
             typed: TypedWords::default(),
+            reveal: DraftReveal::default(),
             recovery: Default::default(),
             id,
             path: format!("{FOLDER}/{id}.md"),
@@ -588,6 +592,7 @@ impl GroupDraft {
         let notes = splat::content::list_formats::prose(&entry);
         Ok(Self {
             typed: TypedWords::default(),
+            reveal: DraftReveal::default(),
             recovery: Default::default(),
             id: entry.id,
             path: path.into(),
@@ -2107,17 +2112,17 @@ fn link_fits_after(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> bool 
 /// The change link on a row of its own (G135): only its words, at the text edge. A quiet action
 /// that starts a line outside a message has no icon (N4, `Action::line_start`), so nothing hangs
 /// into the margin.
-fn change_link_line_start(ui: &mut egui::Ui, word: &str) -> bool {
-    design::small_link(ui, word).clicked()
+fn change_link_line_start(ui: &mut egui::Ui, word: &str) -> egui::Response {
+    design::small_link(ui, word)
 }
 
 /// The change link at the end of a detail line: the muted pencil, then the words as a `Small`
-/// link. Returns true when the DM opens the form.
-pub(super) fn change_link(ui: &mut egui::Ui, word: &str) -> bool {
+/// link. Returns the link's response: the DM opens the form when it is clicked.
+pub(super) fn change_link(ui: &mut egui::Ui, word: &str) -> egui::Response {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.label(Type::Small.rich(ui, change_mark()).color(colors().muted));
-        design::small_link(ui, word).clicked()
+        design::small_link(ui, word)
     })
     .inner
 }
@@ -2140,13 +2145,6 @@ fn show_change_fault(
     }
     // G122 asks whether the fault itself is on screen.
     said
-}
-
-const FORM_OPENED: &str = "override_form_opened";
-
-/// The form can open below the fold, so the next frame scrolls to it.
-pub(super) fn show_form_when_it_opens(ui: &egui::Ui) {
-    ui.data_mut(|data| data.insert_temp(egui::Id::new(FORM_OPENED), true));
 }
 
 /// How a change row's value changes, as its drop-down offers it.
@@ -2409,6 +2407,9 @@ pub(super) struct FormEnd {
     pub(super) changed: bool,
     /// Where the form says its change faults, if any (G122: the text the DM reads).
     pub(super) fault: Option<egui::Rect>,
+    /// The whole form, from its heading to its end: the target of the reveal its opener asked
+    /// for (M0237).
+    pub(super) form: Option<egui::Rect>,
 }
 
 #[allow(
@@ -2462,14 +2463,6 @@ pub(super) fn overrides_form(
             heading
         })
         .inner;
-    if ui
-        .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(FORM_OPENED)))
-        .is_some()
-    {
-        let mut rect = heading.rect;
-        rect.min.y -= design::S;
-        ui.scroll_to_rect(rect, Some(egui::Align::Min));
-    }
     // A value that cannot stand says so under its own field; only a fault no field explains
     // (a change that a linked sheet decides) stays at the top.
     let on_a_field = [
@@ -2671,11 +2664,16 @@ pub(super) fn overrides_form(
     if changed {
         *block = overrides.to_mapping();
     }
+    // The form's whole rect, `S` above its heading as the old scroll kept it.
+    let mut form = heading.rect;
+    form.min.y -= design::S;
+    form.max.y = form.max.y.max(ui.cursor().top());
     FormEnd {
         done,
         done_act,
         changed,
         fault,
+        form: Some(form),
     }
 }
 
@@ -3921,8 +3919,12 @@ fn members(
                             .wrap(),
                         );
                         design::named(ui, &response, &detail);
-                        if change_link_line_start(ui, word) {
-                            show_form_when_it_opens(ui);
+                        let link = change_link_line_start(ui, word);
+                        if link.clicked() {
+                            // M0237: the form comes whole into view, by its column's reveal.
+                            if let Some(act) = design::reveal::Act::clicked(ui, &link) {
+                                draft.reveal.0.ask(act, draft.id, ("member_form", key.as_str()));
+                            }
                             *expanded = Some(key.clone());
                         }
                     } else {
@@ -3947,8 +3949,14 @@ fn members(
                                     Type::Small.rich(ui, CHANGE_SEPARATOR).color(colors().muted),
                                 );
                             }
-                            if change_link(ui, word) {
-                                show_form_when_it_opens(ui);
+                            let link = change_link(ui, word);
+                            if link.clicked() {
+                                if let Some(act) = design::reveal::Act::clicked(ui, &link) {
+                                    draft
+                                        .reveal
+                                        .0
+                                        .ask(act, draft.id, ("member_form", key.as_str()));
+                                }
                                 *expanded = Some(key.clone());
                             }
                         });
@@ -3957,6 +3965,11 @@ fn members(
                 member_row
             });
             let (member_row, facts) = (facts.inner, facts.response.rect);
+            // M0251: the row, for the reveal its form's `Done` asks for.
+            draft
+                .reveal
+                .0
+                .mark(ui, draft.id, ("member_row", key.as_str()), member_row);
             let count_line = ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                 // M0249: the shared stepper for a count, with − and + and typing, up to
@@ -4009,7 +4022,7 @@ fn members(
                                     remove = Some(index);
                                 }
                             });
-                            if Action::quiet(if entry.is_none() {
+                            let edit = Action::quiet(if entry.is_none() {
                                 "Replace…"
                             } else {
                                 "Edit"
@@ -4017,13 +4030,17 @@ fn members(
                             .density(Density::Read)
                             .name(&button)
                             .selected(is_open)
-                            .show(ui)
-                            .clicked()
-                            {
+                            .show(ui);
+                            if edit.clicked() {
                                 *expanded = if is_open {
                                     None
                                 } else {
-                                    show_form_when_it_opens(ui);
+                                    if let Some(act) = design::reveal::Act::clicked(ui, &edit) {
+                                        draft
+                                            .reveal
+                                            .0
+                                            .ask(act, draft.id, ("member_form", key.as_str()));
+                                    }
                                     Some(key.clone())
                                 };
                             }
@@ -4125,9 +4142,21 @@ fn members(
                     if end.fault.is_some() {
                         fault_said = end.fault;
                     }
+                    if let Some(form) = end.form {
+                        draft
+                            .reveal
+                            .0
+                            .mark(ui, draft.id, ("member_form", key.as_str()), form);
+                    }
                     if end.done {
                         *expanded = None;
-                        ui.scroll_to_rect(member_row, Some(egui::Align::Min));
+                        // M0251: the row comes whole into view, by its column's reveal.
+                        if let Some(act) = end.done_act {
+                            draft
+                                .reveal
+                                .0
+                                .ask(act, draft.id, ("member_row", key.as_str()));
+                        }
                     }
                 }
             }
@@ -4283,12 +4312,15 @@ fn unread_member(
                     remove = true;
                 }
             });
-            if Action::quiet("Edit")
+            let edit = Action::quiet("Edit")
                 .density(Density::Read)
                 .name(&format!("Changes for {name}"))
-                .show(ui)
-                .clicked()
-            {
+                .show(ui);
+            if edit.clicked() {
+                // M0254: the repair form comes whole into view, by its column's reveal.
+                if let Some(act) = design::reveal::Act::clicked(ui, &edit) {
+                    draft.reveal.0.ask(act, draft.id, ("unread_form", line));
+                }
                 let mut block = Mapping::new();
                 if let Some(row) = &row {
                     block = splat::content::list_formats::changes("", &row[2].value, &row[4].value)
@@ -4315,9 +4347,6 @@ fn unread_member(
                     }
                 }
                 draft.repair = Some((line, block));
-                ui.data_mut(|data| {
-                    data.insert_temp(egui::Id::new(("unread_form_opened", line)), true)
-                });
             }
         });
     });
@@ -4333,14 +4362,9 @@ fn unread_member(
             ui,
             &MemberFault::new(FaultKind::Unreadable, unread_changes(&raw)),
         );
-        if ui
-            .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(("unread_form_opened", line))))
-            .is_some()
-        {
-            let mut rect = unread.rect;
-            rect.min.y -= design::L;
-            ui.scroll_to_rect(rect, Some(egui::Align::Min));
-        }
+        // M0254: the repair form's top, `L` above its message as the old scroll kept it.
+        let mut form_top = unread.rect;
+        form_top.min.y -= design::L;
         // The example belongs to the message, so it starts at the message words.
         // Layout 11c (M0255): placed by its rect at the message's measured left.
         let mut column = ui.available_rect_before_wrap();
@@ -4359,7 +4383,7 @@ fn unread_member(
         );
         if let Some(entry) = entry {
             let id = format!("{repair_id}:{line}");
-            if overrides_form(
+            let end = overrides_form(
                 ui,
                 &id,
                 block,
@@ -4367,9 +4391,14 @@ fn unread_member(
                 &draft.setup.side,
                 None,
                 &mut draft.typed,
-            )
-            .done
-            {
+            );
+            draft.reveal.0.mark(
+                ui,
+                draft.id,
+                ("unread_form", line),
+                end.form.map_or(form_top, |form| form.union(form_top)),
+            );
+            if end.done {
                 apply = Some(block.clone());
             }
         } else {
@@ -4388,6 +4417,17 @@ fn unread_member(
         body_fault(ui, &editor_fault(Tone::Warning, error));
     }
     design::rule(ui);
+}
+
+/// A reveal that a draft owns (`design::reveal::Reveal`). A copy of the draft (an Undo's, a
+/// discard's) starts with none: a running reveal is this draft's, never a copy's.
+#[derive(Debug, Default)]
+pub(super) struct DraftReveal(design::reveal::Reveal);
+
+impl Clone for DraftReveal {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
 }
 
 /// The repair a member fault's choice asks for.
