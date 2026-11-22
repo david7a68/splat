@@ -3949,7 +3949,27 @@ pub mod campaign_content {
                 format!("At {size:?}, the repair's frame is whole and ends at Save: {detail}"),
             );
         }
-        d.state("repair-dirty", Sizes::All);
+        // Layout step 11c (L11c-C.1, SA4): with a repair's editor open the page is still the
+        // pane's scroll column. Where the page fits (1920), its footer starts `S` below the
+        // taller list's last entry (Veilglass Lantern), within that row's height; a `Fills` body
+        // stretched the columns to a footer pinned at the window's bottom, far below the list.
+        d.state_prepared("repair-dirty", Sizes::All, |d| {
+            if d.window_size().0 >= 1900.0 {
+                let last = d.place_of("Veilglass Lantern");
+                let footer = footer_with(d, "Campaign packages draft discarded.");
+                let gap = footer.zip(last).map(|(footer, last)| footer.top() - last.bottom());
+                d.observe(
+                    "l11c-C1-repair-follows",
+                    gap.is_some_and(|gap| {
+                        (crate::design::S - 0.5..=crate::design::S + crate::design::Density::Glance.row())
+                            .contains(&gap)
+                    }),
+                    format!(
+                        "The footer {footer:?} starts {gap:?} below the last entry {last:?} (from `S` to `S` plus a row)"
+                    ),
+                );
+            }
+        });
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
         // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
         // nothing.
@@ -4058,11 +4078,13 @@ pub mod campaign_content {
                         slot.trim_start_matches(|c: char| !c.is_alphabetic()) == "Not saved"
                             && footer.contains(cause.center())
                             && footer.top() > save.bottom()
-                            && footer.bottom() >= *height - crate::design::XXL
+                            && footer.bottom() <= *height
                     }),
+                // Layout step 11c (L11c-C.1, SA4): the footer follows the page's content where it fits,
+                // and the pane pins it only where the content fills or scrolls; no `Fills` body
+                // pins it any more (`l11c-C1-repair-follows`).
                 format!(
-                    "At {size:?}: the slot says only Not saved, and the cause is in the footer at \
-                     the pane's bottom (slot, footer, cause, Save, window height): {placed:?}"
+                    "At {size:?}: the slot says only Not saved, and the cause is in the footer below Save (slot, footer, cause, Save, window height): {placed:?}"
                 ),
             );
         }
@@ -4637,6 +4659,56 @@ pub mod campaign_content {
             a_wheel && b_wheel,
             format!("The wheel brings A's Save into view {a_wheel}, then B's Save {b_wheel}"),
         );
+        // Layout step 11c (review of PR 719): a press on the visible part of B's cut editor
+        // moves nothing while the pointer presses, holds and releases; the pane's focus
+        // clearance alone brings the editor whole into view, after the release. The reference
+        // is B's message above the editor, read from the screen at each frame.
+        d.scroll_up_at(page, 20);
+        let partly = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == b_editor_name)
+                .map(|node| node.shown)
+                .filter(|shown| shown.height() >= crate::design::XL)
+                .filter(|_| !whole(d))
+        };
+        // Down the page by touchpad steps until B's editor shows in part.
+        let mut shown = partly(d);
+        for _ in 0..40 {
+            if shown.is_some() {
+                break;
+            }
+            d.scroll_points_at(page, 40.0);
+            shown = partly(d);
+        }
+        let mut tops = vec![b_message_top(d).map(|rect| rect.top())];
+        if let Some(shown) = shown {
+            let at = shown.center();
+            d.press_hold_at(at);
+            tops.push(b_message_top(d).map(|rect| rect.top()));
+            for _ in 0..3 {
+                d.hold_step();
+                tops.push(b_message_top(d).map(|rect| rect.top()));
+            }
+            d.release_at(at);
+            tops.push(b_message_top(d).map(|rect| rect.top()));
+            d.settle();
+        }
+        let still = tops.len() == 6
+            && tops[0].is_some()
+            && tops.iter().all(|top| {
+                top.zip(tops[0])
+                    .is_some_and(|(top, first)| (top - first).abs() <= 0.5)
+            });
+        let editor_focused = d.focused_name().as_deref() == Some(b_editor_name.as_str());
+        d.observe(
+            "l11c-C1-editor-press-still",
+            still && editor_focused,
+            format!(
+                "B's editor shown {shown:?}; B's message top before, at the press, while held and at the release: {tops:?}; then the editor is focused {editor_focused}"
+            ),
+        );
+        d.press(Key::Escape);
         // Round 25 FD1: A's discard result belongs to A. B's edit leaves it, and Undo discard
         // brings back A's draft only; B's edit stays.
         let b_name = crate::world::repair::editor_name("Notes/Cracked.md");
