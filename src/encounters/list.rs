@@ -461,17 +461,93 @@ pub(super) fn ledger(
 ) -> Ledger {
     // Groups and History are sections: their rows start one indent further in.
     let (left, indent) = (ui.cursor().left(), ui.spacing().indent);
-    let mut facts = 0.0_f32;
+    let mut in_facts = 0.0_f32;
     let mut in_progress = 0.0_f32;
     for run in &page.in_progress {
         let open = live.is_some_and(|live| live.id == run.id);
         let detail = paused_run_detail(run, &page.in_progress, open, story);
-        facts = facts.max(facts_width(ui, &run.encounter, &detail, !open, None));
+        in_facts = in_facts.max(facts_width(ui, &run.encounter, &detail, !open, None));
         let state = open.then(|| run_state_word(run, false));
         in_progress = in_progress.max(in_progress_actions(ui, state.as_deref()));
     }
-    let mut ready = 0.0_f32;
+    // Review of PR 581 (#589): Ready, Groups and History are measured once per change of what
+    // they show (the campaign's read, the groups' revisions, the open run) or of what they are
+    // measured in (`memo::Measure`, the indent), and once a minute for History's saved times.
+    // In progress is measured each frame: its few paused rows name their session from the
+    // Timeline and Sessions, which have no revision here.
     let small = Type::Small.font(ui);
+    let key = LedgerKey {
+        snapshot: snapshot.revision,
+        groups: super::groups::revisions_issued(),
+        live: live.map(|live| live.id),
+        minute: crate::hermetic::now() / 60,
+        body: crate::design::memo::Measure::whole(ui, &Type::Body.font(ui)),
+        small: crate::design::memo::Measure::whole(ui, &small),
+        indent: indent.to_bits(),
+    };
+    let kept_id = ui.id().with("encounters_ledger_kept");
+    let kept_lists = ui
+        .ctx()
+        .data(|data| data.get_temp::<(LedgerKey, [f32; 4])>(kept_id))
+        .filter(|(at, _)| *at == key)
+        .map(|(_, lists)| lists);
+    let [rest, ready, group, ended] = match kept_lists {
+        Some(lists) => lists,
+        None => {
+            let lists = rest_of_ledger(ui, page, snapshot, live, kept, indent, &small);
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(kept_id, (key, lists)));
+            lists
+        }
+    };
+    let facts = in_facts.max(rest);
+    let column = |actions: f32, owner: &'static str| Column {
+        left,
+        facts,
+        actions,
+        owner,
+    };
+    Ledger {
+        in_progress: column(in_progress, "ledger-in-progress"),
+        ready: column(ready, "ledger-ready"),
+        groups: column(group, "ledger-groups"),
+        history: column(ended, "ledger-history"),
+    }
+}
+
+/// What the ledger's measure of Ready, Groups and History was made from (`ledger`).
+#[derive(Clone, PartialEq)]
+struct LedgerKey {
+    snapshot: Uuid,
+    groups: u64,
+    live: Option<Option<Uuid>>,
+    minute: u64,
+    body: crate::design::memo::Measure,
+    small: crate::design::memo::Measure,
+    indent: u32,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many times the ledger's Ready, Groups and History were measured (tests, #589).
+    pub(super) static LEDGER_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Ready's, Groups' and History's widest facts, and each list's widest action recipe:
+/// `[facts, ready, groups, history]`.
+fn rest_of_ledger(
+    ui: &egui::Ui,
+    page: &history::Arranged<'_>,
+    snapshot: &Snapshot,
+    live: Option<&SavedRunInfo>,
+    kept: &mut crate::difficulty::Kept<Uuid>,
+    indent: f32,
+    small: &egui::FontId,
+) -> [f32; 4] {
+    #[cfg(any(test, feature = "test-support"))]
+    LEDGER_MEASURED.with(|count| count.set(count.get() + 1));
+    let mut facts = 0.0_f32;
+    let mut ready = 0.0_f32;
     for row in &page.ready {
         let template = row.template;
         let (open, reason) = ready_reason(page, row, live);
@@ -480,7 +556,7 @@ pub(super) fn ledger(
             .as_ref()
             .filter(|_| !row.unfinished_run)
             .and_then(|roster| {
-                kept.widest(ui, &template.id, roster.revision, &small, || {
+                kept.widest(ui, &template.id, roster.revision, small, || {
                     crate::difficulty::Line::roster(&template.difficulty, &roster.parts)
                 })
             });
@@ -505,18 +581,7 @@ pub(super) fn ledger(
         facts = facts.max(indent + width);
         ended = history_actions(ui);
     }
-    let column = |actions: f32, owner: &'static str| Column {
-        left,
-        facts,
-        actions,
-        owner,
-    };
-    Ledger {
-        in_progress: column(in_progress, "ledger-in-progress"),
-        ready: column(ready, "ledger-ready"),
-        groups: column(group, "ledger-groups"),
-        history: column(ended, "ledger-history"),
-    }
+    [facts, ready, group, ended]
 }
 
 /// A Ready row's second line: its roster's words.

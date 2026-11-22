@@ -179,7 +179,10 @@ for the seconds the work runs, leaves it waiting. Every request that moves a col
 `reveal::cancel` (Sol 2-011): the DM's input to its own column ends it (a wheel over it, a press or drag in it, a key
 that moves a view or a caret or activates a control, text, an accessibility action on a control in it), input to
 another column never does, and a focus that such input moved or that went to another column is not an end. The raw
-reader is private to that module, and a two-column case table runs every request kind through the same inputs. A failed Connect in Settings brings its kept cookie, its
+reader is private to that module, and a two-column case table runs every request kind through the same inputs. Outside
+the design a request asks `reveal::dm_scrolls` (the Session plan's row reveal), and a raw read of the DM's scroll or
+drag (`raw_scroll_delta`, `smooth_scroll_delta`, `is_decidedly_dragging`) in shipping code fails the design lint
+(`raw-scroll-input`), whose allowlist holds only the entry point's reads and Lookup's closing of its results list. A failed Connect in Settings brings its kept cookie, its
 cause and Connect whole into view this way (M0279).
 A column that moves by itself with no press in it does so only through a typed jump, `reveal::jump(ui, top,
 JumpTo::…)` (ruling M18, layout PR 10c), from a closed list: `LinkedHeading` (a reader opened at a linked section,
@@ -1416,7 +1419,12 @@ whether or not the bar shows, so opening Groups moves no row action; the creatur
 roster keep it too, so `Add` and the row menus stay put as a list grows or shrinks. When the run folder cannot be
 read (a folder that held runs is gone, or cannot be listed), In progress and History say so (`Splat cannot read the
 run folder, so it cannot show unfinished runs.`), never their empty states, until a read succeeds. Each row reserves right-edge slots
-for its main action, quiet Edit and row menu. The menu holds deletion and starting another run. An encounter
+for its main action, quiet Edit and row menu. The ledger's lists (In progress, Ready, Groups and History) share one
+measured column (layout PR 5a, `encounters::list::ledger`): every list's actions start `L` after the widest facts of the
+whole ledger, a closed section's rows included, so opening one moves no action, and each list's widest action recipe
+sets where its actions end. Where a list's facts, `L` and its actions do not fit (a narrow window), its actions keep
+the far edge and its facts give way, each row's actions still `L` or more after its own facts. Ready, Groups and
+History are measured once per change of what they show or of the font, theme or scale, and In progress each frame. The menu holds deletion and starting another run. An encounter
 with an unfinished run appears in In progress; when it ends, it returns to Ready. Keep in Ready during a run
 leaves a blocked Start fight and a reason to resume from In progress. In the editor, a muted line below the option
 says what it does. The header counts all Ready rows,
