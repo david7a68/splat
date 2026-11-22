@@ -1801,12 +1801,12 @@ impl Sessions {
         match self.removal_note.as_mut().filter(|_| same_removal) {
             Some(seen) => {
                 match (&seen.words, words) {
-                    (Some(before), Some(draft)) if *before != draft.body => {
+                    (Some(before), Some(draft)) if *before != draft.body.as_str() => {
                         book.forget_removed();
                         self.removal_note = None;
                         return;
                     }
-                    (None, Some(draft)) => seen.words = Some(draft.body.clone()),
+                    (None, Some(draft)) => seen.words = Some(draft.body.as_str().to_owned()),
                     _ => {}
                 }
                 seen.revision = revision;
@@ -1815,7 +1815,7 @@ impl Sessions {
                 self.removal_note = Some(RemovalNote {
                     id,
                     revision,
-                    words: words.map(|draft| draft.body.clone()),
+                    words: words.map(|draft| draft.body.as_str().to_owned()),
                 });
             }
         }
@@ -3149,7 +3149,7 @@ impl Sessions {
                     .draft
                     .as_ref()
                     .filter(|draft| draft.path == note.path)
-                    .map(|draft| draft.body.clone())
+                    .map(|draft| draft.body.as_str().to_owned())
                     .or_else(|| {
                         fs::read_to_string(&note.path)
                             .ok()
@@ -3224,7 +3224,7 @@ impl Sessions {
         let mut failed = None;
         for (before, body) in changes {
             let mut next = before.clone();
-            next.body = body;
+            let _ = next.body.replace(body);
             next.edited();
             next.save();
             if next.unsaved() {
@@ -3245,7 +3245,7 @@ impl Sessions {
             written.push(LinkWrite {
                 id: super::note_identity(&next.path, &bytes),
                 before,
-                after: next.body.clone(),
+                after: next.body.as_str().to_owned(),
                 bytes,
             });
             if self
@@ -3358,7 +3358,7 @@ impl Sessions {
                         Recovery::First(Step::Check(File::SessionNote)),
                     ))
                 }
-                Some(draft) if !same_file(&draft) || draft.body != write.after => {
+                Some(draft) if !same_file(&draft) || draft.body.as_str() != write.after => {
                     let within = write.within();
                     Some((
                         Cause::EditedSince(within.clone()),
@@ -3796,7 +3796,7 @@ impl Sessions {
             if self.selected == Some(session) {
                 self.draft
                     .as_ref()
-                    .map_or_else(String::new, |draft| draft.body.clone())
+                    .map_or_else(String::new, |draft| draft.body.as_str().to_owned())
             } else {
                 self.notes
                     .iter()
@@ -4555,7 +4555,7 @@ impl Sessions {
             body: self
                 .draft
                 .as_ref()
-                .map_or_else(String::new, |draft| draft.body.clone()),
+                .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
             events: book.events.clone(),
             name,
             number,
@@ -4574,7 +4574,7 @@ impl Sessions {
                 || self
                     .draft
                     .as_ref()
-                    .is_none_or(|draft| draft.body != moved.body)
+                    .is_none_or(|draft| draft.body.as_str() != moved.body)
         });
         if changed {
             self.moves.owner_changed(&page);
@@ -5093,7 +5093,7 @@ impl Sessions {
                             }
                             if focus {
                                 response.request_focus();
-                                let (caret, changed) = fresh_line_in_note(&mut draft.body);
+                                let (caret, changed) = draft.body.edit(fresh_line_in_note);
                                 if changed {
                                     draft.edited();
                                 }
@@ -5168,7 +5168,7 @@ impl Sessions {
             Some(id) => {
                 design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
             }
-            None => insert_in_note(&mut draft.body, words),
+            None => draft.body.edit(|body| insert_in_note(body, words)),
         }
         draft.edited();
         true
@@ -5346,7 +5346,7 @@ impl Sessions {
             .selected
             .and_then(|id| self.notes.iter().find(|note| note.id == id));
         note.map_or_else(
-            || draft.body.clone(),
+            || draft.body.as_str().to_owned(),
             |note| without_own_heading(&draft.body, note),
         )
     }
@@ -5522,7 +5522,7 @@ impl Sessions {
             }
         }
         if let (Some(draft), Some(session)) = (&mut self.draft, self.selected)
-            && rename_links(&mut draft.body, old, new)
+            && draft.body.edit(|body| rename_links(body, old, new))
         {
             draft.edited();
             self.mentions
@@ -5573,7 +5573,9 @@ impl Sessions {
             .iter()
             .filter_map(|note| {
                 let body = if self.selected == Some(note.id) {
-                    self.draft.as_ref().map(|draft| draft.body.clone())
+                    self.draft
+                        .as_ref()
+                        .map(|draft| draft.body.as_str().to_owned())
                 } else {
                     fs::read_to_string(&note.path)
                         .ok()
@@ -7873,7 +7875,7 @@ impl Sessions {
                     let body = self
                         .template_draft
                         .take()
-                        .map_or_else(|| template.body.clone(), |draft| draft.body);
+                        .map_or_else(|| template.body.clone(), |draft| draft.body.into_string());
                     self.deleted_templates.record(kept::DeletedTemplate {
                         page: kept::Page {
                             root: self.folder.clone().unwrap_or_default(),
@@ -9656,7 +9658,7 @@ mod tests {
                 .state()
                 .template_draft
                 .as_ref()
-                .map(|draft| draft.body.clone())
+                .map(|draft| draft.body.as_str().to_owned())
         };
         assert_eq!(body(&harness).as_deref(), Some("## Plan\n"));
         harness.state_mut().select_template(&b.name);
@@ -9720,7 +9722,7 @@ mod tests {
                 .0
                 .draft
                 .as_ref()
-                .map(|draft| draft.body.clone())
+                .map(|draft| draft.body.as_str().to_owned())
                 .unwrap_or_default()
         };
         harness.run_steps(2);

@@ -658,7 +658,7 @@ mod tests {
             std::fs::write(&path, &text).unwrap();
             let mut repair = Repair::open(&campaign, "Broken.md").unwrap();
             repair.draft.push_str("\nMy unsent text.\n");
-            let draft = repair.draft.clone();
+            let draft = repair.draft.as_str().to_owned();
             show(&mut repair, &campaign);
             assert_eq!(repair.draft.as_str(), draft, "{row}");
             assert_eq!(std::fs::read_to_string(&path).unwrap(), text, "{row}");
@@ -668,7 +668,7 @@ mod tests {
             std::fs::write(&path, &text).unwrap();
             let mut repair = Repair::open(&campaign, "Broken.md").unwrap();
             repair.draft.push_str("\nMy unsent text.\n");
-            let draft = repair.draft.clone();
+            let draft = repair.draft.as_str().to_owned();
             assert!(!repair.save(&campaign), "{value}");
             assert_eq!(repair.draft.as_str(), draft);
             assert_eq!(std::fs::read_to_string(&path).unwrap(), text);

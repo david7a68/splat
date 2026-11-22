@@ -1664,7 +1664,7 @@ impl Draft {
     /// no such file, the draft stays `Missing` with the last saved words, so no edit or Save
     /// can write the old path; only the DM's explicit `Save as a new file` does.
     pub fn discard(&mut self) {
-        let words = self.body.clone();
+        let words = self.body.as_str().to_owned();
         let note = self
             .baseline
             .as_deref()
@@ -1682,12 +1682,13 @@ impl Draft {
         match followed {
             Some(moved) => *self = moved,
             None => {
-                self.body = self
+                let words = self
                     .baseline
                     .as_deref()
                     .map(body_of)
                     .unwrap_or_default()
                     .to_owned();
+                let _ = self.body.replace(words);
                 self.revision = next_revision();
                 self.state = DraftState::Missing;
             }
@@ -1717,7 +1718,7 @@ impl Draft {
 
     /// Back to the file, keeping the draft's words for one step of undo.
     pub fn reload_keeping_undo(&mut self) -> Result<(), String> {
-        let words = self.body.clone();
+        let words = self.body.as_str().to_owned();
         self.reload()?;
         self.dropped = Some(Dropped::Reloaded(words));
         self.dropped_baseline.clone_from(&self.baseline);
@@ -1727,7 +1728,7 @@ impl Draft {
     /// Bring back what `reload_keeping_undo` or `discard` dropped.
     pub fn undo_dropped(&mut self) {
         if let Some(Dropped::Reloaded(words) | Dropped::Discarded(words)) = self.dropped.take() {
-            self.body = words;
+            let _ = self.body.replace(words);
             self.edited();
             // The file changed since the words were dropped, and the draft followed it: the DM
             // chooses between the two, as in any conflict.
@@ -1821,14 +1822,14 @@ impl Draft {
                 Ok(_) => {}
             }
         }
-        let before = self.body.clone();
+        let before = self.body.as_str().to_owned();
         let (prefix, after) = patch(&self.prefix, &before).ok_or(ActFault::LineChanged)?;
         // Only an act that changed the properties puts them back.
         let properties = (prefix != self.prefix).then(|| {
             let before = std::mem::replace(&mut self.prefix, prefix);
             Box::new((before, self.prefix.clone()))
         });
-        self.body.clone_from(&after);
+        let _ = self.body.replace(after.as_str());
         self.edited();
         let mut undo = NoteUndo {
             path: self.path.as_path().into(),
@@ -1935,7 +1936,7 @@ impl NoteUndo {
 
     /// Whether this Undo still applies to the note in this draft.
     pub fn live(&self, draft: &Draft) -> bool {
-        self.owns(draft) && draft.body == self.after && self.left_properties(&draft.prefix)
+        self.owns(draft) && draft.body.as_str() == self.after && self.left_properties(&draft.prefix)
     }
 
     /// The properties are the ones the act left, or the act did not change them.
@@ -1986,7 +1987,7 @@ impl NoteUndo {
         }
         let (prefix, before) = back(&draft.prefix, &draft.body).ok_or(ActFault::LineChanged)?;
         draft.prefix = prefix;
-        draft.body = before;
+        let _ = draft.body.replace(before);
         draft.edited();
         Ok(())
     }
@@ -2590,7 +2591,7 @@ mod tests {
         let note = create_note(dir.path(), &new_note(1, "", "Before")).unwrap();
         let mut draft = Draft::open(&note.path).unwrap();
         fs::remove_file(&note.path).unwrap();
-        draft.body = "My draft".into();
+        let _ = draft.body.replace("My draft".into());
         draft.edited();
         draft.save();
         fs::write(&note.path, "DM's restored file").unwrap();
@@ -2605,7 +2606,7 @@ mod tests {
         let note = create_note(dir.path(), &new_note(2, "", "Before")).unwrap();
         let mut draft = Draft::open(&note.path).unwrap();
         fs::remove_file(&note.path).unwrap();
-        draft.body = "My draft".into();
+        let _ = draft.body.replace("My draft".into());
         draft.edited();
         draft.save();
         assert_eq!(draft.state, DraftState::Missing);
@@ -2647,7 +2648,7 @@ mod tests {
         let mut draft = Draft::open(&nested).unwrap();
         let moved = dir.path().join("Moved.md");
         fs::rename(&nested, &moved).unwrap();
-        draft.body = "My draft".into();
+        let _ = draft.body.replace("My draft".into());
         draft.edited();
         draft.save();
         assert_eq!(draft.moved_to.as_deref(), Some(moved.as_path()));
@@ -3091,7 +3092,7 @@ mod tests {
             .replace("Start", "From Obsidian");
         fs::write(&note.path, &outside).unwrap();
 
-        draft.body = "Mine\n".into();
+        let _ = draft.body.replace("Mine\n".into());
         draft.edited();
         // A note act beside unsaved words and a changed file is not applied, and says so.
         // The words and the file stay as they were, and the conflict view decides.
@@ -3142,7 +3143,7 @@ mod tests {
         );
 
         fs::write(&note.path, &outside).unwrap();
-        draft.body = "Kept for one step\n".into();
+        let _ = draft.body.replace("Kept for one step\n".into());
         draft.edited();
         draft.save();
         draft.reload_keeping_undo().unwrap();
@@ -3152,7 +3153,7 @@ mod tests {
         assert_eq!(draft.state, DraftState::Unsaved);
         draft.overwrite();
         fs::write(&note.path, &outside).unwrap();
-        draft.body = "Lost\n".into();
+        let _ = draft.body.replace("Lost\n".into());
         draft.edited();
         draft.save();
         draft.reload().unwrap();
@@ -3351,7 +3352,7 @@ mod tests {
         let note = create_note(dir.path(), &new_note(5, "", "Start\n")).unwrap();
         let mut draft = Draft::open(&note.path).unwrap();
         fs::remove_file(&note.path).unwrap();
-        draft.body = "My words\n".into();
+        let _ = draft.body.replace("My words\n".into());
         draft.edited();
         draft.save();
         assert_eq!(draft.state, DraftState::Missing);
@@ -3385,7 +3386,7 @@ mod tests {
         fs::create_dir_all(dir.path().join("Past")).unwrap();
         let renamed = dir.path().join("Past/Renamed.md");
         fs::rename(&note.path, &renamed).unwrap();
-        draft.body = "My words\n".into();
+        let _ = draft.body.replace("My words\n".into());
         draft.edited();
         draft.save();
         assert_eq!(draft.state, DraftState::Missing);
@@ -3501,7 +3502,7 @@ mod tests {
         fs::write(&note.path, &outside).unwrap();
         draft.follow_disk();
         assert!(draft.body.contains("Elsewhere"));
-        draft.body = "Mine".into();
+        let _ = draft.body.replace("Mine".into());
         draft.edited();
         fs::write(&note.path, "---\nsession_id: x\n---\nAgain").unwrap();
         draft.follow_disk();

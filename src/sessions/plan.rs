@@ -1963,7 +1963,9 @@ impl Scenes {
     /// when the words come back to what the act left.
     fn end_what_changed(&mut self, draft: Option<&crate::sessions::Draft>) {
         if self.fault.as_ref().is_some_and(|fault| {
-            draft.is_none_or(|draft| draft.body != fault.met || (fault.waits && !draft.unsaved()))
+            draft.is_none_or(|draft| {
+                draft.body.as_str() != fault.met || (fault.waits && !draft.unsaved())
+            })
         }) {
             self.fault = None;
         }
@@ -4258,7 +4260,7 @@ impl Sessions {
         if let Some((_, _, before, _, _, _)) = self.removed_group.take()
             && let Some(draft) = &mut self.draft
         {
-            draft.body = before;
+            let _ = draft.body.replace(before);
             draft.edited();
         }
     }
@@ -4421,7 +4423,11 @@ impl Sessions {
             .removed_group
             .as_ref()
             .is_some_and(|(id, _, _, after, _, _)| {
-                *id == session && self.draft.as_ref().is_none_or(|draft| draft.body != *after)
+                *id == session
+                    && self
+                        .draft
+                        .as_ref()
+                        .is_none_or(|draft| draft.body.as_str() != *after)
             })
         {
             self.removed_group = None;
@@ -4429,7 +4435,7 @@ impl Sessions {
         let body = self
             .draft
             .as_ref()
-            .map_or_else(String::new, |draft| draft.body.clone());
+            .map_or_else(String::new, |draft| draft.body.as_str().to_owned());
         let mut played: BTreeMap<String, usize> = BTreeMap::new();
         for event in &book.events {
             if event.is_in(session) && event.run.is_some() {
@@ -5194,17 +5200,23 @@ impl Sessions {
         if let Some((position, name, height)) = remove_group
             && let Some(draft) = &mut self.draft
         {
-            let before = draft.body.clone();
-            unlink_group(&mut draft.body, &name);
+            let before = draft.body.as_str().to_owned();
+            draft.body.edit(|body| unlink_group(body, &name));
             draft.edited();
             Self::mark_plan(
                 &mut self.plan_marks,
                 self.folder.as_deref(),
                 PlanKind::GroupRemoved,
             );
-            self.removed_group =
-                Some((session, position, before, draft.body.clone(), height, name));
-            self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
+            self.removed_group = Some((
+                session,
+                position,
+                before,
+                draft.body.as_str().to_owned(),
+                height,
+                name,
+            ));
+            self.plan_notice_state = Some((draft.body.as_str().to_owned(), book.events.clone()));
         }
         if changed {
             book.touch();
@@ -5228,7 +5240,7 @@ impl Sessions {
                     self.plan_notice_state = Some((
                         self.draft
                             .as_ref()
-                            .map_or_else(String::new, |draft| draft.body.clone()),
+                            .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
                         book.events.clone(),
                     ));
                     self.record_deleted_run(book, deleted, saved.id);
@@ -5248,7 +5260,7 @@ impl Sessions {
             self.plan_notice_state = Some((
                 self.draft
                     .as_ref()
-                    .map_or_else(String::new, |draft| draft.body.clone()),
+                    .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
                 book.events.clone(),
             ));
             self.open_event = None;
@@ -5692,7 +5704,7 @@ impl Sessions {
                 ))
             };
             scenes.fault = Some(Fault {
-                met: draft.body.clone(),
+                met: draft.body.as_str().to_owned(),
                 place,
                 waits: matches!(what, SceneFault::NotSaved),
                 what,
@@ -5736,7 +5748,10 @@ impl Sessions {
     /// The plan's results end at the next edit of the note or the timeline events.
     fn end_plan_results_after_edits(&mut self, book: &Book) {
         if let Some((body, events)) = &self.plan_notice_state
-            && (self.draft.as_ref().is_none_or(|draft| draft.body != *body)
+            && (self
+                .draft
+                .as_ref()
+                .is_none_or(|draft| draft.body.as_str() != *body)
                 || book.events != *events)
         {
             self.deleted_run = None;
@@ -7264,7 +7279,7 @@ mod tests {
         let restored = sessions.draft.as_ref().unwrap().body.clone();
         for words in [format!("{restored}x"), restored.clone()] {
             let draft = sessions.draft.as_mut().unwrap();
-            draft.body = words;
+            let _ = draft.body.replace(words);
             draft.edited();
             frame(&mut sessions);
             sessions.draft.as_mut().unwrap().save();
@@ -10060,7 +10075,7 @@ mod tests {
             let body = sessions
                 .draft
                 .as_ref()
-                .map_or_else(String::new, |draft| draft.body.clone());
+                .map_or_else(String::new, |draft| draft.body.as_str().to_owned());
             sessions.plan_notice_state = Some((body, book.events.clone()));
         };
         let mut sessions = Sessions::default();
