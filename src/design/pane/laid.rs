@@ -1302,4 +1302,164 @@ mod tests {
             "the newer region request replaces bring_into_view"
         );
     }
+
+    /// One input of the resolver's case table (Sol sweep 2-001).
+    #[derive(Clone, Copy, Debug)]
+    enum Input {
+        Wheel,
+        ContentDrag,
+        BarDrag,
+        Press,
+        Key(egui::Key, egui::Modifiers),
+        Text,
+        Ime,
+    }
+
+    /// The resolver's case table (Sol sweep 2-001; reviews of PRs 757 and 770): two columns, a
+    /// request queued for column A (the pane), and each input the cancel rule handles, aimed at
+    /// column B (the pointer over it, the focus in it) and then at A. A's request survives every
+    /// input at B; every input at A ends it, except a shortcut that moves nothing (Ctrl+S). Each
+    /// cancel branch of `take_queued` has a row.
+    #[test]
+    fn the_resolver_cancels_only_on_its_own_columns_input() {
+        use egui::{Key, Modifiers};
+        let rows = [
+            ("wheel", Input::Wheel, true),
+            ("content drag", Input::ContentDrag, true),
+            ("bar drag", Input::BarDrag, true),
+            ("press", Input::Press, true),
+            ("Page Up", Input::Key(Key::PageUp, Modifiers::NONE), true),
+            (
+                "Page Down",
+                Input::Key(Key::PageDown, Modifiers::NONE),
+                true,
+            ),
+            ("Home", Input::Key(Key::Home, Modifiers::NONE), true),
+            ("End", Input::Key(Key::End, Modifiers::NONE), true),
+            ("ArrowUp", Input::Key(Key::ArrowUp, Modifiers::NONE), true),
+            (
+                "ArrowDown",
+                Input::Key(Key::ArrowDown, Modifiers::NONE),
+                true,
+            ),
+            (
+                "ArrowLeft",
+                Input::Key(Key::ArrowLeft, Modifiers::NONE),
+                true,
+            ),
+            (
+                "ArrowRight",
+                Input::Key(Key::ArrowRight, Modifiers::NONE),
+                true,
+            ),
+            ("Tab", Input::Key(Key::Tab, Modifiers::NONE), true),
+            ("Shift+Tab", Input::Key(Key::Tab, Modifiers::SHIFT), true),
+            ("text", Input::Text, true),
+            ("IME", Input::Ime, true),
+            ("Ctrl+S", Input::Key(Key::S, Modifiers::CTRL), false),
+        ];
+        let mut page = Page::new(texts(40));
+        page.beside = Some(Rect::NOTHING);
+        let mut harness = harness(page, egui::vec2(1200.0, 420.0));
+        let button = |at: egui::Pos2, pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        let mut wrong = Vec::new();
+        for (name, input, cancels) in rows {
+            for in_a in [false, true] {
+                // From the top, nothing pending, the focus and the pointer where the input aims.
+                harness.state_mut().region.navigate(Navigation::Reset);
+                harness.run_steps(10);
+                let beside = harness.state().beside.expect("the other column");
+                let clip = harness.state().clip;
+                let (point, bar, focus) = if in_a {
+                    (
+                        clip.left_center() + egui::vec2(100.0, 0.0),
+                        egui::pos2(beside.left() - 5.0, clip.top() + 12.0),
+                        "Act 0",
+                    )
+                } else {
+                    (
+                        beside.center(),
+                        egui::pos2(beside.right() - 5.0, beside.top() + 12.0),
+                        "Beside button",
+                    )
+                };
+                harness.get_by_label(focus).focus();
+                harness
+                    .input_mut()
+                    .events
+                    .push(egui::Event::PointerMoved(point));
+                harness.run_steps(2);
+                // A's request, queued (one pass a frame: it applies in the next frame).
+                harness
+                    .state_mut()
+                    .region
+                    .navigate(Navigation::Show(Id::new(35usize)));
+                harness.step();
+                let events = &mut harness.input_mut().events;
+                match input {
+                    Input::Wheel => events.push(egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, -10.0),
+                        modifiers: Modifiers::NONE,
+                    }),
+                    Input::ContentDrag | Input::BarDrag => {
+                        let from = if matches!(input, Input::BarDrag) {
+                            bar
+                        } else {
+                            point
+                        };
+                        events.push(egui::Event::PointerMoved(from));
+                        events.push(button(from, true));
+                        harness.step();
+                        for step in 1..4 {
+                            let to = from + egui::vec2(0.0, 12.0 * step as f32);
+                            harness
+                                .input_mut()
+                                .events
+                                .push(egui::Event::PointerMoved(to));
+                            harness.step();
+                        }
+                        harness
+                            .input_mut()
+                            .events
+                            .push(button(from + egui::vec2(0.0, 36.0), false));
+                    }
+                    Input::Press => {
+                        events.push(button(point, true));
+                        events.push(button(point, false));
+                    }
+                    Input::Key(key, modifiers) => {
+                        for pressed in [true, false] {
+                            events.push(egui::Event::Key {
+                                key,
+                                physical_key: None,
+                                pressed,
+                                repeat: false,
+                                modifiers,
+                            });
+                        }
+                    }
+                    Input::Text => events.push(egui::Event::Text("x".to_owned())),
+                    Input::Ime => {
+                        events.push(egui::Event::Ime(egui::ImeEvent::Commit("x".to_owned())));
+                    }
+                }
+                harness.run_steps(3);
+                let survived = shown(&harness, 35);
+                let expected = !(in_a && cancels);
+                if survived != expected {
+                    wrong.push(format!(
+                        "{name} at {}: survived {survived}, expected {expected}",
+                        if in_a { "A" } else { "B" }
+                    ));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "the case table: {wrong:#?}");
+    }
 }

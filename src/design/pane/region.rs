@@ -711,7 +711,8 @@ fn resolve_in_place(
     let keys = crate::design::reveal::keys_in(ui, column);
     let (moved, held) = ui.input(|input| {
         let pointer = &input.pointer;
-        let in_column = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| column.contains(pos));
+        let reach = crate::design::reveal::with_lane(column);
+        let in_column = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| reach.contains(pos));
         let wheel = input.raw_scroll_delta.y != 0.0 || input.smooth_scroll_delta.y != 0.0;
         let page = input.events.iter().any(|event| {
             matches!(
