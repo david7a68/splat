@@ -142,6 +142,8 @@ pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 pub use laid::{Laid, LaidUi, draw_laid};
+#[cfg(any(test, feature = "test-support"))]
+pub use notice_row::notices_laid;
 pub use notice_row::{NoticeRoll, NoticeRow, check_height, slot as notice_slot};
 pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Measured, Row};
 pub use plan_row::{PlanColumns, PlanRow, SummaryPart, rule as plan_rule, slot as plan_slot};
