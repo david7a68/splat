@@ -982,13 +982,13 @@ mod tests {
         assert_eq!(harness.state().body.as_str(), "Met x ");
         // Each Backspace is a step of the history, so Ctrl+Z goes back one at a time.
         let mut undone = Vec::new();
-        while undone.len() < 6 && harness.state().body != "Met x lost" {
+        while undone.len() < 6 && harness.state().body.as_str() != "Met x lost" {
             harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
             harness.run_steps(3);
             undone.push(harness.state().body.clone());
         }
         assert_eq!(
-            harness.state().body,
+            harness.state().body.as_str(),
             "Met x lost",
             "n0-slash-undo: Ctrl+Z after a command brings back the words typed before it: {undone:?}"
         );

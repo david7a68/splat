@@ -6774,7 +6774,7 @@ mod tests {
                 planned_fight("Bridge Ambush", "Encounters/Bridge Ambush.md"),
             ];
             let mut days_of = |fights: &[PlanFight], fights_revision| {
-                let body = sessions.draft.as_ref().unwrap().body.clone();
+                let body = sessions.draft.as_ref().unwrap().body.as_str().to_owned();
                 let planned: Vec<&PlanFight> =
                     plan_links(&body, &book.events, Some(session), fights)
                         .into_iter()
@@ -6957,7 +6957,7 @@ mod tests {
         let mut field = design::AddField::default();
         field.words = "Unsent scene".into();
         sessions.scenes.field = Some(field);
-        let a_words = sessions.draft.as_ref().unwrap().body.clone();
+        let a_words = sessions.draft.as_ref().unwrap().body.as_str().to_owned();
         let b_file = |shrine: usize| {
             let text = fs::read_to_string(&b_note.path).unwrap();
             assert_eq!(
@@ -6980,7 +6980,7 @@ mod tests {
         b_file(1);
         assert_eq!(sessions.selected, Some(a));
         assert_eq!(sessions.draft.as_ref().unwrap().path, a_note.path);
-        assert_eq!(sessions.draft.as_ref().unwrap().body, a_words);
+        assert_eq!(sessions.draft.as_ref().unwrap().body.as_str(), a_words);
         assert_eq!(sessions.scenes.added.as_ref(), Some(&scene));
         assert_eq!(
             sessions
@@ -7276,7 +7276,7 @@ mod tests {
         };
         frame(&mut sessions);
         assert!(!sessions.travel.planned.is_empty());
-        let restored = sessions.draft.as_ref().unwrap().body.clone();
+        let restored = sessions.draft.as_ref().unwrap().body.as_str().to_owned();
         for words in [format!("{restored}x"), restored.clone()] {
             let draft = sessions.draft.as_mut().unwrap();
             let _ = draft.body.replace(words);
@@ -7285,7 +7285,7 @@ mod tests {
             sessions.draft.as_mut().unwrap().save();
             frame(&mut sessions);
         }
-        assert_eq!(sessions.draft.as_ref().unwrap().body, restored);
+        assert_eq!(sessions.draft.as_ref().unwrap().body.as_str(), restored);
         assert!(
             !sessions.plan_line_shown_in(Some(b)),
             "the plan offers no result"
@@ -7488,7 +7488,7 @@ mod tests {
             "{}Typed, not saved.\n",
             sessions.draft.as_ref().unwrap().body
         );
-        sessions.draft.as_mut().unwrap().body = dirty.clone();
+        sessions.draft.as_mut()let _ = .unwrap().body.replace(dirty.clone());
         sessions.draft.as_mut().unwrap().edited();
         let renamed = dir.path().join("Renamed road.md");
         fs::rename(&b_note.path, &renamed).unwrap();
@@ -7499,7 +7499,7 @@ mod tests {
             Some(refused.as_str()),
             "the rename keeps A's answer"
         );
-        assert_eq!(sessions.draft.as_ref().unwrap().body, dirty);
+        assert_eq!(sessions.draft.as_ref().unwrap().body.as_str(), dirty);
         assert!(
             sessions.draft.as_ref().unwrap().unsaved(),
             "the dirty draft is not saved"
@@ -7507,7 +7507,7 @@ mod tests {
         fs::rename(&renamed, &b_note.path).unwrap();
         sessions.notes[1].path = b_note.path.clone();
         sessions.notes_revision += 1;
-        sessions.draft.as_mut().unwrap().body = dirty.replace("Typed, not saved.\n", "");
+        sessions.draft.as_mut()let _ = .unwrap().body.replace(dirty.replace("Typed, not saved.\n", ""));
         sessions.draft.as_mut().unwrap().save();
         // E6 (R41): an unreadable file is an error, a missing one a warning, by one rule that
         // both readers' lines take (`Shown::outcome`). Each is a fresh plan line's first Undo.
@@ -9341,7 +9341,7 @@ mod tests {
             )
         );
         assert_eq!(
-            page.draft.as_ref().unwrap().body,
+            page.draft.as_ref().unwrap().body.as_str(),
             crate::sessions::body_of(&changed)
         );
 

@@ -2591,7 +2591,7 @@ mod tests {
         let note = create_note(dir.path(), &new_note(1, "", "Before")).unwrap();
         let mut draft = Draft::open(&note.path).unwrap();
         fs::remove_file(&note.path).unwrap();
-        let _ = draft.body.replace("My draft".into());
+        let _ = draft.body.replace("My draft");
         draft.edited();
         draft.save();
         fs::write(&note.path, "DM's restored file").unwrap();
@@ -2606,7 +2606,7 @@ mod tests {
         let note = create_note(dir.path(), &new_note(2, "", "Before")).unwrap();
         let mut draft = Draft::open(&note.path).unwrap();
         fs::remove_file(&note.path).unwrap();
-        let _ = draft.body.replace("My draft".into());
+        let _ = draft.body.replace("My draft");
         draft.edited();
         draft.save();
         assert_eq!(draft.state, DraftState::Missing);
@@ -2619,7 +2619,7 @@ mod tests {
         assert_eq!(draft.restored, None);
         assert_eq!(draft.state, DraftState::Missing);
         draft.undo_dropped();
-        assert_eq!(draft.body, "My draft");
+        assert_eq!(draft.body.as_str(), "My draft");
         draft.save();
         assert_eq!(fs::read_to_string(&note.path).unwrap(), "Arrived outside");
         draft.save_again();
@@ -2648,7 +2648,7 @@ mod tests {
         let mut draft = Draft::open(&nested).unwrap();
         let moved = dir.path().join("Moved.md");
         fs::rename(&nested, &moved).unwrap();
-        let _ = draft.body.replace("My draft".into());
+        let _ = draft.body.replace("My draft");
         draft.edited();
         draft.save();
         assert_eq!(draft.moved_to.as_deref(), Some(moved.as_path()));
@@ -3065,7 +3065,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let note = create_note(dir.path(), &new_note(1, "", "Start\n")).unwrap();
         let mut draft = Draft::open(&note.path).unwrap();
-        assert_eq!(draft.body, "Start\n");
+        assert_eq!(draft.body.as_str(), "Start\n");
         assert_eq!(draft.state, DraftState::Clean);
         draft.body.push_str("More\n");
         draft.edited();
@@ -3092,7 +3092,7 @@ mod tests {
             .replace("Start", "From Obsidian");
         fs::write(&note.path, &outside).unwrap();
 
-        let _ = draft.body.replace("Mine\n".into());
+        let _ = draft.body.replace("Mine\n");
         draft.edited();
         // A note act beside unsaved words and a changed file is not applied, and says so.
         // The words and the file stay as they were, and the conflict view decides.
@@ -3104,7 +3104,7 @@ mod tests {
             act.unwrap_err().words(),
             "The note changed on disk. Choose in the note first."
         );
-        assert_eq!(draft.body, "Mine\n");
+        assert_eq!(draft.body.as_str(), "Mine\n");
         assert_eq!(fs::read_to_string(&note.path).unwrap(), outside);
         // Today's plan acts are as they were: the line joins the draft, as typed words do.
         let undo = draft
@@ -3112,10 +3112,10 @@ mod tests {
                 Some(format!("{words}- [[Plan]]\n"))
             })
             .unwrap();
-        assert_eq!(draft.body, "Mine\n- [[Plan]]\n");
+        assert_eq!(draft.body.as_str(), "Mine\n- [[Plan]]\n");
         assert_eq!(draft.state, DraftState::Unsaved);
         undo.undo(&mut draft).unwrap();
-        assert_eq!(draft.body, "Mine\n");
+        assert_eq!(draft.body.as_str(), "Mine\n");
         draft.save();
         assert_eq!(draft.state, DraftState::Conflict);
         assert_eq!(fs::read_to_string(&note.path).unwrap(), outside);
@@ -3143,17 +3143,17 @@ mod tests {
         );
 
         fs::write(&note.path, &outside).unwrap();
-        let _ = draft.body.replace("Kept for one step\n".into());
+        let _ = draft.body.replace("Kept for one step\n");
         draft.edited();
         draft.save();
         draft.reload_keeping_undo().unwrap();
         assert!(matches!(draft.dropped, Some(Dropped::Reloaded(_))));
         draft.undo_dropped();
-        assert_eq!(draft.body, "Kept for one step\n");
+        assert_eq!(draft.body.as_str(), "Kept for one step\n");
         assert_eq!(draft.state, DraftState::Unsaved);
         draft.overwrite();
         fs::write(&note.path, &outside).unwrap();
-        let _ = draft.body.replace("Lost\n".into());
+        let _ = draft.body.replace("Lost\n");
         draft.edited();
         draft.save();
         draft.reload().unwrap();
@@ -3319,7 +3319,7 @@ mod tests {
         let swapped = format!("{prefix}{}", c.after());
         fs::write(&third.path, &swapped).unwrap();
         replaced.follow_disk();
-        assert_eq!(replaced.body, c.after());
+        assert_eq!(replaced.body.as_str(), c.after());
         assert!(!c.live(&replaced));
         assert_eq!(c.undo(&mut replaced), Err(ActFault::OtherNote));
         assert_eq!(fs::read_to_string(&third.path).unwrap(), swapped);
@@ -3352,7 +3352,7 @@ mod tests {
         let note = create_note(dir.path(), &new_note(5, "", "Start\n")).unwrap();
         let mut draft = Draft::open(&note.path).unwrap();
         fs::remove_file(&note.path).unwrap();
-        let _ = draft.body.replace("My words\n".into());
+        let _ = draft.body.replace("My words\n");
         draft.edited();
         draft.save();
         assert_eq!(draft.state, DraftState::Missing);
@@ -3364,9 +3364,9 @@ mod tests {
         assert!(list_notes(dir.path()).is_empty());
         // iter-25-S SM1: with no file left, the editor says so.
         assert_eq!(draft.state, DraftState::Missing);
-        assert_eq!(draft.body, "Start\n");
+        assert_eq!(draft.body.as_str(), "Start\n");
         draft.undo_dropped();
-        assert_eq!(draft.body, "My words\n");
+        assert_eq!(draft.body.as_str(), "My words\n");
         assert!(!note.path.exists());
         // Discard, edit, Save: nothing is written at the old path.
         draft.discard();
@@ -3386,7 +3386,7 @@ mod tests {
         fs::create_dir_all(dir.path().join("Past")).unwrap();
         let renamed = dir.path().join("Past/Renamed.md");
         fs::rename(&note.path, &renamed).unwrap();
-        let _ = draft.body.replace("My words\n".into());
+        let _ = draft.body.replace("My words\n");
         draft.edited();
         draft.save();
         assert_eq!(draft.state, DraftState::Missing);
@@ -3423,7 +3423,7 @@ mod tests {
         );
         assert_eq!(discarded.path, renamed);
         assert_eq!(discarded.state, DraftState::Clean);
-        assert_eq!(discarded.body, "Moved words\n");
+        assert_eq!(discarded.body.as_str(), "Moved words\n");
         // Review of PR 255, item 2: the moved file is edited outside; the disk timer follows it
         // (twice, the second time with nothing new). The outside words show, and the discarded
         // words stay recoverable; their Undo meets the conflict choice, not a silent write.
@@ -3432,13 +3432,13 @@ mod tests {
         fs::write(&renamed, &edited_text).unwrap();
         followed.follow_disk();
         followed.follow_disk();
-        assert_eq!(followed.body, "Edited in Obsidian\n");
+        assert_eq!(followed.body.as_str(), "Edited in Obsidian\n");
         assert_eq!(
             followed.dropped,
             Some(Dropped::Discarded("My words\n".into()))
         );
         followed.undo_dropped();
-        assert_eq!(followed.body, "My words\n");
+        assert_eq!(followed.body.as_str(), "My words\n");
         assert_eq!(followed.state, DraftState::Conflict);
         followed.save();
         assert_eq!(fs::read_to_string(&renamed).unwrap(), edited_text);
@@ -3456,7 +3456,7 @@ mod tests {
         );
         fs::write(&renamed, &moved_text).unwrap();
         discarded.undo_dropped();
-        assert_eq!(discarded.body, "My words\n");
+        assert_eq!(discarded.body.as_str(), "My words\n");
         assert_eq!(discarded.dropped, None);
         assert!(!note.path.exists());
         assert_eq!(fs::read_to_string(&renamed).unwrap(), moved_text);
@@ -3502,11 +3502,11 @@ mod tests {
         fs::write(&note.path, &outside).unwrap();
         draft.follow_disk();
         assert!(draft.body.contains("Elsewhere"));
-        let _ = draft.body.replace("Mine".into());
+        let _ = draft.body.replace("Mine");
         draft.edited();
         fs::write(&note.path, "---\nsession_id: x\n---\nAgain").unwrap();
         draft.follow_disk();
-        assert_eq!(draft.body, "Mine");
+        assert_eq!(draft.body.as_str(), "Mine");
     }
 
     #[test]

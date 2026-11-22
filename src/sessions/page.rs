@@ -3366,7 +3366,7 @@ impl Sessions {
                     ))
                 }
                 Some(mut current) => {
-                    current.body = write.before.body.clone();
+                    current.body = write.before.body.as_str().to_owned();
                     current.edited();
                     current.save();
                     // A save that did not finish says why in the draft's state.
@@ -7875,7 +7875,7 @@ impl Sessions {
                     let body = self
                         .template_draft
                         .take()
-                        .map_or_else(|| template.body.clone(), |draft| draft.body.into_string());
+                        .map_or_else(|| template.body.as_str().to_owned(), |draft| draft.body.into_string());
                     self.deleted_templates.record(kept::DeletedTemplate {
                         page: kept::Page {
                             root: self.folder.clone().unwrap_or_default(),
@@ -9079,14 +9079,14 @@ mod tests {
         };
         sessions.rename_links("Ash Pack", "Cinder Pack");
         assert_eq!(
-            sessions.draft.as_ref().unwrap().body,
+            sessions.draft.as_ref().unwrap().body.as_str(),
             "[[Ash Pack#Members]]\n"
         );
         assert!(sessions.rename_problem.is_some());
         fs::remove_file(dir.path().join("Ash Pack.md")).unwrap();
         sessions.rename_links("Ash Pack", "Cinder Pack");
         assert_eq!(
-            sessions.draft.as_ref().unwrap().body,
+            sessions.draft.as_ref().unwrap().body.as_str(),
             "[[Cinder Pack#Members]]\n"
         );
     }
