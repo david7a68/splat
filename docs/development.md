@@ -43,6 +43,16 @@ get equivalent inputs and behavior, including metadata they use. File extensions
 do not tell you the scope. For example, the tracker tests load
 `docs/design/world-examples/heralds-tournament.md` as a fixture.
 
+### Tests that draw a page
+
+Build an `egui_kittest` harness with `design::test_harness` (`themed_state`, `themed_ui_state`,
+`themed`, `themed_ui`). Its first frame installs the app's theme, so the page never draws at
+egui's default sizes; a test that calls `theme::install(&harness.ctx)` after the builder drew
+measures a page's one-time results (an open jump, a first fit) at the wrong sizes (issue #810).
+The design lint counts those calls per file (`late-theme`), and the count can only shrink.
+`scripts/late_theme.py` moves the standard cases: by default it prints a diff and the cases it
+leaves for a hand edit (`MANUAL`); `--write` applies it.
+
 ## Build layout
 
 | Path | Contents |

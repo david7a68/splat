@@ -7814,6 +7814,7 @@ mod tests {
 
     #[test]
     fn iter5_c_timeline_fight_resumes_by_run_id_without_a_planned_source() {
+        use crate::design::test_harness::Themed as _;
         use crate::encounter_run::{SavedRunInfo, Standing};
         use egui_kittest::kittest::Queryable;
         let session = Uuid::new_v4();
@@ -7845,7 +7846,7 @@ mod tests {
         let no_runs = crate::design::memo::Revised::new(()).revision();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH, 640.0))
-            .build_state(
+            .themed_state(
                 |ctx,
                  (page, book, runs, open): &mut (
                     Sessions,
@@ -7878,7 +7879,6 @@ mod tests {
                 },
                 (page, book, vec![other, saved.clone()], None),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Resume: Bridge Ambush").click();
         harness.run_steps(2);
@@ -7910,13 +7910,13 @@ mod tests {
 
     #[test]
     fn iter3_c_closed_plan_rest_shows_not_at_full() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::builder().build(|ctx| {
+        let mut harness = egui_kittest::Harness::builder().themed(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 plan_event_summary(ui, "Old mill", Some(false), None);
             });
         });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label(&format!(
             "Old\u{a0}mill ·\u{a0}{}\u{a0}Not\u{a0}at\u{a0}full",
@@ -8425,6 +8425,7 @@ mod tests {
 
     #[test]
     fn long_rest_added_on_plan_restores_and_undo_removes_its_ruling() {
+        use crate::design::test_harness::Themed as _;
         timeline::page::check_long_rest_add(&PLAN_KINDS);
         // Early review F1 of PR 444 (ruling L9): the Add result of a long rest names the fights
         // that keep their saved HP. Its kept line follows the saved runs' facts by their own
@@ -8457,7 +8458,7 @@ mod tests {
         type State = (Sessions, Book, Revised<Vec<SavedRunInfo>>);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH, 640.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book, runs): &mut State| {
                     let mut group = |_: &mut egui::Ui| {};
                     let plan = Plan {
@@ -8485,7 +8486,6 @@ mod tests {
                 },
                 (page, book, Revised::new(vec![saved.clone()])),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Add Long rest").click();
         harness.run_steps(3);
@@ -8709,14 +8709,14 @@ mod tests {
 
     #[test]
     fn i19_p5_group_summary_wraps_before_it_shortens() {
+        use crate::design::test_harness::Themed as _;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH / 2.0, 200.0))
-            .build_state(|ctx, rect| {
+            .themed_state(|ctx, rect| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     *rect = ui.scope(|ui| plan_group_summary(ui, "Rivals · 3 members · XP 600 · Changed · 1 × Ember Cultist · 2 × Goblin Warrior", 3)).response.rect;
                 });
             }, egui::Rect::NOTHING);
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let rect = harness.state();
         assert!(rect.height() > Type::Small.line(), "{rect:?}");
@@ -8821,6 +8821,7 @@ mod tests {
     /// words alone, and ends at one that changes them.
     #[test]
     fn scenes_are_note_acts_with_their_own_undo() {
+        use crate::design::test_harness::Themed as _;
         use crate::sessions::{NewNote, create_note, plan_lines};
         use egui_kittest::kittest::Queryable;
         // Review round 1 (REVIEW-291-scene-state-height): a scene that links a rule note has no
@@ -8830,7 +8831,7 @@ mod tests {
         let no_runs = crate::design::memo::Revised::new(()).revision();
         let mut row = egui_kittest::Harness::builder()
             .with_size(egui::vec2(400.0, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, state: &mut (bool, f32)| {
                     let mut group = |_: &mut egui::Ui| {};
                     let plan = Plan {
@@ -8876,7 +8877,6 @@ mod tests {
                 },
                 (false, 0.0),
             );
-        design::theme::install(&row.ctx);
         row.run_steps(3);
         let found = row.state().1;
         row.state_mut().0 = true;
@@ -8912,7 +8912,7 @@ mod tests {
         let no_runs = crate::design::memo::Revised::new(()).revision();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book): &mut (Sessions, Book)| {
                     let mut group = |_: &mut egui::Ui| {};
                     let plan = Plan {
@@ -8942,7 +8942,6 @@ mod tests {
                 },
                 (page, Book::default()),
             );
-        design::theme::install(&harness.ctx);
         // The plan model is built when the note changes, never on a quiet frame.
         let model = crate::test_support::CachedWork::start(
             "Scene model",
@@ -9579,9 +9578,10 @@ mod tests {
     /// its line breaks, laid out as `wrapped_link` lays it out. Two lines are not enough.
     #[test]
     fn the_rewards_fit_keeps_each_title_as_it_is() {
+        use crate::design::test_harness::Themed as _;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(500.0, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, faults: &mut Vec<String>| {
                     faults.clear();
                     egui::CentralPanel::default().show(ctx, |ui| {
@@ -9650,7 +9650,6 @@ mod tests {
                 },
                 Vec::<String>::new(),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(
             harness.state().is_empty(),
@@ -9663,6 +9662,7 @@ mod tests {
     /// path, with its own Undo kept by the note and the fight.
     #[test]
     fn rewards_are_a_note_act_with_their_own_undo() {
+        use crate::design::test_harness::Themed as _;
         use crate::sessions::{NewNote, create_note};
         use egui_kittest::kittest::Queryable;
         use splat_campaign::encounter_run::Participant;
@@ -9774,7 +9774,7 @@ mod tests {
         let no_runs = crate::design::memo::Revised::new(()).revision();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book): &mut (Sessions, Book)| {
                     let mut group = |_: &mut egui::Ui| {};
                     let plan = Plan {
@@ -9801,7 +9801,6 @@ mod tests {
                 },
                 (page, book),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         // The footer's scroll part is named by its messages too, so a message can match twice.
         let shown = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
