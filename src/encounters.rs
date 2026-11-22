@@ -13533,6 +13533,59 @@ mod tests {
             None,
             "the save settles it, and the answer ends"
         );
+        // Review of PR 733 (P2): with the content index the app gives the run, the answer says
+        // the encounter was deleted while no encounter has its id. A change to another
+        // encounter keeps it; the encounter restored ends it, on the app's every-frame check
+        // with the rule's key unchanged.
+        let fight = uuid::Uuid::new_v4();
+        let note = |id: uuid::Uuid, name: &str| {
+            format!(
+                "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\n---\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n"
+            )
+        };
+        let index = |campaign: &crate::persistence::Campaign| {
+            Some(std::sync::Arc::new(
+                crate::lookup::ContentIndex::load(&[], Some(campaign)).unwrap(),
+            ))
+        };
+        editor.continue_saved_run(&path, &campaign);
+        let run = editor.run_mut().unwrap();
+        run.came_from(fight);
+        run.content = index(&campaign);
+        answer(&mut editor, &mut timeline);
+        let words = |editor: &Encounters| {
+            editor
+                .run()
+                .unwrap()
+                .unend_refused
+                .as_ref()
+                .map(|(_, _, refusal)| refusal.words().as_str().to_owned())
+        };
+        assert!(
+            words(&editor).is_some_and(|words| words.contains("its encounter was deleted")),
+            "{:?}",
+            words(&editor)
+        );
+        editor.follow_continue_rule(&timeline);
+        fs::write(
+            dir.path().join("Other fight.md"),
+            note(uuid::Uuid::new_v4(), "Other fight"),
+        )
+        .unwrap();
+        editor.run_mut().unwrap().content = index(&campaign);
+        editor.follow_continue_rule(&timeline);
+        assert!(
+            words(&editor).is_some_and(|words| words.contains("its encounter was deleted")),
+            "a change to another encounter keeps the answer"
+        );
+        fs::write(dir.path().join("Ambush.md"), note(fight, "Ambush")).unwrap();
+        editor.run_mut().unwrap().content = index(&campaign);
+        editor.follow_continue_rule(&timeline);
+        assert_eq!(
+            words(&editor),
+            None,
+            "the restored encounter ends the deleted answer, with the rule's key unchanged"
+        );
         // On the Timeline as the fight that was played last, it goes on, on the round it
         // ended in.
         let fact = editor.run().unwrap().timeline_fact();
