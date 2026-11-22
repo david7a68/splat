@@ -570,6 +570,11 @@ pub enum Cause {
     CreatureDeleted(Rows),
     /// `Splat cannot read the file of Cinder Wolf.` An error (R41: unreadable).
     CreatureUnreadable(Name),
+    /// `Two files claim the creature Cinder Wolf.` A warning, as Library shows it (issue #530).
+    CreatureDuplicate(Name),
+    /// `The package Ashen Marches of Cinder Wolf was not found.` A warning (R41: missing): the
+    /// creature's file may still exist (issue #530).
+    PackageNotFound { creature: Name, package: Name },
     /// `Hobb’s note changed on disk or waits for a choice.` A warning.
     NeedsChoice(Name),
     /// `More than one note can answer to Hobb.` A warning.
@@ -618,6 +623,8 @@ pub enum Step {
     ReplaceRows(Rows),
     /// `Fix Cinder Wolf in Library`
     FixInLibrary(Name),
+    /// `Add the Ashen Marches package in Campaign → Packages`
+    AddPackage(Name),
     /// `Remove Wandering roll`
     Remove(Name),
     /// `Resolve Hobb’s note`
@@ -652,6 +659,12 @@ impl Step {
             }
             Self::ReplaceRows(rows) => format!("Choose replacements for {}", rows.words()),
             Self::FixInLibrary(name) => format!("Fix {} in Library", name.as_str()),
+            Self::AddPackage(package) => {
+                format!(
+                    "Add the {} package in Campaign → Packages",
+                    package.as_str()
+                )
+            }
             Self::Remove(name) => format!("Remove {}", name.as_str()),
             Self::Resolve(name) => format!("Resolve {}", name.as_str()),
             Self::ChooseGroups => "Choose the group in each note".to_owned(),
@@ -781,6 +794,8 @@ impl Refusal {
             | Cause::LaterPlayed
             | Cause::NotOnTimeline
             | Cause::CreatureDeleted(_)
+            | Cause::CreatureDuplicate(_)
+            | Cause::PackageNotFound { .. }
             | Cause::NeedsChoice(_)
             | Cause::Ambiguous(_)
             | Cause::EditedSince(_)
@@ -937,6 +952,14 @@ impl Refusal {
             Cause::CreatureUnreadable(creature) => {
                 crate::sentence!("Splat cannot read the file of {}.", creature.as_str())
             }
+            Cause::CreatureDuplicate(creature) => {
+                crate::sentence!("Two files claim the creature {}.", creature.as_str())
+            }
+            Cause::PackageNotFound { creature, package } => crate::sentence!(
+                "The package {} of {} was not found.",
+                package.as_str(),
+                creature.as_str()
+            ),
             Cause::NeedsChoice(note) => {
                 crate::sentence!("{} changed on disk or waits for a choice.", note.as_str())
             }
@@ -1046,6 +1069,35 @@ mod tests {
                 "No fight started from Shrine of Cinders. Splat cannot read the file of Cinder \
                  Wolf. Fix Cinder Wolf in Library first.",
                 Tone::Error,
+            ),
+            // Issue #530: two files claim the creature (a warning), and a package that is not
+            // loaded (a warning, never "deleted").
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::CreatureDuplicate(name("Cinder Wolf")),
+                    Recovery::First(Step::FixInLibrary(name("Cinder Wolf"))),
+                ),
+                "No fight started from Shrine of Cinders. Two files claim the creature Cinder \
+                 Wolf. Fix Cinder Wolf in Library first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::PackageNotFound {
+                        creature: name("Cinder Wolf"),
+                        package: name("Ashen Marches"),
+                    },
+                    Recovery::First(Step::AddPackage(name("Ashen Marches"))),
+                ),
+                "No fight started from Shrine of Cinders. The package Ashen Marches of Cinder \
+                 Wolf was not found. Add the Ashen Marches package in Campaign → Packages first.",
+                Tone::Warning,
             ),
             // Continue fight (R0).
             (

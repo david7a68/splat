@@ -55,11 +55,20 @@ struct Invalid {
 }
 
 /// Why roster rows have no creature, by the rows the roster names (`Draft::deleted_rows`,
-/// `Draft::unreadable_rows`).
+/// `Draft::unreadable_rows`), or by the creature's own name and package where the next step
+/// is about the creature, not the row (issue #530).
 #[derive(Clone, Debug, PartialEq)]
 enum RowCause {
     Deleted(Vec<String>),
-    Unreadable(Vec<String>),
+    /// The roster rows, and the Library name of each row's unreadable file, in roster order.
+    Unreadable(Vec<String>, Vec<String>),
+    /// Two files claim the creature: its own name.
+    Duplicate(String),
+    /// The creature's package is not loaded: the creature (as the row names it) and the package.
+    PackageMissing {
+        creature: String,
+        package: String,
+    },
 }
 
 impl Invalid {
@@ -81,8 +90,10 @@ impl Invalid {
                     Recovery::First(Step::ReplaceRows(rows)),
                 ))
             }
-            RowCause::Unreadable(names) => {
-                let mut creatures: Vec<&String> = names.iter().collect();
+            RowCause::Unreadable(_, files) => {
+                // Issue #530: the next step names the Library entry (the file), not a row's
+                // changed name.
+                let mut creatures: Vec<&String> = files.iter().collect();
                 creatures.sort();
                 creatures.dedup();
                 let [creature] = creatures[..] else {
@@ -94,6 +105,19 @@ impl Invalid {
                     Recovery::First(Step::FixInLibrary(Name::new(creature.as_str())?)),
                 ))
             }
+            RowCause::Duplicate(creature) => Some(Refusal::new(
+                act,
+                Cause::CreatureDuplicate(Name::new(creature.as_str())?),
+                Recovery::First(Step::FixInLibrary(Name::new(creature.as_str())?)),
+            )),
+            RowCause::PackageMissing { creature, package } => Some(Refusal::new(
+                act,
+                Cause::PackageNotFound {
+                    creature: Name::new(creature.as_str())?,
+                    package: Name::new(package.as_str())?,
+                },
+                Recovery::First(Step::AddPackage(Name::new(package.as_str())?)),
+            )),
         }
     }
 
@@ -1248,12 +1272,28 @@ impl Draft {
                     let id = snapshot.catalogue.resolve_ref(reference).map_err(|_| {
                         // The kind of fault sets the tone, here where the message is made.
                         let unreadable = snapshot.catalogue.unreadable_ref(reference);
+                        // Issue #530: two files that claim the creature, and a package that is
+                        // not loaded, are their own causes, never "unreadable" or "deleted".
+                        let package = snapshot.catalogue.missing_package_of(reference);
                         Invalid {
                             missing: false,
-                            rows: Some(if unreadable.is_some() {
-                                RowCause::Unreadable(self.unreadable_rows(snapshot))
-                            } else {
-                                RowCause::Deleted(self.deleted_rows(snapshot))
+                            rows: Some(match (unreadable, package) {
+                                (Some(note), _) if note.duplicate => RowCause::Duplicate(
+                                    roster_base_name(slot, None, &snapshot.known_creature_names),
+                                ),
+                                (Some(_), _) => RowCause::Unreadable(
+                                    self.unreadable_rows(snapshot),
+                                    self.unreadable_files(snapshot),
+                                ),
+                                (None, Some(package)) => RowCause::PackageMissing {
+                                    creature: roster_base_name(
+                                        slot,
+                                        None,
+                                        &snapshot.known_creature_names,
+                                    ),
+                                    package,
+                                },
+                                (None, None) => RowCause::Deleted(self.deleted_rows(snapshot)),
                             }),
                             tone: missing_creature_tone(unreadable),
                             // G125: each row says its deleted entry (`MISSING_CREATURE`), so the
@@ -1325,6 +1365,22 @@ impl Draft {
                 })
             })
             .map(|slot| roster_name(slot, None, &snapshot.known_creature_names))
+            .collect()
+    }
+    /// The creature's own name (its Library entry's) for each roster row whose creature's file
+    /// cannot be read, in roster order (issue #530: `Fix … in Library` names the entry, not a
+    /// row's changed name).
+    fn unreadable_files(&self, snapshot: &Snapshot) -> Vec<String> {
+        self.setup
+            .roster
+            .iter()
+            .filter(|slot| {
+                slot.creature.as_ref().is_some_and(|reference| {
+                    snapshot.catalogue.resolve_ref(reference).is_err()
+                        && snapshot.catalogue.unreadable_ref(reference).is_some()
+                })
+            })
+            .map(|slot| roster_base_name(slot, None, &snapshot.known_creature_names))
             .collect()
     }
     /// A change to a stat must leave it valid for this slot's creature and starting state.
@@ -13097,6 +13153,24 @@ mod tests {
         assert!(invalid.tone == missing_creature_tone(unread));
         assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         assert_eq!(missing_creature_mark(unread).0, icons::ERROR);
+        // Issue #530 (2): a row renamed "Guard" keeps the next step on its Library entry. The
+        // page keeps the creature's known name across reads, as for a deleted one.
+        let mut snapshot = snapshot;
+        snapshot.keep_edited_settings(&old);
+        let mut draft = draft;
+        draft.setup.roster[0]
+            .overrides
+            .insert(Value::from("name"), Value::from("Guard"));
+        let renamed = draft.validate(&snapshot).unwrap_err();
+        let refusal = renamed
+            .start_refusal("Bridge Ambush")
+            .expect("a typed answer");
+        assert_eq!(
+            refusal.words().as_str(),
+            "No fight started from Bridge Ambush. Splat cannot read the file of Cinder Wolf. Fix \
+             Cinder Wolf in Library first.",
+            "#530: the next step names the Library entry, not the row's name"
+        );
         encounters.snapshot = Some(snapshot);
         encounters.draft = Some(draft);
         encounters.error = Some(invalid.text.clone());
@@ -13106,7 +13180,8 @@ mod tests {
         // in the message and in the row. The fight stays blocked until the identity is clear.
         fs::write(&file, &original).unwrap();
         fs::write(dir.path().join("Cinder Wolf copy.md"), &original).unwrap();
-        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut snapshot = Snapshot::load(&active, &[]).unwrap();
+        snapshot.keep_edited_settings(&old);
         let draft = encounters.draft.as_ref().unwrap();
         let invalid = draft.validate(&snapshot).unwrap_err();
         let duplicate = snapshot
@@ -13123,6 +13198,20 @@ mod tests {
         assert!(invalid.tone == missing_creature_tone(duplicate));
         assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         assert_eq!(missing_creature_mark(duplicate).0, icons::WARN);
+        // Issue #530 (1): Start's answer says the duplicate in its own warning, not as a file
+        // that cannot be read (an error).
+        let refusal = invalid
+            .start_refusal("Bridge Ambush")
+            .expect("a typed answer");
+        assert_eq!(
+            (refusal.words().as_str(), refusal.tone()),
+            (
+                "No fight started from Bridge Ambush. Two files claim the creature Cinder Wolf. Fix \
+                 Cinder Wolf in Library first.",
+                Tone::Warning
+            ),
+            "#530: two files that claim the creature"
+        );
         encounters.snapshot = Some(snapshot);
         encounters.error = Some(invalid.text.clone());
         encounters.validation_error = Some(invalid);

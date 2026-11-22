@@ -1511,7 +1511,11 @@ stored field name. `Done` in a roster row's changes brings that row whole into v
 scroll (`design::reveal`, owned by the draft). A Start fight that such rows refuse is answered with a `Refusal` (ruling M7) in the
 editor's footer, in place of the check's sentence: `No fight started from Bridge Ambush. The creature of the 2 Cinder
 Wolf rows was deleted. Choose replacements for the 2 Cinder Wolf rows first.` (an unreadable creature's file:
-`… Splat cannot read the file of Cinder Wolf. Fix Cinder Wolf in Library first.`). It shows while the draft is the one
+`… Splat cannot read the file of Cinder Wolf. Fix Cinder Wolf in Library first.`, which names the creature's Library
+entry, not a row's changed name; two files that claim the creature, a warning: `… Two files claim the creature Cinder
+Wolf. Fix Cinder Wolf in Library first.`; a creature whose package is not loaded, a warning, never "deleted": `… The
+package Ashen Marches of Cinder Wolf was not found. Add the Ashen Marches package in Campaign → Packages first.`;
+issue #530). It shows while the draft is the one
 Start checked and the check holds: an edit hides it, an Undo back to that draft shows it again, and a Save, another
 Start, a reload or another campaign ends it. Creatures of several unreadable files keep the check's sentence. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
 on and retains names and starting values, with one Undo. In a group's editor, Use says `Replaced Unknown creature
