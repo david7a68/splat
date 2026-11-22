@@ -544,6 +544,8 @@ impl FieldId {
         guard.after(ui, text.as_str(), &output.response);
         record_field(ui, &output.response);
         Editor {
+            frame: output.response.rect,
+            view: output.text_clip_rect,
             response: output.response,
             galley: output.galley,
             galley_pos: output.galley_pos,
@@ -664,6 +666,12 @@ pub struct Editor {
     pub text_clip_rect: Rect,
     /// The cursor or selection, while the field has one.
     pub cursor_range: Option<egui::text::CCursorRange>,
+    /// The editor's outside frame: the field itself here; the fixed frame of an editor viewport
+    /// (`pane::EditorRegion::editor`, `pane::editor_view`), whose text scrolls inside it.
+    pub frame: Rect,
+    /// The part of the text in view: the text's own rect here; the viewport's inner scroll view
+    /// for an editor viewport.
+    pub view: Rect,
 }
 
 /// What the bound text was when the field last drew with focus: its length and a hash.
