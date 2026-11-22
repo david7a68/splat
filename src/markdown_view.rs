@@ -202,7 +202,8 @@ fn show_with_density(
 ) {
     let from = reader_document(ui);
     let mut ops = prepare(ui, markdown, dense, row, from);
-    draw(ui, &mut ops, from, short_links, row.is_some());
+    let jump = Maps::of(&ops).wanted(ui.ctx());
+    draw(ui, &mut ops, from, short_links, row.is_some(), jump, None);
 }
 
 /// The link index a reader resolves its links in, when its host gave one.
@@ -252,10 +253,67 @@ impl PreparedKey {
     }
 }
 
-/// A document's prepared blocks, for their key.
+/// A document's prepared blocks, for their key, with its maps (layout PR 9b-R1b): its headings,
+/// its link controls, and where each block stood in the last draw.
 struct Kept {
     key: PreparedKey,
     ops: Vec<Op>,
+    maps: Maps,
+}
+
+/// A prepared document's maps, complete whatever is in view (note 9b §5): each heading's words
+/// and block; each link control's block, place in it and destination (its id is its reader's,
+/// its block's and its place's: [`block_id`]); and each block's top below the reader's top in
+/// the last draw (empty before the first).
+#[derive(Default)]
+struct Maps {
+    headings: Vec<(String, usize)>,
+    controls: Vec<Control>,
+    offsets: Vec<f32>,
+}
+
+/// One link control of a prepared document.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Control {
+    pub(crate) block: usize,
+    pub(crate) place: usize,
+    pub(crate) destination: LinkTarget,
+}
+
+/// A kept document's heading map (each heading's words and block) and its control map.
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) type DocumentMaps = (Vec<(String, usize)>, Vec<Control>);
+
+impl Maps {
+    /// The maps of prepared blocks: their headings and their link controls.
+    fn of(ops: &[Op]) -> Self {
+        let mut maps = Self::default();
+        for (block, op) in ops.iter().enumerate() {
+            match op {
+                Op::Jump(words) => maps.headings.push((words.trim().to_owned(), block)),
+                Op::Paragraph(paragraph) => {
+                    for (place, (_, destination)) in paragraph.links.iter().enumerate() {
+                        maps.controls.push(Control {
+                            block,
+                            place,
+                            destination: destination.clone(),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+        maps
+    }
+
+    /// The block of the heading a typed jump asks for, if this document has it.
+    fn wanted(&self, ctx: &egui::Context) -> Option<usize> {
+        let wanted = ctx.data(|data| data.get_temp::<String>(heading_id()))?;
+        self.headings
+            .iter()
+            .find(|(words, _)| wanted.eq_ignore_ascii_case(words))
+            .map(|(_, block)| *block)
+    }
 }
 
 /// Each reader's kept blocks, with the frame it last drew them in. A reader not drawn in the
@@ -288,10 +346,32 @@ fn show_kept(ui: &mut egui::Ui, source: ReaderSource<'_>) {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if kept.as_ref().is_none_or(|kept| kept.key != key) {
         let ops = prepare(ui, source.text, false, None, from);
-        *kept = Some(Kept { key, ops });
+        let maps = Maps::of(&ops);
+        *kept = Some(Kept { key, ops, maps });
     }
     if let Some(kept) = kept.as_mut() {
-        draw(ui, &mut kept.ops, from, ShortLinks::Prose, false);
+        // A typed jump resolves against the heading map and the heading's offset from the last
+        // draw, before any block is drawn (note 9b §5: before any clipping); the first draw
+        // after a preparation has no offsets yet, so the heading's block jumps as it draws.
+        let mut jump = kept.maps.wanted(ui.ctx());
+        if let Some(offset) = jump.and_then(|block| kept.maps.offsets.get(block)) {
+            design::reveal::jump(
+                ui,
+                ui.cursor().top() + offset,
+                design::reveal::JumpTo::LinkedHeading,
+            );
+            want_heading(ui.ctx(), None);
+            jump = None;
+        }
+        draw(
+            ui,
+            &mut kept.ops,
+            from,
+            ShortLinks::Prose,
+            false,
+            jump,
+            Some(&mut kept.maps.offsets),
+        );
     }
 }
 
@@ -323,6 +403,30 @@ pub fn kept_galleys(ctx: &egui::Context) -> Vec<Arc<egui::Galley>> {
         }
     }
     galleys
+}
+
+/// The control map and the heading map of every document a reader keeps prepared (layout PR
+/// 9b-R1b's checks).
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) fn kept_maps(ctx: &egui::Context) -> Vec<DocumentMaps> {
+    let readers = ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<KeptReaders>(egui::Id::new("markdown_kept_readers"))
+            .clone()
+    });
+    let readers = readers
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    readers
+        .values()
+        .filter_map(|(_, kept)| {
+            let kept = kept
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            kept.as_ref()
+                .map(|kept| (kept.maps.headings.clone(), kept.maps.controls.clone()))
+        })
+        .collect()
 }
 
 /// One block of prepared Markdown, as [`draw`] draws it.
@@ -394,26 +498,38 @@ struct Quotes {
 
 /// Draw prepared blocks. A paragraph's link ids come from the reader and the block's place,
 /// never from its words: stable while the document's preparation stands.
+/// `jump` is the block of the heading a typed jump lands on as it draws; `offsets`, a kept
+/// document's map of each block's top below the reader's top, written as the blocks draw.
 fn draw(
     ui: &mut egui::Ui,
     ops: &mut [Op],
     from: Option<uuid::Uuid>,
     short_links: ShortLinks,
     row: bool,
+    jump: Option<usize>,
+    mut offsets: Option<&mut Vec<f32>>,
 ) {
     let reader = egui::Id::new(("markdown_reader", from));
     let mut quotes = Quotes::default();
+    let top = ui.cursor().top();
+    if let Some(offsets) = offsets.as_mut() {
+        offsets.resize(ops.len(), 0.0);
+    }
     for (block, op) in ops.iter_mut().enumerate() {
+        if let Some(offsets) = offsets.as_mut() {
+            offsets[block] = ui.cursor().top() - top;
+        }
         match op {
             Op::Gap(gap) => design::gap(ui, *gap),
             Op::Rule => design::rule(ui),
-            Op::Jump(words) => {
-                if wanted_heading(ui.ctx(), words) {
+            Op::Jump(_) => {
+                if jump == Some(block) {
                     design::reveal::jump(
                         ui,
                         ui.cursor().top(),
                         design::reveal::JumpTo::LinkedHeading,
                     );
+                    want_heading(ui.ctx(), None);
                 }
             }
             Op::Figures(figures, caption) => {
@@ -3300,6 +3416,81 @@ mod tests {
              {:?}",
             link_names(&harness)
         );
+    }
+
+    /// Layout PR 9b-R1b: a kept document's maps are complete (every heading, every link control
+    /// with its block and place), and a typed jump to a heading far below the view resolves from
+    /// the heading map: first as the heading's block draws, then from its kept offset before
+    /// any block draws.
+    #[test]
+    fn a_typed_jump_resolves_from_the_heading_map() {
+        let text: &'static str = Box::leak(
+            format!(
+                "{}## The ford\n\nAsk [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar).\n\n{}",
+                "A line of the watch.\n\n".repeat(40),
+                "A line after the ford.\n\n".repeat(20)
+            )
+            .into_boxed_str(),
+        );
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(480.0, 320.0))
+            .build_ui(move |ui| {
+                design::layout::ScrollColumn::new("reader")
+                    .hosts_reveals()
+                    .show(ui, |ui| {
+                        show_document(
+                            ui,
+                            ReaderSource {
+                                doc: DocumentId::Entry(uuid::Uuid::from_u128(9)),
+                                revision: 1,
+                                text,
+                            },
+                        );
+                    });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let maps = kept_maps(&harness.ctx);
+        let controls: Vec<_> = maps.iter().flat_map(|(_, controls)| controls).collect();
+        assert!(
+            maps.len() == 1
+                && maps[0].0.iter().any(|(words, _)| words == "The ford")
+                && controls.len() == 2
+                && controls[0].block == controls[1].block
+                && (controls[0].place, controls[1].place) == (0, 1)
+                && controls[0].destination == LinkTarget::Note("Wren".into())
+                && controls.len() == link_names(&harness).len(),
+            "9b-R1b-maps: the heading and both link controls, as drawn ({:?}): {maps:?}",
+            link_names(&harness)
+        );
+        let heading = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::Label, "The ford")
+                .rect()
+                .top()
+        };
+        let below = heading(&harness);
+        for (round, case) in ["as its block draws", "from its kept offset"]
+            .iter()
+            .enumerate()
+        {
+            if round == 1 {
+                // Away from the heading again, so the second jump has to move the column.
+                harness.event(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, 400.0),
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(10);
+            }
+            want_heading(&harness.ctx, Some("The ford".into()));
+            harness.run_steps(6);
+            let at = heading(&harness);
+            assert!(
+                below > 320.0 && (0.0..=design::XL).contains(&at),
+                "9b-R1b-jump ({case}): the heading from {below} to the view's top, at {at}"
+            );
+        }
     }
 
     #[test]
