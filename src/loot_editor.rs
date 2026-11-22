@@ -123,20 +123,21 @@ enum Pick {
 }
 
 /// One creature's loot, as its Changes keep it: one line, parts separated by `;`. The rows
-/// keep what the DM types, spaces and empty rows included, until it changes the loot.
+/// keep what the DM types, spaces and empty rows included, until it changes the loot. `owner` is
+/// the Changes form's row (its typed key, issue #559).
 pub fn show_cell(
     ui: &mut egui::Ui,
-    id: impl std::hash::Hash,
+    owner: impl design::RowKey,
     name: &str,
     loot: &mut Option<String>,
 ) -> bool {
-    let id = egui::Id::new(("loot_cell", id));
+    let id = egui::Id::new(("loot_cell", &owner));
     let parts = splat::content::loot::parts(loot.as_deref().unwrap_or(""));
     let mut lines: Vec<String> = ui
         .data(|data| data.get_temp::<Vec<String>>(id))
         .filter(|kept| splat::content::loot::parts(&kept.join(";")) == parts)
         .unwrap_or_else(|| parts.clone());
-    let changed = show(ui, id, name, &mut lines, true);
+    let changed = show(ui, owner, name, &mut lines, true);
     if changed {
         let joined = splat::content::loot::parts(&lines.join(";")).join("; ");
         *loot = (!joined.is_empty()).then_some(joined);
@@ -145,17 +146,18 @@ pub fn show_cell(
     changed
 }
 
-/// The list and its add field. `id` keeps one list's typing apart from another's. `one_cell`
+/// The list and its add field. `owner` (an encounter draft's id, a creature's Changes row) keys
+/// the list's fields, so one list's typing stays apart from another's (issue #559). `one_cell`
 /// is for a creature, whose loot is one table cell, so a line cannot hold `;`. Returns whether
 /// the lines changed.
 pub fn show(
     ui: &mut egui::Ui,
-    id: impl std::hash::Hash,
+    owner: impl design::RowKey,
     name: &str,
     lines: &mut Vec<String>,
     one_cell: bool,
 ) -> bool {
-    let id = egui::Id::new(("loot_editor", id));
+    let id = egui::Id::new(("loot_editor", &owner));
     let mut state: State = ui.data(|data| data.get_temp(id)).unwrap_or_default();
     let sources = sources(ui.ctx());
     let before = lines.clone();
@@ -163,7 +165,7 @@ pub fn show(
     for at in 0..lines.len() {
         if let Some(gone) = line_row(
             ui,
-            id,
+            &owner,
             name,
             lines,
             at,
@@ -191,7 +193,7 @@ pub fn show(
     }
     add_row(
         ui,
-        id,
+        &owner,
         name,
         lines,
         &mut state,
@@ -206,6 +208,12 @@ const LOOT_LINE: design::FieldName = crate::field_id!("loot_line");
 /// The list's own add field (keys only).
 const LOOT_ADD: design::FieldName = crate::field_id!("loot_add");
 
+/// The add field of `owner`'s list, keyed by the owner itself (issue #564: by its whole key, not
+/// a 16-bit `Debug` text of an egui id, so two lists never share the field's text history).
+fn add_field(owner: impl design::RowKey) -> design::FieldId {
+    LOOT_ADD.of(owner)
+}
+
 /// One line. Returns its place when the DM removes it.
 #[allow(clippy::too_many_arguments)]
 #[allow(
@@ -214,7 +222,7 @@ const LOOT_ADD: design::FieldName = crate::field_id!("loot_add");
 )]
 fn line_row(
     ui: &mut egui::Ui,
-    owner: egui::Id,
+    owner: &impl design::RowKey,
     name: &str,
     lines: &mut [String],
     at: usize,
@@ -317,7 +325,7 @@ fn line_row(
                 // The field belongs to this list (its caller's id) and, by its label, to its line.
                 let response = design::line_field(
                     ui,
-                    LOOT_LINE.of(design::TextKey::from_data(format!("{owner:?}"))),
+                    LOOT_LINE.of(owner),
                     &format!("{name} loot line {}", at + 1),
                     &mut words,
                     "What the party finds",
@@ -414,7 +422,7 @@ const NO_TABLES: &str =
 )]
 fn add_row(
     ui: &mut egui::Ui,
-    owner: egui::Id,
+    owner: &impl design::RowKey,
     name: &str,
     lines: &mut Vec<String>,
     state: &mut State,
@@ -423,9 +431,8 @@ fn add_row(
 ) {
     // The gap is the row's item spacing, so the menu ends at the column's right edge.
     let menu = design::menu_button_width(ui, ROLL_MENU) + ui.spacing().item_spacing.x;
-    // The list's own field (M0404), keyed by the list's owner (its caller's id), as its lines
-    // are (`line_row`).
-    let field = LOOT_ADD.of(design::TextKey::from_data(format!("{owner:?}")));
+    // The list's own field (M0404), keyed by the list's owner, as its lines are (`line_row`).
+    let field = add_field(owner);
     let label = format!("Add loot to {name}");
     let menu_name = format!("{ROLL_MENU} for {name}");
     let added = design::add_field(field, &label, "Type loot, or find an item or table")
@@ -624,12 +631,16 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(640.0, 400.0))
             .themed_state(
-                |ctx, (key, name, loot): &mut (&str, &str, Option<String>)| {
+                |ctx, (key, name, loot): &mut (uuid::Uuid, &str, Option<String>)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         show_cell(ui, *key, name, loot);
                     });
                 },
-                ("goblin", "Goblin", Some("Iron; Roll gems".to_owned())),
+                (
+                    uuid::Uuid::from_u128(1),
+                    "Goblin",
+                    Some("Iron; Roll gems".to_owned()),
+                ),
             );
         harness.run_steps(2);
         // M-U0.1 (M0401): the row menu's Remove is a design action, one `Read` control high as
@@ -679,7 +690,7 @@ mod tests {
             harness.key_press(egui::Key::Backspace);
         }
         harness.run_steps(1);
-        *harness.state_mut() = ("orc", "Orc", None);
+        *harness.state_mut() = (uuid::Uuid::from_u128(2), "Orc", None);
         harness.run_steps(2);
         let add = "Add loot to Orc";
         harness.get_by_label(add).click();
@@ -693,6 +704,21 @@ mod tests {
                 .value()
                 .is_none_or(|words| words.is_empty()),
             "m-r0-7-loot-owner: Ctrl+Z in the orc's field gave it the goblin's words"
+        );
+        // Issue #564: two owners whose egui ids print the same 16-bit `Debug` text (the old
+        // key) still have two add fields: the field is keyed by the whole owner.
+        let mut printed = std::collections::HashMap::new();
+        let (a, b) = (1_u128..)
+            .map(uuid::Uuid::from_u128)
+            .find_map(|owner| {
+                let text = format!("{:?}", egui::Id::new(("loot_editor", owner)));
+                printed.insert(text, owner).map(|before| (before, owner))
+            })
+            .expect("two owners print the same 16 bits");
+        assert_ne!(
+            add_field(a),
+            add_field(b),
+            "#564: {a} and {b} share a printed id, never a field"
         );
     }
 

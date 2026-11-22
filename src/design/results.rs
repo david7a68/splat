@@ -1161,14 +1161,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
-        // `line_row`'s lines are; the list has no typed owner yet.
-        (
-            "src/loot_editor.rs",
-            "add_row",
-            &[Ban::Extras(1), Ban::RowKey(1)],
-        ),
-        ("src/loot_editor.rs", "line_row", &[Ban::RowKey(1)]),
+        ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
         (
             "src/markdown_view.rs",
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
