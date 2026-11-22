@@ -1482,11 +1482,12 @@ mod tests {
     }
 
     fn harness(mut page: Page) -> egui_kittest::Harness<'static, Page> {
+        use crate::design::test_harness::Themed as _;
         // The page asks after the theme (its fonts) is installed.
         let ask = std::mem::take(&mut page.ask);
         let mut h = egui_kittest::Harness::builder()
             .with_size(egui::vec2(WIDTH, HEIGHT))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, page: &mut Page| {
                     if page.raw {
                         // A scroll area that is not a `ScrollColumn`.
@@ -1531,7 +1532,6 @@ mod tests {
                 },
                 page,
             );
-        super::super::theme::install(&h.ctx);
         h.step();
         h.state_mut().ask = ask;
         h
