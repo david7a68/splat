@@ -159,21 +159,6 @@ fn pressed(act: FooterAct) -> super::SessionAct {
     super::SessionAct::Plan(act)
 }
 
-/// A plan result that keeps the order its own act issued (an add, a deleted run, a scene, a
-/// removed group, rewards, a plan line). Staged: each kind moves into a `design::Results` store
-/// later; until then the act's own order places it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: plan results keep their own orders (`outcome_at`, design::results::STAGED_ALLOWS)"
-)]
-fn kept_at<A: 'static>(
-    messages: &mut Messages<'_, A>,
-    order: design::ResultOrder,
-    outcome: impl Into<KeptOutcome<A>>,
-) {
-    messages.outcome_at(order, outcome);
-}
-
 /// Words the plan builds as text from its data (event labels, rewards, a removal), or that come
 /// from a file or the system. The one place this file takes them as a sentence.
 #[allow(
@@ -2798,8 +2783,6 @@ struct RewardsDone {
     with_xp: bool,
     not_rolled: usize,
     unknown: u64,
-    /// When the act made it (`next_result_order`): the plan's footer lists results newest first.
-    order: design::ResultOrder,
     /// The fight's name as the act read it, so the footer searches no DM data each frame
     /// (review of PR 296, item 1).
     fight: String,
@@ -2837,6 +2820,9 @@ struct RewardsSeen {
 #[derive(Default)]
 pub(super) struct Rewards {
     done: BTreeMap<(Uuid, String), RewardsDone>,
+    /// Each result of `done` in the plan's store: its footer order (issued at the act, so the
+    /// footer lists results newest first) and its Undo's ticket.
+    marks: design::Results<RewardsOwner, RewardsMark>,
     /// What an act could not do: the note, the fight, the whole words (with the fight's name,
     /// read at the act), the draft's revision it met, and its tone (R41: a run folder's cause
     /// keeps its own). A change of the note ends it.
@@ -2845,6 +2831,39 @@ pub(super) struct Rewards {
     /// Whether `Add rewards` fits on a played row: by the title, its lead icon, the row's width
     /// and the action's. Worked out when one of them changes, not each frame.
     fit: BTreeMap<(String, &'static str, i64, i64), RewardsAt>,
+}
+
+/// Whose rewards result it is: the note the act wrote in, and the played fight's event. A note's
+/// ID is its own in every campaign.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RewardsOwner {
+    note: Uuid,
+    event: String,
+}
+
+impl design::results::Owner for RewardsOwner {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+/// A rewards result in the plan's store: its owner only. Its words and its Undo come from
+/// `Rewards::done`, which ends it.
+struct RewardsMark(RewardsOwner);
+
+impl design::results::Kept for RewardsMark {
+    type Owner = RewardsOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        // Its block no longer stands as the act left it, or its Undo was done (`Rewards::see`).
+        owner_changed: design::results::OwnerChanged::Ends,
+        // The note's own words end it, when the draft reads them.
+        disk_changed: design::results::DiskChanged::Stays,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> RewardsOwner {
+        self.0.clone()
+    }
 }
 
 impl Rewards {
@@ -2863,9 +2882,21 @@ impl Rewards {
             return;
         }
         let fights = played_fights(book);
-        self.done.retain(|(id, _), done| {
-            *id != note || crate::sessions::remove_rewards(&draft.body, &done.written).is_some()
+        let mut ended = Vec::new();
+        self.done.retain(|(id, event), done| {
+            let holds = *id != note
+                || crate::sessions::remove_rewards(&draft.body, &done.written).is_some();
+            if !holds {
+                ended.push(RewardsOwner {
+                    note: *id,
+                    event: event.clone(),
+                });
+            }
+            holds
         });
+        for owner in &ended {
+            self.marks.owner_changed(owner);
+        }
         self.seen = Some(RewardsSeen {
             revision: draft.revision(),
             listed: crate::sessions::listed_references(&draft.body),
@@ -2956,7 +2987,13 @@ impl Rewards {
     /// The note's rewards results and its fault, in the plan's message footer, each naming its
     /// fight by the name the act read. Results with their Undo go newest first among the
     /// footer's results; the fault is a notice until the note changes.
-    fn in_footer(&self, messages: &mut Messages<'_, super::SessionAct>, note: Uuid, revision: u64) {
+    fn in_footer<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, super::SessionAct>,
+        note: Uuid,
+        revision: u64,
+    ) {
         if let Some((id, _, words, met, severity)) = &self.fault
             && (*id, *met) == (note, revision)
         {
@@ -2965,10 +3002,17 @@ impl Rewards {
                 *severity,
             )));
         }
-        for ((id, event), done) in &self.done {
-            if *id != note {
+        // One walk of the store, each entry's data found by its key: no lookup of the store per
+        // result (review of PR 658, P2).
+        for shown in self.marks.newest_first(&()) {
+            let owner = &shown.value().0;
+            if owner.note != note {
                 continue;
             }
+            let event = &owner.event;
+            let Some(done) = self.done.get(&(note, event.clone())) else {
+                continue;
+            };
             let fight = &done.fight;
             let mut words = format!(
                 "Rewards for “{fight}” added under Loot and rewards. {}",
@@ -2996,14 +3040,12 @@ impl Rewards {
                 1 => words.push_str(" 1 award is not known."),
                 n => words.push_str(&format!(" {n} awards are not known.")),
             }
-            kept_at(
-                messages,
-                done.order,
-                Said::new(as_sentence(&words)).undo(
-                    UndoStep::of(Verb::Add, "rewards")
-                        .pressed_as(pressed(FooterAct::Rewards(RewardsAct::Undo(event.clone())))),
-                ),
-            );
+            let undo = pressed(FooterAct::Rewards(RewardsAct::Undo(event.clone())));
+            messages.kept(shown.outcome(frame, |_| {
+                Said::new(as_sentence(&words))
+                    .undo(UndoStep::of(Verb::Add, "rewards").pressed_as(undo))
+                    .into()
+            }));
         }
     }
 }
@@ -3044,6 +3086,31 @@ impl Sessions {
     /// `Add rewards` or `Undo rewards`, through the note's one act path: it follows the disk,
     /// patches one block and saves at once. The run, the earlier notes and the Timeline are read
     /// now. What it could not do shows under the fight's row.
+    /// The footer's `Undo add rewards` by its line's `ticket`: a result replaced or ended since
+    /// is gone, and nothing changes; a refused Undo keeps its result and its line.
+    fn undo_rewards(
+        &mut self,
+        ticket: design::results::Ticket,
+        event: String,
+        book: &Book,
+        session: Option<Uuid>,
+        plan: &Plan<'_>,
+    ) {
+        let Some(note) = session else {
+            return;
+        };
+        let mut marks = std::mem::take(&mut self.rewards.marks);
+        let _ = marks.undo_by(ticket, |_| {
+            self.rewards_act(RewardsAct::Undo(event.clone()), book, session, plan);
+            if self.rewards.done.contains_key(&(note, event.clone())) {
+                Err(())
+            } else {
+                Ok(())
+            }
+        });
+        self.rewards.marks = marks;
+    }
+
     fn rewards_act(
         &mut self,
         act: RewardsAct,
@@ -3158,10 +3225,13 @@ impl Sessions {
                             with_xp: has_xp,
                             not_rolled: found.not_rolled,
                             unknown: unknown * u64::from(has_xp),
-                            order: crate::timeline::next_result_order(),
                             fight: fight.clone(),
                         },
                     );
+                    rewards.marks.record(RewardsMark(RewardsOwner {
+                        note,
+                        event: event.clone(),
+                    }));
                     self.caret_to_show = Some(shown);
                 }
                 if let Some(why) = refused {
@@ -4456,7 +4526,7 @@ impl Sessions {
         self.rewards.see(self.draft.as_ref(), session, book);
         if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
             self.rewards
-                .in_footer(&mut messages, note, draft.revision());
+                .in_footer(&frame, &mut messages, note, draft.revision());
         }
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
         // journey's session, while the note is as the act left it; a refused Undo's answer,
@@ -4505,6 +4575,8 @@ impl Sessions {
         let mut travel_act = None;
         self.rewards.see(self.draft.as_ref(), session, book);
         let mut rewards_act = None;
+        // A footer Undo of rewards reaches only the result its line showed.
+        let mut rewards_ticket = None;
         let mut travel_undo = (TravelUndo::None, String::new());
         // A name a result links: an encounter or a group, and whether a row for it is to come.
         let in_plan = |name: &str| {
@@ -4936,7 +5008,10 @@ impl Sessions {
                         }
                     }
                     FooterAct::Scene(act) => scene_act = Some(act),
-                    FooterAct::Rewards(act) => rewards_act = Some(act),
+                    FooterAct::Rewards(act) => {
+                        rewards_act = Some(act);
+                        rewards_ticket = press.ticket;
+                    }
                     FooterAct::UndoPlanLine => {
                         if let Some(ticket) = press.ticket {
                             self.undo_plan_line(ticket);
@@ -4971,8 +5046,12 @@ impl Sessions {
         if let Some(act) = scene_act {
             self.scene_act(act, session);
         }
-        if let Some(act) = rewards_act {
-            self.rewards_act(act, book, session, plan);
+        match (rewards_act, rewards_ticket) {
+            (Some(RewardsAct::Undo(event)), Some(ticket)) => {
+                self.undo_rewards(ticket, event, book, session, plan);
+            }
+            (Some(RewardsAct::Undo(_)), None) | (None, _) => {}
+            (Some(act), _) => self.rewards_act(act, book, session, plan),
         }
         // A draft is open only for a selected session, so the act has its session.
         if let Some((position, name)) = remove_fight
