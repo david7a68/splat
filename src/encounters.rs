@@ -69,6 +69,34 @@ enum RowCause {
         creature: String,
         package: String,
     },
+    /// Start's own checks (issue #530, item 4), each the typed cause of one fault `validate`
+    /// finds, by the row's shown name where a row is at fault.
+    EncounterUnreadable(String),
+    RosterUnreadable(String),
+    Unnamed,
+    LootHeading,
+    SideUnnamed,
+    HostileSideMissing,
+    SideWithoutFoes,
+    KeyShared(String),
+    SideMissing(String),
+    Unavailable(String),
+    PartyFromCampaign,
+    WithoutCreature(usize),
+    StartingNotWhole {
+        row: String,
+        what: &'static str,
+    },
+    ChangedSideMissing {
+        row: String,
+        side: String,
+    },
+    HpAboveMax {
+        row: String,
+        hp: i64,
+        max: i64,
+    },
+    ChangesInvalid(String),
 }
 
 impl Invalid {
@@ -118,7 +146,80 @@ impl Invalid {
                 },
                 Recovery::First(Step::AddPackage(Name::new(package.as_str())?)),
             )),
+            // Item 4: every other fault Start's check finds, in its own typed cause.
+            other => {
+                let row = |name: &str| Rows::new([Name::new(name)?]);
+                let (cause, step) = match other {
+                    RowCause::EncounterUnreadable(file) => (
+                        Cause::EncounterUnreadable(Name::new(file.as_str())?),
+                        Step::RepairInEntries,
+                    ),
+                    RowCause::RosterUnreadable(file) => (
+                        Cause::RosterUnreadable(Name::new(file.as_str())?),
+                        Step::FixRosterRows,
+                    ),
+                    RowCause::Unnamed => (Cause::EncounterUnnamed, Step::EnterEncounterName),
+                    RowCause::LootHeading => (Cause::LootHeadingInNotes, Step::MoveLootLines),
+                    RowCause::SideUnnamed => (Cause::SideUnnamed, Step::RepairInEntries),
+                    RowCause::HostileSideMissing => {
+                        (Cause::HostileSideMissing, Step::RepairInEntries)
+                    }
+                    RowCause::SideWithoutFoes => (Cause::SideWithoutFoes, Step::RepairInEntries),
+                    RowCause::KeyShared(name) => {
+                        (Cause::RowKeyShared(row(name)?), Step::RepairInEntries)
+                    }
+                    RowCause::SideMissing(name) => {
+                        (Cause::RowSideMissing(row(name)?), Step::RepairInEntries)
+                    }
+                    RowCause::Unavailable(name) => (
+                        Cause::CreatureUnavailable(row(name)?),
+                        Step::ReplaceRows(row(name)?),
+                    ),
+                    RowCause::PartyFromCampaign => (Cause::PartyFromCampaign, Step::EditPartyRows),
+                    RowCause::WithoutCreature(index) => (
+                        Cause::RowWithoutCreature(Name::new(format!("Row {}", index + 1))?),
+                        Step::RepairInEntries,
+                    ),
+                    RowCause::StartingNotWhole { row: name, what } => (
+                        Cause::StartingNotWhole {
+                            rows: row(name)?,
+                            what: Name::new(*what)?,
+                        },
+                        Step::FixStartingValues(row(name)?),
+                    ),
+                    RowCause::ChangedSideMissing { row: name, side } => (
+                        Cause::ChangedSideMissing {
+                            rows: row(name)?,
+                            side: Name::new(side.as_str())?,
+                        },
+                        Step::FixChanges(row(name)?),
+                    ),
+                    RowCause::HpAboveMax { row: name, hp, max } => (
+                        Cause::StartingHpAboveMax {
+                            rows: row(name)?,
+                            hp: *hp,
+                            max: *max,
+                        },
+                        Step::FixStartingValues(row(name)?),
+                    ),
+                    RowCause::ChangesInvalid(name) => (
+                        Cause::ChangesInvalid(row(name)?),
+                        Step::FixChanges(row(name)?),
+                    ),
+                    RowCause::Deleted(_)
+                    | RowCause::Unreadable(..)
+                    | RowCause::Duplicate(_)
+                    | RowCause::PackageMissing { .. } => return None,
+                };
+                Some(Refusal::new(act, cause, Recovery::First(step)))
+            }
         }
+    }
+
+    /// The typed cause of this fault, for Start's answer (issue #530).
+    fn because(mut self, cause: RowCause) -> Self {
+        self.rows = Some(cause);
+        self
     }
 
     /// A required part is missing.
@@ -1220,7 +1321,16 @@ impl Draft {
     fn validate(&self, snapshot: &Snapshot) -> Result<(), Invalid> {
         #[cfg(any(test, feature = "test-support"))]
         VALIDATIONS.with(|count| count.set(count.get() + 1));
-        let entry = Entry::parse(&self.path, &self.source)?;
+        // Issue #530 (item 4): each fault carries its typed cause, for Start's answer.
+        let file = self
+            .path
+            .rsplit('/')
+            .next()
+            .unwrap_or(&self.path)
+            .to_owned();
+        let entry = Entry::parse(&self.path, &self.source).map_err(|error| {
+            Invalid::from(error).because(RowCause::EncounterUnreadable(file.clone()))
+        })?;
         if let Some(reason) = roster_fault_reason(
             &self.path,
             &roster_faults(&entry, &snapshot.known_creature_names),
@@ -1228,44 +1338,54 @@ impl Draft {
             // R41: in the tone of its diagnosis, as the message above the roster says it.
             return Err(Invalid {
                 tone: unread_row_tone(),
-                ..reason.into()
+                ..Invalid::from(reason).because(RowCause::RosterUnreadable(file))
             });
         }
         if self.name.trim().is_empty() {
-            return Err(Invalid::missing("Enter an encounter name."));
+            return Err(Invalid::missing("Enter an encounter name.").because(RowCause::Unnamed));
         }
         // The Loot list writes that section, so a second one typed in the notes would be lost.
         if self.loot_owned && splat::content::loot::has_section(&self.body) {
-            return Err("Read-aloud and notes has a Loot heading. Put those lines in the Loot list, or rename the heading.".into());
+            return Err(Invalid::from("Read-aloud and notes has a Loot heading. Put those lines in the Loot list, or rename the heading.").because(RowCause::LootHeading));
         }
         let mut keys = BTreeSet::new();
         for (side, data) in &self.setup.sides {
             if side.as_str().is_none_or(|s| s.trim().is_empty()) {
-                return Err("Sides need names.".into());
+                return Err(Invalid::from("Sides need names.").because(RowCause::SideUnnamed));
             }
             let hostile = data
                 .get("hostile_to")
                 .and_then(Value::as_sequence)
-                .ok_or("Each side needs a list of the sides it fights.")?;
+                .ok_or_else(|| {
+                    Invalid::from("Each side needs a list of the sides it fights.")
+                        .because(RowCause::SideWithoutFoes)
+                })?;
             if hostile.iter().any(|s| !self.setup.sides.contains_key(s)) {
-                return Err("A hostile side is missing.".into());
+                return Err(Invalid::from("A hostile side is missing.")
+                    .because(RowCause::HostileSideMissing));
             }
         }
         for (index, slot) in self.setup.roster.iter().enumerate() {
             let row = || roster_row(index, slot, snapshot);
+            // The row's shown name, for Start's typed answer (`Rows`).
+            let shown = || shown_row_name(slot, snapshot);
             if slot.key.trim().is_empty() || !keys.insert(&slot.key) {
-                return Err(format!(
+                return Err(Invalid::from(format!(
                     "{} shares its identity with another row, or has none. {REPAIR_IN_ENTRIES}",
                     row()
-                )
-                .into());
+                ))
+                .because(RowCause::KeyShared(shown())));
             }
             if !self
                 .setup
                 .sides
                 .contains_key(Value::from(slot.side.clone()))
             {
-                return Err(format!("{}: its side is not in this encounter.", row()).into());
+                return Err(Invalid::from(format!(
+                    "{}: its side is not in this encounter.",
+                    row()
+                ))
+                .because(RowCause::SideMissing(shown())));
             }
             match (&slot.creature, &slot.party_slot) {
                 (Some(reference), None) => {
@@ -1308,17 +1428,29 @@ impl Draft {
                         }
                     })?;
                     if !snapshot.creatures.iter().any(|c| c.id == id) {
-                        return Err(format!(
+                        return Err(Invalid::from(format!(
                             "{}: this creature is unavailable in campaign content.",
                             row()
-                        )
-                        .into());
+                        ))
+                        .because(RowCause::Unavailable(shown())));
                     }
-                    self.validate_overrides(&row(), slot, &snapshot.catalogue.entries[&id].entry)?;
+                    self.validate_overrides(
+                        (&row(), &shown()),
+                        slot,
+                        &snapshot.catalogue.entries[&id].entry,
+                    )?;
                 }
-                (None, Some(_)) => return Err(PARTY_FROM_CAMPAIGN.into()),
+                (None, Some(_)) => {
+                    return Err(
+                        Invalid::from(PARTY_FROM_CAMPAIGN).because(RowCause::PartyFromCampaign)
+                    );
+                }
                 _ => {
-                    return Err(format!("{} needs one creature or one party member.", row()).into());
+                    return Err(Invalid::from(format!(
+                        "{} needs one creature or one party member.",
+                        row()
+                    ))
+                    .because(RowCause::WithoutCreature(index)));
                 }
             }
             for (field, words) in [("hp", "HP"), ("temporary_hp", "Temporary HP")] {
@@ -1327,11 +1459,14 @@ impl Draft {
                     .get(field)
                     .is_some_and(|v| v.as_u64().is_none())
                 {
-                    return Err(format!(
+                    return Err(Invalid::from(format!(
                         "{}: its starting {words} must be a whole number, 0 or more.",
                         row()
-                    )
-                    .into());
+                    ))
+                    .because(RowCause::StartingNotWhole {
+                        row: shown(),
+                        what: words,
+                    }));
                 }
             }
         }
@@ -1384,16 +1519,30 @@ impl Draft {
             .collect()
     }
     /// A change to a stat must leave it valid for this slot's creature and starting state.
-    fn validate_overrides(&self, row: &str, slot: &Slot, entry: &Entry) -> Result<(), String> {
-        let named = |error: String| format!("{row}: {error}");
-        let overrides = Overrides::parse(&slot.overrides).map_err(&named)?;
-        let resolved = overrides.resolve_for(entry, &slot.side).map_err(&named)?;
+    /// `row` is the row as a message names it (`Row 2 (Cinder Wolf)`) and as Start's typed
+    /// answer names it (its shown name).
+    fn validate_overrides(
+        &self,
+        (row, shown): (&str, &str),
+        slot: &Slot,
+        entry: &Entry,
+    ) -> Result<(), Invalid> {
+        let named = |error: String| {
+            Invalid::from(format!("{row}: {error}"))
+                .because(RowCause::ChangesInvalid(shown.to_owned()))
+        };
+        let overrides = Overrides::parse(&slot.overrides).map_err(named)?;
+        let resolved = overrides.resolve_for(entry, &slot.side).map_err(named)?;
         if let Some(side) = &overrides.side
             && !self.setup.sides.contains_key(side.trim())
         {
-            return Err(named(format!(
-                "side {side} is not a side of this encounter."
-            )));
+            return Err(Invalid::from(format!(
+                "{row}: side {side} is not a side of this encounter."
+            ))
+            .because(RowCause::ChangedSideMissing {
+                row: shown.to_owned(),
+                side: side.trim().to_owned(),
+            }));
         }
         if overrides.max_hp.is_some()
             && let (Some(hp), Some(max)) = (
@@ -1402,9 +1551,14 @@ impl Draft {
             )
             && hp > max
         {
-            return Err(named(format!(
-                "starting HP {hp} is above the changed maximum of {max}."
-            )));
+            return Err(Invalid::from(format!(
+                "{row}: starting HP {hp} is above the changed maximum of {max}."
+            ))
+            .because(RowCause::HpAboveMax {
+                row: shown.to_owned(),
+                hp,
+                max,
+            }));
         }
         Ok(())
     }
@@ -2384,6 +2538,18 @@ fn roster_base_name(
                 .cloned()
         })
         .unwrap_or_else(|| "Missing creature".into())
+}
+
+/// A roster row's shown name (its changed name, else its creature's), as `roster_row` gives it
+/// after the row's place.
+fn shown_row_name(slot: &Slot, snapshot: &Snapshot) -> String {
+    let definition = slot
+        .creature
+        .as_ref()
+        .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok())
+        .and_then(|id| snapshot.catalogue.entries.get(&id))
+        .map(|indexed| &indexed.entry);
+    roster_name(slot, definition, &snapshot.known_creature_names)
 }
 
 /// A roster row as the DM sees it in a message: its place in the roster and its shown name, never
@@ -13259,11 +13425,29 @@ mod tests {
         let draft = new_draft();
         assert!(draft.validate(&snapshot).is_ok());
         assert!(draft.setup.roster[1].key.starts_with("actor_"));
+        // Issue #530 (item 4): every fault that refuses Start has its typed answer, in the
+        // `No fight started from …` form.
+        let answers = std::cell::RefCell::new(Vec::new());
         let fault = |change: &dyn Fn(&mut Draft)| {
             let mut draft = new_draft();
             change(&mut draft);
-            let text = draft.validate(&snapshot).unwrap_err().text;
+            let invalid = draft.validate(&snapshot).unwrap_err();
+            let text = invalid.text.clone();
             assert!(!text.contains("actor_"), "{text}");
+            let answer = invalid
+                .start_refusal(&draft.name)
+                .unwrap_or_else(|| panic!("#530: no typed Start answer for {text:?}"));
+            assert!(
+                answer
+                    .words()
+                    .as_str()
+                    .starts_with("No fight started from Bridge. "),
+                "#530: {:?}",
+                answer.words()
+            );
+            answers
+                .borrow_mut()
+                .push(answer.words().as_str().to_owned());
             text
         };
         assert_eq!(
@@ -13322,6 +13506,19 @@ mod tests {
             }),
             "Row 2 (Ash): side nowhere is not a side of this encounter."
         );
+        let answers = answers.into_inner();
+        for expected in [
+            "No fight started from Bridge. The starting HP of the Cinder Wolf row must be a whole \
+             number, 0 or more. Change the starting values of the Cinder Wolf row in the roster \
+             first.",
+            "No fight started from Bridge. The changed side nowhere of the Ash row is not a side \
+             of this encounter. Fix the changes of the Ash row in the roster first.",
+        ] {
+            assert!(
+                answers.iter().any(|words| words == expected),
+                "{answers:#?}"
+            );
+        }
         // A fault found when the fight starts names the row too.
         let mut editor = Encounters {
             active: Some(active.clone()),
