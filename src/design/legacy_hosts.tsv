@@ -120,7 +120,6 @@ row-clip	src/markdown_view.rs	table_part	3	Reader
 row-clip	src/party.rs	member_row	1	Party
 row-clip	src/party_bar.rs	show	1	Party
 row-clip	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
-row-clip	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 row-clip	src/world/repair.rs	source_editor	1	World
 row-clip	src/design/pane/columns.rs	PaneEdges::show_children	1	design	design implementation boundary: a resizable child clips to the composite's view (egui's side panel sets its own clip)
 scroll-area	src/design/components.rs	dialog_width	1	design	design implementation boundary
@@ -132,8 +131,6 @@ scroll-area	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
-scroll-area	src/sessions/page.rs	Sessions::note_editor	1	Sessions
-scroll-area	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 scroll-request	src/design/components.rs	reveal_least	1	design	design implementation boundary
 scroll-request	src/design/components.rs	scroll_part	2	design	design implementation boundary
 scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
@@ -151,21 +148,17 @@ scroll-request	src/lib.rs	Splat::page	1	App
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
 scroll-request	src/sessions/page.rs	Sessions::banner	1	Sessions
-scroll-request	src/sessions/page.rs	Sessions::note_editor	2	Sessions
 scroll-request	src/sessions/page.rs	Sessions::reading_view	1	Sessions
 scroll-request	src/sessions/plan.rs	Reveal::show	1	Sessions
 scroll-request	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 scroll-request	src/sessions/plan.rs	reveal_opened_played	3	Sessions
 scroll-request	src/settings.rs	Settings::show_account	1	Settings
-scroll-request	src/timeline/checks.rs	lines	1	Timeline
 scroll-offset	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area_in	1	design	design implementation boundary
 scroll-offset	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
 scroll-offset	src/design/pane.rs	Footer::place	2	design	design implementation boundary
 scroll-offset	src/design/popups.rs	Dropdown::list	1	design	design implementation boundary
-scroll-offset	src/sessions/page.rs	Sessions::note_editor	2	Sessions
-scroll-offset	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 virtual-rows	src/design/pane/region.rs	BlockRegion::region	1	design	the region of an owned list body (layout 3b; raised)
 scroll-offset	src/design/pane/region.rs	BlockRegion::region	1	design	the region's one offset writer (L10; raised)
 row-register	src/design/pane/region.rs	BlockRegion::in_place	1	design	a region inside a Content pane registers its rows for the pane's whole-row cut (layout 4; raised)
