@@ -213,18 +213,28 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
                     }
                 });
                 let at_top = row.rect.top() - list?.top() <= crate::design::L;
-                Some((at_top, edges))
+                // M0194: the open brought the run's row and its Read-only line whole into view.
+                let whole = row.fully_in_view()
+                    && d.nodes()
+                        .iter()
+                        .any(|node| node.name == "Read-only" && node.fully_in_view());
+                Some((at_top, edges, whole))
             })
         });
         d.observe(
+            "M0194-history-opened-run-whole",
+            measured.as_ref().is_some_and(|(_, _, whole)| *whole),
+            format!("At {size:?}, the opened run's row and Read-only line are whole in view"),
+        );
+        d.observe(
             "X37-history-clean-edge",
-            measured.as_ref().is_some_and(|(at_top, edges)| {
+            measured.as_ref().is_some_and(|(at_top, edges, _)| {
                 !at_top || edges.as_ref().is_some_and(|(cut, _)| cut.is_empty())
             }),
             format!("At {size:?}, (row at the list's top, the texts cut there): {measured:?}"),
         );
         let gap = measured
-            .and_then(|(_, edges)| edges)
+            .and_then(|(_, edges, _)| edges)
             .and_then(|(_, gap)| gap);
         d.observe(
             "X66-combat-log-gap",

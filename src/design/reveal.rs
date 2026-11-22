@@ -860,8 +860,10 @@ pub enum JumpTo {
     /// the least scroll that shows it whole ([`bring_into_view`]), so the menu does not hang
     /// from a control the DM cannot see.
     OpenMenuControl,
-    /// A list's row brought to the top because the page opened at it, a link revealed it, or
-    /// it moved there (the Timeline's events, M0556): the row before it at the view's top.
+    /// A list's row brought into view because the page opened at it, a link revealed it, or
+    /// it moved there. As a [`jump`], the row before it at the view's top (the Timeline's
+    /// events, M0556); as [`bring_into_view`], the least scroll that shows the row whole with
+    /// what it opened (History's opened run, M0194).
     ListedRow,
 }
 
