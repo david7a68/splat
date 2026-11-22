@@ -2124,8 +2124,7 @@ fn a_due_check_keeps_its_focus_when_the_change_before_it_goes() {
     let before = (words(), measures());
     h.run_steps(5);
     assert!(
-        h.query_by_label("Seals (Party) +1").is_some()
-            && h.query_by_label("Enter room").is_some(),
+        h.query_by_label("Seals (Party) +1").is_some() && h.query_by_label("Enter room").is_some(),
         "quiet-host-reached: the Due row and the lines drew"
     );
     assert_eq!(

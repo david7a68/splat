@@ -543,8 +543,8 @@ struct DueParts {
     ticks: Vec<Tick>,
     /// The words each roll and `Done` paint, laid before paint in their places (Astra's P2 on
     /// PR 897): a quiet frame lays no action's words. A roll with no place has none.
-    roll_words: Vec<Option<std::sync::Arc<egui::Galley>>>,
-    done_words: Option<std::sync::Arc<egui::Galley>>,
+    roll_words: Vec<Option<design::LaidAction>>,
+    done_words: Option<design::LaidAction>,
 }
 
 /// Why a roll is blocked: each name of its table has its roll.
@@ -732,7 +732,7 @@ fn due_rows(
                 };
                 if ui.in_slot(slot, |ui| {
                     roll_action(label)
-                        .laid(std::sync::Arc::clone(words))
+                        .laid(words.clone())
                         .blocked(*reason)
                         .show(ui)
                         .clicked()
@@ -829,7 +829,7 @@ fn finish(
         .density(Density::Read)
         .name(&parts.done_name);
     let done = match &parts.done_words {
-        Some(words) => done.laid(std::sync::Arc::clone(words)),
+        Some(words) => done.laid(words.clone()),
         None => done,
     };
     if done.show(ui).clicked() {
@@ -866,7 +866,7 @@ struct LineParts {
     value: String,
     /// The actions it shows, by their place in `quick`, with each one's accessible name and its
     /// words laid in its place before paint (a quiet frame lays no action's words).
-    shown: Vec<(usize, String, std::sync::Arc<egui::Galley>)>,
+    shown: Vec<(usize, String, design::LaidAction)>,
     /// The line's tracker and instance, as the view's acts and the hold name them.
     place: (String, Option<String>),
     /// A repeated amount field's warning under the line, once for the tracker.
@@ -954,6 +954,8 @@ fn lay_tracker(
         let laid = design::ActionLine {
             key: egui::Id::new(("trackers_line", key, line)),
             heading: None,
+            over: &[],
+            row: 0.0,
             title: (indented && line == 0).then_some(def.name.as_str()),
             indent,
             name: &fitted,
@@ -1105,7 +1107,7 @@ fn quick_action_in(
     quick: &super::Quick,
     at: usize,
     // Its accessible name (`Pay: Ann` on an instance's line) and its words laid in its place.
-    (named, words): (&str, &std::sync::Arc<egui::Galley>),
+    (named, words): (&str, &design::LaidAction),
     act: &mut Option<Act>,
 ) {
     let here = asking
@@ -1119,7 +1121,7 @@ fn quick_action_in(
     }
     let response = quick_action(&quick.label)
         .name(named)
-        .laid(std::sync::Arc::clone(words))
+        .laid(words.clone())
         .show(ui);
     let control = (&place.0, &place.1, &quick.label, at);
     held_seen(ui, control, response.rect.top());
