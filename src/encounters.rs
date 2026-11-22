@@ -3733,7 +3733,7 @@ impl DraftUndo {
                 } else {
                     (
                         format!("{} moves to any encounter when you save.", group.name()),
-                        UndoStep::verb(Verb::Move),
+                        UndoStep::of(Verb::Move, group.name()),
                     )
                 };
                 KeptOutcome::Notice(
