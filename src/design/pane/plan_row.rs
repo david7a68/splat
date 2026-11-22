@@ -367,7 +367,7 @@ mod tests {
                         "{width}@{scale}: row {at}'s title {link:?} at its laid place in {block:?}"
                     );
                     // AccessKit's rects are in physical pixels.
-                    let node = harness.get_by_label(&titles[at]).rect();
+                    let node = harness.get_by_label(titles[at]).rect();
                     let node = Rect::from_min_max(
                         (node.min.to_vec2() / scale).to_pos2(),
                         (node.max.to_vec2() / scale).to_pos2(),
