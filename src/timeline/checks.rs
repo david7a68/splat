@@ -526,7 +526,8 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
         (None, Some(key)) if !key.is_empty() => "Table not found",
         _ => "Choose a table",
     };
-    let button = design::menu_button(ui, word, false);
+    // The menu starts the field's line: its word at the label's text edge (`line_start`).
+    let button = design::menu_button_at_line_start(ui, word, false);
     design::menu_popup(ui, &button).show(|ui| {
         let mut names: Vec<&Table> = view.tables.iter().collect();
         names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
@@ -537,7 +538,8 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
                 ui.close();
             }
         }
-        ui.separator();
+        // The token rule between the tables and `No checks`; the item gaps keep `S` around it.
+        design::rule(ui);
         let results = !view.event.checks.is_empty();
         if Action::quiet("No checks")
             .blocked_if(results, "Clear the results first.")
@@ -1252,7 +1254,12 @@ mod tests {
                     "{dice:?} {menu:?}"
                 );
             } else {
-                assert!(dice.top() >= menu.bottom() && (dice.left() - menu.left()).abs() < 1.0);
+                // On a line of their own the words start at the text edge, the label's: the
+                // menu's target hangs left of it (`line_start`).
+                assert!(
+                    dice.top() >= menu.bottom() && (dice.left() - label.left()).abs() < 1.0,
+                    "{dice:?} {label:?}"
+                );
             }
         }
     }

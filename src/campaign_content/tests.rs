@@ -923,12 +923,12 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     pick(&mut harness, "toll-a");
     assert!(
         harness
-            .query_by_label("Undo recover packages/watch-a")
+            .query_by_label("Undo recover Watch in packages/watch-a/")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label("Undo recover packages/toll-a")
+            .query_by_label("Undo recover Toll in packages/toll-a/")
             .is_some()
     );
     // B: Watch moved again, and B finds it in watch-b/.
@@ -937,15 +937,15 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     find(&mut harness, "watch-a", "watch-b");
     assert!(
         harness
-            .query_by_label("Undo recover packages/watch-b")
+            .query_by_label("Undo recover Watch in packages/watch-b/")
             .is_some()
     );
     // Back in A: no line names B's folder, and A's Watch result ended with B's recovery.
     harness.state_mut().campaigns.open_for_test(&first);
     settle(&mut harness);
     for gone in [
-        "Undo recover packages/watch-b",
-        "Undo recover packages/watch-a",
+        "Undo recover Watch in packages/watch-b/",
+        "Undo recover Watch in packages/watch-a/",
     ] {
         assert!(
             harness.query_by_label(gone).is_none(),
@@ -954,7 +954,9 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     }
     // A's Toll line names A's folder, and its Undo acts on A's data: Toll's registration
     // goes back to toll/; Watch stays where B found it.
-    harness.get_by_label("Undo recover packages/toll-a").click();
+    harness
+        .get_by_label("Undo recover Toll in packages/toll-a/")
+        .click();
     settle(&mut harness);
     assert_eq!(registered(&harness, toll.id), Some(toll.path.clone()));
     assert_eq!(
@@ -963,7 +965,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     );
     assert!(
         harness
-            .query_by_label("Undo recover packages/toll-a")
+            .query_by_label("Undo recover Toll in packages/toll-a/")
             .is_none()
     );
     // B keeps its result and its Undo.
@@ -971,7 +973,7 @@ fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
     settle(&mut harness);
     assert!(
         harness
-            .query_by_label("Undo recover packages/watch-b")
+            .query_by_label("Undo recover Watch in packages/watch-b/")
             .is_some()
     );
 }
