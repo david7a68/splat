@@ -1119,7 +1119,9 @@ mod tests {
                 ..Page::default()
             },
         );
-        let mut press = |h: &mut egui_kittest::Harness<'_, Page>| {
+        // The theme's frame first: the page draws from the next one.
+        h.run();
+        let press = |h: &mut egui_kittest::Harness<'_, Page>| {
             h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::S);
             h.step();
             h.state().taken
