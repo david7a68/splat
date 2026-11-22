@@ -1539,6 +1539,40 @@ impl<'a> Driver<'a> {
         self.film_result("Dropped");
     }
 
+    /// Press the primary button at a point and keep it held, one frame for the press. The
+    /// caller looks at the screen, may `hold_step`, and ends with `release_at`.
+    pub fn press_hold_at(&mut self, pos: egui::Pos2) {
+        self.film_aim(egui::Rect::from_center_size(pos, egui::Vec2::ZERO), "Press");
+        self.harness.hover_at(pos);
+        self.harness.step();
+        self.harness.event(egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        self.harness.step();
+    }
+
+    /// One more frame with the press of `press_hold_at` held, the pointer still.
+    pub fn hold_step(&mut self) {
+        self.harness.step();
+    }
+
+    /// Let go of the press of `press_hold_at`: one frame, not settled, so the caller sees the
+    /// release frame itself; `settle` after it.
+    pub fn release_at(&mut self, pos: egui::Pos2) {
+        self.harness.event(egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
+    }
+
     fn is_control(node: &Found) -> bool {
         !node.disabled && !matches!(node.role, Role::Label | Role::TextRun)
     }

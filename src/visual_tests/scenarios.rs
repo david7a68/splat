@@ -4650,6 +4650,56 @@ pub mod campaign_content {
             a_wheel && b_wheel,
             format!("The wheel brings A's Save into view {a_wheel}, then B's Save {b_wheel}"),
         );
+        // Layout step 11c (review of PR 719): a press on the visible part of B's cut editor
+        // moves nothing while the pointer presses, holds and releases; the pane's focus
+        // clearance alone brings the editor whole into view, after the release. The reference
+        // is B's message above the editor, read from the screen at each frame.
+        d.scroll_up_at(page, 20);
+        let partly = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == b_editor_name)
+                .map(|node| node.shown)
+                .filter(|shown| shown.height() >= crate::design::XL)
+                .filter(|_| !whole(d))
+        };
+        // Down the page by touchpad steps until B's editor shows in part.
+        let mut shown = partly(d);
+        for _ in 0..40 {
+            if shown.is_some() {
+                break;
+            }
+            d.scroll_points_at(page, 40.0);
+            shown = partly(d);
+        }
+        let mut tops = vec![b_message_top(d).map(|rect| rect.top())];
+        if let Some(shown) = shown {
+            let at = shown.center();
+            d.press_hold_at(at);
+            tops.push(b_message_top(d).map(|rect| rect.top()));
+            for _ in 0..3 {
+                d.hold_step();
+                tops.push(b_message_top(d).map(|rect| rect.top()));
+            }
+            d.release_at(at);
+            tops.push(b_message_top(d).map(|rect| rect.top()));
+            d.settle();
+        }
+        let still = tops.len() == 6
+            && tops[0].is_some()
+            && tops.iter().all(|top| {
+                top.zip(tops[0])
+                    .is_some_and(|(top, first)| (top - first).abs() <= 0.5)
+            });
+        let editor_focused = d.focused_name().as_deref() == Some(b_editor_name.as_str());
+        d.observe(
+            "l11c-C1-editor-press-still",
+            still && editor_focused,
+            format!(
+                "B's editor shown {shown:?}; B's message top before, at the press, while held and at the release: {tops:?}; then the editor is focused {editor_focused}"
+            ),
+        );
+        d.press(Key::Escape);
         // Round 25 FD1: A's discard result belongs to A. B's edit leaves it, and Undo discard
         // brings back A's draft only; B's edit stays.
         let b_name = crate::world::repair::editor_name("Notes/Cracked.md");
