@@ -2920,10 +2920,17 @@ impl Rewards {
                 *severity,
             )));
         }
-        for ((id, event), done) in &self.done {
-            if *id != note {
+        // One walk of the store, each entry's data found by its key: no lookup of the store per
+        // result (review of PR 658, P2).
+        for shown in self.marks.newest_first(&()) {
+            let owner = &shown.value().0;
+            if owner.note != note {
                 continue;
             }
+            let event = &owner.event;
+            let Some(done) = self.done.get(&(note, event.clone())) else {
+                continue;
+            };
             let fight = &done.fight;
             let mut words = format!(
                 "Rewards for “{fight}” added under Loot and rewards. {}",
@@ -2951,19 +2958,12 @@ impl Rewards {
                 1 => words.push_str(" 1 award is not known."),
                 n => words.push_str(&format!(" {n} awards are not known.")),
             }
-            let owner = RewardsOwner {
-                note,
-                event: event.clone(),
-            };
-            if let Some(shown) = self.marks.get(&owner) {
-                messages.kept(shown.outcome(frame, |_| {
-                    Said::new(as_sentence(&words))
-                        .undo(UndoStep::of(Verb::Add, "rewards").pressed_as(pressed(
-                            FooterAct::Rewards(RewardsAct::Undo(event.clone())),
-                        )))
-                        .into()
-                }));
-            }
+            let undo = pressed(FooterAct::Rewards(RewardsAct::Undo(event.clone())));
+            messages.kept(shown.outcome(frame, |_| {
+                Said::new(as_sentence(&words))
+                    .undo(UndoStep::of(Verb::Add, "rewards").pressed_as(undo))
+                    .into()
+            }));
         }
     }
 }
