@@ -6109,6 +6109,8 @@ impl Run {
         // at the pane's bottom, `S` below the columns.
         let frame = design::outcome::PaneFrame::new(ui);
         let messages = self.run_messages(&frame, false, ui.available_width());
+        // Where the final state's rows end, for Undo's edge in the header.
+        let mut roster_right = ui.available_rect_before_wrap().left();
         let pressed = messages
             .pane(ui, design::pane::Body::Content, |ui| {
                 if self.closing.is_open() {
@@ -6129,7 +6131,6 @@ impl Run {
                             .frame(side_frame()),
                     )
                 };
-                let mut roster_right = ui.available_rect_before_wrap().left();
                 columns.edges(ui).show_children(ui, |ui, index| {
                     if index == 1 {
                         self.ended_panel(ui);
@@ -6199,100 +6200,101 @@ impl Run {
                             });
                         });
                 });
-                let mut header_ui = ui.new_child(
-                    egui::UiBuilder::new()
-                        .id_salt("ended_header")
-                        .max_rect(header_rect.with_max_y(header_rect.top() + first_line)),
-                );
-                header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.set_min_height(60.0);
-                    let close_reason = self.close_reason();
-                    let close_width = close_reason.as_ref().map_or_else(
-                        || {
-                            Action::primary("Close run")
-                                .density(Density::Glance)
-                                .natural_width(ui)
-                        },
-                        |reason| {
-                            design::number_width(ui, reason, &Type::Small.font(ui))
-                                .min(ui.available_width() / 2.0)
-                        },
-                    );
-                    ui.allocate_ui_with_layout(
-                        vec2(
-                            close_width,
-                            Density::Glance.control()
-                                + if close_reason.is_some() {
-                                    Type::Small.line() + ui.spacing().item_spacing.y
-                                } else {
-                                    0.0
-                                },
-                        ),
-                        Layout::top_down(Align::RIGHT),
-                        |ui| {
-                            if Action::primary(if self.close_block().is_some() {
-                                "Close after sync"
-                            } else {
-                                "Close run"
-                            })
-                            .name("Close run")
-                            .density(Density::Glance)
-                            .blocked(self.close_block())
-                            .show(ui)
-                            .clicked()
-                            {
-                                closed = self.request_close();
-                            }
-                            design::blocked_reason(ui, close_reason.as_deref());
-                        },
-                    );
-                    if one_line {
-                        self.ended_continue(ui, f32::INFINITY);
-                        let room = ui.available_width() - title_width - gap;
-                        // Undo stays at the roster's right edge, but never gives its target to it.
-                        let align =
-                            (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
-                        let align = match self.ended_undo_whole(ui) {
-                            Some(whole) => align.min((room - whole).max(0.0)),
-                            None => align,
-                        };
-                        let edge = ui.available_rect_before_wrap().right() - align;
-                        in_column(ui, edge, |ui| self.ended_undo(ui, room - align));
-                    }
-                    self.save_status(ui);
-                    ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        self.run_title(ui, &self.state_words(false));
-                        ui.label(
-                            Type::Small
-                                .rich(ui, format!("Outcome: {outcome}"))
-                                .color(c.muted),
-                        );
-                    });
-                });
-                if !one_line {
-                    let mut second = ui.new_child(
-                        egui::UiBuilder::new()
-                            .id_salt("ended_header_actions")
-                            .max_rect(
-                                header_rect
-                                    .with_min_y(header_rect.top() + first_line)
-                                    .with_max_x(if self.hide_panel {
-                                        header_rect.right()
-                                    } else {
-                                        roster_right
-                                    }),
-                            ),
-                    );
-                    second.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                        self.ended_continue(ui, reason_room);
-                        let room = ui.available_width();
-                        self.ended_undo(ui, room);
-                    });
-                }
             })
             .pressed;
         self.run_press(pressed, &mut None);
+        // The header, drawn after the pane so it knows the final state's edge, in the rect kept
+        // for it above the pane (outside the pane's scroll and clip).
+        let mut header_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("ended_header")
+                .max_rect(header_rect.with_max_y(header_rect.top() + first_line)),
+        );
+        header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.set_min_height(60.0);
+            let close_reason = self.close_reason();
+            let close_width = close_reason.as_ref().map_or_else(
+                || {
+                    Action::primary("Close run")
+                        .density(Density::Glance)
+                        .natural_width(ui)
+                },
+                |reason| {
+                    design::number_width(ui, reason, &Type::Small.font(ui))
+                        .min(ui.available_width() / 2.0)
+                },
+            );
+            ui.allocate_ui_with_layout(
+                vec2(
+                    close_width,
+                    Density::Glance.control()
+                        + if close_reason.is_some() {
+                            Type::Small.line() + ui.spacing().item_spacing.y
+                        } else {
+                            0.0
+                        },
+                ),
+                Layout::top_down(Align::RIGHT),
+                |ui| {
+                    if Action::primary(if self.close_block().is_some() {
+                        "Close after sync"
+                    } else {
+                        "Close run"
+                    })
+                    .name("Close run")
+                    .density(Density::Glance)
+                    .blocked(self.close_block())
+                    .show(ui)
+                    .clicked()
+                    {
+                        closed = self.request_close();
+                    }
+                    design::blocked_reason(ui, close_reason.as_deref());
+                },
+            );
+            if one_line {
+                self.ended_continue(ui, f32::INFINITY);
+                let room = ui.available_width() - title_width - gap;
+                // Undo stays at the roster's right edge, but never gives its target to it.
+                let align = (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
+                let align = match self.ended_undo_whole(ui) {
+                    Some(whole) => align.min((room - whole).max(0.0)),
+                    None => align,
+                };
+                let edge = ui.available_rect_before_wrap().right() - align;
+                in_column(ui, edge, |ui| self.ended_undo(ui, room - align));
+            }
+            self.save_status(ui);
+            ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                self.run_title(ui, &self.state_words(false));
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("Outcome: {outcome}"))
+                        .color(c.muted),
+                );
+            });
+        });
+        if !one_line {
+            let mut second = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("ended_header_actions")
+                    .max_rect(
+                        header_rect
+                            .with_min_y(header_rect.top() + first_line)
+                            .with_max_x(if self.hide_panel {
+                                header_rect.right()
+                            } else {
+                                roster_right
+                            }),
+                    ),
+            );
+            second.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                self.ended_continue(ui, reason_room);
+                let room = ui.available_width();
+                self.ended_undo(ui, room);
+            });
+        }
 
         closed
     }
