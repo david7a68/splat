@@ -1692,10 +1692,9 @@ impl Splat {
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     if strip.running {
-                        ui.label(
-                            Type::Heading
-                                .rich(ui, format!("Round {}", strip.round))
-                                .color(c.text),
+                        design::heading(
+                            ui,
+                            design::Heading::Panel(&format!("Round {}", strip.round)),
                         );
                         ui.add(
                             egui::Label::new(
@@ -1722,20 +1721,14 @@ impl Splat {
                             );
                         }
                     } else {
-                        ui.label(
-                            Type::Heading
-                                .rich(
-                                    ui,
-                                    format!(
-                                        "{} · {}",
-                                        self.encounters
-                                            .run()
-                                            .map(|run| run.state_words(false))
-                                            .unwrap_or_default(),
-                                        strip.name
-                                    ),
-                                )
-                                .color(c.text),
+                        let state = self
+                            .encounters
+                            .run()
+                            .map(|run| run.state_words(false))
+                            .unwrap_or_default();
+                        design::heading(
+                            ui,
+                            design::Heading::Panel(&format!("{state} · {}", strip.name)),
                         );
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

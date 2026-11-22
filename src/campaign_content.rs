@@ -2729,7 +2729,10 @@ impl CampaignContent {
             };
             // A fault count is a status: the warning icon and colour, then the count.
             let job = crate::content_actions::issue_count_title(ui, &heading);
+            // Review of PR 730: its id is its own, not its count, so a repair that changes the
+            // count keeps it as the DM left it.
             let issues = design::Section::new(job)
+                .id("campaign_issues")
                 .default_open(!campaign_flags.is_empty())
                 .show(ui, |ui| {
                     design::ScrollColumn::new("campaign_issues")
