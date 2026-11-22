@@ -253,7 +253,7 @@ impl<T: Sync> std::ops::Deref for Revised<T> {
 /// the display scale. A fit kept with one is worked out again when any of them changes, so a
 /// font installed again under the same `FontId` or a new scale never shows an old fit. It is
 /// made only from the `Ui` that measures ([`Measure::of`]), so no other number can stand in.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Measure {
     room: u32,
     size: u32,
