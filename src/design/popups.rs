@@ -512,11 +512,6 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         // Toggle before any row measurement. A closed control draws only its chosen words.
         if response.clicked() {
             egui::Popup::toggle_id(ui.ctx(), list);
-            // The control holds the focus while its list is open, so the pane's focus arbiter
-            // brings its whole field into view at the click's release (layout PR 10b).
-            if egui::Popup::is_id_open(ui.ctx(), list) {
-                response.request_focus();
-            }
         }
         let requested_open = egui::Popup::is_id_open(ui.ctx(), list);
         let drawn = requested_open
@@ -535,6 +530,11 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             egui::Popup::close_id(ui.ctx(), list);
         }
         let open_now = shown && egui::Popup::is_id_open(ui.ctx(), list);
+        // While its list is open, the pane's focus arbiter keeps the control's whole field in
+        // view, as for a focused control (the keyboard is on the list's rows; layout PR 10b).
+        if open_now {
+            super::components::set_open_owner(ui, response.id);
+        }
         // Focus goes back to the control when the list closes with the keyboard on it, or on
         // nothing (Escape, a chosen row).
         if (was_open || requested_open) && !open_now {

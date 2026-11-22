@@ -975,19 +975,31 @@ fn widget_count(ui: &Ui) -> usize {
 /// comes whole into view (a click on a cut field, a drop-down's chosen row). An editor viewport's
 /// block is its fixed frame (`components::reveal_as`), not its text.
 fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
-    let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
     let layer = ui.layer_id();
-    // The focused control's own rect, and its field's whole block, in this pass.
-    let own = focused.and_then(|focused| {
+    // A control of this body and its rect in this pass, if it is one.
+    let in_body = |control: Id| {
         ui.ctx().viewport(|viewport| {
             let widgets_now = &viewport.this_pass.widgets;
-            let (at_layer, at) = widgets_now.order(focused)?;
+            let (at_layer, at) = widgets_now.order(control)?;
             (at_layer == layer && widgets.contains(&at))
-                .then(|| widgets_now.get(focused).map(|widget| widget.rect))
+                .then(|| widgets_now.get(control).map(|widget| widget.rect))
                 .flatten()
         })
-    });
+    };
+    // The subject: the focused control of this body, else the body's control whose list is
+    // open (the keyboard is on the list's rows; layout PR 10b).
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    let (focused, own) =
+        match focused.and_then(|focused| in_body(focused).map(|own| (focused, own))) {
+            Some((focused, own)) => (Some(focused), Some(own)),
+            None => match super::components::open_owner(ui.ctx())
+                .and_then(|owner| in_body(owner).map(|own| (owner, own)))
+            {
+                Some((owner, own)) => (Some(owner), Some(own)),
+                None => (focused, None),
+            },
+        };
     let block = focused
         .zip(own)
         .map(|(focused, rect)| super::components::reveal_rect(ui.ctx(), focused, rect));

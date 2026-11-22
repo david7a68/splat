@@ -1802,16 +1802,22 @@ fn field_label<R>(
         .data_mut(|data| data.insert_temp(Id::new(FIELD_TOP), outer));
     let last = count(ui);
     let bottom = field_feedback(ui, help, error);
-    // Only a focused control of this block: one lookup, nothing that grows with the form.
-    if let Some(focused) = ui.memory(|memory| memory.focused())
-        && ui.ctx().viewport(|viewport| {
+    // Only a focused control of this block, or the control whose list is open: one or two
+    // lookups, nothing that grows with the form.
+    let inside = |id: Id| {
+        ui.ctx().viewport(|viewport| {
             viewport
                 .this_pass
                 .widgets
-                .order(focused)
+                .order(id)
                 .is_some_and(|(at_layer, at)| at_layer == layer && (first..last).contains(&at))
         })
-    {
+    };
+    let subject = ui
+        .memory(|memory| memory.focused())
+        .filter(|id| inside(*id))
+        .or_else(|| open_owner(ui.ctx()).filter(|id| inside(*id)));
+    if let Some(focused) = subject {
         let span = ui.max_rect();
         reveal_with(
             ui,
@@ -3753,6 +3759,26 @@ pub(super) fn reveal_rect(ctx: &egui::Context, id: Id, own: Rect) -> Rect {
                 if replaces { rect } else { rect.union(own) }
             },
         )
+}
+
+/// The key of the control whose list is open in this pass (`popups::Dropdown`).
+const OPEN_OWNER: &str = "design_open_owner";
+
+/// The control whose list is open now: the pane's focus arbiter keeps its whole field in view
+/// as it does a focused control's, while the keyboard is on the list's rows (layout PR 10b).
+pub(super) fn set_open_owner(ui: &Ui, control: Id) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(Id::new(OPEN_OWNER), Some((pass, control))));
+}
+
+/// The control whose list is open in this pass, if one is.
+pub(super) fn open_owner(ctx: &egui::Context) -> Option<Id> {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|data| data.get_temp::<Option<(u64, Id)>>(Id::new(OPEN_OWNER)))
+        .flatten()
+        .filter(|(set, _)| *set == pass)
+        .map(|(_, control)| control)
 }
 
 /// The key of the field block being drawn, for a list that opens from a control in it.
