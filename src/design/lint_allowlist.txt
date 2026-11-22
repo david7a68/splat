@@ -48,9 +48,7 @@ src/world/lines.rs fact-owner 1
 # with `design::test_harness` instead. Shrink only: each move lowers its file's count. src/trackers/view.rs
 # keeps 1: its name test installs the theme again on purpose, to prove a new font generation fits again.
 src/design/pane.rs late-theme 12
-src/design/pane/laid.rs late-theme 2
 src/design/reveal.rs late-theme 1
-src/encounters/groups.rs late-theme 3
 src/markdown_view.rs late-theme 5
 src/settings.rs late-theme 3
 src/timeline/checks.rs late-theme 1

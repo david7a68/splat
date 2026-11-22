@@ -4535,6 +4535,7 @@ mod tests {
     /// FT4: UI text names a value in curly quotation marks, never straight ones.
     #[test]
     fn a_group_name_keeps_focus_and_undo_through_its_first_save() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
@@ -4545,12 +4546,11 @@ mod tests {
         let shown = draft.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 200.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     name_field(ui, &mut shown.borrow_mut(), 300.0);
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness
             .get_by_role(egui::accesskit::Role::TextInput)
@@ -4883,6 +4883,7 @@ mod tests {
 
     #[test]
     fn iter4_b_remove_member_undo_keeps_full_member_and_other_draft_edits() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -4904,14 +4905,13 @@ mod tests {
         let snapshot = Snapshot::load(&active, &[]).unwrap();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(880.0, 1000.0))
-            .build_state(
+            .themed_state(
                 move |ctx, state: &mut MembersState| {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
                 (draft, None, design::Results::default(), None, None),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("More actions for Scout").click();
         harness.run_steps(2);
@@ -5123,6 +5123,7 @@ mod tests {
 
     #[test]
     fn i20_p2_flagged_member_uses_the_normal_form_and_keeps_name_and_note() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -5136,14 +5137,13 @@ mod tests {
         let snapshot = Snapshot::load(&active, &[]).unwrap();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(880.0, 1000.0))
-            .build_state(
+            .themed_state(
                 move |ctx, state: &mut MembersState| {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
                 (draft, None, design::Results::default(), None, None),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("More actions for Scout").click();
         harness.run_steps(2);

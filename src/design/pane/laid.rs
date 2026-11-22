@@ -458,7 +458,8 @@ mod tests {
     }
 
     fn harness(page: Page, size: egui::Vec2) -> Harness<'static, Page> {
-        let mut harness = Harness::builder().with_size(size).build_ui_state(
+        use crate::design::test_harness::Themed as _;
+        let mut harness = Harness::builder().with_size(size).themed_ui_state(
             |ui, page: &mut Page| {
                 let full = ui.available_rect_before_wrap();
                 if page.beside.is_some() {
@@ -610,7 +611,6 @@ mod tests {
             },
             page,
         );
-        crate::design::theme::install(&harness.ctx);
         harness
             .ctx
             .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
@@ -1639,11 +1639,12 @@ mod tests {
     /// it) and ends on the same input aimed at the outer column. Red: ownership by rect.
     #[test]
     fn a_nested_column_owns_its_own_keys() {
+        use crate::design::test_harness::Themed as _;
         use egui::{Key, Modifiers};
         use egui_kittest::kittest::Queryable;
         let mut harness = Harness::builder()
             .with_size(egui::vec2(600.0, 340.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, nested: &mut Nested| {
                     crate::design::layout::ScrollColumn::new("laid_test_outer")
                         .max_height(300.0)
@@ -1687,7 +1688,6 @@ mod tests {
                     inner: Rect::NOTHING,
                 },
             );
-        crate::design::theme::install(&harness.ctx);
         harness
             .ctx
             .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
