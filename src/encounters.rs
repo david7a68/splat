@@ -1674,10 +1674,12 @@ fn editor_columns(ctx: &egui::Context, width: f32) -> design::PaneColumns {
 }
 
 /// Where the roster's rows and rules end, in its child `rest` of `editor_columns`: its panel's
-/// `S` margin before the Add column's splitter, and at most `ROSTER_MAX_WIDTH` (`editor_panes`).
+/// `S` margin before the Add column's splitter, at most `ROSTER_MAX_WIDTH` (`editor_panes`), less
+/// its scroll column's lane.
 /// The head's name field ends there (FA9, FI9).
 fn roster_edge(rest: egui::Rangef) -> f32 {
-    rest.min + (rest.span() - design::S).min(ROSTER_MAX_WIDTH)
+    // The roster's scroll column keeps its bar's lane (`roster_pane`).
+    rest.min + (rest.span() - design::S).min(ROSTER_MAX_WIDTH) - design::lane_width()
 }
 
 /// The roster and Add participants side by side: the roster at most `ROSTER_MAX_WIDTH`, then

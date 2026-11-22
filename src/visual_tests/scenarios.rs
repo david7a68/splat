@@ -27833,13 +27833,15 @@ pub mod session_plan {
                     d.place_of("Save creature"),
                 )
             });
-            let form = crate::design::FORM_WIDTH + 2.0 * crate::design::S;
+            // Layout step 6b: exactly the shared rule's width for the room to the roster rule's
+            // end, so a name bounded by any other edge (one a lane wider) fails.
+            let margins = 2.0 * crate::design::S;
             d.observe(
                 "iter-26-B-FA9",
                 name.zip(rule).is_some_and(|(name, rule)| {
-                    name.right() <= rule + 1.0
-                        && ((name.right() - rule).abs() <= 1.0
-                            || (name.width() - form).abs() <= 1.0)
+                    let column = rule - name.left() - margins;
+                    let wanted = crate::design::save_row::name_width(column) + margins;
+                    (name.width() - wanted).abs() <= 1.0
                 }) && start.zip(name).is_some_and(|(save, name)| {
                     (save.left() - (name.right() + crate::design::L)).abs() <= 1.5
                 }) && creature.is_some(),
