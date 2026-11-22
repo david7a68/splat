@@ -54,17 +54,17 @@ sol-table-4.md:SO5	action-near-row	5a	named	open
 sol-table-6.md:SQ9	action-near-row	5a	named	open
 astra-desk-1.md:AA2	pane-footer-follows-content	7b	named	closed #619
 astra-desk-10.md:AJ4	pane-footer-follows-content	9,11	named	open
-astra-desk-2.md:AB4	pane-footer-follows-content	8	named	open
+astra-desk-2.md:AB4	pane-footer-follows-content	8	named	closed #652
 astra-desk-4.md:AD1	pane-footer-follows-content	1b	named	open
-astra-desk-7.md:AG12	pane-footer-follows-content	8	named	open
+astra-desk-7.md:AG12	pane-footer-follows-content	8	named	closed #652
 astra-table-4.md:AO4	pane-footer-follows-content	7c	named	open
 astra-table-5.md:AP5	pane-footer-follows-content	7c	named	open
 astra-table-8.md:AS1	pane-footer-follows-content	1b	named	open
 sol-desk-1.md:SA4	pane-footer-follows-content	7b	named	closed #619
 sol-desk-10.md:SJ4	pane-footer-follows-content	9,11	named	open
-sol-desk-2.md:SB4	pane-footer-follows-content	8	named	open
+sol-desk-2.md:SB4	pane-footer-follows-content	8	named	closed #652
 sol-desk-4.md:SD4	pane-footer-follows-content	1b	named	open
-sol-desk-7.md:SG12	pane-footer-follows-content	8	named	open
+sol-desk-7.md:SG12	pane-footer-follows-content	8	named	closed #652
 sol-table-8.md:SS1	pane-footer-follows-content	1b	named	open
 astra-desk-8.md:AH8	session-header-measure	7c	named	open
 astra-table-4.md:AO10	session-header-measure	7c	named	open

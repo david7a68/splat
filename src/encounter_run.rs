@@ -440,6 +440,11 @@ pub struct Run {
     /// app works it out when the Timeline or the run changes, for the view to show. The acts
     /// work it out again (`unend`). Never saved.
     pub continue_blocked: Option<&'static str>,
+    /// The answer to the DM's last refused Continue fight or Undo of the ending (issue #507),
+    /// with the reason it answered. It belongs to that attempt: Dismiss, the next attempt, and
+    /// the Timeline's next change that works out another reason (`answer_still_stands`) end it.
+    /// Never saved.
+    pub unend_refused: Option<(&'static str, crate::design::results::Refusal)>,
     /// An act that makes this ended fight live again waits for the app, which has the Timeline.
     pub wants_unend: Option<Unend>,
     /// Lookup is open. Letters are then the next word of a search, never a command.
@@ -917,6 +922,7 @@ impl Run {
             hide_panel: false,
             lookup_open: false,
             continue_blocked: None,
+            unend_refused: None,
             wants_unend: None,
             reopened: false,
             no_saved_undo: None,
@@ -1581,18 +1587,57 @@ impl Run {
         } else {
             Some(CONTINUE_DISK_CHANGED)
         };
-        if let Some(reason) = self.continue_blocked {
-            // A file that changed under an edit is only the rule's answer, in the control's
-            // place: the Timeline's next change, the save that settles it, works it out again.
-            if current {
-                self.error = Some(continue_reason(reason, self.encounter_exists()).into());
-            }
+        self.unend_refused = self
+            .continue_blocked
+            .map(|reason| (reason, self.unend_refusal(act, reason)));
+        if self.continue_blocked.is_some() {
             return;
         }
         match act {
             Unend::Continue => self.run_command(Command::Continue),
             Unend::Undo if self.undo_unends_saved() => self.take_back(),
             Unend::Undo => {}
+        }
+    }
+    /// The typed answer to a refused `act` for `reason` (issue #507, ruling M7). It keeps the
+    /// Timeline's read diagnosis: a file Splat cannot read is an error; a file that changed under
+    /// an unsaved edit is a warning, settled on the Timeline page; the run rule's answer comes
+    /// from `Refusal::run_rule`, which ends at its cause once the encounter is deleted.
+    fn unend_refusal(&self, act: Unend, reason: &'static str) -> crate::design::results::Refusal {
+        use crate::design::results::{
+            Cause, FailedAct, Fallback, File, Name, Recovery, Refusal, RunRule, Step,
+        };
+        let fight = Name::new(self.name.as_str()).unwrap_or(Name::fallback(Fallback::ThisFight));
+        let act = match act {
+            Unend::Continue => FailedAct::NotContinued { fight },
+            Unend::Undo => FailedAct::EndingNotUndone { fight },
+        };
+        match reason {
+            CONTINUE_NEEDS_TIMELINE => Refusal::new(
+                act,
+                Cause::Unreadable(File::Timeline),
+                Recovery::First(Step::FixTimeline),
+            ),
+            CONTINUE_DISK_CHANGED => Refusal::new(
+                act,
+                Cause::Conflict(File::Timeline),
+                Recovery::First(Step::SettleTimeline),
+            ),
+            CONTINUE_NO_EVENT => {
+                Refusal::run_rule(act, RunRule::NotOnTimeline, self.encounter_exists())
+            }
+            _ => Refusal::run_rule(act, RunRule::LaterPlayed, self.encounter_exists()),
+        }
+    }
+    /// After the app works the rule out again (the Timeline or the run changed): the last
+    /// refused act's answer ends unless the rule still gives the reason it answered.
+    pub fn answer_still_stands(&mut self) {
+        if self
+            .unend_refused
+            .as_ref()
+            .is_some_and(|(reason, _)| self.continue_blocked != Some(*reason))
+        {
+            self.unend_refused = None;
         }
     }
     /// The outcome of the ending that the newest Continue fight took away, for the next
@@ -3977,6 +4022,7 @@ impl Run {
             hide_panel: false,
             lookup_open: false,
             continue_blocked: None,
+            unend_refused: None,
             wants_unend: None,
             reopened: true,
             no_saved_undo: None,
@@ -8558,6 +8604,25 @@ mod tests {
         };
         let place = event(&book, b.id).played_order;
         let standing = |run: &Run| run.info(PathBuf::new(), None, true).standing;
+        // Issue #507: a refused act's typed answer, its words and its tone, never a run error.
+        let answer = |run: &Run| {
+            assert!(
+                run.error.is_none(),
+                "a refusal is no run error: {:?}",
+                run.error
+            );
+            run.unend_refused
+                .as_ref()
+                .map(|(_, refusal)| (refusal.words().as_str().to_owned(), refusal.tone()))
+        };
+        let later = |act: &str| {
+            Some((
+                format!(
+                    "{act} A later fight or rest was played. Start a new run to play it again."
+                ),
+                crate::design::Tone::Warning,
+            ))
+        };
         // B is the last fight, with this result, and the next fight starts from its HP.
         let b_is_last = |book: &Book, b: &Run, result: &str, plan: &str, open: bool| {
             let said = event(book, b.id);
@@ -8627,10 +8692,13 @@ mod tests {
         assert!(older.undo_continues());
         older.undo();
         assert_eq!(older.wants_unend, Some(Unend::Undo), "the app answers it");
-        for act in [Unend::Undo, Unend::Continue] {
+        for (act, words) in [
+            (Unend::Undo, "The ending of A was not undone."),
+            (Unend::Continue, "A did not go on."),
+        ] {
             older.unend(act, &mut book);
             assert!(older.ended(), "{act:?} of an older fight");
-            assert_eq!(older.error.as_deref(), Some(CONTINUE_LATER));
+            assert_eq!(answer(&older), later(words), "{act:?}");
         }
         assert_eq!(
             older.undo_blocked(),
@@ -8654,15 +8722,20 @@ mod tests {
         refused.undo();
         refused.unend(Unend::Undo, &mut book);
         assert!(refused.ended());
-        assert_eq!(refused.error.as_deref(), Some(CONTINUE_LATER));
+        assert_eq!(answer(&refused), later("The ending of B was not undone."));
         book.reload();
         assert_eq!(continue_blocked(&book.events, true, b.id), None);
+        // The answer belongs to its attempt: once the rule gives another reason (none here),
+        // the app's next working-out ends it.
+        refused.continue_blocked = continue_blocked(&book.events, true, b.id);
+        refused.answer_still_stands();
+        assert_eq!(answer(&refused), None, "the reason it answered is gone");
 
         // From History or the plan's played row: B opens from its file and goes on.
         let mut b = Run::open(b.path().unwrap(), campaign).unwrap();
         let mut said = None;
         b.unend(Unend::Continue, &mut book);
-        assert!(b.error.is_none(), "{:?}", b.error);
+        assert_eq!(answer(&b), None);
         tell(&mut book, &mut said, Some(&mut b), session);
         assert_eq!(standing(&b), Standing::Unfinished);
         b_is_last(&book, &b, "Round 1", "Round 1", true);
@@ -8747,7 +8820,7 @@ mod tests {
         let mut again = Run::open(b.path().unwrap(), campaign).unwrap();
         again.unend(Unend::Continue, &mut book);
         assert!(again.ended(), "the act must read the disk first");
-        assert_eq!(again.error.as_deref(), Some(CONTINUE_LATER));
+        assert_eq!(answer(&again), later("B did not go on."));
         // The file changed under the note, so that copy cannot be sure which fight was played
         // last. The act refuses and keeps the note; the Timeline's save settles it.
         again.unend(Unend::Continue, &mut noted);
@@ -8756,15 +8829,39 @@ mod tests {
             "an unsaved note must not skip a later rest on disk"
         );
         assert_eq!(again.continue_blocked, Some(CONTINUE_DISK_CHANGED));
+        // #507: bytes that changed under the edit are a warning, settled on the Timeline page.
+        assert_eq!(
+            answer(&again),
+            Some((
+                "B did not go on. Timeline.md has unsaved words, and its file changed on disk. \
+                 Settle Timeline.md on the Timeline page first."
+                    .to_owned(),
+                crate::design::Tone::Warning,
+            ))
+        );
         assert_eq!(noted.events[0].notes, "A note waiting to save");
         noted.save();
         again.unend(Unend::Continue, &mut noted);
         assert!(again.ended());
-        assert_eq!(again.error.as_deref(), Some(CONTINUE_LATER));
+        assert_eq!(answer(&again), later("B did not go on."));
         assert!(
             fs::read_to_string(&timeline)
                 .unwrap()
                 .contains("A note waiting to save")
+        ); // #507: a Timeline.md Splat cannot read is an error, fixed on the Timeline page.
+        fs::write(&timeline, "---\ntimeline_version: [broken\n---\n").unwrap();
+        noted.reload();
+        assert!(noted.unreadable.is_some());
+        again.unend(Unend::Undo, &mut noted);
+        assert!(again.ended());
+        assert_eq!(
+            answer(&again),
+            Some((
+                "The ending of B was not undone. Splat cannot read Timeline.md. Fix Timeline.md \
+                 on the Timeline page first."
+                    .to_owned(),
+                crate::design::Tone::Error,
+            ))
         );
     }
     #[test]
