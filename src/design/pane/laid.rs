@@ -886,6 +886,27 @@ mod tests {
         harness.input_mut().events.push(button(false));
         harness.run_steps(3);
         assert!(shown(&harness, 25), "it lands after the release");
+        // A wheel while the press is held cancels the waiting request.
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(button(true));
+        harness.step();
+        show(&mut harness, 38);
+        harness.step();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(2);
+        harness.input_mut().events.push(button(false));
+        harness.run_steps(4);
+        assert!(
+            !shown(&harness, 38),
+            "a wheel while held cancels the request"
+        );
         // egui's own target, asked in the passes that queue and apply the request, does not
         // write the offset after it.
         harness.state_mut().pull = true;

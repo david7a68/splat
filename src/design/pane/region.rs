@@ -350,7 +350,7 @@ impl<'s> BlockRegion<'s> {
         let clip = ui.clip_rect();
         let (offset, view) = (clip.top() - rect.top(), clip.height().max(0.0));
         let plan = state.plan.plan(content, env);
-        let queued = resolve_in_place(
+        resolve_in_place(
             ui,
             (&mut state.pending, &mut state.asked),
             plan,
@@ -359,8 +359,6 @@ impl<'s> BlockRegion<'s> {
         );
         let mask = state.plan.mask(content, env, offset, view);
         let plan = state.plan.plan(content, env);
-        let (ctx, layer) = (ui.ctx().clone(), ui.layer_id());
-        let widgets_from = widget_count(&ctx, layer);
         for (at, part) in drawn_blocks(&mask) {
             let block_rect = place(plan, at);
             // A block's `Ui` (and so its controls' ids and their focus) is its own, by its key:
@@ -376,36 +374,6 @@ impl<'s> BlockRegion<'s> {
                 clip_to_part(&mut child, rect.top() + top..=rect.top() + end);
             }
             block(&mut child, at);
-        }
-        // Focus clearance (priority 5): a control of a drawn block that gained the keyboard focus
-        // in this pass and is not whole in the room (a block taller than the room, entered by Tab)
-        // comes whole into view in the next pass, unless a request moved the column already.
-        // egui drops a focus whose control stays out of view, and the pane's own focus scroll
-        // would land a frame later; this one is the column's request, so no egui target moves
-        // it afterwards. The DM's own wheel never gains a focus, so it is never pulled back.
-        let focused = ctx.memory(|memory| memory.focused());
-        let gained = focused.filter(|id| Some(*id) != state.focused_id);
-        state.focused_id = focused;
-        if !queued
-            && let Some(id) = gained
-            && let Some(own) = ctx.viewport(|viewport| {
-                let widgets = &viewport.this_pass.widgets;
-                widgets
-                    .order(id)
-                    .filter(|(at_layer, at)| *at_layer == layer && *at >= widgets_from)
-                    .and_then(|_| widgets.get(id).map(|widget| widget.rect))
-            })
-        {
-            let target = crate::design::components::reveal_rect(&ctx, id, own);
-            let whole = target.top() >= clip.top() - 0.5 && target.bottom() <= clip.bottom() + 0.5;
-            if !whole {
-                let by = if target.height() > view || target.top() < clip.top() {
-                    target.top() - clip.top()
-                } else {
-                    target.bottom() - clip.bottom()
-                };
-                crate::design::reveal::queue(ui, by);
-            }
         }
         // A hairline marks each cut edge: content goes on beyond it.
         let hairline = |y: f32| {
@@ -686,8 +654,8 @@ impl<'s> BlockRegion<'s> {
 /// the pane's: run once per pass after that pass's input, before any block draws. In order: the
 /// DM's movement over the column in this pass (a wheel turn, a drag begun in it, Page Up or Page
 /// Down) cancels every older request; a press held in the column makes the requests wait, up to
-/// `REQUEST_FRAMES`; then the highest request (`Pending::take`) becomes the least move of the
-/// column that shows its block whole (a block taller than the view: its head at the view's
+/// `REQUEST_FRAMES` (a wheel while it is held still cancels them); then the highest request
+/// (`Pending::take`) becomes the least move of the column that shows its block whole (a block taller than the view: its head at the view's
 /// top), queued for the column's next pass (`reveal::queue`), which another pass of this frame
 /// draws. A request whose block left the plan ends.
 fn resolve_in_place(
@@ -696,7 +664,7 @@ fn resolve_in_place(
     plan: &BlockPlan,
     clip: Rect,
     (offset, view): (f32, f32),
-) -> bool {
+) {
     let frame = ui.ctx().cumulative_frame_nr();
     let (moved, held) = ui.input(|input| {
         let pointer = &input.pointer;
@@ -715,11 +683,11 @@ fn resolve_in_place(
     }
     if *pending == Pending::default() {
         *asked = None;
-        return false;
+        return;
     }
     asked.get_or_insert(frame);
     if held {
-        return false;
+        return;
     }
     *asked = None;
     let target = match pending.take(plan) {
@@ -735,13 +703,11 @@ fn resolve_in_place(
         }
         Some(Want::Origin) => 0.0,
         Some(Want::Kept(kept)) => kept,
-        None => return false,
+        None => return,
     };
     if (target - offset).abs() > 0.5 {
         crate::design::reveal::queue(ui, target - offset);
-        return true;
     }
-    false
 }
 
 /// The widgets on `layer` so far in this pass.
