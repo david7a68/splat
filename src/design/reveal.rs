@@ -798,6 +798,8 @@ mod tests {
         after: f32,
         /// The outer column does not host reveals.
         plain: bool,
+        /// A typed jump to the target's top (`jump`), asked once.
+        heading: bool,
     }
 
     impl Page {
@@ -830,6 +832,7 @@ mod tests {
                 open_down: 0.0,
                 after: 0.0,
                 plain: false,
+                heading: false,
             }
         }
     }
@@ -842,8 +845,12 @@ mod tests {
         if page.drawn {
             let tall = page.tall;
             let mut field = None;
+            let heading = std::mem::take(&mut page.heading);
             let rect = ui
                 .vertical(|ui| {
+                    if heading {
+                        jump(ui, ui.cursor().top(), JumpTo::LinkedHeading);
+                    }
                     ui.label("Target top");
                     field = Some(ui.button("Field"));
                     room(ui, tall);
@@ -1344,11 +1351,26 @@ mod tests {
         page.plain = true;
         let mut h = harness(page);
         let before = top(&h, "Target top");
+        let view_top = top(&h, "Outer top");
         h.run_steps(8);
         assert_eq!(h.state().reveal.ended(), Some(End::Unowned));
         assert!(
             (top(&h, "Target top") - before).abs() < 0.5,
             "a column that hosts no reveal moved"
+        );
+        // Layout PR 10c (ruling M18): a typed jump needs no act and no hosting column. The
+        // column writes it as its own offset: the target's top at the view's top, once.
+        h.state_mut().heading = true;
+        h.run_steps(3);
+        let at = top(&h, "Target top");
+        assert!(
+            (at - view_top).abs() < 1.0,
+            "jump: the target's top {at} is at the view's top {view_top}"
+        );
+        h.run_steps(4);
+        assert!(
+            (top(&h, "Target top") - at).abs() < 0.5,
+            "jump-once: the column stays where the jump put it"
         );
     }
 
