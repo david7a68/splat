@@ -542,7 +542,7 @@ pub fn iter14_e_changed_files_end_every_undo_result(
                     .unwrap();
                 let _ = library.draft.replace(format!(
                     "{}\nUnsaved words.\n",
-                    loaded.notes[unrelated].text
+                    loaded.notes[unrelated].text.as_str()
                 ));
                 library.loaded = Some(loaded);
                 library.selected = Some(unrelated);

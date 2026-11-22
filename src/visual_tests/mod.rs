@@ -750,6 +750,105 @@ fn selected() -> Vec<(&'static str, Seed, Script)> {
         .collect()
 }
 
+/// Sol 2-003: what a builder needs for the next red run from a failed run. `lines` are the
+/// failure's own lines (`<scenario>: …` for a scenario that failed, `<check> / <scenario>…` for
+/// a regression); each scenario they name (one of this run's `names`) gives its failing
+/// observations (`workflow` violations): scenario, check id, window and the start of the
+/// detail. Then the one focused rerun of those scenarios, under the run's own label.
+fn rerun_report(
+    label: &str,
+    names: &[&str],
+    lines: &[String],
+    violations: &[ergonomics::Violation],
+) -> String {
+    const SHOWN: usize = 160;
+    let known = |name: &str| names.iter().copied().find(|known| *known == name.trim());
+    let mut scenarios: Vec<&str> = Vec::new();
+    for line in lines {
+        let named = line
+            .split(" / ")
+            .nth(1)
+            .and_then(|rest| known(rest.split(':').next().unwrap_or(rest)))
+            .or_else(|| line.split(':').next().and_then(known));
+        if let Some(name) = named
+            && !scenarios.contains(&name)
+        {
+            scenarios.push(name);
+        }
+    }
+    if scenarios.is_empty() {
+        return String::new();
+    }
+    let mut report = String::from("Failing observations:\n");
+    for violation in violations
+        .iter()
+        .filter(|v| v.check == "workflow" && scenarios.contains(&v.scenario.as_str()))
+    {
+        let mut detail: String = violation.detail.chars().take(SHOWN).collect();
+        if violation.detail.chars().count() > SHOWN {
+            detail.push('…');
+        }
+        report.push_str(&format!(
+            "  {} / {} at {}: {detail}\n",
+            violation.scenario, violation.state, violation.window
+        ));
+    }
+    report.push_str(&format!(
+        "Rerun: devenv shell -- visual-test {label} --only {}",
+        scenarios.join(",")
+    ));
+    report
+}
+
+/// Sol 2-003: the report names each failing observation of the scenarios the failure names
+/// (and none of another scenario, nor a passing check), and one exact rerun of those scenarios.
+#[test]
+fn a_failed_run_names_its_observations_and_its_focused_rerun() {
+    let violation =
+        |check: &str, scenario: &str, state: &str, detail: &str| ergonomics::Violation {
+            check: check.into(),
+            scenario: scenario.into(),
+            state: state.into(),
+            window: "960x640".into(),
+            node: state.into(),
+            role: check.into(),
+            rect: [0.0; 4],
+            detail: detail.into(),
+        };
+    let long = "Done stands on the last line's centre ".repeat(8);
+    let violations = [
+        violation("workflow", "trackers", "T19.4", &long),
+        violation(
+            "workflow",
+            "session-plan",
+            "T7.1",
+            "The plan's rows keep one pitch",
+        ),
+        violation("target-size", "trackers", "trackers-due", "a 20 px target"),
+    ];
+    let names = ["trackers", "session-plan", "list-formats"];
+    let regressions = ["workflow / trackers: 1 (baseline 0)".to_owned()];
+    let failed = ["list-formats: Expected text not found: Lost Patrol".to_owned()];
+    let shown: String = long.chars().take(160).collect();
+    assert_eq!(
+        rerun_report("s07-f1", &names, &regressions, &violations),
+        format!(
+            "Failing observations:\n  trackers / T19.4 at 960x640: {shown}…\n\
+             Rerun: devenv shell -- visual-test s07-f1 --only trackers"
+        )
+    );
+    assert_eq!(
+        rerun_report("latest", &names, &failed, &violations),
+        "Failing observations:\nRerun: devenv shell -- visual-test latest --only list-formats"
+    );
+    let both: Vec<String> = regressions.iter().chain(&failed).cloned().collect();
+    assert!(
+        rerun_report("x", &names, &both, &violations).ends_with("--only trackers,list-formats"),
+        "one rerun for every scenario the failure names"
+    );
+    assert_eq!(rerun_report("x", &names, &[], &violations), "");
+}
+
 fn output_directory() -> (PathBuf, bool) {
     let explicit = std::env::var_os("SPLAT_VISUAL_DIR").map(PathBuf::from);
     let capture = explicit.is_some() || std::env::var_os("SPLAT_VISUAL_CAPTURE").is_some();
@@ -1270,10 +1369,16 @@ fn visual_suite() {
         println!("Updated {BASELINE_PATH}");
         return;
     }
+    // Sol 2-003: a failed run says how to see the failure again, in one focused run.
+    let label = directory.file_name().map_or_else(
+        || "latest".into(),
+        |name| name.to_string_lossy().into_owned(),
+    );
     assert!(
         failed.is_empty(),
-        "Scenarios failed:\n{}",
-        failed.join("\n")
+        "Scenarios failed:\n{}\n{}",
+        failed.join("\n"),
+        rerun_report(&label, &names, &failed, &violations)
     );
     // A run of every scenario must speak for every test in section 8. A deleted `observe`
     // would otherwise look like nothing at all.
@@ -1292,9 +1397,10 @@ fn visual_suite() {
         ),
         Enforce::Baseline => assert!(
             regressions.is_empty(),
-            "Ergonomics regressions against {BASELINE_PATH}:\n{}\nDetails: {}",
+            "Ergonomics regressions against {BASELINE_PATH}:\n{}\nDetails: {}\n{}",
             regressions.join("\n"),
             directory.join("ergonomics.md").display(),
+            rerun_report(&label, &names, &regressions, &violations),
         ),
         Enforce::Strict => assert!(
             violations.is_empty(),

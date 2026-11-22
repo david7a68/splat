@@ -2219,43 +2219,68 @@ mod tests {
     }
 
     /// M0556: the list opens at its last event: the list's column writes the jump
-    /// (`reveal::jump`), so the rows near the last event are drawn in view and the first one is
-    /// not (only the rows in view draw). The same rows as `scroll_to_rect` showed.
+    /// (`reveal::jump`), so the last event is painted whole inside the column's clip and the
+    /// first one is not drawn (only the rows in view draw). At a wide window (two columns' width)
+    /// and at a small one. The theme is the app's before the page's first frame: the harness draws
+    /// until the page settles before the test's own code runs, and a jump measured at egui's
+    /// default sizes is clamped short of the end once the theme's sizes apply.
     #[test]
     fn the_list_opens_at_its_last_event() {
         use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
-        let dir = tempfile::tempdir().unwrap();
-        let mut book = Book::default();
-        book.open(Some(dir.path()));
-        for at in 0..60 {
-            book.add(Kind::Event, None);
-            book.events.last_mut().unwrap().title = format!("Stop {at:02}");
-        }
-        book.save();
-        type State = (TimelinePage, Book, crate::sessions::page::Sessions);
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1200.0, 600.0))
-            .themed_state(
-                |ctx, (page, book, notes): &mut State| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
-                    });
-                },
-                (
-                    TimelinePage::default(),
-                    book,
-                    crate::sessions::page::Sessions::default(),
-                ),
+        for size in [egui::vec2(1200.0, 600.0), egui::vec2(960.0, 640.0)] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut book = Book::default();
+            book.open(Some(dir.path()));
+            for at in 0..60 {
+                book.add(Kind::Event, None);
+                book.events.last_mut().unwrap().title = format!("Stop {at:02}");
+            }
+            book.save();
+            type State = (TimelinePage, Book, crate::sessions::page::Sessions);
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(size)
+                // The theme is installed in the harness's first frame; the page draws from the
+                // next (issue #810, `design::test_harness`).
+                .themed_state(
+                    |ctx, (page, book, notes): &mut State| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
+                        });
+                    },
+                    (
+                        TimelinePage::default(),
+                        book,
+                        crate::sessions::page::Sessions::default(),
+                    ),
+                );
+            harness.run_steps(6);
+            // The column's clip ends at the panel's content edge (the list has no footer).
+            let bottom = size.y
+                - f32::from(
+                    egui::Frame::central_panel(&harness.ctx.style())
+                        .inner_margin
+                        .bottom,
+                );
+            let rect = |words: &str| {
+                harness
+                    .query_all_by_label_contains(words)
+                    .next()
+                    .map(|node| node.rect())
+            };
+            let last =
+                rect("Stop 59").unwrap_or_else(|| panic!("{size:?}: the last event is drawn"));
+            let before =
+                rect("Stop 58").unwrap_or_else(|| panic!("{size:?}: the event before it is drawn"));
+            assert!(
+                last.bottom() <= bottom + 0.5 && last.top() > before.bottom(),
+                "{size:?}: the last event {last:?} is whole above the clip's end {bottom}"
             );
-        harness.run_steps(6);
-        let drawn = |words: &str| harness.query_all_by_label_contains(words).next().is_some();
-        // The column stops at its content's end: the rows near the last event are in view.
-        assert!(drawn("Stop 57"), "the rows near the last event are in view");
-        assert!(
-            !drawn("Stop 00"),
-            "the list moved: the first event is out of view"
-        );
+            assert!(
+                rect("Stop 00").is_none(),
+                "{size:?}: the list moved: the first event is out of view"
+            );
+        }
     }
 
     /// Round 30 B7d, ruling L9: the Add result ends in the page's owner update

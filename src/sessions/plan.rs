@@ -1934,7 +1934,7 @@ impl Scenes {
     fn end_what_changed(&mut self, draft: Option<&crate::sessions::Draft>) {
         if self.fault.as_ref().is_some_and(|fault| {
             draft.is_none_or(|draft| {
-                draft.body.as_str() != fault.met || (fault.waits && !draft.unsaved())
+                !draft.body.same_words(&fault.met) || (fault.waits && !draft.unsaved())
             })
         }) {
             self.fault = None;
@@ -4397,7 +4397,7 @@ impl Sessions {
                     && self
                         .draft
                         .as_ref()
-                        .is_none_or(|draft| draft.body.as_str() != *after)
+                        .is_none_or(|draft| !draft.body.same_words(after))
             })
         {
             self.removed_group = None;
@@ -5722,7 +5722,7 @@ impl Sessions {
             && (self
                 .draft
                 .as_ref()
-                .is_none_or(|draft| draft.body.as_str() != *body)
+                .is_none_or(|draft| !draft.body.same_words(body))
                 || book.events != *events)
         {
             self.deleted_run = None;
