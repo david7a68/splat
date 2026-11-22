@@ -1157,6 +1157,12 @@ mod tests {
         key(&mut harness, egui::Key::S, egui::Modifiers::CTRL);
         harness.run_steps(3);
         assert!(shown(&harness, 30), "a shortcut leaves a queued request");
+        // A key that moves nothing (Escape) leaves it too.
+        show(&mut harness, 16);
+        harness.step();
+        key(&mut harness, egui::Key::Escape, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(shown(&harness, 16), "Escape leaves a queued request");
         // A shortcut on a key that would move the view (Ctrl+Page Down: the next tab) too.
         show(&mut harness, 12);
         harness.step();
