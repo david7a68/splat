@@ -41,6 +41,25 @@ const GONE_BESIDE_SAVE: &str = "Its encounter was deleted. See Belongs to.";
 /// A member's fault beside Save, while its row is not on screen: fixed words with no name, so
 /// the place's width is known; the row keeps the full cause with the name.
 const MEMBER_BESIDE_SAVE: &str = "A creature here cannot be saved. See its row.";
+
+/// Layout step 6: the group head's two reason slots (`save_row::head_plan`): Save's own reason,
+/// then the campaign-switch reason in both its forms, whose place G122's short words for a fault
+/// said elsewhere can take. Each slot's room and line are measured by all of them, so neither a
+/// state nor a refusal moves a field.
+const HEAD_REASONS: [design::save_row::ReasonSlot<'static>; 2] = [
+    design::save_row::ReasonSlot::of(&[EMPTY_REASON]),
+    design::save_row::ReasonSlot {
+        forms: &[
+            design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
+            design::save_row::DISCARD_TO_SWITCH,
+        ],
+        substitutes: &[GONE_BESIDE_SAVE, MEMBER_BESIDE_SAVE],
+        short: &[
+            design::save_row::SAVE_OR_DISCARD_SHORT,
+            design::save_row::DISCARD_SHORT,
+        ],
+    },
+];
 /// The Groups list's heading for groups whose encounter is gone; Arrivals says the same words
 /// beside such a group's name (FB10).
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
@@ -1176,9 +1195,35 @@ pub(super) fn shown_name(block: &Mapping, name: String) -> String {
         .map_or(name, |changed| changed.trim().to_owned())
 }
 
-/// What the DM can do about a member whose creature this campaign cannot find.
-const MISSING_MEMBER_HELP: &str =
-    "Choose a replacement, check the packages it uses, or remove this member.";
+/// A member's fault in its one form (`member_fault`), as a typed fault: its words whole, in the
+/// tone its kind gives (R41): an error is `CannotRead`, a warning `NeedsFixing`.
+struct MemberFaultWords {
+    words: String,
+    severity: design::outcome::Severity,
+}
+
+impl MemberFaultWords {
+    fn new(words: String, tone: Tone) -> Self {
+        let severity = if tone == Tone::Error {
+            design::outcome::Severity::CannotRead
+        } else {
+            design::outcome::Severity::NeedsFixing
+        };
+        Self { words, severity }
+    }
+}
+
+impl design::outcome::Fault for MemberFaultWords {
+    fn severity(&self) -> design::outcome::Severity {
+        self.severity
+    }
+    fn place(&self) -> Option<design::outcome::FaultPlace<'_>> {
+        None
+    }
+    fn cause(&self) -> design::outcome::Sentence {
+        super::outcome_words(&self.words)
+    }
+}
 /// A group's own reason when it has no member fault to show.
 const NONE_CAN_JOIN: &str = "No members can join.";
 /// Why a member with a D&D Beyond sheet cannot join from a group.
@@ -2840,56 +2885,45 @@ impl Encounters {
 
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
-        let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
         let (mut save, mut discard) = (false, false);
         let mut name_right = f32::INFINITY;
-        // AK1, AB2: the header is one block that ends where the members column ends. Save group
-        // sits at that edge on the save row, above the member actions and beside the save state
-        // and Discard, never across the Add creatures column. The name keeps its measure, so it
-        // still ends with `Belongs to` and, in a narrow column, at the column's edge. Before the
-        // column is first drawn (and in the compact Add pane), the page's edge stands in for it.
-        let block_right = column_right.map_or(ui.max_rect().right(), |right| {
-            right.min(ui.max_rect().right())
-        });
-        // The save row's reasons are measured to one edge on both tabs of the compact editor
-        // (Astra, 386): the members column's width as `members_pane` gives it, which the Add
-        // creatures tab does not draw. So a reason keeps its place, and the row its height,
-        // when the DM changes tab.
-        let reasons_right = if compact {
-            ui.max_rect().left()
-                + (ui.available_width() - ui.spacing().scroll.allocated_width())
-                    .clamp(0.0, design::LIST_MEASURE)
-        } else {
-            block_right
-        };
-        // FB7: Save group is on the title line at the editor's right edge, above the Add
-        // creatures column, where Save encounter is in the encounter editor (round 28: one place
-        // in both editors). The name and Belongs to keep the block's edge. The save row below
-        // keeps the state, Discard and reasons.
-        let title_right = ui.max_rect().right();
+        // Layout step 6 (`DraftHead`, I7, I8): one plan for the head, made before it paints from
+        // the widths only. The members column's edge comes from the room and the widths the body
+        // draws its columns with (`members_edge`), not from an older frame: the name field ends
+        // at that column (with `Belongs to`) or at `FORM_WIDTH`; Save group follows it `L` after,
+        // or takes its own line; the save row's reasons are measured to the same edge, beside the
+        // widest state word and Discard in every state, so a state change moves no field (SL4).
+        let members_right = members_edge(ui, compact);
+        let left = ui.max_rect().left();
         // Save keeps one width in both weights, so its left edge does not move when a press
-        // changes its weight (G1b): it ends at the editor's right edge.
+        // changes its weight (G1b).
         let save_width = Action::primary("Save group")
             .natural_width(ui)
             .max(Action::secondary("Save group").natural_width(ui))
             .ceil();
-        let button = match state.save_weight() {
-            design::save_row::SaveWeight::Primary => Action::primary("Save group"),
-            design::save_row::SaveWeight::Secondary => Action::secondary("Save group"),
-        }
-        .min_width(save_width)
-        .blocked(state.save_blocked());
+        let plan = design::save_row::head_plan(
+            ui,
+            &design::save_row::HeadSpec {
+                // The group's state never says changed on disk, not saved or repair.
+                words: &design::save_row::EDIT_WORDS,
+                column: members_right - left,
+                line: ui.max_rect().right() - left,
+                actions: save_width,
+                row: members_right - left,
+                reasons: &HEAD_REASONS,
+            },
+        );
+        let button = || {
+            match state.save_weight() {
+                design::save_row::SaveWeight::Primary => Action::primary("Save group"),
+                design::save_row::SaveWeight::Secondary => Action::secondary("Save group"),
+            }
+            .min_width(save_width)
+            .blocked(state.save_blocked())
+        };
         let (back, ()) = head.show(ui, |ui| {
             ui.horizontal(|ui| {
-                let gap = ui.spacing().item_spacing.x;
-                let room = (block_right.min(title_right - button.natural_width(ui) - gap)
-                    - ui.cursor().left())
-                .min(ui.available_width());
-                let width = (room - 2.0 * design::S).max(Density::Scan.control());
-                let column = column_right.map_or(f32::INFINITY, |right| {
-                    right - ui.cursor().left() - 2.0 * design::S
-                });
-                let response = name_field(ui, draft, width.min(name_width(column)));
+                let response = name_field(ui, draft, plan.name_width);
                 design::named(ui, &response, &format!("Group name: {}", draft.name));
                 if response.changed() {
                     draft.touch();
@@ -2899,22 +2933,23 @@ impl Encounters {
                 if focus_name {
                     design::focus_and_select(ui, response.id, &draft.name);
                 }
-                ui.allocate_ui_with_layout(
-                    egui::vec2(
-                        (title_right - ui.cursor().left()).max(0.0),
-                        Density::Scan.control(),
-                    ),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| save = button.show(ui).clicked(),
-                );
+                if plan.actions_beside {
+                    // Save starts `L` after the field.
+                    let gap = ui.spacing().item_spacing.x;
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(design::L - gap + save_width, Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| save = button().show(ui).clicked(),
+                    );
+                }
             });
+            if !plan.actions_beside {
+                ui.horizontal(|ui| save = button().show(ui).clicked());
+            }
         });
-        // The save row: the state and Discard at its start, Save group at the block's edge. A
-        // reason that has no room on the row takes its own line below it. AK1, FK1: each reason
-        // has one place, chosen as if both were shown, and the lines below are reserved, so a
-        // reason that comes or goes moves no field.
-        // Each reason: the words its place is measured by (the longest form), and the words it
-        // shows now, if any.
+        // The save row: the state and Discard at its start. A reason the plan does not put on the
+        // row takes its own line below it, kept in every state (AK1, FK1), so a reason that comes
+        // or goes moves no field.
         // Each line below the row: the words it is measured by, the words it shows now, and
         // whether it is the campaign-switch reason's line (G122, below).
         let mut below: Vec<(&'static str, Option<&'static str>, bool)> = Vec::new();
@@ -2937,39 +2972,31 @@ impl Encounters {
         // The switch reason's place while `gone`, and its words, drawn after the body.
         let mut gone_place: Option<egui::Rect> = None;
         let mut deferred_switch: Option<&'static str> = None;
+        let reasons_right = members_right;
+        // Ruling M24: where the switch reason does not fit beside the widest word and Discard,
+        // the row says its short form in every state, the full reason in hover and the accessible
+        // description; no line is kept for it below.
+        let switch_short = plan.short[1];
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
             discard =
                 super::editor_save_state(ui, state.word().status(), state.discard_shown(), None);
-            let gap = ui.spacing().item_spacing.x;
-            let font = Type::Small.font(ui);
-            // R37: `New` is shorter than the words it turns into (`Unsaved`, or `Invalid`), so
-            // the reasons' places are measured as if the word were the wider of those: the first
-            // member then moves no reason and no field.
-            let word_width =
-                |word: design::save_row::SaveWord| design::number_width(ui, word.words(), &font);
-            let widest = word_width(design::save_row::SaveWord::Unsaved).max(word_width(
-                design::save_row::SaveWord::Invalid(design::save_row::InvalidCause::Refused),
-            ));
-            let mut room =
-                reasons_right - ui.cursor().left() - (widest - word_width(state.word())).max(0.0);
-            // Save's own reason first: it stays at the row's end, under Save, while there is
-            // room. A dirty group blocks the campaign switch wherever it is open, so it says so,
-            // as the encounter editor does.
-            let mut beside = |measure: &'static str, shown: Option<&'static str>, switch: bool| {
-                let width = design::number_width(ui, measure, &font) + gap;
-                if width <= room {
-                    room -= width;
-                    (shown, true)
-                } else {
-                    below.push((measure, shown, switch));
-                    (None, false)
-                }
-            };
-            let (empty_reason, _) = beside(EMPTY_REASON, empty.then_some(EMPTY_REASON), false);
-            // FB6: while Save is blocked, Discard is the one way out, so the lock says only that
-            // (`DraftState::lock_reason`). Its place is measured by the longer form.
-            let (switch, on_row) = beside(
+            // Save's own reason first, at the row's end, then the campaign-switch reason: each in
+            // its planned place. FB6: while Save is blocked, Discard is the one way out, so the
+            // lock says only that (`DraftState::lock_reason`); its place is measured by the
+            // longer form.
+            let mut place =
+                |at: usize, measure: &'static str, shown: Option<&'static str>, switch| {
+                    if plan.on_row[at] {
+                        (shown, true)
+                    } else {
+                        below.push((measure, shown, switch));
+                        (None, false)
+                    }
+                };
+            let (empty_reason, _) = place(0, EMPTY_REASON, empty.then_some(EMPTY_REASON), false);
+            let (switch, on_row) = place(
+                1,
                 design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
                 state.lock_reason(),
                 true,
@@ -2982,7 +3009,7 @@ impl Encounters {
                 ));
                 deferred_switch = switch;
             } else {
-                super::blocked_reason(ui, switch);
+                switch_reason(ui, switch, switch_short);
             }
             ui.allocate_ui_with_layout(
                 egui::vec2(
@@ -2993,34 +3020,16 @@ impl Encounters {
                 |ui| super::blocked_reason(ui, empty_reason),
             );
         });
-        for (reason, shown, switch) in below {
+        for (_, shown, switch) in below {
             let top = ui.cursor().top();
-            let height = ui
-                .painter()
-                .layout(
-                    reason.to_owned(),
-                    Type::Small.font(ui),
-                    colors().muted,
-                    ui.available_width(),
-                )
-                .size()
-                .y;
-            // A layout too narrow for the switch reason on the row (narrower than 960, beside
-            // Lookup): its own line, as on main, is the place, as tall as the taller of the two.
-            let height = match elsewhere {
-                Some((_, words)) if switch => height.max(
-                    ui.painter()
-                        .layout(
-                            words.to_owned(),
-                            Type::Small.font(ui),
-                            colors().muted,
-                            (ui.available_width() - design::ICON_SLOT - design::S).max(0.0),
-                        )
-                        .size()
-                        .y,
-                ),
-                _ => height,
-            };
+            // A layout too narrow for the reason on the row (narrower than 960, beside Lookup):
+            // its own line, as tall as the tallest of its forms and of the words that can take
+            // its place, whether or not any shows or a refusal stands (layout step 6, Astra's P2).
+            let height = design::save_row::slot_height(
+                ui,
+                &HEAD_REASONS[usize::from(switch)],
+                ui.available_width(),
+            );
             let shown = if gone && switch {
                 gone_place = Some(egui::Rect::from_min_size(
                     egui::pos2(ui.cursor().left(), top),
@@ -3159,7 +3168,7 @@ impl Encounters {
             // Nothing is painted outside the place.
             beside.set_clip_rect(place.intersect(ui.clip_rect()));
             if gone_shown.get() {
-                super::blocked_reason(&mut beside, deferred_switch);
+                switch_reason(&mut beside, deferred_switch, switch_short);
             } else {
                 design::outcome::row_fault(&mut beside, &editor_fault(*tone, words));
             }
@@ -3243,22 +3252,15 @@ impl Encounters {
                 EditorPane::Roster => {
                     return members_pane(ui, draft, snapshot, expanded, name_right, refused);
                 }
-                EditorPane::Add => {
-                    // No members column is drawn, so the name keeps no edge from an older one.
-                    let id = column_right_id(&draft.path);
-                    if ui.data_mut(|data| data.remove_temp::<f32>(id)).is_some() {
-                        ui.ctx().request_discard("The members column is not shown");
-                    }
-                    add_pane(
-                        ui,
-                        draft,
-                        snapshot,
-                        search,
-                        focus_search,
-                        (peek, separated),
-                        true,
-                    )
-                }
+                EditorPane::Add => add_pane(
+                    ui,
+                    draft,
+                    snapshot,
+                    search,
+                    focus_search,
+                    (peek, separated),
+                    true,
+                ),
             }
             return false;
         }
@@ -3376,17 +3378,6 @@ fn add_pane(
     }
 }
 
-/// How wide a group's name may be, given the room to the members column's right edge. It ends at
-/// FORM_WIDTH or at the column, whichever comes first. Within `XL` of the column it ends at the
-/// column, so the two edges are the same or clearly apart.
-fn name_width(column: f32) -> f32 {
-    if column - design::FORM_WIDTH < design::XL {
-        column
-    } else {
-        design::FORM_WIDTH
-    }
-}
-
 /// The key of a member's open changes form and of its fields: its group and its identity in the
 /// draft, never its place among the members.
 fn member_key(path: &str, member: &MemberDraft) -> String {
@@ -3394,8 +3385,34 @@ fn member_key(path: &str, member: &MemberDraft) -> String {
 }
 
 /// Where a group editor's members column ended in the last pass, for the name field above it.
-fn column_right_id(path: &str) -> egui::Id {
-    egui::Id::new(("group_column_right", path))
+/// The campaign-switch reason on the group's save row: its full words, or its short form with
+/// the full words in hover and the accessible description (ruling M24).
+fn switch_reason(ui: &mut egui::Ui, words: Option<&str>, short: bool) {
+    match words {
+        Some(full) if short => {
+            design::save_row::short_reason(ui, design::save_row::switch_short(full), full);
+        }
+        words => super::blocked_reason(ui, words),
+    }
+}
+
+/// Layout step 6: where the members column ends, from the room the editor has and the widths its
+/// body draws the columns with (`group_editor_body`: the Add creatures panel, then the members at
+/// most `ROSTER_MAX_WIDTH`; `members_pane`: the scroll bar's lane kept, at most `LIST_MEASURE`).
+/// The head asks before it paints, so its name field and reasons end at the column's edge in the
+/// same pass, with no edge kept from an older one.
+fn members_edge(ui: &egui::Ui, compact: bool) -> f32 {
+    let room = ui.available_width();
+    let members = if compact {
+        room
+    } else {
+        let add = design::side_panel_width(ui.ctx().content_rect().width())
+            .max(room - ROSTER_MAX_WIDTH)
+            .min(ADD_PANE_MAX_WIDTH);
+        (room - add).min(ROSTER_MAX_WIDTH)
+    };
+    ui.max_rect().left()
+        + (members - ui.spacing().scroll.allocated_width()).clamp(0.0, design::LIST_MEASURE)
 }
 
 #[allow(
@@ -3422,19 +3439,11 @@ fn members_pane(
             let mut clip = ui.clip_rect();
             clip.min.y = clip.min.y.max(top);
             ui.set_clip_rect(clip);
-            let column = ui.scope(|ui| {
+            // Its width is the one `members_edge` gives the head before it paints.
+            ui.scope(|ui| {
                 ui.set_width(width.min(ui.available_width()));
                 gone_shown = group_fields(ui, draft, snapshot, expanded, None, name_right, refused);
             });
-            // The name field is drawn before this column; when the column moves (a resize, a
-            // scroll bar), draw the pass again so that both end at the same edge.
-            let right = column.response.rect.right();
-            let id = column_right_id(&draft.path);
-            if ui.data(|data| data.get_temp::<f32>(id)) != Some(right) {
-                ui.data_mut(|data| data.insert_temp(id, right));
-                ui.ctx()
-                    .request_discard("The group name field ends at the members column");
-            }
         });
     gone_shown
 }
@@ -3945,20 +3954,18 @@ fn members(
                     line,
                     cause,
                 );
-                // The actions start under the message's words: the words end there.
-                let mut words_end = None;
+                // M-P0 item 9: one typed body fault, its help under its words, then its repair
+                // at them.
                 let repair = ui.scope(|ui| {
-                    design::message_with_actions(ui, kind.tone(), &words, |ui| {
-                        words_end = Some(ui.min_rect().top());
-                        design::help(ui, MISSING_MEMBER_HELP);
-                        packages_repair(ui)
-                    })
+                    design::outcome::BodyFault::new(&MemberFaultWords::new(words, kind.tone()))
+                        .help(crate::sentence!(
+                            "Choose a replacement, check the packages it uses, or remove this member."
+                        ))
+                        .repair(design::outcome::Repair::new(PACKAGES_LINK, ()))
+                        .show(ui)
+                        .is_some()
                 });
-                let block = repair.response.rect;
-                fault_said = Some(egui::Rect::from_x_y_ranges(
-                    block.x_range(),
-                    block.top()..=words_end.unwrap_or(block.bottom()).min(block.bottom()),
-                ));
+                fault_said = Some(repair.response.rect);
                 repair.response.on_hover_text(member.creature.label());
                 if repair.inner {
                     ui.data_mut(|data| {
@@ -4139,13 +4146,21 @@ fn unread_member(
     );
     let help = member.flag.help();
     // R41: the tone of the fault the list and Arrivals give this row (`FaultKind::Unreadable`).
-    design::message_with_actions(ui, FaultKind::Unreadable.tone(), &words, |ui| {
-        if !help.is_empty() {
-            design::help(ui, help);
-        }
-        ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
-        super::file_line(ui, &snapshot.campaign_root, &draft.path);
-    });
+    // M-P0 item 9: one typed fault, its help and what it blocks under its words, a line each,
+    // then its file.
+    let mut message = design::outcome::FaultMessage::<()>::new(&MemberFaultWords::new(
+        words,
+        FaultKind::Unreadable.tone(),
+    ));
+    if !help.is_empty() {
+        message = message.help(super::outcome_words(help));
+    }
+    let message = message.help(super::outcome_words(blocked)).file(
+        design::outcome::FileLine::new(&snapshot.campaign_root, &draft.path)
+            .edit()
+            .show(),
+    );
+    let _ = design::outcome::BodyMessage::from(message).show(ui);
     let line = member.flag.line;
     let mut remove = false;
     ui.horizontal(|ui| {
@@ -4255,15 +4270,6 @@ fn unread_member(
         body_fault(ui, &editor_fault(Tone::Warning, error));
     }
     design::rule(ui);
-}
-
-/// The repair under a member's warning: a bordered secondary button that starts at the warning
-/// text (FB5), as every message action without an icon is.
-fn packages_repair(ui: &mut egui::Ui) -> bool {
-    Action::secondary(PACKAGES_LINK)
-        .density(Density::Read)
-        .show(ui)
-        .clicked()
 }
 
 /// The repair a member fault's choice asks for.
@@ -5992,7 +5998,9 @@ mod tests {
 
     #[test]
     fn a_group_name_ends_at_its_column_or_clearly_before_it() {
-        // iter-19-B-FD3: a column just past FORM_WIDTH would give a near miss.
+        // iter-19-B-FD3: a column just past FORM_WIDTH would give a near miss. Layout step 6: the
+        // rule is the shared draft head's (`save_row::name_width`), for both editors.
+        use design::save_row::name_width;
         let near = design::FORM_WIDTH + design::XL - 1.0;
         assert_eq!(
             name_width(near),
@@ -6245,7 +6253,7 @@ mod tests {
         let error = draft.save(&campaign, &[]).unwrap_err();
         assert_eq!(
             error,
-            super::super::disk::changed_on_disk("group", "Changed")
+            super::super::disk::changed_on_disk("group", "Changed").to_string()
         );
         assert!(
             error.starts_with("Changed changed on disk."),

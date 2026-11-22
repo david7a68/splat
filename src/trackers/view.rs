@@ -7,8 +7,8 @@ use super::{
 };
 use crate::design::outcome::PaneFrame;
 use crate::design::outcome::{
-    Banner, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Outcome,
-    PagePlaceholder, Said, Sentence, UndoStep, Verb,
+    Banner, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, PagePlaceholder,
+    Said, Sentence, UndoStep, Verb,
 };
 use crate::design::pane::{Body, ContentScroll, held_seen, hold_press};
 use crate::design::{self, Action, Density, Gap, Heading, TextKey, Type, colors, icons};
@@ -967,10 +967,6 @@ fn amount_field(
 /// then the last act of the session being played with `Undo: <label>` and `Add to Timeline`, or,
 /// after `Add to Timeline`, `Added to the Timeline.` with `Undo add`. Nothing shows while
 /// `Trackers.md` cannot be read.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "a refusal carries the ledger’s words"
-)]
 fn messages<'f>(
     frame: &'f PaneFrame,
     trackers: &Trackers,
@@ -981,11 +977,8 @@ fn messages<'f>(
         return messages;
     }
     match &trackers.reason {
-        Some(Unrecorded::Refused(why)) => {
-            messages.outcome(Outcome::Refused(
-                Sentence::outside(why.as_str())
-                    .unwrap_or(crate::sentence!("Nothing was recorded.")),
-            ));
+        Some(Unrecorded::Refused(refusal)) => {
+            messages.outcome(FaultMessage::new(&TrackerFault::Refused(refusal.clone())));
         }
         Some(Unrecorded::NotSaved(error)) => {
             messages.outcome(FaultMessage::new(&TrackerFault::NotSaved(error.clone())));

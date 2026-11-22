@@ -30,6 +30,14 @@ impl Trackers {
         self.removed.clone()
     }
 
+    /// What the last Remove's Undo names (`Undo remove <name>`); empty with no Remove.
+    pub fn test_removed_name(&self) -> String {
+        self.removed
+            .as_ref()
+            .map(history::Removed::name)
+            .unwrap_or_default()
+    }
+
     pub fn test_today(&self) -> &Today {
         &self.today
     }

@@ -258,15 +258,13 @@ fn section(
     open: Option<bool>,
     add: impl FnOnce(&mut egui::Ui),
 ) {
-    if open.is_none() {
-        design::section_with_id(ui, id, design::group_heading_text(ui, word, count), add);
-    } else {
-        egui::CollapsingHeader::new(design::group_heading_text(ui, word, count))
-            .id_salt(id)
-            .icon(design::section_icon)
-            .open(open)
-            .show(ui, add);
-    }
+    design::section_opened(
+        ui,
+        id,
+        design::group_heading_text(ui, word, count),
+        open,
+        add,
+    );
 }
 
 /// G118: a Ready row's difficulty line. It takes the roster's TYPED parts (`Roster::parts`),

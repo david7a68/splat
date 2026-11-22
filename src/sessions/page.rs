@@ -56,8 +56,15 @@ const NOTE_COLUMN: &str = "session_note_frame";
 /// The note frame's padding and hairline, on both sides.
 const NOTE_FRAME_EDGES: f32 = 2.0 * (design::S + design::HAIRLINE_WIDTH);
 /// The header's toggle of the session list, by what a press does.
-pub const HIDE_LIST: &str = "Hide the session list";
-pub const SHOW_LIST: &str = "Show the session list";
+/// The session list's toggle: one name in both states; its pressed state says whether the list
+/// is shown (review of PR 618).
+pub const LIST_TOGGLE: &str = "Session list";
+/// The page header's actions (M0498).
+const NEW_SESSION: design::Word = crate::word!("New session");
+const NEW_TEMPLATE: design::Word = crate::word!("New template");
+const STOP_RECORDING: design::Word = crate::word!("Stop recording");
+const TEMPLATES: design::Word = crate::word!("Templates");
+const SHOW_PARTY: design::Word = crate::word!("Show party");
 /// The plan and the note stand side by side from here.
 const PLAN_BESIDE_NOTE_FROM: f32 = 720.0;
 const PLAN_WIDTH: f32 = 330.0;
@@ -887,11 +894,13 @@ fn fills_body(reason: design::pane::FillsReason) -> design::pane::Body {
 
 /// The words a draft dropped (reloaded from disk, or discarded) and their Undo, in the footer
 /// of the pane that holds the draft: the result its store keeps (M0437), with the store's order,
-/// taken at the act, and its ticket.
+/// taken at the act, and its ticket. The Undo names the draft's note or template (`name`,
+/// M0438, M0440).
 fn add_dropped<'f>(
     frame: &'f PaneFrame,
     messages: &mut Messages<'f, SessionAct>,
     draft: &Draft,
+    name: &str,
     dropped: &design::Results<kept::DraftFile, kept::Dropped>,
 ) {
     if draft.dropped.is_none() {
@@ -908,12 +917,12 @@ fn add_dropped<'f>(
                 Notice::new(crate::sentence!(
                     "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
                 )),
-                UndoStep::verb(Verb::Reload).pressed_as(SessionAct::UndoDrop),
+                UndoStep::of(Verb::Reload, name).pressed_as(SessionAct::UndoDrop),
             )
         } else {
             KeptOutcome::Notice(
                 Notice::new(crate::sentence!("Draft discarded.")),
-                UndoStep::verb(Verb::Discard).pressed_as(SessionAct::UndoDrop),
+                UndoStep::of(Verb::Discard, name).pressed_as(SessionAct::UndoDrop),
             )
         }
     }));
@@ -2596,7 +2605,8 @@ impl Sessions {
         self.job_done = false;
         self.job_warned = false;
         // A folder move's result stays its campaign's (`folder_moves`): this campaign's scope
-        // hides it, and coming back shows it again. So does the page's notice (`notices`).
+        // hides it, and coming back shows it again. The page's notice does not: the change
+        // ends it (`end_notice` above), and coming back does not bring it back.
         self.select(self.current().or(self.notes.first().map(|note| note.id)));
     }
 
@@ -4145,14 +4155,26 @@ impl Sessions {
             self.draft.as_ref()
         };
         if let Some(draft) = draft {
-            add_dropped(frame, &mut messages, draft, &self.dropped);
+            let name = if template {
+                self.template.clone()
+            } else {
+                self.note_name()
+            };
+            add_dropped(
+                frame,
+                &mut messages,
+                draft,
+                &name.unwrap_or_default(),
+                &self.dropped,
+            );
         }
         if template {
             if let Some(shown) = self.deleted_templates.get(&self.page()) {
                 messages.kept(shown.outcome(frame, |deleted| {
                     Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
                         .undo(
-                            UndoStep::verb(Verb::Delete).pressed_as(SessionAct::UndoDeleteTemplate),
+                            UndoStep::of(Verb::Delete, deleted.name.clone())
+                                .pressed_as(SessionAct::UndoDeleteTemplate),
                         )
                         .into()
                 }));
@@ -5188,18 +5210,19 @@ impl Sessions {
                     .selected
                     .and_then(|id| self.notes.iter().find(|note| note.id == id))
                     .map_or_else(|| "Notes".to_owned(), Note::label);
-                let date = self.selected.and_then(|id| self.notes.iter().find(|note| note.id == id)).map_or("", |note| note.date.as_str());
-                let mut close = false;
-                if self.selected.is_none() {
-                    close = design::panel_header(ui, &title, "Close notes");
-                } else {
-                    ui.horizontal_top(|ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            close = design::icon_button(ui, icons::CLOSE, "Close notes").clicked();
-                            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| note_title(ui, &title, date));
-                        });
-                    });
-                }
+                // M0471: the panel's title line is the shared part: the note's title, its date
+                // after it (muted `Small`), and the close icon at the line's right end.
+                let date = self
+                    .selected
+                    .and_then(|id| self.notes.iter().find(|note| note.id == id))
+                    .map(|note| note.date.as_str())
+                    .filter(|date| !date.is_empty());
+                let close = design::TitleLine::new(&title)
+                    .role(design::TitleType::Section)
+                    .context(date)
+                    .close("Close notes")
+                    .show(ui)
+                    .closed;
                 if let Some(draft) = &self.draft { Self::note_status(ui, draft); }
                 design::rule(ui);
                 if close { self.notes_open = false; return; }
@@ -5236,7 +5259,8 @@ impl Sessions {
                 let mut messages =
                     Messages::new(&frame, "notes_panel_footer", ui.available_width());
                 if let Some(draft) = &self.draft {
-                    add_dropped(&frame, &mut messages, draft, &self.dropped);
+                    let name = self.note_name().unwrap_or_default();
+                    add_dropped(&frame, &mut messages, draft, &name, &self.dropped);
                 }
                 if let Some(date) = dated {
                     messages.outcome(
@@ -6815,7 +6839,8 @@ impl Sessions {
         let mut messages = Messages::new(frame, ("session_footer", self.selected), width);
         let dismiss = || Choice::new(MessageChoice::Dismiss(Lost::Nothing), SessionAct::Dismiss);
         if let Some(draft) = &self.draft {
-            add_dropped(frame, &mut messages, draft, &self.dropped);
+            let name = self.note_name().unwrap_or_default();
+            add_dropped(frame, &mut messages, draft, &name, &self.dropped);
         }
         if let Some((tone, words)) = self
             .notice()
@@ -6916,7 +6941,7 @@ impl Sessions {
                 )),
             );
         }
-        self.carry_in_messages(&mut messages);
+        self.carry_in_messages(frame, &mut messages);
         messages
     }
 
@@ -6953,7 +6978,7 @@ impl Sessions {
                     moved.name,
                     moved.number
                 ))
-                .undo(UndoStep::verb(Verb::Move).pressed_as(SessionAct::UndoMove))
+                .undo(UndoStep::of(Verb::Move, moved.name.clone()).pressed_as(SessionAct::UndoMove))
                 .into()
             }));
         }
@@ -6987,7 +7012,10 @@ impl Sessions {
                     None => crate::sentence!("{} added.", added.title),
                 };
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Add).pressed_as(SessionAct::UndoMarker))
+                    .undo(
+                        UndoStep::of(Verb::Add, added.title.clone())
+                            .pressed_as(SessionAct::UndoMarker),
+                    )
                     .into()
             }));
         }
@@ -7069,7 +7097,7 @@ impl Sessions {
             SessionAct::PlayThisOne => self.play_this_one(),
             SessionAct::Open(session) => self.select(session),
             SessionAct::OpenSettings => self.wants_processing_settings = true,
-            SessionAct::UndoCarry(session) => self.undo_carry(session),
+            SessionAct::UndoCarry(session) => self.undo_carry(session, press.ticket),
             SessionAct::UndoDrop => {
                 if let (Some(draft), Some(ticket)) = (&mut self.draft, press.ticket) {
                     let _ = self.dropped.undo_by(ticket, |_| {
@@ -7603,7 +7631,10 @@ impl Sessions {
         if let Some(shown) = self.deleted_templates.get(&self.page()) {
             messages.kept(shown.outcome(frame, |deleted| {
                 Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
-                    .undo(UndoStep::verb(Verb::Delete).pressed_as(SessionAct::UndoDeleteTemplate))
+                    .undo(
+                        UndoStep::of(Verb::Delete, deleted.name.clone())
+                            .pressed_as(SessionAct::UndoDeleteTemplate),
+                    )
                     .into()
             }));
         }
@@ -8267,66 +8298,63 @@ impl Sessions {
         } else {
             design::count(count, singular, plural)
         };
-        let mut new_session = false;
         let in_form = self.form.is_some();
         let empty = self.notes.is_empty();
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
-        let mut stop = false;
         // The same width test as the page below the header (`notes_view`).
         let offers_list_toggle = self.offers_list_toggle(ui.available_width() >= TWO_COLUMNS_FROM);
-        design::page_header(ui, page_title, Some(&context), |ui| {
-            // First, so it keeps the header's right end whatever comes and goes beside it.
-            if offers_list_toggle {
-                let (name, hint) = if self.list_hidden {
-                    (SHOW_LIST, "Show the session list (Ctrl+\\)")
-                } else {
-                    (HIDE_LIST, "Hide the session list (Ctrl+\\)")
-                };
-                if design::icon_button_with_hint(ui, icons::SESSION_LIST, name, hint).clicked() {
-                    self.toggle_list();
-                }
-            }
-            let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
-            if self.view == View::Notes && !in_form && !empty && !folder_missing {
-                new_session = Action::secondary("New session")
+        let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
+        // M0498: the page's header is the shared title line. The list's show and hide is its
+        // view toggle, at the line's right end whatever comes and goes among the actions.
+        let mut line = design::TitleLine::new(page_title)
+            .context((!context.is_empty()).then_some(context.as_str()))
+            .page();
+        if offers_list_toggle {
+            let hint = if self.list_hidden {
+                "Show the session list (Ctrl+\\)"
+            } else {
+                "Hide the session list (Ctrl+\\)"
+            };
+            line = line.toggle(icons::SESSION_LIST, LIST_TOGGLE, hint, !self.list_hidden);
+        }
+        if self.view == View::Notes && !in_form && !empty && !folder_missing {
+            line = line.action(
+                design::TitleAction::secondary(NEW_SESSION)
                     .icon(icons::ADD)
-                    .blocked_if(
-                        folder_missing,
-                        "Choose the session folder before making a session.",
-                    )
-                    .blocked_if(locked, "Other sessions wait until you choose what to keep.")
-                    .show(ui)
-                    .clicked();
-            }
-            if self.view == View::Templates
-                && self.new_template.is_none()
-                && Action::secondary("New template")
-                    .icon(icons::ADD)
-                    .show(ui)
-                    .clicked()
-            {
-                self.templates_list_only = false;
-                self.new_template = Some(String::new());
-                self.template_error = None;
-            }
-            if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
-                stop = Action::quiet("Stop recording")
-                    .icon(icons::STOP_RECORDING)
-                    .show(ui)
-                    .clicked();
-            }
-            if self.view == View::Notes && Action::quiet("Templates").show(ui).clicked() {
-                self.view = View::Templates;
-            }
-            if self.party_hidden
-                && Action::quiet("Show party")
-                    .icon(icons::PARTY)
-                    .show(ui)
-                    .clicked()
-            {
-                self.party_bar = Some(true);
-            }
-        });
+                    .blocked(
+                        locked.then_some("Other sessions wait until you choose what to keep."),
+                    ),
+            );
+        }
+        if self.view == View::Templates && self.new_template.is_none() {
+            line = line.action(design::TitleAction::secondary(NEW_TEMPLATE).icon(icons::ADD));
+        }
+        if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
+            line =
+                line.action(design::TitleAction::quiet(STOP_RECORDING).icon(icons::STOP_RECORDING));
+        }
+        if self.view == View::Notes {
+            line = line.action(design::TitleAction::quiet(TEMPLATES));
+        }
+        if self.party_hidden {
+            line = line.action(design::TitleAction::quiet(SHOW_PARTY).icon(icons::PARTY));
+        }
+        let header = line.show(ui);
+        if header.toggled {
+            self.toggle_list();
+        }
+        if header.clicked(NEW_TEMPLATE) {
+            self.templates_list_only = false;
+            self.new_template = Some(String::new());
+            self.template_error = None;
+        }
+        if header.clicked(TEMPLATES) {
+            self.view = View::Templates;
+        }
+        if header.clicked(SHOW_PARTY) {
+            self.party_bar = Some(true);
+        }
+        let (stop, new_session) = (header.clicked(STOP_RECORDING), header.clicked(NEW_SESSION));
         if stop {
             self.finish_recording(ui.ctx());
         }
@@ -8436,6 +8464,11 @@ impl Sessions {
     pub fn simulate_job_finished(&mut self) {
         let session = self.selected.expect("an open session");
         self.finish_job(Ok(None), session);
+    }
+
+    /// The open note's name, as its warnings and its draft's Undo name it.
+    pub fn open_note_name(&self) -> Option<String> {
+        self.note_name()
     }
 
     /// The open note's draft, to put back after a step that a scenario proves aside.
@@ -10057,7 +10090,8 @@ mod tests {
         }
         harness.run_steps(2);
         // The footer's own Undo, by its ticket.
-        harness.get_by_label("Undo move").click();
+        // M0483: the Undo names the run it moves back.
+        harness.get_by_label("Undo move Bridge Ambush").click();
         harness.run_steps(2);
         {
             let (page, book) = harness.state_mut();

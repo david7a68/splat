@@ -138,9 +138,11 @@ fn connection_help(ui: &mut egui::Ui) {
     });
 }
 
-/// The link's one kept result, `Campaign link saved.`: it ends with the next refresh or link.
+/// The link's one kept result, `Campaign link saved.`, of the local campaign whose link was
+/// saved. It ends with the next refresh or link, a failed link attempt, an account change, and a
+/// change of the open campaign (`poll`, every frame, on any page).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LinkSaved;
+pub struct LinkSaved(uuid::Uuid);
 
 impl crate::design::results::Owner for LinkSaved {
     type Scope = ();
@@ -158,7 +160,7 @@ impl crate::design::results::Kept for LinkSaved {
         press: crate::design::results::Press::Nothing,
     };
     fn owner(&self) -> LinkSaved {
-        LinkSaved
+        *self
     }
 }
 
@@ -174,12 +176,38 @@ pub struct DndBeyond {
     error: Option<String>,
     /// The link's result, with the order the link took for the footer (the store's).
     message: crate::design::Results<LinkSaved, LinkSaved>,
+    /// The open local campaign as the last `poll` saw it: a change ends the link's result.
+    open: Option<uuid::Uuid>,
     visible_last_frame: bool,
     requested_visible_link: Option<(uuid::Uuid, String)>,
     pending_link: Option<(uuid::Uuid, String)>,
 }
 
 impl DndBeyond {
+    /// The list's or the link's error, as the footer says it (tests).
+    #[cfg(test)]
+    pub(crate) fn error_for_test(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    /// A list as a refresh would bring it: `(id, name)` per remote campaign (tests).
+    #[cfg(test)]
+    pub(crate) fn listed_for_test(list: &[(&str, &str)]) -> Self {
+        Self {
+            campaigns: list
+                .iter()
+                .map(|(id, name)| RemoteCampaign {
+                    id: (*id).into(),
+                    name: (*name).into(),
+                    dm_username: None,
+                    player_count: None,
+                })
+                .collect(),
+            loaded: true,
+            ..Default::default()
+        }
+    }
+
     /// Give one remote campaign another name, as a new list from D&D Beyond would. Tests only:
     /// the test list is fixed (`fetch`).
     #[cfg(any(test, feature = "test-support"))]
@@ -203,6 +231,11 @@ impl DndBeyond {
         self.visible_last_frame = false;
     }
 
+    /// The link's result ends, whichever campaign's (see `LinkSaved`).
+    fn end_link_result(&mut self) {
+        self.message.end_unreachable(|_| false);
+    }
+
     pub fn poll(
         &mut self,
         ctx: &egui::Context,
@@ -210,6 +243,11 @@ impl DndBeyond {
         connected: bool,
         local: &mut Campaigns,
     ) {
+        let open = local.active_campaign().map(|campaign| campaign.id);
+        if open != self.open {
+            self.open = open;
+            self.end_link_result();
+        }
         if epoch != self.account_epoch || !connected {
             // Dropping the receiver discards a previous account's late response.
             self.pending = None;
@@ -221,7 +259,7 @@ impl DndBeyond {
             self.loaded = false;
             self.account_epoch = epoch;
             self.error = None;
-            self.message.owner_changed(&LinkSaved);
+            self.end_link_result();
             return;
         }
         if let Some(rx) = &self.pending {
@@ -268,7 +306,7 @@ impl DndBeyond {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.error = None;
-        self.message.owner_changed(&LinkSaved);
+        self.end_link_result();
         let ctx = ctx.clone();
         thread::spawn(move || {
             let _ = tx.send(fetch(session));
@@ -428,7 +466,10 @@ impl DndBeyond {
                 &crate::campaigns::NotDone::words(error),
             ));
         }
-        if link && let Some(shown) = self.message.get(&LinkSaved) {
+        if link
+            && let Some(open) = self.open
+            && let Some(shown) = self.message.get(&LinkSaved(open))
+        {
             messages.kept(shown.outcome(frame, |_| {
                 crate::design::outcome::Said::new(crate::sentence!("Campaign link saved.")).into()
             }));
@@ -559,7 +600,7 @@ impl DndBeyond {
             match local.link(selected.clone()) {
                 Ok(()) => {
                     self.requested_visible_link = None;
-                    self.message.record(LinkSaved);
+                    self.message.record(LinkSaved(campaign.id));
                     self.error = None;
                     if let Some(remote) = self
                         .campaigns
@@ -571,7 +612,11 @@ impl DndBeyond {
                         self.error = Some(error);
                     }
                 }
-                Err(error) => self.error = Some(error),
+                // A failed attempt is the newest answer: the older success ends.
+                Err(error) => {
+                    self.error = Some(error);
+                    self.end_link_result();
+                }
             }
         }
         if let Some(id) = &current {
