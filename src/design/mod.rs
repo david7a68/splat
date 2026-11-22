@@ -67,6 +67,6 @@ pub use save_row::{DraftState, save_row};
 pub use status::{KindStatus, StatusKind, Tinted};
 pub use tokens::*;
 // M5, ruling R22: the run's turn heading, one closed part.
-pub use turn_heading::{KeptTurnHeading, TurnHeading, TurnKeys, TurnName};
+pub use turn_heading::{KeptTurnHeading, TurnHeading, TurnKeys, TurnName, TurnStrip};
 // Ruling R24: one block per value of a settings pane.
 pub use value_block::{HeadingNote, HeadingRow, ValueBlock};
