@@ -182,6 +182,8 @@ when it is taller than the view. `OpenMenuControl` is a list row's `⋯` whose m
 (the Encounters lists, M0259): the button comes back, so the menu does not hang from a control the DM cannot see.
 `ListedRow` here is History's opened run (M0194): its row, its Read-only line and its Final state come whole into
 view, also when the run was opened from another page.
+`AddedTarget` is the card that took what the DM added from another column (an encounter's group that a creature
+from the Add pane went to, M0226): the card comes whole into view, once per add.
 `CheckResult` is a journey's check whose result an act just wrote (a roll, an entered number; the Timeline
 detail, M0546): its line comes whole into view. The Timeline detail's form scrolls in its own pane's column, its
 header drawn before the pane (M0559): wide, a pane with no footer (its results stay in the list's footer); narrow,

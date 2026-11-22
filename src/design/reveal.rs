@@ -869,6 +869,10 @@ pub enum JumpTo {
     /// least scroll that shows its line whole ([`bring_into_view`]), so the DM sees what the act
     /// did.
     CheckResult,
+    /// The card that took what the DM added from another column (an encounter's group that a
+    /// creature from the Add pane went to, M0226): the least scroll that shows the card whole
+    /// ([`bring_into_view`]), fired once by the add (ruling M27).
+    AddedTarget,
 }
 
 /// The `ScrollColumn` that holds `ui` moves, at its next pass, so that the screen y `top` of
