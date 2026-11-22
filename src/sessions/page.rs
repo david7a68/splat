@@ -10762,8 +10762,21 @@ mod tests {
                     .is_disabled(),
             "an empty folder at the press points at Save folder, which is there"
         );
-        // M0497: with no file to move, Ctrl+S saves the folder (the shared save row's key), but
-        // not under a modal.
+        fs::create_dir_all(&templates_c).unwrap();
+        fs::write(templates_c.join("Back.md"), "Back").unwrap();
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(3);
+        assert!(
+            !shows(&harness, "has no files now") && shows(&harness, MOVE_FILES),
+            "files back end the refusal"
+        );
+        // M0497: with no file to move (C's templates gone again), Ctrl+S saves the folder (the
+        // shared save row's key), but not under a modal. After the refusal's own checks, so
+        // nothing here ends it before they look. C is not used again.
+        fs::remove_dir_all(&templates_c).unwrap();
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(3);
+        assert!(!shows(&harness, MOVE_FILES), "no file to move");
         harness.state_mut().0.modal = true;
         ctrl_s(&mut harness);
         assert_eq!(
@@ -10777,21 +10790,6 @@ mod tests {
             super::super::folder_setting(&c).unwrap(),
             "Elsewhere",
             "n0-folder-ctrl-s: Ctrl+S saves the folder"
-        );
-        // Back to the default folder for the steps below: the setting, then the page by a
-        // campaign switch, and the same typed folder.
-        super::super::save_folder(&c, DEFAULT_FOLDER).unwrap();
-        switch(&mut harness, &b);
-        switch(&mut harness, &c);
-        harness.state_mut().0.folder_text = "Elsewhere".to_owned();
-        harness.run_steps(3);
-        fs::create_dir_all(&templates_c).unwrap();
-        fs::write(templates_c.join("Back.md"), "Back").unwrap();
-        harness.state_mut().0.simulate_folder_scan();
-        harness.run_steps(3);
-        assert!(
-            !shows(&harness, "has no files now") && shows(&harness, MOVE_FILES),
-            "files back end the refusal"
         );
         // Early-pass packet, point 3: the current folder's `Now:` line is one line, so a save to
         // a long folder and back to a short one never moves the save row under it.
