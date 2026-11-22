@@ -1229,10 +1229,6 @@ impl CampaignContent {
         self.end_plain(PageResult::Saved);
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: the page's pane, placed by hand around its columns (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         let scope = (self.module, self.dependencies);
         if self.notice_scope.is_some_and(|previous| previous != scope) {
