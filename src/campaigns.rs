@@ -2372,12 +2372,25 @@ mod tests {
             };
         const UNDO: &str = "Undo discard of Campaign details";
         edit_name(&mut harness);
+        // Unrelated B: A's link changes (a result of its own). Undo of A then puts A's draft
+        // back, and B's change and its result stay.
+        pick(&mut harness, "Not linked");
+        assert!(shows(&harness, SAVED));
         harness.get_by_label(UNDO).click();
         harness.run_steps(3);
         assert_eq!(
             harness.state().0.name,
             "Campaign A",
             "Undo of A in A's form"
+        );
+        assert!(
+            shows(&harness, SAVED)
+                && harness
+                    .state()
+                    .0
+                    .active_campaign()
+                    .is_some_and(|campaign| campaign.dndbeyond_campaign_id.is_none()),
+            "Undo of A changed B's link or ended its result"
         );
         harness.get_by_label("Discard").click();
         harness.run_steps(3);
