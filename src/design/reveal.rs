@@ -543,6 +543,10 @@ fn owning_region(ui: &Ui) -> Option<(Id, Region)> {
 pub enum JumpTo {
     /// A reader opened at a linked section: the section's heading at the view's top.
     LinkedHeading,
+    /// An open menu's control after its pane changed size under it (a list row's `⋯`, M0259):
+    /// the least scroll that shows it whole ([`bring_into_view`]), so the menu does not hang
+    /// from a control the DM cannot see.
+    OpenMenuControl,
 }
 
 /// A jump queued for a column: the frame it was asked in and the offset it puts the column at.
@@ -566,7 +570,37 @@ pub fn jump(ui: &Ui, top: f32, why: JumpTo) {
     let Some((_, region)) = owning_region(ui) else {
         return;
     };
-    let to = (region.offset + top - region.view.top()).max(0.0);
+    queue_jump(ui, &region, top - region.view.top(), why);
+}
+
+/// The least scroll, with no press, that shows the whole `rect` (a rect of this pass) in the
+/// view of the `ScrollColumn` that holds `ui` (M-P0.25): none when it is whole in view; else
+/// its nearer edge at the view's edge, and its top at the view's top when it is taller than
+/// the view. The column writes it as its own offset at its next pass, as it writes [`jump`]'s,
+/// and the DM's own input in between drops it. Outside a `ScrollColumn` it does nothing.
+/// Whether it asked for a scroll.
+pub fn bring_into_view(ui: &Ui, rect: Rect, why: JumpTo) -> bool {
+    let Some((_, region)) = owning_region(ui) else {
+        return false;
+    };
+    let view = region.view;
+    let by = if rect.top() < view.top() || rect.height() > view.height() {
+        rect.top() - view.top()
+    } else if rect.bottom() > view.bottom() {
+        rect.bottom() - view.bottom()
+    } else {
+        0.0
+    };
+    if by.abs() < 0.5 {
+        return false;
+    }
+    queue_jump(ui, &region, by, why);
+    true
+}
+
+/// Queue the column's offset `by` points from where it is now, for its next pass.
+fn queue_jump(ui: &Ui, region: &Region, by: f32, why: JumpTo) {
+    let to = (region.offset + by).max(0.0);
     let frame = ui.ctx().cumulative_frame_nr();
     ui.ctx().data_mut(|data| {
         data.insert_temp(jump_id(region.key), Jump { frame, to, why });
@@ -809,6 +843,8 @@ mod tests {
         after: f32,
         /// The outer column does not host reveals.
         plain: bool,
+        /// Ask the least scroll that shows the target (`bring_into_view`) in this pass.
+        least: bool,
         /// A typed jump to the target's top (`jump`), asked once.
         heading: bool,
     }
@@ -843,6 +879,7 @@ mod tests {
                 open_down: 0.0,
                 after: 0.0,
                 plain: false,
+                least: false,
                 heading: false,
             }
         }
@@ -869,6 +906,9 @@ mod tests {
                 })
                 .response
                 .rect;
+            if std::mem::take(&mut page.least) {
+                bring_into_view(ui, rect, JumpTo::OpenMenuControl);
+            }
             if page.focus_inside == Some(true)
                 && let Some(field) = field
             {
@@ -1383,6 +1423,44 @@ mod tests {
             (top(&h, "Target top") - at).abs() < 0.5,
             "jump-once: the column stays where the jump put it"
         );
+        // M-P0.25: the least scroll that shows the target, with no press. Above the view, its
+        // top comes to the view's top; whole in view, nothing moves; below the view, its bottom
+        // comes to the view's bottom (not its top to the view's top).
+        h.state_mut().after = 600.0;
+        h.state_mut().jump = true;
+        h.run_steps(3);
+        assert!(
+            !in_view(&h) && top(&h, "Target top") < view_top,
+            "the case starts with the target above the view"
+        );
+        h.state_mut().least = true;
+        h.run_steps(3);
+        assert!(
+            in_view(&h) && (top(&h, "Target top") - view_top).abs() < 2.0,
+            "m-p0-least-scroll: above the view, its top comes to the view's top: {} vs {view_top}",
+            top(&h, "Target top")
+        );
+        let still = picture(&h);
+        h.state_mut().least = true;
+        h.run_steps(3);
+        assert_eq!(
+            picture(&h),
+            still,
+            "m-p0-least-scroll: whole in view, nothing moves"
+        );
+        h.state_mut().above += 600.0;
+        h.run_steps(2);
+        assert!(!in_view(&h), "the target is now below the view");
+        h.state_mut().least = true;
+        h.run_steps(3);
+        let end = h.get_by_label("Target end").rect();
+        assert!(
+            in_view(&h) && end.bottom() > HEIGHT - 40.0 && top(&h, "Target top") > view_top + 100.0,
+            "m-p0-least-scroll: below the view, the least scroll leaves the target whole at the \
+             view's bottom: top {}, end {end:?}",
+            top(&h, "Target top")
+        );
+        h.state_mut().after = 0.0;
         // Layout PR 10d: a jump asked while the DM drags the column's content (the pointer still
         // down, moving it) is dropped: the DM's scroll wins, and the column moves only with the
         // drag.

@@ -144,7 +144,6 @@ scroll-request	src/encounters/groups.rs	members	1	Encounters
 scroll-request	src/encounters/groups.rs	of_encounter	2	Encounters
 scroll-request	src/encounters/groups.rs	overrides_form	1	Encounters
 scroll-request	src/encounters/groups.rs	unread_member	1	Encounters
-scroll-request	src/encounters/list.rs	row_menu	1	Encounters
 scroll-request	src/lib.rs	Splat::page	1	App
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
