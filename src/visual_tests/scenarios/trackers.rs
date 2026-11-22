@@ -896,7 +896,44 @@ pub fn run(d: &mut Driver<'_>) {
                 .is_some_and(|frame| frame.stroke.width > 0.0),
         "Add to Timeline, a message action without an icon, has a border",
     );
-    d.state("trackers-over-an-entry", Sizes::Small);
+    // Layout step 11a (SH9, AH6): a list heading is one block with its first row, so the footer's
+    // cut never leaves `Pinned` (or `Due`) standing alone over a cut row: a heading that shows
+    // whole in its column has whole words under it in that same column.
+    d.state_prepared("trackers-over-an-entry", Sizes::Small, |d| {
+        let mut alone = Vec::new();
+        for title in ["pinned", "due"] {
+            let mut heading = None;
+            d.each_painted_text(|text, clip| {
+                let rect = text.visual_bounding_rect();
+                let words = text.galley.job.text.to_lowercase();
+                if words.trim().starts_with(title) && clip.expand(1.0).contains_rect(rect) {
+                    heading = Some((rect, clip));
+                }
+            });
+            let Some((heading, column)) = heading else {
+                continue;
+            };
+            let mut below = false;
+            d.each_painted_text(|text, clip| {
+                let rect = text.visual_bounding_rect();
+                below |= clip == column
+                    && rect.top() >= heading.bottom()
+                    && clip.expand(1.0).contains_rect(rect)
+                    && !text.galley.job.text.trim().is_empty();
+            });
+            if !below {
+                alone.push((title, heading));
+            }
+        }
+        d.observe(
+            "l11a-SH9-heading-with-row",
+            alone.is_empty(),
+            format!(
+                "At {:?}, headings with no whole row under them: {alone:?}",
+                d.window_size()
+            ),
+        );
+    });
     // Words typed there are a new search, which leaves Trackers for its result.
     d.type_into(SEARCH_LOOKUP, VARRA);
     d.wait_for_text(VARRA_WORDS);
