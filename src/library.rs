@@ -10866,7 +10866,8 @@ mod tests {
             ],
         );
         assert_eq!(
-            repair.draft, fixed,
+            repair.draft.as_str(),
+            fixed,
             "fixture: the editor holds the fixed draft"
         );
         let writable = fs::metadata(&notes).unwrap().permissions();
