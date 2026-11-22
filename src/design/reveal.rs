@@ -25,6 +25,10 @@
 //!   that does not draw a target it drew before; a frame in which its column was not drawn); a
 //!   new ask (`Replaced`); [`PASSES`] scroll frames; and a deadline of `DEADLINE` frames from the
 //!   act, which also ends a request whose target never shows. A resize never restarts it.
+//! - **A press whose result comes later** ([`Reveal::ask_on_result`], issue #698): the request
+//!   waits, moving nothing and with no deadline, until the owner says the result came
+//!   ([`Reveal::result_came`]); its passes and its deadline start then. Every other end applies
+//!   while it waits, so the DM's own input in between, or leaving the page, ends it.
 //!
 //! A run that ended leaves the registry of live requests at once (its `End` stays with its
 //! owner), so a column's work per pass is a look at the requests that run now.
@@ -234,6 +238,9 @@ struct Run {
     edge: bool,
     /// The offset for the column's next pass, with the frame that wrote it.
     pending: Option<(f32, u64)>,
+    /// It waits for the result of the work its act started (`Reveal::ask_on_result`): it moves
+    /// nothing and has no deadline until `Reveal::result_came`.
+    waiting: bool,
 }
 
 impl Run {
@@ -325,6 +332,7 @@ impl Reveal {
             asked: None,
             edge: false,
             pending: None,
+            waiting: false,
         };
         let Some(column) = act.column else {
             run.end(End::Unowned);
@@ -348,6 +356,39 @@ impl Reveal {
         self.run = Some(run);
     }
 
+    /// At the press that starts work whose result comes later, such as a Connect that a worker
+    /// answers (issue #698, M0279): the request waits for [`Reveal::result_came`], bound to the
+    /// press's column, and moves nothing. While it waits it ends as an asked reveal ends (the
+    /// DM's input after the act's frame, a focus change, the owner's end or another visit, a
+    /// frame without its column, a newer ask), but it has no deadline: the work sets the time,
+    /// and the owner ends it when the work ends with no result to show.
+    pub fn ask_on_result(&mut self, act: Act, visit: impl Hash, target: impl Hash) {
+        self.ask(act, visit, target);
+        if let Some(run) = &self.run {
+            let mut run = lock(run);
+            if run.phase.is_ok() {
+                run.waiting = true;
+                run.deadline = u64::MAX;
+            }
+        }
+    }
+
+    /// The awaited result came, and the target shows it from this frame: a waiting request runs
+    /// from now as an asked one does (its [`PASSES`] and its deadline). It changes nothing in a
+    /// request that ended or that does not wait.
+    pub fn result_came(&mut self, ctx: &Context) {
+        let Some(run) = &self.run else {
+            return;
+        };
+        let mut run = lock(run);
+        if run.phase.is_ok() && run.waiting {
+            run.waiting = false;
+            run.deadline = ctx.cumulative_frame_nr() + DEADLINE;
+            run.left = PASSES;
+            ctx.request_repaint();
+        }
+    }
+
     /// The owner ended (its object went away, its campaign changed): the request ends for good.
     pub fn end(&mut self) {
         if let Some(run) = &self.run {
@@ -359,6 +400,15 @@ impl Reveal {
     #[cfg(any(test, feature = "test-support"))]
     pub fn running(&self) -> bool {
         self.run.as_ref().is_some_and(|run| lock(run).phase.is_ok())
+    }
+
+    /// Whether it waits for its result (`ask_on_result`).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn waits(&self) -> bool {
+        self.run.as_ref().is_some_and(|run| {
+            let run = lock(run);
+            run.phase.is_ok() && run.waiting
+        })
     }
 
     /// Why it ended; `None` while it runs or before any act.
@@ -430,15 +480,17 @@ fn focus_allowed(ctx: &Context, run: &mut Run, form: Option<Rect>) -> bool {
     }
 }
 
-/// Whether a reveal runs in the column that `ui` is drawn in: the pane's focus reveal then makes
-/// no request into it.
+/// Whether a reveal runs in the column that `ui` is drawn in, other than one that waits for a
+/// result: the pane's focus reveal then makes no request into it.
 pub(super) fn holds(ui: &Ui) -> bool {
     let Some((_, region)) = owning_region(ui).filter(|(_, region)| region.hosts) else {
         return false;
     };
-    running(ui.ctx())
-        .iter()
-        .any(|run| lock(run).column == region.key)
+    // A request that waits for a result owns no scroll yet.
+    running(ui.ctx()).iter().any(|run| {
+        let run = lock(run);
+        run.column == region.key && !run.waiting
+    })
 }
 
 /// The DM's input of a pass, read before any child can consume a key.
@@ -1039,6 +1091,10 @@ fn resolve(ui: &Ui, run: &mut Run, region: &Region, content: Id, input: bool) {
         run.end(End::Focus);
         return;
     }
+    if run.waiting {
+        // Its result has not come: nothing moves (`Reveal::ask_on_result`).
+        return;
+    }
     let Some(target) = target else {
         if run.drawn {
             // A pass of its column that does not draw the target it drew before.
@@ -1139,6 +1195,10 @@ mod tests {
         scrolled: Option<bool>,
         /// A typed jump to the target's top (`jump`), asked once.
         heading: bool,
+        /// `ask` waits for a result (`ask_on_result`).
+        awaited: bool,
+        /// The awaited result comes in the next pass (`result_came`).
+        came: bool,
     }
 
     impl Page {
@@ -1174,6 +1234,8 @@ mod tests {
                 least: false,
                 scrolled: None,
                 heading: false,
+                awaited: false,
+                came: false,
             }
         }
     }
@@ -1239,7 +1301,14 @@ mod tests {
             page.reveal.ask(act, 0, "t");
         }
         if std::mem::take(&mut page.ask) {
-            page.reveal.ask(Act::test(ui, 1), 0, "t");
+            if page.awaited {
+                page.reveal.ask_on_result(Act::test(ui, 1), 0, "t");
+            } else {
+                page.reveal.ask(Act::test(ui, 1), 0, "t");
+            }
+        }
+        if std::mem::take(&mut page.came) {
+            page.reveal.result_came(ui.ctx());
         }
         if page.focus_inside == Some(false) {
             page.focus_inside = None;
@@ -1580,6 +1649,47 @@ mod tests {
                 (top(&h, "Outer top") - before).abs() < 0.5,
                 "a target that showed late was scrolled to (wheel first: {wheel_first})"
             );
+        }
+        // Issue #698 (M0279, `m-p0-awaited`): a press whose result comes later. The request waits
+        // past the deadline and moves nothing, also once its target is drawn; when the result
+        // comes, the target comes whole into view. The DM's wheel during the wait ends it, and
+        // the result then moves nothing.
+        for wheel_first in [false, true] {
+            let mut page = quiet();
+            page.drawn = false;
+            page.awaited = true;
+            let mut h = harness(page);
+            h.state_mut().ask = true;
+            h.step();
+            h.run_steps(12);
+            if wheel_first {
+                wheel(&mut h, 0.0);
+                h.step();
+            }
+            h.state_mut().drawn = true;
+            h.run_steps(4);
+            let before = top(&h, "Outer top");
+            assert_eq!(
+                h.state().reveal.running(),
+                !wheel_first,
+                "m-p0-awaited: it waits past the deadline (wheel first: {wheel_first})"
+            );
+            assert!(!in_view(&h), "the target starts out of view");
+            h.state_mut().came = true;
+            h.run_steps(8);
+            if wheel_first {
+                assert_eq!(h.state().reveal.ended(), Some(End::ByTheDm));
+                assert!(
+                    (top(&h, "Outer top") - before).abs() < 0.5,
+                    "m-p0-awaited: a result after the DM's wheel moves nothing"
+                );
+            } else {
+                assert_eq!(h.state().reveal.ended(), Some(End::Whole));
+                assert!(
+                    in_view(&h),
+                    "m-p0-awaited: the result brings its target whole into view"
+                );
+            }
         }
     }
 

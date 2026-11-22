@@ -1962,15 +1962,6 @@ impl Splat {
                         settings_feed(|frame, messages, dndbeyond: &dndbeyond::DndBeyond| {
                             dndbeyond.footer_messages(frame, messages, None);
                         });
-                    // After a failed Connect, Connect comes into view above the footer.
-                    let reveal_connect = |ui: &mut egui::Ui, settings: &mut settings::Settings| {
-                        if let Some(connect) = settings
-                            .take_reveal()
-                            .filter(|connect| connect.bottom() > ui.clip_rect().bottom())
-                        {
-                            ui.scroll_to_rect(connect.expand2(egui::vec2(0.0, design::S)), None);
-                        }
-                    };
                     if ui.ctx().content_rect().width() >= 1000.0 {
                         design::gap(ui, design::Gap::L);
                         // A clear gutter, so that the left column's text does not run on. Not
@@ -2035,7 +2026,6 @@ impl Splat {
                                             ui.vertical(|ui| {
                                                 settings.campaign_form_open = campaigns.form_open();
                                                 settings.show(ui);
-                                                reveal_connect(ui, settings);
                                             });
                                             settings
                                         },
@@ -2073,7 +2063,6 @@ impl Splat {
                                         // The account's heading adds the space above it.
                                         settings.show_compact(ui);
                                     }
-                                    reveal_connect(ui, settings);
                                 });
                                 (campaigns, settings, dndbeyond)
                             },

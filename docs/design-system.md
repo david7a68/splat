@@ -170,6 +170,10 @@ after the pass that asks for it (egui keeps the target for that pass). A `Scroll
 request lands after a reveal ended. The DM's own wheel and drag scroll as before. After the DM opens a form,
 `design::reveal` brings the whole form into view once, in the column of the pressed control, only in a column
 that hosts reveals (R34, R44, R46); the Settings pane's column (the import form) is the one today.
+A press whose result comes later asks with `Reveal::ask_on_result` (issue #698): the request waits, with no deadline
+and moving nothing, until the owner calls `Reveal::result_came`, and every other end applies while it waits (the DM's
+input, a focus change, the owner's end, leaving the page). A failed Connect in Settings brings its kept cookie, its
+cause and Connect whole into view this way (M0279).
 A column that moves by itself with no press in it does so only through a typed jump, `reveal::jump(ui, top,
 JumpTo::…)` (ruling M18, layout PR 10c), from a closed list: `LinkedHeading` (a reader opened at a linked section,
 its heading at the view's top; the World and Lookup reader and the Library reader) and `ListedRow` (a list's row
@@ -187,7 +191,8 @@ detail, M0546): its line comes whole into view. The Timeline detail's form scrol
 header drawn before the pane (M0559): wide, a pane with no footer (its results stay in the list's footer); narrow,
 the pane that holds the open event's footer. Another event, a link or the page opened again opens the form at
 its top (`ContentScroll::from_top`, M0560); a filter or a search changes only the list, so the form keeps its place.
-While the header leaves the form less than one control row, the header scrolls with the form. A request for the
+While the header and the pane's footer (with its gap) leave the form less than one control row, the header scrolls
+with the form. A request for the
 keyboard from another page needs no reveal of its own: the Settings sign-in field takes the focus when it draws, and
 its pane's focus arbiter brings it whole into view by the least scroll (M0541).
 A retry that would move a column by itself ends on any scroll of the DM's in it (`reveal::dm_scrolls`: a wheel over it,

@@ -1531,10 +1531,19 @@ impl TimelinePage {
         // least one control row; below that it scrolls with the form, so the form never has no
         // room (the header's height is the last draw's, at this width).
         let header_key = width_id.with("timeline_detail_header");
+        // Review of #827 (P3): the pane's footer (its lines and the gap above them) counts too: the
+        // last draw's pane height less its body's room.
+        let footer_key = header_key.with("footer");
+        let footer_room = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(footer_key))
+            .unwrap_or(0.0);
         let header_scrolls = ui
             .ctx()
             .data(|data| data.get_temp::<f32>(header_key))
-            .is_some_and(|header| ui.available_height() - header < design::Density::Read.control());
+            .is_some_and(|header| {
+                ui.available_height() - header - footer_room < design::Density::Read.control()
+            });
         // M0559 (M-P0.30): the header, then the form, which scrolls in the detail's own pane.
         let mut draw = |page: &mut Self, ui: &mut egui::Ui, book: &mut Book, part: DetailPart| {
             if part == DetailPart::Header {
@@ -1824,6 +1833,7 @@ impl TimelinePage {
         if !header_scrolls {
             draw(self, ui, book, DetailPart::Header);
         }
+        let pane_bottom = ui.max_rect().bottom();
         ui.push_id("timeline_detail_pane", |ui| {
             self.list_pane(
                 ui,
@@ -1832,6 +1842,10 @@ impl TimelinePage {
                 footer,
                 design::pane::ContentScroll::default().from_top(from_top),
                 |page, ui, book, _| {
+                    if let Some(body) = design::pane::body_room(ui) {
+                        let room = (pane_bottom - body.bottom()).max(0.0);
+                        ui.ctx().data_mut(|data| data.insert_temp(footer_key, room));
+                    }
                     if header_scrolls {
                         draw(page, ui, book, DetailPart::Header);
                     }
@@ -2620,6 +2634,71 @@ mod tests {
             inside(reached),
             "m-p0-short-detail: the form's Kind comes into the {short:?} window: {reached:?}"
         );
+        // Review of #827 (P3, `m-p0-short-detail-footer`): narrow, with the Add result and its
+        // Undo in the detail's footer. At every height of the sweep, the header and the footer
+        // leave the form room, or the header scrolls with the form: wheel steps over the form
+        // bring its Kind whole into view above the footer.
+        harness.set_size(egui::vec2(600.0, 600.0));
+        harness.run_steps(4);
+        harness.get_by_label("All events").click();
+        harness.run_steps(4);
+        harness.get_by_label("Add Major event").click();
+        harness.run_steps(4);
+        let undo = |harness: &egui_kittest::Harness<'_, State>| {
+            harness.query_by_label("Undo add").map(|node| node.rect())
+        };
+        assert!(undo(&harness).is_some(), "the footer holds the Add result");
+        for height in (260..=420).step_by(8) {
+            let size = egui::vec2(600.0, height as f32);
+            harness.set_size(size);
+            harness.run_steps(4);
+            let footer = undo(&harness)
+                .unwrap_or_else(|| panic!("{size:?}: the footer holds the Add result"))
+                .top();
+            // Whole in the form's room: under the back line and the header (the Title field
+            // ends it, also when the header scrolls with the form) and above the footer.
+            let title = |harness: &egui_kittest::Harness<'_, State>| {
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::TextInput, "Title")
+                    .rect()
+                    .bottom()
+            };
+            let back = harness.get_by_label("All events").rect().bottom();
+            let whole = |harness: &egui_kittest::Harness<'_, State>| {
+                let rect = kind(harness);
+                rect.top() >= title(harness).max(back) && rect.bottom() <= footer
+            };
+            let mut steps = 0;
+            while !whole(&harness) && steps < 80 {
+                // Over the form's room, towards the Kind: under the back line when the header
+                // scrolls with the form, under the Title when it stays.
+                let top = if steps % 2 == 0 {
+                    back
+                } else {
+                    title(&harness).max(back)
+                };
+                let at = egui::pos2(size.x / 2.0, (top.min(footer) + footer) / 2.0);
+                let by = if kind(&harness).top() < title(&harness).max(back) {
+                    20.0
+                } else {
+                    -20.0
+                };
+                harness.event(egui::Event::PointerMoved(at));
+                harness.event(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, by),
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(2);
+                steps += 1;
+            }
+            let reached = kind(&harness);
+            assert!(
+                whole(&harness),
+                "m-p0-short-detail-footer: at {size:?} the form's Kind comes whole above the \
+                 footer at {footer}: {reached:?}"
+            );
+        }
     }
 
     /// Round 30 B7d, ruling L9: the Add result ends in the page's owner update
