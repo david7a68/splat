@@ -95,6 +95,10 @@ proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
 ab_glyph = "0.2"
 epaint_default_fonts = "0.33"
+# Model tests of a page against a shared part's state machine model (ruling M29; see
+# `src/design/Cargo.toml`).
+proptest = { version = "1", default-features = false, features = ["std", "bit-set"] }
+proptest-state-machine = "0.3"
 
 # Test builds only. jemalloc returns freed memory and scales across the visual
 # suite's workers; it does not build with MSVC.
