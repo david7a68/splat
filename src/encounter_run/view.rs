@@ -3715,7 +3715,8 @@ impl Run {
                 }
             );
             // The name the `joined at` message uses, so one arrival has one name.
-            let arrival = Self::arrival_name(&self.state, first, &name);
+            let parts = Self::arrival_parts(&self.state, first, &name);
+            let arrival = parts.whole();
             // Its forms are made once for these two names (review of PR 490): an unchanged
             // frame clones the kept words (their forms are shared) and builds none.
             let words = match &self.tie_choice {
@@ -3725,7 +3726,7 @@ impl Run {
                     words.clone()
                 }
                 _ => {
-                    let words = move_choice(&arrival, &name);
+                    let words = move_choice(&parts, &name);
                     self.tie_choice = Some((arrival, name, words.clone()));
                     words
                 }
@@ -7076,15 +7077,14 @@ fn close_saved_words(sync: bool) -> String {
 /// parenthesis) the two names give up their last words in turn (`shortened_names`): the label
 /// shortens by whole words only (R3f X43, X44). The typed choice shows the first form that fits
 /// (`ChoiceWords::or_shorter`); hover and the accessible name keep the whole words.
-fn move_choice(arrival: &str, before: &str) -> design::outcome::ChoiceWords {
-    let whole = crate::choice!("Move {} before {}", arrival, before);
-    let group = arrival
-        .strip_suffix(')')
-        .and_then(|rest| rest.rsplit_once(" ("))
-        .map_or(arrival, |(group, _)| group);
-    // With no parenthesis, the first pair is the whole words again.
+fn move_choice(arrival: &super::ArrivalName, before: &str) -> design::outcome::ChoiceWords {
+    let whole = crate::choice!("Move {} before {}", arrival.whole(), before);
+    // The member goes by data (#512): a member's own parentheses are never read as the end of
+    // the group's name.
+    let group = arrival.group.as_str();
+    // With no member, the first pair is the whole words again.
     let forms = shortened_names(group, before)
-        .skip(usize::from(group == arrival))
+        .skip(usize::from(arrival.member.is_none()))
         .inspect(|_| {
             #[cfg(any(test, feature = "test-support"))]
             MOVE_FORMS.with(|forms| forms.set(forms.get() + 1));
@@ -12667,13 +12667,16 @@ mod tests {
                 // whole, gives up the whole parenthesis, never only the member's name: a bare
                 // `(… 3)` tells the DM nothing. One pixel short of each form gives the next
                 // (migration-32 L2c: the typed choice's forms, `ChoiceWords::or_shorter`).
-                let arrival = "Shrine Reserve (Goblin Warrior 3)";
+                let arrival = super::super::ArrivalName {
+                    group: "Shrine Reserve".into(),
+                    member: Some("Goblin Warrior 3".into()),
+                };
                 let whole = "Move Shrine Reserve (Goblin Warrior 3) before Brannoch Vale";
                 let short = "Move Shrine Reserve before Brannoch Vale";
                 let shown_in = |choice: design::outcome::ChoiceWords, width: f32| {
                     choice.shown_where(|words| design::number_width(ui, words, &font) <= width)
                 };
-                let at = |width: f32| shown_in(move_choice(arrival, "Brannoch Vale"), width);
+                let at = |width: f32| shown_in(move_choice(&arrival, "Brannoch Vale"), width);
                 let whole_width = design::number_width(ui, whole, &font);
                 let short_width = design::number_width(ui, short, &font);
                 assert_eq!(at(whole_width), whole);
@@ -12692,6 +12695,21 @@ mod tests {
                 for width in [whole_width - 1.0, short_width - 1.0, shortest_width] {
                     assert!(!at(width).contains("(…"), "iter-26-R-FA6 at {width}");
                 }
+                // #512: a member whose own name holds parentheses gives up the whole member,
+                // never the words up to its first parenthesis (`Move Patrol (Goblin before …`).
+                let patrol = super::super::ArrivalName {
+                    group: "Patrol".into(),
+                    member: Some("Goblin (East) 2".into()),
+                };
+                let patrol_whole = "Move Patrol (Goblin (East) 2) before Brannoch Vale";
+                let patrol_width = design::number_width(ui, patrol_whole, &font);
+                let patrol_at = |width: f32| shown_in(move_choice(&patrol, "Brannoch Vale"), width);
+                assert_eq!(patrol_at(patrol_width), patrol_whole);
+                assert_eq!(
+                    patrol_at(patrol_width - 1.0),
+                    "Move Patrol before Brannoch Vale",
+                    "#512: the member goes whole, by data"
+                );
                 // iter-26-R SJ1, iter-27-R FI8: Undo is not under that message, so it keeps the
                 // copy number that tells two same-name groups apart. The moved arrival is what
                 // the DM must know: the place goes first, then the group, and the member keeps
@@ -12742,8 +12760,11 @@ mod tests {
                 // An arrival named by its group alone has no member to give up.
                 let plain = "Move Shrine Reserve before Brannoch Vale";
                 let plain_width = design::number_width(ui, plain, &font);
-                let alone =
-                    |width: f32| shown_in(move_choice("Shrine Reserve", "Brannoch Vale"), width);
+                let reserve = super::super::ArrivalName {
+                    group: "Shrine Reserve".into(),
+                    member: None,
+                };
+                let alone = |width: f32| shown_in(move_choice(&reserve, "Brannoch Vale"), width);
                 assert_eq!(alone(plain_width), plain);
                 // With no parenthesis the names give up their last words at once (R3f X43, X44).
                 assert_eq!(

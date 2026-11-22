@@ -801,6 +801,11 @@ pub struct Sessions {
     plan_projection: plan::ProjectionCache,
     /// The plan's closed rows as their recipe laid them, kept by their inputs (layout 11c A2c).
     plan_rows: plan::PlanRowsCache,
+    /// The plan's measured region, while its body is one (layout 11c A2c-3): its offset, its
+    /// requests and its mask.
+    plan_region: Option<crate::design::RegionState>,
+    /// Whether the plan's body was its measured region in the last frame (A2c-3).
+    pub(super) plan_measured: bool,
     /// The fight behind the open event, read once.
     /// The open played fight's summary, kept with the run's file as last found (or why not):
     /// a different answer from the folder reads it again (R41, round 30 review F2).

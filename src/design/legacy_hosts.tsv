@@ -111,7 +111,6 @@ row-clip	src/design/pane/region.rs	clip_to_part	1	design	a block an edge cuts dr
 row-clip	src/design/turn_heading.rs	paint	1	design	design implementation boundary
 row-clip	src/encounter_run/view.rs	Run::roster	4	Run
 row-clip	src/encounters/groups.rs	Encounters::group_editor_view	1	Encounters
-row-clip	src/encounters/groups.rs	members_pane	1	Encounters
 row-clip	src/markdown_source.rs	paint_section_rules	1	Reader
 row-clip	src/markdown_view.rs	reader_table	2	Reader
 row-clip	src/markdown_view.rs	table_part	3	Reader
@@ -128,7 +127,6 @@ scroll-area	src/design/layout.rs	sideways_scroll	1	design	design implementation 
 scroll-area	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
-scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
 scroll-request	src/design/components.rs	reveal_least	1	design	design implementation boundary
 scroll-request	src/design/components.rs	scroll_part	2	design	design implementation boundary
 scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
@@ -137,10 +135,7 @@ scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes
 scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
 scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
-scroll-request	src/encounters/groups.rs	members	1	Encounters
 scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters
-scroll-request	src/encounters/groups.rs	overrides_form	1	Encounters
-scroll-request	src/encounters/groups.rs	unread_member	1	Encounters
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
 scroll-request	src/sessions/plan.rs	Reveal::show	1	Sessions

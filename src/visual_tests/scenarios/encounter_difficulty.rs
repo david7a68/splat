@@ -223,12 +223,28 @@ pub fn run(d: &mut Driver<'_>) {
 
     // T5.7: the Ready to run rows. Lookup closed, then open.
     ready_rows_say_their_word(d, "T5.7-ready");
+    // Review of PR 581 (#589, `m-p0-ledger-kept`): unchanged frames measure no list of the
+    // ledger but In progress.
+    d.settle();
+    let measured = crate::encounters::ledger_measures();
+    for _ in 0..3 {
+        d.settle();
+    }
+    d.observe(
+        "m-p0-ledger-kept",
+        crate::encounters::ledger_measures() == measured,
+        format!(
+            "Unchanged frames measure the ledger's lists {} times",
+            crate::encounters::ledger_measures() - measured
+        ),
+    );
     // iter-29 G118 (AB4, FB5; ruling R31), a cell witness on the PAINTED line at each size:
     // Nameless Visitor's only creature lacks its XP, so its row ends with `XP not known` and
     // names Nameless Thing once. Where the summary gave way, the name follows the reason.
     d.state_prepared("ready-to-run", Sizes::All, |d| {
         // Layout PR 5a (I6): the Ready rows' actions start `L` after the ledger's widest facts.
-        let (columns, detail) = d.ledger_columns();
+        // Review of PR 581 (#589): this ledger's allowance of residual gaps above 4L.
+        let (columns, detail) = d.ledger_columns(4);
         d.observe("pr5a-ledger-columns", columns, detail);
         let mut lines = Vec::new();
         d.each_painted_text(|text, clip| {

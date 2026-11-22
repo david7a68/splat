@@ -575,6 +575,41 @@ pub enum Cause {
     /// `The package Ashen Marches of Cinder Wolf was not found.` A warning (R41: missing): the
     /// creature's file may still exist (issue #530).
     PackageNotFound { creature: Name, package: Name },
+    /// Start's own checks of an encounter (issue #530, item 4), each in the words the editor
+    /// already gives it. All are warnings (a rule of the app the act did not meet), except the
+    /// roster rows Splat cannot read (an error, R41).
+    /// `The encounter has no name.`
+    EncounterUnnamed,
+    /// `Read-aloud and notes has a Loot heading.`
+    LootHeadingInNotes,
+    /// `A side has no name.`
+    SideUnnamed,
+    /// `A hostile side is missing.`
+    HostileSideMissing,
+    /// `A side has no list of the sides it fights.`
+    SideWithoutFoes,
+    /// `The key of the Cinder Wolf row is missing or shared with another row.`
+    RowKeyShared(Rows),
+    /// `The side of the Cinder Wolf row is not in this encounter.`
+    RowSideMissing(Rows),
+    /// `The creature of the Cinder Wolf row is unavailable in campaign content.`
+    CreatureUnavailable(Rows),
+    /// `This encounter fills some rows from the campaign’s party.`
+    PartyFromCampaign,
+    /// `Row 3 needs one creature or one party member.`
+    RowWithoutCreature(Name),
+    /// `The starting HP of the Cinder Wolf row must be a whole number, 0 or more.`
+    StartingNotWhole { rows: Rows, what: Name },
+    /// `The changed side Raiders of the Cinder Wolf row is not a side of this encounter.`
+    ChangedSideMissing { rows: Rows, side: Name },
+    /// `The starting HP 40 of the Cinder Wolf row is above the changed maximum of 30.`
+    StartingHpAboveMax { rows: Rows, hp: i64, max: i64 },
+    /// `The changes of the Cinder Wolf row cannot stand.` Each change says why on its row.
+    ChangesInvalid(Rows),
+    /// `Splat cannot read the roster rows of Bridge Ambush.md.` An error (R41: unreadable).
+    RosterUnreadable(Name),
+    /// `Splat cannot read Bridge Ambush.md.` An error (R41: unreadable).
+    EncounterUnreadable(Name),
     /// `Hobb’s note changed on disk or waits for a choice.` A warning.
     NeedsChoice(Name),
     /// `More than one note can answer to Hobb.` A warning.
@@ -625,6 +660,20 @@ pub enum Step {
     FixInLibrary(Name),
     /// `Add the Ashen Marches package in Campaign → Packages`
     AddPackage(Name),
+    /// `Enter an encounter name`
+    EnterEncounterName,
+    /// `Put those lines in the Loot list, or rename the heading`
+    MoveLootLines,
+    /// `Repair this encounter in Campaign → Campaign entries`
+    RepairInEntries,
+    /// `Edit those rows in Campaign → Campaign entries`
+    EditPartyRows,
+    /// `Fix the changes of the Cinder Wolf row in the roster`
+    FixChanges(Rows),
+    /// `Change the starting values of the Cinder Wolf row in the roster`
+    FixStartingValues(Rows),
+    /// `Fix the roster rows or remove them in Obsidian`
+    FixRosterRows,
     /// `Remove Wandering roll`
     Remove(Name),
     /// `Resolve Hobb’s note`
@@ -659,6 +708,22 @@ impl Step {
             }
             Self::ReplaceRows(rows) => format!("Choose replacements for {}", rows.words()),
             Self::FixInLibrary(name) => format!("Fix {} in Library", name.as_str()),
+            Self::EnterEncounterName => "Enter an encounter name".to_owned(),
+            Self::MoveLootLines => {
+                "Put those lines in the Loot list, or rename the heading".to_owned()
+            }
+            Self::RepairInEntries => {
+                "Repair this encounter in Campaign → Campaign entries".to_owned()
+            }
+            Self::EditPartyRows => "Edit those rows in Campaign → Campaign entries".to_owned(),
+            Self::FixChanges(rows) => format!("Fix the changes of {} in the roster", rows.words()),
+            Self::FixStartingValues(rows) => {
+                format!(
+                    "Change the starting values of {} in the roster",
+                    rows.words()
+                )
+            }
+            Self::FixRosterRows => "Fix the roster rows or remove them in Obsidian".to_owned(),
             Self::AddPackage(package) => {
                 format!(
                     "Add the {} package in Campaign → Packages",
@@ -796,6 +861,20 @@ impl Refusal {
             | Cause::CreatureDeleted(_)
             | Cause::CreatureDuplicate(_)
             | Cause::PackageNotFound { .. }
+            | Cause::EncounterUnnamed
+            | Cause::LootHeadingInNotes
+            | Cause::SideUnnamed
+            | Cause::HostileSideMissing
+            | Cause::SideWithoutFoes
+            | Cause::RowKeyShared(_)
+            | Cause::RowSideMissing(_)
+            | Cause::CreatureUnavailable(_)
+            | Cause::PartyFromCampaign
+            | Cause::RowWithoutCreature(_)
+            | Cause::StartingNotWhole { .. }
+            | Cause::ChangedSideMissing { .. }
+            | Cause::StartingHpAboveMax { .. }
+            | Cause::ChangesInvalid(_)
             | Cause::NeedsChoice(_)
             | Cause::Ambiguous(_)
             | Cause::EditedSince(_)
@@ -813,7 +892,9 @@ impl Refusal {
             | Cause::NotSaved(_)
             | Cause::NotChanged(_)
             | Cause::FolderNotWritable(_)
-            | Cause::CreatureUnreadable(_) => Tone::Error,
+            | Cause::CreatureUnreadable(_)
+            | Cause::RosterUnreadable(_)
+            | Cause::EncounterUnreadable(_) => Tone::Error,
         }
     }
 
@@ -960,6 +1041,57 @@ impl Refusal {
                 package.as_str(),
                 creature.as_str()
             ),
+            Cause::EncounterUnnamed => crate::sentence!("The encounter has no name."),
+            Cause::LootHeadingInNotes => {
+                crate::sentence!("Read-aloud and notes has a Loot heading.")
+            }
+            Cause::SideUnnamed => crate::sentence!("A side has no name."),
+            Cause::HostileSideMissing => crate::sentence!("A hostile side is missing."),
+            Cause::SideWithoutFoes => {
+                crate::sentence!("A side has no list of the sides it fights.")
+            }
+            Cause::RowKeyShared(rows) => crate::sentence!(
+                "The key of {} is missing or shared with another row.",
+                rows.words()
+            ),
+            Cause::RowSideMissing(rows) => {
+                crate::sentence!("The side of {} is not in this encounter.", rows.words())
+            }
+            Cause::CreatureUnavailable(rows) => crate::sentence!(
+                "The creature of {} is unavailable in campaign content.",
+                rows.words()
+            ),
+            Cause::PartyFromCampaign => {
+                crate::sentence!("This encounter fills some rows from the campaign’s party.")
+            }
+            Cause::RowWithoutCreature(row) => {
+                crate::sentence!("{} needs one creature or one party member.", row.as_str())
+            }
+            Cause::StartingNotWhole { rows, what } => crate::sentence!(
+                "The starting {} of {} must be a whole number, 0 or more.",
+                what.as_str(),
+                rows.words()
+            ),
+            Cause::ChangedSideMissing { rows, side } => crate::sentence!(
+                "The changed side {} of {} is not a side of this encounter.",
+                side.as_str(),
+                rows.words()
+            ),
+            Cause::StartingHpAboveMax { rows, hp, max } => crate::sentence!(
+                "The starting HP {} of {} is above the changed maximum of {}.",
+                hp,
+                rows.words(),
+                max
+            ),
+            Cause::ChangesInvalid(rows) => {
+                crate::sentence!("The changes of {} cannot stand.", rows.words())
+            }
+            Cause::RosterUnreadable(file) => {
+                crate::sentence!("Splat cannot read the roster rows of {}.", file.as_str())
+            }
+            Cause::EncounterUnreadable(file) => {
+                crate::sentence!("Splat cannot read {}.", file.as_str())
+            }
             Cause::NeedsChoice(note) => {
                 crate::sentence!("{} changed on disk or waits for a choice.", note.as_str())
             }
@@ -1098,6 +1230,197 @@ mod tests {
                 "No fight started from Shrine of Cinders. The package Ashen Marches of Cinder \
                  Wolf was not found. Add the Ashen Marches package in Campaign → Packages first.",
                 Tone::Warning,
+            ),
+            // Issue #530 (item 4): Start's own checks, each a typed cause in the editor's words.
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::EncounterUnnamed,
+                    Recovery::First(Step::EnterEncounterName),
+                ),
+                "No fight started from Shrine of Cinders. The encounter has no name. Enter an encounter name first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::LootHeadingInNotes,
+                    Recovery::First(Step::MoveLootLines),
+                ),
+                "No fight started from Shrine of Cinders. Read-aloud and notes has a Loot heading. Put those lines in the Loot list, or rename the heading first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::SideUnnamed,
+                    Recovery::First(Step::RepairInEntries),
+                ),
+                "No fight started from Shrine of Cinders. A side has no name. Repair this encounter in Campaign → Campaign entries first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::HostileSideMissing,
+                    Recovery::First(Step::RepairInEntries),
+                ),
+                "No fight started from Shrine of Cinders. A hostile side is missing. Repair this encounter in Campaign → Campaign entries first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::SideWithoutFoes,
+                    Recovery::First(Step::RepairInEntries),
+                ),
+                "No fight started from Shrine of Cinders. A side has no list of the sides it fights. Repair this encounter in Campaign → Campaign entries first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::RowKeyShared(Rows::new([name("Cinder Wolf")]).unwrap()),
+                    Recovery::First(Step::RepairInEntries),
+                ),
+                "No fight started from Shrine of Cinders. The key of the Cinder Wolf row is missing or shared with another row. Repair this encounter in Campaign → Campaign entries first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::RowSideMissing(Rows::new([name("Cinder Wolf")]).unwrap()),
+                    Recovery::First(Step::RepairInEntries),
+                ),
+                "No fight started from Shrine of Cinders. The side of the Cinder Wolf row is not in this encounter. Repair this encounter in Campaign → Campaign entries first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::CreatureUnavailable(Rows::new([name("Cinder Wolf")]).unwrap()),
+                    Recovery::First(Step::ReplaceRows(Rows::new([name("Cinder Wolf")]).unwrap())),
+                ),
+                "No fight started from Shrine of Cinders. The creature of the Cinder Wolf row is unavailable in campaign content. Choose a replacement for the Cinder Wolf row first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::PartyFromCampaign,
+                    Recovery::First(Step::EditPartyRows),
+                ),
+                "No fight started from Shrine of Cinders. This encounter fills some rows from the campaign’s party. Edit those rows in Campaign → Campaign entries first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::RowWithoutCreature(name("Row 3")),
+                    Recovery::First(Step::RepairInEntries),
+                ),
+                "No fight started from Shrine of Cinders. Row 3 needs one creature or one party member. Repair this encounter in Campaign → Campaign entries first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::StartingNotWhole {
+                        rows: Rows::new([name("Cinder Wolf")]).unwrap(),
+                        what: name("HP"),
+                    },
+                    Recovery::First(Step::FixStartingValues(
+                        Rows::new([name("Cinder Wolf")]).unwrap(),
+                    )),
+                ),
+                "No fight started from Shrine of Cinders. The starting HP of the Cinder Wolf row must be a whole number, 0 or more. Change the starting values of the Cinder Wolf row in the roster first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::ChangedSideMissing {
+                        rows: Rows::new([name("Cinder Wolf")]).unwrap(),
+                        side: name("Raiders"),
+                    },
+                    Recovery::First(Step::FixChanges(Rows::new([name("Cinder Wolf")]).unwrap())),
+                ),
+                "No fight started from Shrine of Cinders. The changed side Raiders of the Cinder Wolf row is not a side of this encounter. Fix the changes of the Cinder Wolf row in the roster first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::StartingHpAboveMax {
+                        rows: Rows::new([name("Cinder Wolf")]).unwrap(),
+                        hp: 40,
+                        max: 30,
+                    },
+                    Recovery::First(Step::FixStartingValues(
+                        Rows::new([name("Cinder Wolf")]).unwrap(),
+                    )),
+                ),
+                "No fight started from Shrine of Cinders. The starting HP 40 of the Cinder Wolf row is above the changed maximum of 30. Change the starting values of the Cinder Wolf row in the roster first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::ChangesInvalid(Rows::new([name("Cinder Wolf")]).unwrap()),
+                    Recovery::First(Step::FixChanges(Rows::new([name("Cinder Wolf")]).unwrap())),
+                ),
+                "No fight started from Shrine of Cinders. The changes of the Cinder Wolf row cannot stand. Fix the changes of the Cinder Wolf row in the roster first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::RosterUnreadable(name("Bridge Ambush.md")),
+                    Recovery::First(Step::FixRosterRows),
+                ),
+                "No fight started from Shrine of Cinders. Splat cannot read the roster rows of Bridge Ambush.md. Fix the roster rows or remove them in Obsidian first.",
+                Tone::Error,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotStarted {
+                        encounter: name("Shrine of Cinders"),
+                    },
+                    Cause::EncounterUnreadable(name("Bridge Ambush.md")),
+                    Recovery::First(Step::RepairInEntries),
+                ),
+                "No fight started from Shrine of Cinders. Splat cannot read Bridge Ambush.md. Repair this encounter in Campaign → Campaign entries first.",
+                Tone::Error,
             ),
             // Continue fight (R0).
             (
