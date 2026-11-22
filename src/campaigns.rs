@@ -2417,10 +2417,20 @@ mod tests {
         // back into A's form, and B's change and its result stay.
         pick(&mut harness, "Harbor");
         assert!(shows(&harness, SAVED), "B's link change says its result");
+        // The click's frames end with the press, done after the pane drew; the next frame is
+        // the first one drawn after Undo.
         harness.get_by_label(UNDO).click();
-        harness.run_steps(3);
-        // Review of PR 688 (P1): at once after Undo, the open form is A's, the fields on screen
-        // hold A's draft, and B's stored details did not change.
+        harness.step();
+        let frame = harness.ctx.cumulative_frame_nr();
+        harness.step();
+        assert_eq!(
+            harness.ctx.cumulative_frame_nr() - frame,
+            1,
+            "one frame after the press"
+        );
+        // Review of PR 688 (P1) and PR 693 (P2): on the first frame drawn after Undo, the open
+        // form is A's, the fields on screen hold A's draft, and B's stored details did not
+        // change.
         let (owner, name, folder) = (
             harness.state().0.editing,
             field(&harness, "Campaign name"),
