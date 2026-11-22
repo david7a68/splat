@@ -2190,7 +2190,7 @@ heading's `XS` below it, and `Starts with the title line only.` below Name. The 
 creation form with its actions under the field (`InlineCreate::actions_under`): the name field and its help, then
 `Create template` and quiet `Cancel` together on the action line, then the kept line with `Type a name first.`. Enter
 in the field creates, Escape cancels. Built-ins leave one blank line below each heading.
-Template editors use the note's styled source face, no input well, full column width and height. `Deleted
+Template editors use the note's styled source face in the shared editor viewport (`pane::editor_view`, `ViewHeight::Fills`): its input well and fixed frame take the full column width and the body's height above the footer, with the text and its lane scrolling inside it. A built-in template reads with no well. `Deleted
 “<name>”.` with `Undo delete` is a result in the template editor's message footer (in a narrow window with the
 list alone, in the list's footer), never under the list. A campaign change or an edit to a template ends it.
 
