@@ -370,6 +370,8 @@ mod tests {
         /// The least scroll that shows a block (`bring_into_view`), asked once before the
         /// region draws.
         bring: Option<usize>,
+        /// What `dm_scrolls` (a retry's rule, PR 780) said in the pane's column in the last pass.
+        scrolls: bool,
     }
 
     impl Page {
@@ -392,6 +394,7 @@ mod tests {
                 duplicate: false,
                 jumps: (None, None),
                 bring: None,
+                scrolls: false,
             }
         }
     }
@@ -460,6 +463,7 @@ mod tests {
                     }
                     page.top = ui.cursor().top();
                     page.clip = ui.clip_rect();
+                    page.scrolls = crate::design::reveal::dm_scrolls(ui);
                     let (top, pull) = (page.top, page.pull);
                     // A jump asked in this pass before the region draws, or after it.
                     let jumps = std::mem::take(&mut page.jumps);
@@ -1319,7 +1323,9 @@ mod tests {
     /// request queued for column A (the pane), and each input the cancel rule handles, aimed at
     /// column B (the pointer over it, the focus in it) and then at A. A's request survives every
     /// input at B; every input at A ends it, except a shortcut that moves nothing (Ctrl+S). Each
-    /// cancel branch of `take_queued` has a row. (A press on A's scroll bar sets A's offset in
+    /// cancel branch of `take_queued` has a row. A retry's rule (`dm_scrolls`, the row menu's
+    /// bring-back of PR 780) is the same rule: in A it says the DM scrolls for exactly the inputs
+    /// that end A's request. (A press on A's scroll bar sets A's offset in
     /// egui's own pass, after a queued one, so the bar always wins; its row checks that.)
     #[test]
     fn the_resolver_cancels_only_on_its_own_columns_input() {
@@ -1407,7 +1413,13 @@ mod tests {
                     .region
                     .navigate(Navigation::Show(Id::new(35usize)));
                 harness.step();
-                let mut seen = false;
+                // Whether A's request applied in any frame of the input, and whether a retry's rule
+                // (`dm_scrolls`) said the DM scrolls A in any frame.
+                let (mut seen, mut scrolls) = (false, false);
+                let mut observe = |harness: &Harness<'_, Page>| {
+                    seen |= near(harness);
+                    scrolls |= harness.state().scrolls;
+                };
                 let events = &mut harness.input_mut().events;
                 match input {
                     Input::Wheel => events.push(egui::Event::MouseWheel {
@@ -1424,6 +1436,7 @@ mod tests {
                         events.push(egui::Event::PointerMoved(from));
                         events.push(button(from, true));
                         harness.step();
+                        observe(&harness);
                         for step in 1..4 {
                             let to = from + egui::vec2(0.0, 12.0 * step as f32);
                             harness
@@ -1431,6 +1444,7 @@ mod tests {
                                 .events
                                 .push(egui::Event::PointerMoved(to));
                             harness.step();
+                            observe(&harness);
                         }
                         harness
                             .input_mut()
@@ -1459,13 +1473,20 @@ mod tests {
                 }
                 for _ in 0..3 {
                     harness.step();
-                    seen |= near(&harness);
+                    observe(&harness);
                 }
                 // Survived: its block is whole in view. Ended: the view came nowhere near its block
                 // in any frame (a request that applied for one frame, then was scrolled past by the
                 // input, was not ended).
                 let expected = !(in_a && cancels);
                 let survived = if expected { shown(&harness, 35) } else { seen };
+                if scrolls == expected {
+                    wrong.push(format!(
+                        "{name} at {}: dm_scrolls {scrolls}, expected {}",
+                        if in_a { "A" } else { "B" },
+                        !expected
+                    ));
+                }
                 if survived != expected {
                     wrong.push(format!(
                         "{name} at {}: survived {survived}, expected {expected}",

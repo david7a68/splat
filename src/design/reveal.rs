@@ -584,7 +584,7 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
 /// `bring_into_view`, a retry).
 #[derive(Clone, Copy, Debug)]
 struct ColumnInput {
-    /// The DM scrolls it: a wheel with the pointer over its view, a drag begun in it, or (with
+    /// The DM scrolls it: a wheel with the pointer over its view or its bar, a drag begun there, or (with
     /// its area's id) its own fling after a drag.
     moved: bool,
     /// A press that began in it is held.
