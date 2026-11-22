@@ -2614,6 +2614,13 @@ mod tests {
         let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
         assert!(catalogue.entries.contains_key(&wolf_id));
         assert!(catalogue.manifest_problems[&module.id].contains("another identity"));
+        // M0043: a note changed on disk is a new reading of its folder, so the catalogue is
+        // built again and never handed back from the last build of the same folders.
+        let renamed = patch_fields(&wolf, &[("splat_name", Some("Dire Wolf".into()))]).unwrap();
+        fs::write(temp.path().join("Wolf.md"), &renamed).unwrap();
+        let again = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+        assert_eq!(again.entries[&wolf_id].entry.name, "Dire Wolf");
+        fs::write(temp.path().join("Wolf.md"), &wolf).unwrap();
         let repair = ManifestWrite::write(&module).unwrap();
         assert_eq!(
             crate::library::local_module(temp.path()).unwrap().id,
