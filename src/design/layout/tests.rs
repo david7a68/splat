@@ -455,6 +455,8 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     const PACKAGES: Word = crate::word!("Packages");
     const KEY: KeyName = crate::key!("N");
     const MENU_LINE: &str = "Rules/Watch.md: 2 broken links";
+    const NEW_HINT: &str = "Make an entry in this campaign";
+    const PACKAGES_HINT: &str = "Reload or change the packages";
     fn header<'a>(
         opened: &'a std::cell::Cell<bool>,
         packages: &'a std::cell::Cell<bool>,
@@ -462,9 +464,11 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         room: Rect,
     ) -> TitleLine<'a> {
         TitleLine::new("Library")
-            .action(TitleAction::secondary(NEW_ENTRY).key(KEY))
+            .action(TitleAction::secondary(NEW_ENTRY).key(KEY).hint(NEW_HINT))
             .menu(
-                TitleAction::quiet(PACKAGES).blocked(blocked.then_some("Wait for the Library.")),
+                TitleAction::quiet(PACKAGES)
+                    .hint(PACKAGES_HINT)
+                    .blocked(blocked.then_some("Wait for the Library.")),
                 move |ui| {
                     packages.set(true);
                     let _ = ui.label("Reload from disk");
@@ -494,6 +498,25 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 "Hide the list",
                 "Hide the list (Ctrl+\\)",
                 true,
+            )
+            .state(
+                Status {
+                    icon: crate::design::icons::DRAFT,
+                    word: "Unsaved",
+                    color: colors().document.unsaved,
+                },
+                &[
+                    Status {
+                        icon: crate::design::icons::OK,
+                        word: "Saved",
+                        color: colors().document.saved,
+                    },
+                    Status {
+                        icon: crate::design::icons::DRAFT,
+                        word: "Unsaved",
+                        color: colors().document.unsaved,
+                    },
+                ],
             )
     }
     for (width, beside, blocked) in [
@@ -565,6 +588,39 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             new.right() <= toggle.left() && status.right() <= toggle.left() || !beside,
             "n0-title-toggle: {width}: the actions keep clear of the toggle: {new:?} {status:?} {toggle:?}"
         );
+        // N0 (ruling M21): the plain status stands left of the toggle on the title's line,
+        // wherever the actions go; the actions keep clear of it.
+        // Its painted words, so a status drawn outside its room fails too.
+        let words = format!("{} Unsaved", crate::design::icons::DRAFT);
+        let state = painted
+            .iter()
+            .find(|text| text.text == words)
+            .map(|text| text.rect)
+            .expect("the state is painted");
+        assert!(
+            state.right() <= toggle.left() - ACTION_GAP + 0.5
+                && state.right() >= toggle.left() - ACTION_GAP - 3.0
+                && (state.center().y - toggle.center().y).abs() <= 2.0,
+            "n0-title-state: {width}: the state left of the toggle, on its line: {state:?}, toggle {toggle:?}"
+        );
+        assert!(
+            new.right() <= state.left() && status.right() <= state.left() || !beside,
+            "n0-title-state: {width}: the actions keep clear of the state: {new:?} {status:?} {state:?}"
+        );
+        // What assistive tools read is in its room too: the state's text run ends left of the
+        // toggle (a right-to-left room put it over the toggle).
+        let run = nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == egui::accesskit::Role::TextRun
+                    && node.value() == Some(words.as_str())
+            })
+            .and_then(|(_, node)| node.bounds())
+            .expect("the state's text run");
+        assert!(
+            run.x1 as f32 <= toggle.left() - ACTION_GAP + 0.5,
+            "n0-title-state: {width}: the state's text run ends left of the toggle: {run:?}, toggle {toggle:?}"
+        );
         // Review of PR 618: assistive tools read the toggle's state, not only its name.
         assert_eq!(
             nodes
@@ -623,6 +679,26 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 },
             ]
         };
+        // M-P0 (for M0280): an action's hint shows on hover, as an `Action`'s does, a menu
+        // action's too; a blocked one shows its reason, not its hint.
+        ctx.all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+        for (name, hint, shown) in [
+            ("New entry", NEW_HINT, true),
+            ("Packages", PACKAGES_HINT, !blocked),
+            ("Packages", "Wait for the Library.", blocked),
+        ] {
+            draw(vec![egui::Event::PointerMoved(
+                bounds(&nodes, name).center(),
+            )]);
+            draw(Vec::new());
+            let (_, painted) = draw(Vec::new());
+            assert_eq!(
+                painted.iter().any(|text| text.text == hint),
+                shown,
+                "m-p0-title-hint: {width}: {name}'s hover shows {hint:?} exactly when it should"
+            );
+        }
+        draw(vec![egui::Event::PointerGone]);
         draw(click(status.center()));
         let (_, painted) = draw(Vec::new());
         assert!(opened.get(), "{width}: the status link opens its menu");
@@ -703,6 +779,50 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         assert!(
             status_pressed.get(),
             "{width}: the pressed status link's press comes back"
+        );
+    }
+
+    // Review of PR 686 (P1, P2): the state keeps the room of the widest status the line can
+    // show, so Saved and Unsaved place the line alike, also at the width where it just fits.
+    {
+        const MORE: Word = crate::word!("More");
+        let saved = Status {
+            icon: crate::design::icons::OK,
+            word: "Saved",
+            color: colors().document.saved,
+        };
+        let unsaved = Status {
+            icon: crate::design::icons::DRAFT,
+            word: "Unsaved",
+            color: colors().document.unsaved,
+        };
+        let ctx = context();
+        let draw = |width: f32, now: Status<'static>, every: &[Status<'static>]| {
+            let mut below = false;
+            let (nodes, _) = frame_with(&ctx, vec2(width + 40.0, 200.0), Vec::new(), |ui| {
+                let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 150.0));
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    below = TitleLine::new("Downtime")
+                        .role(TitleType::Section)
+                        .menu(TitleAction::quiet(MORE), |_| {})
+                        .state(now, every)
+                        .show(ui)
+                        .below;
+                });
+            });
+            (below, bounds(&nodes, "More"))
+        };
+        // The narrowest width at which the line fits on the title with Saved's room alone: the
+        // boundary a room of the current status alone would cross when Saved turns Unsaved.
+        let just = (100..800)
+            .map(|width| width as f32)
+            .find(|width| !draw(*width, saved, &[saved]).0)
+            .expect("the line fits at some width");
+        let (saved_below, saved_more) = draw(just, saved, &[saved, unsaved]);
+        let (unsaved_below, unsaved_more) = draw(just, unsaved, &[saved, unsaved]);
+        assert!(
+            saved_below == unsaved_below && saved_more == unsaved_more,
+            "n0-title-state-room: at {just} px Saved and Unsaved place More alike: {saved_more:?} ({saved_below}), {unsaved_more:?} ({unsaved_below})"
         );
     }
 

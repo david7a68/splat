@@ -145,8 +145,59 @@ struct Reconcile {
     proposals: Vec<Proposal>,
     /// Proposals that the DM unticked.
     declined: BTreeSet<String>,
+    /// The lines and keys made from `proposals` and `declined`, kept until either changes:
+    /// cleared where they change (`set_check_owner`, `finish_check`, a tick).
+    view: Option<ReviewView>,
     error: Option<String>,
 }
+/// One item of a list drawn in place in the page's column (the changes to review, the issue
+/// list): drawn, then registered as a whole row, so the pane's whole-row cut keeps it whole at
+/// the footer's edge (layout step 11c, review of PR 719).
+fn whole_row(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    let row = ui.scope(add);
+    design::register_row(ui, row.response.rect);
+}
+
+/// What the changes to review show, kept until the proposals or the DM's ticks change: each
+/// proposal's line and the keys an Apply would carry out (review of PR 719: not rebuilt each
+/// frame).
+struct ReviewView {
+    lines: Vec<String>,
+    keys: BTreeSet<String>,
+}
+
+impl ReviewView {
+    fn of(proposals: &[Proposal], declined: &BTreeSet<String>) -> Self {
+        let lines = proposals
+            .iter()
+            .map(|proposal| {
+                let line = format!(
+                    "{} ({}): {}",
+                    proposal.name,
+                    proposal.kind,
+                    match &proposal.change {
+                        Move::ToPackage(package) => format!("move to {package}"),
+                        Move::ToCampaign =>
+                            "move back to the campaign package; its package is no longer enabled"
+                                .to_owned(),
+                        Move::Forget => "remove; no current entry uses it".to_owned(),
+                    }
+                );
+                match &proposal.blocked {
+                    Some(reason) => format!("{line}. Not available: {reason}"),
+                    None => line,
+                }
+            })
+            .collect();
+        let keys = proposals
+            .iter()
+            .filter(|p| p.blocked.is_none() && !declined.contains(&p.key))
+            .map(|p| p.key.clone())
+            .collect();
+        Self { lines, keys }
+    }
+}
+
 /// The error that says Campaign.md is missing, as `Campaigns` words it.
 const MISSING_CAMPAIGN: &str = "Campaign.md is missing";
 
@@ -377,8 +428,15 @@ enum ContentFault<'a> {
         /// The package's reference, while its Technical details are open.
         reference: Option<&'a str>,
     },
-    /// A Campaign.md flag or a missing dependency (the content layer's words).
+    /// A Campaign.md flag (the content layer's words).
     Flag(&'a str),
+    /// A missing dependency (M0044): with one owner, the owner and the line of its missing
+    /// link head the words (`Lost Patrol · line 13: Needs a creature that is not in this
+    /// campaign’s packages.`); with several, the content layer's sentence names them all.
+    Missing {
+        place: Option<(&'a str, Option<u32>)>,
+        cause: &'a str,
+    },
     /// Encounters a package removal left without creatures.
     LeftWithout(&'a design::outcome::Sentence),
 }
@@ -399,6 +457,7 @@ impl design::outcome::Fault for ContentFault<'_> {
             | Self::Manifest { on_disk: false, .. }
             | Self::Unavailable { .. }
             | Self::Flag(_)
+            | Self::Missing { .. }
             | Self::LeftWithout(_) => Severity::NeedsFixing,
         }
     }
@@ -408,6 +467,13 @@ impl design::outcome::Fault for ContentFault<'_> {
             Self::RepairRefused { path, .. } => Some(design::outcome::FaultPlace {
                 name: (*path).into(),
                 line: None,
+            }),
+            Self::Missing {
+                place: Some((owner, line)),
+                ..
+            } => Some(design::outcome::FaultPlace {
+                name: (*owner).into(),
+                line: *line,
             }),
             _ => None,
         }
@@ -456,7 +522,9 @@ impl design::outcome::Fault for ContentFault<'_> {
                 .blocking()
                 .and_then(&outside)
                 .unwrap_or(crate::sentence!("This needs fixing.")),
-            Self::Flag(cause) => outside(cause).unwrap_or(crate::sentence!("This needs fixing.")),
+            Self::Flag(cause) | Self::Missing { cause, .. } => {
+                outside(cause).unwrap_or(crate::sentence!("This needs fixing."))
+            }
             // What Replace keeps and replaces is its choice's own help line (ruling M8).
             Self::Manifest {
                 package, problem, ..
@@ -1009,6 +1077,7 @@ impl CampaignContent {
         if self.reconcile.campaign != owner {
             self.reconcile.proposals.clear();
             self.reconcile.declined.clear();
+            self.reconcile.view = None;
             self.reconcile.error = None;
             self.reconcile.checked_at = None;
         }
@@ -1063,7 +1132,10 @@ impl CampaignContent {
         self.reconcile.checked_at = Some(Instant::now());
         self.reconcile.error = None;
         match checked.proposals {
-            Ok(proposals) => self.reconcile.proposals = proposals,
+            Ok(proposals) => {
+                self.reconcile.proposals = proposals;
+                self.reconcile.view = None;
+            }
             Err(error) => self.reconcile.error = Some(error),
         }
         match checked.applied {
@@ -1704,48 +1776,41 @@ impl CampaignContent {
             ui,
             design::Heading::Section("Campaign package: changes to review"),
         );
-        // Drawn in place, whole rows of the page's column (L11c-C.1).
+        // Drawn in place, each proposal a whole row of the page's column (L11c-C.1).
+        let view = reconcile
+            .view
+            .get_or_insert_with(|| ReviewView::of(&reconcile.proposals, &reconcile.declined));
+        let mut ticked = None;
         ui.vertical(|ui| {
-            for proposal in &reconcile.proposals {
-                let line = format!(
-                    "{} ({}): {}",
-                    proposal.name,
-                    proposal.kind,
-                    match &proposal.change {
-                        Move::ToPackage(package) => format!("move to {package}"),
-                        Move::ToCampaign =>
-                            "move back to the campaign package; its package is no longer enabled"
-                                .to_owned(),
-                        Move::Forget => "remove; no current entry uses it".to_owned(),
+            for (proposal, line) in reconcile.proposals.iter().zip(&view.lines) {
+                whole_row(ui, |ui| {
+                    if proposal.blocked.is_some() {
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, line.as_str()).color(c.muted))
+                                .wrap(),
+                        );
+                        return;
                     }
-                );
-                if let Some(reason) = &proposal.blocked {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(ui, format!("{line}. Not available: {reason}"))
-                                .color(c.muted),
-                        )
-                        .wrap(),
-                    );
-                    continue;
-                }
-                let mut chosen = !reconcile.declined.contains(&proposal.key);
-                if ui.checkbox(&mut chosen, line).changed() {
-                    if chosen {
-                        reconcile.declined.remove(&proposal.key);
-                    } else {
-                        reconcile.declined.insert(proposal.key.clone());
+                    let mut chosen = !reconcile.declined.contains(&proposal.key);
+                    if ui.checkbox(&mut chosen, line.as_str()).changed() {
+                        ticked = Some((proposal.key.clone(), chosen));
                     }
-                }
+                });
             }
         });
-        let keys: BTreeSet<String> = reconcile
-            .proposals
-            .iter()
-            .filter(|p| p.blocked.is_none() && !reconcile.declined.contains(&p.key))
-            .map(|p| p.key.clone())
-            .collect();
+        if let Some((key, chosen)) = ticked {
+            if chosen {
+                reconcile.declined.remove(&key);
+            } else {
+                reconcile.declined.insert(key);
+            }
+            reconcile.view = None;
+        }
+        let keys = reconcile
+            .view
+            .get_or_insert_with(|| ReviewView::of(&reconcile.proposals, &reconcile.declined))
+            .keys
+            .clone();
         let unsaved = self
             .snapshot
             .as_ref()
@@ -2566,7 +2631,7 @@ impl CampaignContent {
             for (at, flag) in campaign_flags.iter().enumerate() {
                 // Every flag is about Campaign.md, so one file line follows the last of them.
                 let last = at + 1 == campaign_flags.len();
-                ui.scope(|ui| {
+                whole_row(ui, |ui| {
                     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
                     let mut fault =
                         design::outcome::BodyFault::new(&ContentFault::Flag(&flag.message));
@@ -2613,8 +2678,7 @@ impl CampaignContent {
             };
             // A fault count is a status: the warning icon and colour, then the count.
             let job = crate::content_actions::issue_count_title(ui, &heading);
-            let issues = egui::CollapsingHeader::new(job)
-                .icon(design::section_icon)
+            let issues = design::Section::new(job)
                 .default_open(!campaign_flags.is_empty())
                 .show(ui, |ui| {
                     // Drawn in place, whole rows of the page's column (L11c-C.1).
@@ -2626,49 +2690,58 @@ impl CampaignContent {
                                 .iter()
                                 .any(|issue| issue.message.as_str() == error.as_str())
                         }) {
-                            ui.add(
-                                egui::Label::new(Type::Small.rich(ui, e.as_str()).color(c.muted))
+                            whole_row(ui, |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small.rich(ui, e.as_str()).color(c.muted),
+                                    )
                                     .wrap(),
-                            );
+                                );
+                            });
                         }
                         for issue in &closure.missing_dependencies {
                             ui.push_id(&issue.reference, |ui| {
-                                // FA6: a dependency issue is a warning like the flags above
-                                // it, and its repairs start at its words, one per owner.
-                                let mut fault = design::outcome::BodyFault::new(
-                                    &ContentFault::Flag(&issue.message),
-                                );
-                                for id in &issue.owners {
-                                    if let Some(path) = catalogue.file_path_of(*id) {
-                                        let owner = &catalogue.entries[id];
-                                        fault = fault.repair(design::outcome::Repair::new(
-                                            crate::choice!("Repair {}", owner.entry.name),
-                                            path.to_path_buf(),
-                                        ));
-                                    }
-                                }
-                                let repair = fault.show(ui);
-                                if let Some(path) = repair {
-                                    ui.ctx().data_mut(|data| {
-                                        data.insert_temp(
-                                            egui::Id::new("open_library_repair"),
-                                            path,
-                                        );
-                                        // The editor names the missing link and opens at
-                                        // its line.
-                                        if let Some(target) = &issue.target {
-                                            data.insert_temp(
-                                                egui::Id::new("open_library_repair_link"),
-                                                Some((target.clone(), issue.message.clone())),
-                                            );
+                                whole_row(ui, |ui| {
+                                    // FA6: a dependency issue is a warning like the flags above
+                                    // it, and its repairs start at its words, one per owner.
+                                    let missing = issue.fault();
+                                    let mut fault =
+                                        design::outcome::BodyFault::new(&ContentFault::Missing {
+                                            place: missing.place,
+                                            cause: &missing.cause,
+                                        });
+                                    for id in &issue.owners {
+                                        if let Some(path) = catalogue.file_path_of(*id) {
+                                            let owner = &catalogue.entries[id];
+                                            fault = fault.repair(design::outcome::Repair::new(
+                                                crate::choice!("Repair {}", owner.entry.name),
+                                                path.to_path_buf(),
+                                            ));
                                         }
+                                    }
+                                    let repair = fault.show(ui);
+                                    if let Some(path) = repair {
+                                        ui.ctx().data_mut(|data| {
+                                            data.insert_temp(
+                                                egui::Id::new("open_library_repair"),
+                                                path,
+                                            );
+                                            // The editor names the missing link and opens at
+                                            // its line.
+                                            if let Some(target) = &issue.target {
+                                                data.insert_temp(
+                                                    egui::Id::new("open_library_repair_link"),
+                                                    Some((target.clone(), issue.message.clone())),
+                                                );
+                                            }
+                                        });
+                                    }
+                                    design::quiet_section(ui, "Technical details", |ui| {
+                                        ui.label(
+                                            Type::Small.rich(ui, issue.technical()).color(c.muted),
+                                        );
                                     });
-                                }
-                                design::quiet_section(ui, "Technical details", |ui| {
-                                    ui.label(
-                                        Type::Small.rich(ui, issue.technical()).color(c.muted),
-                                    );
-                                });
+                                })
                             });
                         }
                         for entry in catalogue.entries.values().filter(|entry| {
@@ -2684,10 +2757,14 @@ impl CampaignContent {
                                         .iter()
                                         .any(|reference| catalogue.resolve(reference).is_err())
                                 },
-                            ) && design::link(ui, &format!("Open {}", entry.entry.name))
-                                .clicked()
-                            {
-                                self.open_lookup = Some(entry.entry.id);
+                            ) {
+                                whole_row(ui, |ui| {
+                                    if design::link(ui, &format!("Open {}", entry.entry.name))
+                                        .clicked()
+                                    {
+                                        self.open_lookup = Some(entry.entry.id);
+                                    }
+                                });
                             }
                         }
                     });

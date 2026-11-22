@@ -699,10 +699,10 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
                         })
                         .inner;
                     if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        match typed.trim().parse::<i64>() {
-                            Ok(value) => act = Some(Act::Enter(at, value)),
-                            Err(_) if typed.trim().is_empty() => {}
-                            Err(_) => {
+                        match design::parse_signed(typed) {
+                            Some(value) => act = Some(Act::Enter(at, value)),
+                            None if typed.trim().is_empty() => {}
+                            None => {
                                 state.problem = Some((Some(at), "Type a whole number.".into()));
                             }
                         }

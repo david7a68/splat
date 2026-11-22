@@ -1760,9 +1760,8 @@ impl Campaigns {
                 None
             } else {
                 Some(
-                    egui::CollapsingHeader::new("Add campaign")
-                        .icon(design::section_icon)
-                        .id_salt(("campaign_form", editing_id))
+                    design::Section::new("Add campaign")
+                        .id(("campaign_form", editing_id))
                         .open(focus.then_some(true))
                         .default_open(empty)
                         .show(ui, fields),

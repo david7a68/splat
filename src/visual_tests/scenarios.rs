@@ -765,7 +765,10 @@ fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     d.each_painted_text(|text, _| {
         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
         // An empty icon slot (iter-27-B FM1) paints no glyph.
+        // The words start inside the area: a menu that opens over a list does not take the
+        // list's words behind it (layout PR 5b moved row menus over their rows' text).
         if area.contains(rect.center())
+            && rect.left() >= area.left() - 1.0
             && !is_icon(&text.galley.job.text)
             && !text.galley.job.text.trim().is_empty()
         {
@@ -4647,6 +4650,56 @@ pub mod campaign_content {
             a_wheel && b_wheel,
             format!("The wheel brings A's Save into view {a_wheel}, then B's Save {b_wheel}"),
         );
+        // Layout step 11c (review of PR 719): a press on the visible part of B's cut editor
+        // moves nothing while the pointer presses, holds and releases; the pane's focus
+        // clearance alone brings the editor whole into view, after the release. The reference
+        // is B's message above the editor, read from the screen at each frame.
+        d.scroll_up_at(page, 20);
+        let partly = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == b_editor_name)
+                .map(|node| node.shown)
+                .filter(|shown| shown.height() >= crate::design::XL)
+                .filter(|_| !whole(d))
+        };
+        // Down the page by touchpad steps until B's editor shows in part.
+        let mut shown = partly(d);
+        for _ in 0..40 {
+            if shown.is_some() {
+                break;
+            }
+            d.scroll_points_at(page, 40.0);
+            shown = partly(d);
+        }
+        let mut tops = vec![b_message_top(d).map(|rect| rect.top())];
+        if let Some(shown) = shown {
+            let at = shown.center();
+            d.press_hold_at(at);
+            tops.push(b_message_top(d).map(|rect| rect.top()));
+            for _ in 0..3 {
+                d.hold_step();
+                tops.push(b_message_top(d).map(|rect| rect.top()));
+            }
+            d.release_at(at);
+            tops.push(b_message_top(d).map(|rect| rect.top()));
+            d.settle();
+        }
+        let still = tops.len() == 6
+            && tops[0].is_some()
+            && tops.iter().all(|top| {
+                top.zip(tops[0])
+                    .is_some_and(|(top, first)| (top - first).abs() <= 0.5)
+            });
+        let editor_focused = d.focused_name().as_deref() == Some(b_editor_name.as_str());
+        d.observe(
+            "l11c-C1-editor-press-still",
+            still && editor_focused,
+            format!(
+                "B's editor shown {shown:?}; B's message top before, at the press, while held and at the release: {tops:?}; then the editor is focused {editor_focused}"
+            ),
+        );
+        d.press(Key::Escape);
         // Round 25 FD1: A's discard result belongs to A. B's edit leaves it, and Undo discard
         // brings back A's draft only; B's edit stays.
         let b_name = crate::world::repair::editor_name("Notes/Cracked.md");
@@ -5654,7 +5707,18 @@ pub mod encounter_build {
         d.type_text(BOSS);
         d.click_first(ADD);
         d.expect("8. ");
-        d.state("creatures-added", Sizes::All);
+        // Layout PR 5b (I6): the roster' actions start `L` after their widest facts; at
+        // 1920 they have room for the column.
+        d.state_prepared("creatures-added", Sizes::All, |d| {
+            let (holds, column, detail) =
+                d.kept_columns_hold("roster", true, Some(crate::design::S));
+            let wide = d.window_size().0 >= LARGE.0;
+            d.observe(
+                "pr5b-roster-columns",
+                holds && (column || !wide),
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
+        });
         d.click(SAVE_ENCOUNTER);
         d.expect(SAVED_NOTE);
         d.state("saved", Sizes::Default);
@@ -11041,11 +11105,18 @@ pub mod column_resize {
         let edge = |d: &Driver<'_>| d.place_of(FIND_CREATURE).map_or(0.0, |r| r.left()) - S;
         let start = edge(d);
         d.drag_column_edge(start, start + 100.0);
+        // Layout PR 5b: the roster's menus follow its facts; its rows' rules end at its edge.
         let roster = d
             .nodes()
             .into_iter()
             .filter(|node| node.name.starts_with("More actions for") && node.in_view())
-            .map(|node| node.rect.right())
+            .flat_map(|node| {
+                d.hairlines_in(egui::Rect::from_min_max(
+                    egui::pos2(0.0, node.rect.bottom()),
+                    egui::pos2(d.window_size().0, node.rect.bottom() + 24.0),
+                ))
+            })
+            .map(|line| line.right())
             .fold(0.0, f32::max);
         d.observe(
             CHECK,
@@ -11264,7 +11335,9 @@ pub mod column_resize {
         d.state_prepared("session-events-fill-their-column", Sizes::All, |d| {
             show_plan(d);
             d.wait_for_text("Add to notes");
-            // iter-25-S FB7: in the tab layout, the plan rows end at the tab row's right edge.
+            // iter-25-S FB7: in the tab layout, no plan row ends past the tab row's right edge.
+            // Layout PR 5a-2 (I6): the rows' actions follow their titles in one column, so one
+            // of them ending at that edge is no longer the rule; the plan's column check is.
             let tabs_end = d.place_of("Edit session details").map(|rect| rect.right());
             let rows_end: Vec<f32> = d
                 .nodes()
@@ -11277,15 +11350,18 @@ pub mod column_resize {
                 .map(|node| node.rect.right())
                 .collect();
             let tabbed = d.has("Note");
+            let (columns, _, detail) = d.plan_columns_hold();
             d.observe(
                 "iter-25-S-FB7",
                 !tabbed
                     || (!rows_end.is_empty()
+                        && columns
                         && tabs_end.is_some_and(|end| {
-                            rows_end.iter().any(|right| (right - end).abs() < 1.0)
-                                && rows_end.iter().all(|right| *right <= end + 1.0)
+                            rows_end.iter().all(|right| *right <= end + 1.0)
                         })),
-                format!("Plan row actions {rows_end:?} end at the tab row's edge {tabs_end:?}"),
+                format!(
+                    "Plan row actions {rows_end:?} end within the tab row's edge {tabs_end:?}; {detail}"
+                ),
             );
             d.observe(
                 "H1 one plan Undo",
@@ -11294,7 +11370,7 @@ pub mod column_resize {
                     .filter(|node| node.in_view() && node.name.starts_with("Undo"))
                     .count()
                     == 1
-                    && d.has("Undo add"),
+                    && d.event_undo("add").is_some(),
                 "The plan add has one named Undo at each window size",
             );
         });
@@ -14936,13 +15012,16 @@ pub mod session_notes {
             d.has_containing("Short rest added to Session 1."),
             "An event added here says so, in words",
         );
-        d.click("Undo add");
+        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
         d.observe(
             "T11.2",
             !d.has("Short rest") && d.has_containing("Removed"),
             "A mis-press has one step of undo, and that has one too",
         );
-        d.click("Undo remove");
+        d.click(
+            &d.event_undo("remove")
+                .expect("an event\u{2019}s Undo remove"),
+        );
         d.expect("Short rest");
         d.click("Short rest");
         d.click("More actions for Short rest");
@@ -15275,16 +15354,19 @@ pub mod session_notes {
         d.click("All");
         d.click("More actions for Rest at the mill");
         d.click("Remove this event");
-        d.expect("Undo remove");
+        d.expect("Undo remove ");
         d.expect("1 note still links to it.");
         d.state("timeline-removed", Sizes::Default);
         d.click_containing("Travel ·");
         d.observe(
             "T11.4",
-            d.has("Undo remove"),
+            d.event_undo("remove").is_some(),
             "Selecting another event keeps the undo for a removal",
         );
-        d.click("Undo remove");
+        d.click(
+            &d.event_undo("remove")
+                .expect("an event\u{2019}s Undo remove"),
+        );
         d.expect("Rest at the mill");
 
         // Round 26 FG4, FD7: a length the clock cannot count is a warning with its icon, in the
@@ -20412,7 +20494,17 @@ pub mod encounter_groups {
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("MEMBERS 3");
         d.expect("XP 600");
-        d.state("group-editor", Sizes::All);
+        // Layout PR 5b (I6): the members' actions start `L` after their widest facts; at
+        // 1920 they have room for the column.
+        d.state_prepared("group-editor", Sizes::All, |d| {
+            let (holds, column, detail) = d.kept_columns_hold("members", true, None);
+            let wide = d.window_size().0 >= LARGE.0;
+            d.observe(
+                "pr5b-members-columns",
+                holds && (column || !wide),
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
+        });
         // Layout step 6 (SL4, AL9): the clean editor's head and first fields, for the dirty
         // editor of `group-member-removed-with-undo`.
         let clean_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
@@ -20930,21 +21022,41 @@ pub mod encounter_groups {
             "A dirty group opened in Encounters says why the campaign cannot change",
             |d| d.visible_text("Unsaved") && switch_reason_shown(d),
         );
-        // FD4 family: the group notes field ends at the members' right edge, as the encounter
-        // editor's notes field ends at the roster's.
+        // FD4 family: the group notes field ends at the members' column edge, as the encounter
+        // editor's notes field ends at the roster's. Layout PR 5b: a member's menu follows the
+        // members' facts, so it ends within that edge, in the members' column (I6).
         for size in [SMALL, DEFAULT, LARGE] {
-            let edges = d.at_size(size, |d| {
+            // PR 641 review (P1): the notes field's right edge is compared with the members'
+            // rule (the hairline under a member's row, which spans the members column) directly.
+            let (edges, (columns, _, detail)) = d.at_size(size, |d| {
+                let menu = d.place_of("More actions for Cinder Wolf");
+                let rule = menu.and_then(|menu| {
+                    d.hairlines_in(egui::Rect::from_min_max(
+                        egui::pos2(0.0, menu.bottom()),
+                        egui::pos2(d.window_size().0, menu.bottom() + 24.0),
+                    ))
+                    .into_iter()
+                    .map(|line| line.right())
+                    .reduce(f32::max)
+                });
                 (
-                    d.place_of("More actions for Cinder Wolf")
-                        .map(|rect| rect.right()),
-                    d.place_of(&format!("Group notes for {GROUP_RIVALS}"))
-                        .map(|rect| rect.right()),
+                    (
+                        menu.map(|rect| rect.right()),
+                        rule,
+                        d.place_of(&format!("Group notes for {GROUP_RIVALS}"))
+                            .map(|rect| rect.right()),
+                    ),
+                    d.kept_columns_hold("members", true, None),
                 )
             });
             d.observe(
                 "iter-18-B-FD4-group",
-                matches!(edges, (Some(menu), Some(notes)) if (menu - notes).abs() <= 0.5),
-                format!("At {size:?}, the member menu and the notes field end at {edges:?}"),
+                columns
+                    && matches!(edges, (Some(menu), Some(rule), Some(notes))
+                        if (notes - rule).abs() <= 0.5 && menu <= notes + 0.5),
+                format!(
+                    "At {size:?}, the member menu, the members' rule and the notes field end at {edges:?}; {detail}"
+                ),
             );
         }
         // iter-27-B FB7: Save group is on the title line, after the name, as Save encounter is;
@@ -22379,9 +22491,13 @@ fn right_edges(d: &Driver<'_>, name: &str) -> Vec<f32> {
 /// role, just right of the member menus.
 fn members_scroll_bar(d: &Driver<'_>) -> bool {
     let nodes = d.nodes();
+    // Layout PR 5b: the member menus follow the members' facts; the name field still ends at
+    // the column's edge.
     let Some(column) = nodes
         .iter()
-        .filter(|node| node.name.starts_with("More actions for "))
+        .filter(|node| {
+            node.name.starts_with("More actions for ") || node.name.starts_with("Group name")
+        })
         .map(|node| node.rect.right())
         .reduce(f32::max)
     else {
@@ -24003,6 +24119,25 @@ pub mod run_loot {
                 && d.has("Library item"),
             "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
         );
+        // Layout step 11c (M0402): a line's reason stands in its key's column, below the row,
+        // placed by the key's own edge and not by a measured space, at every size.
+        let reasons = [DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let key = d.place_of("Table for the encounter loot line 2")?;
+                let reason = painted_bounds(d, "No roll table has the key")?;
+                Some((size, key.left(), reason.left(), reason.top() - key.bottom()))
+            })
+        });
+        d.observe(
+            "m32-L11c-loot-reason-column",
+            reasons.iter().all(|at| {
+                at.is_some_and(|(_, key, reason, below)| {
+                    // The key menu's rect starts 1 px before its first painted edge.
+                    (reason - key - crate::design::S - 1.0).abs() <= 1.5 && below >= -0.5
+                })
+            }),
+            format!("The reason starts at the key menu's column (its left plus S) and below it (size, key left, reason left, gap below): {reasons:?}"),
+        );
         d.goal("add loot and a roll on a campaign table");
         // iter-25-R, Astra 4: a removed loot line is a finished change: a success message, with
         // its Undo, which puts the line back.
@@ -25471,13 +25606,37 @@ pub mod session_plan_groups {
         d.click(NAV_CAMPAIGN);
         d.expect("1 content issue to repair");
         d.click("1 content issue to repair");
-        d.expect("Lost Patrol needs a creature that cannot be found.");
         let missing_id = splat::character::stable_id("visual:group:lost:creature").to_string();
+        // M0044 (SD3, AD4): the shared fault form: the owner and the line of its missing
+        // member's row, then what it needs and why that cannot be had.
+        let group_text = std::fs::read_to_string(
+            d.app_mut()
+                .campaigns
+                .active_campaign()
+                .unwrap()
+                .path
+                .join("Encounter Groups/Lost Patrol.md"),
+        )
+        .unwrap();
+        let members = group_text
+            .lines()
+            .position(|line| line.trim() == "## Members")
+            .expect("the group's Members");
+        let member_line = group_text
+            .lines()
+            .enumerate()
+            .find(|(at, line)| *at > members && line.contains(&missing_id))
+            .map(|(at, _)| at + 1)
+            .expect("the missing member's row");
+        let missing_words = format!(
+            "Lost Patrol · line {member_line}: Needs a creature that is not in this campaign’s packages."
+        );
+        d.expect(&missing_words);
         d.observe_both(
             "iter-2-C-missing-member",
             "The missing member names its owner and keeps its reference folded",
             |d| {
-                d.visible_text("Lost Patrol needs a creature that cannot be found.")
+                d.visible_text(&missing_words)
                     && d.has("Repair Lost Patrol")
                     && !d.visible_text(&missing_id)
             },
@@ -25488,10 +25647,7 @@ pub mod session_plan_groups {
         for size in [SMALL, DEFAULT] {
             let (tones, words, link, bordered) = d.at_size(size, |d| {
                 let words = d
-                    .painted_rect_in(
-                        "Lost Patrol needs a creature that cannot be found.",
-                        egui::Rect::EVERYTHING,
-                    )
+                    .painted_rect_in(&missing_words, egui::Rect::EVERYTHING)
                     .map(|rect| rect.left());
                 let link = d.place_of("Repair Lost Patrol").map(|rect| rect.left());
                 let bordered = d
@@ -25502,12 +25658,7 @@ pub mod session_plan_groups {
                         frame.stroke.width > 0.0
                             && frame.stroke.color == crate::design::colors().field_border
                     });
-                (
-                    tones_beside(d, "Lost Patrol needs a creature that cannot be found."),
-                    words,
-                    link,
-                    bordered,
-                )
+                (tones_beside(d, &missing_words), words, link, bordered)
             });
             d.observe(
                 "iter-23-Q-FA6",
@@ -26928,8 +27079,9 @@ pub mod session_plan {
         // at the removed row's place. It stays with its notice, below the remaining row.
         d.observe(
             "iter-10-C-AT2-undo",
-            d.in_view("Undo remove")
-                && d.place_of("Undo remove")
+            d.event_undo("remove").is_some_and(|undo| d.in_view(&undo))
+                && d.event_undo("remove")
+                    .and_then(|undo| d.place_of(&undo))
                     .zip(d.place_of(&notice))
                     .zip(d.place_of(FIRST))
                     .is_some_and(|((undo, words), row)| {
@@ -26972,7 +27124,7 @@ pub mod session_plan {
             "iter-24-S-FL3-undo",
             !d.has("Undo delete run")
                 && d.visible_text(&notice)
-                && d.in_view("Undo remove")
+                && d.event_undo("remove").is_some_and(|undo| d.in_view(&undo))
                 && d.in_view(&format!("Resume: {FIRST}")),
             "Undo delete run brings the run back, and the removal's result returns",
         );
@@ -26981,7 +27133,7 @@ pub mod session_plan {
         d.expect(&format!("Start fight: {FIRST}"));
         d.observe(
             "iter-24-S-FL3",
-            !d.has("Undo remove") && d.in_view("Undo delete run"),
+            d.event_undo("remove").is_none() && d.in_view("Undo delete run"),
             "Deleting the run again replaces the removal's result again",
         );
         // FT4: Timeline names the removed fight as the plan does.
@@ -26989,7 +27141,7 @@ pub mod session_plan {
         d.observe(
             "iter-12-C-FT4",
             d.visible_text(&format!("Removed “{FIRST}” (Round 2 · Paused)."))
-                && d.in_view("Undo remove"),
+                && d.event_undo("remove").is_some_and(|undo| d.in_view(&undo)),
             "Timeline's removal notice names the removed fight, with its Undo",
         );
         d.click(NAV_SESSIONS);
@@ -27495,9 +27647,19 @@ pub mod session_plan {
         // iter-23-S FK2: a run that starts ends the removal's result and its Undo, so no notice
         // sits above rows it no longer names.
         let removal_gone = |d: &Driver<'_>| {
-            !d.has_containing(&format!("Removed “{FIRST}”")) && !d.has("Undo remove")
+            !d.has_containing(&format!("Removed “{FIRST}”")) && d.event_undo("remove").is_none()
         };
         d.state_prepared("plan-after-a-fight", Sizes::All, |d| {
+            // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest facts (every
+            // title and summary line) where that column fits, else at the far edge. Here the
+            // fights' summaries are too wide for it, so the plan keeps the far edge; the unit
+            // test `plan_summary_follows_the_title_without_an_extra_gap` proves the column.
+            let (holds, column, detail) = d.plan_columns_hold();
+            d.observe(
+                "pr5a2-plan-columns",
+                holds,
+                format!("At {:?}, column {column}: {detail}", d.window_size()),
+            );
             d.observe(
                 "iter-23-S-FK2-plan",
                 removal_gone(d),
@@ -27641,10 +27803,10 @@ pub mod session_plan {
         d.click("Add Long rest");
         d.observe(
             "S4",
-            d.has("Undo add") && !d.has("Undo everyone to full"),
+            d.event_undo("add").is_some() && !d.has("Undo everyone to full"),
             "The long rest has one Undo",
         );
-        d.click("Undo add");
+        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
         d.observe(
             "S4",
             !d.has("Everyone at full"),
@@ -27914,7 +28076,7 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
-        let undo_add = undo_shape(d, "Undo add");
+        let undo_add = undo_shape(d, &d.event_undo("add").expect("an event\u{2019}s Undo add"));
         d.observe(
             "iter-17-B-AT1-pair",
             saved_hp_undo.is_some() && undo_add == saved_hp_undo,
@@ -27922,7 +28084,7 @@ pub mod session_plan {
                 "The saved-HP Undo {saved_hp_undo:?} has the same shape as Undo add {undo_add:?}"
             ),
         );
-        d.click("Undo add");
+        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Add Long rest");
         d.expect("Everyone at full");
@@ -28270,9 +28432,10 @@ pub mod session_plan {
                 let rule = d
                     .place_of("More actions for Werewolf copy")
                     .and_then(|menu| {
+                        // Layout PR 5b: the menu follows the row's facts; the rule spans the row.
                         d.hairlines_in(egui::Rect::from_min_max(
                             egui::pos2(0.0, menu.bottom()),
-                            egui::pos2(menu.right() + 60.0, menu.bottom() + 24.0),
+                            egui::pos2(d.window_size().0, menu.bottom() + 24.0),
                         ))
                         .into_iter()
                         .map(|line| line.right())
@@ -29353,6 +29516,36 @@ pub mod run_rolls {
             "T16.1",
             d.has_containing("Click a target") && d.has_containing("% to hit"),
             "An armed tile says what to do, and each row shows the chance to hit it",
+        );
+        // Layout step 11c (M0424, M0425): the crosshair is centred on the first line of the
+        // words, whether they wrap or not, placed by rects and not by measured spaces.
+        let centred = [SMALL, DEFAULT].map(|size| {
+            d.at_size(size, |d| {
+                // The accessible rects are the rows' own boxes, not the ink.
+                let nodes = d.nodes();
+                let words = nodes
+                    .iter()
+                    .find(|node| node.in_view() && node.name.contains("Click a target"))?
+                    .rect;
+                // The crosshair of this hint: the glyph that ends `XS` before the words.
+                let icon = nodes
+                    .iter()
+                    .find(|node| {
+                        node.in_view()
+                            && node.name == crate::design::icons::ARMED
+                            && (words.left() - node.rect.right()).abs() <= crate::design::XS + 2.0
+                    })?
+                    .rect;
+                let first = words.top() + crate::design::Type::Small.line() / 2.0;
+                Some((size, icon.center().y, first))
+            })
+        });
+        d.observe(
+            "m32-L11c-armed-hint-centred",
+            centred
+                .iter()
+                .all(|at| at.is_some_and(|(_, icon, first)| (icon - first).abs() <= 0.6)),
+            format!("The crosshair's centre and the words' first line's centre (size, icon y, line y): {centred:?}"),
         );
         d.goal_within("T16.1", "arm the selected creature's attack", 1);
         action_at_text(d, "iter-19-R-FT4", BITE, "Stop");

@@ -105,7 +105,7 @@ impl Run {
         let presses = design::TurnHeading::new(
             &self.name,
             self.state.round,
-            design::TurnName::whole(current, &roster, (self.revision, participants.len())),
+            design::TurnName::whole(current, &roster, (*self.revision, participants.len())),
             scale,
             self.panel == Panel::Groups && !self.hide_panel,
             nobody_present.then_some(NOBODY_PRESENT),

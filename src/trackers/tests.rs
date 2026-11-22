@@ -1474,6 +1474,59 @@ fn each_write_path_of_the_ledger_holds() {
     fs::write(&path, &text).unwrap();
     race.trackers.read_disk();
     assert_eq!(value(&race, "favor", None), 1);
+    // M0566 (SH7, AH7): a Remove that takes a notice off the Due list says so in its result,
+    // as an act's fall does; a Remove that ends none says nothing more.
+    let t = &mut race.trackers;
+    t.press("seals", Some("Old Guard"), "Take seal", None);
+    let due = t.due();
+    let seal = t.test_history()["seals"]
+        .iter()
+        .find(|row| row.entry.instance.as_deref() == Some("Old Guard"))
+        .unwrap()
+        .entry
+        .clone();
+    t.remove(note, &seal);
+    let words = t.test_removed().map(|removed| removed.words).unwrap();
+    assert!(
+        words.starts_with("Removed ")
+            && words.ends_with(". First seal for Old Guard is no longer due."),
+        "{words}"
+    );
+    assert_eq!(t.due(), due - 1);
+    // Review of PR 703: of two seals, Remove of the first leaves the first seal due, now
+    // raised by the second, and says nothing of it.
+    let t = &mut race.trackers;
+    t.press("seals", Some("Old Guard"), "Take seal", None);
+    t.press("seals", Some("Old Guard"), "Take seal", None);
+    let first = t.test_history()["seals"]
+        .iter()
+        .find(|row| row.entry.instance.as_deref() == Some("Old Guard"))
+        .unwrap()
+        .entry
+        .clone();
+    t.remove(note, &first);
+    let words = t.test_removed().map(|removed| removed.words).unwrap();
+    assert!(
+        !words.contains("First seal for Old Guard is no longer due"),
+        "{words}"
+    );
+    assert_eq!(value(&race, "seals", Some("Old Guard")), 1);
+    let t = &mut race.trackers;
+    assert!(
+        t.state
+            .due
+            .iter()
+            .any(|notice| notice.name(&t.rules) == "First seal for Old Guard"),
+        "the first seal stays due"
+    );
+    let rest: Vec<_> = t.test_history()["seals"]
+        .iter()
+        .filter(|row| row.entry.instance.as_deref() == Some("Old Guard"))
+        .map(|row| row.entry.clone())
+        .collect();
+    for entry in rest {
+        race.trackers.remove(note, &entry);
+    }
     // An Undo whose place changed on disk: the entry before the removed one was edited in
     // Obsidian. It puts nothing back, says so, and ends.
     let t = &mut race.trackers;
@@ -1798,6 +1851,48 @@ fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
         h.query_by_label("CROWD FAVOR HISTORY 5,001").is_some()
     })
     .expect("a changed ledger prepares its rows again");
+    // M0571: unchanged frames fit no row's words again; a row too long for its room is cut at
+    // a whole word and still says its words whole to assistive technology.
+    let fitted = || history::FITTED.with(std::cell::Cell::get);
+    h.run_steps(2);
+    let before = fitted();
+    h.run_steps(3);
+    assert_eq!(
+        fitted(),
+        before,
+        "unchanged frames fit no row's words again"
+    );
+    let long = "Crowd loves it when the champion bows to every banner in the hall";
+    let t = h.state_mut();
+    // The first row of the history, in view at its top.
+    t.ledger.changes.insert(
+        0,
+        Entry {
+            id: "c-fffffffe".into(),
+            tracker: Some("favor".into()),
+            add: Some(1),
+            why: Some(long.into()),
+            ..Entry::default()
+        },
+    );
+    t.test_settle();
+    h.run_steps(2);
+    assert!(fitted() > before, "a settle fits the rows in view again");
+    // A label's painted words are its value; its accessible label is the whole row.
+    let whole = format!("{long}: +1");
+    let cut_row = h.query_all(egui_kittest::kittest::By::new().predicate(|node| {
+        node.role() == eframe::egui::accesskit::Role::Label
+            && node.label().is_some_and(|label| label == whole)
+            && node.value().is_some_and(|shown| {
+                shown.ends_with('…')
+                    && whole.starts_with(&format!("{} ", shown.trim_end_matches('…')))
+            })
+    }));
+    assert_eq!(
+        cut_row.count(),
+        1,
+        "the row is cut at a whole word and says its words whole"
+    );
 }
 
 /// FE1, AE2: every tracker line of the panel shares one value column and one first-action

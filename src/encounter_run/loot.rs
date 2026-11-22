@@ -319,7 +319,7 @@ impl Run {
         let left = self.unrolled(&open).len();
         let mut picks: Vec<(Holder, usize)> = Vec::new();
         // The copy owns its result: Undo and any new step end it, whatever the Log's length.
-        let copied = self.loot_copied == Some(self.revision);
+        let copied = self.loot_copied == Some(*self.revision);
         ui.horizontal(|ui| {
             design::heading(ui, design::Heading::Label("Loot"));
             if left > 0 {
@@ -346,7 +346,7 @@ impl Run {
                         .cloned()
                         .collect();
                     ui.ctx().copy_text(self.loot_markdown(&copied));
-                    self.loot_copied = Some(self.revision);
+                    self.loot_copied = Some(*self.revision);
                 }
                 if left > 1
                     && Action::secondary(&format!("Roll all {left}"))

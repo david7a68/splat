@@ -3716,6 +3716,9 @@ pub struct Encounters {
     /// The saved-run facts that the Session plan's and the Timeline's Add results read, with
     /// their revision (`saved_runs_revision`). Noted at the end of each `poll`.
     run_facts: RunFactsRevised,
+    /// The snapshot that `plan_fights` lists, as its revision: a new read or a save of an
+    /// encounter makes a new snapshot revision, and so a new revision here.
+    plan_fights_read: crate::design::memo::Revised<Option<Uuid>>,
     /// G118: the Ready rows' difficulty lines, by template id, each under its `Roster::key`,
     /// room, font and scale. The page owns them; a new key replaces an entry, and a template
     /// that leaves the snapshot loses its entry at the next snapshot revision.
@@ -3802,9 +3805,10 @@ pub struct Encounters {
     /// Why the fight read in History cannot go on (`continue_blocked`), when it cannot.
     history_blocked: Option<&'static str>,
     /// What the rule's answers were worked out from: the Timeline's count of changes, the
-    /// open run if it is ended, and the ID of the fight read in History. Not its path: another
+    /// open run if it is ended, the ID of the fight read in History, and whether an edit waits
+    /// over a file that changed on disk. Not the fight's path: another
     /// run can take the file at that path.
-    continue_key: Option<(u64, Option<uuid::Uuid>, Option<uuid::Uuid>)>,
+    continue_key: Option<(u64, Option<uuid::Uuid>, Option<uuid::Uuid>, bool)>,
     /// A run just opened, or the DM asked to go back to it from its row in the list, so the
     /// shell goes to the Run page.
     pub go_to_run: bool,
@@ -4377,6 +4381,14 @@ impl Encounters {
                 )
             })
     }
+    /// The revision of the fights `plan_fights` lists: it changes with each new read of the
+    /// encounters and each save of one, never on a quiet frame.
+    pub fn plan_fights_revision(&mut self) -> crate::design::memo::Revision {
+        self.plan_fights_read
+            .set(self.snapshot.as_ref().map(|snapshot| snapshot.revision));
+        self.plan_fights_read.revision()
+    }
+
     pub fn plan_fights(&self) -> Vec<PlanFight> {
         self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
             snapshot
@@ -4399,7 +4411,7 @@ impl Encounters {
                         .as_ref()
                         .map(|roster| roster.parts.clone())
                         .unwrap_or_default(),
-                    key: template.summary.as_ref().map_or(0, |roster| roster.key),
+                    revision: template.summary.as_ref().map(|roster| roster.revision),
                     difficulty: template.difficulty.clone(),
                 })
                 .collect()
@@ -4486,10 +4498,21 @@ impl Encounters {
             let runs = &self.snapshot.as_ref()?.runs;
             runs.iter().find(|run| run.path == *path)?.id
         });
-        if self.continue_key == Some((timeline.changes(), ended, read)) {
+        // An edit that waits for its save over a file that changed on disk: the rule cannot say
+        // which fight was played last, as `Run::unend` finds (review of PR 666).
+        let unsettled = timeline.unsaved() && timeline.moved_under_edit.is_some();
+        let key = (timeline.changes(), ended, read, unsettled);
+        if self.continue_key == Some(key) {
+            // A restored or deleted encounter changes no key: the answer checks it each frame.
+            if let Some(run) = self.run.as_mut() {
+                run.answer_still_stands();
+            }
             return;
         }
         let rule = |id| {
+            if unsettled {
+                return Some(crate::encounter_run::Run::UNSETTLED);
+            }
             crate::encounter_run::continue_blocked(
                 &timeline.events,
                 timeline.unreadable.is_none(),
@@ -4501,7 +4524,7 @@ impl Encounters {
             run.answer_still_stands();
         }
         self.history_blocked = read.and_then(rule);
-        self.continue_key = Some((timeline.changes(), ended, read));
+        self.continue_key = Some(key);
     }
     /// The newest unfinished save is one click away from any page.
     pub fn paused_run(&self) -> Option<&crate::encounter_run::SavedRunInfo> {
@@ -8461,207 +8484,303 @@ impl Encounters {
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
                 let member_row = ui.horizontal(|ui| {
                     ui.set_min_height(Density::Glance.row());
-                    // Every slot is reserved, so columns line up between rows.
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        row_menu(ui, &name, |ui| {
-                            if menu_action(ui, "Edit", None) {
-                                *expanded = Some(slot.key.clone());
-                            }
-                            if menu_action(ui, "Move up", (i == 0).then_some("Already first.")) {
-                                raise = Some(i);
-                            }
-                            if menu_action(
-                                ui,
-                                "Move down",
-                                (i + 1 == count).then_some("Already last."),
-                            ) {
-                                lower = Some(i);
-                            }
-                            if menu_action(ui, "Duplicate", None) {
-                                duplicate = Some(i);
-                            }
-                            if creature.is_some_and(|c| !c.party) {
-                                if menu_action(ui, "Make it yours", None) {
-                                    *make_yours = Some(i);
+                    // Layout PR 5b (I6): the actions start `L` after the roster's widest facts
+                    // and end at its widest actions, from its last pass; spare width lies after
+                    // them. Where they do not fit, the actions keep the far edge and the facts
+                    // give way, as before. Every slot is reserved, so columns line up.
+                    let list = egui::Id::new("roster_row_columns");
+                    let (kept_facts, kept_actions) = design::action_rows::columns(ui, list);
+                    let row = ui.available_rect_before_wrap();
+                    let (left, room) = (row.left(), row.width());
+                    let column =
+                        kept_facts > 0.0 && kept_facts + design::L + kept_actions <= room + 0.5;
+                    let end = if column {
+                        left + kept_facts + design::L + kept_actions
+                    } else {
+                        row.right()
+                    };
+                    let height = Density::Glance.row();
+                    ui.scope_builder(
+                        egui::UiBuilder::new()
+                            .max_rect(egui::Rect::from_min_max(
+                                row.min,
+                                egui::pos2(end, row.top() + height),
+                            ))
+                            .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                        |ui| {
+                            row_menu(ui, &name, |ui| {
+                                if menu_action(ui, "Edit", None) {
+                                    *expanded = Some(slot.key.clone());
                                 }
-                                choice_note(
+                                if menu_action(ui, "Move up", (i == 0).then_some("Already first."))
+                                {
+                                    raise = Some(i);
+                                }
+                                if menu_action(
                                     ui,
-                                    "Make it yours",
-                                    Some("Edit a copy in this campaign."),
-                                );
-                            }
-                            if menu_action(ui, "Remove", None) {
-                                remove = Some(i);
-                            }
-                        });
-                        if let Some(note) = unreadable {
-                            if Action::quiet(if crate::world::repair_in_world(&note.path) {
-                                "Open in World"
+                                    "Move down",
+                                    (i + 1 == count).then_some("Already last."),
+                                ) {
+                                    lower = Some(i);
+                                }
+                                if menu_action(ui, "Duplicate", None) {
+                                    duplicate = Some(i);
+                                }
+                                if creature.is_some_and(|c| !c.party) {
+                                    if menu_action(ui, "Make it yours", None) {
+                                        *make_yours = Some(i);
+                                    }
+                                    choice_note(
+                                        ui,
+                                        "Make it yours",
+                                        Some("Edit a copy in this campaign."),
+                                    );
+                                }
+                                if menu_action(ui, "Remove", None) {
+                                    remove = Some(i);
+                                }
+                            });
+                            if let Some(note) = unreadable {
+                                if Action::quiet(if crate::world::repair_in_world(&note.path) {
+                                    "Open in World"
+                                } else {
+                                    "Open in Library"
+                                })
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                                {
+                                    ui.ctx().data_mut(|data| {
+                                        data.insert_temp(
+                                            egui::Id::new("open_library_repair"),
+                                            note.path.clone(),
+                                        )
+                                    });
+                                }
+                            } else if Action::quiet(if creature.is_none() {
+                                "Replace…"
                             } else {
-                                "Open in Library"
+                                "Edit"
                             })
                             .density(Density::Read)
+                            .name(groups::SLOT_OPTIONS)
+                            .selected(is_open)
                             .show(ui)
                             .clicked()
                             {
-                                ui.ctx().data_mut(|data| {
-                                    data.insert_temp(
-                                        egui::Id::new("open_library_repair"),
-                                        note.path.clone(),
-                                    )
-                                });
+                                *expanded = if is_open {
+                                    None
+                                } else {
+                                    groups::show_form_when_it_opens(ui);
+                                    Some(slot.key.clone())
+                                };
                             }
-                        } else if Action::quiet(if creature.is_none() {
-                            "Replace…"
-                        } else {
-                            "Edit"
-                        })
-                        .density(Density::Read)
-                        .name(groups::SLOT_OPTIONS)
-                        .selected(is_open)
-                        .show(ui)
-                        .clicked()
-                        {
-                            *expanded = if is_open {
-                                None
-                            } else {
-                                groups::show_form_when_it_opens(ui);
-                                Some(slot.key.clone())
-                            };
-                        }
-                        design::gap(ui, design::Gap::XS);
-                        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            ui.add(
-                                egui::Label::new(
-                                    Type::Strong
-                                        .rich(ui, format!("{}. {name}", i + 1))
-                                        .color(colors().text),
-                                )
-                                .truncate(),
-                            );
-                            if missing {
-                                let split = detail.find(fault_icon).unwrap_or(0);
-                                let mut job = egui::text::LayoutJob::default();
-                                for (text, color) in [
-                                    (&detail[..split], colors().muted),
-                                    (&detail[split..split + fault_icon.len()], fault_color),
-                                    (&detail[split + fault_icon.len()..], colors().muted),
-                                ] {
-                                    job.append(
-                                        text,
-                                        0.0,
-                                        egui::TextFormat {
-                                            font_id: Type::Small.font(ui),
-                                            color,
-                                            ..Default::default()
-                                        },
-                                    );
-                                }
-                                let shown = ui.add(egui::Label::new(job).wrap());
-                                if let Some(note) = unreadable.filter(|note| note.duplicate) {
-                                    shown.on_hover_text(&note.word);
-                                }
-                            } else if !detail.is_empty() {
-                                if changed && !is_open {
-                                    ui.spacing_mut().interact_size.y = 0.0;
-                                    ui.horizontal(|ui| {
-                                        // The separator's own blanks are the gap on both sides, as in the text before it.
-                                        ui.spacing_mut().item_spacing.x = 0.0;
-                                        let word = definition
-                                            .and_then(|entry| {
-                                                Overrides::parse(&slot.overrides).ok().map(
-                                                    |overrides| {
-                                                        groups::change_words(
-                                                            &overrides,
-                                                            entry,
-                                                            &slot.side,
-                                                            &crate::loot_editor::missing_in(
-                                                                ui.ctx(),
-                                                                overrides.loot.as_deref(),
-                                                            ),
-                                                        )
-                                                    },
-                                                )
-                                            })
-                                            .unwrap_or_else(|| "Changed".into());
-                                        // FC9: the muted pencil before the words, as in
-                                        // the list.
-                                        let marked = format!("{}{word}", groups::change_mark());
-                                        let change_width = design::number_width(
-                                            ui,
-                                            &marked,
-                                            &Type::Small.font(ui),
-                                        );
-                                        let (fitted, fault_kept) = changed_detail_parts(
-                                            ui,
-                                            &detail,
-                                            &marked,
-                                            ui.available_width(),
-                                            hp_missing,
-                                        );
-                                        let detail_rect = ui
-                                            .label(detail_text(ui, &stat_line(&fitted), fault_kept))
-                                            .on_hover_text(&detail)
-                                            .rect;
-                                        let separator = ui
-                                            .label(
-                                                Type::Small.rich(ui, " · ").color(colors().muted),
+                            let actions = ui.min_rect();
+                            // The facts keep their old room: the row less this row's actions (the item spacing
+                            // and `XS`), so they give way as before and are drawn at the width that measures them.
+                            let facts_room =
+                                (room - actions.width() - ui.spacing().item_spacing.x - design::XS)
+                                    .max(0.0);
+                            let facts = ui
+                                .scope_builder(
+                                    egui::UiBuilder::new()
+                                        .max_rect(egui::Rect::from_min_size(
+                                            egui::pos2(left, row.top()),
+                                            egui::vec2(facts_room, height),
+                                        ))
+                                        .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                                    |ui| {
+                                        ui.spacing_mut().item_spacing.y = 0.0;
+                                        ui.add(
+                                            egui::Label::new(
+                                                Type::Strong
+                                                    .rich(ui, format!("{}. {name}", i + 1))
+                                                    .color(colors().text),
                                             )
-                                            .rect;
-                                        // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
-                                        let at = egui::pos2(
-                                            separator.right(),
-                                            detail_rect.center().y - design::XL / 2.0,
+                                            .truncate(),
                                         );
-                                        let mut inline = ui.new_child(
-                                            egui::UiBuilder::new()
-                                                .max_rect(egui::Rect::from_min_size(
-                                                    at,
-                                                    egui::vec2(change_width, design::XL),
-                                                ))
-                                                .layout(egui::Layout::top_down(egui::Align::Min)),
-                                        );
-                                        if groups::change_link(&mut inline, &word) {
-                                            groups::show_form_when_it_opens(ui);
-                                            *expanded = Some(slot.key.clone());
+                                        if missing {
+                                            let split = detail.find(fault_icon).unwrap_or(0);
+                                            let mut job = egui::text::LayoutJob::default();
+                                            for (text, color) in [
+                                                (&detail[..split], colors().muted),
+                                                (
+                                                    &detail[split..split + fault_icon.len()],
+                                                    fault_color,
+                                                ),
+                                                (
+                                                    &detail[split + fault_icon.len()..],
+                                                    colors().muted,
+                                                ),
+                                            ] {
+                                                job.append(
+                                                    text,
+                                                    0.0,
+                                                    egui::TextFormat {
+                                                        font_id: Type::Small.font(ui),
+                                                        color,
+                                                        ..Default::default()
+                                                    },
+                                                );
+                                            }
+                                            let shown = ui.add(egui::Label::new(job).wrap());
+                                            if let Some(note) =
+                                                unreadable.filter(|note| note.duplicate)
+                                            {
+                                                shown.on_hover_text(&note.word);
+                                            }
+                                        } else if !detail.is_empty() {
+                                            if changed && !is_open {
+                                                ui.spacing_mut().interact_size.y = 0.0;
+                                                ui.horizontal(|ui| {
+                                                    // The separator's own blanks are the gap on both sides, as in the text before it.
+                                                    ui.spacing_mut().item_spacing.x = 0.0;
+                                                    let word = definition
+                                                        .and_then(|entry| {
+                                                            Overrides::parse(&slot.overrides)
+                                                                .ok()
+                                                                .map(|overrides| {
+                                                                    groups::change_words(
+                                                                &overrides,
+                                                                entry,
+                                                                &slot.side,
+                                                                &crate::loot_editor::missing_in(
+                                                                    ui.ctx(),
+                                                                    overrides.loot.as_deref(),
+                                                                ),
+                                                            )
+                                                                })
+                                                        })
+                                                        .unwrap_or_else(|| "Changed".into());
+                                                    // FC9: the muted pencil before the words, as in
+                                                    // the list.
+                                                    let marked =
+                                                        format!("{}{word}", groups::change_mark());
+                                                    let change_width = design::number_width(
+                                                        ui,
+                                                        &marked,
+                                                        &Type::Small.font(ui),
+                                                    );
+                                                    let (fitted, fault_kept) = changed_detail_parts(
+                                                        ui,
+                                                        &detail,
+                                                        &marked,
+                                                        ui.available_width(),
+                                                        hp_missing,
+                                                    );
+                                                    let detail_rect = ui
+                                                        .label(detail_text(
+                                                            ui,
+                                                            &stat_line(&fitted),
+                                                            fault_kept,
+                                                        ))
+                                                        .on_hover_text(&detail)
+                                                        .rect;
+                                                    let separator = ui
+                                                        .label(
+                                                            Type::Small
+                                                                .rich(ui, " · ")
+                                                                .color(colors().muted),
+                                                        )
+                                                        .rect;
+                                                    // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
+                                                    let at = egui::pos2(
+                                                        separator.right(),
+                                                        detail_rect.center().y - design::XL / 2.0,
+                                                    );
+                                                    let mut inline = ui.new_child(
+                                                        egui::UiBuilder::new()
+                                                            .max_rect(egui::Rect::from_min_size(
+                                                                at,
+                                                                egui::vec2(
+                                                                    change_width,
+                                                                    design::XL,
+                                                                ),
+                                                            ))
+                                                            .layout(egui::Layout::top_down(
+                                                                egui::Align::Min,
+                                                            )),
+                                                    );
+                                                    if groups::change_link(&mut inline, &word) {
+                                                        groups::show_form_when_it_opens(ui);
+                                                        *expanded = Some(slot.key.clone());
+                                                    }
+                                                    // Layout PR 5b: the facts' width holds the
+                                                    // link (the roster's column measures it);
+                                                    // their height keeps the row's pitch.
+                                                    ui.expand_to_include_x(
+                                                        inline.min_rect().right(),
+                                                    );
+                                                });
+                                                return;
+                                            }
+                                            // What a player has left is the reason to look, so all of it shows.
+                                            ui.spacing_mut().interact_size.y = 0.0;
+                                            ui.horizontal_wrapped(|ui| {
+                                                ui.spacing_mut().item_spacing.x = 0.0;
+                                                for (at, part) in detail_parts(&detail, hp_missing)
+                                                    .iter()
+                                                    .enumerate()
+                                                {
+                                                    if at > 0 {
+                                                        ui.label(
+                                                            Type::Small
+                                                                .rich(ui, " · ")
+                                                                .color(colors().muted),
+                                                        );
+                                                    }
+                                                    if part.words == "Bloodied" {
+                                                        design::status(
+                                                            ui,
+                                                            Status {
+                                                                icon: icons::BLOODIED,
+                                                                word: part.words,
+                                                                color: colors().hp.bloodied,
+                                                            },
+                                                        );
+                                                    } else {
+                                                        ui.label(
+                                                            Type::Small
+                                                                .rich(ui, stat_line(part.words))
+                                                                .color(part.color()),
+                                                        );
+                                                    }
+                                                }
+                                            });
                                         }
-                                    });
-                                    return;
-                                }
-                                // What a player has left is the reason to look, so all of it shows.
-                                ui.spacing_mut().interact_size.y = 0.0;
-                                ui.horizontal_wrapped(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 0.0;
-                                    for (at, part) in
-                                        detail_parts(&detail, hp_missing).iter().enumerate()
-                                    {
-                                        if at > 0 {
-                                            ui.label(
-                                                Type::Small.rich(ui, " · ").color(colors().muted),
-                                            );
-                                        }
-                                        if part.words == "Bloodied" {
-                                            design::status(
-                                                ui,
-                                                Status {
-                                                    icon: icons::BLOODIED,
-                                                    word: part.words,
-                                                    color: colors().hp.bloodied,
-                                                },
-                                            );
-                                        } else {
-                                            ui.label(
-                                                Type::Small
-                                                    .rich(ui, stat_line(part.words))
-                                                    .color(part.color()),
-                                            );
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                    });
+                                    },
+                                )
+                                .response
+                                .rect;
+                            let natural = facts.width();
+                            design::action_rows::measured(ui, list, natural, actions.width());
+                            #[cfg(any(test, feature = "test-support"))]
+                            design::action_rows::keep(
+                                ui,
+                                design::action_rows::RowRecord {
+                                    owner: "roster",
+                                    row: i,
+                                    facts: egui::Rect::from_min_size(
+                                        egui::pos2(left, facts.top()),
+                                        egui::vec2(natural, facts.height()),
+                                    ),
+                                    // The row's facts share the actions' line.
+                                    line: egui::Rect::from_min_size(
+                                        egui::pos2(left, facts.top()),
+                                        egui::vec2(natural, facts.height()),
+                                    ),
+                                    action: actions,
+                                    column: if column {
+                                        left + kept_facts + design::L
+                                    } else {
+                                        actions.left()
+                                    },
+                                    edge: row.right(),
+                                    wrapped: !column,
+                                },
+                            );
+                        },
+                    );
                 });
                 let member_row = member_row.response.rect;
                 draft
@@ -10671,11 +10790,17 @@ mod tests {
             })
             .reduce(f32::max)
             .expect("the roster draws a row rule");
-        for name in [
-            "More actions for Cinder Wolf",
-            "Roll on a table for the encounter",
-            "Read-aloud and notes",
-        ] {
+        // Layout PR 5b (I6): the row menu follows the roster's facts, within its rule.
+        let menu = harness
+            .query_all_by_label("More actions for Cinder Wolf")
+            .map(|node| node.rect().right())
+            .reduce(f32::max)
+            .unwrap();
+        assert!(
+            menu <= rule + 0.5,
+            "iter18-B-FD4: the row menu ends at {menu}, within the roster rule at {rule}"
+        );
+        for name in ["Roll on a table for the encounter", "Read-aloud and notes"] {
             // The field's caption carries the same name; the widest node is the control.
             let right = harness
                 .query_all_by_label(name)
@@ -13373,6 +13498,41 @@ mod tests {
         assert!(run.continue_blocked.is_some_and(|reason| {
             reason.starts_with("This fight cannot go on: it is not on the Timeline")
         }));
+        // Review of PR 666 (P1): with an edit that waits for its save over a Timeline.md that
+        // changed on disk, the refusal says so, and the app's next working-out (the new run
+        // changed its key) keeps it until the save settles the file.
+        let reason = |editor: &Encounters| {
+            editor
+                .run()
+                .unwrap()
+                .unend_refused
+                .as_ref()
+                .map(|(reason, _, _)| *reason)
+        };
+        let event = timeline.add(crate::timeline::Kind::Event, None);
+        timeline.save();
+        let mut other = crate::timeline::Book::default();
+        other.open(Some(dir.path()));
+        other.add(crate::timeline::Kind::Event, None);
+        other.save();
+        timeline.event_mut(&event).unwrap().notes = "Waiting to save".into();
+        timeline.touch();
+        editor.continue_saved_run(&path, &campaign);
+        answer(&mut editor, &mut timeline);
+        assert_eq!(reason(&editor), Some(crate::encounter_run::Run::UNSETTLED));
+        editor.follow_continue_rule(&timeline);
+        assert_eq!(
+            reason(&editor),
+            Some(crate::encounter_run::Run::UNSETTLED),
+            "the refresh keeps the refusal while the edit waits over the changed file"
+        );
+        timeline.save();
+        editor.follow_continue_rule(&timeline);
+        assert_eq!(
+            reason(&editor),
+            None,
+            "the save settles it, and the answer ends"
+        );
         // On the Timeline as the fight that was played last, it goes on, on the round it
         // ended in.
         let fact = editor.run().unwrap().timeline_fact();

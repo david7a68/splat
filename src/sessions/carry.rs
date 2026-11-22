@@ -1332,7 +1332,7 @@ mod tests {
             name: name.into(),
             path: format!("Encounters/{name}.md"),
             summary: Default::default(),
-            key: 0,
+            revision: None,
             difficulty: Default::default(),
         }
     }
@@ -1396,6 +1396,7 @@ mod tests {
             fights,
             saved_runs,
             saved_runs_revision: crate::design::memo::Revised::new(()).revision(),
+            fights_revision: crate::design::memo::Revised::new(()).revision(),
             groups: &[],
             group_blocked: None,
             group_open: false,

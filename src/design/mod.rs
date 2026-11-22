@@ -10,6 +10,7 @@ pub mod fact;
 pub mod fitting;
 pub mod icons;
 pub mod layout;
+pub mod line_end;
 pub mod memo;
 pub mod outcome;
 pub mod pane;

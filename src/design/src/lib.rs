@@ -11,7 +11,7 @@ pub use egui;
 #[doc(hidden)]
 pub mod ownership {
     pub use crate::design::components::{Footer, ResultOrder};
-    pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
+    pub use crate::design::memo::{Changed, Key, Measure, Memo, Memos, Revised, Revision};
     pub use crate::design::results::*;
     pub use crate::design::save_row::{
         Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,
