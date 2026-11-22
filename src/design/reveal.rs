@@ -831,6 +831,9 @@ pub enum JumpTo {
     /// the least scroll that shows it whole ([`bring_into_view`]), so the menu does not hang
     /// from a control the DM cannot see.
     OpenMenuControl,
+    /// A list's row brought to the top because the page opened at it, a link revealed it, or
+    /// it moved there (the Timeline's events, M0556): the row before it at the view's top.
+    ListedRow,
 }
 
 /// The `ScrollColumn` that holds `ui` moves, at its next pass, so that the screen y `top` of
