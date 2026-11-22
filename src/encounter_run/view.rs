@@ -343,9 +343,9 @@ fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
     if text.is_empty() {
         Ok(None)
     } else {
-        text.parse()
+        design::parse_signed(text)
             .map(Some)
-            .map_err(|_| "Enter a whole number, or clear the field to roll.")
+            .ok_or("Enter a whole number, or clear the field to roll.")
     }
 }
 
@@ -14732,7 +14732,10 @@ mod tests {
         for number in [i64::MIN, -1, 0, 13, i64::MAX] {
             assert_eq!(arrival_total(&number.to_string()), Ok(Some(number)));
         }
+        // M-P0.21 (review of #709): a total typed as the app writes it, with a true minus.
+        assert_eq!(arrival_total(&design::signed(-2)), Ok(Some(-2)));
         assert!(arrival_total("1.5").is_err());
+        assert!(arrival_total("3\u{2212}5").is_err());
     }
 
     #[test]
