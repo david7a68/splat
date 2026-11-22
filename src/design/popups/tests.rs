@@ -640,7 +640,9 @@ fn in_a_pane_the_list_stays_above_the_footer() {
         // A direct click on the cut control: at the release, its whole field comes above the
         // footer, and the list opens from it without covering its caption.
         draw(click(cut.center()));
-        draw(Vec::new());
+        for _ in 0..3 {
+            draw(Vec::new());
+        }
         let words = texts(&draw(Vec::new()));
         assert!(egui::Popup::is_id_open(&ctx, list()), "open at {width}");
         let caption = words
