@@ -550,7 +550,7 @@ pub struct Trackers {
     /// history.
     problems: Vec<(Option<Uuid>, String)>,
     /// The last `Remove` in a tracker's history, for its one Undo, by its entries' IDs.
-    removed: Option<history::Removed>,
+    removed: crate::design::Results<history::HistoryOwner, history::Removed>,
     /// Why the last `Remove` or its Undo wrote nothing, for the reader of that note.
     history_reason: Option<(Uuid, Unrecorded)>,
 }
