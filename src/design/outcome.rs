@@ -6750,57 +6750,6 @@ mod tests {
         });
     }
 
-    /// Review of PR 592 (`m-p0-compact-refuses`): the compact form draws no choice's help line
-    /// and no lock's reason line, so a test build refuses a compact message with either.
-    #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the test of the body place `BodyMessage::show` itself"
-    )]
-    fn a_compact_message_refuses_choice_help_and_locks() {
-        for (case, choice) in [
-            (
-                "help",
-                Choice::new(MessageChoice::Choice("Read again"), 1)
-                    .help(crate::sentence!("Reads the file again.")),
-            ),
-            (
-                "lock",
-                Choice::new(MessageChoice::Choice("Read again"), 1)
-                    .blocked(crate::sentence!("Wait for the read.")),
-            ),
-        ] {
-            let mut choice = Some(choice);
-            let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let ctx = egui::Context::default();
-                let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        if let Some(choice) = choice.take() {
-                            let _ = BodyMessage::from(
-                                Notice::new(crate::sentence!("The file changed.")).choice(choice),
-                            )
-                            .compact()
-                            .show(ui);
-                        }
-                    });
-                });
-            }));
-            let message = refused
-                .err()
-                .and_then(|panic| {
-                    panic
-                        .downcast_ref::<String>()
-                        .cloned()
-                        .or_else(|| panic.downcast_ref::<&str>().map(|said| (*said).to_owned()))
-                })
-                .unwrap_or_default();
-            assert!(
-                message.contains("a compact message draws no choice help and no lock reason"),
-                "m-p0-compact-refuses: a compact message with a choice's {case} is refused: {message:?}"
-            );
-        }
-    }
-
     #[test]
     #[allow(
         clippy::disallowed_methods,
@@ -7253,6 +7202,50 @@ mod tests {
                 h.state(),
                 &[Fix::Log, Fix::Dismiss, Fix::Open],
                 "{width}: each press once"
+            );
+        }
+
+        // Review of PR 592 (`m-p0-compact-refuses`): the compact form draws no choice's help line
+        // and no lock's reason line, so a test build refuses a compact message with either.
+        for (case, choice) in [
+            (
+                "help",
+                Choice::new(MessageChoice::Choice("Read again"), 1)
+                    .help(crate::sentence!("Reads the file again.")),
+            ),
+            (
+                "lock",
+                Choice::new(MessageChoice::Choice("Read again"), 1)
+                    .blocked(crate::sentence!("Wait for the read.")),
+            ),
+        ] {
+            let mut choice = Some(choice);
+            let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let ctx = egui::Context::default();
+                let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        if let Some(choice) = choice.take() {
+                            let _ = BodyMessage::from(
+                                Notice::new(crate::sentence!("The file changed.")).choice(choice),
+                            )
+                            .compact()
+                            .show(ui);
+                        }
+                    });
+                });
+            }));
+            let message = refused
+                .err()
+                .and_then(|panic| {
+                    panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| panic.downcast_ref::<&str>().map(|said| (*said).to_owned()))
+                })
+                .unwrap_or_default();
+            assert!(
+                message.contains("a compact message draws no choice help and no lock reason"),
+                "m-p0-compact-refuses: a compact message with a choice's {case} is refused: {message:?}"
             );
         }
 
