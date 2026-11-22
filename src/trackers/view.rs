@@ -22,8 +22,9 @@ pub(crate) struct ViewState {
     /// A typed amount: the tracker, its instance, the action's label, and the words so far.
     asking: Option<(String, Option<String>, String, String)>,
     focus_asking: bool,
-    /// Proposed changes the DM unticked, by notice. Ticked is the default.
-    unticked: HashSet<(NoticeRef, usize)>,
+    /// Proposed changes the DM unticked, by notice and the change's own key. Ticked is the
+    /// default.
+    unticked: HashSet<Tick>,
     /// The act pressed in this frame. The shell applies it after Lookup drew, once it has read
     /// the day count again, so an act uses the day at the click.
     pressed: Option<Act>,
@@ -212,6 +213,30 @@ impl ViewState {
     pub(super) fn typed(&self) -> Option<&str> {
         self.asking.as_ref().map(|(_, _, _, typed)| typed.as_str())
     }
+}
+
+/// A proposed change of a Due row, by its notice and its own key (`ChangeKey`).
+type Tick = (NoticeRef, ChangeKey);
+
+/// A mark's change by its own identity, not its place in the mark (Astra's P2 on PR 897): the
+/// tracker it changes, its line, and which of the mark's changes to that same line it is. A change
+/// that leaves the mark before it moves no other change's key: its check box keeps its id (and
+/// its focus), and the DM's untick stays with its change.
+type ChangeKey = (String, Option<String>, usize);
+
+/// Each change's key, in the mark's order (`ChangeKey`).
+fn change_keys(notice: &super::Notice, mark: Says<'_>) -> Vec<ChangeKey> {
+    let mut keys: Vec<ChangeKey> = Vec::with_capacity(mark.changes.len());
+    for change in mark.changes {
+        let tracker = change.tracker.clone().unwrap_or_else(|| notice.key.clone());
+        let instance = change.instance.clone();
+        let nth = keys
+            .iter()
+            .filter(|(t, i, _)| *t == tracker && *i == instance)
+            .count();
+        keys.push((tracker, instance, nth));
+    }
+    keys
 }
 
 /// The empty state's route to the switches of the house rules in play.
@@ -514,8 +539,8 @@ struct DueParts {
     short: String,
     finish: String,
     done_name: String,
-    /// Each check's place in the DM's unticked set.
-    ticks: Vec<(NoticeRef, usize)>,
+    /// Each check's place in the DM's unticked set: its notice and its change's own key.
+    ticks: Vec<Tick>,
 }
 
 /// Why a roll is blocked: each name of its table has its roll.
@@ -574,8 +599,9 @@ fn due_parts(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> DueParts 
     let short = notice.name(rules);
     DueParts {
         words: notice_words(rules, notice, mark),
-        ticks: (0..mark.changes.len())
-            .map(|at| (notice.id.clone(), at))
+        ticks: change_keys(notice, mark)
+            .into_iter()
+            .map(|key| (notice.id.clone(), key))
             .collect(),
         done_name: format!("Done: {short}"),
         finish: finish_label(notice),
@@ -742,7 +768,7 @@ fn finish(
     ui: &mut egui::Ui,
     parts: &DueParts,
     notice: &super::Notice,
-    unticked: &HashSet<(NoticeRef, usize)>,
+    unticked: &HashSet<Tick>,
     act: &mut Option<Act>,
 ) {
     design::row_menu(ui, &parts.short, |ui| {

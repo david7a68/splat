@@ -2081,6 +2081,72 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
     assert!(laid() > after, "a new width lays the Due rows again");
 }
 
+/// Astra's P2 on PR 897: a Due row's check box is keyed by its change's own identity, in the
+/// real host. The wagon's mark proposes two changes; the second check box has the keyboard; the
+/// first change leaves the mark in the note (read again as the shell reads it); the check box
+/// that stays keeps its id and its focus. Red: a key by the change's place.
+#[test]
+fn a_due_check_keeps_its_focus_when_the_change_before_it_goes() {
+    use crate::design::test_harness::Themed as _;
+    use crate::timeline::Kind;
+    use egui_kittest::{Harness, kittest::Queryable};
+    const TWO: &str = "> day_marks:\n>   wagon:\n>     name: Supply wagon\n>     at: 3\n>     say: The supply wagon arrives.\n>     changes:\n>     - {tracker: favor, add: 1}\n>     - {tracker: seals, for: Party, add: 1}\n";
+    let mut race = race();
+    let note = race.campaign.path.join("Tournament.md");
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(
+        &note,
+        text.replacen("> trackers:\n", &format!("{TWO}> trackers:\n"), 1),
+    )
+    .unwrap();
+    race.index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+    poll(
+        &mut race.trackers,
+        Some(race.index.clone()),
+        Some(&race.campaign),
+        Some(TONIGHT),
+        &race.timeline,
+    );
+    add_event(&mut race, Kind::Day, "");
+    add_event(&mut race, Kind::Travel, "2 days");
+    assert_eq!(race.trackers.due(), 1, "the wagon is due");
+    let t = std::mem::take(&mut race.trackers);
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(640.0, 900.0))
+        .themed_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
+    h.run_steps(4);
+    const SECOND: &str = "Seals (Party) +1";
+    h.get_by_label(SECOND).focus();
+    h.run_steps(2);
+    let focused = h.ctx.memory(|memory| memory.focused());
+    assert!(focused.is_some(), "the second check box has the keyboard");
+    // The first change leaves the mark, and the rules are read again.
+    let text = fs::read_to_string(&note).unwrap();
+    fs::write(
+        &note,
+        text.replacen(">     - {tracker: favor, add: 1}\n", "", 1),
+    )
+    .unwrap();
+    race.index = Arc::new(ContentIndex::load(&[], Some(&race.campaign)).unwrap());
+    poll(
+        h.state_mut(),
+        Some(race.index.clone()),
+        Some(&race.campaign),
+        Some(TONIGHT),
+        &race.timeline,
+    );
+    h.run_steps(4);
+    assert!(
+        h.query_by_label("Crowd Favor +1").is_none() && h.query_by_label(SECOND).is_some(),
+        "the first change is gone and the second stays"
+    );
+    assert_eq!(
+        h.ctx.memory(|memory| memory.focused()),
+        focused,
+        "due-check-key: the check box that stays keeps its id and its focus"
+    );
+}
+
 /// Layout 11c scope C (N1's threshold cases, on the real lines): the race clock's line, with its
 /// six actions, one point wider and one point narrower than the panel width where its actions
 /// take one row fewer. At both, everything the line painted (its name and each action) lies in
