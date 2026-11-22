@@ -5759,7 +5759,9 @@ pub mod encounter_build {
                     &[
                         "Encounter name: ",
                         "Find a creature or party member",
-                        "More actions for ",
+                        // The first roster row's menu (not the encounter's own menu in its head,
+                        // `More actions for Bridge Ambush`; Astra's P2 on PR 668).
+                        "More actions for Brannoch Vale",
                     ],
                 )
             };
