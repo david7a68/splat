@@ -951,12 +951,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/results.rs", "act_order", &[Ban::Results]),
         // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
-        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c).
-        (
-            "src/encounter_run/view.rs",
-            "groups_tab",
-            &[Ban::Layout(1), Ban::Pane(1)],
-        ),
+        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c), a design
+        // `ScrollColumn` since layout step 11a (no raw scroll area is left).
+        ("src/encounter_run/view.rs", "groups_tab", &[Ban::Pane(1)]),
         (
             "src/encounters/groups.rs",
             "group_editor_view",
@@ -1354,7 +1351,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "draw", &[Ban::Extras(1), Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
-        ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
         // `message` and a link).

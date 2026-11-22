@@ -1217,6 +1217,76 @@ pub fn reveal_with_focus(ui: &Ui, words: Rect) {
     }
 }
 
+/// Room a body keeps for content that an act will add (layout step 11b; ruling R30, D-2). A
+/// closed set: each room's height comes from tokens and line heights, never from the content.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Room {
+    /// A Log heading and one new entry of at most two prose lines, under a note's body.
+    LogEntry,
+}
+
+impl Room {
+    /// The room's height in `ui`'s fonts.
+    pub fn height(self, ui: &Ui) -> f32 {
+        match self {
+            Self::LogEntry => {
+                let prose =
+                    ui.fonts_mut(|fonts| fonts.row_height(&super::reader::prose_type(ui).font(ui)));
+                super::L + super::Type::Heading.line() + S + 2.0 * prose
+            }
+        }
+    }
+}
+
+/// The body's room for content that an act will add, where the body's content ends: blank
+/// space of the room's height, drawn here and nowhere else, so the content lands in room
+/// already in view and nothing moves. Its rect, for [`reveal_with_focus_and_growth`].
+pub fn keep_room(ui: &mut Ui, room: Room) -> Rect {
+    let top = ui.cursor().top();
+    let height = room.height(ui);
+    super::extras::space(ui, height);
+    Rect::from_min_max(
+        pos2(ui.max_rect().left(), top),
+        pos2(ui.max_rect().right(), top + height),
+    )
+}
+
+/// How much a pane's footer grows when an act ends (layout step 11b). A closed set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Growth {
+    /// The act's result line and its Undo.
+    ResultWithUndo,
+}
+
+impl Growth {
+    /// The footer's growth.
+    pub fn height(self) -> f32 {
+        match self {
+            Self::ResultWithUndo => S + 2.0 * super::Density::Read.control(),
+        }
+    }
+}
+
+/// An act's room, named for its one field (`field`, drawn in this pass): `room` (a
+/// [`keep_room`]) and, below it, as much again as the footer will grow when the act ends belong
+/// to the field while it has the keyboard. The pane's focus arbiter keeps the field and all of
+/// that whole above the footer as it is now, so when the act's content and its result come,
+/// nothing moves and nothing is covered. Only the field: another control that takes the
+/// keyboard (the field's own Save, a link in the note) is revealed alone. The field too is
+/// revealed alone when its block, the room and the growth together are taller than the pane's
+/// body room: a rect that spans both edges of the view makes no scroll, and the keyboard's
+/// target would stay hidden (Astra's review of PR 736).
+pub fn reveal_with_focus_and_growth(ui: &Ui, field: &egui::Response, room: Rect, growth: Growth) {
+    if !field.has_focus() {
+        return;
+    }
+    let named = room.with_max_y(room.max.y + growth.height());
+    let block = super::components::reveal_rect(ui.ctx(), field.id, field.rect).union(named);
+    if body_room(ui).is_none_or(|body| block.height() <= body.height()) {
+        super::components::reveal_with(ui, field.id, named);
+    }
+}
+
 /// What the hold needs of a pass's scroll column, kept until the footer has measured.
 #[derive(Clone, Copy)]
 struct ColumnFacts {
@@ -2593,6 +2663,13 @@ mod hold_tests {
         near: bool,
         /// A text field under it, with its words.
         clip: Option<String>,
+        /// A field whose act adds content (layout step 11b), with its words, its own Save
+        /// under it, and its room at the list's end with the footer's growth named for it.
+        grown: Option<String>,
+        /// Rows between that Save and the room.
+        grown_gap: usize,
+        /// That room, as the last pass drew it.
+        room: Option<Rect>,
     }
 
     impl State {
@@ -2609,6 +2686,9 @@ mod hold_tests {
                 help: false,
                 near: false,
                 clip: None,
+                grown: None,
+                grown_gap: 0,
+                room: None,
             }
         }
     }
@@ -2673,6 +2753,35 @@ mod hold_tests {
                 .then_some("The far control's help, which comes with no change of focus.");
             crate::design::small_field(ui, "Far caption", help, None, |ui| {
                 let _ = ui.button("Far control");
+            });
+            let grown = state.grown.as_mut().map(|text| {
+                const GROWN: crate::design::layout::FieldName =
+                    crate::field_id!("hold_test_grown_text");
+                let field = crate::design::labelled_field(
+                    ui,
+                    GROWN.once(crate::design::layout::Once::Example),
+                    "Grown caption",
+                    text,
+                    None,
+                    None,
+                );
+                let _ = ui.button("Save grown");
+                field
+            });
+            if grown.is_some() {
+                for row in 0..state.grown_gap {
+                    ui.label(format!("Row before the room {row}"));
+                }
+            }
+            state.room = grown.map(|field| {
+                let room = keep_room(ui, Room::LogEntry);
+                reveal_with_focus_and_growth(ui, &field, room, Growth::ResultWithUndo);
+                // The note's later sections (a reader's `From other notes`): the scroll area
+                // cannot show past the content's end.
+                for row in 0..6 {
+                    ui.label(format!("Row after the room {row}"));
+                }
+                room
             });
         });
     }
@@ -2856,6 +2965,109 @@ mod hold_tests {
             caption.top() >= viewport.top() - 0.5,
             "i9-again: a second click on the focused field brings its caption {caption:?} into \
              the view {viewport:?}"
+        );
+
+        // Layout step 11b (Astra's review of PR 736, P1): an act's room and the footer's growth
+        // belong to its one field while it has the keyboard. The growth is counted here apart
+        // from `Growth`, so a growth of 0 fails too.
+        let growth = S + 2.0 * crate::design::Density::Read.control();
+        h.state_mut().message = false;
+        h.state_mut().help = false;
+        h.state_mut().near = false;
+        h.state_mut().clip = None;
+        h.state_mut().grown = Some("away".to_owned());
+        h.state_mut().grown_gap = 60;
+        h.run_steps(4);
+        let view = |h: &Harness<'_, State>| {
+            pane_records(&h.ctx)
+                .into_iter()
+                .next()
+                .unwrap()
+                .viewport()
+                .unwrap()
+        };
+        let field = |h: &Harness<'_, State>| {
+            h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Grown caption")
+                .rect()
+        };
+        let save = |h: &Harness<'_, State>| h.get_by_label("Save grown").rect();
+        let whole = |rect: Rect, view: Rect| {
+            rect.top() >= view.top() - 0.5 && rect.bottom() <= view.bottom() + 0.5
+        };
+        let wheel = |h: &mut Harness<'_, State>, delta: f32| {
+            h.hover_at(view(h).center());
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, delta),
+                modifiers: egui::Modifiers::NONE,
+            });
+            // The wheel's smooth scroll ends before the next act.
+            h.run_steps(10);
+        };
+        // A long note: the field, its room and the growth are taller than the view. The DM's
+        // wheel takes the field above the view, with the room below it.
+        let middle = |h: &mut Harness<'_, State>| {
+            let by = field(h).bottom() - view(h).top() + 40.0;
+            wheel(h, -by);
+            let (field, room, view) = (field(h), h.state().room.unwrap(), view(h));
+            assert!(
+                field.bottom() < view.top() && room.bottom() > view.bottom(),
+                "i11b-setup: the field {field:?} is above the view {view:?}, its room {room:?} \
+                 below it"
+            );
+        };
+        middle(&mut h);
+        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Grown caption")
+            .focus();
+        h.run_steps(4);
+        let (shown, at) = (field(&h), view(&h));
+        assert!(
+            whole(shown, at),
+            "i11b-field-alone: with its room too far below, the focused field {shown:?} comes \
+             whole into the view {at:?} alone"
+        );
+        middle(&mut h);
+        h.get_by_label("Save grown").focus();
+        h.run_steps(4);
+        let (shown, at) = (save(&h), view(&h));
+        assert!(
+            whole(shown, at),
+            "i11b-save-alone: Tab to the field's Save {shown:?} brings it whole into the view \
+             {at:?}"
+        );
+        // A short note: the field, its room and the growth fit the view. Its Save, whole at the
+        // view's end with the room below the view, takes the keyboard and nothing scrolls; the
+        // field takes it and comes into view with its room and the growth.
+        h.state_mut().grown_gap = 0;
+        h.run_steps(4);
+        h.get_by_label("Next control").focus();
+        h.run_steps(4);
+        let by = save(&h).bottom() - (view(&h).bottom() - 10.0);
+        wheel(&mut h, -by);
+        let (before, room, at) = (save(&h), h.state().room.unwrap(), view(&h));
+        assert!(
+            whole(before, at)
+                && room.bottom() + growth > at.bottom()
+                && room.bottom() + growth - field(&h).top() <= at.height(),
+            "i11b-setup-short: Save {before:?} whole in the view {at:?}, the room {room:?} and \
+             the growth {growth} past its end, all of it no taller than the view"
+        );
+        h.get_by_label("Save grown").focus();
+        h.run_steps(4);
+        let after = save(&h);
+        assert!(
+            (after.top() - before.top()).abs() <= 0.5,
+            "i11b-save-no-growth: the room and the growth are the field's, not Save's: Save \
+             stays at {before:?}, not {after:?}"
+        );
+        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Grown caption")
+            .focus();
+        h.run_steps(4);
+        let (shown, room, at) = (field(&h), h.state().room.unwrap(), view(&h));
+        assert!(
+            whole(shown, at) && room.bottom() + growth <= at.bottom() + 0.5,
+            "i11b-field-with-room: the focused field {shown:?}, its room {room:?} and the growth \
+             {growth} come whole into the view {at:?}"
         );
     }
 
