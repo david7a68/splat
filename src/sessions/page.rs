@@ -1490,9 +1490,14 @@ struct PanelSlice {
 }
 
 impl PanelSlice {
+    /// Where the panel's part of the note starts: its `## What happened`, else the note's start.
+    fn start(text: &str) -> usize {
+        text.find("## What happened").unwrap_or(0)
+    }
+
     fn of(session: Option<Uuid>, body: &TextDraft) -> Self {
         let text = body.as_str();
-        let at = text.find("## What happened").unwrap_or(0);
+        let at = Self::start(text);
         Self {
             session,
             body: body.key(),
@@ -3276,6 +3281,13 @@ impl Sessions {
                 failed = Some(format!("{name} was not written. {why}"));
                 break;
             }
+            if let Some(open) = self.draft.as_ref().filter(|draft| draft.path == next.path) {
+                // The act wrote a copy of the open note: the Notes panel follows it as the note's
+                // own write.
+                let mut copy = next.clone();
+                copy.take_over_from(open, before.body.as_str());
+                self.draft = Some(copy);
+            }
             let bytes = next.file_text().unwrap_or_default().to_owned();
             written.push(LinkWrite {
                 id: super::note_identity(&next.path, &bytes),
@@ -3283,13 +3295,6 @@ impl Sessions {
                 after: next.body.as_str().to_owned(),
                 bytes,
             });
-            if self
-                .draft
-                .as_ref()
-                .is_some_and(|draft| draft.path == next.path)
-            {
-                self.draft = Some(next.clone());
-            }
             #[cfg(any(test, feature = "test-support"))]
             AFTER_LINK_WRITE.with(|hook| {
                 if let Some(hook) = hook.borrow_mut().as_mut() {
@@ -3411,11 +3416,14 @@ impl Sessions {
                             Recovery::First(Step::Check(File::SessionNote)),
                         ))
                     });
-                    if self
+                    if let Some(open) = self
                         .draft
                         .as_ref()
-                        .is_some_and(|draft| draft.path == current.path)
+                        .filter(|draft| draft.path == current.path)
                     {
+                        // The Undo wrote a copy of the open note that held the update's words:
+                        // the Notes panel follows it as the note's own write.
+                        current.take_over_from(open, &write.after);
                         self.draft = Some(current);
                     }
                     why
@@ -4927,13 +4935,56 @@ impl Sessions {
             NOTE_ON_PAGE
         }
         .of(self.selected);
-        if in_panel
-            && self.panel_slice.as_ref().is_none_or(|slice| {
-                slice.session != self.selected || slice.body != draft.body.key()
-            })
-        {
-            self.panel_slice = Some(PanelSlice::of(self.selected, &draft.body));
+        if in_panel {
+            let now = draft.body.key();
+            let session = self.selected;
+            match self
+                .panel_slice
+                .as_mut()
+                .filter(|slice| slice.session == session)
+            {
+                Some(slice) if slice.body == now => {}
+                Some(slice) => {
+                    // Only the note's own writes since the panel held the note (an act, the
+                    // page's insert, a renamed link): the note is cut again at What happened, and
+                    // the panel's part takes its new words under the panel's typing history, so
+                    // Ctrl+Z there takes back what the DM typed and leaves the app's words
+                    // (reviews of PRs 799 and 825).
+                    match draft.own_since(slice.body) {
+                        true => {
+                            let text = draft.body.as_str();
+                            let (prefix, tail) = text.split_at(PanelSlice::start(text));
+                            if !slice.tail.same_words(tail) {
+                                design::write_under_history(
+                                    ui.ctx(),
+                                    field.id(),
+                                    &mut slice.tail,
+                                    tail,
+                                );
+                            }
+                            prefix.clone_into(&mut slice.prefix);
+                            slice.body = now;
+                        }
+                        false => {
+                            // A change the panel did not make (a reload of an outside edit, a
+                            // discard): the slice is cut again and its typing history ends, so
+                            // Ctrl+Z there never puts back words from before it.
+                            if let Some(mut state) =
+                                egui::TextEdit::load_state(ui.ctx(), field.id())
+                            {
+                                state.clear_undoer();
+                                egui::TextEdit::store_state(ui.ctx(), field.id(), state);
+                            }
+                            *slice = PanelSlice::of(session, &draft.body);
+                        }
+                    }
+                }
+                None => self.panel_slice = Some(PanelSlice::of(session, &draft.body)),
+            }
+            draft.mark_followed();
         }
+        // The body before the page editor's own edits in this pass.
+        let before_edit = draft.body.key();
         let (prefix_chars, tail_before) = match &self.panel_slice {
             Some(slice) if in_panel => (slice.prefix.chars().count(), Some(slice.tail.key())),
             _ => (0, None),
@@ -5098,6 +5149,11 @@ impl Sessions {
                 .body
                 .replace(format!("{}{}", slice.prefix, slice.tail.as_str()));
             slice.body = draft.body.key();
+            draft.mark_followed();
+        }
+        // The page editor's own edits are the note's own writes: the Notes panel follows them.
+        if !in_panel && draft.body.key() != before_edit {
+            draft.own_write(before_edit);
         }
         if edited {
             draft.edited();
@@ -5109,41 +5165,9 @@ impl Sessions {
         if save && let Some(draft) = &mut self.draft {
             draft.save();
         }
-        // The page editor's own edit keeps the Notes panel's slice (and its Undo) in step.
-        if edited && !in_panel {
-            self.panel_slice_follows_note(ui.ctx());
-        }
         if let Some(target) = pressed_link {
             self.open_note_link(target);
         }
-    }
-
-    /// The Notes panel's slice after a whole-note edit of the note's own (the page editor's,
-    /// `add_to_note`'s: a reading's summary, a plan's link): the slice takes the note's new
-    /// words past its part before, through the panel's text guard (`edit_in_place`), so the
-    /// panel keeps its typing history (review of PR 799). A change to the part before, or
-    /// another note, cuts the slice again when the panel draws, as an outside change does.
-    fn panel_slice_follows_note(&mut self, ctx: &egui::Context) {
-        let (Some(draft), Some(slice)) = (&self.draft, &mut self.panel_slice) else {
-            return;
-        };
-        if slice.session != self.selected || slice.body == draft.body.key() {
-            return;
-        }
-        let Some(tail) = draft.body.as_str().strip_prefix(slice.prefix.as_str()) else {
-            return;
-        };
-        let tail = tail.to_owned();
-        design::edit_in_place(
-            ctx,
-            NOTE_IN_PANEL.of(self.selected).id(),
-            &mut slice.tail,
-            |text| {
-                text.clear();
-                text.push_str(&tail);
-            },
-        );
-        slice.body = draft.body.key();
     }
 
     pub fn fresh_focus_in_panel(&mut self) {
@@ -5169,14 +5193,15 @@ impl Sessions {
         let Some(draft) = &mut self.draft else {
             return false;
         };
+        let before = draft.body.key();
         match editor {
             Some(id) => {
                 design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
             }
             None => draft.body.edit(|body| insert_in_note(body, words)),
         }
+        draft.own_write(before);
         draft.edited();
-        self.panel_slice_follows_note(ctx);
         true
     }
 
@@ -5527,12 +5552,15 @@ impl Sessions {
                 return;
             }
         }
-        if let (Some(draft), Some(session)) = (&mut self.draft, self.selected)
-            && draft.body.edit(|body| rename_links(body, old, new))
-        {
-            draft.edited();
-            self.mentions
-                .insert(session, timeline::referenced_ids(&draft.body));
+        if let (Some(draft), Some(session)) = (&mut self.draft, self.selected) {
+            let before = draft.body.key();
+            let renamed = draft.body.edit(|body| rename_links(body, old, new));
+            draft.own_write(before);
+            if renamed {
+                draft.edited();
+                self.mentions
+                    .insert(session, timeline::referenced_ids(&draft.body));
+            }
         }
         if let Some((_, names)) = &mut self.tonight_links {
             for name in names
@@ -9851,7 +9879,7 @@ mod tests {
             let draft = harness.state_mut().0.draft.as_mut().unwrap();
             let _ = draft
                 .body
-                .replace("# Session 1\n\nRecap words.\n\n## What happened\nNight one.\n");
+                .replace("# Session 1\n\nRecap words.\n\n## Plan for tonight\n\n## What happened\nNight one.\n");
             draft.edited();
         }
         harness.state_mut().2 = true;
@@ -9870,30 +9898,125 @@ mod tests {
         harness.run_steps(2);
         let note = body(&harness);
         assert!(
-            note.starts_with("# Session 1\n\nRecap words.\n\n## What happened")
-                && note.contains("Night one.")
+            note.starts_with(
+                "# Session 1\n\nRecap words.\n\n## Plan for tonight\n\n## What happened"
+            ) && note.contains("Night one.")
                 && note.contains(" More."),
             "n0-panel-slice: what is typed in the panel goes into the note, its start kept: {note:?}"
         );
-        // Review of PR 799 (P2): the page adds a reading's summary through `add_to_note` while
-        // the panel holds what was typed; the panel keeps its Undo, so Ctrl+Z there still takes
-        // back what was typed.
+        // Reviews of PRs 799 and 825 (Sol 2-009): a pair from the same saved note. The panel's
+        // words, and the note's part from What happened on as saved.
+        let path = harness.state().0.draft.as_ref().unwrap().path.clone();
+        let panel = |harness: &egui_kittest::Harness<'_, (Sessions, bool, bool)>| {
+            harness
+                .get_by_label("Note text")
+                .value()
+                .unwrap_or_default()
+        };
+        let saved = |harness: &mut egui_kittest::Harness<'_, (Sessions, bool, bool)>| {
+            harness.state_mut().0.draft.as_mut().unwrap().save();
+            let file = fs::read_to_string(&path).unwrap();
+            file.split_once("## What happened")
+                .map(|(_, tail)| tail.to_owned())
+                .unwrap_or_default()
+        };
+        let undo = |harness: &mut egui_kittest::Harness<'_, (Sessions, bool, bool)>,
+                    until_gone: &str| {
+            let mut undone = Vec::new();
+            while undone.len() < 6 && body(harness).contains(until_gone) {
+                harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+                harness.run_steps(2);
+                undone.push(body(harness));
+            }
+            undone
+        };
+        let _ = saved(&mut harness);
+        // (a) The app's own whole-note write (a reading's summary through `add_to_note`) keeps
+        // the panel's Undo: Ctrl+Z there takes back what the DM typed and leaves the app's words.
         let ctx = harness.ctx.clone();
+        harness
+            .get_by_label("Note text")
+            .type_text(" Typed in play.");
+        harness.run_steps(2);
         assert!(harness.state_mut().0.add_to_note(&ctx, "A summary."));
         harness.run_steps(2);
         assert!(
-            body(&harness).contains("A summary."),
-            "the summary is in the note"
+            panel(&harness).contains("A summary.") && panel(&harness).contains(" Typed in play."),
+            "the summary is in the panel beside the typing: {:?}",
+            panel(&harness)
         );
+        // An act through the note's one write path (`Draft::apply`, as a plan's rewards): a plan
+        // line, in the part before What happened.
+        harness.state_mut().0.add_to_plan("Old mill");
+        harness.run_steps(2);
+        let undone = undo(&mut harness, " Typed in play.");
+        let (words, file) = (panel(&harness), saved(&mut harness));
+        assert!(
+            !words.contains(" Typed in play.")
+                && words.contains("A summary.")
+                && !file.contains(" Typed in play.")
+                && file.contains("A summary.")
+                && body(&harness).contains("- [[Old mill]]"),
+            "n0-panel-undo: after the app's summary and plan line, Ctrl+Z in the panel takes back \
+             the typing and keeps the app's words: panel {words:?}, saved {file:?}, note {:?} \
+             ({undone:?})",
+            body(&harness)
+        );
+        // A renamed link is the note's own write as well: the panel keeps its Undo through it.
+        harness
+            .get_by_label("Note text")
+            .type_text(" Typed [[Old place]].");
+        harness.run_steps(2);
+        harness.state_mut().0.rename_links("Old place", "New place");
+        harness.run_steps(2);
+        assert!(
+            body(&harness).contains("[[New place]]"),
+            "the link is renamed"
+        );
+        let undone = undo(&mut harness, " Typed");
+        assert!(
+            !body(&harness).contains(" Typed"),
+            "n0-panel-rename-undo: after a renamed link, Ctrl+Z in the panel still takes back what was typed: {undone:?}"
+        );
+        // (b) Typed and saved, Notes hidden; an outside edit of the note's end, which the disk
+        // check reloads; the app's summary before Notes draws again. The reload ends the panel's
+        // Undo: Ctrl+Z there takes out neither the outside words nor the app's words.
+        harness
+            .get_by_label("Note text")
+            .type_text(" Before the reload.");
+        harness.run_steps(2);
+        let _ = saved(&mut harness);
+        harness.state_mut().1 = false;
+        harness.run_steps(2);
+        let text = fs::read_to_string(&path).unwrap();
+        fs::write(&path, format!("{text}\nOutside words.\n")).unwrap();
+        harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
+        assert!(
+            body(&harness).contains("Outside words."),
+            "the disk check reloaded the outside edit"
+        );
+        assert!(harness.state_mut().0.add_to_note(&ctx, "A second summary."));
+        harness.state_mut().1 = true;
+        harness.run_steps(2);
+        harness.get_by_label("Note text").focus();
+        harness.run_steps(2);
+        let reloaded = body(&harness);
         let mut undone = Vec::new();
-        while undone.len() < 6 && body(&harness).contains(" More.") {
+        for _ in 0..4 {
             harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
             harness.run_steps(2);
             undone.push(body(&harness));
         }
+        let (words, file) = (panel(&harness), saved(&mut harness));
         assert!(
-            !body(&harness).contains(" More."),
-            "n0-panel-undo: after add_to_note, Ctrl+Z in the panel still takes back what was typed: {undone:?}"
+            words.contains("Outside words.")
+                && words.contains("A second summary.")
+                && file.contains("Outside words.")
+                && file.contains("A second summary.")
+                && undone.iter().all(|note| *note == reloaded),
+            "n0-panel-reload: the reload ended the panel's Undo, so Ctrl+Z in Notes changes \
+             nothing and keeps the outside words and the app's words: panel {words:?}, saved \
+             {file:?} ({undone:?})"
         );
     }
 

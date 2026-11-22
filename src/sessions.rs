@@ -1447,6 +1447,15 @@ pub struct Draft {
     last_edit: Option<Instant>,
     /// Changes when the words or the file change. No two drafts share one.
     revision: u64,
+    /// The Notes panel's mark and the note's own writes since it (review of PR 825): the body's
+    /// revision when the panel last held it ([`Draft::mark_followed`]), and its revision after
+    /// the note's own writes that came after it, each from the revision the one before left
+    /// ([`Draft::own_write`]). Any other change breaks the row (a reload makes a new draft; a
+    /// discard writes no own write), and then the panel's typing history ends.
+    own_since: Option<(
+        crate::design::text_draft::DraftKey,
+        crate::design::text_draft::DraftKey,
+    )>,
     /// A test's failing disk: each write fails with this system error code (28 is a full disk),
     /// before anything is written or the baseline moves.
     #[cfg(any(test, feature = "test-support"))]
@@ -1493,9 +1502,42 @@ impl Draft {
             save_again_error: None,
             last_edit: None,
             revision: next_revision(),
+            own_since: None,
             #[cfg(any(test, feature = "test-support"))]
             failing_write: None,
         })
+    }
+
+    /// The Notes panel holds the body as it is now: the row of the note's own writes starts here.
+    pub fn mark_followed(&mut self) {
+        let now = self.body.key();
+        self.own_since = Some((now, now));
+    }
+
+    /// The note's own write changed the body from revision `before` (an act, the page's insert,
+    /// a renamed link, the DM's typing on the page). It goes on the row only when the row ends
+    /// at `before`: a change made another way between them broke it.
+    pub fn own_write(&mut self, before: crate::design::text_draft::DraftKey) {
+        self.own_since = self
+            .own_since
+            .filter(|(_, head)| *head == before)
+            .map(|(from, _)| (from, self.body.key()));
+    }
+
+    /// Whether every change of the body since revision `from` (the panel's mark) is the note's
+    /// own write, in a row.
+    pub fn own_since(&self, from: crate::design::text_draft::DraftKey) -> bool {
+        self.own_since == Some((from, self.body.key()))
+    }
+
+    /// This draft, a copy of `open` that an act wrote and saved (an event's link update, its
+    /// Undo), takes `open`'s place. The copy is a new document, so the row of own writes goes
+    /// on through it only when the copy started from the words `open` holds at the row's end.
+    pub fn take_over_from(&mut self, open: &Draft, started: &str) {
+        self.own_since = open
+            .own_since
+            .filter(|(_, head)| *head == open.body.key() && open.body.same_words(started))
+            .map(|(from, _)| (from, self.body.key()));
     }
 
     /// The file's words as this draft last read or wrote them.
@@ -1842,7 +1884,9 @@ impl Draft {
             let before = std::mem::replace(&mut self.prefix, prefix);
             Box::new((before, self.prefix.clone()))
         });
+        let key = self.body.key();
         let _ = self.body.replace(after.as_str());
+        self.own_write(key);
         self.edited();
         let mut undo = NoteUndo {
             path: self.path.as_path().into(),
@@ -2002,7 +2046,9 @@ impl NoteUndo {
         }
         let (prefix, before) = back(&draft.prefix, &draft.body).ok_or(ActFault::LineChanged)?;
         draft.prefix = prefix;
+        let key = draft.body.key();
         let _ = draft.body.replace(before);
+        draft.own_write(key);
         draft.edited();
         Ok(())
     }

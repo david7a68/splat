@@ -939,6 +939,97 @@ pub fn edit_in_place(
     move_bound(ctx, id, before, BoundText::of_draft(text), Some(text.key()));
 }
 
+/// A write of the app's own into the words of the field `id`, which the DM may be typing in (a
+/// reading's summary, a plan's rewards, a renamed link, all reaching the Notes panel's part of
+/// a note): the words become `after`, and the DM's Undo history goes on UNDER the write. Each
+/// earlier step gets the same change, so Ctrl+Z takes back what the DM typed and leaves the
+/// app's words. The change is placed in a step by the words after it: a step that does not
+/// end with them, and the changed words before them, stays as it was. The guard's record moves
+/// as in [`edit_in_place`]. Not for a change the field's owner did not make (a reload of an
+/// outside edit): that history must end.
+pub fn write_under_history(
+    ctx: &egui::Context,
+    id: Id,
+    text: &mut super::text_draft::TextDraft,
+    after: &str,
+) {
+    let before = text.as_str().to_owned();
+    edit_in_place(ctx, id, text, |words| {
+        words.clear();
+        words.push_str(after);
+    });
+    let Some(mut state) = egui::text_edit::TextEditState::load(ctx, id) else {
+        return;
+    };
+    // The steps, newest first: from a state that is no step, each `undo` gives the step before.
+    let mut walk = state.undoer();
+    let mut current = (
+        egui::text::CCursorRange::one(egui::text::CCursor::new(usize::MAX)),
+        String::new(),
+    );
+    let mut steps = Vec::new();
+    while let Some(step) = walk.undo(&current).cloned() {
+        steps.push(step.clone());
+        current = step;
+    }
+    if steps.is_empty() {
+        return;
+    }
+    let mut rebuilt = egui::util::undoer::Undoer::default();
+    for (cursor, words) in steps.into_iter().rev() {
+        let step =
+            under_write(&words, &before, after).map_or((cursor, words), |(words, at, by)| {
+                let moved = |cursor: egui::text::CCursor| egui::text::CCursor {
+                    index: if cursor.index > at {
+                        cursor.index.saturating_add_signed(by)
+                    } else {
+                        cursor.index
+                    },
+                    ..cursor
+                };
+                (
+                    egui::text::CCursorRange {
+                        primary: moved(cursor.primary),
+                        secondary: moved(cursor.secondary),
+                        ..cursor
+                    },
+                    words,
+                )
+            });
+        rebuilt.add_undo(&step);
+    }
+    state.set_undoer(rebuilt);
+    state.store(ctx, id);
+}
+
+/// `step` with the change from `before` to `after` (one change: `before` is a + x + b, `after`
+/// is a + y + b), placed by the words after it: `step` ends with b, and x before it. The new
+/// words, where the change starts (in characters) and how many characters it adds.
+fn under_write(step: &str, before: &str, after: &str) -> Option<(String, usize, isize)> {
+    let lead = before
+        .char_indices()
+        .zip(after.chars())
+        .find(|((_, one), other)| one != other)
+        .map_or(before.len().min(after.len()), |((at, _), _)| at);
+    let (old, new) = (&before[lead..], &after[lead..]);
+    let tail = old
+        .chars()
+        .rev()
+        .zip(new.chars().rev())
+        .take_while(|(one, other)| one == other)
+        .map(|(one, _)| one.len_utf8())
+        .sum::<usize>();
+    let (x, y, b) = (
+        &old[..old.len() - tail],
+        &new[..new.len() - tail],
+        &old[old.len() - tail..],
+    );
+    let head = step.strip_suffix(b)?.strip_suffix(x)?;
+    let at = head.chars().count();
+    let by = y.chars().count() as isize - x.chars().count() as isize;
+    Some((format!("{head}{y}{b}"), at, by))
+}
+
 /// [`edit_in_place`] for a field of a plain `String` (a single-line field).
 pub fn edit_line_in_place(
     ctx: &egui::Context,
