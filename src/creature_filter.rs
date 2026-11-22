@@ -73,8 +73,8 @@ fn chip(ui: &mut egui::Ui, label: &str) -> bool {
 }
 
 /// Each fact is a submenu of the Filter menu (`MenuPopup::show_submenus`, M0051): its choices
-/// open under its row, in the menu, one fact at a time, so none lies over the next fact's row,
-/// also in a narrow pane.
+/// open under its row, in the menu, so none lies over the next fact's row, also in a narrow
+/// pane; the menu scrolls its facts when the open ones are tall.
 fn menu(
     ui: &mut egui::Ui,
     submenus: &mut design::Submenus,
@@ -108,32 +108,25 @@ fn menu(
             }
         })
         .collect();
-    // As wide as the widest fact's choices (from the rows' inset) and the scroll lane, which the
-    // column always keeps: the menu keeps one width whichever fact is open.
+    // The widest fact's choices: the menu keeps one width whichever facts are open.
     let widest = facets
         .iter()
         .map(|(facet, values)| facet_width(ui, *facet, values))
         .fold(0.0, f32::max);
-    ui.set_width(widest + design::S + design::lane_width());
-    submenus.show(ui, "creature filter facts", &words, |ui, at| {
+    submenus.show(ui, "creature filter facts", widest, &words, |ui, at| {
         let (facet, values) = facets[at];
-        design::ScrollColumn::new(("creature filter facet", facet.label()))
-            .max_height(ui.ctx().content_rect().height() * 0.5)
-            .fit_height()
-            .show(ui, |ui| {
-                if facet == Facet::Challenge {
-                    challenge_menu(ui, filter, values);
-                } else {
-                    for (value, count) in values {
-                        let mut on = filter.is_chosen(facet, value);
-                        let response = ui.checkbox(&mut on, format!("{value} ({count})"));
-                        design::named(ui, &response, &format!("Filter {}: {value}", facet.label()));
-                        if response.changed() {
-                            filter.toggle(facet, value);
-                        }
-                    }
+        if facet == Facet::Challenge {
+            challenge_menu(ui, filter, values);
+        } else {
+            for (value, count) in values {
+                let mut on = filter.is_chosen(facet, value);
+                let response = ui.checkbox(&mut on, format!("{value} ({count})"));
+                design::named(ui, &response, &format!("Filter {}: {value}", facet.label()));
+                if response.changed() {
+                    filter.toggle(facet, value);
                 }
-            });
+            }
+        }
     });
 }
 

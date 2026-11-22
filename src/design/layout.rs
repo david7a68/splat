@@ -4395,15 +4395,17 @@ pub struct Submenus {
 
 impl Submenus {
     /// Its submenus, each a row of the menu with its word and caret, whose choices open under it
-    /// in the menu, one at a time; `contents(ui, at)` draws the open one's choices.
+    /// in the menu, each on its own; `contents(ui, at)` draws an open one's choices, and `width`
+    /// is the widest submenu's choices, so the menu keeps one width.
     pub fn show<W: AsRef<str>>(
         &mut self,
         ui: &mut Ui,
         id: impl std::hash::Hash,
+        width: f32,
         words: &[W],
         contents: impl FnMut(&mut Ui, usize),
     ) {
-        super::components::menu_submenus(ui, id, words, contents);
+        super::components::menu_submenus(ui, id, width, words, contents);
     }
 }
 

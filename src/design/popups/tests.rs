@@ -1405,7 +1405,8 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
 
         // M0051: a menu of several submenus (`menu_submenus`, the creature Filter's facts) in
         // the same column, on `menu_popup`. A submenu's choices open under its row, in the menu,
-        // so every other row stays in view below them, inside the column, and only one is open.
+        // so every other row stays in view below them, inside the column; each row opens on its
+        // own, so the row the DM presses never moves (G1b).
         let ctx = context();
         let picked = Cell::new(None::<&str>);
         let placed = Cell::new(Rect::NOTHING);
@@ -1422,20 +1423,28 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
                         .layout(Layout::top_down(Align::Min)),
                 );
                 let filter = child.button("Filter creatures");
-                crate::design::menu_popup(&child, &filter).show_submenus(|ui, submenus| {
-                    submenus.show(ui, "facts", &["Habitat", "Type", "Size"], |ui, at| {
-                        let kinds: &[&'static str] = match at {
-                            0 => &["Underdark", "Forest"],
-                            1 => &["Aberration", "Beast", "Celestial"],
-                            _ => &["Tiny", "Huge"],
-                        };
-                        for kind in kinds {
-                            if ui.button(*kind).clicked() {
-                                picked.set(Some(kind));
-                            }
-                        }
+                crate::design::menu_popup(&child, &filter)
+                    .within(column)
+                    .show_submenus(|ui, submenus| {
+                        submenus.show(
+                            ui,
+                            "facts",
+                            120.0,
+                            &["Habitat", "Type", "Size"],
+                            |ui, at| {
+                                let kinds: &[&'static str] = match at {
+                                    0 => &["Underdark", "Forest"],
+                                    1 => &["Aberration", "Beast", "Celestial"],
+                                    _ => &["Tiny", "Huge"],
+                                };
+                                for kind in kinds {
+                                    if ui.button(*kind).clicked() {
+                                        picked.set(Some(kind));
+                                    }
+                                }
+                            },
+                        );
                     });
-                });
             })
         };
         let first = draw(Vec::new());
@@ -1482,14 +1491,18 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
             [Some(false), Some(true), Some(false)],
             "m0051-submenus: at {width}, each row says whether it is open"
         );
-        // Another row opens and the first closes: one at a time. Its choice is reachable.
+        // Another row opens on its own: Type stays open, and the pressed row has not moved.
         draw(click(size_row.center()));
-        let swapped = draw(Vec::new());
+        let both = draw(Vec::new());
+        let pressed = bounds(&both, "Size").expect("the Size row");
         assert!(
-            bounds(&swapped, "Beast").is_none() && bounds(&swapped, "Huge").is_some(),
-            "m0051-submenus: at {width}, one submenu open at a time"
+            bounds(&both, "Beast").is_some()
+                && bounds(&both, "Huge").is_some()
+                && (pressed.top() - size_row.top()).abs() < 0.5,
+            "m0051-submenus: at {width}, Size opens under the pointer and Type stays open: \
+             {size_row:?} then {pressed:?}"
         );
-        let huge = bounds(&swapped, "Huge").unwrap();
+        let huge = bounds(&both, "Huge").unwrap();
         draw(click(huge.center()));
         draw(Vec::new());
         assert_eq!(

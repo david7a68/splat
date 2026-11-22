@@ -5135,25 +5135,59 @@ pub fn menu_submenu<R>(
 
 /// A menu of several submenus (the creature Filter's facts, M0051). Each submenu is a row of the
 /// menu, with `menu_submenu`'s inset, type and height and its caret after its word; its choices
-/// open under it, in the same menu, one submenu at a time. So no submenu lies over the next
-/// one's row at any width: the menu stays the one layer `menu_popup` placed in its owning pane,
-/// clear of its splitter and scroll bar. The keyboard reaches each row and then the open row's
+/// open under it, in the same menu. So no submenu lies over the next one's row at any width:
+/// the menu stays the one layer `menu_popup` placed in its owning pane, clear of its splitter
+/// and scroll bar. Each row opens and closes on its own, so a press moves no row above it and
+/// the row the DM pressed stays under the pointer (G1b); the rows scroll in the menu when the
+/// open ones are taller than 60% of the window. The keyboard reaches each row and then its open
 /// choices in order (Tab); Space or Enter on a row opens or closes it; Escape closes the menu,
 /// as any menu. Each row tells a screen reader whether it is open. `words` are the submenus'
-/// words; `contents(ui, at)` draws the open one's choices, from the row's words. Only
+/// words; `contents(ui, at)` draws an open one's choices, from the row's words; `width` is the
+/// widest submenu's choices, so the menu keeps one width whichever are open (the choices from
+/// the rows' inset, or the widest row, and the scroll lane). Only
 /// [`Submenus::show`](super::layout::Submenus::show) calls it, in a menu that a click inside
 /// does not close ([`MenuPopup::show_submenus`](super::layout::MenuPopup::show_submenus)).
 pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
     ui: &mut Ui,
     id: impl std::hash::Hash,
+    width: f32,
     words: &[W],
     mut contents: impl FnMut(&mut Ui, usize),
 ) {
     let key = ui.make_persistent_id(id);
-    let mut open: Option<usize> = ui.data(|data| data.get_temp(key)).flatten();
-    for (at, word) in words.iter().enumerate() {
-        let word = word.as_ref();
-        let here = open == Some(at);
+    let mut open: std::collections::BTreeSet<usize> =
+        ui.data(|data| data.get_temp(key)).unwrap_or_default();
+    // A row: its padding, its word and its caret, as `menu_submenu`'s.
+    let font = Type::Strong.font(ui);
+    let rows = words
+        .iter()
+        .map(|word| {
+            S + number_width(ui, word.as_ref(), &font) + ui.spacing().item_spacing.x + L + S
+        })
+        .fold(0.0, f32::max);
+    ui.set_width((width + S).max(rows) + super::layout::lane_width());
+    let room = ui.ctx().content_rect().height() * 0.6;
+    super::layout::ScrollColumn::new(key)
+        .max_height(room)
+        .fit_height()
+        .show(ui, |ui| {
+            for (at, word) in words.iter().enumerate() {
+                submenu_row(ui, &mut open, at, word.as_ref(), &mut contents);
+            }
+        });
+    ui.data_mut(|data| data.insert_temp(key, open));
+}
+
+/// One row of `menu_submenus` and, while it is open, its choices under it.
+fn submenu_row(
+    ui: &mut Ui,
+    open: &mut std::collections::BTreeSet<usize>,
+    at: usize,
+    word: &str,
+    contents: &mut impl FnMut(&mut Ui, usize),
+) {
+    {
+        let here = open.contains(&at);
         let row = ui
             .scope(|ui| {
                 ui.spacing_mut().button_padding = vec2(S, XS);
@@ -5172,17 +5206,16 @@ pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
         named(ui, &row, word);
         ui.ctx()
             .accesskit_node_builder(row.id, |node| node.set_expanded(here));
-        if row.clicked() {
-            open = if here { None } else { Some(at) };
+        if row.clicked() && !open.remove(&at) {
+            open.insert(at);
         }
-        if open == Some(at) {
+        if open.contains(&at) {
             ui.horizontal_top(|ui| {
                 space(ui, S);
                 ui.vertical(|ui| contents(ui, at));
             });
         }
     }
-    ui.data_mut(|data| data.insert_temp(key, open));
 }
 
 /// Where a submenu of `size` starts (its top left): right of its button, else left of it, each
