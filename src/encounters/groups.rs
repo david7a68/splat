@@ -1850,8 +1850,14 @@ pub(super) fn of_encounter(
                         None,
                     );
                 });
+            // M0226 (ruling M27): a creature added from the Add pane went to this card, so the
+            // card comes whole into view, once, by its column's least scroll.
             if adding && reveal {
-                frame.response.scroll_to_me(Some(egui::Align::Max));
+                design::reveal::bring_into_view(
+                    ui,
+                    frame.response.rect,
+                    design::reveal::JumpTo::AddedTarget,
+                );
             }
             design::gap(ui, design::Gap::S);
         });
