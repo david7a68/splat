@@ -448,10 +448,11 @@ pub struct Run {
     /// work it out again (`unend`). Never saved.
     pub continue_blocked: Option<&'static str>,
     /// The answer to the DM's last refused Continue fight or Undo of the ending (issue #507),
-    /// with the reason it answered. It belongs to that attempt: Dismiss, the next attempt, and
-    /// the Timeline's next change that works out another reason (`answer_still_stands`) end it.
-    /// Never saved.
-    pub unend_refused: Option<(&'static str, crate::design::results::Refusal)>,
+    /// with the reason it answered and whether the fight's encounter existed then (its words
+    /// say so). It belongs to that attempt: Dismiss, the next attempt, the app's next working-out
+    /// with another reason, and the encounter deleted or restored (`answer_still_stands`) end
+    /// it. Never saved.
+    pub unend_refused: Option<(&'static str, bool, crate::design::results::Refusal)>,
     /// An act that makes this ended fight live again waits for the app, which has the Timeline.
     pub wants_unend: Option<Unend>,
     /// Lookup is open. Letters are then the next word of a search, never a command.
@@ -1594,9 +1595,10 @@ impl Run {
         } else {
             Some(CONTINUE_DISK_CHANGED)
         };
+        let exists = self.encounter_exists();
         self.unend_refused = self
             .continue_blocked
-            .map(|reason| (reason, self.unend_refusal(act, reason)));
+            .map(|reason| (reason, exists, self.unend_refusal(act, reason)));
         if self.continue_blocked.is_some() {
             return;
         }
@@ -1636,17 +1638,26 @@ impl Run {
             _ => Refusal::run_rule(act, RunRule::LaterPlayed, self.encounter_exists()),
         }
     }
-    /// After the app works the rule out again (the Timeline or the run changed): the last
-    /// refused act's answer ends unless the rule still gives the reason it answered.
+    /// Each frame, and after the app works the rule out again: the last refused act's answer
+    /// ends unless the rule still gives the reason it answered and the fight's encounter is
+    /// still as it was (deleted or there), so a restored encounter's answer never says it was
+    /// deleted (review of PR 666).
     pub fn answer_still_stands(&mut self) {
+        let exists = self.encounter_exists();
         if self
             .unend_refused
             .as_ref()
-            .is_some_and(|(reason, _)| self.continue_blocked != Some(*reason))
+            .is_some_and(|(reason, existed, _)| {
+                self.continue_blocked != Some(*reason) || *existed != exists
+            })
         {
             self.unend_refused = None;
         }
     }
+
+    /// The rule's answer while Timeline.md changed on disk under an edit that waits for its
+    /// save: Splat cannot be sure which fight was played last, as `unend` finds it.
+    pub(crate) const UNSETTLED: &'static str = CONTINUE_DISK_CHANGED;
     /// The outcome of the ending that the newest Continue fight took away, for the next
     /// ending to start from. It is read from the Undo steps, which the run file keeps, so it
     /// is the same after a close and a restart. None when that ending gave no outcome.
@@ -8628,7 +8639,7 @@ mod tests {
             );
             run.unend_refused
                 .as_ref()
-                .map(|(_, refusal)| (refusal.words().as_str().to_owned(), refusal.tone()))
+                .map(|(_, _, refusal)| (refusal.words().as_str().to_owned(), refusal.tone()))
         };
         let later = |act: &str| {
             Some((
@@ -8720,6 +8731,34 @@ mod tests {
             Some(CONTINUE_LATER),
             "the view says why"
         );
+        // Review of PR 666 (P2): the answer says the encounter was deleted only while it is. An
+        // empty content index has no encounter for A's source; with none, it is there again.
+        older.source = Some(Uuid::new_v4());
+        older.content = Some(Arc::new(
+            crate::lookup::ContentIndex::load(&[], None).unwrap(),
+        ));
+        older.unend(Unend::Continue, &mut book);
+        assert_eq!(
+            answer(&older),
+            Some((
+                "A did not go on. A later fight or rest was played, and its encounter was deleted."
+                    .to_owned(),
+                crate::design::Tone::Warning,
+            ))
+        );
+        older.answer_still_stands();
+        assert!(
+            answer(&older).is_some(),
+            "while it is deleted, the answer stands"
+        );
+        older.content = None;
+        older.answer_still_stands();
+        assert_eq!(
+            answer(&older),
+            None,
+            "a restored encounter ends the deleted answer"
+        );
+        older.source = None;
         b_is_last(&book, &b, "Won, round 1", "Won · Ended · Round 1", false);
         // A long rest is later than B, whatever it restored: the DM can change that ruling.
         let rest = book.add_long_rest(session);

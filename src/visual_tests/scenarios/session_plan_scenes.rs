@@ -692,13 +692,26 @@ pub fn run(d: &mut Driver<'_>) {
             .count()
     };
     let rests = events(d);
+    // M-N1.7: an event's Undo names it (`Undo add <label>`, `Undo remove <label>`), on the plan
+    // as on Timeline. The scene's is `Undo add scene`.
+    let rest_undo = |d: &Driver<'_>| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name == "Undo add")
+            .map(|node| node.name)
+            .unwrap_or_default()
+    };
+    let remove_undo = |d: &Driver<'_>| d.name_starting("Undo remove ");
     d.click("Add Long rest");
-    d.expect("Undo add");
+    assert!(
+        !rest_undo(d).is_empty(),
+        "the Long rest\u{2019}s Undo shows"
+    );
     let added = events(d) == rests + 1;
-    let both = d.in_view("Undo add scene") && d.in_view("Undo add") && added;
+    let both = d.in_view("Undo add scene") && d.in_view(&rest_undo(d)) && added;
     // Review of PR 274, item 2: live Undo results go newest first, whatever their kind.
     let top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
-    let (rest_top, scene_top) = (top(d, "Undo add"), top(d, "Undo add scene"));
+    let (rest_top, scene_top) = (top(d, &rest_undo(d)), top(d, "Undo add scene"));
     d.observe(
         "review-274-2-rest-newest",
         rest_top
@@ -711,7 +724,7 @@ pub fn run(d: &mut Driver<'_>) {
     let undone = !note(d).contains(KEEP);
     d.observe(
         "iter-26-S-FL1-undo",
-        both && undone && kept && d.in_view("Undo add"),
+        both && undone && kept && d.in_view(&rest_undo(d)),
         "Both results stay listed; Undo scene takes A's line out, and B's event and Undo stay",
     );
 
@@ -723,7 +736,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(&format!("{KEEP} · Location"));
     d.expect("Scene added to tonight.");
     d.press(Key::Escape);
-    let (rest_top, scene_top) = (top(d, "Undo add"), top(d, "Undo add scene"));
+    let (rest_top, scene_top) = (top(d, &rest_undo(d)), top(d, "Undo add scene"));
     d.observe(
         "review-274-2-scene-newest",
         rest_top
@@ -731,7 +744,7 @@ pub fn run(d: &mut Driver<'_>) {
             .is_some_and(|(rest, scene)| scene < rest),
         format!("The newer scene's Undo {scene_top:?} is above the older Long rest's {rest_top:?}"),
     );
-    d.click("Undo add");
+    d.click(&rest_undo(d));
     let rest_gone = events(d) == rests;
     let scene_kept = note(d).contains(KEEP) && d.in_view("Undo add scene");
     d.observe(
@@ -744,15 +757,18 @@ pub fn run(d: &mut Driver<'_>) {
     // the plan too, as its order is kept with the removal itself. Then Undo, and the same removal
     // again on Timeline, with no plan drawn between: the new removal is newer again.
     d.click("Add Long rest");
-    d.expect("Undo add");
+    assert!(
+        !rest_undo(d).is_empty(),
+        "the Long rest\u{2019}s Undo shows"
+    );
     let removal_newest = |d: &mut Driver<'_>| {
         d.click(NAV_TIMELINE);
         d.click_starting("Long rest · ");
         d.click("More actions for Long rest");
         d.click("Remove this event");
         d.click(NAV_SESSIONS);
-        d.expect("Undo remove");
-        let (remove_top, scene_top) = (top(d, "Undo remove"), top(d, "Undo add scene"));
+        d.expect("Undo remove ");
+        let (remove_top, scene_top) = (top(d, &remove_undo(d)), top(d, "Undo add scene"));
         (
             events(d) == rests
                 && remove_top
@@ -763,7 +779,7 @@ pub fn run(d: &mut Driver<'_>) {
     };
     let (first, first_detail) = removal_newest(d);
     d.observe("review-298-1-removal-newest", first, first_detail);
-    d.click("Undo remove");
+    d.click(&remove_undo(d));
     let back = events(d) == rests + 1;
     let (again, again_detail) = removal_newest(d);
     d.observe(
