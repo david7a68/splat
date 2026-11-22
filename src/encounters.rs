@@ -11033,6 +11033,16 @@ mod tests {
                 && painted,
             "Ctrl+S with the digit: the field keeps {typed:?}, the save says {error:?} (painted {painted})"
         );
+        // Layout PR 9b: the creature text (in its closed section until opened) keeps its layout:
+        // its quiet frames lay out and hash none of it.
+        harness.get_by_label("Its text, as Markdown").click();
+        harness.run_steps(3);
+        harness.get_by_label("Creature text");
+        assert_eq!(
+            design::pane::text_work(|| harness.run_steps(3)),
+            (0, 0),
+            "9b-quiet: the creature text's quiet frames"
+        );
     }
 
     #[test]
