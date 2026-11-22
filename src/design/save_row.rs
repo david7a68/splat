@@ -1122,7 +1122,14 @@ mod tests {
         // The theme's frame first: the page draws from the next one.
         h.run();
         let press = |h: &mut egui_kittest::Harness<'_, Page>| {
-            h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::S);
+            // One frame holds the whole press (a queued key press spreads over frames).
+            h.input_mut().events.push(egui::Event::Key {
+                key: egui::Key::S,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            });
             h.step();
             h.state().taken
         };
