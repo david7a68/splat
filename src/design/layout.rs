@@ -1368,15 +1368,20 @@ pub fn sideways_scroll<R>(
     view: Sideways,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> ScrollAreaOutput<R> {
-    egui::ScrollArea::horizontal()
-        .id_salt(Id::new(id_salt))
-        .auto_shrink([view.fit, true])
-        .scroll_bar_visibility(if view.no_bar {
-            egui::scroll_area::ScrollBarVisibility::AlwaysHidden
-        } else {
-            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
-        })
-        .show(ui, add)
+    // The app's solid bar, whatever the caller's style: it takes its own lane.
+    ui.scope(|ui| {
+        ui.spacing_mut().scroll = theme::scroll_style();
+        egui::ScrollArea::horizontal()
+            .id_salt(Id::new(id_salt))
+            .auto_shrink([view.fit, true])
+            .scroll_bar_visibility(if view.no_bar {
+                egui::scroll_area::ScrollBarVisibility::AlwaysHidden
+            } else {
+                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+            })
+            .show(ui, add)
+    })
+    .inner
 }
 
 /// Fixed room for a text value that changes in place: as wide as the widest example in its
