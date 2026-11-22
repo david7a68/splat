@@ -2355,6 +2355,29 @@ mod tests {
                 harness.run_steps(3);
             };
         const UNDO: &str = "Undo discard of Campaign details";
+        // What Undo of A must not touch, and A's saved folder (the draft keeps it).
+        let stored =
+            |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
+             id: Uuid| {
+                harness
+                    .state()
+                    .0
+                    .all()
+                    .iter()
+                    .find(|campaign| campaign.id == id)
+                    .map(|campaign| (campaign.name.clone(), campaign.path.clone()))
+                    .unwrap()
+            };
+        let b_stored = stored(&harness, first);
+        let a_folder = stored(&harness, second).1.to_string_lossy().into_owned();
+        let field =
+            |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
+             label: &str| {
+                harness
+                    .query_all_by_role_and_label(egui::accesskit::Role::TextInput, label)
+                    .next()
+                    .and_then(|field| field.value())
+            };
         edit_name(&mut harness);
         // Unrelated B: A's link changes (a result of its own). Undo of A then puts A's draft
         // back into A's form, and B's change and its result stay.
@@ -2362,10 +2385,21 @@ mod tests {
         assert!(shows(&harness, SAVED), "B's link change says its result");
         harness.get_by_label(UNDO).click();
         harness.run_steps(3);
-        assert_eq!(
-            harness.state().0.name,
-            "Campaign A",
-            "Undo of A in A's form"
+        // Review of PR 688 (P1): at once after Undo, the open form is A's, the fields on screen
+        // hold A's draft, and B's stored details did not change.
+        let (owner, name, folder) = (
+            harness.state().0.editing,
+            field(&harness, "Campaign name"),
+            field(&harness, "Folder"),
+        );
+        assert!(
+            owner == Some(second)
+                && name.as_deref() == Some("Campaign A")
+                && folder.as_deref() == Some(a_folder.as_str())
+                && stored(&harness, first) == b_stored,
+            "Undo of A left the form or B wrong: form of {owner:?} (A is {second}), name {name:?}, \
+             folder {folder:?}, B stored {:?}",
+            stored(&harness, first)
         );
         assert!(
             shows(&harness, SAVED)
