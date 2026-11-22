@@ -3366,7 +3366,7 @@ impl Sessions {
                     ))
                 }
                 Some(mut current) => {
-                    current.body = write.before.body.as_str().to_owned();
+                    let _ = current.body.replace(write.before.body.as_str());
                     current.edited();
                     current.save();
                     // A save that did not finish says why in the draft's state.
@@ -7872,10 +7872,10 @@ impl Sessions {
         if delete && let Some(path) = &template.path {
             match super::remove_file(path) {
                 Ok(()) => {
-                    let body = self
-                        .template_draft
-                        .take()
-                        .map_or_else(|| template.body.as_str().to_owned(), |draft| draft.body.into_string());
+                    let body = self.template_draft.take().map_or_else(
+                        || template.body.as_str().to_owned(),
+                        |draft| draft.body.into_string(),
+                    );
                     self.deleted_templates.record(kept::DeletedTemplate {
                         page: kept::Page {
                             root: self.folder.clone().unwrap_or_default(),

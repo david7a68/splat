@@ -4881,7 +4881,7 @@ mod tests {
             .state_mut()
             .0
             .notes
-            .replace("A new note after removal".into());
+            .replace("A new note after removal");
         harness.state_mut().0.setup.members[0].count = 7;
         // Review of PR 347: A (Scout) is in the footer, and its Undo is pressed; the body then
         // removes B (Wolf) before that press is applied. A comes back from its own data, kept
@@ -5321,7 +5321,7 @@ mod tests {
         assert!(error.contains("Another group"), "{error}");
         assert!(!dir.path().join(&second.path).exists());
         // A group keeps its own name through an edit.
-        first.notes.replace("New words.".into());
+        first.notes.replace("New words.");
         first.save(&campaign, &[]).unwrap();
         write_note(
             dir.path(),
@@ -5635,7 +5635,7 @@ mod tests {
         let mut draft = GroupDraft::new();
         draft.name = "Rival team".into();
         draft.setup.side = "rivals".into();
-        draft.notes.replace("They hold the east gate.".into());
+        draft.notes.replace("They hold the east gate.");
         draft.add(scout);
         draft.add(scout);
         draft.add(guard);
@@ -5664,7 +5664,7 @@ mod tests {
         let campaign = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
         let mut draft = GroupDraft::new();
-        draft.notes.replace("First words.".into());
+        draft.notes.replace("First words.");
         draft.add(scout);
         draft.save(&campaign, &[]).unwrap();
         let path = dir.path().join(&draft.path);
@@ -5676,7 +5676,7 @@ mod tests {
         draft.save(&campaign, &[]).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         assert!(text.contains("## Kept\nBy hand."), "{text}");
-        draft.notes.replace("Other words.".into());
+        draft.notes.replace("Other words.");
         draft.save(&campaign, &[]).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         assert!(
@@ -6561,7 +6561,7 @@ mod tests {
         let copy = dir.path().join("Copied group.md");
         fs::copy(dir.path().join(group.path()), &copy).unwrap();
         let bytes = fs::read(&copy).unwrap();
-        group.notes.replace("My plan".into());
+        group.notes.replace("My plan");
         assert!(group.save(&campaign, &[]).is_err());
         assert!(
             group

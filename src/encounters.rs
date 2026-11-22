@@ -10646,7 +10646,7 @@ mod tests {
         for width in [600.0, 960.0] {
             harness.set_size(egui::vec2(width, 640.0));
             harness.run_steps(2);
-            assert_eq!(draft.borrow().body, text, "Unsent text survives");
+            assert_eq!(draft.borrow().body.as_str(), text, "Unsent text survives");
             assert_eq!(
                 harness.ctx.memory(|memory| memory.focused()),
                 Some(focus),
@@ -10664,7 +10664,11 @@ mod tests {
         // Another encounter opens at its own top, with its own text: the column's scroll is
         // keyed by the draft, not shared with the encounter before it.
         let mut second = Draft::new();
-        second.body = (1..=600).map(|n| format!("Second line {n}.\n")).collect();
+        let _ = second.body.replace(
+            (1..=600)
+                .map(|n| format!("Second line {n}.\n"))
+                .collect::<String>(),
+        );
         let second_id = second.id;
         *draft.borrow_mut() = second;
         harness.run_steps(2);
@@ -12493,7 +12497,7 @@ mod tests {
             .draft
             .as_ref()
             .expect("Undo remove gives the draft back");
-        assert_eq!(back.body, "My later words");
+        assert_eq!(back.body.as_str(), "My later words");
         assert!(harness.state().discarded.is_none());
         assert!(!path.exists(), "nothing was written");
     }
@@ -13734,12 +13738,20 @@ mod tests {
         let path = run.path().unwrap().to_path_buf();
         editor.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
         assert_eq!(editor.paused_run().unwrap().path, path);
-        editor.draft.as_mut().unwrap().body = "Keep this draft".to_owned();
+        let _ = editor
+            .draft
+            .as_mut()
+            .unwrap()
+            .body
+            .replace("Keep this draft");
         editor.open_saved_run(&path, &campaign);
         assert!(editor.has_run());
         assert!(editor.go_to_run);
         assert!(editor.paused_run().is_none());
-        assert_eq!(editor.draft.as_ref().unwrap().body, "Keep this draft");
+        assert_eq!(
+            editor.draft.as_ref().unwrap().body.as_str(),
+            "Keep this draft"
+        );
     }
 
     fn slot_override(draft: &mut Draft, index: usize, text: &str) {

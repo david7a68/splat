@@ -7488,7 +7488,7 @@ mod tests {
             "{}Typed, not saved.\n",
             sessions.draft.as_ref().unwrap().body
         );
-        sessions.draft.as_mut()let _ = .unwrap().body.replace(dirty.clone());
+        let _ = sessions.draft.as_mut().unwrap().body.replace(dirty.clone());
         sessions.draft.as_mut().unwrap().edited();
         let renamed = dir.path().join("Renamed road.md");
         fs::rename(&b_note.path, &renamed).unwrap();
@@ -7507,7 +7507,12 @@ mod tests {
         fs::rename(&renamed, &b_note.path).unwrap();
         sessions.notes[1].path = b_note.path.clone();
         sessions.notes_revision += 1;
-        sessions.draft.as_mut()let _ = .unwrap().body.replace(dirty.replace("Typed, not saved.\n", ""));
+        let _ = sessions
+            .draft
+            .as_mut()
+            .unwrap()
+            .body
+            .replace(dirty.replace("Typed, not saved.\n", ""));
         sessions.draft.as_mut().unwrap().save();
         // E6 (R41): an unreadable file is an error, a missing one a warning, by one rule that
         // both readers' lines take (`Shown::outcome`). Each is a fresh plan line's first Undo.
