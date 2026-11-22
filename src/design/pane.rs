@@ -193,10 +193,6 @@ pub enum FillsReason {
     LiveRoster,
     /// Several columns side by side, each with its own scroll (Party's list and sheet).
     Columns,
-    /// The run's Arrivals list, with its own scroll under the panel's footer. Its group blocks
-    /// hold their members and faults: the pane's column would hide a whole block that the
-    /// footer's edge cuts (N12), so the list keeps a plain cut until its blocks are rows.
-    ArrivalsList,
 }
 
 /// How a `Body::Content` pane's scroll column behaves beyond the default, for `Footer::pane_content`.

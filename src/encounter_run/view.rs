@@ -3329,10 +3329,6 @@ impl Run {
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
     /// with its button, by the rule the campaign chose for initiative.
     /// Whatever joins a fight after it starts: one creature, or a prepared group.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: Arrivals keeps its own scroll under a `Fills` body (`FillsReason::ArrivalsList`), counted (design::results::STAGED_ALLOWS)"
-    )]
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
         // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned
         // to the panel's bottom, below the scrolling list. The list keeps its top, so a result
@@ -3351,41 +3347,37 @@ impl Run {
         // Add), so the frame of an act shows the reason or result it brought and never one it
         // ended (M-R0.1, P3: a valid total's frame painted the old reason while Add enabled).
         let frame = design::outcome::PaneFrame::new(ui);
-        let messages = design::outcome::Messages::<ArrivalPress>::new(
+        let mut messages = design::outcome::Messages::<ArrivalPress>::new(
             &frame,
             ("arrival_footer", self.id),
             ui.available_width(),
         );
+        // #511: with no footer line, the pane's own bottom ends the list at its last whole
+        // block too (SM5), so no group's Initiative or Add stands half under the window's edge.
+        messages.rows_end_whole();
         let this = &mut *self;
-        // The list keeps its own scroll (`FillsReason::ArrivalsList`), a design scroll column:
-        // the footer's edge ends it at its last whole block (layout step 11a, SM2/AM2, SB1/AB1),
-        // with the hairline. `group_list` gives the blocks.
-        let body = design::pane::Body::Fills(design::pane::Fills::because(
-            design::pane::FillsReason::ArrivalsList,
-        ));
+        // #511: the list is the pane's column (`Body::Content`). `group_list` splits each group at
+        // its semantic boundaries (its head, then each fault with its repair; layout step 11a,
+        // SM2/AM2, SB1/AB1), so the column's edge ends the list at its last whole block and never
+        // hides a whole group. FJ1: the column keeps the scroll bar's lane whether or not the bar
+        // shows, so a list that grows long moves no field and no Add.
         let paned = messages.pane_then(
             ui,
-            body,
+            design::pane::Body::Content,
             move |ui| {
-                // FJ1: the column keeps the scroll bar's lane whether or not the bar shows, as the
-                // Encounters list does, so a list that grows long moves no field and no Add.
-                let add = design::layout::ScrollColumn::new("run_groups")
-                    .show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.y = design::XS;
-                        if this
-                            .groups
-                            .as_ref()
-                            .is_some_and(|groups| !groups.is_empty())
-                        {
-                            design::help(ui, "Drag a group name to the list, or use Add.");
-                        }
-                        // Measured once: the search field and the group list share the block.
-                        let arrival = this.arrival_block(ui);
-                        this.add_creature_form(ui, arrival.map(|(_, block)| block));
-                        design::rule(ui);
-                        this.group_list(ui, arrival)
-                    })
-                    .inner;
+                ui.spacing_mut().item_spacing.y = design::XS;
+                if this
+                    .groups
+                    .as_ref()
+                    .is_some_and(|groups| !groups.is_empty())
+                {
+                    design::help(ui, "Drag a group name to the list, or use Add.");
+                }
+                // Measured once: the search field and the group list share the block.
+                let arrival = this.arrival_block(ui);
+                this.add_creature_form(ui, arrival.map(|(_, block)| block));
+                design::rule(ui);
+                let add = this.group_list(ui, arrival);
                 (this, add)
             },
             |(this, add), messages| {

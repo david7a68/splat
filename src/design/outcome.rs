@@ -5458,13 +5458,17 @@ fn register(ui: &Ui, rect: Rect, place: MessagePlace, tone: Tone) {
     let _ = (ui, rect, place, tone);
 }
 
-/// Each message a typed place drew in the last pass that drew one, with its place. Only test
-/// builds keep them; the old message functions register nothing.
+/// Each message a typed place drew in the pass that just ended, with its place. Only test
+/// builds keep them; the old message functions register nothing. A record from an older pass is
+/// stale (#511: a run's Arrivals footer, drawn before the DM went back to the plan, read as a
+/// message on the plan page), so it gives nothing.
 #[cfg(any(test, feature = "test-support"))]
 pub fn message_rects(ctx: &egui::Context) -> Vec<(Rect, MessagePlace, Tone)> {
+    let now = ctx.cumulative_pass_nr();
     ctx.data(|data| {
         data.get_temp::<(u64, Vec<(Rect, MessagePlace, Tone)>)>(egui::Id::new(MESSAGE_RECTS))
     })
+    .filter(|(pass, _)| pass + 1 >= now)
     .map(|(_, rects)| rects)
     .unwrap_or_default()
 }

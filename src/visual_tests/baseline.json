@@ -225,7 +225,7 @@
     "encounter-groups": {
       "T13.2: add a group to the running fight, rolling once": 1,
       "add a group during setup": 4,
-      "add groups by a total and by dragging": 11,
+      "add groups by a total and by dragging": 13,
       "make an encounter group": 14
     },
     "encounter-owned-groups": {
@@ -297,7 +297,7 @@
       "roll NPC initiative": 1
     },
     "run-add-creature": {
-      "add a creature made up at the table to a running fight": 11,
+      "add a creature made up at the table to a running fight": 12,
       "add two of a campaign's creatures to a running fight": 7
     },
     "run-continue": {
