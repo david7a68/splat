@@ -1180,7 +1180,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/timeline/page.rs",
             "detail",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Layout(1), Ban::ByOwner(1)],
+            &[Ban::ByOwner(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         ("src/world/repair.rs", "source_editor", &[Ban::RowKey(1)]),
@@ -1689,8 +1689,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 2),
             ("src/timeline/test_support.rs", 2),
-            ("src/world.rs", 1),
-            ("src/world/repair.rs", 1),
         ],
     ),
     // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.

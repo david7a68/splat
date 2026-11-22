@@ -496,7 +496,7 @@ pub fn broken(d: &mut Driver<'_>) {
         );
     });
     d.click("Reload and lose my draft");
-    d.expect("Undo reload");
+    d.expect("Undo reload Broken.md");
     assert_eq!(
         d.editor_text().as_deref(),
         Some(format!("{external}\nAnother outside edit.\n").as_str())
@@ -505,18 +505,18 @@ pub fn broken(d: &mut Driver<'_>) {
         fs::read_to_string(&path).unwrap(),
         format!("{external}\nAnother outside edit.\n")
     );
-    undo_first(d, "Undo reload");
+    undo_first(d, "Undo reload Broken.md");
     tops.push(("reloaded, Undo and reason", editor_tops(d)));
     part_reachable(
         d,
         &format!("Reloaded from disk. Your draft is kept until you edit. {combined}"),
-        "Undo reload",
+        "Undo reload Broken.md",
     );
     // iter-27-A FA2: with Undo reload and the reason the footer still follows the save row.
     d.state_prepared("repair-reloaded-with-undo", Sizes::All, |d| {
         repair_footer_follows(d, "Reloaded from disk.", "iter-27-A-FA2");
     });
-    d.click("Undo reload");
+    d.click("Undo reload Broken.md");
     assert_eq!(d.editor_text().as_deref(), Some(fixed.as_str()));
     tops.push(("reload undone, no message", editor_tops(d)));
     // Round 25 FD1: no reason, result or Undo moves the editor, at any size.
@@ -538,7 +538,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.replace_text_in("Note text", &fixed);
     d.observe(
         "iter-1-A-reload-next-edit",
-        !d.has("Undo reload") && d.editor_text().as_deref() == Some(fixed.as_str()),
+        !d.has("Undo reload Broken.md") && d.editor_text().as_deref() == Some(fixed.as_str()),
         "A new edit ends Undo reload and keeps the newly typed draft",
     );
     // Round 25 FD1: the editor no longer moves when the message below it ends, so it keeps the
@@ -1630,12 +1630,12 @@ pub fn broken(d: &mut Driver<'_>) {
     d.settle();
     d.click("Reload and lose my draft");
     d.settle();
-    d.expect("Undo reload");
+    d.expect("Undo reload Repaired watchkeeper");
     // Round 25 results family: the edit form's reload result sits below its save row, so it does
     // not move the fields; the first edit ends it without moving them back.
     let (status, undo, save) = (
         status_field(d),
-        d.place_of("Undo reload"),
+        d.place_of("Undo reload Repaired watchkeeper"),
         d.place_of("Save changes"),
     );
     d.observe(
@@ -1656,7 +1656,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.wait_for_text("The watchkeeper is back.");
     d.observe(
         "re-check-1-D-draft-owner",
-        !d.has("Undo reload")
+        !d.has("Undo reload Repaired watchkeeper")
             && !d.has("Save changes")
             && d.has("Edit Repaired watchkeeper")
             && fs::read_to_string(&copy).ok().as_deref() == Some(outside.as_str()),
@@ -12879,14 +12879,14 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         "iter-13-D-FD2-reload-undo",
         "After the conflict's reload, Reload shows the disk value and keeps Undo reload",
         |d| {
-            d.expect("Undo reload");
-            d.in_view("Undo reload") && d.field_text("Status").as_deref() == Some("away")
+            d.expect("Undo reload Safe Rook");
+            d.in_view("Undo reload Safe Rook") && d.field_text("Status").as_deref() == Some("away")
         },
     );
-    d.click("Undo reload");
+    d.click("Undo reload Safe Rook");
     d.observe(
         "iter-13-D-FD2-reload-undone",
-        d.field_text("Status").as_deref() == Some("ready") && !d.has("Undo reload"),
+        d.field_text("Status").as_deref() == Some("ready") && !d.has("Undo reload Safe Rook"),
         "Undo reload restores the draft",
     );
     d.click("Discard");
@@ -12924,13 +12924,13 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     d.settle();
     d.observe(
         "iter-13-D-FD2-second-reload",
-        d.in_view("Undo reload") && d.field_text("Status").as_deref() == Some("gone"),
+        d.in_view("Undo reload Safe Rook") && d.field_text("Status").as_deref() == Some("gone"),
         "The second Reload shows the newest file and keeps Undo reload",
     );
-    d.click("Undo reload");
+    d.click("Undo reload Safe Rook");
     d.observe(
         "iter-13-D-FD2-second-undone",
-        d.field_text("Status").as_deref() == Some("ready") && !d.has("Undo reload"),
+        d.field_text("Status").as_deref() == Some("ready") && !d.has("Undo reload Safe Rook"),
         "Undo reload restores the DM's own draft, not the version between",
     );
     d.click("Discard");

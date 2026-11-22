@@ -179,8 +179,11 @@ Its least-scroll form, `reveal::bring_into_view(ui, rect, JumpTo::…)` (M-P0.25
 no press: nothing when it is whole in view; else its nearer edge at the view's edge, and its top at the view's top
 when it is taller than the view. `OpenMenuControl` is a list row's `⋯` whose menu is open when its pane shrinks
 (the Encounters lists, M0259): the button comes back, so the menu does not hang from a control the DM cannot see.
-The Timeline's checks follow Enter (M0546) once the Timeline detail scrolls in its pane's column; its raw
-`egui::ScrollArea` is out of reach of the column's offset writer.
+`CheckResult` is a journey's check whose result an act just wrote (a roll, an entered number; the Timeline
+detail, M0546): its line comes whole into view. The Timeline detail's form scrolls in its own pane's column, its
+header drawn before the pane (M0559): wide, a pane with no footer (its results stay in the list's footer); narrow,
+the pane that holds the open event's footer. Another event, a link or a changed filter opens the form at its top
+(`ContentScroll::from_top`, M0560).
 A retry that would move a column by itself ends on any scroll of the DM's in it (`reveal::dm_scrolls`: a wheel over it,
 a press or drag that started on its content or its bar, a scroll key), so the column stays where the DM leaves it (the
 row menu's bring-back, review of PR 770).

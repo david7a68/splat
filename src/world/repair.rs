@@ -403,7 +403,8 @@ impl Repair {
                             Notice::new(crate::sentence!(
                                 "Reloaded from disk. Your draft is kept until you edit."
                             )),
-                            UndoStep::verb(Verb::Reload).pressed_as(RepairAct::Undo),
+                            // `Undo reload Broken.md`, the name its discard's Undo has (M0548).
+                            UndoStep::of(Verb::Reload, name.clone()).pressed_as(RepairAct::Undo),
                         ),
                     }
                 }));
