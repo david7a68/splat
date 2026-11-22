@@ -2356,14 +2356,17 @@ fn creature_facts(ui: &mut egui::Ui, c: &Creature) -> (bool, f32) {
         .clicked();
     if let Some(reason) = &c.unavailable {
         // A status is an icon, a word and a colour, like the other warnings here. It wraps,
-        // because a warning must not be cut to an ellipsis at 960.
-        design::wrapped_status(
+        // because a warning must not be cut to an ellipsis at 960, in the two lines its row
+        // reserves (`Row::Action { status }`): in a very narrow pane, a longer one ends in `…`
+        // there, its whole words on hover and in its accessible name (issue #585).
+        design::wrapped_status_rows(
             ui,
             design::Status {
                 icon: icons::WARN,
                 word: reason,
                 color: colors().result.warning,
             },
+            2,
         );
     } else {
         detail_columns(ui, &c.detail, c.source.as_deref(), c.hp_missing);
@@ -5541,7 +5544,9 @@ impl Encounters {
                 design::save_row::Changed::No
             },
             design::save_row::Primary::Elsewhere,
-        );
+        )
+        // Issue #553: the encounter's own Discard can show beside it.
+        .discard_named("Discard creature changes");
         if editor.error.is_some() {
             state = state.not_saved();
         }
@@ -9498,6 +9503,7 @@ mod tests {
     /// it; with no words it keeps the list's first five.
     #[test]
     fn the_replacement_picker_ranks_before_it_takes_five() {
+        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
         for name in [
@@ -9546,13 +9552,12 @@ mod tests {
         assert!(offered > 5, "fixture: more creatures than the five");
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 600.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, snapshot: &mut Snapshot| {
                     let _ = replace_missing_creature(ui, snapshot, 1, "Missing");
                 },
                 snapshot,
             );
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let empty = visited();
         harness.get_by_label("Replacement creature").click();
@@ -9590,7 +9595,7 @@ mod tests {
         // ranking its words, then none open: the store keeps no closed row's five.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 600.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, (snapshot, open): &mut (Snapshot, Vec<u8>)| {
                     for &row in open.iter() {
                         ui.push_id(row, |ui| {
@@ -9600,7 +9605,6 @@ mod tests {
                 },
                 (Snapshot::load(&active, &[]).unwrap(), Vec::new()),
             );
-        crate::design::theme::install(&harness.ctx);
         for row in 1..=5 {
             harness.state_mut().1 = vec![row];
             harness.run_steps(2);
@@ -9644,7 +9648,7 @@ mod tests {
         type Search = (Snapshot, String, Vec<Uuid>);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 600.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, (snapshot, query, roster): &mut Search| {
                     let mut search = query.clone();
                     let _ = Encounters::creature_search(
@@ -9666,7 +9670,6 @@ mod tests {
                     Vec::new(),
                 ),
             );
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(
             harness.query_by_label("Fenstalker").is_some()
@@ -9713,6 +9716,7 @@ mod tests {
 
     #[test]
     fn iter_2_b_npc_with_deleted_stat_block_stays_in_search_and_cannot_be_added() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -9728,7 +9732,7 @@ mod tests {
                 .any(|creature| creature.entry.name == "Watchkeeper"),
             "the live run cannot add an NPC whose stat block is missing"
         );
-        let mut harness = egui_kittest::Harness::new(move |ctx| {
+        let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let chosen = Encounters::creature_search(
                     ui,
@@ -9745,7 +9749,6 @@ mod tests {
                 assert!(chosen.is_none());
             });
         });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
         // FD3: the reason is a status, the warning icon and then the words.
@@ -9798,7 +9801,7 @@ mod tests {
         );
         let in_roster = {
             let snapshot = Snapshot::load(&active, &[]).unwrap();
-            let mut harness = egui_kittest::Harness::new(move |ctx| {
+            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let _ = Encounters::creature_search(
                         ui,
@@ -9814,7 +9817,6 @@ mod tests {
                     );
                 });
             });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             column(&design::action_rows::row_records(&harness.ctx)).1
         };
@@ -10134,6 +10136,7 @@ mod tests {
 
     #[test]
     fn i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         // Review of PR 339 (4): the Undo names its copy (`Verb::Separate`).
         const UNDO_COPY: &str = "Undo separate Rook copy.md";
@@ -10150,7 +10153,7 @@ mod tests {
             active: Some(active.clone()),
             ..Default::default()
         };
-        let mut harness = egui_kittest::Harness::builder().build_state(
+        let mut harness = egui_kittest::Harness::builder().themed_state(
             move |ctx, page: &mut Encounters| {
                 ctx.data_mut(|data| {
                     data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
@@ -10208,7 +10211,6 @@ mod tests {
             },
             page,
         );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
         harness.get_by_label("These two files claim to be the same entry.");
@@ -10387,6 +10389,7 @@ mod tests {
 
     #[test]
     fn iter7_b_duplicate_npc_has_aligned_single_repair_choices() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -10402,7 +10405,7 @@ mod tests {
         fs::write(dir.path().join("Rook.md"), &original).unwrap();
         fs::write(dir.path().join("Rook copy.md"), &original).unwrap();
         let index = Arc::new(crate::lookup::ContentIndex::load(&[], Some(&active)).unwrap());
-        let mut harness = egui_kittest::Harness::new(move |ctx| {
+        let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
             ctx.data_mut(|data| {
                 data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
             });
@@ -10425,7 +10428,6 @@ mod tests {
                 );
             });
         });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert_eq!(
             harness
@@ -10462,6 +10464,7 @@ mod tests {
 
     #[test]
     fn each_encounters_name_field_keeps_its_own_undo_history() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let mut a = Draft::new();
         a.name = "Alpha".into();
@@ -10474,12 +10477,11 @@ mod tests {
         let current = which.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 200.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     name_field(ui, &mut shown.borrow_mut()[current.get()], 300.0);
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let focus = |harness: &mut egui_kittest::Harness<'_>| {
             harness
@@ -10516,6 +10518,7 @@ mod tests {
     /// roster column's one reveal (`design::reveal`), when the DM scrolled its top out of view.
     #[test]
     fn roster_done_brings_its_row_whole_into_view() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -10530,7 +10533,7 @@ mod tests {
         let id = draft.id;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(960.0, 640.0))
-            .build_state(
+            .themed_state(
                 move |ctx, (draft, expanded): &mut (Draft, Option<String>)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         Encounters::roster_pane(
@@ -10547,7 +10550,6 @@ mod tests {
                 },
                 (draft, Some(first_key)),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let scroll = harness
             .ctx
@@ -10593,6 +10595,7 @@ mod tests {
 
     #[test]
     fn iter7_b_roster_keeps_unsent_notes_focus_and_scroll_across_parent_changes() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -10601,7 +10604,7 @@ mod tests {
         let shown = draft.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(960.0, 640.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let parent = if ui.available_width() > 760.0 {
                         "wide"
@@ -10622,7 +10625,6 @@ mod tests {
                     });
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness
             .query_all_by_label("Read-aloud and notes")
@@ -10696,6 +10698,7 @@ mod tests {
 
     #[test]
     fn iter7_b_roster_scroll_content_keeps_list_measure_and_warning_words_muted() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -10711,7 +10714,7 @@ mod tests {
         draft.add(id, false);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 1080.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     Encounters::roster_pane(
                         ui,
@@ -10725,7 +10728,6 @@ mod tests {
                     );
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let notes = harness
             .query_all_by_label("Read-aloud and notes")
@@ -10791,6 +10793,7 @@ mod tests {
     /// FD4: the loot row and the notes field end at the roster's right edge, one column edge.
     #[test]
     fn iter18_b_loot_and_notes_end_at_the_roster_edge() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -10800,7 +10803,7 @@ mod tests {
         draft.add(id, false);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 1080.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     Encounters::roster_pane(
                         ui,
@@ -10814,7 +10817,6 @@ mod tests {
                     );
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         // The roster's row rule marks the column's right edge.
         let rule = harness
@@ -10900,6 +10902,7 @@ mod tests {
 
     #[test]
     fn iter8_b_clean_creature_uses_shared_status() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         let dir = tempfile::tempdir().unwrap();
         creature(dir.path(), "Wolf", false);
@@ -10907,7 +10910,7 @@ mod tests {
         let root = dir.path().to_path_buf();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(480.0, 600.0))
-            .build_state(
+            .themed_state(
                 move |ctx, (editor, key): &mut (CreatureEditor, bool)| {
                     // The page's Ctrl+S, taken before the pane draws (`save_shortcut`).
                     *key |= take_save_key(ctx);
@@ -10918,7 +10921,6 @@ mod tests {
                 },
                 (editor, false),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Done with this creature");
         let save = harness.get_by_label("Save creature");
@@ -10956,7 +10958,8 @@ mod tests {
             .next()
             .expect("the save row says Unsaved")
             .rect();
-        let discard = harness.get_by_label("Discard").rect();
+        // Issue #553: its Discard has its own accessible name, apart from the encounter's.
+        let discard = harness.get_by_label("Discard creature changes").rect();
         assert!(
             harness.query_by_label("Done with this creature").is_none()
                 && word.right() <= discard.left()
@@ -12666,6 +12669,7 @@ mod tests {
     }
     #[test]
     fn editor_renders_at_supported_sizes_without_changing_the_draft() {
+        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let id = creature(dir.path(), "Hero", true);
@@ -12726,7 +12730,7 @@ mod tests {
         // modal test (`crate::art::modal_open`).
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_state(
+            .themed_state(
                 move |ctx, (editor, close): &mut (Encounters, bool)| {
                     egui::SidePanel::right("lookup").show(ctx, |ui| {
                         crate::art::thumbnail(ui, &image, "Map");
@@ -12751,7 +12755,6 @@ mod tests {
                 },
                 (editor, false),
             );
-        design::theme::install(&harness.ctx);
         crate::art::install(&harness.ctx);
         harness.run_steps(3);
         {
@@ -13188,6 +13191,7 @@ mod tests {
 
     #[test]
     fn iter4_b_unread_roster_blocks_direct_and_plan_starts_without_writing() {
+        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
         let wolf = stat_creature(dir.path(), "Wolf", 20);
@@ -13276,7 +13280,7 @@ mod tests {
         };
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(960.0, 640.0))
-            .build_state(
+            .themed_state(
                 move |ctx, encounters: &mut Encounters| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         encounters.show(
@@ -13292,7 +13296,6 @@ mod tests {
                 },
                 open(&many),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(4);
         let page = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(960.0, 640.0));
         let whole = |rect: egui::Rect| page.contains_rect(rect) && rect.is_positive();

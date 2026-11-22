@@ -49,7 +49,11 @@ Build an `egui_kittest` harness with `design::test_harness` (`themed_state`, `th
 `themed`, `themed_ui`). Its first frame installs the app's theme, so the page never draws at
 egui's default sizes; a test that calls `theme::install(&harness.ctx)` after the builder drew
 measures a page's one-time results (an open jump, a first fit) at the wrong sizes (issue #810).
-The design lint counts those calls per file (`late-theme`), and the count can only shrink.
+The design lint counts those calls per file (`late-theme`), also on a context taken from a
+harness (`let ctx = harness.ctx.clone();`), and the count can only shrink. A test that changes the
+theme on purpose after a draw (a new font generation, as in `src/content_ui/tests/quiet_reader.rs`
+and `src/trackers/view.rs`) keeps its visible call on the harness's own context and a counted row
+with its reason in `lint_allowlist.txt`; it never hides the call behind another binding.
 `scripts/late_theme.py` moves the standard cases: by default it prints a diff and the cases it
 leaves for a hand edit (`MANUAL`); `--write` applies it.
 

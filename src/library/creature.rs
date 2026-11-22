@@ -1054,10 +1054,10 @@ mod tests {
         width: f32,
         add: impl FnMut(&mut egui::Ui) + 'static,
     ) -> egui_kittest::Harness<'static> {
+        use crate::design::test_harness::ThemedPage as _;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(width, 900.0))
-            .build_ui(add);
-        design::theme::install(&harness.ctx);
+            .themed_ui(add);
         harness.run_ok();
         harness
     }

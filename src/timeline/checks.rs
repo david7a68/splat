@@ -1247,13 +1247,14 @@ mod tests {
     /// `·`, and a line of their own starts with the words.
     #[test]
     fn t11_9_the_dice_words_never_start_a_line_with_the_separator() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::{Harness, kittest::Queryable};
         let tables = [table("road", "On the road", Per::Day)];
         let event = journey("journey", Some("road"));
         for (width, words) in [(400.0, "· 1d20 each day"), (160.0, "1d20 each day")] {
             let mut harness = Harness::builder()
                 .with_size(egui::vec2(480.0, 200.0))
-                .build_ui(|ui| {
+                .themed_ui(|ui| {
                     ui.set_max_width(width);
                     let view = View {
                         event: &event,
@@ -1265,7 +1266,6 @@ mod tests {
                     };
                     header(ui, &view, &mut State::default());
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let label = harness.get_by_label("Encounter checks").rect();
             let menu = harness.get_by_label("On the road").rect();
