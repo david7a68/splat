@@ -1551,7 +1551,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/tests/quiet_text.rs",
             "stock_text_edit",
-            &[Ban::Layout(2)],
+            &[Ban::Layout(1)],
         ),
         ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
