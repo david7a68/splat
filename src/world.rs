@@ -6549,6 +6549,7 @@ mod tests {
     /// `iter-29-D2-status-log` (session-plan-scenes).
     #[test]
     fn a_log_field_opens_with_its_room_in_view_once() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         // Through the real draw, for Status and Place.
         let dir = tempfile::tempdir().unwrap();
@@ -6567,7 +6568,7 @@ mod tests {
             // The reader, the bottom of what it drew, and the Log room's height in its fonts.
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(520.0, 600.0))
-                .build_ui_state(
+                .themed_ui_state(
                     |ui, (reader, bottom, room): &mut (Reader, f32, f32)| {
                         reader.read_with(ui, &index.items[at], &index, Some(&campaign), None);
                         *bottom = ui.min_rect().bottom();
@@ -6575,7 +6576,6 @@ mod tests {
                     },
                     (Reader::default(), 0.0, 0.0),
                 );
-            crate::design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let closed = harness.state().1;
             harness.get_by_label(change).click();
@@ -6598,6 +6598,7 @@ mod tests {
 
     #[test]
     fn a_log_line_follows_the_disk_and_a_failed_write_keeps_the_words() {
+        use crate::design::test_harness::Themed as _;
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let campaign = sample_campaign(dir.path());
@@ -6679,7 +6680,7 @@ mod tests {
         let at = index.position(hob).unwrap();
         use egui_kittest::kittest::Queryable;
         let drawn = |world: Reader, lookup: Reader, form_in_world: bool| -> (Reader, Reader) {
-            let mut harness = egui_kittest::Harness::new_ui_state(
+            let mut harness = egui_kittest::Harness::builder().themed_ui_state(
                 |ui, (world, lookup): &mut (Reader, Reader)| {
                     let pass = ui.ctx().cumulative_pass_nr();
                     lookup.share_with(world, pass);
@@ -6694,7 +6695,6 @@ mod tests {
                 },
                 (world, lookup),
             );
-            crate::design::theme::install(&harness.ctx);
             {
                 let (world, lookup) = harness.state_mut();
                 let form = if form_in_world { world } else { lookup };
@@ -6872,7 +6872,7 @@ mod tests {
             };
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(560.0, 1200.0))
-                .build_ui_state(
+                .themed_ui_state(
                     |ui, (page, compact): &mut (Reader, Reader)| {
                         page.played = Some("[[Session 1]]".into());
                         compact.played = Some("[[Session 1]]".into());
@@ -6881,7 +6881,6 @@ mod tests {
                     },
                     (page, compact),
                 );
-            crate::design::theme::install(&harness.ctx);
             harness.state_mut().0.open_log(campaign.id, hob, "Hob", "");
             harness.state_mut().1.open_log(campaign.id, hob, "Hob", "");
             harness.run_steps(2);

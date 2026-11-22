@@ -3208,10 +3208,10 @@ mod tests {
 
     /// The Reader with a paragraph, in a test harness with the app's theme.
     fn reader(markdown: &'static str) -> egui_kittest::Harness<'static> {
+        use crate::design::test_harness::ThemedPage as _;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(480.0, 320.0))
-            .build_ui(move |ui| show(ui, markdown));
-        design::theme::install(&harness.ctx);
+            .themed_ui(move |ui| show(ui, markdown));
         harness.run_ok();
         harness
     }
@@ -3424,11 +3424,12 @@ mod tests {
 
     #[test]
     fn iter16_a_ad1_focus_survives_a_layout_change() {
+        use crate::design::test_harness::Themed as _;
         // A pane or a breakpoint can add a widget above the reader. That moves every automatic
         // id below it, but not the link the DM has focused.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(480.0, 320.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, wide: &mut bool| {
                     if *wide {
                         ui.label("A pane beside the reader");
@@ -3440,7 +3441,6 @@ mod tests {
                 },
                 false,
             );
-        design::theme::install(&harness.ctx);
         harness.run_ok();
         harness.key_press(egui::Key::Tab);
         harness.run_ok();
@@ -3503,16 +3503,16 @@ mod tests {
         width: f32,
         dense: bool,
     ) -> egui_kittest::Harness<'static> {
+        use crate::design::test_harness::ThemedPage as _;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(width, 480.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 if dense {
                     show_compact(ui, markdown);
                 } else {
                     show(ui, markdown);
                 }
             });
-        design::theme::install(&harness.ctx);
         harness.run_ok();
         harness
     }
@@ -4247,12 +4247,13 @@ mod tests {
 
     #[test]
     fn iter17_a_limit1_an_earlier_reader_with_the_same_words_does_not_take_focus() {
+        use crate::design::test_harness::Themed as _;
         const WORDS: &str =
             "Ask [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar) about the bells.";
         let (a, b) = (uuid::Uuid::from_u128(1), uuid::Uuid::from_u128(2));
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(480.0, 480.0))
-            .build_ui_state(
+            .themed_ui_state(
                 move |ui, earlier: &mut bool| {
                     if *earlier {
                         ui.ctx()
@@ -4265,7 +4266,6 @@ mod tests {
                 },
                 false,
             );
-        design::theme::install(&harness.ctx);
         harness.run_ok();
         let focused_rect = |harness: &egui_kittest::Harness<'_, bool>| {
             use egui_kittest::kittest::NodeT;
@@ -4391,13 +4391,14 @@ mod tests {
 
     #[test]
     fn iter17_a_limit1_a_reader_without_a_document_keeps_its_ids_beside_one_with_a_document() {
+        use crate::design::test_harness::Themed as _;
         const SESSION: &str =
             "Ask [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar) about the bells.";
         let document = uuid::Uuid::from_u128(7);
         // Lookup, a side panel, draws before the page. Its reader shows a document.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(900.0, 480.0))
-            .build_state(
+            .themed_state(
                 move |ctx, lookup: &mut bool| {
                     if *lookup {
                         egui::SidePanel::right("lookup").show(ctx, |ui| {
@@ -4411,7 +4412,6 @@ mod tests {
                 },
                 false,
             );
-        design::theme::install(&harness.ctx);
         harness.run_ok();
         harness.key_press(egui::Key::Tab);
         harness.run_ok();
