@@ -1326,12 +1326,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "unread_member",
             &[Ban::Extras(1), Ban::Body],
         ),
-        ("src/encounters/list.rs", "choice_note", &[Ban::Extras(2)]),
-        (
-            "src/encounters/list.rs",
-            "history_summary",
-            &[Ban::Extras(2)],
-        ),
         // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
         ("src/library/catalogue.rs", "repair_notice", &[Ban::Body]),
         (
@@ -1354,7 +1348,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
-        ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
         // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
         // warning with its two repairs and the duplicate repair, in the reader's body (were
         // `message`, `message_with_actions`).

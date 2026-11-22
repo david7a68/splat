@@ -957,6 +957,7 @@ pub fn run(d: &mut Driver<'_>) {
         let (xs, temps, conditions, baselines) = d.at_size(size, |d| {
             let (mut xs, mut temps, mut conditions, mut texts) =
                 (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+            let mut name_ends: Vec<(f32, f32)> = Vec::new();
             d.each_painted_text(|text, clip| {
                 let words = &text.galley.job.text;
                 if !clip.intersects(text.visual_bounding_rect()) {
@@ -976,6 +977,9 @@ pub fn run(d: &mut Driver<'_>) {
                     .first()
                     .map(|s| s.format.font_id.size);
                 texts.push((words.clone(), text.pos.x, baseline, size));
+                if size == Some(crate::design::Type::Strong.size()) {
+                    name_ends.push((baseline, text.pos.x + text.galley.size().x));
+                }
                 if words.starts_with("HP ") && words.contains('/') {
                     xs.push(text.pos.x);
                 } else if words.starts_with(crate::design::icons::TEMP_HP) {
@@ -1010,8 +1014,30 @@ pub fn run(d: &mut Driver<'_>) {
                     (*base, name)
                 })
                 .collect();
-            (xs, temps, conditions, baselines)
+            // Layout 11c (M0271): the HP column starts `M` after the names' column, as wide as
+            // the widest name on a Final state row.
+            let widest = baselines
+                .iter()
+                .filter_map(|(base, _)| {
+                    name_ends
+                        .iter()
+                        .filter(|(nbase, _)| (nbase - base).abs() < 8.0)
+                        .map(|(_, end)| *end)
+                        .reduce(f32::max)
+                })
+                .reduce(f32::max);
+            (xs, temps, conditions, (baselines, widest))
         });
+        let (baselines, widest) = baselines;
+        d.observe(
+            "m32-L11c-history-columns",
+            widest
+                .zip(xs.first())
+                .is_some_and(|(widest, hp)| (hp - widest - crate::design::M).abs() <= 0.5),
+            format!(
+                "At {size:?}, the widest name ends at {widest:?}, the HP column starts at {xs:?}"
+            ),
+        );
         let temp_end = temps.iter().copied().fold(f32::MIN, f32::max);
         d.observe(
             "iter-25-B-AI1",
