@@ -999,7 +999,9 @@ pub fn unregister_count(notes: &[Note], package: Uuid) -> usize {
 
 pub struct Note {
     pub path: String,
-    pub text: String,
+    /// The file's text, with its revision (layout PR 9b-C): set when the note loads, saves or
+    /// follows the disk, so an open draft's compare with it is two revisions on a quiet frame.
+    pub text: crate::design::memo::Revised<String>,
     pub entry: Option<Entry>,
     pub error: Option<String>,
     /// Why the file could not be read at all, from the system error's kind. Such a note has no
@@ -1342,7 +1344,7 @@ impl Loaded {
             .is_some_and(|at| {
                 let note = &self.notes[at];
                 note.path == offer.source.path
-                    && note.text == offer.source.text
+                    && *note.text == offer.source.text
                     && note
                         .entry
                         .as_ref()
@@ -3309,7 +3311,7 @@ fn problem_note(
                 .map_or(error.message, |fault| fault.cause().to_owned()),
         ),
         path: error.path,
-        text,
+        text: crate::design::memo::Revised::new(text),
         entry: None,
         fault,
         manifest_gone: false,
@@ -3354,7 +3356,7 @@ pub fn load(module: Option<&Module>) -> Result<Loaded, String> {
             let mismatched = entry.kind == "package" && entry.id != module.id;
             notes.push(Note {
                 path: entry.path.clone(),
-                text,
+                text: crate::design::memo::Revised::new(text),
                 entry: (!mismatched).then_some(entry),
                 error: mismatched.then(|| "Package details have another identity. Replace with the registered details, or restore the original id.".into()),
                 fault: None,
@@ -3365,7 +3367,7 @@ pub fn load(module: Option<&Module>) -> Result<Loaded, String> {
         if missing_manifest {
             notes.push(Note {
                 path: manifest_path.clone(),
-                text: String::new(),
+                text: crate::design::memo::Revised::default(),
                 entry: None,
                 error: Some(crate::content_workspace::DELETED_MANIFEST.into()),
                 fault: None,
@@ -3388,7 +3390,7 @@ pub fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 .to_owned();
             notes.push(Note {
                 path: entry.path.clone(),
-                text,
+                text: crate::design::memo::Revised::new(text),
                 entry: Some(entry),
                 error: None,
                 fault: None,
@@ -3452,7 +3454,7 @@ pub fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loade
                     let text = text_of(&entry.path)?;
                     all.notes.push(Note {
                         path: entry.path.clone(),
-                        text,
+                        text: crate::design::memo::Revised::new(text),
                         entry: Some(entry),
                         error: None,
                         fault: None,
@@ -3522,7 +3524,7 @@ pub fn catalogue_subtitles(
             .values()
             .map(|e| Note {
                 path: e.entry.path.clone(),
-                text: String::new(),
+                text: crate::design::memo::Revised::default(),
                 entry: Some(e.entry.clone()),
                 error: None,
                 fault: None,
