@@ -858,6 +858,9 @@ pub struct ChoiceWords {
     /// that revision, not form by form (a clone is the same version).
     shorter: std::sync::Arc<[ChoiceWords]>,
     shorter_revision: Option<super::memo::Revision>,
+    /// Its objects must show whole (a file name): words that do not fit wrap, never cut
+    /// (`whole_objects`).
+    whole: bool,
 }
 
 impl PartialEq for ChoiceWords {
@@ -865,6 +868,7 @@ impl PartialEq for ChoiceWords {
         self.fixed == other.fixed
             && self.objects == other.objects
             && self.shorter_revision == other.shorter_revision
+            && self.whole == other.whole
     }
 }
 
@@ -880,6 +884,7 @@ impl From<&'static str> for ChoiceWords {
             objects: Vec::new(),
             shorter: std::sync::Arc::from([]),
             shorter_revision: None,
+            whole: false,
         }
     }
 }
@@ -898,7 +903,16 @@ impl ChoiceWords {
             objects,
             shorter: std::sync::Arc::from([]),
             shorter_revision: None,
+            whole: false,
         }
+    }
+
+    /// Objects that must show whole, such as a file the repair acts on (M0583): when the words
+    /// do not fit their line, they wrap in the action, which grows taller (`Action::wraps`),
+    /// instead of being cut. Words that fit stay on one line.
+    pub fn whole_objects(mut self) -> Self {
+        self.whole = true;
+        self
     }
 
     /// These words, with shorter forms of the same choice for a line too short for them,
@@ -947,6 +961,9 @@ impl ChoiceWords {
         let whole = self.label();
         if fits(&whole) {
             return Fitted::Whole(whole);
+        }
+        if self.whole {
+            return Fitted::Wraps(whole);
         }
         for form in self.shorter.iter() {
             let words = form.label();

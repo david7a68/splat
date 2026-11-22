@@ -1992,12 +1992,14 @@ impl design::outcome::Fault for DuplicateIdentity {
     }
 }
 
-/// The repair of one of the files: `Make <file> a separate note` (or `entry`).
+/// The repair of one of the files: `Make <file> a separate note` (or `entry`). The file shows
+/// whole: in a narrow reader the words wrap in the action (M0583), never cut.
 pub fn separate_choice(noun: IdentityNoun, file: &str) -> design::outcome::ChoiceWords {
     match noun {
         IdentityNoun::Note => crate::choice!("Make {} a separate note", file),
         IdentityNoun::Entry => crate::choice!("Make {} a separate entry", file),
     }
+    .whole_objects()
 }
 
 /// The help line under a World note's repair: what its existing links keep. A duplicate of
