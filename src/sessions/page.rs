@@ -8005,8 +8005,10 @@ impl Sessions {
         }
     }
 
-    /// The Session folder form's save row: its state word, Discard, the reason and `Save folder`
-    /// at the form's right edge. True when the DM pressed Save.
+    /// The Session folder form's save row (M0497): the shared save row (`save_row`) of the
+    /// folder's draft, its word (`Unsaved`, `No changes`), Discard and `Save folder` with
+    /// `Ctrl+S` at the form's right edge, and why Save waits under it while the folder has
+    /// changes. True when the DM pressed Save, or `Ctrl+S`, and Save can run.
     fn folder_save_row(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) -> bool {
         let Some(campaign) = self.campaign.clone() else {
             return false;
@@ -8016,54 +8018,47 @@ impl Sessions {
         // The listing the footer read this frame (`folder_scan`, kept until the next scan).
         let files = self.folder_files();
         let has_files = self.folder_move_counts(book, &files).is_some();
-        // The page's lock first: while it holds, the warning offers no choice, so Save never
-        // points at choices that are not there.
-        let blocked = locked
-            .or(self
-                .folder_wait(book, changed, &files)
-                .map(FolderWait::words))
-            .or(has_files.then_some("Choose below to move the files or not."));
-        ui.horizontal_wrapped(|ui| {
+        // One rule for the row (`DraftState`): the word, Discard, Save's weight and why it waits.
+        let mut state = design::DraftState::new(
+            design::save_row::DraftOrigin::Saved,
             if changed {
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::DRAFT,
-                        word: "Unsaved",
-                        color: colors().document.unsaved,
-                    },
-                );
-                if Action::quiet("Discard").show(ui).clicked() {
-                    if let Ok(saved) = folder_setting(&campaign) {
-                        self.folder_text = saved;
-                    }
-                    self.folder_error = None;
-                }
+                design::save_row::Changed::Yes
+            } else {
+                design::save_row::Changed::No
+            },
+            design::save_row::Primary::Draft,
+        );
+        // The page's lock first: while it holds, the warning offers no choice, so Save never
+        // points at choices that are not there. With no changes the row says so itself.
+        let wait = self
+            .folder_wait(book, changed, &files)
+            .filter(|wait| *wait != FolderWait::NoChanges)
+            .map(FolderWait::words);
+        if let Some(why) = locked.or(wait) {
+            state = state.waits(why);
+        } else if has_files {
+            // The warning's two choices under the row save the folder: Save waits in its place.
+            state = state.commits_elsewhere("Choose below to move the files or not.");
+        }
+        // `Ctrl+S` saves exactly when the button it labels can, not under a modal (the app's
+        // one test) nor the page's lock.
+        let save_key = state.can_save()
+            && !self.modal
+            && ui.is_enabled()
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        // The commit place: `Save folder` in every state, so the place the DM pressed never
+        // turns into another act.
+        let row = design::save_row(ui, &state, "Save folder");
+        if row.discard {
+            if let Ok(saved) = folder_setting(&campaign) {
+                self.folder_text = saved;
             }
-            if !changed {
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::OK,
-                        word: "No changes",
-                        color: colors().document.clean,
-                    },
-                );
-            }
-            if locked.is_none() && changed {
-                design::blocked_reason(ui, blocked);
-            }
-            // The commit place: `Save folder` in every state, so the place the DM pressed
-            // never turns into another act.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                Action::secondary("Save folder")
-                    .blocked(blocked)
-                    .show(ui)
-                    .clicked()
-            })
-            .inner
-        })
-        .inner
+            self.folder_error = None;
+        }
+        if locked.is_none() && changed {
+            design::blocked_reason(ui, state.save_blocked());
+        }
+        (row.save || save_key) && state.can_save()
     }
 
     /// Why the folder cannot be saved now, by the folder's own state; `None` when it can.
@@ -10366,6 +10361,10 @@ mod tests {
             harness.state_mut().2 = to.clone();
             harness.run_steps(3);
         };
+        let ctrl_s = |harness: &mut egui_kittest::Harness<'_, State>| {
+            harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::S);
+            harness.run_steps(3);
+        };
         const A_MOVED: &str = "Moved 1 note and 1 template to Moved A.";
         const B_MOVED: &str = "Moved 1 note to Moved B.";
         const MISSING: &str = "Splat cannot find the session folder ";
@@ -10771,6 +10770,27 @@ mod tests {
             !shows(&harness, "has no files now") && shows(&harness, MOVE_FILES),
             "files back end the refusal"
         );
+        // M0497: with no file to move (C's templates gone again), Ctrl+S saves the folder (the
+        // shared save row's key), but not under a modal. After the refusal's own checks, so
+        // nothing here ends it before they look. C is not used again.
+        fs::remove_dir_all(&templates_c).unwrap();
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(3);
+        assert!(!shows(&harness, MOVE_FILES), "no file to move");
+        harness.state_mut().0.modal = true;
+        ctrl_s(&mut harness);
+        assert_eq!(
+            super::super::folder_setting(&c).unwrap(),
+            DEFAULT_FOLDER,
+            "n0-folder-ctrl-s: under a modal Ctrl+S saves nothing"
+        );
+        harness.state_mut().0.modal = false;
+        ctrl_s(&mut harness);
+        assert_eq!(
+            super::super::folder_setting(&c).unwrap(),
+            "Elsewhere",
+            "n0-folder-ctrl-s: Ctrl+S saves the folder"
+        );
         // Early-pass packet, point 3: the current folder's `Now:` line is one line, so a save to
         // a long folder and back to a short one never moves the save row under it.
         switch(&mut harness, &b);
@@ -10838,6 +10858,25 @@ mod tests {
             shows(&harness, MOVE_FILES)
                 && shows(&harness, "Choose below to move the files or not."),
             "the lock gone, the choices come back"
+        );
+        // M0497: the folder's save row is the shared one (`save_row`). While the move choices
+        // take Save's place, Ctrl+S saves nothing; Discard puts the saved folder back.
+        let saved_folder = super::super::folder_setting(&b).unwrap();
+        ctrl_s(&mut harness);
+        assert!(
+            super::super::folder_setting(&b).unwrap() == saved_folder
+                && !shows(&harness, "The current folder now keeps session files."),
+            "n0-folder-row: Ctrl+S presses nothing while the move choices take Save's place"
+        );
+        assert!(
+            shows(&harness, "Unsaved") && shows(&harness, "Discard"),
+            "n0-folder-row: the changed folder says Unsaved, with Discard"
+        );
+        harness.get_by_label("Discard").click();
+        harness.run_steps(3);
+        assert!(
+            shows(&harness, "No changes") && harness.state().0.folder_text == saved_folder,
+            "n0-folder-row: Discard puts the saved folder back"
         );
         // Round 30 B7d: the word ends by the frame clock (`crate::frame_clock`), not the wall
         // clock, so a test's frames decide when it ends: 7.5 s of frames after the stop it

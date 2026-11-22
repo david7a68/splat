@@ -5886,7 +5886,9 @@ pub mod encounter_build {
                     &[
                         "Encounter name: ",
                         "Find a creature or party member",
-                        "More actions for ",
+                        // The first roster row's menu (not the encounter's own menu in its head,
+                        // `More actions for Bridge Ambush`; Astra's P2 on PR 668).
+                        "More actions for Brannoch Vale",
                     ],
                 )
             };
@@ -7104,6 +7106,33 @@ pub mod settings {
                 .all(|at| at.as_ref().is_some_and(|(_, held, _, _)| *held)),
             format!(
                 "Discard (A) and an account error (B), each footer at 960, 1200, 1920: {a_and_b:?}"
+            ),
+        );
+        // Undo A in each size's own layout: the wide footers dispatch their own presses. A is
+        // discarded again after each, so the next size starts from A and B too.
+        let undone_at = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.act_at_size(size, |d| {
+                d.click("Undo discard of Campaign details");
+                let undone = (
+                    size,
+                    d.field_text(EDIT_FORM).as_deref() == Some("Quiet Harbor revised"),
+                    !d.visible_text(DISCARDED),
+                    d.visible_text(ACCOUNT_ERROR),
+                );
+                // With no draft back there is nothing to discard again (A is still shown).
+                if d.in_view("Discard") {
+                    d.click("Discard");
+                }
+                undone
+            })
+        });
+        d.observe(
+            "m32-L8-settings-undo-a-at-every-size",
+            undone_at
+                .iter()
+                .all(|(_, draft, a_gone, b_stays)| *draft && *a_gone && *b_stays),
+            format!(
+                "Undo A at 960, 1200 and 1920 (size, draft back, A's words gone, B's words stay): {undone_at:?}"
             ),
         );
         d.click("Undo discard of Campaign details");
@@ -18678,6 +18707,77 @@ pub mod session_recording {
                 d.click_starting("Transcript and summary service: ");
             }
             d.wait_for_text("Anthropic");
+        });
+        // Layout PR 10b (SR1/AR2): the open list leaves its own field whole: the Service caption
+        // and the control are in the body above the footer, and no row covers either; at 960 and
+        // at 1920 (a wider menu is checked at the other sizes too).
+        for size in [SMALL, LARGE] {
+            let (whole, detail) = d.aside(|d| d.act_at_size(size, |d| {
+                if !d.has("Anthropic") {
+                    d.click_starting("Transcript and summary service: ");
+                    d.wait_for_text("Anthropic");
+                }
+                let nodes = d.nodes();
+                let service = nodes
+                    .iter()
+                    .find(|node| node.name.starts_with("Transcript and summary service: "))
+                    .map(|node| node.rect);
+                let caption = service.and_then(|service| {
+                    nodes
+                        .iter()
+                        .filter(|node| {
+                            node.name == "Service" && node.rect.bottom() <= service.top() + 1.0
+                        })
+                        .map(|node| node.rect)
+                        .reduce(|a, b| if a.bottom() > b.bottom() { a } else { b })
+                });
+                let rows: Vec<egui::Rect> = nodes
+                    .iter()
+                    .filter(|node| {
+                        ["Anthropic", "OpenAI", "Google Gemini", "OpenRouter", "Another service"]
+                            .contains(&node.name.as_str())
+                    })
+                    .map(|node| node.rect)
+                    .collect();
+                let scale = d.pixels_per_point();
+                let limit = service.and_then(|service| {
+                    d.pane_records()
+                        .into_iter()
+                        .find(|record| record.room().contains(service.center() / scale))
+                        .map(|record| {
+                            let room = record.viewport().unwrap_or(record.room());
+                            let bottom = record.footer().map_or(room.bottom(), |footer| footer.top());
+                            (room.top() * scale, bottom * scale)
+                        })
+                });
+                let whole = service.zip(caption).zip(limit).is_some_and(
+                    |((service, caption), (top, bottom))| {
+                        caption.top() >= top - 1.0
+                            && service.bottom() <= bottom + 1.0
+                            && !rows.is_empty()
+                            && rows
+                                .iter()
+                                .all(|row| !row.intersects(caption) && !row.intersects(service))
+                    },
+                );
+                (
+                    whole,
+                    format!(
+                        "caption {caption:?}, control {service:?}, body {limit:?}, rows {rows:?}"
+                    ),
+                )
+            }));
+            d.observe(
+                "layout-10b-SR1-list-context",
+                whole,
+                format!("At {size:?}, the open list leaves its field whole: {detail}"),
+            );
+        }
+        d.aside(|d| {
+            if !d.has("Anthropic") {
+                d.click_starting("Transcript and summary service: ");
+                d.wait_for_text("Anthropic");
+            }
         });
         d.click("Anthropic");
         d.state_prepared("processing-settings-anthropic", Sizes::All, |d| {
