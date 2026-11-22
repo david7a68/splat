@@ -516,6 +516,9 @@ impl<'s> BlockRegion<'s> {
         });
         if scrolled {
             state.pending = Pending::default();
+            // A queued arrow Jump's focus goes with it (issue #539): a row drawn later takes no
+            // focus the DM's wheel already cancelled.
+            state.focus_next = None;
         }
         // The list box: Tab leaves from the region's last control (Shift+Tab from its first), so
         // egui's own Tab goes on past the list; while a row holds focus, Up and Down (Home, End)

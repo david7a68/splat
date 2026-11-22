@@ -1989,6 +1989,7 @@ mod tests {
     /// Each path's failure is collected, so one fault build names every path it breaks.
     #[test]
     fn iter15_d_ad1_every_path_keeps_a_held_npc() {
+        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let (campaign, index) = held_npc_campaign(dir.path());
         assert_eq!(index.broken_world.len(), 1, "the fixture has a repair");
@@ -2002,7 +2003,7 @@ mod tests {
         let shown = campaign.clone();
         let mut harness = Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_ui_state(
+            .themed_ui_state(
                 {
                     let index = index.clone();
                     move |ui, page: &mut WorldPage| {
@@ -2016,7 +2017,6 @@ mod tests {
                 },
                 WorldPage::default(),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.state_mut().begin_new("generate", Some(&index));
         harness.run_steps(2);
@@ -2199,11 +2199,12 @@ mod tests {
     /// ends the Undo, and a new NPC replaces it.
     #[test]
     fn iter15_d_ad1_discard_has_undo() {
+        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         let (campaign, index) = held_npc_campaign(dir.path());
         let mut harness = Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_ui_state(
+            .themed_ui_state(
                 {
                     let index = index.clone();
                     move |ui, page: &mut WorldPage| {
@@ -2217,7 +2218,6 @@ mod tests {
                 },
                 WorldPage::default(),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.state_mut().begin_new("generate", Some(&index));
         harness.run_steps(2);

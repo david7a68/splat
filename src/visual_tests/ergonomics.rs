@@ -1530,11 +1530,11 @@ mod tests {
 
     #[test]
     fn missing_glyph_fails_for_an_unassigned_character_and_accepts_app_icons() {
-        let mut harness = Harness::builder().build_ui(|ui| {
+        use crate::design::test_harness::ThemedPage as _;
+        let mut harness = Harness::builder().themed_ui(|ui| {
             ui.label(format!("Known {} × →", crate::design::icons::EXPAND));
             ui.label("Missing \u{0378}");
         });
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let found = missing_glyphs(
             &harness.ctx,
@@ -1560,12 +1560,13 @@ mod tests {
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
     )]
     fn help_measure_fails_on_a_wide_muted_small_label() {
+        use crate::design::test_harness::ThemedPage as _;
         use crate::design::{Type, colors};
         let words = "Splat fills the template with the session’s name, its date and its number. ";
         let words = words.repeat(4);
         let mut harness = Harness::builder()
             .with_size(egui::vec2(1200.0, 600.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 let muted = |ui: &egui::Ui, lead: &str| {
                     Type::Small
                         .rich(ui, format!("{lead} {words}"))
@@ -1619,7 +1620,6 @@ mod tests {
                 });
                 crate::design::register_row(ui, row.response.rect);
             });
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let rows = RowDetails::of(&harness.ctx);
         let names: Vec<String> = harness

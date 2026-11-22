@@ -2800,6 +2800,13 @@ impl StatusText {
 /// Rail notices wrap so their cause stays visible in a narrow column. A second line starts at
 /// the word, not under the icon, as in every other status that wraps.
 pub fn wrapped_status<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Response {
+    wrapped_status_rows(ui, state, usize::MAX)
+}
+
+/// [`wrapped_status`] in at most `rows` lines, for a row that reserves that many for it (a
+/// creature result's warning, issue #585): past them its word ends in `…`, and its whole word
+/// stays its hover and its accessible name.
+pub fn wrapped_status_rows<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>, rows: usize) -> Response {
     let state = state.into();
     if status_fits(ui, state) {
         return status_label(ui, state);
@@ -2807,7 +2814,18 @@ pub fn wrapped_status<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Response
     let status = ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         status_icon_column(ui, state);
-        ui.add(egui::Label::new(Type::Small.rich(ui, state.word).color(state.word_color)).wrap())
+        let mut job = egui::text::LayoutJob::single_section(
+            state.word.to_owned(),
+            egui::TextFormat::simple(Type::Small.font(ui), state.word_color),
+        );
+        job.wrap = egui::text::TextWrapping {
+            max_width: ui.available_width(),
+            max_rows: rows,
+            break_anywhere: false,
+            overflow_character: Some('…'),
+        };
+        let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+        ui.add(egui::Label::new(galley))
     });
     // The whole status, icon included, as one label's rect was before it wrapped at the word.
     status
@@ -7298,6 +7316,8 @@ mod tests {
         use crate::design::test_harness::ThemedPage as _;
         const WRAPPED: &str = "Timeline not readable";
         const LINKED: &str = "Session folder not found";
+        // Issue #585: a status that reserves two lines keeps to them however long its word.
+        const CAPPED: &str = "Not in this campaign’s packages, so it cannot join the roster yet";
         let state = |word: &'static str| Status {
             icon: icons::WARN,
             word,
@@ -7311,6 +7331,7 @@ mod tests {
                 ui.set_max_width(100.0);
                 wrapped_status(ui, state(WRAPPED));
                 let _ = status_link(ui, state(LINKED));
+                wrapped_status_rows(ui, state(CAPPED), 2);
             });
         harness.run_steps(2);
         // The x of each row's first glyph, by the words of the painted text.
@@ -7350,6 +7371,34 @@ mod tests {
                 "{words} wraps to two lines, each at the word x {word_x}: {xs:?}"
             );
         }
+        // Issue #585: two lines at the word, the second ending in `…`; the whole words are its
+        // accessible name.
+        let capped = harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == CAPPED => {
+                    Some(text.galley.clone())
+                }
+                _ => None,
+            })
+            .expect("the capped status is painted");
+        let last = capped
+            .rows
+            .last()
+            .and_then(|row| row.glyphs.last())
+            .map(|glyph| glyph.chr);
+        assert!(
+            capped.rows.len() == 2 && last == Some('…'),
+            "#585: the capped status keeps to two lines and ends in …: {} rows, last {last:?}",
+            capped.rows.len()
+        );
+        use egui_kittest::kittest::Queryable;
+        assert!(
+            harness.query_by_label(CAPPED).is_some(),
+            "#585: its whole words stay its accessible name"
+        );
     }
 
     /// iter-26-A footer contract: the body's top is the same with 0, 1, 3 and 10 messages, at

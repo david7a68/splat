@@ -750,6 +750,7 @@ mod tests {
     }
 
     fn note(body: &str) -> Harness<'static, Note> {
+        use crate::design::test_harness::Themed as _;
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("Powers")).unwrap();
         std::fs::write(
@@ -765,9 +766,9 @@ mod tests {
             dndbeyond_campaign_name: None,
         };
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
-        let harness = Harness::builder()
+        Harness::builder()
             .with_size(egui::vec2(800.0, 600.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, note: &mut Note| {
                     let id = EDITOR.id();
                     if std::mem::take(&mut note.focus) {
@@ -795,9 +796,7 @@ mod tests {
                     focus: true,
                     _dir: dir,
                 },
-            );
-        crate::design::theme::install(&harness.ctx);
-        harness
+            )
     }
 
     fn type_text(harness: &mut Harness<'_, Note>, text: &str) {
