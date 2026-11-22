@@ -332,6 +332,91 @@ fn death_saves_move_nothing(d: &mut Driver<'_>) {
     }
 }
 
+/// Layout 11c (review of PR 750): the ended view opened first at 1920, with no height kept from
+/// a smaller window (a restart whose window is 1920 from its first frame): its short columns
+/// are measured as they are, so the footer follows them (P1); and its header comes before the
+/// footer in Tab order (P2). The caller's restart then comes back at the base size.
+fn ended_fresh_at_1920(d: &mut Driver<'_>) {
+    d.restart_at(LARGE);
+    let pane = ended_pane(d);
+    d.observe(
+        "m32-L11c-ended-fresh-1920",
+        pane.as_ref().is_some_and(|pane| {
+            pane.content && !pane.pinned && pane.height.is_some_and(|height| height < pane.view)
+        }),
+        format!("Opened first at 1920, the ended pane: {pane:?}"),
+    );
+    // Review of PR 750 (P2): with Prep and the Combat log open, closing Prep leaves only the
+    // log's lines, and the log is as tall as they are: the columns shrink, so the footer follows
+    // the now shorter content again, not empty space kept from Prep.
+    d.click("Prep");
+    d.click("Combat log");
+    let both = ended_pane(d);
+    d.click("Prep");
+    let after = ended_pane(d);
+    d.click("Combat log");
+    d.observe(
+        "m32-L11c-ended-log-follows",
+        both.as_ref()
+            .zip(after.as_ref())
+            .is_some_and(|(both, after)| {
+                both.height
+                    .zip(after.height)
+                    .is_some_and(|(both_height, height)| {
+                        after.content
+                            && !after.pinned
+                            && height < both_height
+                            && height < after.view
+                    })
+            }),
+        format!(
+            "At 1920, with Prep and the Combat log open: {both:?}; then with Prep closed: {after:?}"
+        ),
+    );
+    // A refused Undo of the saved ending puts its message, with Dismiss, in the footer. The
+    // caller's restart then starts from the saved run again, with no focus or scroll from here.
+    d.app_mut().encounters.run_mut().unwrap().wants_unend = Some(crate::encounter_run::Unend::Undo);
+    d.settle();
+    ended_tab_order(d);
+}
+
+/// Layout 11c (review of PR 750, P2): the ended view's header (Close run) comes before its
+/// footer (a message's Dismiss, the footer's group) in Tab order.
+fn ended_tab_order(d: &mut Driver<'_>) {
+    let pane = ended_pane(d);
+    let footer = pane.and_then(|pane| pane.footer);
+    d.harness_focus_nothing();
+    let (mut close, mut first_footer, mut stops) = (None, None, Vec::new());
+    for stop in 0..60 {
+        d.press(Key::Tab);
+        let Some(name) = d.focused_name() else {
+            continue;
+        };
+        let in_footer = footer.is_some_and(|(rect, group)| {
+            d.focus_id() == Some(group)
+                || d.nodes()
+                    .iter()
+                    .any(|node| node.name == name && rect.contains_rect(node.rect))
+        });
+        if name == "Close run" {
+            close.get_or_insert(stop);
+        }
+        if in_footer {
+            first_footer.get_or_insert(stop);
+        }
+        if close.is_some() && first_footer.is_some() {
+            break;
+        }
+        stops.push(name);
+    }
+    d.harness_focus_nothing();
+    d.observe(
+        "m32-L11c-ended-tab-order",
+        close.zip(first_footer).is_some_and(|(close, footer)| close < footer),
+        format!("Tab reaches Close run at stop {close:?} and the footer at {first_footer:?}; stops: {stops:?}"),
+    );
+}
+
 pub fn run(d: &mut Driver<'_>) {
     // The fight belongs to a session, so the plan and Timeline have it.
     d.click(NAV_SESSIONS);
@@ -439,6 +524,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Add Long rest");
     d.click(BACK_TO_RUN);
     d.app_mut().timeline.save();
+    ended_fresh_at_1920(d);
     d.restart();
     let ended = |d: &mut Driver<'_>| d.app_mut().encounters.run().is_some_and(|run| run.ended());
     let shown = ended(d) && !d.has(END_STEP) && d.visible_passage(LATER) && d.in_view(CLOSE_RUN);

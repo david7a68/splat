@@ -1219,3 +1219,61 @@ pub fn applied_changes_reload_the_catalogue_and_failures_are_shown(
         "the Apply's failure answers in its own campaign"
     );
 }
+
+/// Review of PR 740 (P2): Campaign content's issues section stays as the DM left it when a
+/// repair changes its count (one of several issues repaired), and Campaign.md flags that appear
+/// open it.
+#[test]
+fn the_issues_section_keeps_its_state_through_a_repair() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let shown = std::rc::Rc::new(std::cell::Cell::new(("3 content issues to repair", false)));
+    let drawn = shown.clone();
+    let mut harness = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(600.0, 300.0))
+        .build_ui(move |ui| {
+            let (heading, flagged) = drawn.get();
+            let _ = issues_section(ui, heading, flagged, |ui| ui.label("The issue lines"));
+        });
+    design::theme::install(&harness.ctx);
+    harness.run_steps(2);
+    let header = |heading: &str| format!("{} {heading}", design::icons::WARN);
+    let open = |harness: &egui_kittest::Harness<'_>, heading: &str| {
+        harness
+            .get_by_label(&header(heading))
+            .accesskit_node()
+            .data()
+            .is_expanded()
+    };
+    assert_eq!(
+        open(&harness, "3 content issues to repair"),
+        Some(false),
+        "closed at first: no Campaign.md flags"
+    );
+    harness
+        .get_by_label(&header("3 content issues to repair"))
+        .click();
+    harness.run_steps(3);
+    assert!(harness.query_by_label("The issue lines").is_some());
+    // The DM repairs one of the three: the count changes, and the list stays open.
+    shown.set(("2 content issues to repair", false));
+    harness.run_steps(3);
+    assert_eq!(
+        open(&harness, "2 content issues to repair"),
+        Some(true),
+        "m-p0-issues-stay-open: a repair that changes the count keeps the list open"
+    );
+    assert!(harness.query_by_label("The issue lines").is_some());
+    // The DM closes it; then Campaign.md flags appear (a reload), and the list opens for them.
+    harness
+        .get_by_label(&header("2 content issues to repair"))
+        .click();
+    harness.run_steps(3);
+    assert!(harness.query_by_label("The issue lines").is_none());
+    shown.set(("2 content issues to repair · 1 Campaign.md issue", true));
+    harness.run_steps(3);
+    assert_eq!(
+        open(&harness, "2 content issues to repair · 1 Campaign.md issue"),
+        Some(true),
+        "m-p0-issues-flags-open: flags that appear open the list"
+    );
+}

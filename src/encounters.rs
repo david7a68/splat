@@ -8512,303 +8512,264 @@ impl Encounters {
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
                 let member_row = ui.horizontal(|ui| {
                     ui.set_min_height(Density::Glance.row());
-                    // Layout PR 5b (I6): the actions start `L` after the roster's widest facts
-                    // and end at its widest actions, from its last pass; spare width lies after
-                    // them. Where they do not fit, the actions keep the far edge and the facts
-                    // give way, as before. Every slot is reserved, so columns line up.
-                    let list = egui::Id::new("roster_row_columns");
-                    let (kept_facts, kept_actions) = design::action_rows::columns(ui, list);
+                    // Layout PR 5b (I6), L5c: the actions end at the roster's column, `L` after
+                    // its widest facts, from its last pass; spare width lies after them. Where
+                    // they do not fit, the actions keep the far edge and the facts give way, as
+                    // before (`MeasuredColumn`). Every slot is reserved, so columns line up.
                     let row = ui.available_rect_before_wrap();
                     let (left, room) = (row.left(), row.width());
-                    let column =
-                        kept_facts > 0.0 && kept_facts + design::L + kept_actions <= room + 0.5;
-                    let end = if column {
-                        left + kept_facts + design::L + kept_actions
-                    } else {
-                        row.right()
-                    };
                     let height = Density::Glance.row();
-                    ui.scope_builder(
-                        egui::UiBuilder::new()
-                            .max_rect(egui::Rect::from_min_max(
+                    let place = design::action_rows::MeasuredColumn::end("roster_row_columns")
+                        .slot(
+                            ui,
+                            egui::Rect::from_min_max(
                                 row.min,
-                                egui::pos2(end, row.top() + height),
-                            ))
-                            .layout(egui::Layout::right_to_left(egui::Align::Center)),
-                        |ui| {
-                            row_menu(ui, &name, |ui| {
-                                if menu_action(ui, "Edit", None) {
-                                    *expanded = Some(slot.key.clone());
+                                egui::pos2(row.right(), row.top() + height),
+                            ),
+                            left,
+                        );
+                    let drawn = place.scope(ui, |ui| {
+                        row_menu(ui, &name, |ui| {
+                            if menu_action(ui, "Edit", None) {
+                                *expanded = Some(slot.key.clone());
+                            }
+                            if menu_action(ui, "Move up", (i == 0).then_some("Already first.")) {
+                                raise = Some(i);
+                            }
+                            if menu_action(
+                                ui,
+                                "Move down",
+                                (i + 1 == count).then_some("Already last."),
+                            ) {
+                                lower = Some(i);
+                            }
+                            if menu_action(ui, "Duplicate", None) {
+                                duplicate = Some(i);
+                            }
+                            if creature.is_some_and(|c| !c.party) {
+                                if menu_action(ui, "Make it yours", None) {
+                                    *make_yours = Some(i);
                                 }
-                                if menu_action(ui, "Move up", (i == 0).then_some("Already first."))
-                                {
-                                    raise = Some(i);
-                                }
-                                if menu_action(
+                                choice_note(
                                     ui,
-                                    "Move down",
-                                    (i + 1 == count).then_some("Already last."),
-                                ) {
-                                    lower = Some(i);
-                                }
-                                if menu_action(ui, "Duplicate", None) {
-                                    duplicate = Some(i);
-                                }
-                                if creature.is_some_and(|c| !c.party) {
-                                    if menu_action(ui, "Make it yours", None) {
-                                        *make_yours = Some(i);
-                                    }
-                                    choice_note(
-                                        ui,
-                                        "Make it yours",
-                                        Some("Edit a copy in this campaign."),
-                                    );
-                                }
-                                if menu_action(ui, "Remove", None) {
-                                    remove = Some(i);
-                                }
-                            });
-                            if let Some(note) = unreadable {
-                                if Action::quiet(if crate::world::repair_in_world(&note.path) {
-                                    "Open in World"
-                                } else {
-                                    "Open in Library"
-                                })
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                                {
-                                    ui.ctx().data_mut(|data| {
-                                        data.insert_temp(
-                                            egui::Id::new("open_library_repair"),
-                                            note.path.clone(),
-                                        )
-                                    });
-                                }
-                            } else if Action::quiet(if creature.is_none() {
-                                "Replace…"
+                                    "Make it yours",
+                                    Some("Edit a copy in this campaign."),
+                                );
+                            }
+                            if menu_action(ui, "Remove", None) {
+                                remove = Some(i);
+                            }
+                        });
+                        if let Some(note) = unreadable {
+                            if Action::quiet(if crate::world::repair_in_world(&note.path) {
+                                "Open in World"
                             } else {
-                                "Edit"
+                                "Open in Library"
                             })
                             .density(Density::Read)
-                            .name(groups::SLOT_OPTIONS)
-                            .selected(is_open)
                             .show(ui)
                             .clicked()
                             {
-                                *expanded = if is_open {
-                                    None
-                                } else {
-                                    groups::show_form_when_it_opens(ui);
-                                    Some(slot.key.clone())
-                                };
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(
+                                        egui::Id::new("open_library_repair"),
+                                        note.path.clone(),
+                                    )
+                                });
                             }
-                            let actions = ui.min_rect();
-                            // The facts keep their old room: the row less this row's actions (the item spacing
-                            // and `XS`), so they give way as before and are drawn at the width that measures them.
-                            let facts_room =
-                                (room - actions.width() - ui.spacing().item_spacing.x - design::XS)
-                                    .max(0.0);
-                            let facts = ui
-                                .scope_builder(
-                                    egui::UiBuilder::new()
-                                        .max_rect(egui::Rect::from_min_size(
-                                            egui::pos2(left, row.top()),
-                                            egui::vec2(facts_room, height),
-                                        ))
-                                        .layout(egui::Layout::top_down(egui::Align::LEFT)),
-                                    |ui| {
-                                        ui.spacing_mut().item_spacing.y = 0.0;
-                                        ui.add(
-                                            egui::Label::new(
-                                                Type::Strong
-                                                    .rich(ui, format!("{}. {name}", i + 1))
-                                                    .color(colors().text),
-                                            )
-                                            .truncate(),
-                                        );
-                                        if missing {
-                                            let split = detail.find(fault_icon).unwrap_or(0);
-                                            let mut job = egui::text::LayoutJob::default();
-                                            for (text, color) in [
-                                                (&detail[..split], colors().muted),
-                                                (
-                                                    &detail[split..split + fault_icon.len()],
-                                                    fault_color,
-                                                ),
-                                                (
-                                                    &detail[split + fault_icon.len()..],
-                                                    colors().muted,
-                                                ),
-                                            ] {
-                                                job.append(
-                                                    text,
-                                                    0.0,
-                                                    egui::TextFormat {
-                                                        font_id: Type::Small.font(ui),
-                                                        color,
-                                                        ..Default::default()
-                                                    },
-                                                );
-                                            }
-                                            let shown = ui.add(egui::Label::new(job).wrap());
-                                            if let Some(note) =
-                                                unreadable.filter(|note| note.duplicate)
-                                            {
-                                                shown.on_hover_text(&note.word);
-                                            }
-                                        } else if !detail.is_empty() {
-                                            if changed && !is_open {
-                                                ui.spacing_mut().interact_size.y = 0.0;
-                                                ui.horizontal(|ui| {
-                                                    // The separator's own blanks are the gap on both sides, as in the text before it.
-                                                    ui.spacing_mut().item_spacing.x = 0.0;
-                                                    let word = definition
-                                                        .and_then(|entry| {
-                                                            Overrides::parse(&slot.overrides)
-                                                                .ok()
-                                                                .map(|overrides| {
-                                                                    groups::change_words(
-                                                                &overrides,
-                                                                entry,
-                                                                &slot.side,
-                                                                &crate::loot_editor::missing_in(
-                                                                    ui.ctx(),
-                                                                    overrides.loot.as_deref(),
-                                                                ),
-                                                            )
-                                                                })
-                                                        })
-                                                        .unwrap_or_else(|| "Changed".into());
-                                                    // FC9: the muted pencil before the words, as in
-                                                    // the list.
-                                                    let marked =
-                                                        format!("{}{word}", groups::change_mark());
-                                                    let change_width = design::number_width(
-                                                        ui,
-                                                        &marked,
-                                                        &Type::Small.font(ui),
-                                                    );
-                                                    let (fitted, fault_kept) = changed_detail_parts(
-                                                        ui,
-                                                        &detail,
-                                                        &marked,
-                                                        ui.available_width(),
-                                                        hp_missing,
-                                                    );
-                                                    let detail_rect = ui
-                                                        .label(detail_text(
-                                                            ui,
-                                                            &stat_line(&fitted),
-                                                            fault_kept,
-                                                        ))
-                                                        .on_hover_text(&detail)
-                                                        .rect;
-                                                    let separator = ui
-                                                        .label(
-                                                            Type::Small
-                                                                .rich(ui, " · ")
-                                                                .color(colors().muted),
-                                                        )
-                                                        .rect;
-                                                    // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
-                                                    let at = egui::pos2(
-                                                        separator.right(),
-                                                        detail_rect.center().y - design::XL / 2.0,
-                                                    );
-                                                    let mut inline = ui.new_child(
-                                                        egui::UiBuilder::new()
-                                                            .max_rect(egui::Rect::from_min_size(
-                                                                at,
-                                                                egui::vec2(
-                                                                    change_width,
-                                                                    design::XL,
-                                                                ),
-                                                            ))
-                                                            .layout(egui::Layout::top_down(
-                                                                egui::Align::Min,
-                                                            )),
-                                                    );
-                                                    if groups::change_link(&mut inline, &word) {
-                                                        groups::show_form_when_it_opens(ui);
-                                                        *expanded = Some(slot.key.clone());
-                                                    }
-                                                    // Layout PR 5b: the facts' width holds the
-                                                    // link (the roster's column measures it);
-                                                    // their height keeps the row's pitch.
-                                                    ui.expand_to_include_x(
-                                                        inline.min_rect().right(),
-                                                    );
-                                                });
-                                                return;
-                                            }
-                                            // What a player has left is the reason to look, so all of it shows.
-                                            ui.spacing_mut().interact_size.y = 0.0;
-                                            ui.horizontal_wrapped(|ui| {
-                                                ui.spacing_mut().item_spacing.x = 0.0;
-                                                for (at, part) in detail_parts(&detail, hp_missing)
-                                                    .iter()
-                                                    .enumerate()
-                                                {
-                                                    if at > 0 {
-                                                        ui.label(
-                                                            Type::Small
-                                                                .rich(ui, " · ")
-                                                                .color(colors().muted),
-                                                        );
-                                                    }
-                                                    if part.words == "Bloodied" {
-                                                        design::status(
-                                                            ui,
-                                                            Status {
-                                                                icon: icons::BLOODIED,
-                                                                word: part.words,
-                                                                color: colors().hp.bloodied,
-                                                            },
-                                                        );
-                                                    } else {
-                                                        ui.label(
-                                                            Type::Small
-                                                                .rich(ui, stat_line(part.words))
-                                                                .color(part.color()),
-                                                        );
-                                                    }
-                                                }
-                                            });
+                        } else if Action::quiet(if creature.is_none() {
+                            "Replace…"
+                        } else {
+                            "Edit"
+                        })
+                        .density(Density::Read)
+                        .name(groups::SLOT_OPTIONS)
+                        .selected(is_open)
+                        .show(ui)
+                        .clicked()
+                        {
+                            *expanded = if is_open {
+                                None
+                            } else {
+                                groups::show_form_when_it_opens(ui);
+                                Some(slot.key.clone())
+                            };
+                        }
+                        let actions = ui.min_rect();
+                        // The facts keep their old room: the row less this row's actions (the item spacing
+                        // and `XS`), so they give way as before and are drawn at the width that measures them.
+                        let facts_room =
+                            (room - actions.width() - ui.spacing().item_spacing.x - design::XS)
+                                .max(0.0);
+                        let facts = ui
+                            .scope_builder(
+                                egui::UiBuilder::new()
+                                    .max_rect(egui::Rect::from_min_size(
+                                        egui::pos2(left, row.top()),
+                                        egui::vec2(facts_room, height),
+                                    ))
+                                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                                |ui| {
+                                    ui.spacing_mut().item_spacing.y = 0.0;
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Strong
+                                                .rich(ui, format!("{}. {name}", i + 1))
+                                                .color(colors().text),
+                                        )
+                                        .truncate(),
+                                    );
+                                    if missing {
+                                        let split = detail.find(fault_icon).unwrap_or(0);
+                                        let mut job = egui::text::LayoutJob::default();
+                                        for (text, color) in [
+                                            (&detail[..split], colors().muted),
+                                            (&detail[split..split + fault_icon.len()], fault_color),
+                                            (&detail[split + fault_icon.len()..], colors().muted),
+                                        ] {
+                                            job.append(
+                                                text,
+                                                0.0,
+                                                egui::TextFormat {
+                                                    font_id: Type::Small.font(ui),
+                                                    color,
+                                                    ..Default::default()
+                                                },
+                                            );
                                         }
-                                    },
-                                )
-                                .response
-                                .rect;
-                            let natural = facts.width();
-                            design::action_rows::measured(ui, list, natural, actions.width());
-                            #[cfg(any(test, feature = "test-support"))]
-                            design::action_rows::keep(
-                                ui,
-                                design::action_rows::RowRecord {
-                                    owner: "roster",
-                                    row: i,
-                                    facts: egui::Rect::from_min_size(
-                                        egui::pos2(left, facts.top()),
-                                        egui::vec2(natural, facts.height()),
-                                    ),
-                                    // The row's facts share the actions' line.
-                                    line: egui::Rect::from_min_size(
-                                        egui::pos2(left, facts.top()),
-                                        egui::vec2(natural, facts.height()),
-                                    ),
-                                    action: actions,
-                                    column: if column {
-                                        left + kept_facts + design::L
-                                    } else {
-                                        actions.left()
-                                    },
-                                    edge: row.right(),
-                                    wrapped: !column,
+                                        let shown = ui.add(egui::Label::new(job).wrap());
+                                        if let Some(note) = unreadable.filter(|note| note.duplicate)
+                                        {
+                                            shown.on_hover_text(&note.word);
+                                        }
+                                    } else if !detail.is_empty() {
+                                        if changed && !is_open {
+                                            ui.spacing_mut().interact_size.y = 0.0;
+                                            ui.horizontal(|ui| {
+                                                // The separator's own blanks are the gap on both sides, as in the text before it.
+                                                ui.spacing_mut().item_spacing.x = 0.0;
+                                                let word = definition
+                                                    .and_then(|entry| {
+                                                        Overrides::parse(&slot.overrides).ok().map(
+                                                            |overrides| {
+                                                                groups::change_words(
+                                                                    &overrides,
+                                                                    entry,
+                                                                    &slot.side,
+                                                                    &crate::loot_editor::missing_in(
+                                                                        ui.ctx(),
+                                                                        overrides.loot.as_deref(),
+                                                                    ),
+                                                                )
+                                                            },
+                                                        )
+                                                    })
+                                                    .unwrap_or_else(|| "Changed".into());
+                                                // FC9: the muted pencil before the words, as in
+                                                // the list.
+                                                let marked =
+                                                    format!("{}{word}", groups::change_mark());
+                                                let change_width = design::number_width(
+                                                    ui,
+                                                    &marked,
+                                                    &Type::Small.font(ui),
+                                                );
+                                                let (fitted, fault_kept) = changed_detail_parts(
+                                                    ui,
+                                                    &detail,
+                                                    &marked,
+                                                    ui.available_width(),
+                                                    hp_missing,
+                                                );
+                                                let detail_rect = ui
+                                                    .label(detail_text(
+                                                        ui,
+                                                        &stat_line(&fitted),
+                                                        fault_kept,
+                                                    ))
+                                                    .on_hover_text(&detail)
+                                                    .rect;
+                                                let separator = ui
+                                                    .label(
+                                                        Type::Small
+                                                            .rich(ui, " · ")
+                                                            .color(colors().muted),
+                                                    )
+                                                    .rect;
+                                                // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
+                                                let at = egui::pos2(
+                                                    separator.right(),
+                                                    detail_rect.center().y - design::XL / 2.0,
+                                                );
+                                                let mut inline = ui.new_child(
+                                                    egui::UiBuilder::new()
+                                                        .max_rect(egui::Rect::from_min_size(
+                                                            at,
+                                                            egui::vec2(change_width, design::XL),
+                                                        ))
+                                                        .layout(egui::Layout::top_down(
+                                                            egui::Align::Min,
+                                                        )),
+                                                );
+                                                if groups::change_link(&mut inline, &word) {
+                                                    groups::show_form_when_it_opens(ui);
+                                                    *expanded = Some(slot.key.clone());
+                                                }
+                                                // Layout PR 5b: the facts' width holds the
+                                                // link (the roster's column measures it);
+                                                // their height keeps the row's pitch.
+                                                ui.expand_to_include_x(inline.min_rect().right());
+                                            });
+                                            return;
+                                        }
+                                        // What a player has left is the reason to look, so all of it shows.
+                                        ui.spacing_mut().interact_size.y = 0.0;
+                                        ui.horizontal_wrapped(|ui| {
+                                            ui.spacing_mut().item_spacing.x = 0.0;
+                                            for (at, part) in
+                                                detail_parts(&detail, hp_missing).iter().enumerate()
+                                            {
+                                                if at > 0 {
+                                                    ui.label(
+                                                        Type::Small
+                                                            .rich(ui, " · ")
+                                                            .color(colors().muted),
+                                                    );
+                                                }
+                                                if part.words == "Bloodied" {
+                                                    design::status(
+                                                        ui,
+                                                        Status {
+                                                            icon: icons::BLOODIED,
+                                                            word: part.words,
+                                                            color: colors().hp.bloodied,
+                                                        },
+                                                    );
+                                                } else {
+                                                    ui.label(
+                                                        Type::Small
+                                                            .rich(ui, stat_line(part.words))
+                                                            .color(part.color()),
+                                                    );
+                                                }
+                                            }
+                                        });
+                                    }
                                 },
-                            );
-                        },
-                    );
+                            )
+                            .response
+                            .rect;
+                        // The row's facts share the actions' line.
+                        (
+                            egui::Rect::from_min_size(
+                                egui::pos2(left, facts.top()),
+                                egui::vec2(facts.width(), facts.height()),
+                            ),
+                            actions,
+                        )
+                    });
+                    // After the scope: the slot is not `Copy`, and its row ends once.
+                    place.done(ui, "roster", i, drawn.inner.0, drawn.inner.0, drawn.inner.1);
                 });
                 let member_row = member_row.response.rect;
                 draft

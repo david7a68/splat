@@ -1052,6 +1052,38 @@ fn painted_bounds(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     found
 }
 
+/// Layout 11c (M0153): the ended view's pane, from the pane solver's own record: the pane whose
+/// scroll viewport holds the first Final state row.
+#[derive(Debug)]
+pub(crate) struct EndedPane {
+    /// A `Body::Content` pane.
+    pub(crate) content: bool,
+    /// Its footer is pinned at the pane's bottom (it does not follow the content).
+    pub(crate) pinned: bool,
+    /// Its scroll viewport's height.
+    pub(crate) view: f32,
+    /// Its content's height as laid out.
+    pub(crate) height: Option<f32>,
+    /// Its footer, when it holds a message, and the footer's focus group.
+    pub(crate) footer: Option<(egui::Rect, egui::Id)>,
+}
+
+pub(crate) fn ended_pane(d: &Driver<'_>) -> Option<EndedPane> {
+    let row = roster_places(d).first().map(|(_, rect)| *rect)?;
+    d.pane_records().into_iter().find_map(|record| {
+        let viewport = record.viewport()?;
+        viewport.contains(row.center()).then(|| EndedPane {
+            content: matches!(record.body(), crate::design::pane::Body::Content),
+            pinned: record.placement() == crate::design::pane::Placement::Pinned,
+            view: viewport.height(),
+            height: record.content_height(),
+            footer: record
+                .footer()
+                .map(|footer| (footer, record.id().with("focus"))),
+        })
+    })
+}
+
 /// Layout PR 8: where the Settings footer that holds the control or text named `name` stands,
 /// from the pane records: the footer, its pane's viewport and the footer's gap from the pane's own
 /// content (the viewport's top plus the content's height, or the viewport's bottom when pinned).
@@ -2337,7 +2369,9 @@ pub mod creature_filter {
         d.click("Filter Habitat: Underdark");
         d.click_starting("Type");
         d.click("Filter Type: Aberration");
-        d.press(Key::Escape);
+        // Filter again closes the menu in one act (review of PR 759: Escape now closes the open
+        // facts first, one per press, and the menu only when none is open).
+        d.click(FILTER);
         d.expect(UNDERDARK);
         d.expect(ABERRATION);
         d.expect("MATCHES 9");
@@ -9539,35 +9573,39 @@ pub mod prep_to_table {
                         egui::Rect::from_min_size(text.pos, text.galley.size()),
                     ));
                 });
+                // Every field needs its reference: a row whose name is not painted inside it
+                // (missing or moved out of the row) fails here, never drops out of the check.
                 let off_line: Vec<(String, f32)> = fields
                     .iter()
-                    .filter_map(|field| {
+                    .flat_map(|field| {
                         let name = field.name.trim_start_matches("Initiative for ");
-                        let row = nodes
+                        let title = nodes
                             .iter()
-                            .find(|node| node.name.starts_with(&format!("{name} · ")))?;
-                        let title = painted
+                            .find(|node| node.name.starts_with(&format!("{name} · ")))
+                            .and_then(|row| {
+                                painted.iter().find(|(words, rect)| {
+                                    words == name && row.rect.contains_rect(*rect)
+                                })
+                            })
+                            .map(|(_, rect)| *rect);
+                        let Some(title) = title else {
+                            return vec![(format!("no painted name for {name}"), f32::INFINITY)];
+                        };
+                        nodes
                             .iter()
-                            .find(|(words, rect)| words == name && row.rect.contains_rect(*rect))?
-                            .1;
-                        Some(
-                            nodes
-                                .iter()
-                                .filter(|node| {
-                                    node.name == field.name
-                                        || node.name == format!("Roll for {name}")
-                                        || node.name.starts_with(&format!("Place for {name}:"))
-                                        || node.name == format!("Absent: {name}")
-                                        || node.name == format!("More actions for {name}")
-                                        || node.name.starts_with(&format!("Move {name} "))
-                                })
-                                .map(|node| {
-                                    (node.name.clone(), node.rect.center().y - title.center().y)
-                                })
-                                .collect::<Vec<_>>(),
-                        )
+                            .filter(|node| {
+                                node.name == field.name
+                                    || node.name == format!("Roll for {name}")
+                                    || node.name.starts_with(&format!("Place for {name}:"))
+                                    || node.name == format!("Absent: {name}")
+                                    || node.name == format!("More actions for {name}")
+                                    || node.name.starts_with(&format!("Move {name} "))
+                            })
+                            .map(|node| {
+                                (node.name.clone(), node.rect.center().y - title.center().y)
+                            })
+                            .collect::<Vec<_>>()
                     })
-                    .flatten()
                     .filter(|(_, off)| off.abs() > 1.0)
                     .collect();
                 let heading = painted
@@ -12672,10 +12710,11 @@ pub mod run_sync_states {
             );
         }
         for size in [SMALL, LARGE] {
-            let (row_edge, undo_edge) = d.at_size(size, |d| {
+            let (row_edge, undo_edge, pane) = d.at_size(size, |d| {
                 (
                     roster_places(d).first().map(|(_, rect)| rect.right()),
                     d.place_of("Undo: end encounter").map(|rect| rect.right()),
+                    ended_pane(d),
                 )
             });
             d.observe(
@@ -12684,6 +12723,23 @@ pub mod run_sync_states {
                     .zip(undo_edge)
                     .is_some_and(|(row, undo)| (row - undo).abs() <= 1.0),
                 format!("At {size:?}, Undo ends at {undo_edge:?} and the roster at {row_edge:?}"),
+            );
+            // The final state and the panel are one shared task in a `Content` pane: its footer
+            // follows the taller column when both fit (the short ended view at 1920) and is
+            // pinned when one is taller (960). The pane solver's record is the reference.
+            d.observe(
+                "m32-L11c-ended-columns-pane",
+                pane.as_ref().is_some_and(|pane| {
+                    pane.content
+                        && pane.height.is_some_and(|height| {
+                            if size == LARGE {
+                                !pane.pinned && height < pane.view
+                            } else {
+                                pane.pinned == (height >= pane.view - 0.5)
+                            }
+                        })
+                }),
+                format!("At {size:?}, the ended pane: {pane:?}"),
             );
         }
         // A pair of choices is never cut: both are in view, at the minimum window too.
@@ -20894,14 +20950,34 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         // Layout PR 5b (I6): the members' actions start `L` after their widest facts; at
-        // 1920 they have room for the column.
+        // 1920 they have room for the column. L5c (the whole-member pressure): at each size, 960
+        // too, every member is whole: its name and detail are not cut or shortened, and its
+        // actions stand clear of its Count line and inside the row.
         d.state_prepared("group-editor", Sizes::All, |d| {
             let (holds, column, detail) = d.kept_columns_hold("members", true, None);
+            // The group's members, from the fixture: each member's number and name, and the
+            // stats its detail line shows (Rival Captain is an Ember Cultist renamed).
+            let (whole, rows) = d.measured_rows_whole(
+                "members",
+                &[
+                    &[
+                        "1. Rival Captain",
+                        "CR 1",
+                        "HP 43",
+                        "AC 15",
+                        "as Ember Cultist",
+                    ],
+                    &["2. Cinder Wolf", "CR 1", "HP 22", "AC 13"],
+                ],
+            );
             let wide = d.window_size().0 >= LARGE.0;
             d.observe(
                 "pr5b-members-columns",
-                holds && (column || !wide),
-                format!("At {:?}, column {column}: {detail}", d.window_size()),
+                holds && (column || !wide) && whole,
+                format!(
+                    "At {:?}, column {column}: {detail}; {rows}",
+                    d.window_size()
+                ),
             );
         });
         // Layout step 6 (SL4, AL9): the clean editor's head and first fields, for the dirty
@@ -21273,15 +21349,40 @@ pub mod encounter_groups {
                         preview = text.galley.job.sections.last().map(|s| s.format.color);
                     }
                 });
+                // Layout 11c (M0233): the fault's frame starts at the field's own left edge
+                // (±1 px), read from its painted icon, which stands `S` and a hairline after the
+                // frame's left (`small_tone_message`).
+                let mut icons = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if clip.intersects(rect) && text.galley.job.text == crate::design::icons::ERROR
+                    {
+                        icons.push(rect);
+                    }
+                });
+                let frame = faults.first().and_then(|words| {
+                    icons
+                        .iter()
+                        .filter(|icon| {
+                            icon.right() <= words.left() + 1.0
+                                && icon.bottom() > words.top()
+                                && icon.top() < words.bottom()
+                        })
+                        .map(|icon| icon.left() - crate::design::S - crate::design::HAIRLINE_WIDTH)
+                        .reduce(f32::max)
+                });
                 let placed = field.is_some_and(|field| {
                     faults.len() == 1
                         && faults[0].top() >= field.bottom() - 0.5
                         && faults[0].top() < field.bottom() + crate::design::XL
                         && faults[0].left() >= field.left() - 0.5
+                        && frame.is_some_and(|frame| (frame - field.left()).abs() <= 1.0)
                 }) && preview == Some(crate::design::colors().result.error);
                 (
                     placed,
-                    format!("field {field:?}, faults {faults:?}, preview {preview:?}"),
+                    format!(
+                        "field {field:?}, faults {faults:?}, frame {frame:?}, preview {preview:?}"
+                    ),
                 )
             });
             d.observe(
@@ -23379,7 +23480,22 @@ pub mod encounter_owned_groups {
             invalid && kept,
             format!("With an empty new group, New and Save blocked: {invalid}; Ctrl+S writes nothing: {kept}"),
         );
-        d.state("new-group-in-the-encounter", Sizes::All);
+        // Layout 11c (SB1, AB1): the encounter editor's column ends at a whole block of the new
+        // group's form; the footer's edge cuts no control frame or row of it (read from the
+        // paint and its clip: under a column's cut a node keeps its whole rect).
+        d.state_prepared("new-group-in-the-encounter", Sizes::All, |d| {
+            let size = d.window_size();
+            let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(size.0, size.1));
+            let cut = d.frames_cut_from_below(window, crate::design::XXL * 2.0);
+            let words = texts_cut_from_below(d, window);
+            d.observe(
+                "m32-L11c-SB1-AB1-group-form-blocks",
+                cut.is_empty() && words.is_empty(),
+                format!(
+                    "At {size:?}, frames cut from below {cut:?}, texts cut from below {words:?}"
+                ),
+            );
+        });
         // Two frames, one adding and one not: both name fields end at one edge at every size.
         for size in [SMALL, DEFAULT, LARGE] {
             let edges = d.at_size(size, |d| {

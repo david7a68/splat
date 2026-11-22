@@ -10,7 +10,7 @@
 # fails. All others are debt that a step of the layout plan removes.
 # capability	file	function	count	owner	note
 host-region	src/design/column.rs	Column::panel_within	2	design	design implementation boundary
-host-region	src/encounter_run/view.rs	Run::ended_view	2	Run	allowed host composition
+host-region	src/encounter_run/view.rs	Run::ended_view	1	Run	allowed host composition
 host-region	src/encounter_run/view.rs	Run::live_view	2	Run	allowed host composition
 host-region	src/encounter_run/view.rs	Run::setup_view	2	Run	allowed host composition
 host-region	src/encounters.rs	Encounters::editor_panes	1	Encounters	allowed host composition
@@ -60,7 +60,6 @@ pane-host	src/trackers/view.rs	show	2	Trackers
 pane-host	src/world/page.rs	WorldPage::creation_form	1	World
 pane-host	src/world/page.rs	WorldPage::show	3	World
 pane-host	src/world/repair.rs	Repair::show	1	World
-fills	src/encounter_run/view.rs	Run::ended_view	1	Run
 fills	src/encounter_run/view.rs	Run::groups_tab	1	Run	Arrivals' list with its own scroll under its typed footer (migration-32 L2c)
 fills	src/encounter_run/view.rs	Run::live_view	1	Run
 fills	src/encounter_run/view.rs	Run::setup_body	1	Run
@@ -76,6 +75,7 @@ fills	src/sessions/page.rs	fills_body	1	Sessions	the Sessions wrapper (named `fi
 fills	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 composite-child	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign	the package list and the chosen package: a shared task (step 7); its children become closed blocks with the forms and lists of steps 10 and 11
 composite-child	src/encounters.rs	Encounters::editor_panes	1	Encounters	the roster and Add participants: a shared task (step 6b) in the edges the encounter head was drawn with; its children become closed blocks with the roster recipes of step 11
+composite-child	src/encounter_run/view.rs	Run::ended_view	1	Run	the final state and the panel beside it: a shared task (layout 11c, L11c-R.2) in a Content pane, in place of its Fills body, CentralPanel and two raw scroll areas; its children become closed blocks with the roster recipes of step 11; raised
 composite-child	src/lib.rs	Splat::page	1	App	the Settings tab's two independent task panes (campaigns, account) at 1000 px and wider: each child is a whole-height host of its own pane and footer; layout PR 8, raised
 composite-child	src/sessions/page.rs	Sessions::session_content	1	Sessions	the plan and the note beside it: a shared task (step 7) in the edges the session header was drawn in; its children become closed blocks with the plan recipes and the Editor and Reader blocks of steps 9 and 11
 footer-feed	src/lib.rs	Splat::page	5	App	the stacked narrow Settings tab's one footer for Campaigns, Settings and D&D Beyond (3), fed by the same three feeders as the wide tab's two footers, and the campaign link's for Campaigns and D&D Beyond (2)
@@ -91,6 +91,7 @@ row-register	src/campaign_content.rs	whole_row	1	Campaign
 row-register	src/design/components.rs	row	1	design	design implementation boundary
 row-register	src/dndbeyond.rs	DndBeyond::show_import	1	Settings
 row-register	src/encounter_run/view.rs	Run::group_list	1	Run
+row-register	src/encounters/groups.rs	register_whole	1	Encounters	a group form's whole block (a choice row, a member with its count line, its notes) for the pane's whole-row cut (layout 11c, SB1/AB1; raised)
 row-register	src/encounters/list.rs	list_row	1	Encounters
 row-register	src/loot_editor.rs	line_row	1	Encounters
 row-register	src/party_support/sheets.rs	sheet_rect	1	Party	a sheet row (a tile, a fact line, a line of columns) with the heading above it is one block for the pane's whole-row cut (layout 11a; raised)
@@ -127,7 +128,6 @@ scroll-area	src/design/components.rs	scroll_part	1	design	design implementation 
 scroll-area	src/design/layout.rs	ScrollColumn::area	2	design	design implementation boundary
 scroll-area	src/design/layout.rs	sideways_scroll	1	design	design implementation boundary
 scroll-area	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run
-scroll-area	src/encounter_run/view.rs	Run::ended_view	2	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
@@ -145,7 +145,6 @@ scroll-request	src/encounters/groups.rs	members	1	Encounters
 scroll-request	src/encounters/groups.rs	of_encounter	2	Encounters
 scroll-request	src/encounters/groups.rs	overrides_form	1	Encounters
 scroll-request	src/encounters/groups.rs	unread_member	1	Encounters
-scroll-request	src/encounters/list.rs	row_menu	1	Encounters
 scroll-request	src/lib.rs	Splat::page	1	App
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)

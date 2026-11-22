@@ -641,10 +641,6 @@ fn missing_width(ui: &egui::Ui, name: &str, stacked: bool) -> f32 {
 /// (`stacked`, Lookup beside World), the name wraps by whole words and `Not found` takes its own
 /// line below it, whole. The name's first line is as tall as a row's control and centred in it,
 /// so a `Change` beside the value lines up with the name, not between the two lines.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
     let warning = colors().result.warning;
     let words = missing_name(name);
@@ -664,19 +660,27 @@ fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
         }
         ui.label(job);
     } else {
-        ui.vertical(|ui| {
-            // The name's first line sits where a one-line value is centred in the row's
-            // control, so `Change` beside it is level with the name; `Not found` follows it.
-            ui.add_space(((Density::Scan.control() - Type::Body.line()) / 2.0).max(0.0));
-            // `Not found` sits directly under the name, as one value's two lines.
-            ui.spacing_mut().item_spacing.y = 0.0;
-            ui.add(egui::Label::new(Type::Body.rich(ui, &words).color(warning)).wrap());
-            ui.label(
-                Type::Small
-                    .rich(ui, NOT_FOUND.trim_start_matches(" · "))
-                    .color(warning),
-            );
-        });
+        // The name's first line sits where a one-line value is centred in the row's control, so
+        // `Change` beside it is level with the name; `Not found` follows it.
+        let line = design::FirstLine {
+            top: 0.0,
+            height: Density::Scan.control(),
+        };
+        line.slot(
+            ui,
+            egui::vec2(ui.available_width(), Density::Scan.control()),
+            Type::Body.line(),
+            |ui| {
+                // `Not found` sits directly under the name, as one value's two lines.
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.add(egui::Label::new(Type::Body.rich(ui, &words).color(warning)).wrap());
+                ui.label(
+                    Type::Small
+                        .rich(ui, NOT_FOUND.trim_start_matches(" · "))
+                        .color(warning),
+                );
+            },
+        );
     }
 }
 
@@ -3426,17 +3430,15 @@ impl Reader {
         // block (a spell) has.
         let mut empty_value_block = false;
         if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
-            let top = ui.cursor().top();
-            let block = ui.scope(|ui| {
+            // An empty block takes no room and leaves no item gap; the reader's gap before the
+            // prose goes through `empty_value_block`.
+            let (block, drew) = design::unless_empty(ui, |ui| {
                 ui.spacing_mut().item_spacing.y =
                     design::Density::Scan.row() - design::Density::Scan.control();
                 self.entry_controls(ui, item, index, campaign)
             });
-            go = block.inner;
-            // An empty block still takes its own item gap. That gap goes now; the reader's
-            // gap before the prose goes through `empty_value_block`.
-            if block.response.rect.height() <= 0.0 {
-                ui.add_space(top - ui.cursor().top());
+            go = block;
+            if !drew {
                 empty_value_block = !self.compact;
             }
         }

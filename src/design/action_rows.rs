@@ -284,7 +284,9 @@ fn kept_columns<R>(ui: &Ui, list: Id, update: impl FnOnce(&mut KeptColumns) -> R
 }
 
 /// The list's columns from its last pass: (widest facts, widest actions); zero until measured.
-pub fn columns(ui: &Ui, list: Id) -> (f32, f32) {
+/// The part's own: a list places its actions through [`MeasuredColumn`], never by a column of
+/// its own (layout L5c, the ban of design §5 5b).
+fn columns(ui: &Ui, list: Id) -> (f32, f32) {
     kept_columns(ui, list, |kept| kept.last)
 }
 
@@ -293,13 +295,195 @@ pub fn columns(ui: &Ui, list: Id) -> (f32, f32) {
 /// is discarded and drawn again with the new one, so the stale positions never reach the screen
 /// (PR 641 review, P2). A column that only shrinks follows on the next frame; it never puts an
 /// action over facts.
-pub fn measured(ui: &Ui, list: Id, facts: f32, actions: f32) {
+fn measured(ui: &Ui, list: Id, facts: f32, actions: f32) {
     let grew = kept_columns(ui, list, |kept| {
         kept.next = (kept.next.0.max(facts), kept.next.1.max(actions));
         facts > kept.last.0 + 0.5 || actions > kept.last.1 + 0.5
     });
     if grew {
         ui.ctx().request_discard("a list's measured column grew");
+    }
+}
+
+/// A list whose rows' facts keep their own room, where they wrap or give way, and whose action
+/// column comes from what the list drew in its last pass (recipe A, note-5a-2; layout PR 5a-2,
+/// 5b and L5c). Each row's facts keep the room they had without the column, so its line breaks
+/// and height never depend on it. When the list's widest drawn facts `F`, `L` and its widest
+/// drawn actions `A` fit a row, its actions stand in the column `L` after `F`; else every row
+/// keeps its actions at its far edge. The part decides where they stand and draws their region
+/// ([`ActionSlot`]); a list has no column of its own.
+#[derive(Clone, Copy, Debug)]
+pub struct MeasuredColumn {
+    list: Id,
+    at: ColumnAt,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ColumnAt {
+    End,
+    Start { recipe: f32, facts: f32 },
+}
+
+impl MeasuredColumn {
+    /// Each row's actions end at the column's end, so the rows' menus line up (the encounter
+    /// roster, a group's members).
+    pub fn end(list: impl std::hash::Hash) -> Self {
+        Self {
+            list: Id::new(list),
+            at: ColumnAt::End,
+        }
+    }
+
+    /// Each row's actions start at the column, in the row's own recipe width `recipe` (its
+    /// actions with their alternates), for a list of mixed row kinds (the Session plan). `facts`
+    /// is the width of the row's facts drawn before its actions (a plan row's title): until the
+    /// list is measured, and where they are wider than its widest, they place the column.
+    pub fn start(list: impl std::hash::Hash, recipe: f32, facts: f32) -> Self {
+        Self {
+            list: Id::new(list),
+            at: ColumnAt::Start { recipe, facts },
+        }
+    }
+
+    /// The slot of one row's actions. `line` is the actions' line: its top and bottom, its left
+    /// where the actions may start, its right the row's far edge. `left` is where the row's
+    /// facts start. Give the drawn row to [`ActionSlot::done`].
+    #[must_use = "a slot's row is measured and recorded only by `ActionSlot::done`"]
+    pub fn slot(self, ui: &Ui, line: Rect, left: f32) -> ActionSlot {
+        let (kept_facts, kept_actions) = columns(ui, self.list);
+        let far_edge = line.right();
+        let room = far_edge - left;
+        let (column, start, rect) = match self.at {
+            ColumnAt::End => {
+                let column = kept_facts > 0.0 && kept_facts + L + kept_actions <= room + 0.5;
+                let end = if column {
+                    left + kept_facts + L + kept_actions
+                } else {
+                    far_edge
+                };
+                (
+                    column,
+                    column.then_some(left + kept_facts + L),
+                    Rect::from_min_max(line.min, pos2(end.max(line.left()), line.bottom())),
+                )
+            }
+            ColumnAt::Start { recipe, facts } => {
+                let widest = kept_facts.max(facts);
+                let column = kept_facts > 0.0
+                    && kept_actions >= recipe - 0.5
+                    && widest + L + kept_actions <= room + 0.5;
+                let at = if column {
+                    left + widest + L
+                } else {
+                    far_edge - recipe
+                };
+                let rect = Rect::from_min_size(pos2(at, line.top()), vec2(recipe, line.height()));
+                (column, Some(rect.left()), rect)
+            }
+        };
+        ActionSlot {
+            list: self.list,
+            at: self.at,
+            column,
+            start,
+            rect,
+            far_edge,
+            finished: false,
+        }
+    }
+}
+
+/// Where one row's actions stand in a [`MeasuredColumn`], and their region. Draw them with
+/// [`ActionSlot::scope`] or [`ActionSlot::child`], then give the drawn row to
+/// [`ActionSlot::done`]. It is not `Copy`, and a slot dropped before `done` fails a debug
+/// assertion: a row that skipped `done` would not count in its list's column, would not draw
+/// its list again when the column grew, and would not be recorded (PR 772 review, P2).
+#[derive(Debug)]
+#[must_use = "a slot's row is measured and recorded only by `ActionSlot::done`"]
+pub struct ActionSlot {
+    list: Id,
+    at: ColumnAt,
+    /// The actions stand in the list's column; else at the row's far edge.
+    column: bool,
+    /// Where the column starts, as the row's record states it; `None`: where the actions start.
+    start: Option<f32>,
+    rect: Rect,
+    far_edge: f32,
+    /// `done` ran.
+    finished: bool,
+}
+
+impl Drop for ActionSlot {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            debug_assert!(
+                self.finished,
+                "a measured row's slot was dropped before `ActionSlot::done`"
+            );
+        }
+    }
+}
+
+impl ActionSlot {
+    /// The actions' region.
+    pub fn rect(&self) -> Rect {
+        self.rect
+    }
+
+    /// Draw the actions in their region, right to left and centred on their line; the row's
+    /// layout goes on after the region.
+    pub fn scope<R>(&self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+        ui.scope_builder(self.builder(), add)
+    }
+
+    /// The region as a child `Ui`, right to left and centred, that does not move the row's
+    /// layout: the row places itself around [`ActionSlot::rect`].
+    pub fn child(&self, ui: &mut Ui) -> Ui {
+        ui.new_child(self.builder())
+    }
+
+    fn builder(&self) -> UiBuilder {
+        UiBuilder::new()
+            .max_rect(self.rect)
+            .layout(egui::Layout::right_to_left(egui::Align::Center))
+    }
+
+    /// The drawn row: `facts`, every line of facts it drew, from where they start; `line`, its
+    /// facts on the actions' own line; `actions`, its drawn actions. Adds the row to the list's
+    /// columns for the next pass and, in test builds, records it as `owner`'s row `row`.
+    pub fn done(
+        mut self,
+        ui: &Ui,
+        owner: &'static str,
+        row: usize,
+        facts: Rect,
+        line: Rect,
+        actions: Rect,
+    ) {
+        let width = match self.at {
+            ColumnAt::End => actions.width(),
+            ColumnAt::Start { recipe, .. } => recipe,
+        };
+        measured(ui, self.list, facts.width(), width);
+        #[cfg(any(test, feature = "test-support"))]
+        if actions.is_positive() {
+            keep(
+                ui,
+                RowRecord {
+                    owner,
+                    row,
+                    facts,
+                    line,
+                    action: actions,
+                    column: self.start.unwrap_or(actions.left()),
+                    edge: self.far_edge,
+                    wrapped: !self.column,
+                },
+            );
+        }
+        #[cfg(not(any(test, feature = "test-support")))]
+        let _ = (owner, row, line, self.column, self.start, self.far_edge);
+        self.finished = true;
     }
 }
 

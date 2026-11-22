@@ -304,7 +304,7 @@ impl<'a> Driver<'a> {
         });
         let started = Instant::now();
         let frames = Arc::new(Mutex::new(Frames::default()));
-        let harness = Self::build_harness(world, output.is_some(), frames.clone());
+        let harness = Self::build_harness(world, output.is_some(), frames.clone(), SMALL);
         if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
             println!(
                 "Timing {scenario}: app + fonts + renderer = {:?}",
@@ -366,10 +366,11 @@ impl<'a> Driver<'a> {
         world: &World,
         capturing: bool,
         frames: Arc<Mutex<Frames>>,
+        size: (f32, f32),
     ) -> Harness<'a, Splat> {
         let app = world.app();
         let builder = Harness::<Splat>::builder()
-            .with_size(egui::vec2(SMALL.0, SMALL.1))
+            .with_size(egui::vec2(size.0, size.1))
             .with_pixels_per_point(1.0)
             .with_max_steps(64);
         let builder = if capturing {
@@ -410,8 +411,22 @@ impl<'a> Driver<'a> {
 
     /// Quit and start the app again on the same files, as a restart does.
     pub fn restart(&mut self) {
+        self.restart_in(SMALL);
+    }
+
+    /// `restart` with the new app's window at `size` from its first frame, so what it shows
+    /// first is laid out at that size, with nothing kept from another (the base size is unchanged).
+    pub fn restart_at(&mut self, size: (f32, f32)) {
+        let base = self.base;
+        self.base = size;
+        self.restart_in(size);
+        self.base = base;
+        self.window = size;
+    }
+
+    fn restart_in(&mut self, first: (f32, f32)) {
         // The old app writes its state as it runs. A new one reads that.
-        self.harness = Self::build_harness(&self.world, self.capturing, self.frames.clone());
+        self.harness = Self::build_harness(&self.world, self.capturing, self.frames.clone(), first);
         self.harness_generation += 1;
         self.window = self.base;
         self.resize(self.base, 1.0);
@@ -848,6 +863,46 @@ impl<'a> Driver<'a> {
         found
             .into_iter()
             .min_by(|a, b| a.0.area().total_cmp(&b.0.area()))
+    }
+
+    /// Rect shapes in `area` (control frames, fields, row backgrounds; in points) that the clip
+    /// painting them cuts from below: part shows above the clip's bottom (a sliver of its top
+    /// edge is enough), the rest is under it.
+    /// Only shapes no taller than `tallest` count, as a card or a column frame may run under a
+    /// cut, and only shapes taller than a hairline.
+    pub fn frames_cut_from_below(&self, area: egui::Rect, tallest: f32) -> Vec<egui::Rect> {
+        fn visit(
+            shape: &egui::Shape,
+            clip: egui::Rect,
+            (area, tallest): (egui::Rect, f32),
+            found: &mut Vec<egui::Rect>,
+        ) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        visit(shape, clip, (area, tallest), found);
+                    }
+                }
+                egui::Shape::Rect(rect) => {
+                    let r = rect.rect;
+                    if r.height() > 2.0
+                        && r.height() <= tallest
+                        && area.intersects(r)
+                        && r.top() < clip.bottom() - 0.1
+                        && r.bottom() > clip.bottom() + 1.0
+                        && clip.x_range().intersects(r.x_range())
+                    {
+                        found.push(r);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for shape in &self.harness.output().shapes {
+            visit(&shape.shape, shape.clip_rect, (area, tallest), &mut found);
+        }
+        found
     }
 
     /// The painted frame of a named control, for fill and border checks.
@@ -2523,6 +2578,63 @@ impl<'a> Driver<'a> {
             format!(
                 "{owner}: the widest facts end at {widest:.1}; rows (facts end, column, actions start, actions end, far edge): {rows:?}"
             ),
+        )
+    }
+
+    /// Layout L5c (design §5 5b, the whole-member pressure): every row of a measured list
+    /// (`owner`) is whole. `expected` holds, row by row, the words its facts must show, from the
+    /// rows' data (a member's number and name, the stats of its detail line): each must be in a
+    /// text painted whole inside its clip, over the row's facts. A label that its clip hides is
+    /// never painted at all, so the words must be found, not only the painted texts be whole
+    /// (PR 772 review, P1). Every text painted over the facts is also whole and not shortened,
+    /// and the actions start `S` or more after the facts on their own line and end inside the
+    /// row's far edge. Returns whether it holds, and each fault.
+    pub fn measured_rows_whole(&self, owner: &str, expected: &[&[&str]]) -> (bool, String) {
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == owner)
+            .collect();
+        let mut faults = Vec::new();
+        if records.len() != expected.len() {
+            faults.push(format!(
+                "{} rows drawn, {} expected",
+                records.len(),
+                expected.len()
+            ));
+        }
+        for (record, words) in records.iter().zip(expected) {
+            let (mut whole, mut cut, mut elided) = (Vec::new(), Vec::new(), Vec::new());
+            self.each_painted_text(|text, clip| {
+                let bounds = text.visual_bounding_rect();
+                if text.galley.job.text.trim().is_empty() || !record.facts.intersects(bounds) {
+                    return;
+                }
+                let words = text.galley.job.text.replace('\u{a0}', " ");
+                if text.galley.elided {
+                    elided.push(words);
+                } else if clip.expand(1.0).contains_rect(bounds) {
+                    whole.push(words);
+                } else {
+                    cut.push(words);
+                }
+            });
+            let missing: Vec<_> = words
+                .iter()
+                .filter(|word| !whole.iter().any(|text| text.contains(*word)))
+                .collect();
+            let clear = record.action.left() >= record.line.right() + crate::design::S - 0.5
+                && record.action.right() <= record.edge + 0.5;
+            if !missing.is_empty() || !cut.is_empty() || !elided.is_empty() || !clear {
+                faults.push(format!(
+                    "row {}: not shown whole {missing:?} (whole {whole:?}), cut {cut:?}, \
+                     shortened {elided:?}, actions {:?} after the line {:?} inside the edge {}",
+                    record.row, record.action, record.line, record.edge
+                ));
+            }
+        }
+        (
+            !records.is_empty() && faults.is_empty(),
+            format!("{owner}: {} rows whole but {faults:?}", records.len()),
         )
     }
 

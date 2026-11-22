@@ -957,7 +957,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "group_editor_view",
-            &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
+            &[Ban::Results, Ban::Pane(1)],
         ),
         (
             "src/encounters.rs",
@@ -1082,7 +1082,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
         // `FaultMessage`) in place of an untyped `design::message`.
         ("src/copy_dialog.rs", "show", &[Ban::Body]),
-        ("src/creature_filter.rs", "menu", &[Ban::Layout(1)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
@@ -1098,11 +1097,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "conditions_tab",
             &[Ban::RowKey(1)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "ended_view",
-            &[Ban::Layout(2), Ban::Pane(1)],
-        ),
         ("src/encounter_run/view.rs", "record_tab", &[Ban::RowKey(1)]),
         ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
         (
@@ -1115,7 +1109,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
-        ("src/encounters/groups.rs", "change_row", &[Ban::Extras(1)]),
         (
             "src/encounters/groups.rs",
             "members",
@@ -1126,7 +1119,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
         // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
         // `line_row`'s lines are; the list has no typed owner yet.
         (
@@ -1224,6 +1216,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // `design::message` or `small_message`.
         ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
         ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
+        // Layout 11c (L11c-E.2): a change's fault under its own field (was under the row's
+        // `Extras` allow with its raw space).
+        ("src/encounters/groups.rs", "change_row", &[Ban::Body]),
         // Ruling M20 (lane E2): a draft's disk conflict takes its editor's place (the
         // comparison follows), typed; it replaces `design::message` and `message_with_actions`.
         ("src/encounters/disk.rs", "show", &[Ban::Body]),
@@ -1300,29 +1295,15 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
         (
             "src/encounters/groups.rs",
-            "choice_label",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/encounters/groups.rs",
             "conditions_row",
             &[Ban::RowKey(1)],
-        ),
-        (
-            "src/encounters/groups.rs",
-            "group_fields",
-            &[Ban::Extras(1)],
         ),
         (
             "src/encounters/groups.rs",
             "overrides_form",
             &[Ban::RowKey(2)],
         ),
-        (
-            "src/encounters/groups.rs",
-            "unread_member",
-            &[Ban::Extras(1), Ban::Body],
-        ),
+        ("src/encounters/groups.rs", "unread_member", &[Ban::Body]),
         // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
         ("src/library/catalogue.rs", "repair_notice", &[Ban::Body]),
         (
@@ -1348,19 +1329,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
         // warning with its two repairs and the duplicate repair, in the reader's body (were
         // `message`, `message_with_actions`).
-        ("src/world.rs", "draw", &[Ban::Extras(1), Ban::Body]),
+        ("src/world.rs", "draw", &[Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
-        ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
         // `message` and a link).
         ("src/world.rs", "unread_groups_message", &[Ban::Body]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         // M20 (M-W0.5): a note that cannot be read, in place of its page (was
         // `message_with_actions`).
         ("src/world/page.rs", "unread_pane", &[Ban::Body]),
-        ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
     ]

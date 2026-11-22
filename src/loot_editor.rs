@@ -387,7 +387,8 @@ fn table_menu(
     crate::design::menu_popup(&*ui, &response).show(|ui| {
         let tables = sources.map_or(&[][..], |sources| &sources.tables[..]);
         if tables.is_empty() {
-            ui.add(egui::Label::new(Type::Small.rich(ui, NO_TABLES).color(colors().muted)).wrap());
+            // The menu's note, where its choices' words start (M-P0.26).
+            design::choice_note(ui, false, Some(NO_TABLES));
         }
         for table in tables {
             if design::Action::quiet(&format!("{} · {} · {}", table.key, table.dice, table.path))

@@ -1680,10 +1680,6 @@ impl WorldPage {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn list(&mut self, ui: &mut egui::Ui, index: &ContentIndex, groups: &WorldGroups) {
         let spacing = ui.spacing().item_spacing.y;
         for (at, ((kind, title), rows)) in groups.iter().enumerate() {
@@ -1767,8 +1763,8 @@ impl WorldPage {
                     && !self.card_shown()
                     && self.error.is_none()
                     && self.selected == Some(entry.id);
-                ui.horizontal(|ui| {
-                    ui.add_space(depth as f32 * design::S);
+                // A row is set in one step for each level of depth.
+                design::indent(ui, depth, design::Gap::S, |ui| {
                     let response = if detail.is_empty() {
                         design::row(
                             ui,
