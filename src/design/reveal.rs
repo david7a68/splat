@@ -498,6 +498,8 @@ fn dm_input(facts: &Facts, run: &Run) -> bool {
 pub(super) struct Column {
     pub key: Id,
     pub hosts: bool,
+    /// The egui scroll area's own id: its state says whether it still moves from the DM's drag.
+    pub area: Id,
 }
 
 /// A `ScrollColumn`'s facts in one pass, recorded where its content starts.
@@ -573,8 +575,10 @@ pub fn jump(ui: &Ui, top: f32, why: JumpTo) {
 }
 
 /// The jump queued for the column `key`, taken once: asked in this frame or the last, and with
-/// no input of the DM's in this pass.
-fn take_jump(ui: &Ui, key: Id) -> Option<f32> {
+/// no input of the DM's in this pass. The DM's scroll that is still going on drops it too
+/// (layout PR 10d): a drag of the column or its bar, the wheel's smooth rest still being
+/// applied, or the column's own fling after a drag (its area `area` still has a velocity).
+fn take_jump(ui: &Ui, key: Id, area: Id) -> Option<f32> {
     let jump = ui.ctx().data_mut(|data| {
         let jump = data.get_temp::<Jump>(jump_id(key));
         if jump.is_some() {
@@ -586,15 +590,18 @@ fn take_jump(ui: &Ui, key: Id) -> Option<f32> {
     let fresh = jump.frame == frame || jump.frame + 1 == frame;
     let _ = jump.why;
     let moved = ui.input(|input| {
-        input.events.iter().any(|event| {
-            matches!(
-                event,
-                egui::Event::MouseWheel { .. }
-                    | egui::Event::PointerButton { pressed: true, .. }
-                    | egui::Event::Key { pressed: true, .. }
-            )
-        })
-    });
+        input.smooth_scroll_delta != Vec2::ZERO
+            || input.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::MouseWheel { .. }
+                        | egui::Event::PointerButton { pressed: true, .. }
+                        | egui::Event::Key { pressed: true, .. }
+                )
+            })
+    }) || ui.ctx().dragged_id().is_some()
+        || egui::scroll_area::State::load(ui.ctx(), area)
+            .is_some_and(|state| state.velocity() != Vec2::ZERO);
     (fresh && !moved).then_some(jump.to)
 }
 
@@ -602,7 +609,7 @@ fn take_jump(ui: &Ui, key: Id) -> Option<f32> {
 /// pass's input is checked: a jump's ([`jump`]), else a reveal's. `ScrollColumn` calls it before
 /// its area begins.
 pub(super) fn take_offset(ui: &Ui, column: Column) -> Option<f32> {
-    if let Some(to) = take_jump(ui, column.key) {
+    if let Some(to) = take_jump(ui, column.key, column.area) {
         return Some(to);
     }
     // A column that hosts no reveal holds no request: no registry read.
@@ -1375,6 +1382,39 @@ mod tests {
         assert!(
             (top(&h, "Target top") - at).abs() < 0.5,
             "jump-once: the column stays where the jump put it"
+        );
+        // Layout PR 10d: a jump asked while the DM drags the column's content (the pointer still
+        // down, moving it) is dropped: the DM's scroll wins, and the column moves only with the
+        // drag.
+        let grab = egui::pos2(WIDTH / 2.0, 150.0);
+        h.event(egui::Event::PointerMoved(grab));
+        h.event(egui::Event::PointerButton {
+            pos: grab,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.step();
+        for step in 1..=4 {
+            h.event(egui::Event::PointerMoved(
+                grab - egui::vec2(0.0, 20.0 * step as f32),
+            ));
+            h.step();
+        }
+        let dragging = h.ctx.dragged_id().is_some();
+        let before = top(&h, "Target top");
+        h.state_mut().heading = true;
+        for step in 5..=7 {
+            h.event(egui::Event::PointerMoved(
+                grab - egui::vec2(0.0, 20.0 * step as f32),
+            ));
+            h.step();
+        }
+        let after = top(&h, "Target top");
+        assert!(
+            dragging && (after - (before - 60.0)).abs() <= 2.0,
+            "jump-while-dragging: asked during the DM's drag ({dragging}), the jump moved the \
+             target's top from {before} to {after} (the view's top is {view_top})"
         );
     }
 
