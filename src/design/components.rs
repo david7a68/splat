@@ -707,11 +707,48 @@ pub fn row_menu(ui: &mut Ui, name: &str, add: impl FnOnce(&mut Ui)) {
     popup.align(align).show(add);
 }
 
-/// The visible reason beside a blocked control. A tooltip is only a second route.
+/// The visible reason beside a blocked control. A tooltip is only a second route. Its wrapped
+/// words never spread: they are laid out in a column that does not justify, also inside a
+/// justified layout such as a menu's (M-P0.26; egui takes a label's justification from its
+/// layout).
 pub fn blocked_reason(ui: &mut Ui, reason: Option<&str>) {
     if let Some(reason) = reason {
-        ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
+        ui.scope_builder(
+            egui::UiBuilder::new().layout(Layout::top_down(Align::Min)),
+            |ui| {
+                ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
+            },
+        );
     }
+}
+
+/// A note under the menu choice drawn just before it: why it is blocked, or what it does
+/// (M-P0.26; the Encounters menus' `Already first.`, the Timeline table menu's `Clear the
+/// results first.`). It starts at the choice's words, in by the quiet action's padding `S` and,
+/// with `icon_slot`, by the icon slot the choice or its menu keeps; it ends `S` before the menu's
+/// edge and wraps there, in a column that never justifies its words. The menu asks for its width
+/// with it, so the note keeps the menu's right margin.
+pub fn choice_note(ui: &mut Ui, icon_slot: bool, note: Option<&str>) {
+    if note.is_none() {
+        return;
+    }
+    let inset = S + if icon_slot { ICON_SLOT } else { 0.0 };
+    let room = ui.available_rect_before_wrap();
+    let column = Rect::from_min_max(
+        pos2(room.left() + inset, room.top()),
+        pos2((room.right() - S).max(room.left() + inset), room.bottom()),
+    );
+    let note = ui
+        .scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(column)
+                .layout(Layout::top_down(Align::Min)),
+            |ui| blocked_reason(ui, note),
+        )
+        .response
+        .rect;
+    // The menu takes its width from what it holds: the note keeps the padding `S` after it.
+    ui.expand_to_include_x(note.right() + S);
 }
 
 /// Reserve the primary action for the run strip while another page is open.

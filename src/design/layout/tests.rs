@@ -466,6 +466,107 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         "m-p0-title-hint-link: the link's hover shows its hint"
     );
     draw_line(vec![egui::Event::PointerGone]);
+    // M-P0.26 (M0558): a form's header. The kind before the title (an icon alone, named by its
+    // word, with the word on hover), its action at the line's end whatever the title, the save
+    // status, and the `⋯` menu at the right end of the title's line, which opens its menu.
+    const COPY: Word = crate::word!("Copy link");
+    let saving = [
+        Status {
+            icon: crate::design::icons::OK,
+            word: "Saved",
+            color: colors().document.clean,
+        },
+        Status {
+            icon: crate::design::icons::WARN,
+            word: "Saving blocked",
+            color: colors().document.external,
+        },
+    ];
+    let more_opened = std::cell::Cell::new(false);
+    let form_header = |events: Vec<egui::Event>, title: &str| {
+        frame_with(&ctx, vec2(640.0, 300.0), events, |ui| {
+            let _ = TitleLine::new(title)
+                .role(TitleType::Panel)
+                .kind("\u{25c6}", "Day")
+                .actions_at_end()
+                .action(TitleAction::secondary(COPY).icon(crate::design::icons::COPY))
+                .state(saving[0], &saving)
+                .more("More actions for the event", |ui| {
+                    more_opened.set(true);
+                    let _ = ui.label("Remove this event");
+                })
+                .show(ui);
+        })
+    };
+    let (short, painted) = form_header(Vec::new(), "Harvest Eve");
+    let (long, _) = form_header(Vec::new(), "Rest at the old mill by the river");
+    let title_ink = painted
+        .iter()
+        .find(|text| text.text == "Harvest Eve")
+        .map(|text| text.rect)
+        .expect("the title");
+    let (kind, copy, more) = (
+        bounds(&short, "Day"),
+        bounds(&short, "Copy link"),
+        bounds(&short, "More actions for the event"),
+    );
+    assert!(
+        kind.right() <= title_ink.left()
+            && (kind.center().y - title_ink.center().y).abs() < 6.0
+            && (bounds(&long, "Copy link").right() - copy.right()).abs() < 0.5
+            && copy.right() < more.left()
+            && (more.center().y - title_ink.center().y).abs() < 6.0,
+        "m-p0-title-kind: the kind {kind:?} before the title {title_ink:?}, Copy link {copy:?} at \
+         the line's end for both titles, the menu {more:?} at the title line's right end"
+    );
+    form_header(
+        vec![egui::Event::PointerMoved(kind.center())],
+        "Harvest Eve",
+    );
+    form_header(Vec::new(), "Harvest Eve");
+    let (_, painted) = form_header(Vec::new(), "Harvest Eve");
+    assert!(
+        painted.iter().any(|text| text.text == "Day"),
+        "m-p0-title-kind: an icon alone says its word on hover: {:?} at {kind:?}",
+        painted
+            .iter()
+            .map(|text| (&text.text, text.rect))
+            .collect::<Vec<_>>()
+    );
+    form_header(vec![egui::Event::PointerGone], "Harvest Eve");
+    let press = |at: egui::Pos2| {
+        vec![
+            egui::Event::PointerMoved(at),
+            egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            },
+            egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ]
+    };
+    form_header(press(more.center()), "Harvest Eve");
+    let (_, painted) = form_header(Vec::new(), "Harvest Eve");
+    assert!(
+        more_opened.get() && painted.iter().any(|text| text.text == "Remove this event"),
+        "m-p0-title-more: the `⋯` opens its menu"
+    );
+    form_header(
+        vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+        "Harvest Eve",
+    );
     // Review of PR 740 (P2): a blocked link shows its reason on hover, not its hint, and its
     // press does not come back.
     const WAIT: &str = "Wait for the sheet read to end.";

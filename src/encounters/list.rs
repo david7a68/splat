@@ -8,11 +8,9 @@ use std::path::Path;
 pub const FIGHT_OPEN: &str = "This fight is open.";
 pub const GO_TO_RUN: &str = "Go to the run";
 
-pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
-    if let Some(reason) = reason {
-        ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
-    }
-}
+/// The design's reason line, which never justifies its words (M-P0.26): this list's own copy
+/// justified them in a menu.
+pub(super) use crate::design::blocked_reason;
 
 /// The quiet `⋯` menu of a row or a header. The menu part places and sizes it (`menu_popup`):
 /// inside the pane it opens from, clear of its splitter and scroll bar, measured at each opening.
@@ -34,8 +32,10 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
         let last = ui.data_mut(|data| data.get_temp::<egui::Vec2>(pane));
         let resized = last.is_some_and(|last| last != inside.size());
         let pending = pane.with("bring back");
-        let wheel = ui.input(|input| input.raw_scroll_delta != egui::Vec2::ZERO);
-        let bring_back = !wheel
+        // Review of PR 770: any scroll of the DM's in this column (a wheel, a drag of its content
+        // or its bar, a key) ends the retry, so the column stays where the DM leaves it.
+        let scrolled = design::reveal::dm_scrolls(ui);
+        let bring_back = !scrolled
             && (resized
                 || ui
                     .data_mut(|data| data.get_temp::<bool>(pending))
@@ -76,33 +76,11 @@ fn menu_icon(word: &str) -> Option<&'static str> {
     }
 }
 
-/// A line under a menu choice: why it is blocked, or what it does. It starts at the choice's
-/// words, after the quiet action's padding and any icon, and it ends the quiet action's padding
-/// before the menu's edge. The menu asks for its width with both, so the note keeps the menu's
-/// right margin and wraps before it.
+/// A line under a menu choice: why it is blocked, or what it does, at the choice's words
+/// (`design::choice_note`), after the icon slot when the menu keeps one (FM1).
 pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
-    if note.is_none() {
-        return;
-    }
-    let inset = design::S + menu_slot_icon(ui, word).map_or(0.0, |_| design::ICON_SLOT);
-    // Layout 11c (M0260, M0261): the note is placed by its rect, at the choice's words (`inset`
-    // from the line's start) and ending `S` before the menu's edge.
-    let room = ui.available_rect_before_wrap();
-    let column = egui::Rect::from_min_max(
-        egui::pos2(room.left() + inset, room.top()),
-        egui::pos2(room.right() - design::S, room.bottom()),
-    );
-    let note = ui
-        .scope_builder(
-            egui::UiBuilder::new()
-                .max_rect(column)
-                .layout(egui::Layout::top_down(egui::Align::Min)),
-            |ui| blocked_reason(ui, note),
-        )
-        .response
-        .rect;
-    // The menu takes its width from what it holds: the note keeps the padding `S` after it.
-    ui.expand_to_include_x(note.right() + design::S);
+    let slot = menu_slot_icon(ui, word).is_some();
+    design::choice_note(ui, slot, note);
 }
 
 pub(super) fn menu_action(ui: &mut egui::Ui, word: &str, blocked: Option<&str>) -> bool {
@@ -1964,6 +1942,85 @@ mod iter_2_c_tests {
                 && after.top() > 150.0,
             "m0259-least-scroll: shrunk under the open menu, its button came back from {before:?} \
              to {after:?}, at the view's bottom"
+        );
+        // M-P0.26: a reason under a menu choice that wraps, at 960 in a narrow pane. It starts at
+        // the choice's words (after its icon slot), ends `S` before the menu's edge, and its words are never justified (the menu's
+        // own layout is justified; `blocked_reason` lays its words out in a column that is not).
+        const REASON: &str =
+            "This saved run is open in another window. Close it there first, then delete it.";
+        const MENU_LINE: &str =
+            "Runs that are open elsewhere wait for you to close them before they can change.";
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build(|ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    // A 300 px pane, as a narrow list column: the menu's room, so the reason
+                    // must wrap.
+                    let pane = egui::Rect::from_min_max(pos2(300.0, 40.0), pos2(600.0, 600.0));
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
+                        ui.set_clip_rect(pane);
+                        row_menu(ui, "Bridge Ambush", |ui| {
+                            let _ = menu_action(ui, "Edit encounter", None);
+                            let _ = menu_action(ui, "Delete the saved run", Some(REASON));
+                            // A reason line straight in the menu's justified layout.
+                            blocked_reason(ui, Some(MENU_LINE));
+                        });
+                    });
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness
+            .get_by_label("More actions for Bridge Ambush")
+            .click();
+        harness.run_steps(4);
+        fn find(shape: &egui::Shape, words: &str) -> Option<std::sync::Arc<egui::Galley>> {
+            match shape {
+                egui::Shape::Text(text) if text.galley.job.text == words => {
+                    Some(text.galley.clone())
+                }
+                egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| find(shape, words)),
+                _ => None,
+            }
+        }
+        let output = harness.output();
+        let (galley, at) = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.job.text == REASON => {
+                    Some((text.galley.clone(), text.pos))
+                }
+                shape => find(shape, REASON).map(|galley| (galley, egui::Pos2::ZERO)),
+            })
+            .expect("the reason is painted");
+        let line = output
+            .shapes
+            .iter()
+            .find_map(|clipped| find(&clipped.shape, MENU_LINE))
+            .expect("the menu's reason line is painted");
+        assert!(
+            line.rows.len() >= 2 && !line.job.justify,
+            "m-p0-blocked-reason: a wrapped reason line in a justified menu is not justified \
+             ({} rows, justified {})",
+            line.rows.len(),
+            line.job.justify
+        );
+        let choice = harness.get_by_label("Delete the saved run").rect();
+        let menu_right = harness.get_by_label("Edit encounter").rect().right();
+        assert!(
+            galley.rows.len() >= 2
+                && !galley.job.justify
+                && (at.x - (choice.left() + design::S + design::ICON_SLOT)).abs() <= 1.0
+                && at.x + galley.size().x <= menu_right - design::S + 0.5,
+            "m-p0-choice-note: at 960 the reason wraps ({} rows), unjustified ({}), at the \
+             choice's words {} (it starts at {}), ending S before the menu's edge {menu_right} \
+             ({})",
+            galley.rows.len(),
+            !galley.job.justify,
+            choice.left() + design::S + design::ICON_SLOT,
+            at.x,
+            at.x + galley.size().x
         );
     }
 
