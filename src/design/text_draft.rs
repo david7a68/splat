@@ -17,7 +17,8 @@
 //!     an insert of the same words gives two new revisions: the words end equal, the key does
 //!     not;
 //!   - [`TextDraft::replace`] (the program's change: a reload, a discard): always a new
-//!     revision, also for equal words, so the guard drops egui's history for it.
+//!     revision, also for equal words, so its layout is made again. (The field guard compares
+//!     words: other words drop egui's history, equal words keep it, as for a plain text.)
 //!
 //!   A no-op event (an empty paste, Delete at the end) keeps the revision, even when egui says
 //!   `changed()`: the callers keep egui's `changed()` for their events; the key is only for the

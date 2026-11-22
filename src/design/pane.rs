@@ -5699,7 +5699,7 @@ mod editor_region_tests {
             doc: crate::design::text_draft::TextDraft,
             changed: Vec<bool>,
         }
-        let field = crate::field_id!("editor_region_test_text").once(Once::Example);
+        let field = crate::field_id!("editor_region_test_draft").once(Once::Example);
         let make = |doc: bool| {
             let mut h = egui_kittest::Harness::builder()
                 .with_size(vec2(400.0, 300.0))
