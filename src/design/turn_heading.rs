@@ -537,6 +537,128 @@ fn letters(name: &str, fit: impl Fn(&str) -> bool) -> Option<String> {
         .find(|cut| fit(cut))
 }
 
+/// The run strip's line on the other pages (M0274, M0275), fitted as one candidate as the turn
+/// heading is. Its title leads (`Round 3`, or the run's state and name while it is not in
+/// combat), then the current turn (`Kaya’s turn`, in the turn colour) and the next (`Next:
+/// Wolf`, in the next colour); `end` draws the actions and statuses that end the line, right to
+/// left. The next goes first; then the current turn's name gives up whole words, then letters,
+/// never all of them; a title that is still too wide gives up whole words; the end never
+/// shortens. A shortened piece keeps its whole words as its accessible name and its hover. The
+/// line measures its end with the last frame's width (a new width draws the frame again), so
+/// the line reads in its order, the title first. The host draws the band around it (its panel,
+/// fill and height).
+#[must_use = "call show"]
+pub struct TurnStrip<'a> {
+    title: &'a str,
+    turn: Option<&'a str>,
+    next: Option<&'a str>,
+}
+
+impl<'a> TurnStrip<'a> {
+    pub fn new(title: &'a str) -> Self {
+        Self {
+            title,
+            turn: None,
+            next: None,
+        }
+    }
+
+    /// Whose turn it is: its name, as `<name>’s turn`.
+    pub fn turn(mut self, name: Option<&'a str>) -> Self {
+        self.turn = name;
+        self
+    }
+
+    /// Who comes next: its name, as `Next: <name>`.
+    pub fn next(mut self, name: Option<&'a str>) -> Self {
+        self.next = name;
+        self
+    }
+
+    /// Draw the line in `ui` (the band), its end drawn by `end`, right to left.
+    pub fn show(self, ui: &mut Ui, end: impl FnOnce(&mut Ui)) {
+        let c = colors();
+        let key = ui.id().with("turn_strip_end");
+        let end_width = ui.data(|data| data.get_temp::<f32>(key)).unwrap_or(0.0);
+        let gap = ui.spacing().item_spacing.x;
+        let room = (ui.available_width() - end_width - super::L).max(0.0);
+        let (heading, name, small) = (
+            Type::Heading.font(ui),
+            Type::Name.font(ui),
+            Type::Small.font(ui),
+        );
+        let title_width = number_width(ui, self.title, &heading);
+        let title = if title_width <= room {
+            self.title.to_owned()
+        } else {
+            words_that_fit(ui, self.title, &heading, room)
+        };
+        let after_title = (room - number_width(ui, &title, &heading) - gap).max(0.0);
+        let turn = self.turn.map(|who| {
+            let whole = format!("{who}\u{2019}s turn");
+            let tail = number_width(ui, "\u{2019}s turn", &name);
+            let shown = if number_width(ui, &whole, &name) <= after_title {
+                whole.clone()
+            } else {
+                let fitted = whole_words_name(ui, who, &name, after_title - tail);
+                if fitted.chars().take_while(|c| *c != '\u{2026}').count() > 0
+                    && number_width(ui, &fitted, &name) + tail <= after_title
+                {
+                    format!("{fitted}\u{2019}s turn")
+                } else {
+                    // Letters, never all of them: at least the first and the copy mark.
+                    let fit = |cut: &str| number_width(ui, cut, &name) + tail <= after_title;
+                    let letters = letters(who, fit).unwrap_or_else(|| {
+                        letters(who, |cut| {
+                            cut.chars().take_while(|c| *c != '\u{2026}').count() <= 1
+                        })
+                        .unwrap_or_default()
+                    });
+                    format!("{letters}\u{2019}s turn")
+                }
+            };
+            (whole, shown)
+        });
+        let after_turn = turn.as_ref().map_or(after_title, |(_, shown)| {
+            after_title - number_width(ui, shown, &name) - gap
+        });
+        let next = self
+            .next
+            .map(|who| format!("Next: {who}"))
+            .filter(|_| turn.as_ref().is_none_or(|(whole, shown)| whole == shown))
+            .filter(|words| number_width(ui, words, &small) <= after_turn);
+        let piece = |ui: &mut Ui, shown: &str, whole: &str, font: Type, color: Color32| {
+            let response = ui.label(font.rich(ui, shown).color(color));
+            if shown != whole {
+                named(ui, &response, whole);
+                let _ = response.on_hover_text(whole);
+            }
+        };
+        ui.horizontal_centered(|ui| {
+            if title == self.title {
+                super::heading(ui, super::Heading::Panel(self.title));
+            } else {
+                piece(ui, &title, self.title, Type::Heading, c.text);
+            }
+            if let Some((whole, shown)) = &turn {
+                piece(ui, shown, whole, Type::Name, c.turn.current);
+            }
+            if let Some(next) = &next {
+                piece(ui, next, next, Type::Small, c.turn.next);
+            }
+            let used = ui
+                .with_layout(Layout::right_to_left(Align::Center), end)
+                .response
+                .rect
+                .width();
+            if (used - end_width).abs() > 0.5 {
+                ui.data_mut(|data| data.insert_temp(key, used));
+                ui.ctx().request_discard("the run strip measured its end");
+            }
+        });
+    }
+}
+
 /// Whole words of a creature's name that fit in `width`, then `…`. A name does not end on a
 /// joining word, and a copy number or letter stays after the `…` (`Ember Cultist… 12`). The
 /// Legacy users outside the part (counted by the lint's `fitting-escape` rule): the run's

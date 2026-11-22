@@ -503,3 +503,67 @@ fn the_selector_takes_the_first_fit_in_order() {
     );
     assert_eq!(skip.map(|(width, ())| width), Some(40));
 }
+
+/// M0274, M0275 (M-P0.29): the run strip's line, fitted as one candidate at every width from
+/// 360 to 1200 px. The title is whole; every piece ends left of the end (`Back to run` and `Next
+/// turn`); the turn is named whole, and its painted words start with the name's first letter
+/// and end with `’s turn`; `Next: …` shows only beside a whole turn. Some width shows all of it,
+/// some drops `Next: …` and keeps the whole turn, and some cuts the turn's name.
+#[test]
+fn the_run_strip_fits_its_line_as_one_candidate() {
+    let ctx = context();
+    let whole_turn = format!("{LONG_NUMBERED}\u{2019}s turn");
+    let (mut all, mut dropped, mut cut) = (false, false, false);
+    for width in (360..=1200).step_by(40) {
+        let width = width as f32;
+        let draw = |ui: &mut Ui| {
+            TurnStrip::new("Round 3")
+                .turn(Some(LONG_NUMBERED))
+                .next(Some("Wolf 2"))
+                .show(ui, |ui| {
+                    let _ = Action::primary("Next turn").icon(icons::NEXT).show(ui);
+                    let _ = Action::secondary("Back to run")
+                        .density(Density::Read)
+                        .show(ui);
+                });
+            TurnPresses::default()
+        };
+        for _ in 0..3 {
+            let _ = frame(&ctx, width, draw);
+        }
+        let (nodes, painted) = frame(&ctx, width, draw);
+        let end = bounds(&nodes, "Back to run").left();
+        let round = painted.iter().find(|text| text.text == "Round 3");
+        let turn = painted
+            .iter()
+            .find(|text| text.text.ends_with("\u{2019}s turn"))
+            .unwrap_or_else(|| panic!("{width}: the turn is painted"));
+        let next = painted.iter().find(|text| text.text == "Next: Wolf 2");
+        // Its whole words as its name: the label where it is cut, the text itself where not.
+        let named_whole = nodes.iter().any(|(_, node)| {
+            node.role() == egui::accesskit::Role::Label
+                && (node.label() == Some(whole_turn.as_str())
+                    || (node.label().is_none() && node.value() == Some(whole_turn.as_str())))
+        });
+        assert!(
+            round.is_some_and(|round| round.rect.right() <= end)
+                && turn.rect.right() <= end
+                && next.is_none_or(|next| next.rect.right() <= end)
+                && named_whole
+                && turn.text.starts_with('S')
+                && (next.is_none() || turn.text == whole_turn),
+            "m-p0-turn-strip: at {width} the line {:?} {:?} {:?} ends before {end}",
+            round.map(|round| round.rect),
+            (&turn.text, turn.rect),
+            next.map(|next| next.rect)
+        );
+        all |= next.is_some();
+        dropped |= next.is_none() && turn.text == whole_turn;
+        cut |= turn.text != whole_turn;
+    }
+    assert!(
+        all && dropped && cut,
+        "m-p0-turn-strip: some width shows all ({all}), some drops Next ({dropped}), some \
+         cuts the name ({cut})"
+    );
+}
