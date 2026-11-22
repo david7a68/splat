@@ -86,33 +86,6 @@ impl Reveal {
     }
 }
 
-/// The DM scrolled or moved through the page this draw: the wheel, a drag, or a navigation key.
-fn user_moved_the_view(ui: &egui::Ui) -> bool {
-    use egui::Key;
-    ui.input(|input| {
-        input.raw_scroll_delta != egui::Vec2::ZERO
-            || input.smooth_scroll_delta != egui::Vec2::ZERO
-            || input.pointer.is_decidedly_dragging()
-            || input.events.iter().any(|event| {
-                matches!(
-                    event,
-                    egui::Event::Key {
-                        key: Key::ArrowUp
-                            | Key::ArrowDown
-                            | Key::PageUp
-                            | Key::PageDown
-                            | Key::Home
-                            | Key::End
-                            | Key::Tab
-                            | Key::Space,
-                        pressed: true,
-                        ..
-                    }
-                )
-            })
-    })
-}
-
 /// How many draws a reveal may take before it gives up.
 const REVEAL_DRAWS: u8 = 3;
 
@@ -5255,17 +5228,20 @@ impl Sessions {
                     .chain(planned_groups().map(|group| group.name.as_str())),
             )
         };
-        // Review of PR 274: the DM's own scroll or navigation, or a draw the plan missed (the
-        // DM left the view), ends a pending reveal, so it never pulls the plan back.
+        // Review of PR 274: a draw the plan missed (the DM left the view) ends a pending reveal.
+        // The DM's own input to the plan's column ends it too, judged by the one cancel rule in
+        // the pane (`design::reveal::dm_scrolls`; review of #852): input to another column (a
+        // scroll in Lookup) never does.
         let pass = ui.ctx().cumulative_pass_nr();
         if self
             .row_reveal
             .as_ref()
-            .is_some_and(|(_, _, last)| pass > last + 1 || user_moved_the_view(ui))
+            .is_some_and(|(_, _, last)| pass > last + 1)
         {
             self.row_reveal = None;
         }
         let mut reveal = Reveal::new(self.row_reveal.as_ref().map(|(id, _, _)| id.clone()));
+        let mut reveal_cancelled = false;
         // A scene's box reaches `box_hang` before the rows, so that every row's words start at
         // one column (`scene_box`). The pane starts that much before the rows, so the box lies
         // whole inside its scroll column, and the rows keep their place.
@@ -5279,6 +5255,10 @@ impl Sessions {
         let mut pane_ui = ui.new_child(egui::UiBuilder::new().max_rect(wide).layout(*ui.layout()));
         pane_ui.set_clip_rect(ui.clip_rect().with_min_x(wide.left()));
         let paned = messages.pane(&mut pane_ui, design::Body::Content, |outer| {
+            if reveal.target.is_some() && design::reveal::dm_scrolls(outer) {
+                reveal = Reveal::new(None);
+                reveal_cancelled = true;
+            }
             // The pane is the rows' scroll column; its lane is kept, so a row's actions keep
             // their x when the plan grows long enough to scroll.
             let lane_width = outer.available_width();
@@ -5587,6 +5567,9 @@ impl Sessions {
                 },
                 _ => self.session_press(press, book, plan),
             }
+        }
+        if reveal_cancelled {
+            self.row_reveal = None;
         }
         // The reveal ends when the row after the target is in view, or after at most
         // `REVEAL_DRAWS` tries (a draw that the footer discards to measure itself does not show).

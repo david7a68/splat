@@ -815,6 +815,12 @@ pub fn run(d: &mut Driver<'_>) {
     d.scroll_up_at(plan_point, 10);
     d.settle();
     for (step, wheel) in [("wheel", true), ("keyboard", false)] {
+        if !wheel {
+            // Sol 2-011 (review of #852): a key ends the plan's reveal when it goes to the plan's
+            // column. The DM's pointer rests on the plan, with nothing focused, before the ask,
+            // so the key's frame is the first after it.
+            d.hover_over(plan_point);
+        }
         let pass = d.passes() as u64;
         d.app_mut()
             .sessions
@@ -841,6 +847,34 @@ pub fn run(d: &mut Driver<'_>) {
             ),
         );
     }
+    // Review of #852 (`m-p0-row-reveal-beside`): a scroll over Lookup is input to Lookup's column,
+    // not to the plan's (`design::reveal::dm_scrolls`), so a pending reveal of the plan lands.
+    if !d.has("Close Lookup") {
+        d.click(NAV_LOOKUP);
+    }
+    let plan_point = d.place_of("Travel").expect("the Travel row").center();
+    d.scroll_up_at(plan_point, 10);
+    d.settle();
+    let lookup_point =
+        d.place_of("Close Lookup").expect("Lookup is open").center() + egui::vec2(0.0, 160.0);
+    // The pointer rests over Lookup first, so the wheel's frame is the first after the ask.
+    d.hover_over(lookup_point);
+    let pass = d.passes() as u64;
+    d.app_mut()
+        .sessions
+        .simulate_pending_reveal(&travel_id, pass);
+    d.wheel_here(1);
+    d.settle();
+    let shown = d
+        .nodes()
+        .iter()
+        .any(|node| node.name == "Journey B" && node.fully_in_view());
+    d.observe(
+        "m-p0-row-reveal-beside",
+        shown,
+        format!("A scroll over Lookup leaves the plan's reveal: the next row in view {shown}"),
+    );
+    d.click("Close Lookup");
     // One owner for a length being typed: leaving a page gives the journey what was typed
     // there, and a newer length typed on the other page wins, also after a restart.
     d.replace_text_in("How long", "2 days");

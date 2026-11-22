@@ -136,7 +136,9 @@ mod plan;
 mod plan_row;
 /// The scroll region of an owned list body over its plan (layout step 3b).
 mod region;
-pub use action_line::{ActionLine, LineColumns, slot as line_slot};
+pub use action_line::{ActionLine, LineAction, LineColumns, slot as line_slot};
+#[cfg(any(test, feature = "test-support"))]
+pub use action_line::{one_row_width, painted_in_block};
 #[cfg(any(test, feature = "test-support"))]
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
@@ -1455,6 +1457,9 @@ struct ColumnFacts {
     state: egui::scroll_area::State,
     content_size: egui::Vec2,
     inner_rect: Rect,
+    /// The column's key and view, as its content saw them: the owner its DM input is judged by
+    /// (`reveal::cancel`; review of #852).
+    owner: Option<(Id, Rect)>,
 }
 
 /// After a body pass, once the footer has measured (see `ContentScroll::holds_presses`): when
@@ -1467,10 +1472,19 @@ fn hold_place(ui: &Ui, mut held: Held, output: ColumnFacts) -> Held {
     let state = output.state;
     let content = output.content_size.y - held.room;
     held.content = content;
-    let scrolled = ui.input(|i| {
-        i.raw_scroll_delta != egui::Vec2::ZERO
-            || i.smooth_scroll_delta != egui::Vec2::ZERO
-            || i.pointer.is_decidedly_dragging()
+    // The DM's own wheel or drag over the pane's column ends the hold, by the one cancel rule
+    // (`reveal::cancel`; review of #852): a wheel over another column never does.
+    let scrolled = output.owner.is_some_and(|(key, view)| {
+        use super::reveal::cancel;
+        cancel::input(
+            ui,
+            cancel::Owner {
+                key,
+                view,
+                area: None,
+            },
+        )
+        .moved
     });
     if let Some(keep) = held.keep.as_mut() {
         let changed = (*keep.content.get_or_insert(content) - content).abs() > 0.5;
@@ -2527,7 +2541,9 @@ impl Footer<'_> {
                 let rest_key = id.with("region_rest");
                 let rest = ui.ctx().data(|data| data.get_temp::<f32>(rest_key));
                 let region_max = region_height(room_height, rest);
+                let mut body_owner = None;
                 let content = |ui: &mut Ui| {
+                    body_owner = super::reveal::column_view(ui);
                     open(
                         ui,
                         Some(OpenPane {
@@ -2573,6 +2589,7 @@ impl Footer<'_> {
                             state: output.state,
                             content_size: output.content_size,
                             inner_rect: output.inner_rect,
+                            owner: body_owner,
                         },
                     ));
                     ui.ctx()
@@ -4213,6 +4230,37 @@ mod row_cut_tests {
             whole(&list, "released").contains(&30),
             "region: the jump lands after the release"
         );
+        // Review of #852 (`m-p0-region-held-key`): during the hold, a key that moves the view and
+        // goes to the region (Page Down, the pointer over it) is input to its column, as a wheel
+        // is (`reveal::cancel`): it cancels the waiting jump, and the release applies nothing.
+        list.input_mut()
+            .events
+            .push(egui::Event::PointerMoved(centre));
+        list.input_mut().events.push(egui::Event::PointerButton {
+            pos: centre,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        list.step();
+        list.state_mut()
+            .state
+            .navigate(Navigation::Jump { block: 10 });
+        list.step();
+        list.key_press(egui::Key::PageDown);
+        list.step();
+        list.input_mut().events.push(egui::Event::PointerButton {
+            pos: centre,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        list.step();
+        list.step();
+        assert!(
+            !whole(&list, "held-key").contains(&10),
+            "m-p0-region-held-key: Page Down during the hold cancels the waiting jump"
+        );
         // L10, a list box (the lead's ruling B): Down from the last whole row shows the next row
         // whole and focuses it; End and Home reach the last and the first row; Tab enters at the
         // selected row and the next Tab leaves the list.
@@ -4295,6 +4343,53 @@ mod row_cut_tests {
         assert!(
             list.state().state.small_rooms() == 1 && !shown(&list).is_empty(),
             "region: the small room is counted and the rows still draw"
+        );
+
+        // Review of PR 555 (#565, `m-p0-in-place-visible`): in a `Body::Content` pane a region
+        // of blocks that no recipe measured draws in place, and a frame examines the blocks in
+        // view and about `log n` more, not all 600.
+        use crate::design::test_harness::Themed as _;
+        type Placed = (RegionState, crate::design::memo::Revised<Vec<Block>>);
+        let mut placed = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(400.0, 420.0))
+            .themed_ui_state(
+                |ui, (state, rows): &mut Placed| {
+                    Footer::new("region_in_place", 400.0).pane_content(
+                        ui,
+                        ContentScroll::default(),
+                        |ui| {
+                            let _ = BlockRegion::new("region_in_place", state, rows).show(
+                                ui,
+                                |ui, at| {
+                                    let _ = ui.add_sized(
+                                        ui.available_size(),
+                                        egui::Button::new(format!("Row {at}")),
+                                    );
+                                },
+                            );
+                        },
+                    );
+                },
+                (
+                    RegionState::new("region_in_place"),
+                    crate::design::memo::Revised::new(vec![Block::Row(Row::Entry); 600]),
+                ),
+            );
+        placed.run_steps(3);
+        let examined = || super::region::IN_PLACE_EXAMINED.with(std::cell::Cell::get);
+        let before = examined();
+        placed.step();
+        let looked = examined() - before;
+        let drawn = {
+            use egui_kittest::kittest::Queryable;
+            (0..600)
+                .filter(|at| placed.query_by_label(&format!("Row {at}")).is_some())
+                .count()
+        };
+        assert!(
+            // At most two passes in a frame, each its drawn blocks, one more and ten halvings.
+            drawn > 0 && looked > 0 && looked <= 2 * (drawn + 11),
+            "m-p0-in-place-visible: one frame examined {looked} of 600 blocks to draw {drawn}"
         );
     }
 

@@ -938,6 +938,53 @@ fn a_theme_on_a_built_harness_is_counted() {
     assert_eq!(late_theme_installs(text), 3);
 }
 
+/// Sol 2-011 (review of #852): each read of the DM's raw scroll or drag (`raw_scroll_delta`,
+/// `smooth_scroll_delta`, `is_decidedly_dragging`) outside comments. A pending request that
+/// reads them itself goes around the one cancel rule (`design::reveal::cancel`), which ends a
+/// request only on input to its own column.
+fn raw_scroll_reads(code: &str) -> usize {
+    code.lines()
+        .map(|line| line.split("//").next().unwrap_or(""))
+        .map(|line| {
+            // Split, so these names are not counted reads of this file.
+            [
+                concat!("raw_", "scroll_delta"),
+                concat!("smooth_", "scroll_delta"),
+                concat!("is_decidedly_", "dragging"),
+            ]
+            .iter()
+            .map(|name| {
+                line.match_indices(name)
+                    .filter(|(at, _)| {
+                        let before = line[..*at].chars().next_back();
+                        let after = line[at + name.len()..].chars().next();
+                        !before.is_some_and(|c| c.is_alphanumeric() || c == '_')
+                            && !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
+                    })
+                    .count()
+            })
+            .sum::<usize>()
+        })
+        .sum()
+}
+
+#[test]
+fn a_raw_scroll_read_is_counted() {
+    // Split, so this file holds no counted read of its own.
+    let text = concat!(
+        "let a = input.raw_",
+        "scroll_delta;\n",
+        "let b = input.smooth_",
+        "scroll_delta != ZERO || pointer.is_decidedly_",
+        "dragging();\n",
+        "// input.raw_",
+        "scroll_delta in a comment\n",
+        "let c = my_raw_",
+        "scroll_delta_x;\n",
+    );
+    assert_eq!(raw_scroll_reads(text), 3);
+}
+
 /// Counts the rules of every source file under `folder`, and keeps each file's text by its key
 /// in `files` (for the legacy host freeze).
 fn scan(
@@ -968,6 +1015,12 @@ fn scan(
             // Unit tests may name colours and sizes. They do not ship.
             // `mod tests;` near the top names a file of its own, so only an inline module ends it.
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
+            // Sol 2-011, review of #852: a raw reader of the DM's scroll or drag, in shipping
+            // code, design files too. The one cancel entry point (`design::reveal::cancel`) holds
+            // the counted reads; a request elsewhere judges input through it.
+            for _ in 0..raw_scroll_reads(code) {
+                *counts.entry(format!("{key} raw-scroll-input")).or_default() += 1;
+            }
             let found = attributes::read(&text)
                 .unwrap_or_else(|error| panic!("{key} does not parse: {error}"));
             levels.insert(key.to_owned(), file_level(&found));
@@ -1068,6 +1121,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 "reason-end-mark" => "End a blocked reason with `.`, `?` or `!`",
                 "late-theme" => {
                     "A theme installed on a harness after it drew (issue #810). (a) The test draws before it installs the theme by accident: build the harness with `design::test_harness` (`themed_state`, `themed_ui_state`, `themed`, `themed_ui`), whose first frame installs the theme. (b) The test changes the theme on purpose after a draw (a new font generation): keep the visible `theme::install` call on the harness's own context and add a counted row to `lint_allowlist.txt` with its reason, for review; never hide the call behind another binding. Examples of (b): `src/content_ui/tests/quiet_reader.rs`, `src/trackers/view.rs`"
+                }
+                "raw-scroll-input" => {
+                    "Judge the DM's scroll, drag or keys for a pending request through the one cancel entry point (`design::reveal::cancel` in the design, `design::reveal::dm_scrolls` outside it), by the request's own column: a raw read goes around it, and input to another column would end the request (Sol 2-011, review of #852)"
                 }
                 "fitting-escape" => {
                     "Fit the run's words through a design part (`design::TurnHeading`), not a raw cut"
