@@ -119,7 +119,6 @@ row-clip	src/markdown_view.rs	table_part	3	Reader
 row-clip	src/party.rs	member_row	1	Party
 row-clip	src/party_bar.rs	show	1	Party
 row-clip	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
-row-clip	src/world/repair.rs	source_editor	1	World
 row-clip	src/design/pane/columns.rs	PaneEdges::show_children	1	design	design implementation boundary: a resizable child clips to the composite's view (egui's side panel sets its own clip)
 scroll-area	src/design/components.rs	dialog_width	1	design	design implementation boundary
 scroll-area	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
