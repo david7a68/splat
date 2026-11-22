@@ -1142,6 +1142,7 @@ impl KeptPlanLine {
     }
 }
 
+#[cfg(test)]
 fn show_plan_line(ui: &mut egui::Ui, line: &KeptPlanLine) {
     let response = match &line.text {
         PlanText::Alone(alone) => ui.add(
