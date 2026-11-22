@@ -1808,6 +1808,7 @@ fn field_label<R>(
     };
     let first = count(ui);
     field_caption(ui, label, role);
+    let controls = count(ui);
     // The block's top while its control draws (`field_top`); the field around it, if any, after.
     let pass = ui.ctx().cumulative_pass_nr();
     let outer = ui.ctx().data_mut(|data| {
@@ -1822,6 +1823,25 @@ fn field_label<R>(
         .data_mut(|data| data.insert_temp(Id::new(FIELD_TOP), outer));
     let last = count(ui);
     let bottom = field_feedback(ui, warning, help, error);
+    // A warning is the field's own: its controls carry it as their accessible description, so a
+    // screen reader says it when the empty field takes the focus (layout PR 10d). Only while a
+    // warning shows: no work for a field without one.
+    if let Some(warning) = warning {
+        let ids: Vec<Id> = ui.ctx().viewport(|viewport| {
+            viewport
+                .this_pass
+                .widgets
+                .get_layer(layer)
+                .skip(controls)
+                .take(last.saturating_sub(controls))
+                .map(|widget| widget.id)
+                .collect()
+        });
+        for id in ids {
+            ui.ctx()
+                .accesskit_node_builder(id, |node| node.set_description(warning));
+        }
+    }
     // Only a focused control of this block, or the control whose list is open: one or two
     // lookups, nothing that grows with the form.
     let inside = |id: Id| {
@@ -6675,6 +6695,14 @@ mod tests {
                             ui.label("second control")
                         });
                         field(ui, "Last label", None, None, |ui| ui.label("third control"));
+                        // Layout PR 10d: a field's warning is its control's description.
+                        small_field_needing(
+                            ui,
+                            "Needed label",
+                            Some("Enter the address."),
+                            None,
+                            |ui| ui.button("Needed control"),
+                        );
                     } else {
                         help(ui, HELP);
                     }
@@ -6712,6 +6740,17 @@ mod tests {
                 assert!(
                     (gap - L).abs() <= 0.5,
                     "n3-error: {gap} from error to label"
+                );
+                use egui_kittest::kittest::{NodeT, Queryable};
+                let description = harness
+                    .get_by_label("Needed control")
+                    .accesskit_node()
+                    .description()
+                    .map(|words| words.to_string());
+                assert_eq!(
+                    description.as_deref(),
+                    Some("Enter the address."),
+                    "warning-described: the control says its field's warning"
                 );
             }
         }
