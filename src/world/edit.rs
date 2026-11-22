@@ -587,12 +587,8 @@ fn index_campaign(index: &ContentIndex) -> Uuid {
 }
 
 /// The edit form's text in the reader's face, unframed inside the form's well.
-fn edit_text_style(edit: egui::TextEdit<'_>, font: egui::FontId, width: f32) -> egui::TextEdit<'_> {
-    edit.font(font)
-        .desired_width(width)
-        .desired_rows(8)
-        .frame(false)
-        .margin(egui::Vec2::ZERO)
+fn edit_text_style(edit: egui::TextEdit<'_>, font: egui::FontId) -> egui::TextEdit<'_> {
+    edit.font(font).desired_rows(8)
 }
 
 /// A gone Log line's notice: the entry's name and the DM's words, as they typed them.
@@ -1169,46 +1165,42 @@ impl Reader {
             let font = style::prose_type(ui).font(ui);
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                // One field frame includes the editor and its standard scrollbar.
-                let frame = egui::Frame::new()
-                    .fill(colors().well)
-                    .stroke(egui::Stroke::new(
-                        design::HAIRLINE_WIDTH,
-                        colors().field_border,
-                    ))
-                    .corner_radius(design::RADIUS_CONTROL)
-                    .inner_margin(egui::Margin::same(design::S as i8))
-                    .show(ui, |ui| {
-                        let width = ui.available_width();
-                        let field = super::EDIT_TEXT.id(self.compact, id);
-                        let text = &mut draft.now.text;
-                        match region {
-                            // The pane's editor region (round 28, P2): it grows with the text
-                            // and gives way, so Save stays in view under a long note.
-                            Some(region) => {
-                                region
-                                    .editor(ui, field, text, |edit| {
-                                        edit_text_style(edit, font.clone(), width)
-                                    })
-                                    .response
-                            }
-                            // No pane gave a region (a check that draws the reader alone).
-                            None => field.multi_line(ui, text, |edit| {
-                                edit_text_style(edit, font.clone(), width)
-                            }),
-                        }
-                    });
-                frame.response.widget_info(|| {
+                // One fixed field frame holds the editor's text and its scroll lane: the
+                // editor viewport draws it (layout PR 9).
+                let field = super::EDIT_TEXT.id(self.compact, id);
+                let text = &mut draft.now.text;
+                let editor = match region {
+                    // The pane's editor region (round 28, P2): it grows with the text and gives
+                    // way, so Save stays in view under a long note.
+                    Some(region) => {
+                        region.editor(ui, field, text, |edit| edit_text_style(edit, font))
+                    }
+                    // No pane gave a region (a check that draws the reader alone).
+                    None => {
+                        let most = ui.available_height();
+                        design::pane::editor_view(
+                            ui,
+                            design::pane::ViewHeight::AtMost(most),
+                            field,
+                            text,
+                            |edit| edit_text_style(edit, font),
+                        )
+                    }
+                };
+                // The frame's own node, as checks find the field's whole frame by it.
+                ui.interact(
+                    editor.frame,
+                    editor.response.id.with("frame"),
+                    egui::Sense::hover(),
+                )
+                .widget_info(|| {
                     egui::WidgetInfo::labeled(
                         egui::WidgetType::Other,
                         ui.is_enabled(),
                         "Text field",
                     )
                 });
-                if frame.inner.has_focus() {
-                    design::focus_ring(ui, frame.response.rect);
-                }
-                frame.inner
+                editor.response
             })
             .inner
         });

@@ -1173,6 +1173,48 @@ impl<'a> Driver<'a> {
         crate::design::pane::pane_records(&self.harness.ctx)
     }
 
+    /// Layout PR 9 (I10): the editor viewport that holds the editor named `editor` (its fixed
+    /// frame, in points, against the node's pixels). True when all four outside edges are in
+    /// view, it is not held at its least height, and (with `save`) the frame's outside right
+    /// edge is the right edge of the button named `save`, within a pixel. A `save` that names no
+    /// button fails: the edge is never passed unchecked. With what was found.
+    pub fn editor_frame_whole(&self, editor: &str, save: Option<&str>) -> (bool, String) {
+        let scale = self.pixels_per_point();
+        let nodes = self.nodes();
+        let text = nodes
+            .iter()
+            .find(|node| node.name == editor)
+            .map(|node| egui::Rect::from_min_max(node.rect.min / scale, node.rect.max / scale));
+        // `None`: no Save asked for; `Some(None)`: asked for and not found.
+        let save = save.map(|save| {
+            nodes
+                .iter()
+                .find(|node| node.name == save && node.role == Role::Button)
+                .map(|node| node.rect.right() / scale)
+        });
+        let frame = text.and_then(|text| {
+            crate::design::pane::editor_frames(&self.harness.ctx)
+                .into_iter()
+                .find(|record| record.frame().intersects(text))
+        });
+        let whole = frame.is_some_and(|frame| frame.whole() && !frame.least())
+            && match save {
+                None => true,
+                Some(found) => found.zip(frame).is_some_and(|(save, frame)| {
+                    (frame.frame().right() - save).abs() <= 1.0 / scale
+                }),
+            };
+        (
+            whole,
+            format!(
+                "editor {text:?}, frame {:?} in clip {:?} (least {:?}), Save's right edge {save:?}",
+                frame.map(|frame| frame.frame()),
+                frame.map(|frame| frame.clip()),
+                frame.map(|frame| frame.least()),
+            ),
+        )
+    }
+
     /// Each row of actions drawn under a title in the last completed pass (package K's registry,
     /// in points): the title's rect, the row's rect and its number of actions. `TitleLine` and
     /// the readers' title lines (`world::title_line_actions`, placed by `title_placement`)

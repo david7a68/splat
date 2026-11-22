@@ -2128,9 +2128,6 @@ impl Splat {
                     let blocked = self.encounters.plan_blocked();
                     let group_blocked = self.encounters.plan_group_blocked();
                     let group_open = self.encounters.group_open_in_plan();
-                    let group_discarded = self.encounters.group_discarded_in_plan();
-                    let group_discarded_name = self.encounters.discarded_group_name();
-                    let group_discarded_order = self.encounters.discarded_group_order();
                     let arrivals_open = self.encounters.run_takes_arrivals();
                     let run_directory = self.encounters.run_directory(campaign);
                     let open_state = self
@@ -2139,10 +2136,19 @@ impl Splat {
                         .and_then(crate::encounter_run::Run::live_info)
                         .map(|run| crate::encounters::run_state_word(&run, false))
                         .unwrap_or_default();
-                    let (encounters, campaigns) = (&mut self.encounters, &self.campaigns);
+                    // The plan's footer takes the discard's line from the Encounters store before
+                    // its body draws the group editor: the two borrows never overlap.
+                    let (encounters, campaigns) = (
+                        std::cell::RefCell::new(&mut self.encounters),
+                        &self.campaigns,
+                    );
                     let mut group_editor = |ui: &mut egui::Ui| {
-                        encounters.group_in_plan_view(ui, campaign, campaigns);
+                        encounters
+                            .borrow_mut()
+                            .group_in_plan_view(ui, campaign, campaigns);
                     };
+                    let group_discard: &sessions::page::GroupDiscardLine<'_> =
+                        &|frame| encounters.borrow().group_discard_line(frame);
                     let party = self.party.order();
                     let sources = self.lookup.index().map(|index| index.loot_sources());
                     let plan = sessions::page::Plan {
@@ -2154,9 +2160,7 @@ impl Splat {
                         groups: &groups,
                         group_blocked,
                         group_open,
-                        group_discarded,
-                        group_discarded_name,
-                        group_discarded_order,
+                        group_discard,
                         arrivals_open,
                         group_editor: std::cell::RefCell::new(&mut group_editor),
                         blocked,
@@ -2200,6 +2204,8 @@ impl Splat {
                         .index()
                         .map(|index| index.places())
                         .unwrap_or_default();
+                    // The app's one test of an open modal: Ctrl+S waits for it.
+                    self.timeline_page.modal = self.modal_open(ui.ctx());
                     self.timeline_page.show(
                         ui,
                         &mut self.timeline,
@@ -2637,8 +2643,8 @@ impl Splat {
         if let Some((old, new)) = self.encounters.renamed_group.take() {
             self.sessions.rename_links(&old, &new);
         }
-        if std::mem::take(&mut self.sessions.wants_group_undo) {
-            self.encounters.undo_group_discard_in_plan();
+        if let Some(ticket) = self.sessions.wants_group_undo.take() {
+            self.encounters.undo_group_discard_in_plan(ticket);
         }
         if std::mem::take(&mut self.sessions.wants_arrivals) {
             self.encounters.show_arrivals();

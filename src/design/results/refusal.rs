@@ -169,6 +169,10 @@ pub enum Fallback {
     ThisFight,
     /// `that session`
     ThatSession,
+    /// `this scene`: a plan scene whose words are blank (M-N1.4).
+    ThisScene,
+    /// `that tracker`: a tracker's act, label or name that has no words (M-S0.3)
+    ThatTracker,
 }
 
 impl Name {
@@ -184,6 +188,8 @@ impl Name {
             match fallback {
                 Fallback::ThisFight => "this fight",
                 Fallback::ThatSession => "that session",
+                Fallback::ThisScene => "this scene",
+                Fallback::ThatTracker => "that tracker",
             }
             .to_owned(),
         )
@@ -574,6 +580,17 @@ pub enum Cause {
     UnknownTracker(Name),
     /// A fault in the tracker rules: `A change of Rivals has no add or set.` A warning.
     NoAmount(Name),
+    /// A fault in the tracker rules: `Splat cannot read an amount of Rivals.` A warning.
+    BadAmount(Name),
+    /// A fault in the tracker rules: `No roll table has the key “gems”.` A warning.
+    UnknownTable(Name),
+    /// `The roll table “gems” cannot roll.` A warning: its dice or rows have a fault, which
+    /// the problems list names.
+    TableCannotRoll(Name),
+    /// `The roll table “gems” has no row for 7.` A warning.
+    NoRow { table: Name, total: i64 },
+    /// `No amount was typed.` A warning: an action that asks for its amount got none.
+    NoNumber,
     /// The tracker's own limit (M13): `Crowd Favor cannot go below 0.` A warning. With a step it
     /// is only extra words; with none, only `Refusal::at_limit` builds it.
     AtLimit(Limit),
@@ -613,6 +630,8 @@ pub enum Step {
     /// A fault in the tracker rules, fixed where the tracker is defined: `Add Party to the per
     /// list of Rivals in its house rule note`
     AddLine { tracker: Name, line: Name },
+    /// `Type the amount in the action’s field`
+    TypeAmount,
 }
 
 impl Step {
@@ -640,6 +659,7 @@ impl Step {
                 line.as_str(),
                 tracker.as_str()
             ),
+            Self::TypeAmount => "Type the amount in the action’s field".to_owned(),
         }
     }
 }
@@ -746,6 +766,11 @@ impl Refusal {
             | Cause::NoLine { .. }
             | Cause::UnknownTracker(_)
             | Cause::NoAmount(_)
+            | Cause::BadAmount(_)
+            | Cause::UnknownTable(_)
+            | Cause::TableCannotRoll(_)
+            | Cause::NoRow { .. }
+            | Cause::NoNumber
             | Cause::AtLimit(_) => Tone::Warning,
             Cause::Unreadable(_)
             | Cause::NotSaved(_)
@@ -909,6 +934,23 @@ impl Refusal {
             Cause::NoAmount(tracker) => {
                 crate::sentence!("A change of {} has no add or set.", tracker.as_str())
             }
+            Cause::BadAmount(tracker) => {
+                crate::sentence!("Splat cannot read an amount of {}.", tracker.as_str())
+            }
+            Cause::UnknownTable(key) => {
+                crate::sentence!("No roll table has the key “{}”.", key.as_str())
+            }
+            Cause::TableCannotRoll(key) => {
+                crate::sentence!("The roll table “{}” cannot roll.", key.as_str())
+            }
+            Cause::NoRow { table, total } => {
+                crate::sentence!(
+                    "The roll table “{}” has no row for {}.",
+                    table.as_str(),
+                    total
+                )
+            }
+            Cause::NoNumber => crate::sentence!("No amount was typed."),
             Cause::AtLimit(Limit::Min { tracker, min }) => {
                 crate::sentence!("{} cannot go below {}.", tracker.as_str(), min)
             }
@@ -1474,6 +1516,68 @@ mod tests {
                 ),
                 "Nothing was recorded for Rivals +1. A change of Rivals has no add or set. Check \
                  the house rule notes first.",
+                Tone::Warning,
+            ),
+            // M-S0.3 (ruling M21): the tracker causes that had only free words.
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Rivals +1d4"),
+                    },
+                    Cause::BadAmount(name("Rivals")),
+                    Recovery::First(Step::Check(File::HouseRuleNote)),
+                ),
+                "Nothing was recorded for Rivals +1d4. Splat cannot read an amount of Rivals. \
+                 Check the house rule notes first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRolled {
+                        table: name("gems"),
+                    },
+                    Cause::UnknownTable(name("gems")),
+                    Recovery::First(Step::Check(File::HouseRuleNote)),
+                ),
+                "Nothing was rolled on gems. No roll table has the key “gems”. Check the house \
+                 rule notes first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRolled {
+                        table: name("gems"),
+                    },
+                    Cause::TableCannotRoll(name("gems")),
+                    Recovery::First(Step::Check(File::HouseRuleNote)),
+                ),
+                "Nothing was rolled on gems. The roll table “gems” cannot roll. Check the house \
+                 rule notes first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRolled {
+                        table: name("gems"),
+                    },
+                    Cause::NoRow {
+                        table: name("gems"),
+                        total: 7,
+                    },
+                    Recovery::First(Step::Check(File::HouseRuleNote)),
+                ),
+                "Nothing was rolled on gems. The roll table “gems” has no row for 7. Check the \
+                 house rule notes first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded { act: name("Bet") },
+                    Cause::NoNumber,
+                    Recovery::First(Step::TypeAmount),
+                ),
+                "Nothing was recorded for Bet. No amount was typed. Type the amount in the \
+                 action’s field first.",
                 Tone::Warning,
             ),
             (

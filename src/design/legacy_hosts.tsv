@@ -76,6 +76,7 @@ fills	src/sessions/page.rs	Sessions::templates_view	1	Sessions
 fills	src/sessions/page.rs	fills_body	1	Sessions	the Sessions wrapper (named `fills` until this PR); each pane that names it is a row
 fills	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 composite-child	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign	the package list and the chosen package: a shared task (step 7); its children become closed blocks with the forms and lists of steps 10 and 11
+composite-child	src/encounters.rs	Encounters::editor_panes	1	Encounters	the roster and Add participants: a shared task (step 6b) in the edges the encounter head was drawn with; its children become closed blocks with the roster recipes of step 11
 composite-child	src/lib.rs	Splat::page	1	App	the Settings tab's two independent task panes (campaigns, account) at 1000 px and wider: each child is a whole-height host of its own pane and footer; layout PR 8, raised
 composite-child	src/sessions/page.rs	Sessions::session_content	1	Sessions	the plan and the note beside it: a shared task (step 7) in the edges the session header was drawn in; its children become closed blocks with the plan recipes and the Editor and Reader blocks of steps 9 and 11
 footer-feed	src/lib.rs	Splat::page	5	App	the stacked narrow Settings tab's one footer for Campaigns, Settings and D&D Beyond (3), fed by the same three feeders as the wide tab's two footers, and the campaign link's for Campaigns and D&D Beyond (2)
@@ -157,7 +158,6 @@ scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/markdown_view.rs	show_with_density	1	Reader
 scroll-request	src/processing/settings.rs	ProcessingSettings::input_section	1	Processing
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
-scroll-request	src/processing/settings.rs	ProcessingSettings::show	1	Processing
 scroll-request	src/sessions/page.rs	Sessions::banner	1	Sessions
 scroll-request	src/sessions/page.rs	Sessions::note_editor	2	Sessions
 scroll-request	src/sessions/page.rs	Sessions::reading_view	1	Sessions
