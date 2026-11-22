@@ -228,12 +228,14 @@ fn in_party_order<'a>(
 }
 
 /// Keep each summary item and its separator together, including the rest ruling.
-fn plan_event_summary(
-    ui: &mut egui::Ui,
+/// An event row's summary as one job (layout 11c A2c): its words, a length the clock cannot
+/// count in the warning's colour, and a long rest's status. `None` when it says nothing.
+fn plan_event_summary_job(
+    ui: &egui::Ui,
     summary: &str,
     restores: Option<bool>,
     warning: Option<&str>,
-) {
+) -> Option<egui::text::LayoutJob> {
     let mut job = egui::text::LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
@@ -278,7 +280,16 @@ fn plan_event_summary(
             },
         );
     }
-    if !job.text.is_empty() {
+    (!job.text.is_empty()).then_some(job)
+}
+
+fn plan_event_summary(
+    ui: &mut egui::Ui,
+    summary: &str,
+    restores: Option<bool>,
+    warning: Option<&str>,
+) {
+    if let Some(job) = plan_event_summary_job(ui, summary, restores, warning) {
         let response = ui.add(egui::Label::new(job).wrap());
         if warning.is_some() {
             response.on_hover_text(timeline::TIME_REPAIR);
@@ -751,13 +762,14 @@ fn plan_run_link(ui: &mut egui::Ui, word: &str) -> egui::Response {
 
 /// Link words with a glyph of their own before them, in `glyph_color`. The underline covers only
 /// the words; the press target covers both, at least 24 px, and the accessible name is the words.
-fn glyph_link(
-    ui: &mut egui::Ui,
+/// The words of a link with a glyph of its own before them (`glyph_link`), as one job.
+fn glyph_link_job(
+    ui: &egui::Ui,
     glyph: &str,
     glyph_color: egui::Color32,
     role: Type,
     word: &str,
-) -> egui::Response {
+) -> egui::text::LayoutJob {
     let c = colors();
     let plain = egui::TextFormat {
         font_id: role.font(ui),
@@ -782,9 +794,21 @@ fn glyph_link(
             ..plain
         },
     );
-    job.wrap.max_width = ui.available_width().max(1.0);
     job.wrap.max_rows = 1;
     job.wrap.break_anywhere = true;
+    job
+}
+
+fn glyph_link(
+    ui: &mut egui::Ui,
+    glyph: &str,
+    glyph_color: egui::Color32,
+    role: Type,
+    word: &str,
+) -> egui::Response {
+    let mut job = glyph_link_job(ui, glyph, glyph_color, role, word);
+    job.wrap.max_width = ui.available_width().max(1.0);
+    let c = colors();
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(
