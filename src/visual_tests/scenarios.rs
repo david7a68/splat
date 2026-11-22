@@ -7108,6 +7108,33 @@ pub mod settings {
                 "Discard (A) and an account error (B), each footer at 960, 1200, 1920: {a_and_b:?}"
             ),
         );
+        // Undo A in each size's own layout: the wide footers dispatch their own presses. A is
+        // discarded again after each, so the next size starts from A and B too.
+        let undone_at = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.act_at_size(size, |d| {
+                d.click("Undo discard of Campaign details");
+                let undone = (
+                    size,
+                    d.field_text(EDIT_FORM).as_deref() == Some("Quiet Harbor revised"),
+                    !d.visible_text(DISCARDED),
+                    d.visible_text(ACCOUNT_ERROR),
+                );
+                // With no draft back there is nothing to discard again (A is still shown).
+                if d.in_view("Discard") {
+                    d.click("Discard");
+                }
+                undone
+            })
+        });
+        d.observe(
+            "m32-L8-settings-undo-a-at-every-size",
+            undone_at
+                .iter()
+                .all(|(_, draft, a_gone, b_stays)| *draft && *a_gone && *b_stays),
+            format!(
+                "Undo A at 960, 1200 and 1920 (size, draft back, A's words gone, B's words stay): {undone_at:?}"
+            ),
+        );
         d.click("Undo discard of Campaign details");
         d.observe(
             "m32-L8-settings-undo-a-keeps-b",
