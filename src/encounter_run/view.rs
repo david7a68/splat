@@ -3352,8 +3352,9 @@ impl Run {
             ui.available_width(),
         );
         let this = &mut *self;
-        // The list keeps its own scroll (`FillsReason::ArrivalsList`): a group block is taller
-        // than a row, and the footer's edge cuts it plainly, as before (no block is hidden).
+        // The list keeps its own scroll (`FillsReason::ArrivalsList`), a design scroll column:
+        // the footer's edge ends it at its last whole block (layout step 11a, SM2/AM2, SB1/AB1),
+        // with the hairline. `group_list` gives the blocks.
         let body = design::pane::Body::Fills(design::pane::Fills::because(
             design::pane::FillsReason::ArrivalsList,
         ));
@@ -3361,14 +3362,10 @@ impl Run {
             ui,
             body,
             move |ui| {
-                // FJ1: the list keeps the scroll bar's lane whether or not the bar shows, as the
+                // FJ1: the column keeps the scroll bar's lane whether or not the bar shows, as the
                 // Encounters list does, so a list that grows long moves no field and no Add.
-                let lane = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
-                let add = egui::ScrollArea::vertical()
-                    .id_salt("run_groups")
-                    .auto_shrink([false, false])
+                let add = design::layout::ScrollColumn::new("run_groups")
                     .show(ui, |ui| {
-                        ui.set_max_width(lane);
                         ui.spacing_mut().item_spacing.y = design::XS;
                         if this
                             .groups
@@ -3967,7 +3964,11 @@ impl Run {
                 ("For any encounter", any.as_slice()),
                 ("For one encounter", offered.other.as_slice()),
             ] {
+                // Layout step 11a (SM2/AM2): a section's heading (and its help) is one block with
+                // its first group's head.
+                let mut heading_top = None;
                 if labelled && !list.is_empty() {
+                    heading_top = Some(ui.cursor().top());
                     design::heading(
                         ui,
                         design::Heading::Group {
@@ -3983,12 +3984,23 @@ impl Run {
                     );
                 }
                 for group in list {
-                    let row = ui.push_id(group.id, |ui| {
-                        if self.group_row(ui, group, add_width, block) {
-                            add = Some(group.id);
+                    let (added, blocks) = ui
+                        .push_id(group.id, |ui| self.group_row(ui, group, add_width, block))
+                        .inner;
+                    if added {
+                        add = Some(group.id);
+                    }
+                    // Layout step 11a (SM2/AM2, SB1/AB1): each block of the group is whole or
+                    // under the footer's cut: its head (title, members, Initiative and Add), then
+                    // each fault with its repair.
+                    for (at, mut rect) in blocks.into_iter().enumerate() {
+                        if at == 0
+                            && let Some(top) = heading_top.take()
+                        {
+                            rect.min.y = rect.min.y.min(top);
                         }
-                    });
-                    design::register_row(ui, row.response.rect);
+                        design::register_row(ui, rect);
+                    }
                     design::rule(ui);
                 }
             }
@@ -4054,8 +4066,9 @@ impl Run {
         group: &super::RunGroup,
         add_width: f32,
         block: f32,
-    ) -> bool {
+    ) -> (bool, Vec<Rect>) {
         let c = colors();
+        let top = ui.cursor().top();
         let name = &group.name;
         let changed = group
             .members
@@ -4354,7 +4367,7 @@ impl Run {
                 ui.add(egui::Label::new(Type::Small.rich(ui, &members).color(c.muted)).wrap());
             design::named(ui, &response, &summary_name);
         }
-        ui.horizontal(|ui| {
+        let controls_line = ui.horizontal(|ui| {
             let cell = if summary_above { beside } else { width };
             ui.allocate_ui(vec2(cell, Density::Read.control()), |ui| {
                 ui.set_min_width(cell);
@@ -4439,10 +4452,18 @@ impl Run {
                 .inner
             }) || (enter && blocked.is_none());
         });
+        // The head block: the title line to the Initiative and Add line.
+        let x = ui.min_rect().x_range();
+        let mut blocks = vec![Rect::from_x_y_ranges(
+            x,
+            top..=controls_line.response.rect.bottom(),
+        )];
         // FI5: the total's reason is in the footer below the list (`groups_tab`), so it moves
         // no row when it comes or goes.
         let warnings = &group.warnings;
+        let mut faults_top = None;
         if !warnings.is_empty() {
+            faults_top = Some(ui.cursor().top());
             ui.label(Type::Small.rich(ui, "Cannot join").color(c.muted));
         }
         // The members' faults come first in `problem`; the lines after them are the group's own
@@ -4463,16 +4484,23 @@ impl Run {
             let edit_too = packages_only && at + 1 == faults.len();
             // The one member-fault row (Contract B, R): the Encounters list draws it too.
             let view = crate::encounters::MemberFaultView::Arrivals { edit_too };
-            match crate::encounters::member_fault_row(ui, fault, view) {
+            let shown = ui.scope(|ui| crate::encounters::member_fault_row(ui, fault, view));
+            match shown.inner {
                 Some(crate::encounters::MemberRepair::Packages) => self.wants_packages = true,
                 Some(crate::encounters::MemberRepair::EditGroup) => {
                     self.wants_group_editor = Some(group.path.clone());
                 }
                 None => {}
             }
+            // A fault and its repair are one block; `Cannot join` goes with the first.
+            let rect = shown.response.rect;
+            let fault_top = faults_top
+                .take()
+                .map_or(rect.top(), |top| top.min(rect.top()));
+            blocks.push(Rect::from_x_y_ranges(x, fault_top..=rect.bottom()));
         }
 
-        add
+        (add, blocks)
     }
 
     /// The same step for the button and for a drop: the total typed beside it, or a roll.

@@ -951,16 +951,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/results.rs", "act_order", &[Ban::Results]),
         // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
-        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c).
-        (
-            "src/encounter_run/view.rs",
-            "groups_tab",
-            &[Ban::Layout(1), Ban::Pane(1)],
-        ),
+        // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c), a design
+        // `ScrollColumn` since layout step 11a (no raw scroll area is left).
+        ("src/encounter_run/view.rs", "groups_tab", &[Ban::Pane(1)]),
         (
             "src/encounters/groups.rs",
             "group_editor_view",
-            &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
+            &[Ban::Results, Ban::Pane(1)],
         ),
         (
             "src/encounters.rs",
@@ -1117,7 +1114,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
-        ("src/encounters/groups.rs", "change_row", &[Ban::Extras(1)]),
         (
             "src/encounters/groups.rs",
             "members",
@@ -1226,6 +1222,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // `design::message` or `small_message`.
         ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
         ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
+        // Layout 11c (L11c-E.2): a change's fault under its own field (was under the row's
+        // `Extras` allow with its raw space).
+        ("src/encounters/groups.rs", "change_row", &[Ban::Body]),
         // Ruling M20 (lane E2): a draft's disk conflict takes its editor's place (the
         // comparison follows), typed; it replaces `design::message` and `message_with_actions`.
         ("src/encounters/disk.rs", "show", &[Ban::Body]),
@@ -1302,29 +1301,15 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
         (
             "src/encounters/groups.rs",
-            "choice_label",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/encounters/groups.rs",
             "conditions_row",
             &[Ban::RowKey(1)],
-        ),
-        (
-            "src/encounters/groups.rs",
-            "group_fields",
-            &[Ban::Extras(1)],
         ),
         (
             "src/encounters/groups.rs",
             "overrides_form",
             &[Ban::RowKey(2)],
         ),
-        (
-            "src/encounters/groups.rs",
-            "unread_member",
-            &[Ban::Extras(1), Ban::Body],
-        ),
+        ("src/encounters/groups.rs", "unread_member", &[Ban::Body]),
         // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
         ("src/library/catalogue.rs", "repair_notice", &[Ban::Body]),
         (
@@ -1543,6 +1528,14 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Package K2: the popup parts.
         ("src/design/outcome.rs", "measuring", &[Ban::Layout(1)]),
         ("src/design/pane.rs", "stop_body", &[Ban::Layout(1)]),
+        // Layout PR 9b: the quiet-text harness's bare screen and its stock reference, egui's
+        // own text edit, whose cost the document editor is measured against.
+        ("src/design/tests/quiet_text.rs", "root", &[Ban::Layout(1)]),
+        (
+            "src/design/tests/quiet_text.rs",
+            "stock_text_edit",
+            &[Ban::Layout(1)],
+        ),
         ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
         ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),
