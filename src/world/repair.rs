@@ -117,10 +117,13 @@ pub fn editor_events(
     error_line: Option<usize>,
 ) -> (bool, bool) {
     const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
-    let (active, frame, id) = source_editor(ui, Place::AtMost(MAX_HEIGHT), path, draft, error_line);
-    // The editor's own scroll area takes a scroll target set inside it, so a page that scrolls
-    // around the editor never sees it. When the editor gains focus or a screen reader asks to
-    // show it, scroll the page to the editor's whole fixed frame.
+    let (active, _frame, id) =
+        source_editor(ui, Place::AtMost(MAX_HEIGHT), path, draft, error_line);
+    // The page brings the editor's whole fixed frame into view through its focus clearance
+    // (`pane::reveal_focus`: an editor viewport's block is its frame), never by a raw scroll of
+    // its own, so a press on a partly shown editor moves nothing while the pointer is down
+    // (layout step 11c, review of PR 719). A screen reader's request to show it gives it the
+    // keyboard, which the clearance then follows.
     let reveal = ui.input(|input| {
         input.events.iter().any(|event| {
             matches!(event, egui::Event::AccessKitActionRequest(request)
@@ -128,9 +131,8 @@ pub fn editor_events(
                     && request.target == egui::accesskit::NodeId::from(id.value()))
         })
     });
-    if active.1 || reveal {
-        // At once: an animation would be cut short by the editor's own scroll to its cursor.
-        ui.scroll_to_rect_animation(frame, None, egui::style::ScrollAnimation::none());
+    if reveal {
+        ui.memory_mut(|memory| memory.request_focus(id));
     }
     active
 }

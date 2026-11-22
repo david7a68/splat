@@ -124,6 +124,15 @@ pub enum Heading<'a> {
     Label(&'a str),
     /// A reader's or stat block's serif section heading over a hairline.
     Section(&'a str),
+    /// A panel's, a form's or a band's own title, in the heading type and the text colour: what
+    /// the block under it is (`Short rest`, the run strip's `Round 3`).
+    Panel(&'a str),
+    /// A heading that says a state in its colour, its icon first, as a status does: colour is
+    /// never the only signal (`⚠ Hit points conflict`). Its accessible name is its word.
+    Status(Status<'a>),
+    /// A sheet's or an entry's own name, in the display type and the text colour, beside its
+    /// picture (Party's sheet).
+    Name(&'a str),
 }
 
 impl Heading<'_> {
@@ -131,16 +140,16 @@ impl Heading<'_> {
     /// under the heading, so a heading belongs to what follows it.
     pub const fn above(self) -> f32 {
         match self {
-            Self::Group { .. } | Self::Label(_) => L,
-            Self::Section(_) => XL,
+            Self::Group { .. } | Self::Label(_) | Self::Panel(_) | Self::Status(_) => L,
+            Self::Section(_) | Self::Name(_) => XL,
         }
     }
 
     /// The space between the heading (its hairline, for a section) and what follows it.
     pub const fn below(self) -> f32 {
         match self {
-            Self::Group { .. } | Self::Label(_) => XS,
-            Self::Section(_) => XS,
+            Self::Group { .. } | Self::Label(_) | Self::Panel(_) | Self::Status(_) => XS,
+            Self::Section(_) | Self::Name(_) => XS,
         }
     }
 }
@@ -190,6 +199,17 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
             rule(ui);
             response
         }
+        Heading::Panel(text) => ui.label(Type::Heading.rich(ui, text).color(colors().text)),
+        Heading::Status(status) => {
+            let response = ui.label(
+                Type::Heading
+                    .rich(ui, format!("{} {}", status.icon, status.word))
+                    .color(status.color),
+            );
+            named(ui, &response, status.word);
+            response
+        }
+        Heading::Name(text) => ui.label(Type::Display.rich(ui, text).color(colors().text)),
     };
     if !in_row {
         space(ui, heading.below() - spacing);
@@ -555,6 +575,13 @@ mod tests {
             },
             Heading::Label("Party"),
             Heading::Section("Actions"),
+            Heading::Panel("Short rest"),
+            Heading::Status(Status {
+                icon: icons::WARN,
+                word: "Hit points conflict",
+                color: colors().sync.conflict,
+            }),
+            Heading::Name("Kaya Brightwater"),
         ] {
             run(|ui| {
                 let top = ui.max_rect().top();
@@ -598,6 +625,74 @@ mod tests {
                 );
             });
         }
+        // M0413, M0041, M0042: each new role's type and colour; a status heading paints its
+        // icon first in its colour and is named by its word.
+        let ctx = Context::default();
+        crate::design::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let conflict = colors().sync.conflict;
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                heading(ui, Heading::Panel("Short rest"));
+                heading(
+                    ui,
+                    Heading::Status(Status {
+                        icon: icons::WARN,
+                        word: "Hit points conflict",
+                        color: conflict,
+                    }),
+                );
+                heading(ui, Heading::Name("Kaya Brightwater"));
+            });
+        });
+        let painted: Vec<(String, f32, egui::Color32)> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some((
+                    text.galley.text().to_owned(),
+                    text.galley.job.sections[0].format.font_id.size,
+                    text.galley.job.sections[0].format.color,
+                )),
+                _ => None,
+            })
+            .collect();
+        let find = |words: &str| {
+            painted
+                .iter()
+                .find(|(text, ..)| text == words)
+                .cloned()
+                .unwrap_or_else(|| panic!("{words:?} painted: {painted:?}"))
+        };
+        let status_words = format!("{} Hit points conflict", icons::WARN);
+        assert_eq!(
+            [
+                find("Short rest"),
+                find(&status_words),
+                find("Kaya Brightwater")
+            ]
+            .map(|(_, size, color)| (size, color)),
+            [
+                (Type::Heading.size(), colors().text),
+                (Type::Heading.size(), conflict),
+                (Type::Display.size(), colors().text),
+            ],
+            "m-p0-heading-roles: Panel, Status and Name in their type and colour"
+        );
+        let named = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .is_some_and(|update| {
+                update
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| node.label() == Some("Hit points conflict"))
+            });
+        assert!(
+            named,
+            "m-p0-heading-roles: the status heading is named by its word"
+        );
     }
 
     /// X2: a choice never takes more width than its column gives. In a 100 px column, a label

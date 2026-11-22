@@ -634,6 +634,267 @@ fn session_content_edge(d: &Driver<'_>) -> Option<f32> {
         .or(rules)
 }
 
+/// The left of a character sheet's column: the leftmost of its known words that shows (a tile
+/// label or a skill). `None` when no sheet shows.
+fn sheet_left(d: &Driver<'_>) -> Option<f32> {
+    // Every text that starts with one of the words: a word can show twice (the Perception tile
+    // and the Perception skill), and the column starts at the leftmost.
+    let words = [
+        "Hit points",
+        "Armor class",
+        "Proficiency",
+        "Acrobatics",
+        "Athletics",
+        "Perception",
+        "Stealth",
+    ];
+    let mut left: Option<f32> = None;
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if clip.intersects(bounds)
+            && (words
+                .iter()
+                .any(|word| text.galley.job.text.starts_with(word))
+                || tile_label(&text.galley.job.text))
+        {
+            left = Some(left.map_or(bounds.left(), |left| left.min(bounds.left())));
+        }
+    });
+    left.map(|left| left - crate::design::S)
+}
+
+/// A tile's label: its value stands under it (`tile`).
+fn tile_label(words: &str) -> bool {
+    [
+        "Hit points",
+        "Armor class",
+        "Temp HP",
+        "Proficiency",
+        "Initiative",
+        "Inspiration",
+        "Perception",
+        "Insight",
+        "Investigation",
+        "Walking",
+    ]
+    .contains(&words)
+        || ["Str: ", "Dex: ", "Con: ", "Int: ", "Wis: ", "Cha: "]
+            .iter()
+            .any(|ability| words.starts_with(ability))
+}
+
+/// Layout step 11a (SF4, SM5, AM16, AH6): a character sheet's rows are whole rows of their pane,
+/// so its edge (a footer, the session banner, the run sheet's own bottom) never cuts a label,
+/// value, skill or condition through. In the sheet's column: the texts that their clip cuts from
+/// below, and each tile label shown whole whose value does not show whole under it (Astra's P2
+/// on PR 700: a label can stand whole while its value is wholly hidden). The reference of each is
+/// independent of the sheet's rows: the clip that paints the text, and the tile's own label.
+/// `None` when no sheet shows.
+fn sheet_faults(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>)> {
+    Some(sheet_faults_in(d, sheet_left(d)?))
+}
+
+/// `sheet_faults` in the column that starts at `left`.
+fn sheet_faults_in(d: &Driver<'_>, left: f32) -> (Vec<String>, Vec<String>) {
+    let (width, height) = d.window_size();
+    let area = egui::Rect::from_min_max(egui::pos2(left, 0.0), egui::pos2(width, height));
+    // Each text in the column: its words, its bounds, whether it shows whole.
+    let mut texts: Vec<(String, egui::Rect, bool)> = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if area.intersects(bounds) && clip.intersects(bounds) {
+            texts.push((
+                text.galley.job.text.clone(),
+                bounds,
+                clip.expand(1.0).contains_rect(bounds),
+            ));
+        }
+    });
+    let cut = texts_cut_from_below(d, area);
+    let missing = texts
+        .iter()
+        .filter(|(words, label, whole)| {
+            // A label that follows a bonus on its line is a skill, not a tile.
+            *whole
+                && tile_label(words)
+                && !texts.iter().any(|(_, other, _)| {
+                    (other.center().y - label.center().y).abs() < 4.0
+                        && other.right() <= label.left()
+                        && other.right() > label.left() - 40.0
+                })
+        })
+        .filter(|(_, label, _)| {
+            !texts.iter().any(|(_, value, whole)| {
+                *whole
+                    && value.top() >= label.bottom() - 2.0
+                    && value.top() < label.bottom() + 24.0
+                    && (value.left() - label.left()).abs() < 8.0
+            })
+        })
+        .map(|(words, _, _)| words.clone())
+        .collect();
+    (cut, missing)
+}
+
+/// The painted texts in `area` that their clip cuts from below (an edge through them). Only a cut
+/// from below: a list scrolled down shows its top row part-way, as any scroll does.
+fn texts_cut_from_below(d: &Driver<'_>, area: egui::Rect) -> Vec<String> {
+    let mut cut = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if area.intersects(bounds)
+            && clip.intersects(bounds)
+            && bounds.bottom() > clip.bottom() + 1.0
+        {
+            cut.push(text.galley.job.text.clone());
+        }
+    });
+    cut
+}
+
+/// Whether the sheet shows with no fault (`sheet_faults`), and what it found.
+fn sheet_whole(d: &Driver<'_>) -> (bool, String) {
+    let size = d.window_size();
+    let found = sheet_faults(d);
+    (
+        found
+            .as_ref()
+            .is_some_and(|(cut, missing)| cut.is_empty() && missing.is_empty()),
+        format!(
+            "At {size:?}, sheet texts cut from below, and tile labels without their value: {found:?}"
+        ),
+    )
+}
+
+/// Layout step 11a (SM2/AM2, SB1/AB1): the Arrivals list ends at a whole block. In the panel's
+/// column (from its title, `This fight · Arrivals`): the texts its clip cuts from below, and each
+/// group whose painted title shows whole while its Add's painted words do not. Painted, not the
+/// accessibility tree: a node keeps its whole rect under the column's cut. The reference is the
+/// clip that paints each text. `None` when no group title shows, so the check cannot pass on an
+/// empty match.
+fn arrival_blocks(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>, Vec<String>)> {
+    let (width, height) = d.window_size();
+    let left = d
+        .painted_rect_in("Arrivals", egui::Rect::EVERYTHING)?
+        .left()
+        - crate::design::S;
+    let area = egui::Rect::from_min_max(egui::pos2(left, 0.0), egui::pos2(width, height));
+    // Each whole painted text in the column, with its bounds.
+    let mut whole: Vec<(String, egui::Rect)> = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if area.intersects(bounds) && clip.expand(1.0).contains_rect(bounds) {
+            whole.push((text.galley.job.text.clone(), bounds));
+        }
+    });
+    let nodes = d.nodes();
+    // The groups, by their grips' names (`Drag <name> to the initiative list`).
+    let names: Vec<String> = nodes
+        .iter()
+        .filter_map(|node| node.name.strip_prefix("Drag "))
+        .filter_map(|rest| rest.split_once(" to the initiative list"))
+        .map(|(name, _)| name.to_owned())
+        .collect();
+    let drag = format!("{} ", crate::design::icons::DRAG);
+    let shown: Vec<String> = names
+        .into_iter()
+        .filter(|name| {
+            whole.iter().any(|(words, _)| {
+                words.strip_prefix(&drag).is_some_and(|title| {
+                    let title = title.trim_end_matches('…');
+                    !title.is_empty() && name.starts_with(title)
+                })
+            })
+        })
+        .collect();
+    if shown.is_empty() {
+        return None;
+    }
+    let alone = shown
+        .iter()
+        .filter(|name| {
+            let add = format!("Add {name} to the initiative list");
+            !nodes.iter().filter(|node| node.name == add).any(|node| {
+                whole
+                    .iter()
+                    .any(|(_, bounds)| node.rect.contains(bounds.center()))
+            })
+        })
+        .cloned()
+        .collect();
+    Some((texts_cut_from_below(d, area), alone, shown))
+}
+
+/// `arrival_blocks` with no fault; at 960x640 each group in `shown_at_960` shows its title too
+/// (a group's head is a block of its own: faults that the edge hides take only themselves).
+fn arrival_blocks_whole(d: &mut Driver<'_>, id: &str, shown_at_960: &[&str]) {
+    let size = d.window_size();
+    let found = arrival_blocks(d);
+    d.observe(
+        id,
+        found.as_ref().is_some_and(|(cut, alone, shown)| {
+            cut.is_empty()
+                && alone.is_empty()
+                && (size != SMALL
+                    || shown_at_960
+                        .iter()
+                        .all(|name| shown.iter().any(|shown| shown == name)))
+        }),
+        format!(
+            "At {size:?}, Arrivals texts cut from below, groups whose title shows without a whole \
+             Add, and the groups shown: {found:?}"
+        ),
+    );
+}
+
+fn sheet_rows_whole(d: &mut Driver<'_>, id: &str) {
+    let (whole, found) = sheet_whole(d);
+    d.observe(id, whole, found);
+}
+
+/// Layout step 11a (Astra's P1 on PR 700): from the sheet's top to its end in 6-point steps, so
+/// the pane's edge meets every row of both wide columns, the sheet shows no fault at any step
+/// (`sheet_faults`). Returns the steps and each step's fault; it ends at the sheet's top.
+fn sheet_sweep(d: &mut Driver<'_>) -> (usize, Vec<String>) {
+    let Some(wheel) = d
+        .painted_rect_in("Hit points", egui::Rect::EVERYTHING)
+        .map(|rect| rect.center())
+    else {
+        return (0, vec!["no sheet".to_owned()]);
+    };
+    d.scroll_points_at(wheel, -4000.0);
+    let Some(left) = sheet_left(d) else {
+        return (0, vec!["no sheet column".to_owned()]);
+    };
+    let tops = |d: &Driver<'_>| {
+        let mut tops = Vec::new();
+        d.each_painted_text(|text, _| {
+            if text.pos.x >= left {
+                tops.push(text.pos.y);
+            }
+        });
+        tops
+    };
+    let (mut steps, mut faults) = (0, Vec::new());
+    for _ in 0..300 {
+        steps += 1;
+        // The column found at the top: the sheet's end shows none of its known words.
+        let (cut, missing) = sheet_faults_in(d, left);
+        if !cut.is_empty() || !missing.is_empty() {
+            faults.push(format!(
+                "step {steps}: cut from below {cut:?}, labels without their value {missing:?}"
+            ));
+        }
+        let before = tops(d);
+        d.scroll_points_at(wheel, 6.0);
+        if tops(d) == before {
+            break;
+        }
+    }
+    d.scroll_points_at(wheel, -4000.0);
+    (steps, faults)
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -3409,6 +3670,15 @@ pub mod campaign_content {
         d.click_starting("D&D 2024 · SRD");
         d.expect("Whole package, with future additions");
         d.state("packages-tab", Sizes::Default);
+        // M0280: the header's action says what it opens on hover, as the page's own action did.
+        let hint = d.place_of("Campaign entries").map(|rect| {
+            d.hover_shows(rect.center(), "This campaign’s own entries, in the Library")
+        });
+        d.observe(
+            "m32-L11c-campaign-entries-hint",
+            hint == Some(true),
+            format!("Hovering the Campaign entries action shows its hint: {hint:?}"),
+        );
         d.check_tab_order("campaign, packages");
         // No click: the brief asks for these on screen, with the built-in package open.
         d.click_starting(REQUIRED);
@@ -3972,7 +4242,27 @@ pub mod campaign_content {
                 format!("At {size:?}, the repair's frame is whole and ends at Save: {detail}"),
             );
         }
-        d.state("repair-dirty", Sizes::All);
+        // Layout step 11c (L11c-C.1, SA4): with a repair's editor open the page is still the
+        // pane's scroll column. Where the page fits (1920), its footer starts `S` below the
+        // taller list's last entry (Veilglass Lantern), within that row's height; a `Fills` body
+        // stretched the columns to a footer pinned at the window's bottom, far below the list.
+        d.state_prepared("repair-dirty", Sizes::All, |d| {
+            if d.window_size().0 >= 1900.0 {
+                let last = d.place_of("Veilglass Lantern");
+                let footer = footer_with(d, "Campaign packages draft discarded.");
+                let gap = footer.zip(last).map(|(footer, last)| footer.top() - last.bottom());
+                d.observe(
+                    "l11c-C1-repair-follows",
+                    gap.is_some_and(|gap| {
+                        (crate::design::S - 0.5..=crate::design::S + crate::design::Density::Glance.row())
+                            .contains(&gap)
+                    }),
+                    format!(
+                        "The footer {footer:?} starts {gap:?} below the last entry {last:?} (from `S` to `S` plus a row)"
+                    ),
+                );
+            }
+        });
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
         // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
         // nothing.
@@ -4081,11 +4371,13 @@ pub mod campaign_content {
                         slot.trim_start_matches(|c: char| !c.is_alphabetic()) == "Not saved"
                             && footer.contains(cause.center())
                             && footer.top() > save.bottom()
-                            && footer.bottom() >= *height - crate::design::XXL
+                            && footer.bottom() <= *height
                     }),
+                // Layout step 11c (L11c-C.1, SA4): the footer follows the page's content where it fits,
+                // and the pane pins it only where the content fills or scrolls; no `Fills` body
+                // pins it any more (`l11c-C1-repair-follows`).
                 format!(
-                    "At {size:?}: the slot says only Not saved, and the cause is in the footer at \
-                     the pane's bottom (slot, footer, cause, Save, window height): {placed:?}"
+                    "At {size:?}: the slot says only Not saved, and the cause is in the footer below Save (slot, footer, cause, Save, window height): {placed:?}"
                 ),
             );
         }
@@ -4660,6 +4952,56 @@ pub mod campaign_content {
             a_wheel && b_wheel,
             format!("The wheel brings A's Save into view {a_wheel}, then B's Save {b_wheel}"),
         );
+        // Layout step 11c (review of PR 719): a press on the visible part of B's cut editor
+        // moves nothing while the pointer presses, holds and releases; the pane's focus
+        // clearance alone brings the editor whole into view, after the release. The reference
+        // is B's message above the editor, read from the screen at each frame.
+        d.scroll_up_at(page, 20);
+        let partly = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == b_editor_name)
+                .map(|node| node.shown)
+                .filter(|shown| shown.height() >= crate::design::XL)
+                .filter(|_| !whole(d))
+        };
+        // Down the page by touchpad steps until B's editor shows in part.
+        let mut shown = partly(d);
+        for _ in 0..40 {
+            if shown.is_some() {
+                break;
+            }
+            d.scroll_points_at(page, 40.0);
+            shown = partly(d);
+        }
+        let mut tops = vec![b_message_top(d).map(|rect| rect.top())];
+        if let Some(shown) = shown {
+            let at = shown.center();
+            d.press_hold_at(at);
+            tops.push(b_message_top(d).map(|rect| rect.top()));
+            for _ in 0..3 {
+                d.hold_step();
+                tops.push(b_message_top(d).map(|rect| rect.top()));
+            }
+            d.release_at(at);
+            tops.push(b_message_top(d).map(|rect| rect.top()));
+            d.settle();
+        }
+        let still = tops.len() == 6
+            && tops[0].is_some()
+            && tops.iter().all(|top| {
+                top.zip(tops[0])
+                    .is_some_and(|(top, first)| (top - first).abs() <= 0.5)
+            });
+        let editor_focused = d.focused_name().as_deref() == Some(b_editor_name.as_str());
+        d.observe(
+            "l11c-C1-editor-press-still",
+            still && editor_focused,
+            format!(
+                "B's editor shown {shown:?}; B's message top before, at the press, while held and at the release: {tops:?}; then the editor is focused {editor_focused}"
+            ),
+        );
+        d.press(Key::Escape);
         // Round 25 FD1: A's discard result belongs to A. B's edit leaves it, and Undo discard
         // brings back A's draft only; B's edit stays.
         let b_name = crate::world::repair::editor_name("Notes/Cracked.md");
@@ -5303,7 +5645,9 @@ pub mod party {
             .simulate(crate::settings::Account::Connected);
         d.settle();
         d.expect(FORCE_READ);
-        d.state("copy-has-local-edits", Sizes::All);
+        d.state_prepared("copy-has-local-edits", Sizes::All, |d| {
+            sheet_rows_whole(d, "l11a-SF4-sheet-rows");
+        });
         const LOCAL_EDITS: &str = "so Splat stopped updating it.";
         party_body_takes_presses(d, "iter-27-C-press-local-edits", LOCAL_EDITS);
         // Round 27 review: typing in a field outside the footer reaches that field, and the
@@ -5395,6 +5739,23 @@ pub mod party {
             },
         );
         d.state("force-read-replaced", Sizes::Default);
+        // Layout step 11a (Astra's P1 on PR 700): at 1920 the sheet's two wide columns end
+        // whole together under the footer at every scroll offset, from its top to its end. Proof
+        // steps that end at the sheet's top.
+        // At 1920x720 and 1920x480 too: the same wide columns with more to scroll, so the edge
+        // meets every row, the tiles at the top as well.
+        let sweeps = d.aside(|d| {
+            [LARGE, (1920.0, 720.0), (1920.0, 480.0)].map(|size| d.act_at_size(size, sheet_sweep))
+        });
+        d.observe(
+            "l11a-SF4-sheet-sweep",
+            sweeps[1].0 >= 40
+                && sweeps[2].0 > sweeps[1].0
+                && sweeps.iter().all(|(_, faults)| faults.is_empty()),
+            format!(
+                "At 1920x1080, 1920x720 and 1920x480, steps of 6 points and faults: {sweeps:?}"
+            ),
+        );
         let with_result = list_tops(d, REPLACED);
         let archive = note.with_extension("md.splat-archive");
         d.observe(
@@ -7401,6 +7762,7 @@ pub mod settings {
         );
         party_body_takes_presses(d, "iter-27-C-press-stopped", STOPPED);
         d.state_prepared("sync-stopped-recovery", Sizes::All, |d| {
+            sheet_rows_whole(d, "l11a-AH6-sheet-rows");
             // s30 B11 (R41): the rail's `Sync stopped` and the Party footer's notice of it take
             // one tone, a warning.
             let (rail, footer) = (
@@ -9324,7 +9686,24 @@ pub mod prep_to_table {
         d.click(BEGIN);
         d.expect(ROUND);
         d.expect(CURRENT_TURN);
-        d.state("first-turn", Sizes::Standard);
+        d.state_prepared("first-turn", Sizes::Standard, |d| {
+            sheet_rows_whole(d, "l11a-SM5-AM16-sheet-rows");
+        });
+        // Astra's P2 on PR 700: the run's sheet at 1920 too. At 1920x1080 it fits whole; at
+        // 1920x720 and 1920x480 (the same wide sheet) it scrolls, and at every offset to its end
+        // its bottom ends at a whole row (proof steps that end at the sheet's top, where it is).
+        let (whole, found) = d.at_size(LARGE, sheet_whole);
+        let sweeps = d.aside(|d| {
+            [(1920.0, 720.0), (1920.0, 480.0)].map(|size| d.act_at_size(size, sheet_sweep))
+        });
+        d.observe(
+            "l11a-SM5-AM16-sheet-rows",
+            whole
+                && sweeps[1].0 > sweeps[0].0
+                && sweeps[0].0 >= 10
+                && sweeps.iter().all(|(_, faults)| faults.is_empty()),
+            format!("{found}; at 1920x720 and 1920x480, steps of 6 points and faults {sweeps:?}"),
+        );
         d.observe(
             "P1",
             current_participant(d).as_deref() == Some(first.as_str()),
@@ -11393,7 +11772,7 @@ pub mod column_resize {
                     .filter(|node| node.in_view() && node.name.starts_with("Undo"))
                     .count()
                     == 1
-                    && d.event_undo("add").is_some(),
+                    && d.add_undo().is_some(),
                 "The plan add has one named Undo at each window size",
             );
         });
@@ -15053,15 +15432,15 @@ pub mod session_notes {
             d.has_containing("Short rest added to Session 1."),
             "An event added here says so, in words",
         );
-        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
+        d.click(&d.add_undo().expect("an event\u{2019}s Undo add"));
         d.observe(
             "T11.2",
             !d.has("Short rest") && d.has_containing("Removed"),
             "A mis-press has one step of undo, and that has one too",
         );
         d.click(
-            &d.event_undo("remove")
-                .expect("an event\u{2019}s Undo remove"),
+            &d.removal_undo("Short rest")
+                .expect("the Short rest\u{2019}s Undo remove"),
         );
         d.expect("Short rest");
         d.click("Short rest");
@@ -15395,18 +15774,18 @@ pub mod session_notes {
         d.click("All");
         d.click("More actions for Rest at the mill");
         d.click("Remove this event");
-        d.expect("Undo remove ");
+        d.expect("Undo remove Rest at the mill");
         d.expect("1 note still links to it.");
         d.state("timeline-removed", Sizes::Default);
         d.click_containing("Travel ·");
         d.observe(
             "T11.4",
-            d.event_undo("remove").is_some(),
+            d.removal_undo("Rest at the mill").is_some(),
             "Selecting another event keeps the undo for a removal",
         );
         d.click(
-            &d.event_undo("remove")
-                .expect("an event\u{2019}s Undo remove"),
+            &d.removal_undo("Rest at the mill")
+                .expect("the removal\u{2019}s Undo names Rest at the mill"),
         );
         d.expect("Rest at the mill");
 
@@ -15958,6 +16337,28 @@ pub mod session_notes {
         // Must stay true: the open details form owns its own save, so the move is not primary.
         d.click("Edit details");
         d.expect("Save details");
+        // Layout step 11c (L11c-C.2): Edit details gives the keyboard to the name field, and the
+        // pane's focus clearance brings that field's block, the whole form with its Save, into
+        // view (here the form opens below all three blocks).
+        let whole = |d: &Driver<'_>, name: &str, role: Option<egui::accesskit::Role>| {
+            d.nodes().into_iter().any(|node| {
+                node.name == name
+                    && role.is_none_or(|role| node.role == role)
+                    && node.fully_in_view()
+            })
+        };
+        let (field, save, focused) = (
+            whole(d, "Campaign name", Some(egui::accesskit::Role::TextInput)),
+            whole(d, "Save details", None),
+            d.focused_name(),
+        );
+        d.observe(
+            "l11c-C2-edit-details-form",
+            field && save && focused.as_deref() == Some("Campaign name"),
+            format!(
+                "After Edit details: the name field whole {field}, Save details whole {save}, focus on {focused:?}"
+            ),
+        );
         // The details form's own save is the one primary once its details change.
         let name = d
             .field_text("Campaign name")
@@ -20918,15 +21319,40 @@ pub mod encounter_groups {
                         preview = text.galley.job.sections.last().map(|s| s.format.color);
                     }
                 });
+                // Layout 11c (M0233): the fault's frame starts at the field's own left edge
+                // (±1 px), read from its painted icon, which stands `S` and a hairline after the
+                // frame's left (`small_tone_message`).
+                let mut icons = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if clip.intersects(rect) && text.galley.job.text == crate::design::icons::ERROR
+                    {
+                        icons.push(rect);
+                    }
+                });
+                let frame = faults.first().and_then(|words| {
+                    icons
+                        .iter()
+                        .filter(|icon| {
+                            icon.right() <= words.left() + 1.0
+                                && icon.bottom() > words.top()
+                                && icon.top() < words.bottom()
+                        })
+                        .map(|icon| icon.left() - crate::design::S - crate::design::HAIRLINE_WIDTH)
+                        .reduce(f32::max)
+                });
                 let placed = field.is_some_and(|field| {
                     faults.len() == 1
                         && faults[0].top() >= field.bottom() - 0.5
                         && faults[0].top() < field.bottom() + crate::design::XL
                         && faults[0].left() >= field.left() - 0.5
+                        && frame.is_some_and(|frame| (frame - field.left()).abs() <= 1.0)
                 }) && preview == Some(crate::design::colors().result.error);
                 (
                     placed,
-                    format!("field {field:?}, faults {faults:?}, preview {preview:?}"),
+                    format!(
+                        "field {field:?}, faults {faults:?}, frame {frame:?}, preview {preview:?}"
+                    ),
                 )
             });
             d.observe(
@@ -23480,7 +23906,14 @@ pub mod encounter_owned_groups {
         let list = d
             .place_of(&add_group(NEW_NAME))
             .expect("the list shows the group that joined");
-        d.scroll_until(list.center(), "Edit group", 5);
+        // Layout step 11a: until its words are painted whole. The list's whole-row cut hides a
+        // fault and its repair together, while the repair's node still says it is in view.
+        for _ in 0..5 {
+            if d.painted_whole_in("Edit group", egui::Rect::EVERYTHING) {
+                break;
+            }
+            d.scroll_at(list.center(), 1);
+        }
         // iter-25-R FB5: a member fault's repair is a bordered secondary button. M0126 (M-R0.9):
         // it is a choice of the fault's typed message, so at every size it stands on the line
         // under the fault, its border starting at the warning text.
@@ -23564,6 +23997,7 @@ pub mod encounter_owned_groups {
         // their member line, at every size; neither heading holds it, so both headings give way
         // in the one order of their `Fight after` line.
         d.state_prepared("own-group-dragged-in-combat", Sizes::All, |d| {
+            arrival_blocks_whole(d, "l11a-SB1-AB1-arrival-blocks", &["Lost Patrol"]);
             let places =
                 [NEW_NAME, GROUP_SHRINE].map(|group| status_places(d, group, "Added in round 1"));
             d.observe(
@@ -24620,6 +25054,7 @@ pub mod run_add_creature {
         // member line, so at 1200 and 1920 its heading keeps its side and the whole name of the
         // creature whose XP is not known (R31), as Goblin Wave's does.
         d.state_prepared("arrivals-made-up-added", Sizes::All, |d| {
+            arrival_blocks_whole(d, "l11a-SM2-AM2-arrival-blocks", &[]);
             let size = d.window_size();
             let rivals = arrival_heading(d, GROUP_RIVALS);
             let wide = size.0 >= DEFAULT.0;
@@ -27152,8 +27587,8 @@ pub mod session_plan {
         // at the removed row's place. It stays with its notice, below the remaining row.
         d.observe(
             "iter-10-C-AT2-undo",
-            d.event_undo("remove").is_some_and(|undo| d.in_view(&undo))
-                && d.event_undo("remove")
+            d.removal_undo(FIRST).is_some_and(|undo| d.in_view(&undo))
+                && d.removal_undo(FIRST)
                     .and_then(|undo| d.place_of(&undo))
                     .zip(d.place_of(&notice))
                     .zip(d.place_of(FIRST))
@@ -27197,7 +27632,7 @@ pub mod session_plan {
             "iter-24-S-FL3-undo",
             !d.has("Undo delete run")
                 && d.visible_text(&notice)
-                && d.event_undo("remove").is_some_and(|undo| d.in_view(&undo))
+                && d.removal_undo(FIRST).is_some_and(|undo| d.in_view(&undo))
                 && d.in_view(&format!("Resume: {FIRST}")),
             "Undo delete run brings the run back, and the removal's result returns",
         );
@@ -27206,7 +27641,7 @@ pub mod session_plan {
         d.expect(&format!("Start fight: {FIRST}"));
         d.observe(
             "iter-24-S-FL3",
-            d.event_undo("remove").is_none() && d.in_view("Undo delete run"),
+            d.name_starting("Undo remove ").is_empty() && d.in_view("Undo delete run"),
             "Deleting the run again replaces the removal's result again",
         );
         // FT4: Timeline names the removed fight as the plan does.
@@ -27214,7 +27649,7 @@ pub mod session_plan {
         d.observe(
             "iter-12-C-FT4",
             d.visible_text(&format!("Removed “{FIRST}” (Round 2 · Paused)."))
-                && d.event_undo("remove").is_some_and(|undo| d.in_view(&undo)),
+                && d.removal_undo(FIRST).is_some_and(|undo| d.in_view(&undo)),
             "Timeline's removal notice names the removed fight, with its Undo",
         );
         d.click(NAV_SESSIONS);
@@ -27720,7 +28155,8 @@ pub mod session_plan {
         // iter-23-S FK2: a run that starts ends the removal's result and its Undo, so no notice
         // sits above rows it no longer names.
         let removal_gone = |d: &Driver<'_>| {
-            !d.has_containing(&format!("Removed “{FIRST}”")) && d.event_undo("remove").is_none()
+            !d.has_containing(&format!("Removed “{FIRST}”"))
+                && d.name_starting("Undo remove ").is_empty()
         };
         d.state_prepared("plan-after-a-fight", Sizes::All, |d| {
             // Layout PR 5a-2 (I6): the plan's actions start `L` after its widest facts (every
@@ -27876,10 +28312,10 @@ pub mod session_plan {
         d.click("Add Long rest");
         d.observe(
             "S4",
-            d.event_undo("add").is_some() && !d.has("Undo everyone to full"),
+            d.add_undo().is_some() && !d.has("Undo everyone to full"),
             "The long rest has one Undo",
         );
-        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
+        d.click(&d.add_undo().expect("an event\u{2019}s Undo add"));
         d.observe(
             "S4",
             !d.has("Everyone at full"),
@@ -28149,7 +28585,7 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
-        let undo_add = undo_shape(d, &d.event_undo("add").expect("an event\u{2019}s Undo add"));
+        let undo_add = undo_shape(d, &d.add_undo().expect("an event\u{2019}s Undo add"));
         d.observe(
             "iter-17-B-AT1-pair",
             saved_hp_undo.is_some() && undo_add == saved_hp_undo,
@@ -28157,7 +28593,7 @@ pub mod session_plan {
                 "The saved-HP Undo {saved_hp_undo:?} has the same shape as Undo add {undo_add:?}"
             ),
         );
-        d.click(&d.event_undo("add").expect("an event\u{2019}s Undo add"));
+        d.click(&d.add_undo().expect("an event\u{2019}s Undo add"));
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Add Long rest");
         d.expect("Everyone at full");

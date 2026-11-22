@@ -2637,7 +2637,7 @@ fn keys_field<T>(
 
 /// A state as an icon, a word and a colour. Colour is never the only signal. A status whose
 /// icon and word differ in colour is a `KindStatus` (`design::status`).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Status<'a> {
     pub icon: &'a str,
     pub word: &'a str,
@@ -3951,6 +3951,9 @@ pub struct Footer<'a> {
     /// A typed footer's lines (`outcome::Messages`): data, drawn in the order of the footer's
     /// retained plan (layout PR 2b).
     typed: Option<Box<dyn FooterLines + 'a>>,
+    /// The body's own bottom is an edge as the footer is: its scroll column ends at its last
+    /// whole registered row there too, with the hairline (`outcome::Messages::rows_end_whole`).
+    pub(super) whole_rows: bool,
 }
 
 /// A typed footer's lines, as the pane places and draws them (`outcome::Messages`).
@@ -3985,6 +3988,7 @@ impl<'a> Footer<'a> {
             width,
             messages: Vec::new(),
             typed: None,
+            whole_rows: false,
         }
     }
 
@@ -3995,6 +3999,7 @@ impl<'a> Footer<'a> {
             width,
             messages: Vec::new(),
             typed: Some(lines),
+            whole_rows: false,
         }
     }
 
@@ -4888,6 +4893,35 @@ impl<H: std::hash::Hash> Section<H> {
         let response = header.show(ui, add);
         with_expanded(ui, response)
     }
+}
+
+/// A section whose header is a row the caller draws, not a title: a list whose rows open in
+/// place (a sheet's spells, each a fixed row with its name and its facts). `header` draws the row
+/// for its state (`open`, for its caret) and gives back its response. The row says whether it is
+/// open to a screen reader, a click on it opens or closes it, and the body opens under it, at
+/// the row's left edge. It starts closed; its state is kept under `id`. The body's value, while
+/// it is open. Review of PR 730: the one other way to open a section; `clippy.toml` refuses
+/// egui's `CollapsingState` drawing and `Ui::collapsing` outside the design system.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+pub fn section_row<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    header: impl FnOnce(&mut Ui, bool) -> Response,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> Option<R> {
+    let id = ui.make_persistent_id(id);
+    let mut state =
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+    let row = header(ui, state.is_open());
+    ui.ctx()
+        .accesskit_node_builder(row.id, |node| node.set_expanded(state.is_open()));
+    if row.clicked() {
+        state.toggle(ui);
+    }
+    state.show_body_unindented(ui, add).map(|body| body.inner)
 }
 
 /// A collapsing section ([`Section`]) under its title.
@@ -6518,11 +6552,13 @@ mod tests {
     /// and the state follows a click on its own header only.
     #[test]
     fn a_section_says_whether_it_is_open() {
+        let notes = std::rc::Rc::new(std::cell::Cell::new("3 notes"));
+        let title = notes.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 300.0))
-            .build_ui(|ui| {
+            .build_ui(move |ui| {
                 let _ = section(ui, "Details", |ui| ui.label("Inside details"));
-                let _ = section_with_id(ui, "notes", "3 notes", |ui| ui.label("Inside notes"));
+                let _ = section_with_id(ui, "notes", title.get(), |ui| ui.label("Inside notes"));
                 let _ = quiet_section(ui, "Technical", |ui| ui.label("Inside technical"));
                 // A section its owner opens (a History run read from a link).
                 let _ = section_opened(ui, "runs", "2 runs", Some(true), |ui| {
@@ -6576,6 +6612,22 @@ mod tests {
             expanded(&harness)[4],
             Some(false),
             "m-p0-section-default-open: the DM closes a section open by default, and it stays closed"
+        );
+        // Review of PR 730: a section with an id keeps its state when its count changes (a
+        // repair in Campaign content's issues).
+        notes.set("2 notes");
+        harness.run_steps(3);
+        assert_eq!(
+            {
+                use egui_kittest::kittest::{NodeT, Queryable};
+                harness
+                    .get_by_label("2 notes")
+                    .accesskit_node()
+                    .data()
+                    .is_expanded()
+            },
+            Some(true),
+            "m-p0-section-id: the open section stays open under its new count"
         );
         assert!(
             {
