@@ -17,3 +17,5 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 egui_kittest = { version = "0.33", features = ["wgpu"] }
+# Its own tests build harnesses with `design::test_harness` (issue #810), so they need it alone too.
+splat-design = { path = "../design", features = ["test-support"] }
