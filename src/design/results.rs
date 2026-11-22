@@ -996,11 +996,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::ByOwner(1)],
         ),
         // M20 (M-L0.6): the disk-change warnings above the comparison, typed placeholders.
-        (
-            "src/library.rs",
-            "editor_pane",
-            &[Ban::Extras(1), Ban::Body],
-        ),
+        ("src/library.rs", "editor_pane", &[Ban::Body]),
         // M20 (M-L0.6): a read fault in the reader's body, with `Try again`.
         ("src/library/catalogue.rs", "fault_notice", &[Ban::Body]),
         // M20 (M-L0.6): a copied package folder's warnings in the form, with its repair.
@@ -1076,18 +1072,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "removed_fight_message",
             &[Ban::Body],
         ),
-        (
-            "src/world/edit.rs",
-            "edit_form",
-            &[Ban::Results, Ban::Extras(1)],
-        ),
+        ("src/world/edit.rs", "edit_form", &[Ban::Results]),
         // M20 (M-W0.4): the creation error in place of the page's body (was
         // `message_with_actions`).
-        (
-            "src/world/page.rs",
-            "creation_body",
-            &[Ban::Extras(1), Ban::Body],
-        ),
+        ("src/world/page.rs", "creation_body", &[Ban::Body]),
         // Package K: raw egui calls that a layout part replaces.
         (
             "src/campaigns.rs",
@@ -1116,21 +1104,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "ended_view",
-            &[Ban::Layout(2), Ban::Extras(1), Ban::Pane(1)],
+            &[Ban::Layout(2), Ban::Pane(1)],
         ),
-        ("src/encounter_run/view.rs", "group_row", &[Ban::Extras(2)]),
-        (
-            "src/encounter_run/view.rs",
-            "record_tab",
-            &[Ban::Extras(1), Ban::RowKey(1)],
-        ),
+        ("src/encounter_run/view.rs", "record_tab", &[Ban::RowKey(1)]),
         ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(1), Ban::Pane(1), Ban::Body],
+            &[Ban::Layout(1), Ban::Pane(1), Ban::Body],
         ),
-        ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(7)]),
+        ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(1)]),
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
@@ -1147,7 +1130,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/library.rs", "new_entry", &[Ban::Extras(1)]),
-        ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
         // `line_row`'s lines are; the list has no typed owner yet.
         (
@@ -1316,21 +1298,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "live_header",
             &[Ban::Extras(2)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "correction_reason",
-            &[Ban::Extras(1)],
-        ),
         ("src/encounter_run/view.rs", "live_view", &[Ban::Pane(1)]),
         // M-P0 item 7: the run's notices in the compact typed form, where they stand.
         ("src/encounter_run/view.rs", "live_notice", &[Ban::Body]),
         ("src/encounter_run/notice.rs", "header_notice", &[Ban::Body]),
         ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
-        (
-            "src/encounter_run/view.rs",
-            "setup_tie_controls",
-            &[Ban::Extras(1)],
-        ),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
@@ -1392,7 +1364,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
         // warning with its two repairs and the duplicate repair, in the reader's body (were
         // `message`, `message_with_actions`).
-        ("src/world.rs", "draw", &[Ban::Extras(2), Ban::Body]),
+        ("src/world.rs", "draw", &[Ban::Extras(1), Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
@@ -1400,7 +1372,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
         // `message` and a link).
         ("src/world.rs", "unread_groups_message", &[Ban::Body]),
-        ("src/world.rs", "value_row", &[Ban::Extras(1)]),
+        ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         // M20 (M-W0.5): a note that cannot be read, in place of its page (was
         // `message_with_actions`).
@@ -1673,8 +1645,6 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/comparison.rs", 1),
             ("crates/campaign/src/encounter_run/undo.rs", 2),
-            ("src/library.rs", 1),
-            ("src/library/catalogue.rs", 1),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
         ],

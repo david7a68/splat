@@ -166,7 +166,8 @@ fn broken_link_warnings(
 /// unchanged frame prepares nothing and borrows them. The parse is known by its revision.
 type BrokenLines = (
     design::memo::Revision,
-    std::sync::Arc<crate::lookup::ContentIndex>,
+    // The index's load (`ContentIndex::generation`), never its address.
+    u64,
     Option<usize>,
     Vec<Sentence>,
 );
@@ -4884,13 +4885,13 @@ impl Library {
                         .as_ref()
                         .is_some_and(|(seen, known, at, _)| {
                             *seen == parsed_draft.revision()
-                                && std::sync::Arc::ptr_eq(known, index)
+                                && *known == index.generation()
                                 && *at == skip
                         });
                     if !fresh {
                         let warnings = broken_link_warnings(&self.draft, entry, index, skip);
                         self.broken_lines =
-                            Some((parsed_draft.revision(), index.clone(), skip, warnings));
+                            Some((parsed_draft.revision(), index.generation(), skip, warnings));
                     }
                     broken_taken = true;
                     self.broken_lines
@@ -5326,7 +5327,7 @@ impl Library {
                         // first warning, as between a kind line and prose,
                         // so the kind word does not read as the warning's.
                         if fault.is_some() || repair_problem.is_some() {
-                            ui.add_space(design::L - ui.spacing().item_spacing.y);
+                            design::gap_to_next(ui, design::Gap::L);
                         }
                         if let Some(fault) = &fault {
                             read_again = fault_notice(ui, fault);

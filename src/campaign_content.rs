@@ -377,8 +377,15 @@ enum ContentFault<'a> {
         /// The package's reference, while its Technical details are open.
         reference: Option<&'a str>,
     },
-    /// A Campaign.md flag or a missing dependency (the content layer's words).
+    /// A Campaign.md flag (the content layer's words).
     Flag(&'a str),
+    /// A missing dependency (M0044): with one owner, the owner and the line of its missing
+    /// link head the words (`Lost Patrol · line 13: Needs a creature that is not in this
+    /// campaign’s packages.`); with several, the content layer's sentence names them all.
+    Missing {
+        place: Option<(&'a str, Option<u32>)>,
+        cause: &'a str,
+    },
     /// Encounters a package removal left without creatures.
     LeftWithout(&'a design::outcome::Sentence),
 }
@@ -399,6 +406,7 @@ impl design::outcome::Fault for ContentFault<'_> {
             | Self::Manifest { on_disk: false, .. }
             | Self::Unavailable { .. }
             | Self::Flag(_)
+            | Self::Missing { .. }
             | Self::LeftWithout(_) => Severity::NeedsFixing,
         }
     }
@@ -408,6 +416,13 @@ impl design::outcome::Fault for ContentFault<'_> {
             Self::RepairRefused { path, .. } => Some(design::outcome::FaultPlace {
                 name: (*path).into(),
                 line: None,
+            }),
+            Self::Missing {
+                place: Some((owner, line)),
+                ..
+            } => Some(design::outcome::FaultPlace {
+                name: (*owner).into(),
+                line: *line,
             }),
             _ => None,
         }
@@ -456,7 +471,9 @@ impl design::outcome::Fault for ContentFault<'_> {
                 .blocking()
                 .and_then(&outside)
                 .unwrap_or(crate::sentence!("This needs fixing.")),
-            Self::Flag(cause) => outside(cause).unwrap_or(crate::sentence!("This needs fixing.")),
+            Self::Flag(cause) | Self::Missing { cause, .. } => {
+                outside(cause).unwrap_or(crate::sentence!("This needs fixing."))
+            }
             // What Replace keeps and replaces is its choice's own help line (ruling M8).
             Self::Manifest {
                 package, problem, ..
@@ -2758,9 +2775,12 @@ impl CampaignContent {
                                 ui.push_id(&issue.reference, |ui| {
                                     // FA6: a dependency issue is a warning like the flags above
                                     // it, and its repairs start at its words, one per owner.
-                                    let mut fault = design::outcome::BodyFault::new(
-                                        &ContentFault::Flag(&issue.message),
-                                    );
+                                    let missing = issue.fault();
+                                    let mut fault =
+                                        design::outcome::BodyFault::new(&ContentFault::Missing {
+                                            place: missing.place,
+                                            cause: &missing.cause,
+                                        });
                                     for id in &issue.owners {
                                         if let Some(path) = catalogue.file_path_of(*id) {
                                             let owner = &catalogue.entries[id];

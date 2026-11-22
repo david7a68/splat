@@ -279,8 +279,10 @@ fn removal(
 }
 
 /// The names of the notices due with `ledger` that are not due with `next`, oldest first. A
-/// day mark's open days share one row, named by its oldest day: each of its days that is no
-/// longer open is named, and a day that opens again ends nothing.
+/// notice at a value stays due when the same tracker and instance are still at or past its
+/// mark, whichever change raises it now (removing the first of two seals leaves the first seal
+/// due, raised by the second). A day mark's open days share one row, named by its oldest day:
+/// each of its days that is no longer open is named, and a day that opens again ends nothing.
 fn ended_notices(rules: &Rules, today: &Today, ledger: &Ledger, next: &Ledger) -> Vec<String> {
     let (before, after) = (
         super::replay(rules, ledger, today),
@@ -309,8 +311,13 @@ fn ended_notices(rules: &Rules, today: &Today, ledger: &Ledger, next: &Ledger) -
                     ended.push(one.name(rules));
                 }
             }
-            id => {
-                if !after.due.iter().any(|still| still.id == *id) {
+            NoticeRef::Value { at, .. } => {
+                let stays = after.due.iter().any(|still| {
+                    matches!(&still.id, NoticeRef::Value { at: mark, .. } if mark == at)
+                        && still.key == notice.key
+                        && still.instance == notice.instance
+                });
+                if !stays {
                     ended.push(notice.name(rules));
                 }
             }

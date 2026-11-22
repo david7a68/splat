@@ -2115,6 +2115,7 @@ impl Splat {
             Page::Sessions => {
                 if let Some(campaign) = &active {
                     let fights = self.encounters.plan_fights();
+                    let fights_revision = self.encounters.plan_fights_revision();
                     let saved_runs = self.encounters.saved_runs();
                     let saved_runs_revision = self.encounters.saved_runs_revision();
                     let groups = self.encounters.plan_groups();
@@ -2148,6 +2149,7 @@ impl Splat {
                         party: &party,
                         tables: sources.as_ref().map_or(&[], |sources| &sources.tables),
                         fights: &fights,
+                        fights_revision,
                         saved_runs: &saved_runs,
                         saved_runs_revision,
                         groups: &groups,
