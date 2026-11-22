@@ -79,59 +79,7 @@ impl Act {
         let rect = current.interact_rect;
         let focused = ctx.memory(|memory| memory.has_focus(id));
         let node = egui::accesskit::NodeId::from(id.value());
-        let exempt = ui.input(|input| {
-            let events = &input.events;
-            let access = events.iter().find(|event| {
-                matches!(
-                    event,
-                    egui::Event::AccessKitActionRequest(request)
-                        if request.target == node
-                            && request.action == egui::accesskit::Action::Click
-                )
-            });
-            if let Some(event) = access {
-                return Some(vec![event.clone()]);
-            }
-            let key = events.iter().find(|event| {
-                matches!(
-                    event,
-                    egui::Event::Key {
-                        key: egui::Key::Enter | egui::Key::Space,
-                        pressed: true,
-                        ..
-                    }
-                )
-            });
-            if focused && let Some(event) = key {
-                return Some(vec![event.clone()]);
-            }
-            let release = events.iter().position(|event| {
-                matches!(
-                    event,
-                    egui::Event::PointerButton {
-                        pos,
-                        button: egui::PointerButton::Primary,
-                        pressed: false,
-                        ..
-                    } if rect.contains(*pos)
-                )
-            })?;
-            let mut exempt = vec![events[release].clone()];
-            // Its press, when it came in the same pass.
-            if let Some(press) = events[..release].iter().rev().find(|event| {
-                matches!(
-                    event,
-                    egui::Event::PointerButton {
-                        button: egui::PointerButton::Primary,
-                        pressed: true,
-                        ..
-                    }
-                )
-            }) {
-                exempt.push(press.clone());
-            }
-            Some(exempt)
-        })?;
+        let exempt = cancel::act_events(ui, node, focused, rect)?;
         let frame = ctx.cumulative_frame_nr();
         // One act per control and frame.
         let given = ctx.data_mut(|data| {
@@ -648,6 +596,10 @@ pub(in crate::design) mod cancel {
         pub moved: bool,
         /// A press that began in it is held.
         pub held: bool,
+        /// A press is released over it in this pass.
+        pub released: bool,
+        /// Where the pointer is while it presses, holds or releases in it.
+        pub at: Option<egui::Pos2>,
         /// Another input to it: a press in it, a key that moves a view or a caret
         /// (`moves_view`) or activates a control (Enter, Space) while the keys go to it
         /// (`keys_in`), or an accessibility action on a control in it.
@@ -659,6 +611,12 @@ pub(in crate::design) mod cancel {
         pub(in crate::design) fn any(self) -> bool {
             self.moved || self.held || self.other
         }
+
+        /// The DM's pointer presses, holds or releases in it: a focus reveal there waits
+        /// (review of #875), so nothing moves under a click.
+        pub(in crate::design) fn pressing(self) -> bool {
+            self.held || self.released
+        }
     }
 
     /// A pass's input as it goes to one column, read where the column starts, before a child
@@ -667,6 +625,8 @@ pub(in crate::design) mod cancel {
         frame: u64,
         moved: bool,
         held: bool,
+        released: bool,
+        at: Option<egui::Pos2>,
         /// Each event of the pass, and whether it is input to this column.
         events: Vec<(egui::Event, bool)>,
         /// A press, key, text or accessibility action went to another column: a focus it moves
@@ -692,7 +652,7 @@ pub(in crate::design) mod cancel {
             ),
         );
         let frame = ui.ctx().cumulative_frame_nr();
-        let (moved, held, events) = ui.input(|input| {
+        let (moved, held, released, at, events) = ui.input(|input| {
             let pointer = &input.pointer;
             let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| reach.contains(pos));
             let wheel = input.raw_scroll_delta != Vec2::ZERO
@@ -704,7 +664,14 @@ pub(in crate::design) mod cancel {
             let held = pointer.any_down() && over(pointer.press_origin());
             let dragged = held && pointer.is_decidedly_dragging();
             let moved = (wheel && pointer_here && over(pointer.hover_pos())) || dragged || fling;
-            (moved, held, input.events.clone())
+            // egui forgets the press's origin in the pass of its release; the release's own
+            // place says whose it is.
+            let released = input.events.iter().any(|event| {
+                matches!(event, egui::Event::PointerButton { pos, pressed: false, .. }
+                    if reach.contains(*pos))
+            });
+            let at = pointer.latest_pos();
+            (moved, held, released, at, input.events.clone())
         });
         let mut elsewhere = false;
         let events = events
@@ -728,9 +695,76 @@ pub(in crate::design) mod cancel {
             frame,
             moved,
             held,
+            released,
+            at,
             events,
             elsewhere,
         }
+    }
+
+    /// The events of this pass that made an act of the control `node`: an accessibility click
+    /// on it; Enter or Space while it has the focus (`focused`); else the primary release in
+    /// its `rect`, with its press when it came in the same pass. Each is exempt from the one
+    /// rule once, in the act's frame (`Read::input`). `None`: no event of this pass made it.
+    pub(in crate::design) fn act_events(
+        ui: &Ui,
+        node: egui::accesskit::NodeId,
+        focused: bool,
+        rect: Rect,
+    ) -> Option<Vec<egui::Event>> {
+        ui.input(|input| {
+            let events = &input.events;
+            let access = events.iter().find(|event| {
+                matches!(
+                    event,
+                    egui::Event::AccessKitActionRequest(request)
+                        if request.target == node
+                            && request.action == egui::accesskit::Action::Click
+                )
+            });
+            if let Some(event) = access {
+                return Some(vec![event.clone()]);
+            }
+            let key = events.iter().find(|event| {
+                matches!(
+                    event,
+                    egui::Event::Key {
+                        key: egui::Key::Enter | egui::Key::Space,
+                        pressed: true,
+                        ..
+                    }
+                )
+            });
+            if focused && let Some(event) = key {
+                return Some(vec![event.clone()]);
+            }
+            let release = events.iter().position(|event| {
+                matches!(
+                    event,
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        ..
+                    } if rect.contains(*pos)
+                )
+            })?;
+            let mut exempt = vec![events[release].clone()];
+            // Its press, when it came in the same pass.
+            if let Some(press) = events[..release].iter().rev().find(|event| {
+                matches!(
+                    event,
+                    egui::Event::PointerButton {
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        ..
+                    }
+                )
+            }) {
+                exempt.push(press.clone());
+            }
+            Some(exempt)
+        })
     }
 
     /// This pass's input to `owner`'s column (`read`, then `Read::input` with nothing exempt).
@@ -763,6 +797,8 @@ pub(in crate::design) mod cancel {
             ColumnInput {
                 moved: self.moved,
                 held: self.held,
+                released: self.released,
+                at: (self.held || self.released).then_some(self.at).flatten(),
                 other,
             }
         }

@@ -58,3 +58,26 @@ src/trackers/view.rs late-theme 1
 # src/lookup.rs keeps 1: a scroll over the reader closes the results list above it (no request of a column).
 src/design/reveal.rs raw-scroll-input 3
 src/lookup.rs raw-scroll-input 1
+# Review of #875 (`input-read`): a read of the DM's input in a design file outside the one cancel entry point
+# (`mod cancel` in src/design/reveal.rs). Each row is a part's own reader that moves no view by itself and holds
+# or ends no reveal; a new reader fails, so a reveal judges input only through `reveal::cancel`.
+# column.rs 5: a focused splitter's resize keys (Left, Right, Home), read and then taken from egui.
+# components.rs 12: a number field's Up and Down steps, a suggestion list's Up and Down highlight, an inline
+#   field's Enter and Escape, a footer part's own scroll keys (arrows, Page Up, Page Down while it has the focus),
+#   the dialog's spent Enter and Escape, a menu's Escape and the arrow a menu row takes.
+# layout.rs 12: the text Undo guard (a press or a key press is when focus can come), inline create's input method
+#   (the window's focus, composition events, Enter and Escape kept from egui while composing), a suggestion
+#   popup's Escape, and a form's Enter and Escape.
+# pane/region.rs 7: the region's list box keys (Tab leaves at its ends, Up, Down, Home and End move the focus
+#   row by row) and the measured body's key routing (`route_keys`: which block a Tab or an arrow goes to).
+# popups.rs 1: a drag grip's pointer place, where its dragged row is painted.
+# reveal.rs 3: the key owner (`record_keys`, `pointer_in`: the column under the pointer), which the entry point
+#   reads to know whose keys and wheel these are.
+# save_row.rs 1: Ctrl+S.
+src/design/column.rs input-read 5
+src/design/components.rs input-read 12
+src/design/layout.rs input-read 12
+src/design/pane/region.rs input-read 7
+src/design/popups.rs input-read 1
+src/design/reveal.rs input-read 3
+src/design/save_row.rs input-read 1

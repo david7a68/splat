@@ -461,28 +461,65 @@ pub(super) fn ledger(
 ) -> Ledger {
     // Groups and History are sections: their rows start one indent further in.
     let (left, indent) = (ui.cursor().left(), ui.spacing().indent);
-    let mut in_facts = 0.0_f32;
-    let mut in_progress = 0.0_f32;
-    for run in &page.in_progress {
-        let open = live.is_some_and(|live| live.id == run.id);
-        let detail = paused_run_detail(run, &page.in_progress, open, story);
-        in_facts = in_facts.max(facts_width(ui, &run.encounter, &detail, !open, None));
-        let state = open.then(|| run_state_word(run, false));
-        in_progress = in_progress.max(in_progress_actions(ui, state.as_deref()));
-    }
-    // Review of PR 581 (#589): Ready, Groups and History are measured once per change of what
-    // they show (the campaign's read, the groups' revisions, the open run) or of what they are
-    // measured in (`memo::Measure`, the indent), and once a minute for History's saved times.
-    // In progress is measured each frame: its few paused rows name their session from the
-    // Timeline and Sessions, which have no revision here.
     let small = Type::Small.font(ui);
+    let (body, small_measure) = (
+        crate::design::memo::Measure::whole(ui, &Type::Body.font(ui)),
+        crate::design::memo::Measure::whole(ui, &small),
+    );
+    let minute = crate::hermetic::now() / 60;
+    // Review of #875 (P2, #589): In progress is measured once per change of what its rows show
+    // (the campaign's read and the run list's, the open run as its row reads it, and the story:
+    // the Timeline's events and the Sessions folder's listing that name a paused run's session),
+    // or of what they are measured in, and once a minute for "Saved N minutes ago". A story with
+    // no revision (a test's fixed lists) is measured on each frame.
+    let runs = snapshot.runs_read.revision();
+    let progress_key = story.revision.map(|story| InProgressKey {
+        snapshot: snapshot.revision,
+        runs,
+        open: live.map(open_run_words),
+        story,
+        minute,
+        body: body.clone(),
+        small: small_measure.clone(),
+    });
+    let progress_id = ui.id().with("encounters_ledger_in_progress");
+    let kept_progress = progress_key.as_ref().and_then(|key| {
+        ui.ctx()
+            .data(|data| data.get_temp::<(InProgressKey, [f32; 2])>(progress_id))
+            .filter(|(at, _)| at == key)
+            .map(|(_, widths)| widths)
+    });
+    let [in_facts, in_progress] = kept_progress.unwrap_or_else(|| {
+        #[cfg(any(test, feature = "test-support"))]
+        LEDGER_MEASURED.with(|count| count.set(count.get() + 1));
+        let mut in_facts = 0.0_f32;
+        let mut in_progress = 0.0_f32;
+        for run in &page.in_progress {
+            let open = live.is_some_and(|live| live.id == run.id);
+            let detail = paused_run_detail(run, &page.in_progress, open, story);
+            in_facts = in_facts.max(facts_width(ui, &run.encounter, &detail, !open, None));
+            let state = open.then(|| run_state_word(run, false));
+            in_progress = in_progress.max(in_progress_actions(ui, state.as_deref()));
+        }
+        if let Some(key) = progress_key {
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(progress_id, (key, [in_facts, in_progress]));
+            });
+        }
+        [in_facts, in_progress]
+    });
+    // Review of PR 581 (#589): Ready, Groups and History are measured once per change of what
+    // they show (the campaign's read, the run list's read: review of #875, a refresh or a
+    // deleted save in the same minute; the groups' revisions, the open run) or of what they are
+    // measured in (`memo::Measure`, the indent), and once a minute for History's saved times.
     let key = LedgerKey {
         snapshot: snapshot.revision,
+        runs,
         groups: super::groups::revisions_issued(),
         live: live.map(|live| live.id),
-        minute: crate::hermetic::now() / 60,
-        body: crate::design::memo::Measure::whole(ui, &Type::Body.font(ui)),
-        small: crate::design::memo::Measure::whole(ui, &small),
+        minute,
+        body,
+        small: small_measure,
         indent: indent.to_bits(),
     };
     let kept_id = ui.id().with("encounters_ledger_kept");
@@ -519,6 +556,7 @@ pub(super) fn ledger(
 #[derive(Clone, PartialEq)]
 struct LedgerKey {
     snapshot: Uuid,
+    runs: crate::design::memo::Revision,
     groups: u64,
     live: Option<Option<Uuid>>,
     minute: u64,
@@ -527,9 +565,41 @@ struct LedgerKey {
     indent: u32,
 }
 
+/// What the ledger's measure of In progress was made from (`ledger`).
+#[derive(Clone, PartialEq)]
+struct InProgressKey {
+    snapshot: Uuid,
+    runs: crate::design::memo::Revision,
+    /// The open run's words as its row reads them (`open_run_words`): the open run's facts are
+    /// made on each frame from the run itself, with no revision.
+    open: Option<u64>,
+    story: (crate::design::memo::Revision, u64),
+    minute: u64,
+    body: crate::design::memo::Measure,
+    small: crate::design::memo::Measure,
+}
+
+/// The open run's facts that its In progress row reads (its name, file, words, state and save
+/// time), as one number: a few short words hashed, never the run list.
+fn open_run_words(run: &SavedRunInfo) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::hash::DefaultHasher::new();
+    (
+        run.id,
+        &run.encounter,
+        &run.path,
+        &run.label,
+        run.standing == crate::encounter_run::Standing::Ended,
+        run.saved_at,
+    )
+        .hash(&mut hasher);
+    hasher.finish()
+}
+
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
-    /// How many times the ledger's Ready, Groups and History were measured (tests, #589).
+    /// How many times the ledger's lists were measured (tests, #589): In progress, and Ready,
+    /// Groups and History together.
     pub(super) static LEDGER_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -2166,6 +2236,7 @@ mod iter_2_c_tests {
             &Story {
                 events: &book.events,
                 sessions: &sessions,
+                revision: None,
             },
         );
         assert!(detail.contains("Session 1"));
@@ -2180,6 +2251,7 @@ mod iter_2_c_tests {
             &Story {
                 events: &book.events,
                 sessions: &sessions,
+                revision: None,
             },
         );
         assert!(detail.contains("Session 1 · 2026-01-01"));
@@ -2191,6 +2263,7 @@ mod iter_2_c_tests {
             &Story {
                 events: &[],
                 sessions: &[],
+                revision: None,
             },
         );
         assert_eq!(detail.matches("2026-01-01").count(), 1);
@@ -2202,6 +2275,7 @@ mod iter_2_c_tests {
             &Story {
                 events: &[],
                 sessions: &[],
+                revision: None,
             },
         );
         assert_eq!(detail.matches("Saved ").count(), 1);
