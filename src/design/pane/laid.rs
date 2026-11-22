@@ -398,6 +398,7 @@ mod tests {
                         crate::design::layout::ScrollColumn::new("laid_test_beside").show(
                             ui,
                             |ui| {
+                                let _ = ui.button("Beside button");
                                 for line in 0..80 {
                                     let _ = ui.label(format!("Beside {line}"));
                                 }
@@ -836,6 +837,40 @@ mod tests {
                 node.rect()
             );
         }
+        // Shift+Tab goes back through it, each control whole in view again.
+        for slot in (0..7).rev() {
+            key_press(&mut harness, egui::Key::Tab, egui::Modifiers::SHIFT);
+            // egui moves the focus backwards a frame later; the pane's scroll follows it.
+            harness.run_steps(2);
+            let label = if slot == 0 {
+                "Act 2".to_owned()
+            } else {
+                format!("Act 2.{slot}")
+            };
+            let node = harness.get_by_label(&label);
+            assert!(node.is_focused(), "Shift+Tab focuses {label}");
+            let clip = harness.state().clip;
+            assert!(
+                clip.expand(0.5).contains_rect(node.rect()),
+                "{label} {:?} is whole in the room {clip:?}",
+                node.rect()
+            );
+        }
+        // The arrows go down through it the same way.
+        for slot in 1..8 {
+            key_press(&mut harness, egui::Key::ArrowDown, egui::Modifiers::NONE);
+            // egui moves the focus by an arrow at the end of its frame; the scroll follows it.
+            harness.run_steps(2);
+            let label = format!("Act 2.{slot}");
+            let node = harness.get_by_label(&label);
+            assert!(node.is_focused(), "ArrowDown focuses {label}");
+            let clip = harness.state().clip;
+            assert!(
+                clip.expand(0.5).contains_rect(node.rect()),
+                "{label} {:?} is whole in the room {clip:?}",
+                node.rect()
+            );
+        }
         assert!(
             harness.state().region.work().too_tall > 0,
             "the block is counted"
@@ -1081,6 +1116,54 @@ mod tests {
         assert!(
             !shown(&harness, 35),
             "a drag in its column ends the request"
+        );
+        // The keyboard. Focus in the other column: Page Down there, in the frame that asks or the
+        // next, does not end this column's request.
+        let key = |harness: &mut Harness<'_, Page>, key, modifiers| {
+            for pressed in [true, false] {
+                harness.input_mut().events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers,
+                });
+            }
+        };
+        harness.get_by_label("Beside button").focus();
+        harness.run_steps(2);
+        show(&mut harness, 20);
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 20),
+            "Page Down in another column leaves the request"
+        );
+        show(&mut harness, 8);
+        harness.step();
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 8),
+            "Page Down in another column leaves a queued request"
+        );
+        // Focus in this column: a shortcut (Ctrl+S) moves nothing and leaves a queued request;
+        // Page Down ends a request.
+        harness.get_by_label("Act 8").focus();
+        harness.run_steps(2);
+        show(&mut harness, 30);
+        harness.step();
+        key(&mut harness, egui::Key::S, egui::Modifiers::CTRL);
+        harness.run_steps(3);
+        assert!(shown(&harness, 30), "a shortcut leaves a queued request");
+        harness.get_by_label("Act 30").focus();
+        harness.run_steps(2);
+        show(&mut harness, 2);
+        key(&mut harness, egui::Key::PageDown, egui::Modifiers::NONE);
+        harness.run_steps(3);
+        assert!(
+            !shown(&harness, 2),
+            "Page Down in this column ends the request"
         );
     }
 

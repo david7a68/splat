@@ -541,22 +541,25 @@ pub(in crate::design) fn queue(ui: &Ui, by: f32) {
         .request_discard("a region's request moves its column");
 }
 
+/// The view of the `ScrollColumn` that `ui` is drawn in, in screen points (its area's viewport
+/// inside its clip): a sideways clip egui keeps wider than the column is cut to the column.
+pub(in crate::design) fn column_view(ui: &Ui) -> Option<Rect> {
+    owning_region(ui).map(|(_, region)| region.view)
+}
+
 /// The offset queued for the column `key`, taken at the start of its pass. Only the DM's input
 /// over that column (or to a control in it) counts (review of PR 757): a wheel turn over it or a
 /// drag begun in it ends the request, also while the press is held; a press held still in it
 /// makes the request wait, up to `QUEUED_FRAMES`; any other press in it, or a key, text or input
 /// method event while the focus is in it, ends it; else it applies in its own frame or the next
-/// one. A release ends a held press and is not input.
+/// one. A release ends a held press and is not input. A key counts only when it moves a view or
+/// a caret (`moves_view`) and goes to this column (`keys_in`).
 pub(super) fn take_queued(ui: &Ui, key: Id) -> Option<f32> {
     let id = queued_id(key);
     let mut queued = ui.ctx().data(|data| data.get_temp::<Queued>(id))?;
     let frame = ui.ctx().cumulative_frame_nr();
     let view = queued.view;
-    let focus_in = ui
-        .ctx()
-        .memory(|memory| memory.focused())
-        .and_then(|focused| ui.ctx().read_response(focused))
-        .is_some_and(|response| view.intersects(response.rect));
+    let keys = keys_in(ui, view);
     let (moved, held, other) = ui.input(|input| {
         let pointer = &input.pointer;
         let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| view.contains(pos));
@@ -572,11 +575,7 @@ pub(super) fn take_queued(ui: &Ui, key: Id) -> Option<f32> {
             egui::Event::PointerButton {
                 pos, pressed: true, ..
             } => view.contains(*pos) && !pressed_in,
-            egui::Event::Text(_)
-            | egui::Event::Paste(_)
-            | egui::Event::Ime(_)
-            | egui::Event::Key { pressed: true, .. } => focus_in,
-            _ => false,
+            event => keys && moves_view(event),
         });
         (
             (wheel && over(pointer.hover_pos())) || dragged,
@@ -592,6 +591,55 @@ pub(super) fn take_queued(ui: &Ui, key: Id) -> Option<f32> {
     }
     ui.ctx().data_mut(|data| data.remove::<Queued>(id));
     (frame <= queued.frame + 1 && !moved && !held && !other).then_some(queued.offset)
+}
+
+/// The DM's keyboard input that moves a view or a caret (review of PR 757): Tab, an arrow, Page
+/// Up or Down, Home or End (with Shift or none), typed text, a paste, an input method event. A
+/// shortcut with Ctrl, Cmd or Alt (Save) moves nothing.
+pub(in crate::design) fn moves_view(event: &egui::Event) -> bool {
+    use egui::Key;
+    match event {
+        egui::Event::Key {
+            key,
+            pressed: true,
+            modifiers,
+            ..
+        } => {
+            !(modifiers.ctrl || modifiers.command || modifiers.mac_cmd || modifiers.alt)
+                && matches!(
+                    key,
+                    Key::Tab
+                        | Key::ArrowUp
+                        | Key::ArrowDown
+                        | Key::ArrowLeft
+                        | Key::ArrowRight
+                        | Key::PageUp
+                        | Key::PageDown
+                        | Key::Home
+                        | Key::End
+                )
+        }
+        egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Ime(_) => true,
+        _ => false,
+    }
+}
+
+/// Whether this pass's keys go to the column whose view (screen points) is `view`: the focused
+/// control lies in it (as last drawn) or, with nothing focused, the pointer is over it. A key
+/// never belongs to two columns.
+pub(in crate::design) fn keys_in(ui: &Ui, view: Rect) -> bool {
+    match ui.ctx().memory(|memory| memory.focused()) {
+        Some(focused) => ui
+            .ctx()
+            .read_response(focused)
+            .is_some_and(|response| view.intersects(response.rect)),
+        None => ui.input(|input| {
+            input
+                .pointer
+                .hover_pos()
+                .is_some_and(|pos| view.contains(pos))
+        }),
+    }
 }
 
 /// The frames a queued request may wait for a held press to end.

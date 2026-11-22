@@ -690,8 +690,8 @@ impl<'s> BlockRegion<'s> {
 
 /// The resolver of a measured body in a `Body::Content` pane (layout 11c, A1b), whose column is
 /// the pane's: run once per pass after that pass's input, before any block draws. In order: the
-/// DM's movement over the column in this pass (a wheel turn, a drag begun in it, Page Up or Page
-/// Down) cancels every older request; a press held in the column makes the requests wait, up to
+/// DM's movement over the column in this pass (a wheel turn, a drag begun in it, Page Up, Page
+/// Down, Home or End that go to it) cancels every older request; a press held in the column makes the requests wait, up to
 /// `REQUEST_FRAMES` (a wheel while it is held still cancels them); then the highest request
 /// (`Pending::take`) becomes the least move of the column that shows its block whole (a block taller than the view: its head at the view's
 /// top), queued for the column's next pass (`reveal::queue`), which another pass of this frame
@@ -704,15 +704,28 @@ fn resolve_in_place(
     (offset, view): (f32, f32),
 ) {
     let frame = ui.ctx().cumulative_frame_nr();
+    // Review of PR 757: a key moves this column only when it goes to it (the focused control is
+    // in it, or with no focus the pointer is over it), never another column's.
+    // The column's own view: egui keeps a sideways clip as wide as the parent's.
+    let column = crate::design::reveal::column_view(ui).unwrap_or(clip);
+    let keys = crate::design::reveal::keys_in(ui, column);
     let (moved, held) = ui.input(|input| {
         let pointer = &input.pointer;
-        let in_column = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| clip.contains(pos));
+        let in_column = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| column.contains(pos));
         let wheel = input.raw_scroll_delta.y != 0.0 || input.smooth_scroll_delta.y != 0.0;
+        let page = input.events.iter().any(|event| {
+            matches!(
+                event,
+                egui::Event::Key {
+                    key: Key::PageUp | Key::PageDown | Key::Home | Key::End,
+                    ..
+                }
+            ) && crate::design::reveal::moves_view(event)
+        });
         (
             (in_column(pointer.hover_pos()) && wheel)
                 || (pointer.is_decidedly_dragging() && in_column(pointer.press_origin()))
-                || input.key_pressed(Key::PageUp)
-                || input.key_pressed(Key::PageDown),
+                || (keys && page),
             pointer.any_down() && in_column(pointer.press_origin()),
         )
     });
