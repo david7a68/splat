@@ -1176,7 +1176,8 @@ impl<'a> Driver<'a> {
     /// Layout PR 9 (I10): the editor viewport that holds the editor named `editor` (its fixed
     /// frame, in points, against the node's pixels). True when all four outside edges are in
     /// view, it is not held at its least height, and (with `save`) the frame's outside right
-    /// edge is the right edge of the button named `save`, within a pixel. With what was found.
+    /// edge is the right edge of the button named `save`, within a pixel. A `save` that names no
+    /// button fails: the edge is never passed unchecked. With what was found.
     pub fn editor_frame_whole(&self, editor: &str, save: Option<&str>) -> (bool, String) {
         let scale = self.pixels_per_point();
         let nodes = self.nodes();
@@ -1184,7 +1185,8 @@ impl<'a> Driver<'a> {
             .iter()
             .find(|node| node.name == editor)
             .map(|node| egui::Rect::from_min_max(node.rect.min / scale, node.rect.max / scale));
-        let save = save.and_then(|save| {
+        // `None`: no Save asked for; `Some(None)`: asked for and not found.
+        let save = save.map(|save| {
             nodes
                 .iter()
                 .find(|node| node.name == save && node.role == Role::Button)
@@ -1196,9 +1198,12 @@ impl<'a> Driver<'a> {
                 .find(|record| record.frame().intersects(text))
         });
         let whole = frame.is_some_and(|frame| frame.whole() && !frame.least())
-            && save.is_none_or(|save| {
-                frame.is_some_and(|frame| (frame.frame().right() - save).abs() <= 1.0 / scale)
-            });
+            && match save {
+                None => true,
+                Some(found) => found.zip(frame).is_some_and(|(save, frame)| {
+                    (frame.frame().right() - save).abs() <= 1.0 / scale
+                }),
+            };
         (
             whole,
             format!(

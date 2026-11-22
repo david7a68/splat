@@ -1140,7 +1140,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
         ("src/encounters/groups.rs", "change_row", &[Ban::Extras(1)]),
-        ("src/encounters/groups.rs", "members", &[Ban::Layout(1)]),
+        (
+            "src/encounters/groups.rs",
+            "members",
+            &[Ban::Layout(1), Ban::Body],
+        ),
         (
             "src/encounters/groups.rs",
             "members_pane",
@@ -1247,6 +1251,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // `design::message` or `small_message`.
         ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
         ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
+        // Ruling M20 (lane E2): a draft's disk conflict takes its editor's place (the
+        // comparison follows), typed; it replaces `design::message` and `message_with_actions`.
+        ("src/encounters/disk.rs", "show", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
@@ -1285,6 +1292,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/timeline.rs", "removal_follows_run", &[Ban::ByOwner(1)]),
         ("src/timeline/checks.rs", "check_fault", &[Ban::Body]),
         ("src/timeline/checks.rs", "check_notice", &[Ban::Body]),
+        // Ruling M20 (lane T0): Timeline.md's problems in the page's place and the session date
+        // notice, typed; each replaces `design::message`, `message_with_actions` or
+        // `message_with_action`.
+        ("src/timeline/page.rs", "problems", &[Ban::Body]),
+        ("src/timeline/page.rs", "dated_notice", &[Ban::Body]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/world/repair.rs", "cause", &[Ban::Words]),
         ("src/world.rs", "said", &[Ban::Words]),
@@ -1295,7 +1307,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers/view.rs", "body", &[Ban::Body]),
         // Package T (PR 328 review): a repeated amount field's problem stands at its line.
         ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
-        ("src/trackers/view.rs", "messages", &[Ban::Words]),
         (
             "src/content_ui/src/session_notes.rs",
             "notice_sentence",
@@ -1347,7 +1358,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "unread_member",
-            &[Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::Body],
         ),
         ("src/encounters/list.rs", "choice_note", &[Ban::Extras(2)]),
         (
@@ -1634,8 +1645,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/pane.rs", 5),
             ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 1),
-            ("src/trackers/history.rs", 1),
-            ("src/trackers/view.rs", 1),
             ("src/world.rs", 1),
         ],
     ),
@@ -1708,7 +1717,11 @@ pub(crate) const STAGED: &[Staged] = &[
     (
         "Refusal::at_limit(",
         "A refusal ends at its cause only at a limit the DM cannot change: a tracker's `min`, every name rolled (M13), or the run rule after the fight's encounter was deleted (M15). A fault in the tracker rules, and every other cause, gets its next step: `Refusal::new`.",
-        &[("src/design/results/refusal.rs", 5)],
+        &[
+            ("src/design/results/refusal.rs", 5),
+            // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
+            ("src/trackers.rs", 2),
+        ],
     ),
 ];
 

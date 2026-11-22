@@ -16,17 +16,12 @@
     ["G3/far-action","06-run-folder-gone","1920x1080","Button \"Start fight\"",1]
   ],
   "dm-audit": [
-    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add to Log: Hobb the Miller\"",1],
-    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Save encounter\"",3]
+    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add to Log: Hobb the Miller\"",1]
   ],
   "empty": [
     ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1]
   ],
-  "encounter-build": [
-    ["G1b/pressed-control-moved","05-saved","960x640","Button \"Save encounter\"",1]
-  ],
   "encounter-difficulty": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
     ["G3/far-action","01-ready-to-run","1920x1080","Button \"Resume\"",1],
     ["G3/far-action","01-ready-to-run","1920x1080","Button \"Start fight\"",3],
     ["G3/far-action","08-plan","1920x1080","Button \"Start fight: Court of Cinders\"",1],
@@ -67,8 +62,6 @@
     ["G3/far-action","06-keep-in-ready-blocked","1920x1080","Button \"Start fight\"",1]
   ],
   "encounter-owned-groups": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",4],
-    ["G1b/pressed-control-moved","07-encounter-and-group-saved","960x640","Button \"Save encounter\"",1],
     ["G3/far-action","01-groups-for-encounters-closed","1920x1080","Button \"Resume\"",2],
     ["G3/far-action","01-groups-for-encounters-closed","1920x1080","Button \"Start fight\"",1],
     ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Arena Beasts\"",1],
@@ -105,14 +98,8 @@
   "journey-j3": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions for this participant\"",1]
   ],
-  "journey-j6": [
-    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Save encounter\"",1]
-  ],
   "library-navigation": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Back\"",1]
-  ],
-  "library-to-encounter": [
-    ["G1b/pressed-control-moved","05-copy-in-encounter","960x640","Button \"Save encounter\"",1]
   ],
   "list-formats": [
     ["G1b/pressed-control-moved","01-timeline-v2-dm-prose","960x640","Button \"Old bridge · Travel · 10 minutes\"",1],
@@ -149,9 +136,6 @@
     ["N2/icon-off-text-centre","06-log-field-blocked-by-edit","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","07-log-words-of-a-deleted-entry","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","08-log-words-without-an-entry","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1]
-  ],
-  "npc-in-encounter": [
-    ["G1b/pressed-control-moved","03-npc-in-setup","960x640","Button \"Save encounter\"",1]
   ],
   "npc-in-lookup": [
     ["G3/far-action","07-npc-start-fight-in-lookup","1920x1080","Button \"Start fight\"",1],
@@ -219,7 +203,6 @@
     ["G1c/content-moved-with-bar","02-roster-of-20","960x640","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1]
   ],
   "run-loot": [
-    ["G1b/pressed-control-moved","07-rewards-for-loot","960x640","Button \"Save encounter\"",2],
     ["G1b/pressed-control-moved","07-rewards-for-loot","960x640","Button \"Sunken Vault · Fight · Undecided · Ended · Round 2\"",1],
     ["G3/far-action","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1],
     ["G3/far-action","07-rewards-for-loot","1920x1080","Button \"Add rewards: Sunken Vault\"",1]
@@ -264,7 +247,6 @@
     ["G3/far-action","39-sessions-with-notes","1920x1080","Button \"More actions for Bridge Ambush\"",1]
   ],
   "session-plan": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
     ["G3/far-action","03-planned-fight-removed","1920x1080","Button \"Resume: Bridge Ambush\"",1],
     ["G3/far-action","05-plan-with-fights","1920x1080","Button \"Resume: Bridge Ambush\"",1],
     ["G3/far-action","16-plan-after-a-fight","1920x1080","Button \"Add rewards: Bridge Ambush\"",1],
@@ -346,7 +328,8 @@
     ["N4/quiet-action-line-start","25-marked-transcript","1920x1080","Button \"Earlier part\"",1],
     ["N4/quiet-action-line-start","25-marked-transcript","960x640","Button \"Earlier part\"",1],
     ["N4/quiet-action-line-start","27-recording-part-open","1200x800","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","27-recording-part-open","960x640","Button \"Earlier part\"",1]
+    ["N4/quiet-action-line-start","27-recording-part-open","960x640","Button \"Earlier part\"",1],
+    ["N4/quiet-action-line-start","38-input-during-recording","960x640","Button \"Remove speech key (OpenAI): Speech API key\"",1]
   ],
   "settings": [
     ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],
@@ -362,22 +345,9 @@
     ["G3/far-action","01-travel-checks-rolled","1920x1080","Button \"Add to notes: Travel\"",1],
     ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Journey B\"",1],
     ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Travel\"",1],
-    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1],
-    ["N4/quiet-action-line-start","01-travel-checks-rolled","1200x800","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-travel-checks-rolled","1920x1080","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-travel-checks-rolled","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","02-travel-checks-rolled-lookup","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","05-travel-checks-outside","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","06-travel-checks-timeline","1200x800","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","06-travel-checks-timeline","1920x1080","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","06-travel-checks-timeline","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1]
+    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1]
   ],
   "travel-checks-plan": [
-    ["N4/quiet-action-line-start","01-plan-on-timeline","1200x800","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-plan-on-timeline","1920x1080","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-plan-on-timeline","960x640","Button \"On the road\"",1],
     ["G3/far-action","04-plan-answer-in-session-plan","1920x1080","Button \"Add to notes: Ford crossing\"",1],
     ["G3/far-action","04-plan-answer-in-session-plan","1920x1080","Button \"Add to notes: Long road\"",1]
   ],
@@ -386,9 +356,6 @@
   ],
   "world-broken-note": [
     ["N4/quiet-action-line-start","14-both-counts-beside-lookup","960x640","Button \"Generate NPC\"",1]
-  ],
-  "world-note-duplicated": [
-    ["G1b/pressed-control-moved","01-copied-world-npc-encounter-keeps-guard","960x640","Button \"Save encounter\"",1]
   ],
   "world-places": [
     ["G1c/content-moved-with-bar","07-place-change-keeps-disk-edit","960x640","Link \"Edit in Obsidian\"",1],
