@@ -1832,10 +1832,13 @@ impl TimelinePage {
             .campaign
             .is_some_and(|campaign| campaign != campaign_id)
         {
+            // The app set `modal` for this frame before the page drew: the reset keeps it, so
+            // Ctrl+S waits under a modal on the first frame after a campaign change too.
             *self = Self {
                 open_run: self.open_run,
                 saved_runs: std::mem::take(&mut self.saved_runs),
                 saved_runs_revision: self.saved_runs_revision,
+                modal: self.modal,
                 ..Default::default()
             };
         }
@@ -2203,6 +2206,19 @@ mod tests {
             on_disk(&harness).contains("Toll gates"),
             "the words typed in Ctrl+S's frame are saved with it: {}",
             on_disk(&harness)
+        );
+        // Review of PR 640 (P2): on the first frame after a campaign change the page resets
+        // itself, and it keeps the app's modal state, so Ctrl+S still waits under a modal.
+        let state = harness.state_mut();
+        state.1.events[0].title = "Moved camp".into();
+        state.1.touch();
+        state.0.campaign = Some(Uuid::from_u128(2));
+        state.0.modal = true;
+        harness.input_mut().events.push(ctrl_s.clone());
+        harness.step();
+        assert!(
+            !on_disk(&harness).contains("Moved camp"),
+            "under a modal, Ctrl+S saves nothing on the campaign change's frame"
         );
     }
 
