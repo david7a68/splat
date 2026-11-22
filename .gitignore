@@ -8,6 +8,7 @@
 __pycache__/
 *.pyc
 /artifacts/screenshots/
+/artifacts/raises/
 /output/prototypes/
 
 # Visual test captures are temporary; do not commit image files.
