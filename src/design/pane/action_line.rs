@@ -42,10 +42,17 @@ pub struct LineColumns {
 pub struct ActionLine<'a> {
     /// The line's stable key (a tracker and its instance).
     pub key: Id,
-    /// A list group's heading bound to this line (its title and count), or none.
-    pub heading: Option<(&'a str, usize)>,
+    /// A list group's heading bound to this line, or none.
+    pub heading: Option<LineHeading<'a>>,
     /// Body words over the line (a tracker's own name over its instances' lines), or none.
     pub title: Option<&'a str>,
+    /// Each part over the line, by its own measured height, after the title (an Arrivals
+    /// group's head line, and its words that take lines of their own), `LINE_GAP` apart.
+    pub over: &'a [f32],
+    /// The line's row height when the name cell is taller than a control (the caller's measured
+    /// words in it, an Arrivals group's summary); else 0. The value and the actions beside it
+    /// stand centred in the row.
+    pub row: f32,
     /// Where the name cell starts: an instance's line is set in under its tracker's name.
     pub indent: f32,
     /// The name's words as the caller fitted them to its cell (one line).
@@ -65,6 +72,37 @@ pub struct ActionLine<'a> {
     pub tail: f32,
 }
 
+/// A list group's heading bound to a line: its title and count, and whether it starts its
+/// column (then no space above it, as `design::heading`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineHeading<'a> {
+    pub title: &'a str,
+    pub count: usize,
+    pub first: bool,
+}
+
+/// A list group's heading laid as `design::heading` draws it (SH9): its words at their place
+/// from the heading's top (after `Heading::above` unless it starts its column) and the
+/// heading's height (with `Heading::below`). The one heading of the measured recipes
+/// (`ActionLine`, `NoticeRow`).
+pub(in crate::design) fn lay_group_heading(
+    ui: &Ui,
+    (title, count): (&str, usize),
+    first: bool,
+) -> (LaidText, f32) {
+    let group = Heading::Group { title, count };
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(group_heading_text(ui, title, count)));
+    let above = if first { 0.0 } else { group.above() };
+    let height = above + galley.size().y + group.below();
+    (
+        LaidText {
+            at: pos2(0.0, above),
+            galley,
+        },
+        height,
+    )
+}
+
 /// One action of a line: its own key and its measured width.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineAction {
@@ -73,7 +111,8 @@ pub struct LineAction {
 }
 
 /// The slots of a laid line, in order: the heading, the name, the value, then one per action
-/// (`FIRST_ACTION + at`), then one per part below (`ActionLine::below_slot`).
+/// (`FIRST_ACTION + at`), one per part below (`ActionLine::below_slot`), then one per part over
+/// the line (`ActionLine::over_slot`).
 pub mod slot {
     pub const HEADING: usize = 0;
     pub const NAME: usize = 1;
@@ -93,6 +132,16 @@ impl ActionLine<'_> {
         slot::FIRST_ACTION + self.actions.len() + at
     }
 
+    /// The slot of part `at` over the line.
+    pub fn over_slot(&self, at: usize) -> usize {
+        slot::FIRST_ACTION + self.actions.len() + self.below.len() + at
+    }
+
+    /// The line's row height: a control, or the name cell's taller words.
+    fn row_height(&self) -> f32 {
+        Density::Read.control().max(self.row)
+    }
+
     /// Where each action stands from the line's top `top`, in a row `width` wide, and the line's
     /// bottom. An action that would pass the row's edge starts the next row. An action wider than
     /// a whole row takes a row of its own, cut to the row's room: its slot ends at the row's edge,
@@ -100,13 +149,17 @@ impl ActionLine<'_> {
     /// action stays in the block.
     fn flow(&self, width: f32, top: f32) -> (Vec<Rect>, f32) {
         let control = Density::Read.control();
+        let row = self.row_height();
         if self.actions.is_empty() {
-            return (Vec::new(), top + control);
+            return (Vec::new(), top + row);
         }
         let (start, top) = if self.beside {
-            (self.columns.name + S + self.columns.value + S, top)
+            (
+                self.columns.name + S + self.columns.value + S,
+                top + (row - control) / 2.0,
+            )
         } else {
-            (self.indent, top + control + XS)
+            (self.indent, top + row + XS)
         };
         let widths: Vec<f32> = self.actions.iter().map(|action| action.width).collect();
         let wrapped = wrap(
@@ -119,7 +172,11 @@ impl ActionLine<'_> {
                 row_gap: XS,
             },
         );
-        let bottom = wrapped.bottom();
+        let bottom = if self.beside {
+            wrapped.bottom().max(top - (row - control) / 2.0 + row)
+        } else {
+            wrapped.bottom()
+        };
         (wrapped.rects, bottom)
     }
 
@@ -145,19 +202,12 @@ impl ActionLine<'_> {
             vec![Rect::from_min_size(pos2(0.0, 0.0), vec2(0.0, 0.0)); slot::FIRST_ACTION];
         let mut slot_texts = vec![None; slot::FIRST_ACTION];
         let mut y = 0.0;
-        let mut head = None;
-        if let Some((title, count)) = self.heading {
-            let group = Heading::Group { title, count };
-            let galley =
-                ui.fonts_mut(|fonts| fonts.layout_job(group_heading_text(ui, title, count)));
-            let height = group.above() + galley.size().y + group.below();
-            texts.push(LaidText {
-                at: pos2(0.0, group.above()),
-                galley,
-            });
+        if let Some(heading) = self.heading {
+            let (text, height) =
+                lay_group_heading(ui, (heading.title, heading.count), heading.first);
+            texts.push(text);
             slots[slot::HEADING] = Rect::from_min_size(pos2(0.0, 0.0), vec2(width, height));
             y = height;
-            head = Some(height);
         }
         if let Some(title) = self.title {
             let galley = ui.fonts_mut(|fonts| {
@@ -170,13 +220,19 @@ impl ActionLine<'_> {
             });
             y += height + LINE_GAP;
         }
+        let mut over = Vec::with_capacity(self.over.len());
+        for &part in self.over {
+            over.push(Rect::from_min_size(pos2(0.0, y), vec2(width, part)));
+            y += part + LINE_GAP;
+        }
+        let row = self.row_height();
         // The name, in its cell from the indent, the caller's words centred in its height.
         let name = ui.fonts_mut(|fonts| {
             fonts.layout_no_wrap(self.name.to_owned(), Type::Body.font(ui), colors().text)
         });
         slots[slot::NAME] = Rect::from_min_size(
             pos2(self.indent, y),
-            vec2((self.columns.name - self.indent).max(0.0), control),
+            vec2((self.columns.name - self.indent).max(0.0), row),
         );
         slot_texts[slot::NAME] = Some(name);
         // The value, at its cell's right edge.
@@ -185,7 +241,7 @@ impl ActionLine<'_> {
         });
         let right = self.columns.name + S + self.columns.value;
         slots[slot::VALUE] = Rect::from_min_size(
-            pos2(right - value.size().x, y),
+            pos2(right - value.size().x, y + (row - control) / 2.0),
             vec2(value.size().x, control),
         );
         slot_texts[slot::VALUE] = Some(value);
@@ -193,12 +249,18 @@ impl ActionLine<'_> {
         slot_texts.extend(actions.iter().map(|_| None));
         slots.extend(actions);
         y = bottom;
+        // The head: everything over the line stays whole with it (SH9: a heading is bound to
+        // its first line; an Arrivals group's head line, its summary and its controls).
+        let head =
+            (self.heading.is_some() || self.title.is_some() || !self.over.is_empty()).then_some(y);
         for &part in self.below {
             y += LINE_GAP;
             slots.push(Rect::from_min_size(pos2(0.0, y), vec2(width, part)));
             slot_texts.push(None);
             y += part;
         }
+        slot_texts.extend(over.iter().map(|_| None));
+        slots.extend(over);
         // Each action's slot is keyed by its action, so its control keeps its id and its focus
         // when an action before it is hidden.
         let mut slot_keys = vec![None; slot::FIRST_ACTION];
@@ -379,6 +441,10 @@ mod tests {
         actions: Vec<&'static str>,
         beside: bool,
         below: Vec<&'static str>,
+        /// Parts over the line (an Arrivals group's head line and status), each Small words.
+        over: Vec<&'static str>,
+        /// Small words that fill the name cell, wrapped in it (an Arrivals group's summary).
+        cell: Option<&'static str>,
     }
 
     /// What a pass drew of one line: the name's slot, each action's slot with the rect it drew
@@ -424,6 +490,8 @@ mod tests {
         laid: Vec<Laid>,
         words: Vec<Vec<LaidAction>>,
         below: Vec<Vec<Arc<Galley>>>,
+        over: Vec<Vec<Arc<Galley>>>,
+        cells: Vec<Option<Arc<Galley>>>,
         counted: Vec<(f32, f32)>,
     }
 
@@ -461,6 +529,8 @@ mod tests {
             actions,
             beside,
             below: Vec::new(),
+            over: Vec::new(),
+            cell: None,
         };
         vec![
             Line {
@@ -486,6 +556,14 @@ mod tests {
                     vec!["Eat one", "Buy 5", "Share with the party", "Count again"],
                     false,
                 )
+            },
+            // An Arrivals group: a heading inside the column, its head line and status over the
+            // line, a two-line summary in its name cell, and Add at the block's edge.
+            Line {
+                heading: Some(("For this encounter", 1)),
+                over: vec!["Old Guard · Fight after: Hard", "Added in round 2"],
+                cell: Some("Four members: two veterans, a priest and a scout"),
+                ..line("", "", vec!["Add 4"], true)
             },
         ]
     }
@@ -527,8 +605,18 @@ mod tests {
         })
     }
 
-    /// The height over the name line by the test's own count: the heading, the title.
-    fn over(ui: &Ui, line: &Line, width: f32) -> f32 {
+    /// A line's heading: the first line's starts the column.
+    fn heading_of(at: usize, line: &Line) -> Option<LineHeading<'static>> {
+        line.heading.map(|(title, count)| LineHeading {
+            title,
+            count,
+            first: at == 0,
+        })
+    }
+
+    /// The height over the name line by the test's own count: the heading (no space above the
+    /// one that starts the column), the title, the parts over the line.
+    fn over(ui: &Ui, (at, line): (usize, &Line), width: f32) -> f32 {
         measured();
         let mut height = 0.0;
         if let Some((title, count)) = line.heading {
@@ -537,7 +625,11 @@ mod tests {
                 .fonts_mut(|fonts| fonts.layout_job(group_heading_text(ui, title, count)))
                 .size()
                 .y;
-            height += group.above() + words + group.below();
+            let above = if at == 0 { 0.0 } else { group.above() };
+            height += above + words + group.below();
+        }
+        for words in &line.over {
+            height += part(ui, words, width).size().y + LINE_GAP;
         }
         if let Some(title) = line.title {
             height +=
@@ -569,10 +661,22 @@ mod tests {
             }
             used += action.width + S;
         }
-        let line_rows = if line.beside { rows.max(1) } else { 1 + rows };
-        over(ui, line, width)
-            + line_rows as f32 * control
-            + (line_rows - 1) as f32 * XS
+        // The row: a control, or the cell's words when taller; the actions beside it stand
+        // centred in it, the actions under it after it.
+        let row = line.cell.map_or(control, |words| {
+            part(ui, words, columns.name - line.indent)
+                .size()
+                .y
+                .max(control)
+        });
+        let rows = rows as f32;
+        let line_height = if line.beside {
+            row.max((row - control) / 2.0 + rows * control + (rows - 1.0).max(0.0) * XS)
+        } else {
+            row + rows * (control + XS)
+        };
+        over(ui, (at, line), width)
+            + line_height
             + line
                 .below
                 .iter()
@@ -588,6 +692,8 @@ mod tests {
             laid: Vec::new(),
             words: Vec::new(),
             below: Vec::new(),
+            over: Vec::new(),
+            cells: Vec::new(),
             counted: Vec::new(),
         };
         for (at, line) in lines.iter().enumerate() {
@@ -598,10 +704,21 @@ mod tests {
                 .map(|words| part(ui, words, inputs.width))
                 .collect();
             let heights: Vec<f32> = below.iter().map(|galley| galley.size().y).collect();
+            let over_parts: Vec<Arc<Galley>> = line
+                .over
+                .iter()
+                .map(|words| part(ui, words, inputs.width))
+                .collect();
+            let over_heights: Vec<f32> = over_parts.iter().map(|galley| galley.size().y).collect();
+            let cell = line
+                .cell
+                .map(|words| part(ui, words, inputs.columns.name - line.indent));
             let recipe = ActionLine {
                 key: Id::new(("action_line_test", at)),
-                heading: line.heading,
+                heading: heading_of(at, line),
                 title: line.title,
+                over: &over_heights,
+                row: cell.as_ref().map_or(0.0, |cell| cell.size().y),
                 indent: line.indent,
                 name: line.name,
                 value: &line.value,
@@ -623,8 +740,10 @@ mod tests {
             );
             kept.laid.push(recipe.lay(ui, inputs.width));
             kept.below.push(below);
+            kept.over.push(over_parts);
+            kept.cells.push(cell);
             kept.counted.push((
-                over(ui, line, inputs.width),
+                over(ui, (at, line), inputs.width),
                 expected(ui, (at, line), inputs.columns, inputs.width) + inputs.tail,
             ));
         }
@@ -634,7 +753,16 @@ mod tests {
     /// Draw one laid line's parts in its slots from what was laid: its name and value, each
     /// action with its laid words (in its keyed slot), each part's laid words. Lays out no text.
     fn draw(ui: &mut crate::design::LaidUi<'_>, (at, line): (usize, &Line), kept: &Kept) -> Drawn {
-        let name = ui.part(slot::NAME, line.name, false).rect;
+        let name = match &kept.cells[at] {
+            Some(cell) => {
+                let cell = Arc::clone(cell);
+                ui.in_slot(slot::NAME, |ui| {
+                    ui.add(egui::Label::new(egui::WidgetText::Galley(cell)))
+                        .rect
+                })
+            }
+            None => ui.part(slot::NAME, line.name, false).rect,
+        };
         let value = ui.part(slot::VALUE, &line.value, false).rect;
         let mut lowest = name.bottom().max(value.bottom());
         let mut drew = Vec::new();
@@ -649,6 +777,15 @@ mod tests {
             let at_slot = slot::FIRST_ACTION + line.actions.len() + index;
             let galley = Arc::clone(galley);
             let rect = ui.in_slot(at_slot, |ui| {
+                ui.add(egui::Label::new(egui::WidgetText::Galley(galley)))
+                    .rect
+            });
+            lowest = lowest.max(rect.bottom());
+        }
+        let over_first = slot::FIRST_ACTION + line.actions.len() + line.below.len();
+        for (index, galley) in kept.over[at].iter().enumerate() {
+            let galley = Arc::clone(galley);
+            let rect = ui.in_slot(over_first + index, |ui| {
                 ui.add(egui::Label::new(egui::WidgetText::Galley(galley)))
                     .rect
             });
@@ -766,6 +903,35 @@ mod tests {
                             size.y,
                             lowest + tail - top
                         );
+                        // The head runs to the line's bottom when anything stands over the
+                        // line (SH9); a tall row centres the actions beside it.
+                        let line = &list.lines[*at];
+                        let bottom = actions
+                            .iter()
+                            .map(|(slot, _)| slot.bottom())
+                            .fold(name.bottom(), f32::max)
+                            - top;
+                        let over_line =
+                            line.heading.is_some() || line.title.is_some() || !line.over.is_empty();
+                        let head = kept.laid[*at].head();
+                        assert!(
+                            if over_line {
+                                head.is_some_and(|head| (head - bottom).abs() < 0.5)
+                            } else {
+                                head.is_none()
+                            },
+                            "{case}: line {at}'s head {head:?} ends at its line ({bottom})"
+                        );
+                        if line.cell.is_some() && line.beside {
+                            assert!(
+                                name.height() > Density::Read.control() + 0.5
+                                    && actions.first().is_some_and(|(slot, _)| {
+                                        (slot.center().y - name.center().y).abs() < 0.5
+                                    }),
+                                "{case}: line {at}'s action stands centred in its tall row: \
+                                 {name:?} {actions:?}"
+                            );
+                        }
                         wrapped += usize::from(
                             actions
                                 .windows(2)
@@ -1029,6 +1195,8 @@ mod tests {
                     key: Id::new("wide"),
                     heading: None,
                     title: None,
+                    over: &[],
+                    row: 0.0,
                     indent: 0.0,
                     name: "Torches",
                     value: "3",
@@ -1295,6 +1463,8 @@ mod tests {
                         key: Id::new("threshold"),
                         heading: None,
                         title: None,
+                        over: &[],
+                        row: 0.0,
                         indent: 0.0,
                         name: "Old Guard",
                         value: "2",
