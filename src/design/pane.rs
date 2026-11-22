@@ -241,21 +241,21 @@ impl ContentScroll {
 ///
 /// ```compile_fail,E0382
 /// use splat_design::pane::Footer;
-/// fn two(ui: &mut egui::Ui, a: &mut String, b: &mut String) {
+/// fn two(ui: &mut egui::Ui, a: &mut splat_design::text_draft::TextDraft, b: &mut splat_design::text_draft::TextDraft) {
 ///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
-///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit);
-///         region.editor(ui, NOTE.once(splat_design::layout::Once::Settings), b, |edit| edit);
+///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, splat_design::pane::Face::Font(egui::FontId::default()), |edit| edit);
+///         region.editor(ui, NOTE.once(splat_design::layout::Once::Settings), b, splat_design::pane::Face::Font(egui::FontId::default()), |edit| edit);
 ///     });
 /// }
 /// ```
 ///
 /// ```
 /// use splat_design::pane::Footer;
-/// fn one(ui: &mut egui::Ui, a: &mut String) {
+/// fn one(ui: &mut egui::Ui, a: &mut splat_design::text_draft::TextDraft) {
 ///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
-///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit);
+///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, splat_design::pane::Face::Font(egui::FontId::default()), |edit| edit);
 ///         ui.label("A save row");
 ///     });
 /// }
@@ -265,19 +265,19 @@ impl ContentScroll {
 ///
 /// ```compile_fail
 /// use splat_design::pane::Footer;
-/// fn kept(ui: &mut egui::Ui, a: &mut String) {
+/// fn kept(ui: &mut egui::Ui, a: &mut splat_design::text_draft::TextDraft) {
 ///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     let region = Footer::new("pane", 400.0).pane_editor(ui, |_, region| region);
-///     region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit);
+///     region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, splat_design::pane::Face::Font(egui::FontId::default()), |edit| edit);
 /// }
 /// ```
 ///
 /// ```
 /// use splat_design::pane::Footer;
-/// fn used(ui: &mut egui::Ui, a: &mut String) -> bool {
+/// fn used(ui: &mut egui::Ui, a: &mut splat_design::text_draft::TextDraft) -> bool {
 ///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     Footer::new("pane", 400.0)
-///         .pane_editor(ui, |ui, region| region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit))
+///         .pane_editor(ui, |ui, region| region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, splat_design::pane::Face::Font(egui::FontId::default()), |edit| edit))
 ///         .response
 ///         .changed()
 /// }
@@ -293,11 +293,11 @@ impl ContentScroll {
 ///
 /// ```compile_fail,E0382
 /// use splat_design::pane::Footer;
-/// fn copied(ui: &mut egui::Ui, a: &mut String) {
+/// fn copied(ui: &mut egui::Ui, a: &mut splat_design::text_draft::TextDraft) {
 ///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_region_note");
 ///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
 ///         let copy = region;
-///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, |edit| edit);
+///         region.editor(ui, NOTE.once(splat_design::layout::Once::Example), a, splat_design::pane::Face::Font(egui::FontId::default()), |edit| edit);
 ///         let _ = copy;
 ///     });
 /// }
