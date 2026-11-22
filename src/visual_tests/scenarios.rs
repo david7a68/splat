@@ -3557,6 +3557,15 @@ pub mod campaign_content {
         d.click_starting("D&D 2024 · SRD");
         d.expect("Whole package, with future additions");
         d.state("packages-tab", Sizes::Default);
+        // M0280: the header's action says what it opens on hover, as the page's own action did.
+        let hint = d.place_of("Campaign entries").map(|rect| {
+            d.hover_shows(rect.center(), "This campaign’s own entries, in the Library")
+        });
+        d.observe(
+            "m32-L11c-campaign-entries-hint",
+            hint == Some(true),
+            format!("Hovering the Campaign entries action shows its hint: {hint:?}"),
+        );
         d.check_tab_order("campaign, packages");
         // No click: the brief asks for these on screen, with the built-in package open.
         d.click_starting(REQUIRED);

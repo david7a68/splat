@@ -1451,6 +1451,8 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M0412: the one collapsing section (`Section::show`); `CollapsingHeader::new` is
         // banned outside it.
         ("src/design/components.rs", "show", &[Ban::Layout(1)]),
+        // Review of PR 730: the section whose header is the caller's row (a sheet's spells).
+        ("src/design/components.rs", "section_row", &[Ban::Layout(1)]),
         (
             "src/design/components.rs",
             "number_field_with_id",

@@ -1480,59 +1480,54 @@ pub fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: 
             last_level = *level;
         }
         // One fixed row each, so a page of spells can be scanned. Its body opens below.
-        let id = ui.make_persistent_id((page, i, name));
-        let mut state =
-            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
-        let caret = if state.is_open() {
-            icons::DOWN
-        } else {
-            icons::NEXT
-        };
-        let row = design::row(
+        let _ = design::section_row(
             ui,
-            if meta.is_empty() {
-                Density::Read.row()
-            } else {
-                ENTRY_ROW
+            (page, i, name),
+            |ui, open| {
+                let caret = if open { icons::DOWN } else { icons::NEXT };
+                design::row(
+                    ui,
+                    if meta.is_empty() {
+                        Density::Read.row()
+                    } else {
+                        ENTRY_ROW
+                    },
+                    open,
+                    &format!("{name} · {meta}"),
+                    |ui, rect| {
+                        let top = if meta.is_empty() {
+                            rect.center().y - Type::Body.line() / 2.0
+                        } else {
+                            rect.top()
+                        };
+                        ui.painter().text(
+                            egui::pos2(rect.left() + design::S, top + Type::Body.line() / 2.0),
+                            egui::Align2::LEFT_CENTER,
+                            caret,
+                            Type::Small.font(ui),
+                            colors().muted,
+                        );
+                        let left = rect.left() + design::XL;
+                        let width = rect.right() - left - design::S;
+                        let title =
+                            design::one_line(ui, name, Type::Body.font(ui), colors().text, width);
+                        let detail =
+                            design::one_line(ui, meta, Type::Small.font(ui), colors().muted, width);
+                        ui.painter()
+                            .galley(egui::pos2(left, top), title, colors().text);
+                        ui.painter().galley(
+                            egui::pos2(left, rect.top() + Type::Body.line()),
+                            detail,
+                            colors().muted,
+                        );
+                    },
+                )
             },
-            state.is_open(),
-            &format!("{name} · {meta}"),
-            |ui, rect| {
-                let top = if meta.is_empty() {
-                    rect.center().y - Type::Body.line() / 2.0
-                } else {
-                    rect.top()
-                };
-                ui.painter().text(
-                    egui::pos2(rect.left() + design::S, top + Type::Body.line() / 2.0),
-                    egui::Align2::LEFT_CENTER,
-                    caret,
-                    Type::Small.font(ui),
-                    colors().muted,
-                );
-                let left = rect.left() + design::XL;
-                let width = rect.right() - left - design::S;
-                let title = design::one_line(ui, name, Type::Body.font(ui), colors().text, width);
-                let detail =
-                    design::one_line(ui, meta, Type::Small.font(ui), colors().muted, width);
-                ui.painter()
-                    .galley(egui::pos2(left, top), title, colors().text);
-                ui.painter().galley(
-                    egui::pos2(left, rect.top() + Type::Body.line()),
-                    detail,
-                    colors().muted,
-                );
+            |ui| {
+                design::gap(ui, design::Gap::XS);
+                prose(ui, None, description);
             },
         );
-        ui.ctx()
-            .accesskit_node_builder(row.id, |node| node.set_expanded(state.is_open()));
-        if row.clicked() {
-            state.toggle(ui);
-        }
-        state.show_body_unindented(ui, |ui| {
-            design::gap(ui, design::Gap::XS);
-            prose(ui, None, description);
-        });
     }
 }
 

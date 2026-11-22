@@ -502,11 +502,7 @@ impl Party<'_> {
                     );
                     crate::art::portrait(ui, rect, Some(path), &record.definition.splat_name, None);
                 }
-                ui.label(
-                    Type::Display
-                        .rich(ui, &record.definition.splat_name)
-                        .color(c.text),
-                );
+                design::heading(ui, design::Heading::Name(&record.definition.splat_name));
             });
             // Round 27 FI12: the sheet's link follows its kind line, `L` after the words, so it
             // stays with the sheet it opens at any width (it was at the pane's far edge).
