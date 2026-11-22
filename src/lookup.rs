@@ -2944,7 +2944,7 @@ impl Lookup {
             ui.available_width(),
         );
         reader.footer(&frame, &mut messages, current, &index, campaign);
-        trackers.history_footer(current.entry.id, &mut messages);
+        trackers.history_footer(current.entry.id, &frame, &mut messages);
         // The results list above sets its own row spacing. The reader keeps the app's, so an
         // entry reads the same whether a search or a link opened it. The pane is always the
         // editor form (P2), so an edit form's text gives way and Save stays in view from the
@@ -2962,7 +2962,9 @@ impl Lookup {
         });
         nav = nav.take().or(paned.body);
         match paned.pressed {
-            Some(press) if press.id == world::FooterAct::Trackers => trackers.undo_remove(),
+            Some(press) if press.id == world::FooterAct::Trackers => {
+                trackers.undo_remove(press.ticket)
+            }
             Some(press) => {
                 if let Some(campaign) = campaign {
                     nav = nav.take().or(reader.footer_act(
@@ -3387,6 +3389,10 @@ impl splat_campaign::trackers::RuleSource for ContentIndex {
 
     fn loot_sources(&self) -> Arc<splat_campaign::loot::Sources> {
         ContentIndex::loot_sources(self)
+    }
+
+    fn generation(&self) -> u64 {
+        ContentIndex::generation(self)
     }
 }
 

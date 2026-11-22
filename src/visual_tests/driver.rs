@@ -2388,6 +2388,11 @@ impl<'a> Driver<'a> {
         plan_rows_hold(&records)
     }
 
+    /// Every whole row the panes registered in the last completed pass (N12, layout step 11a).
+    pub fn registered_rows(&self) -> Vec<egui::Rect> {
+        super::ergonomics::row_rects(&self.harness.ctx)
+    }
+
     /// The right edge of the registered row that holds `control`: a list row still ends at its
     /// column's scroll lane where its actions follow its facts (layout PR 5a).
     pub fn row_right_of(&self, control: egui::Rect) -> Option<f32> {

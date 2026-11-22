@@ -1506,13 +1506,9 @@ fn parse_grouped(text: &str) -> Option<f64> {
         .ok()
 }
 
-/// A modifier as the DM may type it: `−3`, `-3`, `+2`, `2`.
-fn parse_signed(text: &str) -> Option<f64> {
-    text.trim()
-        .replace('\u{2212}', "-")
-        .trim_start_matches('+')
-        .parse()
-        .ok()
+/// The stepper's read-back of a signed value, through [`parse_signed`].
+fn parse_signed_value(text: &str) -> Option<f64> {
+    parse_signed(text).map(|value| value as f64)
 }
 
 /// The one stepper: its value in the form `shown`, its range, density and limits' reasons.
@@ -1607,7 +1603,7 @@ fn stepper_as(
                     Shown::Signed => {
                         field = field
                             .custom_formatter(|value, _| signed(value as i64))
-                            .custom_parser(parse_signed);
+                            .custom_parser(parse_signed_value);
                     }
                     Shown::Grouped => {
                         field = field
@@ -1644,7 +1640,18 @@ pub fn small_link(ui: &mut Ui, label: &str) -> Response {
     text_link(ui, label, Type::Small)
 }
 
+/// A body link whose target is one `Read` control high: a title line's link action
+/// (`TitleAction::link`), level with the actions beside it (M-Y0.2).
+pub fn title_link(ui: &mut Ui, label: &str) -> Response {
+    link_of_height(ui, label, Type::Body, Density::Read.control())
+}
+
 fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
+    link_of_height(ui, label, role, XL)
+}
+
+/// A one-line link whose target is at least `XL` wide and at least `height` high.
+fn link_of_height(ui: &mut Ui, label: &str, role: Type, height: f32) -> Response {
     let c = colors();
     let room = ui.available_width().max(1.0);
     let galley = one_line(ui, label, role.font(ui), c.accent, room);
@@ -1652,7 +1659,7 @@ fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
     // word such as `Ox` sits at its left, and the next item starts after the whole target,
     // so two short links side by side never share a press area.
     let (target, response) = ui.allocate_exact_size(
-        vec2(galley.size().x.max(XL), galley.size().y.max(XL)),
+        vec2(galley.size().x.max(XL), galley.size().y.max(height)),
         Sense::click(),
     );
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), label));
@@ -1788,19 +1795,36 @@ fn field_label<R>(
     };
     let first = count(ui);
     field_caption(ui, label, role);
+    // The block's top while its control draws (`field_top`); the field around it, if any, after.
+    let pass = ui.ctx().cumulative_pass_nr();
+    let outer = ui.ctx().data_mut(|data| {
+        let outer = data
+            .get_temp::<Option<(u64, egui::LayerId, f32)>>(Id::new(FIELD_TOP))
+            .flatten();
+        data.insert_temp(Id::new(FIELD_TOP), Some((pass, layer, top)));
+        outer
+    });
     let inner = add(ui);
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(Id::new(FIELD_TOP), outer));
     let last = count(ui);
     let bottom = field_feedback(ui, help, error);
-    // Only a focused control of this block: one lookup, nothing that grows with the form.
-    if let Some(focused) = ui.memory(|memory| memory.focused())
-        && ui.ctx().viewport(|viewport| {
+    // Only a focused control of this block, or the control whose list is open: one or two
+    // lookups, nothing that grows with the form.
+    let inside = |id: Id| {
+        ui.ctx().viewport(|viewport| {
             viewport
                 .this_pass
                 .widgets
-                .order(focused)
+                .order(id)
                 .is_some_and(|(at_layer, at)| at_layer == layer && (first..last).contains(&at))
         })
-    {
+    };
+    let subject = ui
+        .memory(|memory| memory.focused())
+        .filter(|id| inside(*id))
+        .or_else(|| open_owner(ui.ctx()).filter(|id| inside(*id)));
+    if let Some(focused) = subject {
         let span = ui.max_rect();
         reveal_with(
             ui,
@@ -1950,8 +1974,9 @@ pub fn number_field_with_id(
                 .font(Type::Numeral.font(ui))
                 .hint_text(placeholder(ui, hint)),
         );
-        // Inside the guard: a letter the field drops is not another text.
-        text.retain(|c| c.is_ascii_digit() || c == '-');
+        // Inside the guard: a letter the field drops is not another text. A true minus stays,
+        // so the DM can type what the app shows (`parse_signed`).
+        text.retain(number_char);
         response
     });
     named(ui, &response, name);
@@ -3048,6 +3073,21 @@ pub fn fraction(current: impl std::fmt::Display, maximum: impl std::fmt::Display
     format!("{current}/{maximum}")
 }
 
+/// A whole number as the DM may type it, also as the app writes it ([`signed`]): `−3` (a true
+/// minus), `-3`, `+2`, `2`, with spaces around it. The one reader of typed signed numbers (a
+/// run's amounts and initiative, a tracker's Amount, World's initiative), so a DM can type what
+/// the app shows.
+pub fn parse_signed(text: &str) -> Option<i64> {
+    // `i64`'s own parse takes one `+` or `-`; the true minus becomes `-`.
+    text.trim().replace('\u{2212}', "-").parse().ok()
+}
+
+/// A character of a typed whole number: a digit, `+`, `-` or a true minus (`−`, as [`signed`]
+/// writes it). The number fields keep these and drop the rest; [`parse_signed`] reads them.
+pub fn number_char(c: char) -> bool {
+    c.is_ascii_digit() || matches!(c, '+' | '-' | '\u{2212}')
+}
+
 /// A modifier, with a true minus sign: `+3`, `−1`.
 pub fn signed(value: i64) -> String {
     if value < 0 {
@@ -3706,26 +3746,78 @@ const REVEAL_WITH: &str = "reveal_with";
 /// show the control with its words cut off below. Set it in each pass the control is drawn,
 /// after its words; a rect from an earlier pass is not used.
 pub(super) fn reveal_with(ui: &Ui, control: Id, rect: Rect) {
+    set_reveal(ui, control, rect, false);
+}
+
+/// The control's whole shape in place of its own rect: an editor viewport's fixed frame, whose
+/// text edit is as tall as all its text (layout PR 10b). Words set with `reveal_with` join it.
+pub(super) fn reveal_as(ui: &Ui, control: Id, rect: Rect) {
+    set_reveal(ui, control, rect, true);
+}
+
+fn set_reveal(ui: &Ui, control: Id, rect: Rect, replaces: bool) {
     let pass = ui.ctx().cumulative_pass_nr();
     // Words set for the control earlier in this pass (its field's caption and help) stay: the
-    // rect is their union.
+    // rect is their union, and a shape set in place of the control stays in place of it.
     ui.ctx().data_mut(|data| {
         let key = control.with(REVEAL_WITH);
-        let rect = match data.get_temp::<(u64, Rect)>(key) {
-            Some((set, before)) if set == pass => before.union(rect),
-            _ => rect,
+        let (rect, replaces) = match data.get_temp::<(u64, Rect, bool)>(key) {
+            Some((set, before, was)) if set == pass => (before.union(rect), was || replaces),
+            _ => (rect, replaces),
         };
-        data.insert_temp(key, (pass, rect));
+        data.insert_temp(key, (pass, rect, replaces));
     });
 }
 
 /// What to bring into view for the focused control `id`, whose own rect is `own`: with the
-/// words `reveal_with` set for it in this pass, else only itself.
+/// words `reveal_with` set for it in this pass, else only itself; a shape `reveal_as` set
+/// stands in place of `own`.
 pub(super) fn reveal_rect(ctx: &egui::Context, id: Id, own: Rect) -> Rect {
     let pass = ctx.cumulative_pass_nr();
-    ctx.data(|data| data.get_temp::<(u64, Rect)>(id.with(REVEAL_WITH)))
+    ctx.data(|data| data.get_temp::<(u64, Rect, bool)>(id.with(REVEAL_WITH)))
+        .filter(|(set, _, _)| *set == pass)
+        .map_or(
+            own,
+            |(_, rect, replaces)| {
+                if replaces { rect } else { rect.union(own) }
+            },
+        )
+}
+
+/// The key of the control whose list is open in this pass (`popups::Dropdown`).
+const OPEN_OWNER: &str = "design_open_owner";
+
+/// The control whose list is open now: the pane's focus arbiter keeps its whole field in view
+/// as it does a focused control's, while the keyboard is on the list's rows (layout PR 10b).
+pub(super) fn set_open_owner(ui: &Ui, control: Id) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(Id::new(OPEN_OWNER), Some((pass, control))));
+}
+
+/// The control whose list is open in this pass, if one is.
+pub(super) fn open_owner(ctx: &egui::Context) -> Option<Id> {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|data| data.get_temp::<Option<(u64, Id)>>(Id::new(OPEN_OWNER)))
+        .flatten()
         .filter(|(set, _)| *set == pass)
-        .map_or(own, |(_, rect)| rect.union(own))
+        .map(|(_, control)| control)
+}
+
+/// The key of the field block being drawn, for a list that opens from a control in it.
+const FIELD_TOP: &str = "design_field_top";
+
+/// The top (its caption's top) of the field block whose control is being drawn now on `ui`'s
+/// layer, while `field_label` draws it: a list that opens from the control never covers its
+/// own field's caption (layout PR 10b).
+pub(super) fn field_top(ui: &Ui) -> Option<f32> {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let layer = ui.layer_id();
+    ui.ctx()
+        .data(|data| data.get_temp::<Option<(u64, egui::LayerId, f32)>>(Id::new(FIELD_TOP)))
+        .flatten()
+        .filter(|(set, at, _)| *set == pass && *at == layer)
+        .map(|(_, _, top)| top)
 }
 
 /// Where a footer message stands in the footer's one order.
@@ -5840,8 +5932,21 @@ mod tests {
                 .map(|(_, node)| node.is_disabled());
             assert_eq!(decrease, Some(value == -1), "{value}: − at its limit only");
         }
-        for (typed, read) in [("\u{2212}3", -3.0), ("-3", -3.0), ("+2", 2.0), ("2", 2.0)] {
+        // The shared reader of typed signed numbers (M-P0 item 11): what the app writes reads
+        // back, a true minus included; words that are not one whole number read as nothing (the
+        // tracker's Amount cases, PR 638 review, moved here with its reader).
+        for (typed, read) in [
+            ("\u{2212}3", -3),
+            ("-3", -3),
+            ("+2", 2),
+            ("2", 2),
+            (" \u{2212}12 ", -12),
+            (&signed(-7), -7),
+        ] {
             assert_eq!(parse_signed(typed), Some(read), "{typed}");
+        }
+        for typed in ["3 points", "three", "", "++4", "+\u{2212}3"] {
+            assert_eq!(parse_signed(typed), None, "{typed}");
         }
         // The grouped stepper (M-P0 item 8, the group editor's member count): a count shows its
         // digits grouped, `1,000` stays `1,000`, and reads back with or without the commas.

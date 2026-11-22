@@ -454,20 +454,22 @@ impl DndBeyond {
     /// Round 26: the D&D Beyond list's error and, on Link and folder (`link`), the link's result,
     /// in the footer of the pane that shows them. Both live until the next refresh or link.
     /// The messages are typed data, so the pane's body can change this list while the footer
-    /// waits for it (`Messages::pane`). `frame` is the pane's.
+    /// waits for it (`Messages::pane`). `frame` is the pane's. `link` is the open campaign on
+    /// the Link and folder pane, read when the footer is built, after the campaign switcher
+    /// drew this frame (review of PR 665): only its own result shows, also in the frame of a
+    /// switch, before `poll` ends the other's. `None` on Settings, which shows no link result.
     pub fn footer_messages<'f, A: 'static>(
         &self,
         frame: &'f crate::design::outcome::PaneFrame,
         messages: &mut crate::design::outcome::Messages<'f, A>,
-        link: bool,
+        link: Option<uuid::Uuid>,
     ) {
         if let Some(error) = &self.error {
             messages.outcome(crate::design::outcome::FaultMessage::new(
                 &crate::campaigns::NotDone::words(error),
             ));
         }
-        if link
-            && let Some(open) = self.open
+        if let Some(open) = link
             && let Some(shown) = self.message.get(&LinkSaved(open))
         {
             messages.kept(shown.outcome(frame, |_| {

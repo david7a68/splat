@@ -788,6 +788,133 @@ fn painted_bounds(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     found
 }
 
+/// Layout PR 8: where the Settings footer that holds the control or text named `name` stands,
+/// from the pane records: the footer, its pane's viewport and the footer's gap from the pane's own
+/// content (the viewport's top plus the content's height, or the viewport's bottom when pinned).
+struct SettingsFooter {
+    footer: egui::Rect,
+    viewport: egui::Rect,
+    gap: f32,
+}
+
+fn settings_footer(d: &Driver<'_>, name: &str) -> Option<SettingsFooter> {
+    let place = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.in_view() && node.name.contains(name))?
+        .rect;
+    d.pane_records().into_iter().find_map(|record| {
+        let footer = record
+            .footer()
+            .filter(|footer| footer.contains_rect(place))?;
+        let viewport = record.viewport()?;
+        let gap = match record.placement() {
+            crate::design::pane::Placement::Follows => {
+                footer.top() - (viewport.top() + record.content_height()?)
+            }
+            crate::design::pane::Placement::Pinned => footer.top() - viewport.bottom(),
+        };
+        Some(SettingsFooter {
+            footer,
+            viewport,
+            gap,
+        })
+    })
+}
+
+/// Layout PR 8: every control and text of the Settings account column (from its heading's left
+/// edge), by name and rounded rect: the same list before and after a campaign act shows that no
+/// campaign result moved it.
+fn account_column(d: &Driver<'_>) -> Option<Vec<(String, [i32; 4])>> {
+    let left = d
+        .painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING)?
+        .left();
+    Some(
+        d.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.in_view() && !node.name.is_empty() && node.rect.left() >= left - 1.0
+            })
+            .map(|node| {
+                let r = node.rect;
+                (
+                    node.name,
+                    [r.left(), r.top(), r.right(), r.bottom()].map(|v| v.round() as i32),
+                )
+            })
+            .collect(),
+    )
+}
+
+/// Layout PR 8: how many Settings footers hold a visible control or text named `name`: a result
+/// belongs to one owner, so it stands in one footer.
+fn footers_holding(d: &Driver<'_>, name: &str) -> usize {
+    let places: Vec<egui::Rect> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.in_view() && node.name.contains(name))
+        .map(|node| node.rect)
+        .collect();
+    d.pane_records()
+        .into_iter()
+        .filter_map(|record| record.footer())
+        .filter(|footer| places.iter().any(|place| footer.contains_rect(*place)))
+        .count()
+}
+
+/// Layout PR 8: in the wide Settings tab (1000 px and wider), the footer that holds `name` is its
+/// column's own: its pane does not reach the account column (so another column's content cannot
+/// set where it stands), it stands `S` below its pane's content, and `S` below the lowest control
+/// or text of its column. Narrow, the tab keeps one footer under the stacked columns, so there is
+/// nothing to say about a column and this holds. `(held, what was measured)`.
+fn settings_footer_under_column(d: &Driver<'_>, name: &str) -> (bool, String) {
+    let size = d.window_size();
+    let found = settings_footer(d, name);
+    if size.0 < 1000.0 {
+        let footer = found.as_ref().map(|found| found.footer);
+        return (
+            footer.is_some(),
+            format!("At {size:?} (stacked): {name:?} stands in the footer {footer:?}"),
+        );
+    }
+    let account = d.painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING);
+    let (Some(found), Some(account)) = (found, account) else {
+        return (
+            false,
+            format!("At {size:?}: no footer holds {name:?}, or no account heading"),
+        );
+    };
+    // The lowest control or text of the column, above its footer.
+    let last = d
+        .nodes()
+        .into_iter()
+        .filter(|node| {
+            node.in_view()
+                && !node.name.is_empty()
+                && node.role != egui::accesskit::Role::GenericContainer
+                && node.role != egui::accesskit::Role::ScrollView
+                && node.rect.left() >= found.viewport.left() - 1.0
+                && node.rect.right() <= account.left()
+                && node.rect.top() >= found.viewport.top() - 0.5
+                && node.rect.bottom() <= found.footer.top() + 0.5
+        })
+        .map(|node| node.rect.bottom())
+        .reduce(f32::max);
+    let below = last.map(|last| found.footer.top() - last);
+    (
+        found.viewport.right() <= account.left()
+            && (found.gap - crate::design::S).abs() <= 1.0
+            && below.is_some_and(|below| (0.0..=crate::design::S + 12.0).contains(&below)),
+        format!(
+            "At {size:?}: footer {:?} of the pane {:?} (account heading at {:?}), {} below its content, {below:?} below its column's lowest control",
+            found.footer,
+            found.viewport,
+            account.left(),
+            found.gap,
+        ),
+    )
+}
+
 /// Where a control's own words start: the painted text named exactly `name` inside `area`. In a
 /// modal dialog the page behind it stays painted, so a text that only centres in `area` can be
 /// the page's (round 27 FN4: a roster name under `Connect to sync`).
@@ -5759,7 +5886,9 @@ pub mod encounter_build {
                     &[
                         "Encounter name: ",
                         "Find a creature or party member",
-                        "More actions for ",
+                        // The first roster row's menu (not the encounter's own menu in its head,
+                        // `More actions for Bridge Ambush`; Astra's P2 on PR 668).
+                        "More actions for Brannoch Vale",
                     ],
                 )
             };
@@ -6926,8 +7055,101 @@ pub mod settings {
                      gap from the content {gap:?}"
                 ),
             );
+            // Layout PR 8 (SG12, AG12): wide, the discard's footer is the campaign column's own,
+            // `S` below its last row; narrow, the stacked tab's one footer.
+            let (held, said) = settings_footer_under_column(d, "Undo discard of Campaign details");
+            d.observe("m32-L8-settings-discard-footer", held, said);
         });
+        // Layout PR 8: A, an unrelated B, then Undo A. A is the discard (its words and Undo in the
+        // campaigns' footer); B is an account error (in the account's footer, wide). Wide, each
+        // footer stands under its own column and holds only its own result; narrow, the one footer
+        // holds both. Undo A brings A's draft and ends A's words together, and B stays.
+        const DISCARDED: &str = "Campaign details draft discarded.";
+        const ACCOUNT_ERROR: &str = "Could not remove the saved sign-in.";
+        d.app_mut().settings.simulate_error(Some(ACCOUNT_ERROR));
+        d.settle();
+        let footers = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let campaign = settings_footer(d, DISCARDED);
+                    let account = settings_footer(d, ACCOUNT_ERROR);
+                    let (campaign, account) = (campaign?, account?);
+                    // Each result stands in the footer of its own owner, and in no other.
+                    let once = footers_holding(d, DISCARDED) == 1
+                        && footers_holding(d, ACCOUNT_ERROR) == 1;
+                    let own = |a: &SettingsFooter, b: &SettingsFooter| {
+                        (a.gap - crate::design::S).abs() <= 1.0 && a.footer != b.footer
+                    };
+                    Some((
+                        size,
+                        // Wide: two panes side by side, each with its own footer `S` under its
+                        // own content. Narrow: one footer holds both.
+                        once && if size.0 >= 1000.0 {
+                            own(&campaign, &account)
+                                && own(&account, &campaign)
+                                && campaign.viewport.right() <= account.viewport.left()
+                                && campaign.footer.right() <= account.footer.left()
+                        } else {
+                            campaign.footer == account.footer
+                        },
+                        campaign.footer,
+                        account.footer,
+                    ))
+                })
+            })
+        };
+        let a_and_b = footers(d);
+        d.observe(
+            "m32-L8-settings-two-footers",
+            a_and_b
+                .iter()
+                .all(|at| at.as_ref().is_some_and(|(_, held, _, _)| *held)),
+            format!(
+                "Discard (A) and an account error (B), each footer at 960, 1200, 1920: {a_and_b:?}"
+            ),
+        );
+        // Undo A in each size's own layout: the wide footers dispatch their own presses. A is
+        // discarded again after each, so the next size starts from A and B too.
+        let undone_at = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.act_at_size(size, |d| {
+                d.click("Undo discard of Campaign details");
+                let undone = (
+                    size,
+                    d.field_text(EDIT_FORM).as_deref() == Some("Quiet Harbor revised"),
+                    !d.visible_text(DISCARDED),
+                    d.visible_text(ACCOUNT_ERROR),
+                );
+                // With no draft back there is nothing to discard again (A is still shown).
+                if d.in_view("Discard") {
+                    d.click("Discard");
+                }
+                undone
+            })
+        });
+        d.observe(
+            "m32-L8-settings-undo-a-at-every-size",
+            undone_at
+                .iter()
+                .all(|(_, draft, a_gone, b_stays)| *draft && *a_gone && *b_stays),
+            format!(
+                "Undo A at 960, 1200 and 1920 (size, draft back, A's words gone, B's words stay): {undone_at:?}"
+            ),
+        );
         d.click("Undo discard of Campaign details");
+        d.observe(
+            "m32-L8-settings-undo-a-keeps-b",
+            d.field_text(EDIT_FORM).as_deref() == Some("Quiet Harbor revised")
+                && !d.visible_text(DISCARDED)
+                && d.visible_text(ACCOUNT_ERROR),
+            format!(
+                "Undo A: the draft is back ({:?}), A's words are gone ({}), B's words stay ({})",
+                d.field_text(EDIT_FORM),
+                !d.visible_text(DISCARDED),
+                d.visible_text(ACCOUNT_ERROR)
+            ),
+        );
+        d.app_mut().settings.simulate_error(None);
+        d.settle();
         assert_eq!(
             d.field_text(EDIT_FORM).as_deref(),
             Some("Quiet Harbor revised")
@@ -7448,6 +7670,8 @@ pub mod empty {
         go_settings(d);
         d.expect(ADD_CAMPAIGN);
         d.state("settings-no-campaigns", Sizes::All);
+        // Layout PR 8: the account column's controls, before the campaign is added.
+        let account_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, account_column));
         // Round 26 FB6: an inline creation form puts Create on its last field's line, after
         // the field, and its reason on a line below, at the field's left edge, that stays when
         // the reason goes.
@@ -7522,6 +7746,24 @@ pub mod empty {
             assert!(
                 !d.has(NAME_FIELD),
                 "A successful add closes the form at every window size"
+            );
+            // Layout PR 8 (SB4, AB4): wide, the add result stands `S` under the campaign column,
+            // not under the taller account column, and the account column's controls stay where
+            // they were before the add. Narrow, the stacked tab keeps one footer.
+            let (held, said) = settings_footer_under_column(d, "Build an encounter");
+            let size = d.window_size();
+            let before = [SMALL, DEFAULT, LARGE]
+                .iter()
+                .position(|known| *known == size)
+                .and_then(|at| account_before[at].clone());
+            let account = account_column(d);
+            d.observe(
+                "m32-L8-settings-campaign-footer",
+                held && (size.0 < 1000.0
+                    || before
+                        .as_ref()
+                        .is_some_and(|b| !b.is_empty() && Some(b) == account.as_ref())),
+                format!("{said}; the account column before {before:?}, now {account:?}"),
             );
         });
         d.goal("add a first campaign");
@@ -18470,6 +18712,77 @@ pub mod session_recording {
                 d.click_starting("Transcript and summary service: ");
             }
             d.wait_for_text("Anthropic");
+        });
+        // Layout PR 10b (SR1/AR2): the open list leaves its own field whole: the Service caption
+        // and the control are in the body above the footer, and no row covers either; at 960 and
+        // at 1920 (a wider menu is checked at the other sizes too).
+        for size in [SMALL, LARGE] {
+            let (whole, detail) = d.aside(|d| d.act_at_size(size, |d| {
+                if !d.has("Anthropic") {
+                    d.click_starting("Transcript and summary service: ");
+                    d.wait_for_text("Anthropic");
+                }
+                let nodes = d.nodes();
+                let service = nodes
+                    .iter()
+                    .find(|node| node.name.starts_with("Transcript and summary service: "))
+                    .map(|node| node.rect);
+                let caption = service.and_then(|service| {
+                    nodes
+                        .iter()
+                        .filter(|node| {
+                            node.name == "Service" && node.rect.bottom() <= service.top() + 1.0
+                        })
+                        .map(|node| node.rect)
+                        .reduce(|a, b| if a.bottom() > b.bottom() { a } else { b })
+                });
+                let rows: Vec<egui::Rect> = nodes
+                    .iter()
+                    .filter(|node| {
+                        ["Anthropic", "OpenAI", "Google Gemini", "OpenRouter", "Another service"]
+                            .contains(&node.name.as_str())
+                    })
+                    .map(|node| node.rect)
+                    .collect();
+                let scale = d.pixels_per_point();
+                let limit = service.and_then(|service| {
+                    d.pane_records()
+                        .into_iter()
+                        .find(|record| record.room().contains(service.center() / scale))
+                        .map(|record| {
+                            let room = record.viewport().unwrap_or(record.room());
+                            let bottom = record.footer().map_or(room.bottom(), |footer| footer.top());
+                            (room.top() * scale, bottom * scale)
+                        })
+                });
+                let whole = service.zip(caption).zip(limit).is_some_and(
+                    |((service, caption), (top, bottom))| {
+                        caption.top() >= top - 1.0
+                            && service.bottom() <= bottom + 1.0
+                            && !rows.is_empty()
+                            && rows
+                                .iter()
+                                .all(|row| !row.intersects(caption) && !row.intersects(service))
+                    },
+                );
+                (
+                    whole,
+                    format!(
+                        "caption {caption:?}, control {service:?}, body {limit:?}, rows {rows:?}"
+                    ),
+                )
+            }));
+            d.observe(
+                "layout-10b-SR1-list-context",
+                whole,
+                format!("At {size:?}, the open list leaves its field whole: {detail}"),
+            );
+        }
+        d.aside(|d| {
+            if !d.has("Anthropic") {
+                d.click_starting("Transcript and summary service: ");
+                d.wait_for_text("Anthropic");
+            }
         });
         d.click("Anthropic");
         d.state_prepared("processing-settings-anthropic", Sizes::All, |d| {

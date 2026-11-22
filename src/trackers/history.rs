@@ -11,6 +11,7 @@ use super::{
     NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, orphaned, place_name,
     result_words, with_dependents,
 };
+use crate::design::memo::{Measure, Memos, Revision};
 use crate::design::outcome::PagePlaceholder;
 use crate::design::outcome::{FaultMessage, Messages, Said, Sentence, UndoStep, Verb};
 use crate::design::{self, Action, Density, Gap, Type, colors};
@@ -25,6 +26,8 @@ thread_local! {
     pub static PREPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Open sections drawn, and rows drawn in them.
     pub static DRAWN: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    /// Rows' words fitted to their room (`history_row`).
+    pub static FITTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// One row of a member's history: the entry as the file held it, its words, and the value it
@@ -45,8 +48,35 @@ pub struct Removed {
     pub words: String,
     /// What its Undo names: the clicked entry's act (`Undo remove Take seal: Keyring +1`).
     name: String,
-    /// When it was made, for the footer's order.
-    order: crate::design::ResultOrder,
+    /// The campaign it was made in: its owner in the store.
+    owner: HistoryOwner,
+}
+
+/// The owner of the last Remove of a tracker history: the campaign. One Undo of a Remove stands
+/// at a time, in whichever note's reader it was made; a campaign switch hides it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryOwner(std::path::PathBuf);
+
+impl crate::design::results::Owner for HistoryOwner {
+    type Scope = std::path::Path;
+    fn scope(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl crate::design::results::Kept for Removed {
+    type Owner = HistoryOwner;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // An Undo that found its entries changed or gone on disk ends it.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        // A read of the ledger keeps it: its Undo checks the entries when pressed.
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Its Undo puts the entries back; it leaves only when that works.
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> HistoryOwner {
+        self.owner.clone()
+    }
 }
 
 /// The member an entry belongs to: the tracker it changed, the tracker whose change raised its
@@ -240,16 +270,58 @@ fn removal(
     if names.len() > 1 {
         words = words.then(crate::sentence!("With it: {}.", names[1..].join("; ")));
     }
+    // A notice that the removal takes off the Due list says so, as an act's fall does
+    // (`result_words`): the DM sees Due go down and reads why.
+    for name in ended_notices(rules, today, ledger, &next) {
+        words = words.then(crate::sentence!("{} is no longer due.", name));
+    }
     Ok((placed, words.to_string(), names.swap_remove(0)))
+}
+
+/// The names of the notices due with `ledger` that are not due with `next`, oldest first. A
+/// day mark's open days share one row, named by its oldest day: each of its days that is no
+/// longer open is named, and a day that opens again ends nothing.
+fn ended_notices(rules: &Rules, today: &Today, ledger: &Ledger, next: &Ledger) -> Vec<String> {
+    let (before, after) = (
+        super::replay(rules, ledger, today),
+        super::replay(rules, next, today),
+    );
+    let mut ended = Vec::new();
+    for notice in &before.due {
+        match &notice.id {
+            NoticeRef::Day { mark, .. } => {
+                let open: Vec<u64> = after
+                    .due
+                    .iter()
+                    .filter(
+                        |still| matches!(&still.id, NoticeRef::Day { mark: m, .. } if m == mark),
+                    )
+                    .flat_map(|still| still.days.iter().copied())
+                    .collect();
+                for day in notice.days.iter().filter(|day| !open.contains(day)) {
+                    let one = super::Notice {
+                        id: NoticeRef::Day {
+                            mark: mark.clone(),
+                            day: *day,
+                        },
+                        ..notice.clone()
+                    };
+                    ended.push(one.name(rules));
+                }
+            }
+            id => {
+                if !after.due.iter().any(|still| still.id == *id) {
+                    ended.push(notice.name(rules));
+                }
+            }
+        }
+    }
+    ended
 }
 
 impl Trackers {
     /// `Remove` on a row of a member's history in the reader of `note`: the entry it was drawn
     /// from, exactly as read. It replaces the Undo of the last `Remove`.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn remove(&mut self, note: Uuid, drawn: &Entry) {
         let today = self.today.clone();
         let mut made = None;
@@ -270,13 +342,14 @@ impl Trackers {
         });
         match done {
             Ok(()) => {
-                if let Some((placed, words, name)) = made {
-                    self.removed = Some(Removed {
+                if let (Some((placed, words, name)), Some(owner)) = (made, self.history_owner()) {
+                    // A new Remove replaces the last one and its Undo; the store issues its order.
+                    self.removed.record(Removed {
                         note,
                         placed,
                         words,
                         name,
-                        order: crate::design::ResultOrder::issue(),
+                        owner,
                     });
                 }
             }
@@ -288,8 +361,16 @@ impl Trackers {
     /// `Undo remove`: the entries go back where they were. When one of them, or the entry
     /// before it, changed or is gone on disk, it writes nothing, says so, and the Undo ends.
     /// When a notice raised since needs the entries to stay out, it writes nothing and names it.
-    pub fn undo_remove(&mut self) {
-        let Some(removed) = self.removed.clone() else {
+    /// `ticket` is the press's: a Remove replaced since its line was drawn does nothing.
+    pub fn undo_remove(&mut self, ticket: Option<crate::design::results::Ticket>) {
+        let Some(ticket) = ticket else {
+            return;
+        };
+        let Some(removed) = self
+            .removed
+            .get_by(&ticket)
+            .map(|shown| shown.value().clone())
+        else {
             return;
         };
         let today = self.today.clone();
@@ -310,15 +391,39 @@ impl Trackers {
             )
         });
         match done {
-            Ok(()) => self.removed = None,
+            Ok(()) => {
+                let _ = self.removed.undo_by(ticket, |_| Ok::<(), ()>(()));
+            }
             Err(Some(reason)) => {
                 if stale {
-                    self.removed = None;
+                    self.removed.owner_changed(&removed.owner);
                 }
                 self.history_reason = Some((removed.note, reason));
             }
             Err(None) => {}
         }
+    }
+
+    /// The campaign: the owner of the last Remove.
+    fn history_owner(&self) -> Option<HistoryOwner> {
+        self.campaign
+            .as_ref()
+            .map(|campaign| HistoryOwner(campaign.path.clone()))
+    }
+
+    /// The last Remove, when it was made in the reader of `note` in this campaign and that
+    /// note is in play: the one selection the footer draws its kept line from, so a note out
+    /// of play shows no Undo remove (PR 676 review, P1).
+    pub(crate) fn removed_in(
+        &self,
+        note: Uuid,
+    ) -> Option<crate::design::results::Shown<'_, Removed>> {
+        if !in_play(&self.rules, note) {
+            return None;
+        }
+        self.removed
+            .get(&self.history_owner()?)
+            .filter(|shown| shown.value().note == note)
     }
 }
 
@@ -345,8 +450,8 @@ enum LineKind {
     Refused(crate::design::results::Refusal),
     /// The save of the history failed, in `view::not_saved`'s words.
     NotSaved(crate::design::outcome::Sentence),
-    /// The last `Remove`, with the order `remove` issued for it and what its Undo names.
-    Removed(crate::design::ResultOrder, String),
+    /// The last `Remove`: a kept line of its store (`footer`).
+    Removed,
 }
 
 /// The footer messages of the history of `note`, in the footer's order: why the last `Remove`
@@ -376,26 +481,23 @@ pub fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
             }
         });
     }
-    if let Some(removed) = trackers.removed.as_ref().filter(|r| r.note == note) {
+    if let Some(removed) = trackers.removed_in(note) {
         lines.push(FooterLine {
-            words: removed.words.clone(),
-            kind: LineKind::Removed(removed.order, removed.name.clone()),
+            words: removed.value().words.clone(),
+            kind: LineKind::Removed,
         });
     }
     lines
 }
 
-/// The reader's footer messages of the history of `note` (`footer_lines`), typed. (A named lead
-/// exception in package D's slice: only this footer path moves to the typed footer. `remove`
-/// still issues its own order, so the result goes in by the staged path.)
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: the last Remove keeps the order `remove` issued (design::results::STAGED_ALLOWS)"
-)]
-pub fn footer<A: Clone + 'static>(
+/// The reader's footer messages of the history of `note` (`footer_lines`), typed. The last
+/// Remove is a kept line of its store (M0567, M0569): its Undo's press carries the store's
+/// ticket, so it reaches only the Remove its line showed.
+pub fn footer<'f, A: Clone + 'static>(
     trackers: &Trackers,
     note: Uuid,
-    messages: &mut Messages<'_, A>,
+    frame: &'f crate::design::outcome::PaneFrame,
+    messages: &mut Messages<'f, A>,
     said: fn(&str) -> Sentence,
     undo: A,
 ) {
@@ -407,14 +509,17 @@ pub fn footer<A: Clone + 'static>(
             LineKind::NotSaved(words) => {
                 messages.outcome(FaultMessage::new(&NotSaved(words)));
             }
-            LineKind::Removed(order, name) => {
-                messages.outcome_at(
-                    order,
-                    Said::new(said(&line.words))
-                        .undo(UndoStep::of(Verb::Remove, name).pressed_as(undo.clone())),
-                );
-            }
+            // Drawn from its store below, with its ticket.
+            LineKind::Removed => {}
         }
+    }
+    if let Some(shown) = trackers.removed_in(note) {
+        let line = shown.outcome(frame, |removed| {
+            Said::new(said(&removed.words))
+                .undo(UndoStep::of(Verb::Remove, removed.name.clone()).pressed_as(undo.clone()))
+                .into()
+        });
+        messages.kept(line);
     }
 }
 
@@ -469,6 +574,8 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat_content::co
     }
     let mut pressed = None;
     let played = trackers.played;
+    let revision = trackers.revision.revision();
+    let fits = &mut trackers.view.history_fits;
     let rules = &trackers.rules;
     let sections = rules
         .trackers
@@ -495,7 +602,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat_content::co
                 if let Some(start) = start {
                     ui.label(Type::Small.rich(ui, start).color(colors().muted));
                 }
-                rows_in_view(ui, rows, played, &mut pressed);
+                rows_in_view(ui, rows, played, (fits, revision), &mut pressed);
             },
         );
     }
@@ -526,6 +633,7 @@ fn rows_in_view(
     ui: &mut egui::Ui,
     rows: &[Row],
     played: Option<Uuid>,
+    (fits, revision): (&mut RowFits, Revision),
     pressed: &mut Option<Entry>,
 ) {
     let height = Density::Read.control();
@@ -561,7 +669,10 @@ fn rows_in_view(
                 .max_rect(rect)
                 .id_salt(&row.entry.id)
                 .layout(egui::Layout::right_to_left(egui::Align::Center)),
-            |ui| history_row(ui, row, row.entry.session != played, pressed),
+            |ui| {
+                let removable = row.entry.session != played;
+                history_row(ui, row, removable, (&mut *fits, revision), pressed);
+            },
         );
     }
 }
@@ -571,8 +682,16 @@ pub const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this sessi
 
 /// A row, laid out from its right end: its menu with `Remove` (off, with its reason painted under
 /// it, on a row of the session being played), so every row looks alike and the values stand in one column; the
-/// value it left; then its words, cut with `…` when they do not fit, whole on hover.
-fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Option<Entry>) {
+/// value it left; then its words, cut at a whole word with `…` when they do not fit (the shared
+/// `words_that_fit`), whole on hover and to assistive technology. The fit is kept by the row's
+/// entry with the trackers' revision and its measure (`ViewState::history_fits`).
+fn history_row(
+    ui: &mut egui::Ui,
+    row: &Row,
+    removable: bool,
+    (fits, revision): (&mut RowFits, Revision),
+    pressed: &mut Option<Entry>,
+) {
     let menu = Density::Read.control();
     design::row_menu(ui, &row.words, |ui| {
         if Action::quiet("Remove")
@@ -603,6 +722,26 @@ fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Opti
         );
     }
     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        ui.add(egui::Label::new(Type::Body.rich(ui, &row.words)).truncate());
+        let (font, room) = (Type::Body.font(ui), ui.available_width());
+        let key = (revision, Measure::of(ui, room, &font));
+        let shown = fits.get_or(&row.entry.id, key, || {
+            #[cfg(feature = "test-support")]
+            FITTED.with(|n| n.set(n.get() + 1));
+            let words = design::words_that_fit(ui, &row.words, &font, room);
+            // A first word wider than the room is `…` alone, so nothing paints over the value.
+            if design::number_width(ui, &words, &font) > room {
+                "…".to_owned()
+            } else {
+                words
+            }
+        });
+        let response = ui.add(egui::Label::new(Type::Body.rich(ui, shown.as_str())));
+        if *shown != row.words {
+            design::named(ui, &response, &row.words);
+            response.on_hover_text(&row.words);
+        }
     });
 }
+
+/// The history rows' words as fitted, by entry: see [`history_row`].
+pub(super) type RowFits = Memos<String, (Revision, Measure), String>;

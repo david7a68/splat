@@ -570,7 +570,7 @@ fn day_marks_follow_the_campaigns_day_count() {
         Some(vec![32, 62])
     );
     assert_eq!(value(&race, "favor", None), 0);
-    race.trackers.undo_remove();
+    race.trackers.test_undo_remove();
     assert_eq!(value(&race, "favor", None), 1);
     assert_eq!(race.trackers.state.due[0].id, day("month_end", 62));
     // A day notice comes from the day count, so no entry raises it: the wagon's Done goes
@@ -588,7 +588,7 @@ fn day_marks_follow_the_campaigns_day_count() {
     assert_eq!(value(&race, "seals", Some("Party")), 0);
     assert!(t.state.due.iter().any(|n| n.id == day("wagon", 3)));
     assert!(!t.state.due.iter().any(|n| n.key == "seals"));
-    race.trackers.undo_remove();
+    race.trackers.test_undo_remove();
     assert_eq!(value(&race, "seals", Some("Party")), 1);
     let t = &race.trackers;
     let rows: Vec<_> = t.state.due.iter().map(|n| n.id.clone()).collect();
@@ -1166,7 +1166,7 @@ fn undo_and_remove_of_a_change_that_raised_a_notice_take_the_notice_and_its_entr
     t.roll_notice(&bell, "wander_early");
     let before = file(&race);
     let t = &mut race.trackers;
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(
         t.test_history_reason(),
         Some((
@@ -1269,7 +1269,7 @@ fn undo_and_remove_of_a_change_that_raised_a_notice_take_the_notice_and_its_entr
     t.remove(note, &correction);
     let bell = t.state.due[0].clone();
     t.roll_notice(&bell, "wander_early");
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(t.test_history_reason(), None);
     assert_eq!(value(&race, "race_clock", None), 0);
     assert!(
@@ -1436,7 +1436,7 @@ fn each_write_path_of_the_ledger_holds() {
     );
     t.press("race_clock", None, "Enter room", None);
     let b = t.newest().to_vec();
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(t.test_removed(), None);
     assert_eq!(t.ledger.changes[0], older);
     assert_eq!(t.ledger.changes.last(), b.last());
@@ -1456,7 +1456,7 @@ fn each_write_path_of_the_ledger_holds() {
     let t = &mut race.trackers;
     t.read_disk();
     let removed_name = t.test_removed_name();
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(
         t.test_history_reason(),
         Some((
@@ -1474,6 +1474,25 @@ fn each_write_path_of_the_ledger_holds() {
     fs::write(&path, &text).unwrap();
     race.trackers.read_disk();
     assert_eq!(value(&race, "favor", None), 1);
+    // M0566 (SH7, AH7): a Remove that takes a notice off the Due list says so in its result,
+    // as an act's fall does; a Remove that ends none says nothing more.
+    let t = &mut race.trackers;
+    t.press("seals", Some("Old Guard"), "Take seal", None);
+    let due = t.due();
+    let seal = t.test_history()["seals"]
+        .iter()
+        .find(|row| row.entry.instance.as_deref() == Some("Old Guard"))
+        .unwrap()
+        .entry
+        .clone();
+    t.remove(note, &seal);
+    let words = t.test_removed().map(|removed| removed.words).unwrap();
+    assert!(
+        words.starts_with("Removed ")
+            && words.ends_with(". First seal for Old Guard is no longer due."),
+        "{words}"
+    );
+    assert_eq!(t.due(), due - 1);
     // An Undo whose place changed on disk: the entry before the removed one was edited in
     // Obsidian. It puts nothing back, says so, and ends.
     let t = &mut race.trackers;
@@ -1486,7 +1505,7 @@ fn each_write_path_of_the_ledger_holds() {
     fs::write(&path, &edited).unwrap();
     t.read_disk();
     let removed_name = t.test_removed_name();
-    t.undo_remove();
+    t.test_undo_remove();
     assert_eq!(
         t.test_history_reason(),
         Some((
@@ -1685,8 +1704,18 @@ fn each_write_path_of_the_ledger_holds() {
         t.reason,
         Some(refused(
             recorded("Crowd loves it"),
-            Refused::RulesUnreadable
+            Refused::RulesUnreadable(RulesFile::Manifest)
         ))
+    );
+    // PR 661 review (P2): the refusal names the file that cannot be read, and sends the DM
+    // there, not to the house rule notes.
+    assert_eq!(
+        refused_words(&t.reason).as_deref(),
+        Some(
+            "Nothing was recorded for Crowd loves it. Splat cannot read Campaign.md. Check \
+             Campaign.md first."
+        ),
+        "m-s0-5-manifest"
     );
     // The reader's words stay with the notes' own fault (`TrackerFault::NotesUnreadable`).
     let why = t.rules.unreadable.clone().unwrap_or_default();
@@ -1788,6 +1817,48 @@ fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
         h.query_by_label("CROWD FAVOR HISTORY 5,001").is_some()
     })
     .expect("a changed ledger prepares its rows again");
+    // M0571: unchanged frames fit no row's words again; a row too long for its room is cut at
+    // a whole word and still says its words whole to assistive technology.
+    let fitted = || history::FITTED.with(std::cell::Cell::get);
+    h.run_steps(2);
+    let before = fitted();
+    h.run_steps(3);
+    assert_eq!(
+        fitted(),
+        before,
+        "unchanged frames fit no row's words again"
+    );
+    let long = "Crowd loves it when the champion bows to every banner in the hall";
+    let t = h.state_mut();
+    // The first row of the history, in view at its top.
+    t.ledger.changes.insert(
+        0,
+        Entry {
+            id: "c-fffffffe".into(),
+            tracker: Some("favor".into()),
+            add: Some(1),
+            why: Some(long.into()),
+            ..Entry::default()
+        },
+    );
+    t.test_settle();
+    h.run_steps(2);
+    assert!(fitted() > before, "a settle fits the rows in view again");
+    // A label's painted words are its value; its accessible label is the whole row.
+    let whole = format!("{long}: +1");
+    let cut_row = h.query_all(egui_kittest::kittest::By::new().predicate(|node| {
+        node.role() == eframe::egui::accesskit::Role::Label
+            && node.label().is_some_and(|label| label == whole)
+            && node.value().is_some_and(|shown| {
+                shown.ends_with('…')
+                    && whole.starts_with(&format!("{} ", shown.trim_end_matches('…')))
+            })
+    }));
+    assert_eq!(
+        cut_row.count(),
+        1,
+        "the row is cut at a whole word and says its words whole"
+    );
 }
 
 /// FE1, AE2: every tracker line of the panel shares one value column and one first-action
@@ -1975,6 +2046,16 @@ fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
         history::footer_lines(&race.trackers, note).is_empty(),
         "a note out of play shows no Undo remove"
     );
+    // PR 676 review (P1): the Remove is still kept in its store, and the footer that is drawn
+    // (its kept line, `history::footer`) offers no Undo remove for a note out of play.
+    assert!(
+        race.trackers.test_removed().is_some(),
+        "the Remove is still kept"
+    );
+    assert!(
+        !race.trackers.test_removed_drawn(note),
+        "m-s0-4-out-of-play: the footer draws Undo remove for a note out of play"
+    );
     fs::write(ledger::path(&race.campaign.path), "not a ledger").unwrap();
     let mut trackers = Trackers::with_ids(crate::hermetic::new_uuid);
     poll(
@@ -1987,4 +2068,42 @@ fn no_note_in_play_reads_no_ledger_and_shows_nothing() {
     assert!(!trackers.in_play());
     assert_eq!(trackers.due(), 0);
     assert!(trackers.unreadable.is_none(), "the ledger is not read");
+}
+
+/// M-S0.4 (M0567, M0569): the last Remove is a kept result of its store, and its Undo's press
+/// reaches only the Remove its line showed. Remove A, then Remove B, which replaces A's Undo:
+/// a press with A's old ticket puts nothing back; B's own Undo puts B back, and A stays out.
+#[test]
+fn a_remove_undo_reaches_only_the_remove_its_line_showed() {
+    let mut race = race();
+    let t = &mut race.trackers;
+    let note = t.rules.trackers[0].note;
+    t.played = None;
+    t.press("favor", None, "Crowd loves it", None);
+    t.press("favor", None, "Crowd loves it", None);
+    t.played = Some(TONIGHT);
+    t.test_settle();
+    let a = t.test_history()["favor"][0].entry.clone();
+    let b = t.test_history()["favor"][1].entry.clone();
+    t.remove(note, &a);
+    let a_ticket = t.test_removed_ticket();
+    assert!(
+        a_ticket.is_some(),
+        "A's Remove is kept with its line's ticket"
+    );
+    t.remove(note, &b);
+    let kept = t.ledger.clone();
+    t.undo_remove(a_ticket);
+    assert_eq!(
+        t.ledger.changes, kept.changes,
+        "m-s0-4-ticket: A's old ticket put an entry back"
+    );
+    assert_eq!(t.test_history_reason(), None);
+    assert!(t.test_removed().is_some(), "B's Undo stays");
+    t.test_undo_remove();
+    assert!(
+        t.ledger.changes.contains(&b) && !t.ledger.changes.contains(&a),
+        "B's own Undo puts B back, and A stays out"
+    );
+    assert_eq!(t.test_removed(), None);
 }

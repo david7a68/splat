@@ -589,14 +589,17 @@ fn in_a_pane_the_list_stays_above_the_footer() {
                     for line in 0..30 {
                         ui.label(format!("Body line {line}"));
                     }
-                    let shown = dropdown(
-                        ui,
-                        &current,
-                        Setup {
-                            many: Some(12),
-                            ..Setup::default()
-                        },
-                    );
+                    // A field block: its caption above the control (layout PR 10b).
+                    let shown = crate::design::small_field(ui, "Side caption", None, None, |ui| {
+                        dropdown(
+                            ui,
+                            &current,
+                            Setup {
+                                many: Some(12),
+                                ..Setup::default()
+                            },
+                        )
+                    });
                     control.set(shown.response.rect);
                     ui.label("After the drop-down");
                 });
@@ -608,18 +611,19 @@ fn in_a_pane_the_list_stays_above_the_footer() {
         for _ in 0..3 {
             draw(Vec::new());
         }
-        // Scroll the body until the drop-down sits near the footer.
+        // Scroll the body until the drop-down is cut by the footer: its top in view, its foot
+        // under the footer (round 31 SR1/AR2, layout PR 10b).
         let footer = pane::footer_rect(&ctx, Id::new("test_pane_footer")).expect("the footer");
-        for _ in 0..80 {
-            // Scrolled until the drop-down is in view, just above the footer.
-            if control.get().bottom() <= footer.top() - S {
+        for _ in 0..240 {
+            let at = control.get();
+            if at.top() < footer.top() - S - 8.0 && at.bottom() > footer.top() - S + 4.0 {
                 break;
             }
             draw(vec![
                 Event::PointerMoved(pos2(COLUMN / 2.0, 100.0)),
                 Event::MouseWheel {
                     unit: egui::MouseWheelUnit::Point,
-                    delta: vec2(0.0, -24.0),
+                    delta: vec2(0.0, -4.0),
                     modifiers: Modifiers::NONE,
                 },
             ]);
@@ -628,11 +632,38 @@ fn in_a_pane_the_list_stays_above_the_footer() {
         let record = pane::pane_record(&ctx, Id::new("test_pane_footer")).expect("the pane");
         assert!(record.offset() > 0.0, "the body is scrolled at {width}");
         let footer = record.footer().expect("the footer holds its notice");
-        draw(click(control.get().center()));
-        draw(Vec::new());
-        draw(Vec::new());
+        let cut = control.get();
+        assert!(
+            cut.bottom() > footer.top() - S + 0.5,
+            "setup-cut: the control {cut:?} is cut by the footer {footer:?} at {width}"
+        );
+        // A direct click on the cut control: at the release, its whole field comes above the
+        // footer, and the list opens from it without covering its caption.
+        draw(click(cut.center()));
+        for _ in 0..3 {
+            draw(Vec::new());
+        }
+        let words = texts(&draw(Vec::new()));
         assert!(egui::Popup::is_id_open(&ctx, list()), "open at {width}");
+        let caption = words
+            .iter()
+            .find(|text| text.words == "Side caption")
+            .expect("the field's caption")
+            .rect;
+        let room = record.viewport().expect("a Content body");
+        assert!(
+            caption.top() >= room.top() - 0.5 && control.get().bottom() <= footer.top() - S + 0.5,
+            "i9-click: the clicked field, caption {caption:?} and control {:?}, is whole above the \
+             footer {footer:?} at {width}",
+            control.get()
+        );
         let popup = list_rect(&ctx);
+        assert!(
+            !popup.intersects(caption) && !popup.intersects(control.get()),
+            "popup-context: the list {popup:?} leaves the caption {caption:?} and the control {:?} \
+             in view at {width}",
+            control.get()
+        );
         assert!(
             popup.bottom() <= footer.top() + 0.5 && popup.top() >= record.room().top() - 0.5,
             "inside the body's room above the footer at {width}: {popup:?}, footer {footer:?}"
