@@ -1685,8 +1685,18 @@ fn each_write_path_of_the_ledger_holds() {
         t.reason,
         Some(refused(
             recorded("Crowd loves it"),
-            Refused::RulesUnreadable
+            Refused::RulesUnreadable(RulesFile::Manifest)
         ))
+    );
+    // PR 661 review (P2): the refusal names the file that cannot be read, and sends the DM
+    // there, not to the house rule notes.
+    assert_eq!(
+        refused_words(&t.reason).as_deref(),
+        Some(
+            "Nothing was recorded for Crowd loves it. Splat cannot read Campaign.md. Check \
+             Campaign.md first."
+        ),
+        "m-s0-5-manifest"
     );
     // The reader's words stay with the notes' own fault (`TrackerFault::NotesUnreadable`).
     let why = t.rules.unreadable.clone().unwrap_or_default();

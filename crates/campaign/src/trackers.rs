@@ -326,6 +326,8 @@ pub struct Rules {
     /// `Campaign.md` or a note in play that cannot be read, with the reason. It is no empty
     /// list: no value shows and no act is made until the file can be read.
     pub unreadable: Option<String>,
+    /// Which file `unreadable` is about, for a refused act's next step.
+    pub unreadable_file: Option<RulesFile>,
     /// The campaign's marked tables.
     pub tables: Option<Arc<Sources>>,
 }
@@ -406,9 +408,11 @@ pub fn is_house_rule_note(entry: &crate::content::Entry) -> bool {
 }
 
 impl Rules {
-    pub fn cannot_read(error: String) -> Self {
+    /// The rules when `file` cannot be read, with the reader's words.
+    pub fn cannot_read(file: RulesFile, error: String) -> Self {
         Self {
             unreadable: Some(error),
+            unreadable_file: Some(file),
             ..Self::default()
         }
     }
@@ -1181,12 +1185,21 @@ pub enum Refused {
     LedgerChanged,
     /// A house rule note changed on disk since the view drew it.
     RulesChanged,
-    /// The tracker rules cannot be read.
-    RulesUnreadable,
+    /// A file of the tracker rules cannot be read: `Campaign.md` or a house rule note in play.
+    RulesUnreadable(RulesFile),
     /// The day count cannot be read from the Timeline.
     TimelineUnreadable,
     /// A later entry needs this one: its label.
     DependsOn(String),
+}
+
+/// A file the tracker rules are read from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RulesFile {
+    /// `Campaign.md`, which lists the house rule notes in play.
+    Manifest,
+    /// A house rule note in play.
+    HouseRuleNote,
 }
 
 /// The part of the files that a refused act was about.
