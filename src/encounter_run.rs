@@ -168,6 +168,24 @@ fn group_member(
     Ok(participant)
 }
 type State = splat_campaign::encounter_run::State<rolling::Cast>;
+/// What an arrival is called, as its parts: its group (or the creatures added by hand), and,
+/// when another group has its name, the first member that tells them apart.
+#[derive(Clone, Debug, PartialEq)]
+struct ArrivalName {
+    group: String,
+    member: Option<String>,
+}
+
+impl ArrivalName {
+    /// The whole name: `Rival Team (Rival Captain 2)`, or the group alone.
+    fn whole(&self) -> String {
+        match &self.member {
+            Some(member) => format!("{} ({member})", self.group),
+            None => self.group.clone(),
+        }
+    }
+}
+
 /// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
 /// kept or taken back, and the revisions of the two reads (never an address, which a freed read
 /// can hand to the next one).
@@ -1286,9 +1304,19 @@ impl Run {
     /// has another group of that name, the first member tells them apart:
     /// `Rival Team (Rival Captain 2)`.
     fn arrival_name(state: &State, first: usize, before: &str) -> String {
+        Self::arrival_parts(state, first, before).whole()
+    }
+
+    /// [`Self::arrival_name`] as its parts, so a shorter form gives up the member by data, never
+    /// by reading parentheses back out of the words (#512: `Patrol (Goblin (East) 2)`).
+    fn arrival_parts(state: &State, first: usize, before: &str) -> ArrivalName {
         let p = &state.participants[first];
+        let alone = |group: String| ArrivalName {
+            group,
+            member: None,
+        };
         let Some(origin) = &p.added_from else {
-            return Self::roll_block_name(state, p);
+            return alone(Self::roll_block_name(state, p));
         };
         if origin.group.is_empty() {
             let names: Vec<_> = state
@@ -1303,12 +1331,12 @@ impl Run {
                 })
                 .map(|other| other.name.as_str())
                 .collect();
-            return match names.as_slice() {
+            return alone(match names.as_slice() {
                 [first @ .., last] if !first.is_empty() => {
                     format!("{} and {last}", first.join(", "))
                 }
                 _ => p.name.clone(),
-            };
+            });
         }
         let twin = origin.group == before
             || state.participants.iter().any(|other| {
@@ -1317,10 +1345,9 @@ impl Run {
                     .as_ref()
                     .is_some_and(|a| a.group == origin.group && a.instance != origin.instance)
             });
-        if twin {
-            format!("{} ({})", origin.group, p.name)
-        } else {
-            origin.group.clone()
+        ArrivalName {
+            group: origin.group.clone(),
+            member: twin.then(|| p.name.clone()),
         }
     }
 
