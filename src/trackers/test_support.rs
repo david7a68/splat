@@ -78,6 +78,6 @@ impl Trackers {
     }
 
     pub fn test_remeasure(&mut self) {
-        self.revision += 1;
+        self.count_settle();
     }
 }

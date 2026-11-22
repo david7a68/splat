@@ -3390,6 +3390,10 @@ impl splat_campaign::trackers::RuleSource for ContentIndex {
     fn loot_sources(&self) -> Arc<splat_campaign::loot::Sources> {
         ContentIndex::loot_sources(self)
     }
+
+    fn generation(&self) -> u64 {
+        ContentIndex::generation(self)
+    }
 }
 
 #[cfg(test)]

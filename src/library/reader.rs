@@ -444,8 +444,13 @@ pub(super) fn show(
             } else {
                 // An intro has no printed heading, so the reader adds none.
                 if section.title != "Overview" {
+                    // The same typed jump as the reader's (ruling M18).
                     if crate::markdown_view::wanted_heading(ui.ctx(), &section.title) {
-                        ui.scroll_to_cursor(Some(eframe::egui::Align::TOP));
+                        crate::design::reveal::jump(
+                            ui,
+                            ui.cursor().top(),
+                            crate::design::reveal::JumpTo::LinkedHeading,
+                        );
                     }
                     crate::design::heading(ui, crate::design::Heading::Section(&section.title));
                 }

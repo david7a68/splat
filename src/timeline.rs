@@ -340,17 +340,6 @@ fn new_id() -> String {
     format!("t-{}", &id[id.len() - 10..])
 }
 
-/// When a kept result was made, so a footer lists its results with a live Undo newest first,
-/// whatever their kind. The owner of a result takes it when the result is made, every time, also
-/// when it repeats an earlier one.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
-pub fn next_result_order() -> crate::design::ResultOrder {
-    crate::design::ResultOrder::issue()
-}
-
 /// A campaign's events, kept in step with its file. Edits save shortly after they stop.
 #[derive(Default)]
 pub struct Book {

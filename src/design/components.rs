@@ -1506,13 +1506,9 @@ fn parse_grouped(text: &str) -> Option<f64> {
         .ok()
 }
 
-/// A modifier as the DM may type it: `−3`, `-3`, `+2`, `2`.
-fn parse_signed(text: &str) -> Option<f64> {
-    text.trim()
-        .replace('\u{2212}', "-")
-        .trim_start_matches('+')
-        .parse()
-        .ok()
+/// The stepper's read-back of a signed value, through [`parse_signed`].
+fn parse_signed_value(text: &str) -> Option<f64> {
+    parse_signed(text).map(|value| value as f64)
 }
 
 /// The one stepper: its value in the form `shown`, its range, density and limits' reasons.
@@ -1607,7 +1603,7 @@ fn stepper_as(
                     Shown::Signed => {
                         field = field
                             .custom_formatter(|value, _| signed(value as i64))
-                            .custom_parser(parse_signed);
+                            .custom_parser(parse_signed_value);
                     }
                     Shown::Grouped => {
                         field = field
@@ -1766,7 +1762,21 @@ pub fn field<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    field_label(ui, label, Type::Small, help, error, add)
+    field_label(ui, label, Type::Small, (None, help, error), add)
+}
+
+/// A form field whose value something needs now (layout PR 10c, round 31 SR4/AR4): `needs`, when
+/// given, is what the DM must enter, drawn directly below the control as a warning (its icon in
+/// the warning colour, then the words), before the field's own `help`. Advice stays help; a
+/// missing value is never drawn as help. The field block (`field_label`) holds the warning too.
+pub fn small_field_needing<R>(
+    ui: &mut Ui,
+    label: &str,
+    needs: Option<&str>,
+    help: Option<&str>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    field_label(ui, label, Type::Small, (needs, help, None), add)
 }
 
 /// A form field with the same sentence-case label as `field`.
@@ -1777,7 +1787,7 @@ pub fn small_field<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    field_label(ui, label, Type::Small, help, error, add)
+    field_label(ui, label, Type::Small, (None, help, error), add)
 }
 
 /// A field block (layout PR 10): its caption, its control, its help and its error. A focused
@@ -1787,8 +1797,7 @@ fn field_label<R>(
     ui: &mut Ui,
     label: &str,
     role: Type,
-    help: Option<&str>,
-    error: Option<&str>,
+    (warning, help, error): (Option<&str>, Option<&str>, Option<&str>),
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
     let top = ui.cursor().top();
@@ -1812,7 +1821,7 @@ fn field_label<R>(
     ui.ctx()
         .data_mut(|data| data.insert_temp(Id::new(FIELD_TOP), outer));
     let last = count(ui);
-    let bottom = field_feedback(ui, help, error);
+    let bottom = field_feedback(ui, warning, help, error);
     // Only a focused control of this block, or the control whose list is open: one or two
     // lookups, nothing that grows with the form.
     let inside = |id: Id| {
@@ -1855,8 +1864,16 @@ fn field_caption(ui: &mut Ui, label: &str, role: Type) {
 /// caller adds no space after a field.
 ///
 /// Returns the block's bottom: its last line of help or error, else its control's.
-fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) -> f32 {
+fn field_feedback(
+    ui: &mut Ui,
+    warning: Option<&str>,
+    help: Option<&str>,
+    error: Option<&str>,
+) -> f32 {
     let mut last = None;
+    if let Some(warning) = warning {
+        last = Some(tone_message(ui, Tone::Warning, warning).rect.bottom());
+    }
     if let Some(text) = help {
         last = Some(self::help(ui, text).rect.bottom());
     }
@@ -1899,7 +1916,7 @@ fn text_field_label(
     help: Option<&str>,
     error: Option<&str>,
 ) -> Response {
-    field_label(ui, label, role, help, error, |ui| {
+    field_label(ui, label, role, (None, help, error), |ui| {
         let width = ui.available_width().min(FORM_WIDTH) - 2.0 * S;
         let response = ui.add(
             egui::TextEdit::singleline(text)
@@ -1978,8 +1995,9 @@ pub fn number_field_with_id(
                 .font(Type::Numeral.font(ui))
                 .hint_text(placeholder(ui, hint)),
         );
-        // Inside the guard: a letter the field drops is not another text.
-        text.retain(|c| c.is_ascii_digit() || c == '-');
+        // Inside the guard: a letter the field drops is not another text. A true minus stays,
+        // so the DM can type what the app shows (`parse_signed`).
+        text.retain(number_char);
         response
     });
     named(ui, &response, name);
@@ -3074,6 +3092,21 @@ pub fn hp_readout(
 /// A displayed current/maximum fraction. Callers supply their own unknown-value words.
 pub fn fraction(current: impl std::fmt::Display, maximum: impl std::fmt::Display) -> String {
     format!("{current}/{maximum}")
+}
+
+/// A whole number as the DM may type it, also as the app writes it ([`signed`]): `−3` (a true
+/// minus), `-3`, `+2`, `2`, with spaces around it. The one reader of typed signed numbers (a
+/// run's amounts and initiative, a tracker's Amount, World's initiative), so a DM can type what
+/// the app shows.
+pub fn parse_signed(text: &str) -> Option<i64> {
+    // `i64`'s own parse takes one `+` or `-`; the true minus becomes `-`.
+    text.trim().replace('\u{2212}', "-").parse().ok()
+}
+
+/// A character of a typed whole number: a digit, `+`, `-` or a true minus (`−`, as [`signed`]
+/// writes it). The number fields keep these and drop the rest; [`parse_signed`] reads them.
+pub fn number_char(c: char) -> bool {
+    c.is_ascii_digit() || matches!(c, '+' | '-' | '\u{2212}')
 }
 
 /// A modifier, with a true minus sign: `+3`, `−1`.
@@ -4763,17 +4796,92 @@ pub fn section_icon(ui: &mut Ui, openness: f32, response: &Response) {
     phosphor_icon(ui, response.rect, icon, colors().muted);
 }
 
-/// A collapsing section with the icon set's arrow. Its header says whether it is open
-/// (expanded) to a screen reader.
+/// A collapsing section with the icon set's arrow, the one form of every section (M0412). Its
+/// header says whether it is open (expanded) to a screen reader. It starts closed and keeps the
+/// state the DM leaves it in, under its title. `id` keeps that state under the owner's id, so a
+/// title that changes (a count, a state word) does not close it; `default_open` is its state the
+/// first time it is drawn (a list that has little in it, a form with nothing to add yet);
+/// `open` opens (`Some(true)`) or closes (`Some(false)`) it this frame, as a search that shows
+/// only its matches does, or a press that asks for it. `None` leaves it as the DM left it.
+///
+/// ```
+/// fn f(ui: &mut egui::Ui, empty: bool) {
+///     let _ = splat_design::design::Section::new("Add campaign")
+///         .id("campaign_form")
+///         .default_open(empty)
+///         .show(ui, |ui| ui.label("The form"));
+/// }
+/// ```
+#[must_use = "call show"]
+pub struct Section<H = ()> {
+    title: egui::WidgetText,
+    id: Option<H>,
+    default_open: bool,
+    open: Option<bool>,
+}
+
+impl Section {
+    pub fn new(title: impl Into<egui::WidgetText>) -> Self {
+        Self {
+            title: title.into(),
+            id: None,
+            default_open: false,
+            open: None,
+        }
+    }
+}
+
+impl<H: std::hash::Hash> Section<H> {
+    /// The owner's id for its state, in place of its title.
+    pub fn id<K: std::hash::Hash>(self, id: K) -> Section<K> {
+        Section {
+            title: self.title,
+            id: Some(id),
+            default_open: self.default_open,
+            open: self.open,
+        }
+    }
+
+    /// Its state the first time it is drawn; after that, the DM's.
+    pub fn default_open(mut self, open: bool) -> Self {
+        self.default_open = open;
+        self
+    }
+
+    /// Its owner opens (`Some(true)`) or closes (`Some(false)`) it this frame.
+    pub fn open(mut self, open: Option<bool>) -> Self {
+        self.open = open;
+        self
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    pub fn show<R>(
+        self,
+        ui: &mut Ui,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> egui::CollapsingResponse<R> {
+        let mut header = egui::CollapsingHeader::new(self.title)
+            .icon(section_icon)
+            .default_open(self.default_open)
+            .open(self.open);
+        if let Some(id) = self.id {
+            header = header.id_salt(id);
+        }
+        let response = header.show(ui, add);
+        with_expanded(ui, response)
+    }
+}
+
+/// A collapsing section ([`Section`]) under its title.
 pub fn section<R>(
     ui: &mut Ui,
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
-    let response = egui::CollapsingHeader::new(title)
-        .icon(section_icon)
-        .show(ui, add);
-    with_expanded(ui, response)
+    Section::new(title).show(ui, add)
 }
 
 /// A collapsing section that stays open when its title changes, such as a count.
@@ -4796,12 +4904,7 @@ pub fn section_opened<R>(
     open: Option<bool>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
-    let response = egui::CollapsingHeader::new(title)
-        .id_salt(id)
-        .icon(section_icon)
-        .open(open)
-        .show(ui, add);
-    with_expanded(ui, response)
+    Section::new(title).id(id).open(open).show(ui, add)
 }
 
 /// egui gives a collapsing header no expanded state: set it from the section's own state, after
@@ -5925,8 +6028,21 @@ mod tests {
                 .map(|(_, node)| node.is_disabled());
             assert_eq!(decrease, Some(value == -1), "{value}: − at its limit only");
         }
-        for (typed, read) in [("\u{2212}3", -3.0), ("-3", -3.0), ("+2", 2.0), ("2", 2.0)] {
+        // The shared reader of typed signed numbers (M-P0 item 11): what the app writes reads
+        // back, a true minus included; words that are not one whole number read as nothing (the
+        // tracker's Amount cases, PR 638 review, moved here with its reader).
+        for (typed, read) in [
+            ("\u{2212}3", -3),
+            ("-3", -3),
+            ("+2", 2),
+            ("2", 2),
+            (" \u{2212}12 ", -12),
+            (&signed(-7), -7),
+        ] {
             assert_eq!(parse_signed(typed), Some(read), "{typed}");
+        }
+        for typed in ["3 points", "three", "", "++4", "+\u{2212}3"] {
+            assert_eq!(parse_signed(typed), None, "{typed}");
         }
         // The grouped stepper (M-P0 item 8, the group editor's member count): a count shows its
         // digits grouped, `1,000` stays `1,000`, and reads back with or without the commas.
@@ -6397,12 +6513,17 @@ mod tests {
                 let _ = section_opened(ui, "runs", "2 runs", Some(true), |ui| {
                     ui.label("Inside runs")
                 });
+                // M0412: open the first time it is drawn, then the DM's (an empty list's form).
+                let _ = Section::new("Add campaign")
+                    .id("campaign_form")
+                    .default_open(true)
+                    .show(ui, |ui| ui.label("Inside the form"));
             });
         super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         let expanded = |harness: &egui_kittest::Harness<'_>| {
             use egui_kittest::kittest::{NodeT, Queryable};
-            ["Details", "3 notes", "Technical", "2 runs"].map(|name| {
+            ["Details", "3 notes", "Technical", "2 runs", "Add campaign"].map(|name| {
                 harness
                     .get_by_label(name)
                     .accesskit_node()
@@ -6412,8 +6533,14 @@ mod tests {
         };
         assert_eq!(
             expanded(&harness),
-            [Some(false), Some(false), Some(false), Some(true)],
-            "closed at first; the owner's open one says it is open"
+            [
+                Some(false),
+                Some(false),
+                Some(false),
+                Some(true),
+                Some(true)
+            ],
+            "closed at first; the owner's open one and the one open by default say they are open"
         );
         {
             use egui_kittest::kittest::Queryable;
@@ -6422,8 +6549,25 @@ mod tests {
         harness.run_steps(3);
         assert_eq!(
             expanded(&harness),
-            [Some(false), Some(true), Some(false), Some(true)],
+            [Some(false), Some(true), Some(false), Some(true), Some(true)],
             "only the clicked section opens"
+        );
+        {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label("Add campaign").click();
+        }
+        harness.run_steps(3);
+        assert_eq!(
+            expanded(&harness)[4],
+            Some(false),
+            "m-p0-section-default-open: the DM closes a section open by default, and it stays closed"
+        );
+        assert!(
+            {
+                use egui_kittest::kittest::Queryable;
+                harness.query_by_label("Inside the form").is_none()
+            },
+            "m-p0-section-default-open: its body goes with it"
         );
     }
 

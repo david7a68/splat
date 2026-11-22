@@ -561,9 +561,9 @@ pub struct Trackers {
     /// `Undo add` of this event.
     pub wants_undo_add: Option<String>,
     pub(crate) view: view::ViewState,
-    /// Counts each `settle`, so the view measures its columns again only when a value or a
-    /// definition changed.
-    pub(crate) revision: u64,
+    /// Counts each `settle`; its revision moves on with it, so the view measures its columns
+    /// and fits its names again only when a value or a definition changed.
+    pub(crate) revision: crate::design::memo::Revised<u64>,
     /// `Campaign → Rules and runs` in the empty state: the shell shows that page.
     pub wants_rules: bool,
     /// Each tracker's history, by key: worked out when the ledger or the definitions change.
@@ -614,10 +614,10 @@ impl Trackers {
         let Some(campaign) = campaign else { return };
         self.follow_clock(timeline);
         if let Some(index) = index
-            && !self
+            && self
                 .index
                 .as_ref()
-                .is_some_and(|old| Arc::ptr_eq(old, &index))
+                .is_none_or(|old| old.generation() != index.generation())
         {
             self.manifest = Some(index.manifest(campaign));
             self.index = Some(index);
@@ -722,9 +722,19 @@ impl Trackers {
         &self.newest
     }
 
+    /// A new settle: the count, and so its revision, moves on.
+    pub(crate) fn count_settle(&mut self) {
+        self.revision.revise(|settles| {
+            *settles += 1;
+            crate::design::memo::Changed::Yes
+        });
+    }
+
     /// Work the values, the notices, the histories and the newest act out of the ledger again.
     fn settle(&mut self) {
-        self.revision += 1;
+        self.count_settle();
+        // Every row's words were fitted for the old revision: none is read again.
+        self.view.history_fits.retain(|_| false);
         self.state = replay(&self.rules, &self.ledger, &self.today);
         self.history = history::rows(&self.rules, &self.ledger, &self.state);
         self.problems = history::problems(&self.rules, &self.state);

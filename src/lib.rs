@@ -1990,7 +1990,7 @@ impl Splat {
                         });
                     let feed_list =
                         settings_feed(|frame, messages, dndbeyond: &dndbeyond::DndBeyond| {
-                            dndbeyond.footer_messages(frame, messages, false);
+                            dndbeyond.footer_messages(frame, messages, None);
                         });
                     // After a failed Connect, Connect comes into view above the footer.
                     let reveal_connect = |ui: &mut egui::Ui, settings: &mut settings::Settings| {
@@ -2122,6 +2122,7 @@ impl Splat {
             Page::Sessions => {
                 if let Some(campaign) = &active {
                     let fights = self.encounters.plan_fights();
+                    let fights_revision = self.encounters.plan_fights_revision();
                     let saved_runs = self.encounters.saved_runs();
                     let saved_runs_revision = self.encounters.saved_runs_revision();
                     let groups = self.encounters.plan_groups();
@@ -2155,6 +2156,7 @@ impl Splat {
                         party: &party,
                         tables: sources.as_ref().map_or(&[], |sources| &sources.tables),
                         fights: &fights,
+                        fights_revision,
                         saved_runs: &saved_runs,
                         saved_runs_revision,
                         groups: &groups,
@@ -2382,10 +2384,13 @@ impl Splat {
                                     dndbeyond
                                 },
                                 |dndbeyond, messages| {
-                                    campaigns_ref
-                                        .borrow()
-                                        .footer_messages(&frame, messages, false, blocked);
-                                    dndbeyond.footer_messages(&frame, messages, true);
+                                    let campaigns = campaigns_ref.borrow();
+                                    campaigns.footer_messages(&frame, messages, false, blocked);
+                                    dndbeyond.footer_messages(
+                                        &frame,
+                                        messages,
+                                        campaigns.active_campaign().map(|campaign| campaign.id),
+                                    );
                                 },
                             );
                             if let Some(press) = paned.pressed {

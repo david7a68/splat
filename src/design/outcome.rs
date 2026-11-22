@@ -3897,6 +3897,8 @@ impl Body {
     /// The compact form (`BodyMessage::compact`): the words as a row's message draws them
     /// (`small_tone_message`), the choices in one band after them on their line, as wide as the
     /// choices, and the file line after the words when it fits, else under them at the words.
+    /// A fault with help draws, as the full form does, its words, its help lines, its file line,
+    /// then its choices on a line of their own at the words.
     fn draw_compact(
         &self,
         ui: &mut Ui,
@@ -3907,8 +3909,12 @@ impl Body {
         let words = self.words.as_str();
         let choices: Vec<(usize, MessageChoice<'_>)> =
             self.choices.iter().copied().enumerate().collect();
+        // Review of PR 677: help comes before the file line and the choices, so a fault with
+        // help keeps nothing beside its words.
+        let helped = !self.help.is_empty();
         let band: f32 = choices
             .iter()
+            .filter(|_| !helped)
             .map(|(at, choice)| match choice {
                 MessageChoice::Dismiss(_) => Density::Read.control() + gap,
                 MessageChoice::Link { word, .. } => compact_link_width(ui, word) + gap,
@@ -3924,7 +3930,7 @@ impl Body {
         let one_line = inset + number_width(ui, words, &Type::Small.font(ui));
         // The band follows the words one item gap after them (its sum holds the gaps).
         let room = ui.available_width() - band;
-        let beside = file.filter(|file| one_line + L + file <= room);
+        let beside = file.filter(|file| !helped && one_line + L + file <= room);
         let mut pressed = None;
         let control = Density::Read.control();
         let text_room = (room - beside.map_or(0.0, |file| file + L)).max(control);
@@ -3961,62 +3967,8 @@ impl Body {
                     |ui| file.draw(ui),
                 );
             }
-            for (at, choice) in &choices {
-                let clicked = match choice {
-                    MessageChoice::Dismiss(_) => {
-                        let lock = self.locks.get(*at).and_then(holding);
-                        match lock {
-                            Some(reason) => {
-                                ui.add_enabled_ui(false, |ui| {
-                                    icon_button(ui, icons::CLOSE, DISMISS_NAME)
-                                })
-                                .inner
-                                .on_disabled_hover_text(reason);
-                                false
-                            }
-                            None => icon_button(ui, icons::CLOSE, DISMISS_NAME).clicked(),
-                        }
-                    }
-                    // A link at the words' size, as the row's own words are.
-                    MessageChoice::Link { word, hover } => {
-                        let lock = self.locks.get(*at).and_then(holding);
-                        let owned = self.hovers.get(*at).and_then(Option::as_deref);
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(compact_link_width(ui, word), control),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| {
-                                let response = match lock {
-                                    Some(reason) => ui
-                                        .add_enabled_ui(false, |ui| {
-                                            super::components::small_link(ui, word)
-                                        })
-                                        .inner
-                                        .on_disabled_hover_text(reason),
-                                    None => super::components::small_link(ui, word),
-                                };
-                                match owned.or(*hover) {
-                                    Some(hover) => response.on_hover_text(hover),
-                                    None => response,
-                                }
-                                .clicked()
-                            },
-                        )
-                        .inner
-                    }
-                    choice => {
-                        let width = self.choice_width(ui, *at, *choice);
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(width, control),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| {
-                                self.draw_choice(ui, *at, *choice, f32::INFINITY, None)
-                                    .is_some_and(|response| response.clicked())
-                            },
-                        )
-                        .inner
-                    }
-                };
-                activated(ui, &mut pressed, clicked, words, Pressed::Choice(*at));
+            if !helped {
+                self.compact_choices(ui, &choices, &mut pressed);
             }
             message.rect.left()
         });
@@ -4042,8 +3994,84 @@ impl Body {
                 );
             });
         }
+        if helped && !choices.is_empty() {
+            let inset = row.inner - ui.cursor().left();
+            ui.horizontal(|ui| {
+                space(ui, inset);
+                self.compact_choices(ui, &choices, &mut pressed);
+            });
+        }
         register(ui, row.response.rect, place, self.tone);
         pressed
+    }
+
+    /// The compact form's choices in order, each as wide as it is and one control high: in the
+    /// band after the words, or on their own line under a fault's help and file line.
+    fn compact_choices(
+        &self,
+        ui: &mut Ui,
+        choices: &[(usize, MessageChoice<'_>)],
+        pressed: &mut Option<Pressed>,
+    ) {
+        let control = Density::Read.control();
+        let words = self.words.as_str();
+        for (at, choice) in choices {
+            let clicked = match choice {
+                MessageChoice::Dismiss(_) => {
+                    let lock = self.locks.get(*at).and_then(holding);
+                    match lock {
+                        Some(reason) => {
+                            ui.add_enabled_ui(false, |ui| {
+                                icon_button(ui, icons::CLOSE, DISMISS_NAME)
+                            })
+                            .inner
+                            .on_disabled_hover_text(reason);
+                            false
+                        }
+                        None => icon_button(ui, icons::CLOSE, DISMISS_NAME).clicked(),
+                    }
+                }
+                // A link at the words' size, as the row's own words are.
+                MessageChoice::Link { word, hover } => {
+                    let lock = self.locks.get(*at).and_then(holding);
+                    let owned = self.hovers.get(*at).and_then(Option::as_deref);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(compact_link_width(ui, word), control),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            let response = match lock {
+                                Some(reason) => ui
+                                    .add_enabled_ui(false, |ui| {
+                                        super::components::small_link(ui, word)
+                                    })
+                                    .inner
+                                    .on_disabled_hover_text(reason),
+                                None => super::components::small_link(ui, word),
+                            };
+                            match owned.or(*hover) {
+                                Some(hover) => response.on_hover_text(hover),
+                                None => response,
+                            }
+                            .clicked()
+                        },
+                    )
+                    .inner
+                }
+                choice => {
+                    let width = self.choice_width(ui, *at, *choice);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, control),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            self.draw_choice(ui, *at, *choice, f32::INFINITY, None)
+                                .is_some_and(|response| response.clicked())
+                        },
+                    )
+                    .inner
+                }
+            };
+            activated(ui, pressed, clicked, words, Pressed::Choice(*at));
+        }
     }
 
     /// The choices that sit on rows under the words: all but `Dismiss`.
@@ -5104,7 +5132,7 @@ impl<'o> FormOpener<'o> {
                 words,
                 repairs: vec![repair],
                 whole: None,
-                help: None,
+                help: Vec::new(),
             }
             .draw_repairs(ui);
             let opened = pressed.is_some();
@@ -5121,7 +5149,7 @@ impl<'o> FormOpener<'o> {
             words,
             repairs: Vec::new(),
             whole: None,
-            help: None,
+            help: Vec::new(),
         }
         .draw(ui);
         if let Some(title) = title {
@@ -5153,7 +5181,7 @@ pub struct BodyFault<A> {
     repairs: Vec<Repair<A>>,
     /// The whole sentence when the words quote a value cut around `…` (`whole`).
     whole: Option<String>,
-    help: Option<Sentence>,
+    help: Vec<Sentence>,
 }
 
 impl<A> BodyFault<A> {
@@ -5163,7 +5191,7 @@ impl<A> BodyFault<A> {
             words: fault_words(fault),
             repairs: Vec::new(),
             whole: None,
-            help: None,
+            help: Vec::new(),
         }
     }
 
@@ -5176,9 +5204,10 @@ impl<A> BodyFault<A> {
     }
 
     /// What the DM can do about it, in a help line under its words, before its repairs (the
-    /// group editor's missing member), as a [`Choice`]'s help says what the choice does.
+    /// group editor's missing member), as a [`Choice`]'s help says what the choice does. Each
+    /// call adds a line of its own, in call order (as `FaultMessage::help`).
     pub fn help(mut self, help: Sentence) -> Self {
-        self.help = Some(help);
+        self.help.push(help);
         self
     }
 
@@ -5219,7 +5248,7 @@ impl<A> BodyFault<A> {
                     });
                     let _ = message.on_hover_text(whole);
                 }
-                if let Some(help) = &help {
+                for help in &help {
                     message_choice_row(ui, tone, |ui| {
                         super::components::help(ui, help.as_str());
                     });
@@ -6565,6 +6594,7 @@ mod tests {
                             state.right = ui.max_rect().right();
                             let pressed = BodyFault::new(&fault)
                                 .help(crate::sentence!("Check the packages it uses."))
+                                .help(crate::sentence!("Or remove it from the group."))
                                 .repair(Repair::new("Open in Library", Fix::Open))
                                 .repair(
                                     Repair::new(
@@ -6630,11 +6660,16 @@ mod tests {
             label(&h, "Check the packages it uses."),
             h.get_by_label("Open in Library").rect(),
         );
+        // Review of PR 677: every help line, in call order.
+        let second = label(&h, "Or remove it from the group.");
         assert!(
             help.top() >= words.bottom() - 1.0
-                && help.bottom() <= open.top() + 1.0
-                && (help.left() - open.left()).abs() < 1.0,
-            "the fault's help under its words, before its repairs: {words:?} {help:?} {open:?}"
+                && second.top() >= help.bottom() - 0.5
+                && second.bottom() <= open.top() + 1.0
+                && (help.left() - open.left()).abs() < 1.0
+                && (second.left() - open.left()).abs() < 1.0,
+            "the fault's help lines under its words, in call order, before its repairs: \
+             {words:?} {help:?} {second:?} {open:?}"
         );
         let (words, help) = (
             label(&h, "Cinder Wolf · line 3: The HP is missing."),
@@ -6792,8 +6827,24 @@ mod tests {
                                 pressed.extend(notice);
                                 let fault = BodyMessage::<Fix>::from(
                                     FaultMessage::new(&Hp(Severity::CannotRead, Some(20)))
-                                        .help(crate::sentence!("Set the HP in the file."))
                                         .file(FileLine::new("/vault", "Encounters/Shrine.md")),
+                                )
+                                .compact()
+                                .show(ui);
+                                pressed.extend(fault);
+                                // With help: its help lines, its file line, then its choice.
+                                let fault = BodyMessage::<Fix>::from(
+                                    FaultMessage::new(&Hp(Severity::CannotRead, Some(21)))
+                                        .help(crate::sentence!("Set the HP in the file."))
+                                        .help(crate::sentence!("Then read the group again."))
+                                        .file(FileLine::new("/vault", "Encounters/Other.md"))
+                                        .choice(Choice::new(
+                                            MessageChoice::Link {
+                                                word: "Read again",
+                                                hover: None,
+                                            },
+                                            Fix::Open,
+                                        )),
                                 )
                                 .compact()
                                 .show(ui);
@@ -6841,13 +6892,38 @@ mod tests {
                     "Cinder Wolf · line 20: The HP is missing.",
                 )
                 .rect();
-            // M-P0 item 9: the compact fault's help under its row, at its words.
-            let help = h
-                .get_by_role_and_label(egui::accesskit::Role::Label, "Set the HP in the file.")
+            // M-P0 item 9, review of PR 677: a compact fault with help draws, under its words and
+            // at them, its help lines in call order, its file line, then its choice, at every
+            // width, as the full form does.
+            let label = |words: &str| {
+                h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                    .rect()
+            };
+            let (helped, first, second) = (
+                label("Cinder Wolf · line 21: The HP is missing."),
+                label("Set the HP in the file."),
+                label("Then read the group again."),
+            );
+            let other = h
+                .query_all(
+                    egui_kittest::kittest::By::new().predicate(|node| {
+                        node.data().label() == Some("/vault/Encounters/Other.md")
+                    }),
+                )
+                .next()
+                .expect("the helped fault's file line")
                 .rect();
+            let again = h.get_by_label("Read again").rect();
             assert!(
-                help.top() >= cause.bottom() - 1.0 && (help.left() - cause.left()).abs() < 1.0,
-                "{width}: the compact fault's help under its words, at them: {cause:?} {help:?}"
+                first.top() >= helped.bottom() - 1.0
+                    && second.top() >= first.bottom() - 0.5
+                    && other.top() >= second.bottom() - 0.5
+                    && again.top() >= other.bottom() - 0.5
+                    && [first, second, other, again]
+                        .iter()
+                        .all(|rect| (rect.left() - helped.left()).abs() < 1.0),
+                "{width}: words, help, help, file line, then the choice, at the words: \
+                 {helped:?} {first:?} {second:?} {other:?} {again:?}"
             );
             // The path's node by the name the part gave it (`named`).
             let path = h
@@ -6874,9 +6950,11 @@ mod tests {
             h.run_steps(2);
             h.get_by_label(DISMISS_NAME).click();
             h.run_steps(2);
+            h.get_by_label("Read again").click();
+            h.run_steps(2);
             assert_eq!(
                 h.state(),
-                &[Fix::Log, Fix::Dismiss],
+                &[Fix::Log, Fix::Dismiss, Fix::Open],
                 "{width}: each press once"
             );
         }

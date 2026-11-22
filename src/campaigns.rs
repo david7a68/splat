@@ -1752,9 +1752,8 @@ impl Campaigns {
                 None
             } else {
                 Some(
-                    egui::CollapsingHeader::new("Add campaign")
-                        .icon(design::section_icon)
-                        .id_salt(("campaign_form", editing_id))
+                    design::Section::new("Add campaign")
+                        .id(("campaign_form", editing_id))
                         .open(focus.then_some(true))
                         .default_open(empty)
                         .show(ui, fields),
@@ -2291,13 +2290,21 @@ mod tests {
             .build_ui_state(
                 |ui, (campaigns, dndbeyond): &mut (Campaigns, crate::dndbeyond::DndBeyond)| {
                     dndbeyond.poll(ui.ctx(), 0, true, campaigns);
+                    // The switcher draws after `poll`, in the same frame (the sidebar).
+                    if let Some(id) = ui
+                        .ctx()
+                        .data_mut(|data| data.remove_temp::<Uuid>(egui::Id::new("switch")))
+                    {
+                        campaigns.select(Some(id));
+                    }
                     campaigns.show_active(ui, None, dndbeyond, None);
                     campaigns.show_form_if_editing(ui);
                     let frame = design::outcome::PaneFrame::new(ui);
                     let mut messages =
                         design::outcome::Messages::<CampaignAct>::new(&frame, "link_footer", 600.0);
                     campaigns.footer_messages(&frame, &mut messages, false, None);
-                    dndbeyond.footer_messages(&frame, &mut messages, true);
+                    let open = campaigns.active_campaign().map(|campaign| campaign.id);
+                    dndbeyond.footer_messages(&frame, &mut messages, open);
                     let paned = messages.pane(ui, design::Body::Content, |_| ());
                     if let Some(press) = paned.pressed {
                         campaigns.footer_act(press);
@@ -2339,7 +2346,19 @@ mod tests {
         // result ends with the change, and it does not come back with A.
         pick(&mut harness, "Not linked");
         assert!(shows(&harness, SAVED), "unlinking A says its result");
-        open(&mut harness, first);
+        // The switcher opens B after `poll` ran this frame (review of PR 665): the footer of
+        // that same frame reads the campaign open now, so A's result is not in it.
+        harness
+            .ctx
+            .data_mut(|data| data.insert_temp(egui::Id::new("switch"), first));
+        let frame = harness.ctx.cumulative_frame_nr();
+        harness.step();
+        assert_eq!(harness.ctx.cumulative_frame_nr() - frame, 1, "one frame");
+        assert!(
+            !shows(&harness, SAVED),
+            "A's link result showed in the frame B opened"
+        );
+        harness.run_steps(3);
         assert!(!shows(&harness, SAVED), "A's link result followed into B");
         open(&mut harness, second);
         assert!(!shows(&harness, SAVED), "A's ended link result came back");
@@ -2356,11 +2375,20 @@ mod tests {
                 harness.run_steps(1);
                 harness.event(egui::Event::Text(" A".into()));
                 harness.run_steps(3);
+                // And the folder (review of PR 665: A's folder comes back too).
+                harness
+                    .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Folder")
+                    .next()
+                    .expect("the folder field")
+                    .focus();
+                harness.run_steps(1);
+                harness.event(egui::Event::Text("-a".into()));
+                harness.run_steps(3);
                 harness.get_by_label("Discard").click();
                 harness.run_steps(3);
             };
         const UNDO: &str = "Undo discard of Campaign details";
-        // What Undo of A must not touch, and A's saved folder (the draft keeps it).
+        // What Undo of A must not touch, and A's saved folder (the draft adds `-a` to it).
         let stored =
             |harness: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>,
              id: Uuid| {
@@ -2388,10 +2416,20 @@ mod tests {
         // back into A's form, and B's change and its result stay.
         pick(&mut harness, "Harbor");
         assert!(shows(&harness, SAVED), "B's link change says its result");
+        // The click's frames end with the press, done after the pane drew; the next frame is
+        // the first one drawn after Undo.
         harness.get_by_label(UNDO).click();
-        harness.run_steps(3);
-        // Review of PR 688 (P1): at once after Undo, the open form is A's, the fields on screen
-        // hold A's draft, and B's stored details did not change.
+        harness.step();
+        let frame = harness.ctx.cumulative_frame_nr();
+        harness.step();
+        assert_eq!(
+            harness.ctx.cumulative_frame_nr() - frame,
+            1,
+            "one frame after the press"
+        );
+        // Review of PR 688 (P1) and PR 693 (P2): on the first frame drawn after Undo, the open
+        // form is A's, the fields on screen hold A's draft, and B's stored details did not
+        // change.
         let (owner, name, folder) = (
             harness.state().0.editing,
             field(&harness, "Campaign name"),
@@ -2400,7 +2438,7 @@ mod tests {
         assert!(
             owner == Some(second)
                 && name.as_deref() == Some("Campaign A")
-                && folder.as_deref() == Some(a_folder.as_str())
+                && folder.as_deref() == Some(format!("{a_folder}-a").as_str())
                 && stored(&harness, first) == b_stored,
             "Undo of A left the form or B wrong: form of {owner:?} (A is {second}), name {name:?}, \
              folder {folder:?}, B stored {:?}",

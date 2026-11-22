@@ -1279,6 +1279,10 @@ pub struct Folder {
     by_path: std::collections::HashMap<String, usize>,
     pub entries: Vec<Entry>,
     pub errors: Vec<Diagnostic>,
+    /// Which reading this is: a new one each time the folder is parsed, the same while a
+    /// reading is reused because no text changed. A cache built from readings compares these,
+    /// never addresses, which a freed reading can hand to the next one.
+    generation: u64,
 }
 
 /// A file's text, or for an ordinary note only enough to see that it changed.
@@ -1305,6 +1309,11 @@ impl Text {
 }
 
 impl Folder {
+    /// Which reading this is. See `generation` on the struct.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
     /// The text of a note, or of a file with a problem, as this reading saw it.
     pub fn text(&self, path: &str) -> Option<&str> {
         self.by_path
@@ -1480,12 +1489,14 @@ pub fn read_folder(root: &Path) -> Result<Arc<Folder>, String> {
         let source = texts[by_path[&entry.path]].1.as_str().unwrap_or_default();
         list_formats::resolve(entry, &catalogue, source);
     }
+    static READINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let folder = Arc::new(Folder {
         texts,
         walked,
         by_path,
         entries,
         errors,
+        generation: READINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
     });
     read_cache::keep(key, folder.clone());
     Ok(folder)
