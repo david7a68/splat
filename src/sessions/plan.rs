@@ -2742,8 +2742,9 @@ type JourneyKey = (
 );
 
 /// What the plan's days on the road are read from: the session, the note's revision, the
-/// Timeline's count of changes, and the count of the campaign's fights.
-type RoadKey = (Option<Uuid>, u64, u64, usize);
+/// Timeline's count of changes, and the revision of the campaign's fights (a fight renamed on
+/// disk changes which rows are planned, though their count stays; review of PR 717).
+type RoadKey = (Option<Uuid>, u64, u64, design::memo::Revision);
 
 /// Each fight still to come, by its name, with its day on the road when it has one.
 type RoadDays = Vec<(String, Option<String>)>;
@@ -3443,7 +3444,12 @@ impl Sessions {
         let Some(draft) = &self.draft else {
             return Arc::default();
         };
-        let key = (session, draft.revision(), book.changes(), plan.fights.len());
+        let key = (
+            session,
+            draft.revision(),
+            book.changes(),
+            plan.fights_revision,
+        );
         if let Some((known, days)) = &self.travel.days
             && *known == key
         {
@@ -6664,6 +6670,84 @@ mod tests {
             ]
         );
         assert_eq!(unlink_planned_fight(&marked, "Wolf Pack", 1), body);
+        // Review of PR 717 (P1): the planned fights' days are kept by the fights' revision, not
+        // their count. Wolf Pack renamed on disk leaves the note and the count as they were;
+        // Bridge Ambush, now the first planned fight, shows no day of Wolf Pack's.
+        {
+            use crate::sessions::{Draft, NewNote, create_note};
+            let dir = tempfile::tempdir().unwrap();
+            let note = create_note(
+                dir.path(),
+                &NewNote {
+                    number: 1,
+                    title: "The Crossing",
+                    date: "2026-11-12",
+                    campaign: "Marches",
+                    template: &marked[marked.find("## Plan").unwrap()..],
+                },
+            )
+            .unwrap();
+            let mut sessions = Sessions {
+                draft: Some(Draft::open(&note.path).unwrap()),
+                ..Sessions::default()
+            };
+            let renamed = [
+                planned_fight("Grey Wolves", "Encounters/Grey Wolves.md"),
+                planned_fight("Bridge Ambush", "Encounters/Bridge Ambush.md"),
+            ];
+            let mut days_of = |fights: &[PlanFight], fights_revision| {
+                let body = sessions.draft.as_ref().unwrap().body.clone();
+                let planned: Vec<&PlanFight> =
+                    plan_links(&body, &book.events, Some(session), fights)
+                        .into_iter()
+                        .filter(|(_, _, waiting)| *waiting)
+                        .map(|(_, fight, _)| fight)
+                        .collect();
+                let mut group = |_: &mut egui::Ui| {};
+                let plan = Plan {
+                    fights,
+                    fights_revision,
+                    saved_runs: &[],
+                    saved_runs_revision: fights_revision,
+                    groups: &[],
+                    group_blocked: None,
+                    group_open: false,
+                    group_discard: &|_| None,
+                    arrivals_open: false,
+                    group_editor: std::cell::RefCell::new(&mut group),
+                    blocked: None,
+                    run_directory: None,
+                    open_run: None,
+                    open_state: String::new(),
+                    open_encounter: None,
+                    party: &[],
+                    tables: &[],
+                };
+                let names: Vec<String> = planned.iter().map(|fight| fight.name.clone()).collect();
+                let days = sessions.planned_days(&book, Some(session), &plan, &planned);
+                names
+                    .into_iter()
+                    .zip(days.at.iter().cloned())
+                    .collect::<Vec<_>>()
+            };
+            let read = crate::design::memo::Revised::new(()).revision();
+            assert_eq!(
+                days_of(&fights, read),
+                [
+                    (
+                        "Wolf Pack".to_owned(),
+                        Some("Day 2 of Road to the ford".to_owned())
+                    ),
+                    ("Bridge Ambush".to_owned(), None)
+                ]
+            );
+            let read_again = crate::design::memo::Revised::new(()).revision();
+            assert_eq!(
+                days_of(&renamed, read_again),
+                [("Bridge Ambush".to_owned(), None)],
+                "a renamed fight's day stays with it, never on the row after it"
+            );
+        }
         // A fight planned the ordinary way carries nothing.
         assert_eq!(
             road_days(body, &book.events, Some(session), &fights)[0].1,
@@ -7579,6 +7663,7 @@ mod tests {
                         fights: &[],
                         saved_runs: runs,
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8184,6 +8269,7 @@ mod tests {
                         fights: &[],
                         saved_runs: runs,
                         saved_runs_revision: runs.revision(),
+                        fights_revision: runs.revision(),
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8434,6 +8520,7 @@ mod tests {
                         fights: &[],
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8515,6 +8602,7 @@ mod tests {
                         fights: &fights,
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -9347,6 +9435,7 @@ mod tests {
                         fights: &[],
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,

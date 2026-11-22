@@ -3716,6 +3716,9 @@ pub struct Encounters {
     /// The saved-run facts that the Session plan's and the Timeline's Add results read, with
     /// their revision (`saved_runs_revision`). Noted at the end of each `poll`.
     run_facts: RunFactsRevised,
+    /// The snapshot that `plan_fights` lists, as its revision: a new read or a save of an
+    /// encounter makes a new snapshot revision, and so a new revision here.
+    plan_fights_read: crate::design::memo::Revised<Option<Uuid>>,
     /// G118: the Ready rows' difficulty lines, by template id, each under its `Roster::key`,
     /// room, font and scale. The page owns them; a new key replaces an entry, and a template
     /// that leaves the snapshot loses its entry at the next snapshot revision.
@@ -4377,6 +4380,14 @@ impl Encounters {
                 )
             })
     }
+    /// The revision of the fights `plan_fights` lists: it changes with each new read of the
+    /// encounters and each save of one, never on a quiet frame.
+    pub fn plan_fights_revision(&mut self) -> crate::design::memo::Revision {
+        self.plan_fights_read
+            .set(self.snapshot.as_ref().map(|snapshot| snapshot.revision));
+        self.plan_fights_read.revision()
+    }
+
     pub fn plan_fights(&self) -> Vec<PlanFight> {
         self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
             snapshot

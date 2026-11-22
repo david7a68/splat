@@ -390,6 +390,10 @@ pub struct Plan<'a> {
     /// The revision of the saved runs' facts (`Encounters::saved_runs_revision`): the plan's Add
     /// result names the fights that keep their HP by them.
     pub saved_runs_revision: design::memo::Revision,
+    /// The revision of the campaign's fights as `fights` lists them
+    /// (`Encounters::plan_fights_revision`): a fight read again, renamed, added or removed is a
+    /// new one, so what the plan keeps by its fights (the planned fights' days) is worked out again.
+    pub fights_revision: design::memo::Revision,
     pub groups: &'a [std::sync::Arc<crate::encounter_run::RunGroup>],
     /// Why no group can be assembled now.
     pub group_blocked: Option<&'a str>,
