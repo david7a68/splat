@@ -1713,8 +1713,10 @@ struct ProjectionInputs {
     /// The campaign's fights and groups: both come from the Encounters snapshot, whose revision
     /// `Plan::fights_revision` is.
     fights: design::memo::Revision,
-    saved: design::memo::Revision,
     index: Option<u64>,
+    // Not the saved runs (review of PR 820): the projection reads a run only to say whether it
+    // ended, and a fight lists only its UNFINISHED run (`Encounters::plan_fights`), so no
+    // projected word changes with them. The rows read a fight's run themselves.
 }
 
 /// The plan's projection, kept by its inputs' revision.
@@ -5472,7 +5474,6 @@ impl Sessions {
                 .map_or(0, crate::sessions::Draft::revision),
             book: book.revision(),
             fights: plan.fights_revision,
-            saved: plan.saved_runs_revision,
             index: index.map(ContentIndex::generation),
         };
         let cache = &mut self.plan_projection;
@@ -9733,8 +9734,7 @@ mod tests {
             has(&harness, "Day 2") && book_has(&harness, &day),
             "a day before it makes this day Day 2 on the next frame"
         );
-        // The saved runs: the played Bridge goes; the removal says the other Bridge stays; its
-        // saved run ends, and the removal says so.
+        // The played Bridge goes; the removal says the other Bridge lines stay.
         {
             let book = &mut harness.state_mut().1;
             book.remove(&played);
@@ -9744,23 +9744,34 @@ mod tests {
             has(&harness, "other “Bridge”"),
             "the removal names the other Bridge"
         );
-        assert!(!has(&harness, "with their results") && !has(&harness, "its result"));
-        // The fight lists its run (`PlanFight::saved`, as `Encounters::plan_kept` lists it again
-        // by the saved runs' revision); the fights' own revision stays, as in the app.
+        // The saved runs, by the real path (review of PR 820): `Encounters::plan_kept` lists a
+        // fight with its UNFINISHED run (`PlanFight::saved`); when that run ends, it lists the
+        // fight again with none, by the saved runs' revision, the fights' own revision kept. The
+        // plan reads it on the next frame: Resume, then Start fight again.
         {
             let mut inputs = inputs.borrow_mut();
-            let mut ended = legacy_plan_run("Bridge");
-            ended.standing = crate::encounter_run::Standing::Ended;
-            inputs.fights[0].saved = Some(ended);
+            inputs.fights[0].saved = Some(legacy_plan_run("Bridge"));
             inputs.saved_revision = crate::design::memo::Revised::new(()).revision();
         }
         harness.step();
         assert!(
-            has(&harness, "with their results") || has(&harness, "and its result stay"),
-            "a saved run that ended shows in the removal on the next frame"
+            harness.query_all_by_label("Resume: Bridge").count() > 0,
+            "a fight with its unfinished run offers Resume"
         );
-        // The content index: one with no Captain Varra makes the scene say `Not found`.
-        assert!(!has(&harness, "Not found"));
+        {
+            let mut inputs = inputs.borrow_mut();
+            inputs.fights[0].saved = None;
+            inputs.saved_revision = crate::design::memo::Revised::new(()).revision();
+        }
+        harness.step();
+        assert!(
+            harness.query_all_by_label("Resume: Bridge").count() == 0
+                && starts(&harness, "Bridge") > 0,
+            "a run that ended: the plan offers Start fight again on the next frame"
+        );
+        // The content index, one built index for another (review of PR 820): with a Captain
+        // Varra note the scene finds her; the note deleted and the index built again (another
+        // generation, an index all the same), the scene says `Not found`.
         let campaign = crate::persistence::Campaign {
             id: Uuid::new_v4(),
             name: "Marches".into(),
@@ -9768,13 +9779,31 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         };
+        let varra = root.path().join("Captain Varra.md");
+        fs::write(
+            &varra,
+            format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Captain Varra\nsplat_rule: {{}}\n---\n\nThe captain of the ford.\n",
+                Uuid::new_v4()
+            ),
+        )
+        .unwrap();
+        inputs.borrow_mut().index = Some(Arc::new(
+            crate::lookup::ContentIndex::load(&[], Some(&campaign)).unwrap(),
+        ));
+        harness.step();
+        assert!(
+            !has(&harness, "Not found"),
+            "the first index finds Captain Varra"
+        );
+        fs::remove_file(&varra).unwrap();
         inputs.borrow_mut().index = Some(Arc::new(
             crate::lookup::ContentIndex::load(&[], Some(&campaign)).unwrap(),
         ));
         harness.step();
         assert!(
             has(&harness, "Not found"),
-            "a rebuilt index shows on the next frame"
+            "an index built again shows on the next frame"
         );
         // The session: another session with the same draft and revisions has none of this
         // session's events: its heading counts its rows (its 3 planned fights and its scene),
