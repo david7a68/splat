@@ -1636,7 +1636,7 @@ mod iter_2_c_tests {
         assert_eq!(
             field(&harness),
             "Foes",
-            "a hidden field's held words are gone"
+            "a hidden field’s held words are gone"
         );
         assert_eq!(harness.state().0, "foes");
     }
