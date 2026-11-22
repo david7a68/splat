@@ -4,7 +4,7 @@ pub mod design;
 #[path = "../../frame_clock.rs"]
 pub mod frame_clock;
 
-pub use design::{extras, fact, layout, outcome, pane, value_block};
+pub use design::{extras, fact, layout, outcome, pane, text_draft, value_block};
 #[cfg(test)]
 pub use egui;
 
