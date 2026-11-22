@@ -8034,6 +8034,50 @@ mod tests {
             .into_iter()
             .filter(|record| record.owner == "plan")
             .collect();
+        // Layout PR 5a-2 (I6): a short title over a short summary, in a wide window: the column
+        // fits, and it starts exactly `L` after the widest facts line.
+        let wide = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1200.0, 400.0),
+            )),
+            ..Default::default()
+        };
+        for _ in 0..3 {
+            let _ = ctx.run(wide(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    plan_row(
+                        ui,
+                        &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
+                        icons::RUN,
+                        |ui| {
+                            ui.label(Type::Body.rich(ui, "Bridge Ambush"));
+                        },
+                        |ui| {
+                            ui.label(Type::Small.rich(ui, "5 party · 2 × Cinder Wolf"));
+                        },
+                        |ui| {
+                            let _ = Action::secondary("Start fight")
+                                .density(Density::Read)
+                                .show(ui);
+                        },
+                    );
+                });
+            });
+        }
+        let fitting: Vec<_> = design::action_rows::row_records(&ctx)
+            .into_iter()
+            .filter(|record| record.owner == "plan")
+            .collect();
+        assert!(
+            fitting.len() == 1
+                && fitting.iter().all(|record| {
+                    !record.wrapped
+                        && (record.column - (record.facts.right() + design::L)).abs() <= 0.5
+                        && record.action.left() >= record.column - 0.5
+                }),
+            "the column fits and starts L after the widest facts line: {fitting:?}"
+        );
         assert!(
             records.len() == 1
                 && records.iter().all(|record| {
