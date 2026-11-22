@@ -1055,6 +1055,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M-N1.3 (ruling M20): Read's embed whose source is gone, typed (`BodyMessage`), in
         // place of a `small_message`.
         ("src/sessions/carry.rs", "show_prepared", &[Ban::Body]),
+        // M-N1.4 (ruling M20): a scene act's typed fault where the DM acted, in place of a
+        // `design::message`.
+        ("src/sessions/plan.rs", "row_fault", &[Ban::Body]),
         // M-N1.1 (ruling M20): a result with the note's Undo at its own place
         // (`PlacedResult`), replacing three `undo_message` calls.
         (
@@ -1130,7 +1133,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
         ("src/encounters/groups.rs", "change_row", &[Ban::Extras(1)]),
-        ("src/encounters/groups.rs", "members", &[Ban::Layout(1)]),
+        (
+            "src/encounters/groups.rs",
+            "members",
+            &[Ban::Layout(1), Ban::Body],
+        ),
         (
             "src/encounters/groups.rs",
             "members_pane",
@@ -1227,6 +1234,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "cause", &[Ban::Words]),
         ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
         ("src/encounters.rs", "outcome_words", &[Ban::Words]),
+        // Ruling M20 (M0178): the duplicate repair in the search results; it replaces an
+        // untyped `design::message_with_actions`.
+        (
+            "src/encounters.rs",
+            "duplicate_creature_results",
+            &[Ban::Body],
+        ),
         // Ruling M20 (M0192): the page's placeholder while another campaign's encounter is open;
         // it replaces an untyped `design::message`.
         ("src/encounters.rs", "show_page", &[Ban::Body]),
@@ -1239,6 +1253,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // `design::message` or `small_message`.
         ("src/encounters/groups.rs", "belongs_to", &[Ban::Body]),
         ("src/encounters/groups.rs", "body_fault", &[Ban::Body]),
+        // Ruling M20 (lane E2): a draft's disk conflict takes its editor's place (the
+        // comparison follows), typed; it replaces `design::message` and `message_with_actions`.
+        ("src/encounters/disk.rs", "show", &[Ban::Body]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
@@ -1277,6 +1294,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/timeline.rs", "removal_follows_run", &[Ban::ByOwner(1)]),
         ("src/timeline/checks.rs", "check_fault", &[Ban::Body]),
         ("src/timeline/checks.rs", "check_notice", &[Ban::Body]),
+        // Ruling M20 (lane T0): Timeline.md's problems in the page's place and the session date
+        // notice, typed; each replaces `design::message`, `message_with_actions` or
+        // `message_with_action`.
+        ("src/timeline/page.rs", "problems", &[Ban::Body]),
+        ("src/timeline/page.rs", "dated_notice", &[Ban::Body]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/world/repair.rs", "cause", &[Ban::Words]),
         ("src/world.rs", "said", &[Ban::Words]),
@@ -1338,7 +1360,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "unread_member",
-            &[Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::Body],
         ),
         ("src/encounters/list.rs", "choice_note", &[Ban::Extras(2)]),
         (
@@ -1371,9 +1393,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        // M20 (M-W0.4, M-W0.5): the index's warnings on this note and the renamed-file warning
-        // with its two repairs, in the reader's body (were `message`, `message_with_actions`).
-        ("src/world.rs", "draw", &[Ban::Extras(3), Ban::Body]),
+        // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
+        // warning with its two repairs and the duplicate repair, in the reader's body (were
+        // `message`, `message_with_actions`).
+        ("src/world.rs", "draw", &[Ban::Extras(2), Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
@@ -1623,7 +1646,7 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/outcome.rs", 1),
             ("src/design/pane.rs", 5),
-            ("src/sessions/plan.rs", 2),
+            ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 1),
             ("src/world.rs", 1),
         ],
@@ -1693,14 +1716,11 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/world/repair.rs", 1),
         ],
     ),
+    // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
     (
         "Refusal::at_limit(",
         "A refusal ends at its cause only at a limit the DM cannot change: a tracker's `min`, every name rolled (M13), or the run rule after the fight's encounter was deleted (M15). A fault in the tracker rules, and every other cause, gets its next step: `Refusal::new`.",
-        &[
-            ("src/design/results/refusal.rs", 5),
-            // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
-            ("src/trackers.rs", 2),
-        ],
+        &[("src/design/results/refusal.rs", 3), ("src/trackers.rs", 2)],
     ),
 ];
 

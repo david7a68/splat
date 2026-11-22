@@ -528,23 +528,32 @@ fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
 /// creature search (not on the Members tab at 960) and the first member's menu. `None` where it
 /// is not shown.
 fn group_head_tops(d: &Driver<'_>) -> Vec<(&'static str, Option<f32>)> {
+    field_tops(
+        d,
+        &[
+            "Group name: ",
+            "Default side",
+            "Belongs to",
+            "Find a creature or party member",
+            "More actions for ",
+        ],
+    )
+}
+
+/// The top of the first control in view whose accessible name starts with each prefix.
+fn field_tops(d: &Driver<'_>, prefixes: &[&'static str]) -> Vec<(&'static str, Option<f32>)> {
     let nodes = d.nodes();
-    [
-        "Group name: ",
-        "Default side",
-        "Belongs to",
-        "Find a creature or party member",
-        "More actions for ",
-    ]
-    .into_iter()
-    .map(|prefix| {
-        let top = nodes
-            .iter()
-            .find(|node| node.name.starts_with(prefix) && node.in_view())
-            .map(|node| node.rect.top());
-        (prefix, top)
-    })
-    .collect()
+    prefixes
+        .iter()
+        .copied()
+        .map(|prefix| {
+            let top = nodes
+                .iter()
+                .find(|node| node.name.starts_with(prefix) && node.in_view())
+                .map(|node| node.rect.top());
+            (prefix, top)
+        })
+        .collect()
 }
 
 /// Whether the save row shows the campaign-switch reason: its full words, or (where they do not
@@ -777,6 +786,133 @@ fn painted_bounds(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
         }
     });
     found
+}
+
+/// Layout PR 8: where the Settings footer that holds the control or text named `name` stands,
+/// from the pane records: the footer, its pane's viewport and the footer's gap from the pane's own
+/// content (the viewport's top plus the content's height, or the viewport's bottom when pinned).
+struct SettingsFooter {
+    footer: egui::Rect,
+    viewport: egui::Rect,
+    gap: f32,
+}
+
+fn settings_footer(d: &Driver<'_>, name: &str) -> Option<SettingsFooter> {
+    let place = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.in_view() && node.name.contains(name))?
+        .rect;
+    d.pane_records().into_iter().find_map(|record| {
+        let footer = record
+            .footer()
+            .filter(|footer| footer.contains_rect(place))?;
+        let viewport = record.viewport()?;
+        let gap = match record.placement() {
+            crate::design::pane::Placement::Follows => {
+                footer.top() - (viewport.top() + record.content_height()?)
+            }
+            crate::design::pane::Placement::Pinned => footer.top() - viewport.bottom(),
+        };
+        Some(SettingsFooter {
+            footer,
+            viewport,
+            gap,
+        })
+    })
+}
+
+/// Layout PR 8: every control and text of the Settings account column (from its heading's left
+/// edge), by name and rounded rect: the same list before and after a campaign act shows that no
+/// campaign result moved it.
+fn account_column(d: &Driver<'_>) -> Option<Vec<(String, [i32; 4])>> {
+    let left = d
+        .painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING)?
+        .left();
+    Some(
+        d.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.in_view() && !node.name.is_empty() && node.rect.left() >= left - 1.0
+            })
+            .map(|node| {
+                let r = node.rect;
+                (
+                    node.name,
+                    [r.left(), r.top(), r.right(), r.bottom()].map(|v| v.round() as i32),
+                )
+            })
+            .collect(),
+    )
+}
+
+/// Layout PR 8: how many Settings footers hold a visible control or text named `name`: a result
+/// belongs to one owner, so it stands in one footer.
+fn footers_holding(d: &Driver<'_>, name: &str) -> usize {
+    let places: Vec<egui::Rect> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.in_view() && node.name.contains(name))
+        .map(|node| node.rect)
+        .collect();
+    d.pane_records()
+        .into_iter()
+        .filter_map(|record| record.footer())
+        .filter(|footer| places.iter().any(|place| footer.contains_rect(*place)))
+        .count()
+}
+
+/// Layout PR 8: in the wide Settings tab (1000 px and wider), the footer that holds `name` is its
+/// column's own: its pane does not reach the account column (so another column's content cannot
+/// set where it stands), it stands `S` below its pane's content, and `S` below the lowest control
+/// or text of its column. Narrow, the tab keeps one footer under the stacked columns, so there is
+/// nothing to say about a column and this holds. `(held, what was measured)`.
+fn settings_footer_under_column(d: &Driver<'_>, name: &str) -> (bool, String) {
+    let size = d.window_size();
+    let found = settings_footer(d, name);
+    if size.0 < 1000.0 {
+        let footer = found.as_ref().map(|found| found.footer);
+        return (
+            footer.is_some(),
+            format!("At {size:?} (stacked): {name:?} stands in the footer {footer:?}"),
+        );
+    }
+    let account = d.painted_rect_in("D&D BEYOND ACCOUNT", egui::Rect::EVERYTHING);
+    let (Some(found), Some(account)) = (found, account) else {
+        return (
+            false,
+            format!("At {size:?}: no footer holds {name:?}, or no account heading"),
+        );
+    };
+    // The lowest control or text of the column, above its footer.
+    let last = d
+        .nodes()
+        .into_iter()
+        .filter(|node| {
+            node.in_view()
+                && !node.name.is_empty()
+                && node.role != egui::accesskit::Role::GenericContainer
+                && node.role != egui::accesskit::Role::ScrollView
+                && node.rect.left() >= found.viewport.left() - 1.0
+                && node.rect.right() <= account.left()
+                && node.rect.top() >= found.viewport.top() - 0.5
+                && node.rect.bottom() <= found.footer.top() + 0.5
+        })
+        .map(|node| node.rect.bottom())
+        .reduce(f32::max);
+    let below = last.map(|last| found.footer.top() - last);
+    (
+        found.viewport.right() <= account.left()
+            && (found.gap - crate::design::S).abs() <= 1.0
+            && below.is_some_and(|below| (0.0..=crate::design::S + 12.0).contains(&below)),
+        format!(
+            "At {size:?}: footer {:?} of the pane {:?} (account heading at {:?}), {} below its content, {below:?} below its column's lowest control",
+            found.footer,
+            found.viewport,
+            account.left(),
+            found.gap,
+        ),
+    )
 }
 
 /// Where a control's own words start: the painted text named exactly `name` inside `area`. In a
@@ -5739,6 +5875,46 @@ pub mod encounter_build {
                 "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
             ),
         );
+        // Layout step 6b (I8): the encounter's first edit brings Unsaved, Discard and the
+        // campaign-switch reason (beside Resume's paused run at the row's end); each reason has
+        // its planned place, so the name, the creature search and the first roster row keep their
+        // tops at 960, 1200 and 1920. Discard puts the encounter back.
+        let still = d.aside(|d| {
+            let fields = |d: &Driver<'_>| {
+                field_tops(
+                    d,
+                    &[
+                        "Encounter name: ",
+                        "Find a creature or party member",
+                        "More actions for ",
+                    ],
+                )
+            };
+            let sizes = [SMALL, DEFAULT, LARGE];
+            let clean = sizes.map(|size| d.at_size(size, fields));
+            d.type_into(&d.name_starting("Encounter name: "), " 2");
+            let dirty = sizes.map(|size| d.at_size(size, fields));
+            let switch = d.has_containing("to switch campaign.");
+            d.click("Discard");
+            (
+                switch
+                    && clean
+                        .iter()
+                        .all(|tops| tops[0].1.is_some() && tops[2].1.is_some())
+                    && clean.iter().zip(&dirty).all(|(clean, dirty)| {
+                        clean
+                            .iter()
+                            .zip(dirty)
+                            .all(|((_, a), (_, b))| match (a, b) {
+                                (Some(a), Some(b)) => (a - b).abs() <= 0.5,
+                                (None, None) => true,
+                                _ => false,
+                            })
+                    }),
+                format!("Switch reason shown {switch}; clean {clean:?}, dirty {dirty:?}"),
+            )
+        });
+        d.observe("l6b-encounter-head-still", still.0, still.1);
         // iter-26-B FB5: the run state keeps its x in the save row when the first edit brings
         // `Unsaved`, Discard and the campaign-switch reason, at 960, 1200 and 1920.
         let run_state_x = |d: &mut Driver<'_>| {
@@ -6877,8 +7053,74 @@ pub mod settings {
                      gap from the content {gap:?}"
                 ),
             );
+            // Layout PR 8 (SG12, AG12): wide, the discard's footer is the campaign column's own,
+            // `S` below its last row; narrow, the stacked tab's one footer.
+            let (held, said) = settings_footer_under_column(d, "Undo discard of Campaign details");
+            d.observe("m32-L8-settings-discard-footer", held, said);
         });
+        // Layout PR 8: A, an unrelated B, then Undo A. A is the discard (its words and Undo in the
+        // campaigns' footer); B is an account error (in the account's footer, wide). Wide, each
+        // footer stands under its own column and holds only its own result; narrow, the one footer
+        // holds both. Undo A brings A's draft and ends A's words together, and B stays.
+        const DISCARDED: &str = "Campaign details draft discarded.";
+        const ACCOUNT_ERROR: &str = "Could not remove the saved sign-in.";
+        d.app_mut().settings.simulate_error(Some(ACCOUNT_ERROR));
+        d.settle();
+        let footers = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let campaign = settings_footer(d, DISCARDED);
+                    let account = settings_footer(d, ACCOUNT_ERROR);
+                    let (campaign, account) = (campaign?, account?);
+                    // Each result stands in the footer of its own owner, and in no other.
+                    let once = footers_holding(d, DISCARDED) == 1
+                        && footers_holding(d, ACCOUNT_ERROR) == 1;
+                    let own = |a: &SettingsFooter, b: &SettingsFooter| {
+                        (a.gap - crate::design::S).abs() <= 1.0 && a.footer != b.footer
+                    };
+                    Some((
+                        size,
+                        // Wide: two panes side by side, each with its own footer `S` under its
+                        // own content. Narrow: one footer holds both.
+                        once && if size.0 >= 1000.0 {
+                            own(&campaign, &account)
+                                && own(&account, &campaign)
+                                && campaign.viewport.right() <= account.viewport.left()
+                                && campaign.footer.right() <= account.footer.left()
+                        } else {
+                            campaign.footer == account.footer
+                        },
+                        campaign.footer,
+                        account.footer,
+                    ))
+                })
+            })
+        };
+        let a_and_b = footers(d);
+        d.observe(
+            "m32-L8-settings-two-footers",
+            a_and_b
+                .iter()
+                .all(|at| at.as_ref().is_some_and(|(_, held, _, _)| *held)),
+            format!(
+                "Discard (A) and an account error (B), each footer at 960, 1200, 1920: {a_and_b:?}"
+            ),
+        );
         d.click("Undo discard of Campaign details");
+        d.observe(
+            "m32-L8-settings-undo-a-keeps-b",
+            d.field_text(EDIT_FORM).as_deref() == Some("Quiet Harbor revised")
+                && !d.visible_text(DISCARDED)
+                && d.visible_text(ACCOUNT_ERROR),
+            format!(
+                "Undo A: the draft is back ({:?}), A's words are gone ({}), B's words stay ({})",
+                d.field_text(EDIT_FORM),
+                !d.visible_text(DISCARDED),
+                d.visible_text(ACCOUNT_ERROR)
+            ),
+        );
+        d.app_mut().settings.simulate_error(None);
+        d.settle();
         assert_eq!(
             d.field_text(EDIT_FORM).as_deref(),
             Some("Quiet Harbor revised")
@@ -7399,6 +7641,8 @@ pub mod empty {
         go_settings(d);
         d.expect(ADD_CAMPAIGN);
         d.state("settings-no-campaigns", Sizes::All);
+        // Layout PR 8: the account column's controls, before the campaign is added.
+        let account_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, account_column));
         // Round 26 FB6: an inline creation form puts Create on its last field's line, after
         // the field, and its reason on a line below, at the field's left edge, that stays when
         // the reason goes.
@@ -7473,6 +7717,24 @@ pub mod empty {
             assert!(
                 !d.has(NAME_FIELD),
                 "A successful add closes the form at every window size"
+            );
+            // Layout PR 8 (SB4, AB4): wide, the add result stands `S` under the campaign column,
+            // not under the taller account column, and the account column's controls stay where
+            // they were before the add. Narrow, the stacked tab keeps one footer.
+            let (held, said) = settings_footer_under_column(d, "Build an encounter");
+            let size = d.window_size();
+            let before = [SMALL, DEFAULT, LARGE]
+                .iter()
+                .position(|known| *known == size)
+                .and_then(|at| account_before[at].clone());
+            let account = account_column(d);
+            d.observe(
+                "m32-L8-settings-campaign-footer",
+                held && (size.0 < 1000.0
+                    || before
+                        .as_ref()
+                        .is_some_and(|b| !b.is_empty() && Some(b) == account.as_ref())),
+                format!("{said}; the account column before {before:?}, now {account:?}"),
             );
         });
         d.goal("add a first campaign");
@@ -27879,13 +28141,15 @@ pub mod session_plan {
                     d.place_of("Save creature"),
                 )
             });
-            let form = crate::design::FORM_WIDTH + 2.0 * crate::design::S;
+            // Layout step 6b: exactly the shared rule's width for the room to the roster rule's
+            // end, so a name bounded by any other edge (one a lane wider) fails.
+            let margins = 2.0 * crate::design::S;
             d.observe(
                 "iter-26-B-FA9",
                 name.zip(rule).is_some_and(|(name, rule)| {
-                    name.right() <= rule + 1.0
-                        && ((name.right() - rule).abs() <= 1.0
-                            || (name.width() - form).abs() <= 1.0)
+                    let column = rule - name.left() - margins;
+                    let wanted = crate::design::save_row::name_width(column) + margins;
+                    (name.width() - wanted).abs() <= 1.0
                 }) && start.zip(name).is_some_and(|(save, name)| {
                     (save.left() - (name.right() + crate::design::L)).abs() <= 1.5
                 }) && creature.is_some(),
@@ -28423,8 +28687,32 @@ pub mod share_to_package {
 
 pub mod remove_package_in_use {
     use super::*;
+    /// An item of the package the steps remove that the campaign chooses and no other entry
+    /// needs: Lookup's loot search holds it only while the package is chosen.
+    const ITEM: &str = "Veilglass Lantern";
+    /// A creature of that package. Every chosen creature of it is needed by an encounter, so
+    /// Encounters lists it whether or not the package is chosen.
+    const CREATURE: &str = "Cinder Wolf";
+
+    /// What the two readers give back: whether Lookup's loot search holds `ITEM`, and whether
+    /// Encounters' creature search lists `CREATURE`.
+    fn readers(d: &Driver<'_>) -> (bool, bool) {
+        let item = d.app().lookup.index().is_some_and(|index| {
+            index
+                .loot_sources()
+                .items
+                .iter()
+                .any(|item| item.name == ITEM)
+        });
+        (item, d.app().encounters.searchable_creature(CREATURE))
+    }
+
     pub fn run(d: &mut Driver<'_>) {
-        let package = d.app_mut().campaigns.modules()[0].id;
+        let module = d.app_mut().campaigns.modules()[0].clone();
+        let package = module.id;
+        // P2 of the review of PR 623: the search results before any change, for the Undo of
+        // the removal at the end.
+        let searched = readers(d);
         go_library(d);
         d.click("Packages");
         d.click("Manage packages…");
@@ -28657,6 +28945,29 @@ pub mod remove_package_in_use {
             "A package removal does not say its creature file was deleted",
         );
         d.state("paused-run-after-package-removal", Sizes::All);
+        // P2 of the review of PR 623 (issue #509): the package comes back (registered again,
+        // which Lookup reads at once) while the campaign does not choose it: Lookup's loot search
+        // loses its item. Undo of the removal chooses it again: Lookup gives the item back, and
+        // Encounters reads the campaign again and lists what it listed before the removal.
+        d.app_mut().campaigns.register_module(module).unwrap();
+        go_campaign(d);
+        d.settle();
+        let removed = readers(d);
+        let read = d.app().encounters.snapshot_revision();
+        d.click("Undo remove Ashen Marches");
+        d.settle();
+        let undone = readers(d);
+        d.observe(
+            "m32-C0-509-removal-undo-readers",
+            searched == (true, true)
+                && !removed.0
+                && undone == searched
+                && d.app().encounters.snapshot_revision() != read,
+            format!(
+                "{ITEM} in Lookup's loot search, {CREATURE} listed by Encounters: before {searched:?}, removed and registered again {removed:?}, after Undo {undone:?}; Encounters read again {}",
+                d.app().encounters.snapshot_revision() != read
+            ),
+        );
     }
 }
 

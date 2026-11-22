@@ -169,6 +169,8 @@ pub enum Fallback {
     ThisFight,
     /// `that session`
     ThatSession,
+    /// `this scene`: a plan scene whose words are blank (M-N1.4).
+    ThisScene,
     /// `that tracker`: a tracker's act, label or name that has no words (M-S0.3)
     ThatTracker,
 }
@@ -186,6 +188,7 @@ impl Name {
             match fallback {
                 Fallback::ThisFight => "this fight",
                 Fallback::ThatSession => "that session",
+                Fallback::ThisScene => "this scene",
                 Fallback::ThatTracker => "that tracker",
             }
             .to_owned(),
@@ -731,6 +734,23 @@ impl Refusal {
             cause: Cause::AtLimit(limit),
             recovery: Recovery::AtLimit(AtLimit(())),
         }))
+    }
+
+    /// M15 (issue #507): Continue fight, or the Undo of an ending, refused by the run `rule`.
+    /// While the fight's encounter exists, a new run from it plays the fight again
+    /// (`Recovery::StartNewRun`); once the encounter is deleted no run can start from it, so the
+    /// answer ends at its cause (`Limit::EncounterGone`). The one place that builds that limit, so
+    /// it never stands while the encounter exists.
+    pub fn run_rule(act: FailedAct, rule: RunRule, encounter_exists: bool) -> Self {
+        if encounter_exists {
+            let cause = match rule {
+                RunRule::LaterPlayed => Cause::LaterPlayed,
+                RunRule::NotOnTimeline => Cause::NotOnTimeline,
+            };
+            Self::new(act, cause, Recovery::StartNewRun)
+        } else {
+            Self::at_limit(act, Limit::EncounterGone(rule))
+        }
     }
 
     /// The tone of its answer, from its diagnosis (R41): a file that cannot be read or written
@@ -1450,27 +1470,54 @@ mod tests {
                 "Nothing was rolled on Wandering. Each name has its roll.",
                 Tone::Warning,
             ),
-            // M15: the run rule after the fight's encounter was deleted ends at its cause too.
+            // M15 (#507): the run rule after the fight's encounter was deleted ends at its cause
+            // too; while the encounter exists, a new run is the next step. `run_rule` decides.
             (
-                Refusal::at_limit(
+                Refusal::run_rule(
                     FailedAct::NotContinued {
                         fight: name("Bridge Ambush"),
                     },
-                    Limit::EncounterGone(RunRule::LaterPlayed),
+                    RunRule::LaterPlayed,
+                    false,
                 ),
                 "Bridge Ambush did not go on. A later fight or rest was played, and its \
                  encounter was deleted.",
                 Tone::Warning,
             ),
             (
-                Refusal::at_limit(
+                Refusal::run_rule(
                     FailedAct::EndingNotUndone {
                         fight: name("Bridge Ambush"),
                     },
-                    Limit::EncounterGone(RunRule::NotOnTimeline),
+                    RunRule::NotOnTimeline,
+                    false,
                 ),
                 "The ending of Bridge Ambush was not undone. It is not on the Timeline, and its \
                  encounter was deleted.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::run_rule(
+                    FailedAct::NotContinued {
+                        fight: name("Bridge Ambush"),
+                    },
+                    RunRule::LaterPlayed,
+                    true,
+                ),
+                "Bridge Ambush did not go on. A later fight or rest was played. Start a new run \
+                 to play it again.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::run_rule(
+                    FailedAct::EndingNotUndone {
+                        fight: name("Bridge Ambush"),
+                    },
+                    RunRule::NotOnTimeline,
+                    true,
+                ),
+                "The ending of Bridge Ambush was not undone. It is not on the Timeline. Start a \
+                 new run to play it again.",
                 Tone::Warning,
             ),
             (
