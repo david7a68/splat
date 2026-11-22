@@ -701,6 +701,12 @@ fn sheet_rect(ui: &egui::Ui, rect: egui::Rect) {
     }
 }
 
+/// A row the host draws under the sheet (Party's `Technical details` heading): one whole row of
+/// the sheet, so the pane's edge never cuts it through (layout step 11a).
+pub fn sheet_row(ui: &egui::Ui, rect: egui::Rect) {
+    sheet_rect(ui, rect);
+}
+
 /// A sheet fact line (`fact::line`), one whole row (`sheet_rect`).
 fn sheet_fact(
     ui: &mut egui::Ui,
@@ -1043,7 +1049,7 @@ pub fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveVa
         }
         if let Some(words) = overview_death_saves(record, live) {
             sheet_section(ui, "Death saves");
-            ui.label(words);
+            sheet_line(ui, words);
         }
         sheet_section(ui, "Conditions");
         let names: Vec<String> = live.map_or_else(

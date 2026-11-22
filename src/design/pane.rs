@@ -1571,15 +1571,26 @@ pub(crate) fn hang_limit(ui: &Ui, span: Rect) -> f32 {
 
 /// The top of the lowest registered row that the viewport's bottom edge cuts (its top above the
 /// edge, its bottom below), unless that row starts at the viewport's top (one row taller than the
-/// room keeps the plain cut). Prose and notes are not rows: they keep a line cut.
+/// room keeps the plain cut). Prose and notes are not rows: they keep a line cut. Rows side by
+/// side (a sheet's two columns) overlap in height, so a cut moved up for one row can cross a row
+/// of the other column: the cut moves again, until no row crosses it (layout step 11a, Astra's
+/// P1 on PR 700). Each move goes up by more than half a pixel, so it ends.
 fn whole_row_cut(rows: &[Rect], viewport: Rect) -> Option<f32> {
-    let edge = viewport.bottom();
-    rows.iter()
-        .filter(|row| {
-            row.top() < edge - 0.5 && row.bottom() > edge + 0.5 && row.top() > viewport.top() + 0.5
-        })
-        .map(|row| row.top())
-        .reduce(f32::min)
+    let crossing = |edge: f32| {
+        rows.iter()
+            .filter(|row| {
+                row.top() < edge - 0.5
+                    && row.bottom() > edge + 0.5
+                    && row.top() > viewport.top() + 0.5
+            })
+            .map(|row| row.top())
+            .reduce(f32::min)
+    };
+    let mut cut = None;
+    while let Some(top) = crossing(cut.unwrap_or(viewport.bottom())) {
+        cut = Some(top);
+    }
+    cut
 }
 
 /// The registered rows that a `Fills` body's scroll column already cut, in this pass: a column
@@ -2974,6 +2985,20 @@ mod row_cut_tests {
             }
         }
         assert!(hidden_by_the_cut > 0, "n12-reached: some height cut a row");
+        // Astra's P1 on PR 700, at 1920x1080: a wrapped Armor fact (1032..1068) in one column and
+        // Darkvision (1056..1074) in the other, the edge at 1072. Darkvision moves the cut to 1056,
+        // which crosses Armor: the cut moves again, to Armor's top. Both rows stay whole.
+        let view = Rect::from_min_max(pos2(0.0, 40.0), pos2(1200.0, 1072.0));
+        let (armor, darkvision) = (
+            Rect::from_min_max(pos2(0.0, 1032.0), pos2(600.0, 1068.0)),
+            Rect::from_min_max(pos2(600.0, 1056.0), pos2(1200.0, 1074.0)),
+        );
+        let cut = whole_row_cut(&[armor, darkvision], view);
+        assert_eq!(
+            cut,
+            Some(1032.0),
+            "n12-columns-fixed-point: a cut that moves for one column leaves the other whole"
+        );
         assert!(
             hidden_when_asked > 0,
             "n12-rows-end-whole: with no footer line, `rows_end_whole` cut a row at the body's bottom"
