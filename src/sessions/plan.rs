@@ -9573,6 +9573,231 @@ mod tests {
         );
         page.scene_act(SceneAct::UndoAdd, Some(note.id));
         assert_eq!(fs::read_to_string(&note.path).unwrap(), before);
+        projection_follows_each_input();
+    }
+
+    /// The plan's inputs, which the projection cases below change one at a time.
+    struct PlanInputs {
+        fights: Vec<PlanFight>,
+        fights_revision: crate::design::memo::Revision,
+        saved: Vec<crate::encounter_run::SavedRunInfo>,
+        saved_revision: crate::design::memo::Revision,
+        index: Option<Arc<ContentIndex>>,
+    }
+
+    /// Review of PR 804 (a cache proof changes content, not shape): each input of the plan's
+    /// projection, changed alone with the others' revisions kept, shows its new words on the next
+    /// frame: a fight renamed with the same count, an event retitled and an event's day changed,
+    /// a saved run that ends, a content index rebuild, and a switch to another session with the
+    /// same revisions. Red runs: each input left out of `ProjectionInputs` once.
+    fn projection_follows_each_input() {
+        use crate::sessions::{NewNote, create_note};
+        use egui_kittest::kittest::Queryable;
+        let root = tempfile::tempdir().unwrap();
+        let note = |number, title| {
+            create_note(
+                root.path(),
+                &NewNote {
+                    number,
+                    title,
+                    date: "2026-11-01",
+                    campaign: "Marches",
+                    template: "## Plan for tonight\n\n- [[Bridge]]\n- [[Bridge]]\n- [[Mill]]\n- [ ] [[Captain Varra]]\n\n## What happened\n\n",
+                },
+            )
+            .unwrap()
+        };
+        let (here, there) = (note(2, "The Crossing"), note(3, "The Ford"));
+        let page = Sessions {
+            selected: Some(here.id),
+            notes: vec![here.clone(), there.clone()],
+            folder: Some(root.path().to_owned()),
+            draft: Some(Draft::open(&here.path).unwrap()),
+            ..Sessions::default()
+        };
+        let still = crate::design::memo::Revised::new(()).revision();
+        let inputs = std::rc::Rc::new(std::cell::RefCell::new(PlanInputs {
+            fights: vec![
+                planned_fight("Bridge", "Encounters/Bridge.md"),
+                planned_fight("Ford", "Encounters/Ford.md"),
+            ],
+            fights_revision: still,
+            saved: Vec::new(),
+            saved_revision: still,
+            index: None,
+        }));
+        let shared = std::rc::Rc::clone(&inputs);
+        let mut book = Book::default();
+        // A played fight in this session, with a title no planned fight has yet.
+        let played = book.add(Kind::Encounter, Some(here.id));
+        {
+            let event = book.event_mut(&played).unwrap();
+            event.title = "Scouts".into();
+            event.run = Some(Uuid::from_u128(77));
+        }
+        let day = book.add(Kind::Day, Some(here.id));
+        book.touch();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(design::FORM_WIDTH, 900.0))
+            .build_state(
+                move |ctx, (page, book): &mut (Sessions, Book)| {
+                    let inputs = shared.borrow();
+                    if let Some(index) = &inputs.index {
+                        let index = Arc::clone(index);
+                        ctx.data_mut(|data| {
+                            data.insert_temp(egui::Id::new("reader_link_index"), index);
+                        });
+                    }
+                    let mut group = |_: &mut egui::Ui| {};
+                    let plan = Plan {
+                        fights: &inputs.fights,
+                        saved_runs: &inputs.saved,
+                        saved_runs_revision: inputs.saved_revision,
+                        fights_revision: inputs.fights_revision,
+                        groups: &[],
+                        group_blocked: None,
+                        group_open: false,
+                        group_discard: &|_| None,
+                        arrivals_open: false,
+                        group_editor: std::cell::RefCell::new(&mut group),
+                        blocked: None,
+                        run_directory: None,
+                        open_run: None,
+                        open_state: String::new(),
+                        open_encounter: None,
+                        party: &[],
+                        tables: &[],
+                    };
+                    page.settle_timed(ctx, book);
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
+                },
+                (page, book),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let starts = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, name: &str| {
+            harness
+                .query_all_by_label(&format!("Start fight: {name}"))
+                .count()
+        };
+        let has = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, words: &str| {
+            harness.query_all_by_label_contains(words).next().is_some()
+        };
+        assert_eq!(
+            starts(&harness, "Bridge"),
+            2,
+            "both Bridge lines are to come"
+        );
+        assert_eq!(starts(&harness, "Mill"), 0, "no fight is called Mill yet");
+        // The fights and groups: a fight renamed (Ford to Mill, in the app and on disk), with the
+        // same count and the note unchanged: the note's Mill line is a planned fight now.
+        {
+            let mut inputs = inputs.borrow_mut();
+            inputs.fights[1] = planned_fight("Mill", "Encounters/Mill.md");
+            inputs.fights_revision = crate::design::memo::Revised::new(()).revision();
+        }
+        harness.step();
+        assert_eq!(
+            starts(&harness, "Mill"),
+            1,
+            "a renamed fight is planned on the next frame"
+        );
+        // The Timeline: the played fight retitled Bridge plays one Bridge line.
+        {
+            let book = &mut harness.state_mut().1;
+            book.event_mut(&played).unwrap().title = "Bridge".into();
+            book.touch();
+        }
+        harness.step();
+        assert_eq!(
+            starts(&harness, "Bridge"),
+            1,
+            "a retitled event plays its line"
+        );
+        // The Timeline: a day before this one makes it Day 2.
+        assert!(has(&harness, "Day 1"));
+        {
+            let book = &mut harness.state_mut().1;
+            let first = book.add(Kind::Day, Some(here.id));
+            let at = book
+                .events
+                .iter()
+                .position(|event| event.id == first)
+                .unwrap();
+            let moved = book.events.remove(at);
+            book.events.insert(0, moved);
+            book.touch();
+        }
+        harness.step();
+        assert!(
+            has(&harness, "Day 2") && book_has(&harness, &day),
+            "a day before it makes this day Day 2 on the next frame"
+        );
+        // The saved runs: the played Bridge goes; the removal says the other Bridge stays; its
+        // saved run ends, and the removal says so.
+        {
+            let book = &mut harness.state_mut().1;
+            book.remove(&played);
+        }
+        harness.run_steps(2);
+        assert!(
+            has(&harness, "other “Bridge”"),
+            "the removal names the other Bridge"
+        );
+        assert!(!has(&harness, "with their results") && !has(&harness, "its result"));
+        // The fight lists its run (`PlanFight::saved`, as `Encounters::plan_kept` lists it again
+        // by the saved runs' revision); the fights' own revision stays, as in the app.
+        {
+            let mut inputs = inputs.borrow_mut();
+            let mut ended = legacy_plan_run("Bridge");
+            ended.standing = crate::encounter_run::Standing::Ended;
+            inputs.fights[0].saved = Some(ended);
+            inputs.saved_revision = crate::design::memo::Revised::new(()).revision();
+        }
+        harness.step();
+        assert!(
+            has(&harness, "with their results") || has(&harness, "and its result stay"),
+            "a saved run that ended shows in the removal on the next frame"
+        );
+        // The content index: one with no Captain Varra makes the scene say `Not found`.
+        assert!(!has(&harness, "Not found"));
+        let campaign = crate::persistence::Campaign {
+            id: Uuid::new_v4(),
+            name: "Marches".into(),
+            path: root.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        inputs.borrow_mut().index = Some(Arc::new(
+            crate::lookup::ContentIndex::load(&[], Some(&campaign)).unwrap(),
+        ));
+        harness.step();
+        assert!(
+            has(&harness, "Not found"),
+            "a rebuilt index shows on the next frame"
+        );
+        // The session: another session with the same draft and revisions has none of this
+        // session's events: its heading counts its rows (its 3 planned fights and its scene),
+        // not this one's (its 2 days too).
+        let heading = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, count: usize| {
+            has(harness, &format!("TONIGHT {count}"))
+                || has(harness, &format!("THIS SESSION {count}"))
+        };
+        assert!(
+            heading(&harness, 6),
+            "this session's heading counts its 6 rows"
+        );
+        harness.state_mut().0.selected = Some(there.id);
+        harness.step();
+        assert!(
+            heading(&harness, 4),
+            "another session's heading counts its own rows on the next frame"
+        );
+    }
+
+    fn book_has(harness: &egui_kittest::Harness<'_, (Sessions, Book)>, id: &str) -> bool {
+        harness.state().1.events.iter().any(|event| event.id == id)
     }
 
     /// F7, rule 2: `Add rewards` goes on a played row only when the title keeps its width and
