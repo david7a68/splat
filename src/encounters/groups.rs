@@ -3913,10 +3913,12 @@ fn members(
                 let room = ui.max_rect().right() - left;
                 let column =
                     kept_facts > 0.0 && kept_facts + design::L + kept_actions <= room + 0.5;
+                // The line's far edge, where its actions end when the column does not fit.
+                let far_edge = ui.max_rect().right();
                 let end = if column {
                     left + kept_facts + design::L + kept_actions
                 } else {
-                    ui.max_rect().right()
+                    far_edge
                 };
                 let own_facts = facts.width().max(count.rect.right() - left);
                 // The line's own height, as before; its width ends at the column.
@@ -3993,6 +3995,7 @@ fn members(
                         } else {
                             actions.left()
                         },
+                        edge: far_edge,
                         wrapped: !column,
                     },
                 );

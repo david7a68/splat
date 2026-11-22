@@ -8743,6 +8743,7 @@ impl Encounters {
                                     } else {
                                         actions.left()
                                     },
+                                    edge: row.right(),
                                     wrapped: !column,
                                 },
                             );
