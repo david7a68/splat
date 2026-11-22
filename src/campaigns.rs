@@ -784,95 +784,98 @@ impl Campaigns {
         } else {
             Some("Reload valid campaign settings in Settings first.")
         };
-        // The name, lock and caret share a fixed-height control.
-        let top = ui.cursor().top();
-        let locked = reason.is_some();
-        let column_right = ui.clip_rect().right();
-        let combo = egui::ComboBox::from_id_salt("active_campaign")
-            .icon(move |ui, rect, visuals, open| {
-                if locked {
-                    ui.painter().text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        icons::READ_ONLY,
-                        Type::Body.font(ui),
-                        colors().muted,
-                    );
-                } else {
-                    design::combo_icon(ui, rect, visuals, open);
-                }
-            })
-            .width(ui.available_width())
-            .wrap()
-            .selected_text(Type::Small.rich(ui, label).color(colors().text))
-            .show_ui(ui, |ui| {
-                // The menu stays inside the navigation column, clear of its splitter. A
-                // narrow column wraps the names.
-                let room = column_right
-                    - design::S
-                    - ui.style().spacing.menu_margin.rightf()
-                    - ui.max_rect().left();
-                if room < 220.0 {
-                    ui.set_max_width(room);
-                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                }
-                ui.set_min_width(room.min(220.0));
-                if let Some(reason) = reason {
-                    design::blocked_reason(ui, Some(reason));
-                    design::gap(ui, design::Gap::L);
-                }
-                ui.add_enabled_ui(reason.is_none(), |ui| {
-                    if self.data.campaigns.is_empty() {
-                        // Round 25 FE4: the one command keeps its words on one line, with `S` on
-                        // each side. In the menu's Strong type it needs 119 px and the column
-                        // gives 103, so it uses `Small`, the type of the switcher's own words. A
-                        // column the DM makes narrower still wraps it.
-                        let clicked = ui
-                            .scope(|ui| {
-                                ui.spacing_mut().button_padding.x = design::S;
-                                let words = Type::Small.rich(ui, "Add campaign");
-                                ui.selectable_label(false, words).clicked()
-                            })
-                            .inner;
-                        if clicked {
-                            add = true;
-                            ui.close();
-                        }
+        // The name, lock and caret share a fixed-height control: a slot of `SELECTOR_HEIGHT`,
+        // whatever the name's lines (layout step 11c, L11c-C.2: no measured space after it).
+        let slot = egui::vec2(ui.available_width(), SELECTOR_HEIGHT);
+        ui.allocate_ui_with_layout(slot, egui::Layout::top_down(egui::Align::Min), |ui| {
+            ui.set_min_height(SELECTOR_HEIGHT);
+            let locked = reason.is_some();
+            let column_right = ui.clip_rect().right();
+            let combo = egui::ComboBox::from_id_salt("active_campaign")
+                .icon(move |ui, rect, visuals, open| {
+                    if locked {
+                        ui.painter().text(
+                            rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            icons::READ_ONLY,
+                            Type::Body.font(ui),
+                            colors().muted,
+                        );
                     } else {
-                        if design::extras::choice_wrapped(
-                            ui,
-                            selected.is_none(),
-                            "No campaign",
-                            None,
-                        )
-                        .clicked()
-                        {
-                            selected = None;
-                        }
+                        design::combo_icon(ui, rect, visuals, open);
                     }
-                    for campaign in &self.data.campaigns {
-                        // A campaign's name is the DM's own words: it wraps, never cuts.
-                        if design::extras::choice_wrapped(
-                            ui,
-                            selected == Some(campaign.id),
-                            &campaign.name,
-                            None,
-                        )
-                        .clicked()
-                        {
-                            selected = Some(campaign.id);
-                        }
+                })
+                .width(ui.available_width())
+                .wrap()
+                .selected_text(Type::Small.rich(ui, label).color(colors().text))
+                .show_ui(ui, |ui| {
+                    // The menu stays inside the navigation column, clear of its splitter. A
+                    // narrow column wraps the names.
+                    let room = column_right
+                        - design::S
+                        - ui.style().spacing.menu_margin.rightf()
+                        - ui.max_rect().left();
+                    if room < 220.0 {
+                        ui.set_max_width(room);
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                     }
+                    ui.set_min_width(room.min(220.0));
+                    if let Some(reason) = reason {
+                        design::blocked_reason(ui, Some(reason));
+                        design::gap(ui, design::Gap::L);
+                    }
+                    ui.add_enabled_ui(reason.is_none(), |ui| {
+                        if self.data.campaigns.is_empty() {
+                            // Round 25 FE4: the one command keeps its words on one line, with `S` on
+                            // each side. In the menu's Strong type it needs 119 px and the column
+                            // gives 103, so it uses `Small`, the type of the switcher's own words. A
+                            // column the DM makes narrower still wraps it.
+                            let clicked = ui
+                                .scope(|ui| {
+                                    ui.spacing_mut().button_padding.x = design::S;
+                                    let words = Type::Small.rich(ui, "Add campaign");
+                                    ui.selectable_label(false, words).clicked()
+                                })
+                                .inner;
+                            if clicked {
+                                add = true;
+                                ui.close();
+                            }
+                        } else {
+                            if design::extras::choice_wrapped(
+                                ui,
+                                selected.is_none(),
+                                "No campaign",
+                                None,
+                            )
+                            .clicked()
+                            {
+                                selected = None;
+                            }
+                        }
+                        for campaign in &self.data.campaigns {
+                            // A campaign's name is the DM's own words: it wraps, never cuts.
+                            if design::extras::choice_wrapped(
+                                ui,
+                                selected == Some(campaign.id),
+                                &campaign.name,
+                                None,
+                            )
+                            .clicked()
+                            {
+                                selected = Some(campaign.id);
+                            }
+                        }
+                    });
                 });
-            });
-        design::named(ui, &combo.response, &format!("Active campaign: {label}"));
-        if let Some(reason) = reason {
-            ui.ctx()
-                .accesskit_node_builder(combo.response.id, |node| node.set_description(reason));
-        }
-        combo.response.on_hover_text(reason.unwrap_or(label));
-        let used = ui.cursor().top() - top;
-        ui.add_space((SELECTOR_HEIGHT - used).max(0.0));
+            design::named(ui, &combo.response, &format!("Active campaign: {label}"));
+            if let Some(reason) = reason {
+                ui.ctx()
+                    .accesskit_node_builder(combo.response.id, |node| node.set_description(reason));
+            }
+            combo.response.on_hover_text(reason.unwrap_or(label));
+        });
+
         if selected != current {
             self.select(selected);
         }
@@ -946,6 +949,9 @@ impl Campaigns {
             self.remote = None;
             self.editing = Some(campaign.id);
             self.end_discard();
+            // The keyboard goes to the form's first field, and the form comes whole into view
+            // with it (`show_form_if_editing`).
+            self.focus_name = true;
             self.reveal_details = true;
             self.name = campaign.name.clone();
             self.path = campaign.path.to_string_lossy().into_owned();
@@ -1532,9 +1538,11 @@ impl Campaigns {
         if open {
             design::gap(ui, design::Gap::S);
             let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
-            // Once, when Edit details opened it: the form and its Save come into view.
+            // Once, when Edit details opened it: the name field has the keyboard, and the whole
+            // form with its Save is that focused field's block, which the pane brings whole into
+            // view (its focus clearance, layout step 10; layout step 11c, L11c-C.2).
             if std::mem::take(&mut self.reveal_details) {
-                ui.scroll_to_rect(form, None);
+                design::pane::reveal_with_focus(ui, form);
             }
         }
         open

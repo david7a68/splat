@@ -1092,7 +1092,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/campaigns.rs",
             "selector",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
         // `FaultMessage`) in place of an untyped `design::message`.

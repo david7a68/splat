@@ -133,7 +133,6 @@ scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
 scroll-area	src/markdown_view.rs	reader_table	1	Reader
 scroll-area	src/sessions/page.rs	Sessions::note_editor	1	Sessions
 scroll-area	src/timeline/page.rs	TimelinePage::detail	1	Timeline
-scroll-request	src/campaigns.rs	Campaigns::show_form_if_editing	1	Settings
 scroll-request	src/design/components.rs	reveal_least	1	design	design implementation boundary
 scroll-request	src/design/components.rs	scroll_part	2	design	design implementation boundary
 scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
