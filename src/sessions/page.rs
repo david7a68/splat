@@ -7752,18 +7752,15 @@ impl Sessions {
                 }
                 // Round 26: the template pane's error and its draft's result sit in its message
                 // footer, so the editor never moves when one comes.
-                // The new template's form is short: the pane's scroll column. The editor fills
-                // its room (lead, P2).
+                // The new template's form is short: the pane's scroll column. The editor is the
+                // pane's editor region (layout step 11c, M0436): it grows with its text up to the
+                // room left above the footer, then scrolls inside its frame.
                 let frame = PaneFrame::new(ui);
                 let messages =
                     self.draft_messages(&frame, "template_footer", true, ui.available_width());
-                let body = if self.new_template.is_some() {
-                    design::pane::Body::Content
-                } else {
-                    fills_body(design::pane::FillsReason::NoteEditor)
-                };
-                let paned = messages.pane(ui, body, |ui| {
-                    // One thing at a time, so that the DM does not type into another template.
+                // One thing at a time, so that the DM does not type into another template. The
+                // new template's form does not take the region: the pane is then a content pane.
+                let paned = messages.pane_editor(ui, |ui, region| {
                     if self.new_template.is_some() {
                         // Round 27: `Cancel` starts its line, and its target reaches into the
                         // gutter: an `L` gutter keeps it clear of the column's splitter.
@@ -7774,7 +7771,7 @@ impl Sessions {
                             })
                             .show(ui, |ui| self.new_template_form(ui));
                     } else {
-                        self.template_editor(ui);
+                        self.template_editor(ui, region);
                     }
                 });
                 if let Some(press) = paned.pressed {
@@ -7917,7 +7914,7 @@ impl Sessions {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
-    fn template_editor(&mut self, ui: &mut egui::Ui) {
+    fn template_editor(&mut self, ui: &mut egui::Ui, region: design::pane::EditorRegion<'_>) {
         let c = colors();
         let Some(index) = self
             .template
@@ -8023,12 +8020,12 @@ impl Sessions {
                 .map_or_else(|| name.clone(), |path| path.display().to_string()),
         ));
         if let Some(draft) = &mut self.template_draft {
-            // One closed editor viewport (layout PR 9): its fixed frame fills the pane's body
-            // and keeps all four edges in view; the text and its lane scroll inside it.
+            // The pane's editor region (layout PR 9, step 11c): its fixed frame keeps all four
+            // edges in view, grows with the text up to the room above the footer, and the text
+            // and its lane scroll inside it.
             let font = design::reader::prose_type(ui).font(ui);
-            let output = design::pane::editor_view(
+            let output = region.editor(
                 ui,
-                design::pane::ViewHeight::Fills,
                 field,
                 &mut draft.body,
                 markdown_face(font.clone()),
@@ -8058,20 +8055,20 @@ impl Sessions {
                     design::text_draft::TextDraft::new(self.templates[index].body.as_str()),
                 ));
             }
+            // The pane gave its editor region, which a built-in template does not use: the pane
+            // is then a content pane, and the text reads in its scroll column.
+            let _ = region;
             let body = &mut self.builtin_text.as_mut().expect("kept above").1;
-            design::ScrollColumn::new(("template_editor", &name)).show(ui, |ui| {
-                let (width, height) = (ui.available_width(), ui.available_height());
-                let font = design::reader::prose_type(ui).font(ui);
-                let output = field.editor(ui, body, markdown_face(font.clone()), |edit| {
-                    edit.font(font)
-                        .desired_width(width)
-                        .min_size(egui::vec2(0.0, height))
-                        .frame(false)
-                        .interactive(false)
-                });
-                design::named(ui, &output.response, "Built-in template text");
-                crate::markdown_source::paint_section_rules(ui, &output, Some(body.key()));
+            let width = ui.available_width();
+            let font = design::reader::prose_type(ui).font(ui);
+            let output = field.editor(ui, body, markdown_face(font.clone()), |edit| {
+                edit.font(font)
+                    .desired_width(width)
+                    .frame(false)
+                    .interactive(false)
             });
+            design::named(ui, &output.response, "Built-in template text");
+            crate::markdown_source::paint_section_rules(ui, &output, Some(body.key()));
         }
         if save && let Some(draft) = &mut self.template_draft {
             draft.save();
@@ -9778,7 +9775,7 @@ mod tests {
             .with_size(egui::vec2(800.0, 600.0))
             .themed_state(
                 |ctx, sessions: &mut Sessions| {
-                    egui::CentralPanel::default().show(ctx, |ui| sessions.template_editor(ui));
+                    egui::CentralPanel::default().show(ctx, |ui| template_pane(ui, sessions));
                 },
                 sessions,
             );
@@ -10250,7 +10247,7 @@ mod tests {
                 |ctx, (sessions, template): &mut (Sessions, bool)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         if *template {
-                            sessions.template_editor(ui);
+                            template_pane(ui, sessions);
                         } else {
                             sessions.note_editor(ui, false);
                         }
@@ -10525,6 +10522,14 @@ mod tests {
                 source
             );
         }
+    }
+
+    /// The template editor in a pane, as `templates_view` draws it: the editor takes the pane's
+    /// editor region (layout step 11c).
+    fn template_pane(ui: &mut egui::Ui, sessions: &mut Sessions) {
+        let frame = PaneFrame::new(ui);
+        let messages = Messages::<()>::new(&frame, "template_test", ui.available_width());
+        let _ = messages.pane_editor(ui, |ui, region| sessions.template_editor(ui, region));
     }
 
     /// The page's kept results as the session footer draws them, with the press acted on as
