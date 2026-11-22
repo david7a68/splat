@@ -3938,16 +3938,15 @@ pub mod campaign_content {
             );
         }
         // Layout step 11c (L11c-C.1): with a repair's editor open the page is still the pane's
-        // scroll column, so its footer follows the taller list by `S` (it was pinned in a `Fills`
-        // body).
-        d.at_size(LARGE, |d| {
+        // scroll column, so its footer follows the taller list by `S` where the page fits (it
+        // was pinned in a `Fills` body).
+        d.state_prepared("repair-dirty", Sizes::All, |d| {
             package_footer_follows(
                 d,
                 "Campaign packages draft discarded.",
                 "l11c-C1-repair-follows",
-            )
+            );
         });
-        d.state("repair-dirty", Sizes::All);
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
         // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
         // nothing.
