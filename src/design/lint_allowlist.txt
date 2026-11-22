@@ -47,6 +47,9 @@ src/world/lines.rs fact-owner 1
 # Issue #810: a theme installed on a test harness after it drew (`late-theme`). Build the harness
 # with `design::test_harness` instead. Shrink only: each move lowers its file's count. src/trackers/view.rs
 # keeps 1: its name test installs the theme again on purpose, to prove a new font generation fits again.
+# src/content_ui/tests/quiet_reader.rs keeps 1 (layout PR 9b-R1a): its eviction case installs the theme
+# again on purpose between frames, to prove the Reader prepares again for a new font generation.
+src/content_ui/tests/quiet_reader.rs late-theme 1
 src/design/pane.rs late-theme 12
 src/design/reveal.rs late-theme 1
 src/markdown_view.rs late-theme 5

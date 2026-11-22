@@ -83,6 +83,12 @@ pub fn entry_art(ctx: &egui::Context, entry: &Entry) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
+/// The generation of the art index in use (`ArtIndex::generation`), for a reader that keeps its
+/// figures (layout PR 9b-R1a); `None` before an index is loaded.
+pub fn generation(ctx: &egui::Context) -> Option<u64> {
+    index(ctx).map(|index| index.generation())
+}
+
 /// The local copy of the image at a link in a note.
 pub fn link_art(ctx: &egui::Context, url: &str) -> Option<PathBuf> {
     index(ctx)?.link(url).map(Path::to_path_buf)
