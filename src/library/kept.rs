@@ -90,9 +90,14 @@ impl Kept for KeptMark {
 }
 
 /// A heading fix: its file, the draft before and the draft the fix wrote.
-pub(super) type HeadingFix = (FileId, String, String);
+pub(super) type HeadingFix = (FileId, String, crate::design::memo::Revised<String>);
 /// A stat fix: its file, the draft before, the draft the fix wrote and its result's words.
-pub(super) type StatFix = (FileId, String, String, Sentence);
+pub(super) type StatFix = (
+    FileId,
+    String,
+    crate::design::memo::Revised<String>,
+    Sentence,
+);
 /// A discarded draft: its file (owner and path) and the words Discard dropped.
 pub(super) type DiscardedDraft = (OwnerKey, String, String);
 /// Why the scope widened: the entry it shows, by name, and the scope it widened to. The notice

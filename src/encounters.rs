@@ -2,7 +2,8 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[cfg(test)]
 use crate::content_workspace::patch_fields;
-use crate::design::text_draft::TextDraft;
+use crate::design::memo::Revised;
+use crate::design::text_draft::{KeptCompare, TextDraft};
 use crate::encounter_settings::GroupingWords;
 use crate::{
     campaigns::Campaigns,
@@ -766,7 +767,11 @@ struct Draft {
     body: TextDraft,
     saved_name: String,
     saved_setup: Setup,
-    saved_body: String,
+    /// The saved text, with its revision (layout PR 9b-C): `dirty` compares two revisions on a
+    /// quiet frame.
+    saved_body: Revised<String>,
+    /// The last answer of the body's compare with the saved one.
+    same_body: KeptCompare,
     /// The note's `## Loot` list, one line each, kept apart from `body` while this owns it.
     loot: Vec<String>,
     saved_loot: Vec<String>,
@@ -823,7 +828,8 @@ impl Draft {
             setup: Setup::default(),
             body: TextDraft::default(),
             saved_setup: Setup::default(),
-            saved_body: String::new(),
+            saved_body: Revised::default(),
+            same_body: KeptCompare::default(),
             loot: Vec::new(),
             saved_loot: Vec::new(),
             loot_owned: true,
@@ -877,7 +883,8 @@ impl Draft {
             name: entry.name.clone(),
             saved_setup: setup.clone(),
             setup,
-            saved_body: body.clone(),
+            saved_body: Revised::new(body.clone()),
+            same_body: KeptCompare::default(),
             body: TextDraft::new(body),
             saved_loot: loot.clone(),
             loot,
@@ -896,11 +903,20 @@ impl Draft {
             results_key: results_key::ResultsKey::new(),
         })
     }
+    /// Whether the text is the saved text: compared once per pair of revisions.
+    fn body_saved(&self) -> bool {
+        self.body.same_as(
+            self.saved_body.revision(),
+            &self.saved_body,
+            &self.same_body,
+        )
+    }
+
     fn dirty(&self) -> bool {
         self.baseline.is_none()
             || self.name != self.saved_name
             || self.setup != self.saved_setup
-            || self.body.as_str() != self.saved_body
+            || !self.body_saved()
             || self.loot != self.saved_loot
             || self.groups.iter().any(GroupDraft::dirty)
             || !self.deleted_groups.is_empty()
@@ -1002,7 +1018,7 @@ impl Draft {
             .as_ref()
             .and_then(|change| change.text.as_deref())
             .unwrap_or(&self.source);
-        let source = if self.body.as_str() == self.saved_body && self.loot == self.saved_loot {
+        let source = if self.body_saved() && self.loot == self.saved_loot {
             disk_source.to_owned()
         } else {
             splat::content::list_formats::with_prose(disk_source, &self.prose())?
@@ -1158,7 +1174,7 @@ impl Draft {
         self.origin = design::save_row::DraftOrigin::Saved;
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
-        self.saved_body = self.body.as_str().to_owned();
+        self.saved_body = Revised::new(self.body.as_str().to_owned());
         self.saved_loot = self.loot.clone();
         self.recovery = Default::default();
         for (index, text) in group_texts {
@@ -1389,16 +1405,6 @@ struct CreatureFields {
     body: TextDraft,
 }
 
-/// Two forms are equal when their values and their words are.
-impl PartialEq for CreatureFields {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && self.hp == other.hp
-            && self.armor_class == other.armor_class
-            && self.body.as_str() == other.body.as_str()
-    }
-}
-
 /// A creature the DM made their own, open beside the roster.
 struct CreatureEditor {
     recovery: disk::Recovery,
@@ -1406,6 +1412,9 @@ struct CreatureEditor {
     baseline: String,
     fields: CreatureFields,
     saved: CreatureFields,
+    /// The last answer of the text's compare with the saved text (layout PR 9b-C): by the two
+    /// drafts' revisions, so a quiet frame compares two numbers.
+    same_body: KeptCompare,
     error: Option<String>,
     focus: bool,
 }
@@ -1434,12 +1443,25 @@ impl CreatureEditor {
             baseline: text,
             saved: fields.clone(),
             fields,
+            same_body: KeptCompare::default(),
             error: None,
             focus: true,
         })
     }
     fn dirty(&self) -> bool {
-        self.saved != self.fields
+        let (saved, now) = (&self.saved, &self.fields);
+        saved.name != now.name
+            || saved.hp != now.hp
+            || saved.armor_class != now.armor_class
+            || !self.body_saved()
+    }
+
+    /// Whether the text is the saved text: compared once per pair of revisions.
+    fn body_saved(&self) -> bool {
+        let saved = &self.saved.body;
+        self.fields
+            .body
+            .same_as(saved.revision(), saved, &self.same_body)
     }
     fn text(&self) -> Result<String, String> {
         let CreatureFields {
@@ -1460,7 +1482,7 @@ impl CreatureEditor {
         let new_armor_class = number(armor_class, "Armor class")?;
         Entry::parse(&self.path, &self.baseline)?;
         {
-            let text = if body.as_str() == self.saved.body.as_str() {
+            let text = if self.body_saved() {
                 self.baseline.clone()
             } else {
                 with_body(&self.baseline, body)

@@ -732,6 +732,8 @@ pub struct Sessions {
     templates: Vec<Template>,
     template: Option<String>,
     template_draft: Option<Draft>,
+    /// The kept answer of the open note's compare with a move result's words (layout PR 9b-C).
+    same_moved: design::text_draft::KeptCompare,
     /// The shown built-in template's name and its words as a document (layout PR 9b).
     builtin_text: Option<(String, design::text_draft::TextDraft)>,
     new_template: Option<String>,
@@ -1801,12 +1803,17 @@ impl Sessions {
         match self.removal_note.as_mut().filter(|_| same_removal) {
             Some(seen) => {
                 match (&seen.words, words) {
-                    (Some(before), Some(draft)) if *before != draft.body.as_str() => {
+                    (Some(before), Some(draft))
+                        if !draft.body.same_as(before.revision(), before, &seen.same) =>
+                    {
                         book.forget_removed();
                         self.removal_note = None;
                         return;
                     }
-                    (None, Some(draft)) => seen.words = Some(draft.body.as_str().to_owned()),
+                    (None, Some(draft)) => {
+                        seen.words =
+                            Some(design::memo::Revised::new(draft.body.as_str().to_owned()));
+                    }
                     _ => {}
                 }
                 seen.revision = revision;
@@ -1815,7 +1822,9 @@ impl Sessions {
                 self.removal_note = Some(RemovalNote {
                     id,
                     revision,
-                    words: words.map(|draft| draft.body.as_str().to_owned()),
+                    words: words
+                        .map(|draft| design::memo::Revised::new(draft.body.as_str().to_owned())),
+                    same: design::text_draft::KeptCompare::default(),
                 });
             }
         }
@@ -3358,7 +3367,7 @@ impl Sessions {
                         Recovery::First(Step::Check(File::SessionNote)),
                     ))
                 }
-                Some(draft) if !same_file(&draft) || draft.body.as_str() != write.after => {
+                Some(draft) if !same_file(&draft) || !draft.body.same_words(&write.after) => {
                     let within = write.within();
                     Some((
                         Cause::EditedSince(within.clone()),
@@ -4552,10 +4561,11 @@ impl Sessions {
             session,
             before,
             open_run,
-            body: self
-                .draft
-                .as_ref()
-                .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
+            body: design::memo::Revised::new(
+                self.draft
+                    .as_ref()
+                    .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
+            ),
             events: book.events.clone(),
             name,
             number,
@@ -4571,10 +4581,11 @@ impl Sessions {
         let changed = self.moves.get(&page).is_some_and(|shown| {
             let moved = shown.value();
             moved.events != book.events
-                || self
-                    .draft
-                    .as_ref()
-                    .is_none_or(|draft| draft.body.as_str() != moved.body)
+                || self.draft.as_ref().is_none_or(|draft| {
+                    !draft
+                        .body
+                        .same_as(moved.body.revision(), &moved.body, &self.same_moved)
+                })
         });
         if changed {
             self.moves.owner_changed(&page);
@@ -8590,7 +8601,10 @@ struct RemovalNote {
     /// The removed event.
     id: String,
     revision: Option<u64>,
-    words: Option<String>,
+    /// The note's words when the result began, with their revision (layout PR 9b-C), and the
+    /// kept answer of the draft's compare with them: a quiet frame compares two revisions.
+    words: Option<design::memo::Revised<String>>,
+    same: design::text_draft::KeptCompare,
 }
 
 /// Keep the note and group editor under stable IDs across the side-by-side breakpoint.

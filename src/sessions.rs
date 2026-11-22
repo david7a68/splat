@@ -1949,7 +1949,9 @@ impl NoteUndo {
 
     /// Whether this Undo still applies to the note in this draft.
     pub fn live(&self, draft: &Draft) -> bool {
-        self.owns(draft) && draft.body.as_str() == self.after && self.left_properties(&draft.prefix)
+        self.owns(draft)
+            && draft.body.same_words(&self.after)
+            && self.left_properties(&draft.prefix)
     }
 
     /// The properties are the ones the act left, or the act did not change them.

@@ -999,7 +999,9 @@ pub fn unregister_count(notes: &[Note], package: Uuid) -> usize {
 
 pub struct Note {
     pub path: String,
-    pub text: String,
+    /// The file's text, with its revision (layout PR 9b-C): set when the note loads, saves or
+    /// follows the disk, so an open draft's compare with it is two revisions on a quiet frame.
+    pub text: crate::design::memo::Revised<String>,
     pub entry: Option<Entry>,
     pub error: Option<String>,
     /// Why the file could not be read at all, from the system error's kind. Such a note has no

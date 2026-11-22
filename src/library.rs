@@ -234,6 +234,11 @@ pub struct Library {
     pending: Option<mpsc::Receiver<Result<Loaded, String>>>,
     selected: Option<usize>,
     draft: crate::design::text_draft::TextDraft,
+    /// The last answers of the draft's compares (layout PR 9b-C): with its note's saved text, and
+    /// with the heading and stat fixes' words. Each by the two revisions it compared.
+    same_saved: crate::design::text_draft::KeptCompare,
+    same_heading: crate::design::text_draft::KeptCompare,
+    same_vital: crate::design::text_draft::KeptCompare,
     search: String,
     matches: Option<(Section, String, Vec<usize>)>,
     /// Chosen creature facts. They apply in Creatures and to search results.
@@ -687,7 +692,7 @@ impl Library {
                 kept.set_vital((
                     file,
                     draft.as_str().to_owned(),
-                    after.clone(),
+                    crate::design::memo::Revised::new(after.clone()),
                     crate::sentence!("The stat block now says {} {}.", label, value),
                 ));
                 let _ = draft.replace(after);
@@ -704,7 +709,11 @@ impl Library {
         self.kept
             .vital()
             .filter(|(at, _, after, _)| {
-                at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
+                at.0 == file.0
+                    && at.1 == file.1
+                    && self
+                        .draft
+                        .same_as(after.revision(), after, &self.same_vital)
             })
             .map(|(_, _, _, result)| result.clone())
     }
@@ -714,7 +723,11 @@ impl Library {
     /// replaced).
     fn stat_undo_applies(&self, file: &FileId) -> bool {
         self.kept.vital().is_some_and(|(at, _, after, _)| {
-            at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
+            at.0 == file.0
+                && at.1 == file.1
+                && self
+                    .draft
+                    .same_as(after.revision(), after, &self.same_vital)
         })
     }
 
@@ -722,7 +735,11 @@ impl Library {
     /// heading fix.
     fn heading_undo_applies(&self, file: &FileId) -> bool {
         self.kept.heading().is_some_and(|(at, _, after)| {
-            at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
+            at.0 == file.0
+                && at.1 == file.1
+                && self
+                    .draft
+                    .same_as(after.revision(), after, &self.same_heading)
         })
     }
 
@@ -1338,7 +1355,7 @@ impl Library {
             .loaded
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .filter(|n| n.text != self.draft.as_str())?;
+            .filter(|n| !self.saved_is_draft(n))?;
         Some((
             note.name().to_owned(),
             match &note.owner {
@@ -1348,11 +1365,18 @@ impl Library {
             },
         ))
     }
+    /// Whether the open draft's words are note `note`'s saved text: compared once per pair of
+    /// revisions (layout PR 9b-C).
+    fn saved_is_draft(&self, note: &Note) -> bool {
+        self.draft
+            .same_as(note.text.revision(), &note.text, &self.same_saved)
+    }
+
     pub fn dirty(&self) -> bool {
         self.loaded
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .is_some_and(|n| n.text != self.draft.as_str())
+            .is_some_and(|n| !self.saved_is_draft(n))
     }
     pub fn form_open(&self) -> bool {
         self.form || self.new_form || self.confirm_unregister.is_some()
@@ -4329,7 +4353,7 @@ impl Library {
                 .and_then(|entry| entry.fields.get("splat_spell"))
                 .and_then(spell_kind),
         );
-        let dirty = self.draft.as_str() != note.text;
+        let dirty = !self.saved_is_draft(note);
         let editable = note.owner.editable();
         // A file the system will not read has no text to edit: the reader names its fault.
         let fault = note.fault.clone();
@@ -4803,6 +4827,7 @@ impl Library {
             &self.draft,
             self.kept.heading(),
             &(note.owner.key(), note.path.clone()),
+            &self.same_heading,
         );
         // Read's messages for the pane's message footer: a package entry's links to entries in
         // this campaign only, each with its copy action, and the copy's result.
@@ -4967,7 +4992,7 @@ impl Library {
             }
         }
         // Live, because Discard in this same frame changed the draft.
-        if self.draft.as_str() != note.text {
+        if !self.saved_is_draft(note) {
             let _ = self.kept.take_discarded();
         }
         // The pane's footer, typed (M-L0.4b): Edit Markdown's (with a save row), Read's, or a
@@ -5449,7 +5474,7 @@ impl Library {
         // still the text its action left, else it does nothing and its entry stays (its line
         // comes back with its own draft). Typed text is never replaced.
         if discard_undo
-            && self.draft.as_str() == note.text
+            && self.saved_is_draft(note)
             && let Some((_, _, text)) = self.kept.take_discarded()
         {
             let _ = self.draft.replace(text);
@@ -5462,8 +5487,13 @@ impl Library {
             .filter(|_| editable && !conflict);
         // The open file, whole (owner kind, owner id, path): a fix's Undo acts only on it.
         let file: FileId = (note.owner.key(), note.path.clone());
-        let heading_now =
-            HeadingChoice::new(current.as_ref(), &self.draft, self.kept.heading(), &file);
+        let heading_now = HeadingChoice::new(
+            current.as_ref(),
+            &self.draft,
+            self.kept.heading(),
+            &file,
+            &self.same_heading,
+        );
         let pressed_heading = (
             heading_fix && heading_now.fix.is_some(),
             heading_undo && self.heading_undo_applies(&file),
@@ -5504,7 +5534,7 @@ impl Library {
             self.draft_revision += 1;
         }
         // Live, as above: a press that changed the draft ends Discard's Undo.
-        if self.draft.as_str() != note.text {
+        if !self.saved_is_draft(note) {
             let _ = self.kept.take_discarded();
         }
         if self.draft_revision != draft_before {
@@ -11223,11 +11253,13 @@ impl HeadingChoice {
     /// `entry` is `None` when the file cannot take the fix (read only, unparsed or in a conflict).
     /// The fix's Undo shows only for its own file (owner kind, owner id and path: `FileId`)
     /// while the draft is the text the fix wrote (M-L0.4a).
+    /// `same`: the kept answer of the draft's compare with the fix's words (layout PR 9b-C).
     pub fn new(
         entry: Option<&Entry>,
-        draft: &str,
+        draft: &crate::design::text_draft::TextDraft,
         undo: Option<&kept::HeadingFix>,
         file: &FileId,
+        same: &crate::design::text_draft::KeptCompare,
     ) -> Self {
         let Some(entry) = entry else {
             return Self {
@@ -11248,7 +11280,9 @@ impl HeadingChoice {
                 )
             }),
             undo: undo
-                .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && after == draft)
+                .is_some_and(|(at, _, after)| {
+                    at.0 == file.0 && at.1 == file.1 && draft.same_as(after.revision(), after, same)
+                })
                 .then(|| crate::sentence!("The first heading now says {}.", entry.name)),
         }
     }
@@ -11264,7 +11298,11 @@ impl HeadingChoice {
     ) -> bool {
         let mut changed = false;
         if fix && let Some((_, _, after)) = &self.fix {
-            kept.set_heading((file.clone(), draft.as_str().to_owned(), after.clone()));
+            kept.set_heading((
+                file.clone(),
+                draft.as_str().to_owned(),
+                crate::design::memo::Revised::new(after.clone()),
+            ));
             let _ = draft.replace(after.as_str());
             changed = true;
         }

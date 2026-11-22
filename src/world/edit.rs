@@ -4,7 +4,7 @@
 use super::{
     Change, ChangeKind, Go, Picker, Reader, link_name, reference, status, stored_link, world_field,
 };
-use crate::design::text_draft::TextDraft;
+use crate::design::text_draft::{KeptCompare, TextDraft};
 use crate::{
     design::{
         self, Action, Density, Type, colors,
@@ -104,7 +104,7 @@ impl PartialEq for Fields {
             && self.place == other.place
             && self.groups == other.groups
             && self.groups_unread == other.groups_unread
-            && self.text.as_str() == other.text.as_str()
+            && self.text.same_words(&other.text)
     }
 }
 
@@ -150,13 +150,15 @@ impl Fields {
         super::merge_groups(index, &self.groups, &draft.groups, &disk.groups)
     }
 
-    fn changed(&self, start: &Self) -> Changed {
+    /// `same`: the kept answer of the text's compare with `start`'s (layout PR 9b-C), so a quiet
+    /// frame compares two revisions.
+    fn changed(&self, start: &Self, same: &KeptCompare) -> Changed {
         Changed {
             status: self.status.trim() != start.status,
             creature: self.creature != start.creature,
             place: self.place != start.place,
             groups: self.groups != start.groups,
-            text: self.text.as_str() != start.text.as_str(),
+            text: !self.text.same_as(start.text.revision(), &start.text, same),
         }
     }
 }
@@ -181,6 +183,10 @@ pub(super) struct EditDraft {
     reloaded: Option<(Fields, Fields)>,
     /// Overwrite kept the note's unread groups in place of the draft's group change.
     groups_refused: bool,
+    /// The last answer of the text's compare with `start`'s, and with the disk's (layout PR
+    /// 9b-C): by revisions, so a quiet frame compares two numbers.
+    same_start: KeptCompare,
+    same_disk: KeptCompare,
 }
 
 /// What Save did.
@@ -233,11 +239,27 @@ impl EditDraft {
             disk: None,
             reloaded: None,
             groups_refused: false,
+            same_start: KeptCompare::default(),
+            same_disk: KeptCompare::default(),
         })
     }
 
+    /// Whether the form is where it began, all its values and its words (the words compared once
+    /// per pair of revisions).
+    fn now_is_start(&self) -> bool {
+        let (now, start) = (&self.now, &self.start);
+        now.status == start.status
+            && now.creature == start.creature
+            && now.place == start.place
+            && now.groups == start.groups
+            && now.groups_unread == start.groups_unread
+            && now
+                .text
+                .same_as(start.text.revision(), &start.text, &self.same_start)
+    }
+
     pub fn dirty(&self) -> bool {
-        let changed = self.now.changed(&self.start);
+        let changed = self.now.changed(&self.start, &self.same_start);
         changed.status || changed.creature || changed.place || changed.groups || changed.text
     }
 
@@ -277,7 +299,7 @@ impl EditDraft {
             self.disk = Some((disk, theirs));
             return Ok(Saved::Waiting);
         }
-        let changed = self.now.changed(&self.start);
+        let changed = self.now.changed(&self.start, &self.same_start);
         if changed.groups
             && let Some(unread) = &self.start.groups_unread
         {
@@ -373,7 +395,7 @@ impl EditDraft {
         theirs: &Fields,
         index: &ContentIndex,
     ) -> Vec<(&'static str, String)> {
-        let changed = self.now.changed(&self.start);
+        let changed = self.now.changed(&self.start, &self.same_start);
         let named = |value: &Option<Value>, label: &str| {
             value
                 .as_ref()
@@ -490,7 +512,11 @@ impl EditDraft {
                 ),
             ));
         }
-        if self.now.text.as_str() != theirs.text.as_str() {
+        if !self
+            .now
+            .text
+            .same_as(theirs.text.revision(), &theirs.text, &self.same_disk)
+        {
             effects.push((
                 "Text",
                 if changed.text {
@@ -535,7 +561,15 @@ impl EditDraft {
             }
         }
         let their_text = theirs.as_ref().map_or("", |theirs| theirs.text.as_str());
-        if their_text != self.now.text.as_str() {
+        let same = match &theirs {
+            Some(theirs) => {
+                self.now
+                    .text
+                    .same_as(theirs.text.revision(), &theirs.text, &self.same_disk)
+            }
+            None => self.now.text.is_empty(),
+        };
+        if !same {
             design::grouped_draft_comparison(ui, &self.now.text, their_text, &self.path, false);
         }
         let Some(choice) = choice else {
@@ -562,7 +596,7 @@ impl EditDraft {
                 }
                 design::DiskConflictChoice::Overwrite => {
                     // Only what the DM changed overwrites. The disk version supplies the rest.
-                    let changed = self.now.changed(&self.start);
+                    let changed = self.now.changed(&self.start, &self.same_start);
                     let now = &mut self.now;
                     if !changed.status {
                         now.status.clone_from(&theirs.status);
@@ -1226,7 +1260,7 @@ impl Reader {
         focused |= text.has_focus();
         self.form_focused = focused;
         // Right after Reload the form matches the disk. Any edit ends Undo reload.
-        if draft.reloaded.is_some() && draft.now != draft.start {
+        if draft.reloaded.is_some() && !draft.now_is_start() {
             draft.reloaded = None;
             self.end(super::Slot::Reloaded);
         }
