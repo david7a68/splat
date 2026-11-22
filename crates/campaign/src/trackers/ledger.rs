@@ -186,7 +186,8 @@ impl Ledger {
     }
 
     /// The list after `op`, or why it cannot be applied to this list.
-    pub fn apply(&self, op: &Op) -> Result<Self, String> {
+    pub fn apply(&self, op: &Op) -> Result<Self, super::Refused> {
+        use super::{Part, Refused};
         let mut next = self.clone();
         match op {
             Op::Append(entries) => {
@@ -205,7 +206,7 @@ impl Ledger {
                         // Gone already: an earlier try or an edit took it out.
                         None => {}
                         Some(_) => {
-                            return Err("That entry changed on disk. Nothing was undone.".into());
+                            return Err(Refused::Changed(Part::Entry));
                         }
                     }
                 }
@@ -216,7 +217,7 @@ impl Ledger {
                         // Back already: an earlier try put it there.
                         Some(old) if old == entry => continue,
                         Some(_) => {
-                            return Err("That entry changed on disk. Nothing was put back.".into());
+                            return Err(Refused::Changed(Part::Entry));
                         }
                         None => {}
                     }
@@ -227,15 +228,10 @@ impl Ledger {
                                 .changes
                                 .iter()
                                 .position(|old| old.id == after.id)
-                                .ok_or(
-                                    "The entry before it is no longer in Trackers.md. Nothing was put back.",
-                                )?;
+                                .ok_or(Refused::Gone(Part::EntryBefore))?;
                             // The place is named by the whole entry before it, as it was read.
                             if next.changes[at] != *after {
-                                return Err(
-                                    "The entry before it changed on disk. Nothing was put back."
-                                        .into(),
-                                );
+                                return Err(Refused::Changed(Part::EntryBefore));
                             }
                             at + 1
                         }
@@ -287,7 +283,7 @@ pub enum Fault {
     /// The file on disk cannot be read. Nothing is written.
     NotRead(String),
     /// The act does not fit the list on disk now. Nothing is written.
-    Refused(String),
+    Refused(super::Refused),
     /// The write failed. Nothing is written, and nothing waits.
     NotSaved(String),
 }
@@ -313,7 +309,7 @@ pub fn parse_bytes(bytes: Option<&[u8]>) -> Result<Ledger, String> {
 /// save. Returns the bytes now on disk and the list they hold.
 pub fn commit(
     path: &Path,
-    build: impl FnOnce(&Ledger) -> Result<Op, String>,
+    build: impl FnOnce(&Ledger) -> Result<Op, super::Refused>,
 ) -> Result<(Vec<u8>, Ledger, Op), Fault> {
     let before = read_bytes(path).map_err(Fault::NotRead)?;
     let ledger = parse_bytes(before.as_deref()).map_err(Fault::NotRead)?;
@@ -404,7 +400,9 @@ mod tests {
         moved.changes[0].add = Some(20);
         assert_eq!(
             moved.apply(&Op::Restore(placed)),
-            Err("The entry before it changed on disk. Nothing was put back.".into())
+            Err(crate::trackers::Refused::Changed(
+                crate::trackers::Part::EntryBefore
+            ))
         );
     }
 

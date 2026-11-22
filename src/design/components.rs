@@ -15,13 +15,6 @@ pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
     draw_menu_button(ui, word, selected, false, None, Density::Scan)
 }
 
-/// A title line's menu action (`TitleLine::menu`): [`menu_button`] at the `Read` height of the
-/// line's other actions; while `blocked`, it is disabled with the reason on hover and as its
-/// accessible description.
-pub(super) fn title_menu_button(ui: &mut Ui, word: &str, blocked: Option<&str>) -> Response {
-    draw_menu_button(ui, word, false, false, blocked, Density::Read)
-}
-
 /// A menu button whose word starts at the text edge of its own row.
 pub fn menu_button_at_line_start(ui: &mut Ui, word: &str, selected: bool) -> Response {
     draw_menu_button(ui, word, selected, true, None, Density::Scan)
@@ -1364,9 +1357,29 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
 
 /// An `icon_button` whose tooltip says more than its name, such as its keyboard command.
 pub fn icon_button_with_hint(ui: &mut Ui, icon: &str, name: &str, hint: &str) -> Response {
+    hinted_icon_button(ui, icon, name, hint, None)
+}
+
+/// A view toggle (`TitleLine::toggle`): an `icon_button_with_hint` that also tells assistive
+/// tools whether it is on, as a toggle button's pressed state, so they need not read it from the
+/// name.
+pub(crate) fn icon_toggle(ui: &mut Ui, icon: &str, name: &str, hint: &str, on: bool) -> Response {
+    hinted_icon_button(ui, icon, name, hint, Some(on))
+}
+
+fn hinted_icon_button(
+    ui: &mut Ui,
+    icon: &str,
+    name: &str,
+    hint: &str,
+    pressed: Option<bool>,
+) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::splat(Density::Read.control()), Sense::click());
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
+    response.widget_info(|| match pressed {
+        Some(on) => WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), on, name),
+        None => WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name),
+    });
     locked_control(ui, &response);
     if ui.is_rect_visible(rect) {
         let c = colors();
@@ -1442,6 +1455,25 @@ pub fn signed_stepper(
     )
 }
 
+/// A stepper whose value is a count that can reach the thousands (a group's member count): it
+/// shows `1,000` with its digits grouped, as every count in the app reads (`count`), and reads
+/// back what the DM types with or without the commas (`1,000`, `1000`). The same − and + and
+/// limits as [`stepper`].
+pub fn grouped_stepper(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+) -> bool {
+    stepper_as(
+        ui,
+        name,
+        value,
+        (range, Density::Read, None, None),
+        Shown::Grouped,
+    )
+}
+
 /// How a stepper's value reads.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Shown {
@@ -1449,6 +1481,29 @@ enum Shown {
     Plain,
     /// `+3`, `−1`: a modifier.
     Signed,
+    /// `1,000`: a count with its digits grouped.
+    Grouped,
+}
+
+/// A count with its digits grouped (`1,000`), a negative one with a true minus.
+fn grouped_value(value: i64) -> String {
+    let digits = grouped_number(value.unsigned_abs() as usize);
+    if value < 0 {
+        format!("\u{2212}{digits}")
+    } else {
+        digits
+    }
+}
+
+/// A count as the DM may type it: `1,000`, `1000`, `1 000`, `−3`.
+fn parse_grouped(text: &str) -> Option<f64> {
+    text.trim()
+        .replace('\u{2212}', "-")
+        .chars()
+        .filter(|c| *c != ',' && !c.is_whitespace())
+        .collect::<String>()
+        .parse()
+        .ok()
 }
 
 /// A modifier as the DM may type it: `−3`, `-3`, `+2`, `2`.
@@ -1547,10 +1602,18 @@ fn stepper_as(
                 widgets.inactive.bg_stroke = Stroke::new(HAIRLINE_WIDTH, c.field_border);
                 ui.spacing_mut().interact_size.y = density.control();
                 let mut field = egui::DragValue::new(value).range(low..=high).speed(0.1);
-                if shown == Shown::Signed {
-                    field = field
-                        .custom_formatter(|value, _| signed(value as i64))
-                        .custom_parser(parse_signed);
+                match shown {
+                    Shown::Plain => {}
+                    Shown::Signed => {
+                        field = field
+                            .custom_formatter(|value, _| signed(value as i64))
+                            .custom_parser(parse_signed);
+                    }
+                    Shown::Grouped => {
+                        field = field
+                            .custom_formatter(|value, _| grouped_value(value as i64))
+                            .custom_parser(parse_grouped);
+                    }
                 }
                 ui.add(field)
             })
@@ -1706,6 +1769,9 @@ pub fn small_field<R>(
     field_label(ui, label, Type::Small, help, error, add)
 }
 
+/// A field block (layout PR 10): its caption, its control, its help and its error. A focused
+/// control of the block is brought into view with the whole block (`reveal_with`), so the pane's
+/// focus arbiter never leaves the caption or the help cut by the footer or the view's edge.
 fn field_label<R>(
     ui: &mut Ui,
     label: &str,
@@ -1714,9 +1780,34 @@ fn field_label<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
+    let top = ui.cursor().top();
+    let layer = ui.layer_id();
+    let count = |ui: &Ui| {
+        ui.ctx()
+            .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
+    };
+    let first = count(ui);
     field_caption(ui, label, role);
     let inner = add(ui);
-    field_feedback(ui, help, error);
+    let last = count(ui);
+    let bottom = field_feedback(ui, help, error);
+    // Only a focused control of this block: one lookup, nothing that grows with the form.
+    if let Some(focused) = ui.memory(|memory| memory.focused())
+        && ui.ctx().viewport(|viewport| {
+            viewport
+                .this_pass
+                .widgets
+                .order(focused)
+                .is_some_and(|(at_layer, at)| at_layer == layer && (first..last).contains(&at))
+        })
+    {
+        let span = ui.max_rect();
+        reveal_with(
+            ui,
+            focused,
+            Rect::from_min_max(pos2(span.left(), top), pos2(span.right(), bottom)),
+        );
+    }
     inner
 }
 
@@ -1734,7 +1825,9 @@ fn field_caption(ui: &mut Ui, label: &str, role: Type) {
 /// The field's help and error, then its own space: `L` from the last line of help or error to the
 /// next thing, so help never reads as the next field's (N3); `XS` more when it has neither. A
 /// caller adds no space after a field.
-fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) {
+///
+/// Returns the block's bottom: its last line of help or error, else its control's.
+fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) -> f32 {
     let mut last = None;
     if let Some(text) = help {
         last = Some(self::help(ui, text).rect.bottom());
@@ -1743,8 +1836,15 @@ fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) {
         last = Some(tone_message(ui, Tone::Error, error).rect.bottom());
     }
     match last {
-        Some(bottom) => space(ui, bottom + L - ui.cursor().top()),
-        None => space(ui, XS),
+        Some(bottom) => {
+            space(ui, bottom + L - ui.cursor().top());
+            bottom
+        }
+        None => {
+            let bottom = ui.min_rect().bottom();
+            space(ui, XS);
+            bottom
+        }
     }
 }
 
@@ -3607,8 +3707,16 @@ const REVEAL_WITH: &str = "reveal_with";
 /// after its words; a rect from an earlier pass is not used.
 pub(super) fn reveal_with(ui: &Ui, control: Id, rect: Rect) {
     let pass = ui.ctx().cumulative_pass_nr();
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(control.with(REVEAL_WITH), (pass, rect)));
+    // Words set for the control earlier in this pass (its field's caption and help) stay: the
+    // rect is their union.
+    ui.ctx().data_mut(|data| {
+        let key = control.with(REVEAL_WITH);
+        let rect = match data.get_temp::<(u64, Rect)>(key) {
+            Some((set, before)) if set == pass => before.union(rect),
+            _ => rect,
+        };
+        data.insert_temp(key, (pass, rect));
+    });
 }
 
 /// What to bring into view for the focused control `id`, whose own rect is `own`: with the
@@ -4545,19 +4653,6 @@ pub fn side_panel_width(available: f32) -> f32 {
     (available * 0.36).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
 }
 
-/// A panel's title row with its close control.
-pub fn panel_header(ui: &mut Ui, title: &str, close: &str) -> bool {
-    let mut closed = false;
-    // The control first, and the title in what is left. A long title wraps.
-    ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-        closed = icon_button(ui, icons::CLOSE, close).clicked();
-        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
-            ui.add(egui::Label::new(Type::Heading.rich(ui, title).color(colors().text)).wrap());
-        });
-    });
-    closed
-}
-
 fn phosphor_icon(ui: &Ui, rect: Rect, icon: &str, color: Color32) {
     ui.painter().text(
         rect.center(),
@@ -4603,9 +4698,23 @@ pub fn section_with_id<R>(
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
+    section_opened(ui, id, title, None, add)
+}
+
+/// `section_with_id` whose owner opens (`Some(true)`) or closes (`Some(false)`) it this frame,
+/// as a search that shows only its matches does; `None` leaves it as the DM left it. Its header
+/// says the state it is drawn in to a screen reader either way.
+pub fn section_opened<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    title: impl Into<egui::WidgetText>,
+    open: Option<bool>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::CollapsingResponse<R> {
     let response = egui::CollapsingHeader::new(title)
         .id_salt(id)
         .icon(section_icon)
+        .open(open)
         .show(ui, add);
     with_expanded(ui, response)
 }
@@ -5734,6 +5843,120 @@ mod tests {
         for (typed, read) in [("\u{2212}3", -3.0), ("-3", -3.0), ("+2", 2.0), ("2", 2.0)] {
             assert_eq!(parse_signed(typed), Some(read), "{typed}");
         }
+        // The grouped stepper (M-P0 item 8, the group editor's member count): a count shows its
+        // digits grouped, `1,000` stays `1,000`, and reads back with or without the commas.
+        for (value, shown) in [(1_000, "1,000"), (12_345, "12,345"), (999, "999"), (1, "1")] {
+            let ctx = egui::Context::default();
+            super::super::theme::install(&ctx);
+            ctx.enable_accesskit();
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mut value = value;
+                    grouped_stepper(ui, "How many", &mut value, 1..=99_999);
+                });
+            });
+            let painted: Vec<String> = output
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                painted.iter().any(|text| text == shown),
+                "{value} shows {shown}: {painted:?}"
+            );
+            let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+            let decrease = nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Decrease How many"))
+                .map(|(_, node)| node.is_disabled());
+            assert_eq!(decrease, Some(value == 1), "{value}: − at its limit only");
+        }
+        for (typed, read) in [
+            ("1,000", 1_000.0),
+            ("1000", 1_000.0),
+            ("12 345", 12_345.0),
+            (" 7 ", 7.0),
+        ] {
+            assert_eq!(parse_grouped(typed), Some(read), "{typed}");
+        }
+        // Review of PR 626 (P2): typed, not only painted and parsed. The DM clicks the count,
+        // types `1,000` over it and leaves: the value is 1000. While typing, the field keeps
+        // exactly the typed words (the caret stays at their end), and Undo gives back fewer of
+        // them, not a reformatted number.
+        use egui_kittest::kittest::Queryable;
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(400.0, 120.0))
+            .build_ui_state(
+                |ui, value: &mut i64| {
+                    grouped_stepper(ui, "How many", value, 1..=99_999);
+                },
+                7_i64,
+            );
+        super::super::theme::install(&h.ctx);
+        h.run_steps(2);
+        // A pointer click on the count opens it for typing.
+        let at = h.get_by_label("How many").rect().center();
+        h.hover_at(at);
+        h.run_steps(1);
+        for pressed in [true, false] {
+            h.event(egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.run_steps(1);
+        }
+        h.run_steps(1);
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        h.run_steps(1);
+        // While it is open for typing, the count keeps its typed words under its id (egui's
+        // drag value), and its text edit state holds the caret.
+        let id = h
+            .ctx
+            .memory(|memory| memory.focused())
+            .expect("the count has the keyboard");
+        let field = |h: &egui_kittest::Harness<'_, i64>| {
+            h.ctx
+                .data(|data| data.get_temp::<String>(id))
+                .unwrap_or_default()
+        };
+        let caret = |h: &egui_kittest::Harness<'_, i64>| {
+            egui::text_edit::TextEditState::load(&h.ctx, id)
+                .and_then(|state| state.cursor.char_range())
+                .map(|range| range.primary.index)
+        };
+        let mut typed = String::new();
+        for letter in "1,000".chars() {
+            h.event(egui::Event::Text(letter.to_string()));
+            h.run_steps(1);
+            typed.push(letter);
+            assert_eq!(
+                (field(&h), caret(&h)),
+                (typed.clone(), Some(typed.chars().count())),
+                "the field keeps the typed words while typing, the caret at their end"
+            );
+        }
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        h.run_steps(1);
+        assert_eq!(
+            field(&h),
+            "7",
+            "Undo gives back the words from before the typing, not a reformatted number"
+        );
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        h.run_steps(1);
+        for letter in typed.chars() {
+            h.event(egui::Event::Text(letter.to_string()));
+            h.run_steps(1);
+        }
+        assert_eq!(field(&h), "1,000", "typed again");
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(*h.state(), 1_000, "typed `1,000`, the value is 1000");
     }
 
     #[test]
@@ -6075,8 +6298,8 @@ mod tests {
         );
     }
 
-    /// Every section form says to a screen reader whether it is open, and the state follows a
-    /// click on its own header only.
+    /// Every section form says to a screen reader whether it is open, also one its owner opens,
+    /// and the state follows a click on its own header only.
     #[test]
     fn a_section_says_whether_it_is_open() {
         let mut harness = egui_kittest::Harness::builder()
@@ -6085,12 +6308,16 @@ mod tests {
                 let _ = section(ui, "Details", |ui| ui.label("Inside details"));
                 let _ = section_with_id(ui, "notes", "3 notes", |ui| ui.label("Inside notes"));
                 let _ = quiet_section(ui, "Technical", |ui| ui.label("Inside technical"));
+                // A section its owner opens (a History run read from a link).
+                let _ = section_opened(ui, "runs", "2 runs", Some(true), |ui| {
+                    ui.label("Inside runs")
+                });
             });
         super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         let expanded = |harness: &egui_kittest::Harness<'_>| {
             use egui_kittest::kittest::{NodeT, Queryable};
-            ["Details", "3 notes", "Technical"].map(|name| {
+            ["Details", "3 notes", "Technical", "2 runs"].map(|name| {
                 harness
                     .get_by_label(name)
                     .accesskit_node()
@@ -6098,7 +6325,11 @@ mod tests {
                     .is_expanded()
             })
         };
-        assert_eq!(expanded(&harness), [Some(false); 3], "closed at first");
+        assert_eq!(
+            expanded(&harness),
+            [Some(false), Some(false), Some(false), Some(true)],
+            "closed at first; the owner's open one says it is open"
+        );
         {
             use egui_kittest::kittest::Queryable;
             harness.get_by_label("3 notes").click();
@@ -6106,7 +6337,7 @@ mod tests {
         harness.run_steps(3);
         assert_eq!(
             expanded(&harness),
-            [Some(false), Some(true), Some(false)],
+            [Some(false), Some(true), Some(false), Some(true)],
             "only the clicked section opens"
         );
     }

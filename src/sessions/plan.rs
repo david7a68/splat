@@ -1,13 +1,14 @@
 //! The Session page's plan: its rows (planned, open and played fights, groups and events), the
 //! Add strip, a row's menu and its opened detail.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
-use super::{Plan, Sessions, kept, plan_summary, wrapped_words};
+use super::{Plan, Sessions, kept, kept::PlanKind, plan_summary, wrapped_words};
 use crate::{
     design::{
         self, Action, Density, Status, Tone, Type, colors, icons,
         outcome::{
             Choice, Fault as MessageFault, FaultMessage, KeptLine, KeptOutcome, MessageChoice,
-            Messages, Notice, Outcome, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+            Messages, Notice, Outcome, PaneFrame, PlacedResult, Said, Sentence, Severity, UndoStep,
+            Verb,
         },
     },
     encounter_run::fight_summary,
@@ -1737,11 +1738,36 @@ struct Shown {
 /// What a scene act could not do, while the note's words are the words it met.
 #[derive(Debug)]
 pub(super) struct Fault {
-    pub(super) words: String,
+    pub(super) what: SceneFault,
     met: String,
     place: Place,
     /// The act waits in the draft: its words end when the note is saved.
     waits: bool,
+}
+
+/// What a scene act could not do.
+#[derive(Debug)]
+pub(super) enum SceneFault {
+    /// It was refused and wrote nothing: what was not done to which scene, why, and the next
+    /// step (ruling M7).
+    Refused(design::results::Refusal),
+    /// It is in the draft, and the note could not be saved: it waits for the next save.
+    NotSaved,
+}
+
+impl MessageFault for SceneFault {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::Refused(refusal) => kept::RefusalFault(refusal).severity(),
+            Self::NotSaved => Severity::NotSaved,
+        }
+    }
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::Refused(refusal) => refusal.words(),
+            Self::NotSaved => crate::sentence!("Notes not saved."),
+        }
+    }
 }
 
 /// What the scenes' fold measured on the last frame. Scenes fold first, so that the next
@@ -1844,14 +1870,12 @@ pub(super) struct Scenes {
     field: Option<design::AddField>,
     /// `Scene added to tonight.`
     pub(super) added: Option<NoteUndo>,
-    /// When the scene in `added` was added: its result's footer order.
-    added_order: design::ResultOrder,
+    /// The words of the scene in `added`, which a refused Undo of it names.
+    added_words: String,
     /// A scene taken out of tonight: its line's place among the plan's lines, its words, and
     /// its Undo. The place is the line that now follows it, which stays while the note is as the
     /// act left it, also when a fight before it is played.
     removed: Option<(usize, String, NoteUndo)>,
-    /// When the scene in `removed` was taken out: its result's footer order.
-    removed_order: design::ResultOrder,
     pub(super) fault: Option<Fault>,
     fold: Fold,
     /// The Scene field had focus on the last frame.
@@ -4023,8 +4047,7 @@ impl Sessions {
 
     /// A planned fight's `Edit encounter` that opened nothing: why, on the page where the DM acted.
     pub fn encounter_not_opened(&mut self, why: String) {
-        self.notice = Some((Tone::Warning, why));
-        self.notice_session = None;
+        self.say(Tone::Warning, why, None);
     }
 
     /// Lead ruling, round 26 (one pane, one footer): a plan group's removal result and its Undo
@@ -4039,9 +4062,10 @@ impl Sessions {
         }
     }
 
-    fn removed_group_message(
+    fn removed_group_message<'f>(
         &self,
-        messages: &mut Messages<'_, super::SessionAct>,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, super::SessionAct>,
         session: Option<Uuid>,
     ) {
         let Some((id, _, _, _, _, name)) = &self.removed_group else {
@@ -4050,12 +4074,78 @@ impl Sessions {
         if *id != session {
             return;
         }
-        kept_at(
-            messages,
-            self.removed_group_order,
+        self.plan_line(frame, messages, PlanKind::GroupRemoved, || {
             Said::new(crate::sentence!("Removed “{}” from tonight.", name))
-                .undo(UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::UndoGroupRemove))),
-        );
+                .undo(
+                    UndoStep::of(Verb::Remove, name.as_str())
+                        .pressed_as(pressed(FooterAct::UndoGroupRemove)),
+                )
+                .into()
+        });
+    }
+
+    /// The owner of the plan's result of `kind` in this campaign's session folder.
+    fn plan_owner(folder: Option<&std::path::Path>, kind: PlanKind) -> kept::PlanOwner {
+        kept::PlanOwner {
+            root: folder.map(std::path::Path::to_path_buf).unwrap_or_default(),
+            kind,
+        }
+    }
+
+    /// A plan result of `kind` was just done: the plan's store issues its order now.
+    fn mark_plan(
+        marks: &mut design::Results<kept::PlanOwner, kept::PlanMark>,
+        folder: Option<&std::path::Path>,
+        kind: PlanKind,
+    ) {
+        marks.record(kept::PlanMark(Self::plan_owner(folder, kind)));
+    }
+
+    /// Each plan result whose data is gone (its Undo, the note's next edit, another act of its
+    /// kind, a campaign switch) ends in the plan's store, before the footer is made.
+    fn end_plan_marks(&mut self) {
+        let held = [
+            (PlanKind::SceneAdded, self.scenes.added.is_some()),
+            (PlanKind::SceneRemoved, self.scenes.removed.is_some()),
+            (PlanKind::GroupRemoved, self.removed_group.is_some()),
+            (PlanKind::DeletedRun, self.deleted_run.is_some()),
+        ];
+        for (kind, held) in held {
+            if !held {
+                let owner = Self::plan_owner(self.folder.as_deref(), kind);
+                self.plan_marks.owner_changed(&owner);
+            }
+        }
+    }
+
+    /// This frame's footer line of the plan's result of `kind`, made from its data by `make`,
+    /// with the order its act's store issued and that entry's ticket.
+    fn plan_line<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, super::SessionAct>,
+        kind: PlanKind,
+        make: impl FnOnce() -> KeptOutcome<super::SessionAct>,
+    ) {
+        let owner = Self::plan_owner(self.folder.as_deref(), kind);
+        if let Some(shown) = self.plan_marks.get(&owner) {
+            messages.kept(shown.outcome(frame, |_| make()));
+        }
+    }
+
+    /// The Undo of the plan's result its footer line's `ticket` names, by `undo`, which says
+    /// whether it was done: a result replaced or ended since is gone, and nothing runs.
+    fn undo_plan_mark(
+        &mut self,
+        ticket: Option<design::results::Ticket>,
+        undo: impl FnOnce(&mut Self) -> bool,
+    ) {
+        let Some(ticket) = ticket else {
+            return;
+        };
+        let mut marks = std::mem::take(&mut self.plan_marks);
+        let _ = marks.undo_by(ticket, |_| if undo(self) { Ok(()) } else { Err(()) });
+        self.plan_marks = marks;
     }
 
     /// G118: the one end of the plan's kept lines. Only the lines of the planned fights in
@@ -4070,7 +4160,7 @@ impl Sessions {
     /// replaces a walk between Encounters, Timeline and the note.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw egui calls, and a by-owner Undo (design::results::STAGED_ALLOWS)"
     )]
     pub(super) fn plan_pane(
         &mut self,
@@ -4297,6 +4387,7 @@ impl Sessions {
         // message footer, which the part places `S` below the rows (pinned only when the rows
         // fill the pane), so a result never moves a row or the Add strip. On the session page
         // the page's own messages share this footer: one footer for what the DM sees.
+        self.end_plan_marks();
         let frame = PaneFrame::new(ui);
         let mut messages = match page {
             Some((settings, note)) => {
@@ -4328,20 +4419,9 @@ impl Sessions {
                 )),
             );
         }
-        if plan.group_discarded
-            && here
-            && let Some(order) = plan.group_discarded_order
-        {
-            let name = plan.group_discarded_name.clone();
-            kept_at(
-                &mut messages,
-                order,
-                KeptOutcome::Notice(
-                    Notice::new(crate::sentence!("{} draft discarded.", name)),
-                    UndoStep::of(Verb::Discard, name)
-                        .pressed_as(pressed(FooterAct::UndoGroupDiscard)),
-                ),
-            );
+        // M0244: the Encounters store's own line of the discard, with its order and ticket.
+        if here && let Some(line) = (plan.group_discard)(&frame) {
+            messages.kept(line.map(|()| pressed(FooterAct::UndoGroupDiscard)));
         }
         if let Some(problem) = &self.rename_problem {
             messages.outcome(Outcome::Refused(as_sentence(problem)));
@@ -4350,8 +4430,8 @@ impl Sessions {
             pressed(FooterAct::File(act))
         });
         self.plan_messages(&frame, &mut messages, book, session, plan, &planned_results);
-        self.scene_messages(&mut messages, shown);
-        self.removed_group_message(&mut messages, session);
+        self.scene_messages(&frame, &mut messages, shown);
+        self.removed_group_message(&frame, &mut messages, session);
         // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
         self.rewards.see(self.draft.as_ref(), session, book);
         if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
@@ -4792,9 +4872,15 @@ impl Sessions {
             match press.id {
                 super::SessionAct::Plan(act) => match act {
                     FooterAct::GoToGroup => self.select(self.group_session),
-                    FooterAct::UndoGroupDiscard => self.wants_group_undo = true,
-                    FooterAct::UndoGroupRemove => self.undo_group_remove(session),
-                    FooterAct::UndoDeletedRun => self.undo_deleted_run(),
+                    FooterAct::UndoGroupDiscard => self.wants_group_undo = press.ticket,
+                    FooterAct::UndoGroupRemove => self.undo_plan_mark(press.ticket, |this| {
+                        this.undo_group_remove(session);
+                        this.removed_group.is_none()
+                    }),
+                    FooterAct::UndoDeletedRun => self.undo_plan_mark(press.ticket, |this| {
+                        this.undo_deleted_run();
+                        this.deleted_run.is_none()
+                    }),
                     FooterAct::UndoAdd => {
                         if let Some(ticket) = press.ticket
                             && let Ok((added, ())) =
@@ -4814,6 +4900,18 @@ impl Sessions {
                         if let Some(ticket) = press.ticket {
                             book.undo_restores(ticket);
                             self.end_plan_add();
+                        }
+                    }
+                    // A scene's footer Undo reaches only the result its line showed; the act
+                    // then takes the scene's data, whatever its save does.
+                    FooterAct::Scene(act @ (SceneAct::UndoAdd | SceneAct::UndoRemove(_))) => {
+                        let mut reached = false;
+                        self.undo_plan_mark(press.ticket, |_| {
+                            reached = true;
+                            true
+                        });
+                        if reached {
+                            scene_act = Some(act);
                         }
                     }
                     FooterAct::Scene(act) => scene_act = Some(act),
@@ -4888,7 +4986,11 @@ impl Sessions {
             let before = draft.body.clone();
             unlink_group(&mut draft.body, &name);
             draft.edited();
-            self.removed_group_order = design::ResultOrder::issue();
+            Self::mark_plan(
+                &mut self.plan_marks,
+                self.folder.as_deref(),
+                PlanKind::GroupRemoved,
+            );
             self.removed_group =
                 Some((session, position, before, draft.body.clone(), height, name));
             self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
@@ -4996,13 +5098,17 @@ impl Sessions {
         if drawn { place } else { Place::Footer }
     }
 
-    /// The scene act's words under the place where the DM acted, while they show there.
+    /// The scene act's refusal under the place where the DM acted, while it shows there.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a refused scene act, said where the DM acted (Ban::Body)"
+    )]
     fn row_fault(&self, ui: &mut egui::Ui, place: Place, shown: Shown) {
         if let Some(fault) = &self.scenes.fault
             && shown.fault == Some(place)
         {
             design::gap(ui, design::Gap::XS);
-            design::message(ui, Tone::Warning, &fault.words);
+            let _ = design::outcome::row_fault(ui, &fault.what);
         }
     }
 
@@ -5091,8 +5197,13 @@ impl Sessions {
         Arc::clone(cache.model.as_ref().expect("the model was just built"))
     }
 
-    /// `Removed “…” from tonight.` with `Undo remove`, at `place`, while the note is as the
-    /// removal left it. A finished change: the success tone.
+    /// `Removed “…” from tonight.` with `Undo remove …`, at `place`, while the note is as the
+    /// removal left it. A finished change: the success tone. Its Undo is the note's, held with
+    /// the scene's data (`Scenes::removed`), so it is a placed result, not a kept line.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a removed scene: its result and its Undo where its row was (Ban::Body)"
+    )]
     fn removed_scene_message(&self, ui: &mut egui::Ui, place: Place, act: &mut Option<SceneAct>) {
         let Some((_, words, undo)) = &self.scenes.removed else {
             return;
@@ -5101,51 +5212,56 @@ impl Sessions {
             return;
         }
         design::gap(ui, design::Gap::S);
-        if design::undo_message(
-            ui,
-            Tone::Success,
-            &format!("Removed “{words}” from tonight."),
-            "Undo remove",
-        ) {
-            *act = Some(SceneAct::UndoRemove(place));
+        if let Some(pressed) = PlacedResult::new(
+            crate::sentence!("Removed “{}” from tonight.", words),
+            UndoStep::of(Verb::Remove, words.as_str()).pressed_as(SceneAct::UndoRemove(place)),
+        )
+        .show(ui)
+        {
+            *act = Some(pressed);
         }
     }
 
     /// The scenes' results whose own place is not drawn, in the plan's message footer
     /// (`shown_at`): the Scene field's once it closes, a row's while the scenes fold, and a
     /// removal whose row's place is gone. The Undo stays the note's, so it stays in reach.
-    fn scene_messages(&self, messages: &mut Messages<'_, super::SessionAct>, shown: Shown) {
+    fn scene_messages<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, super::SessionAct>,
+        shown: Shown,
+    ) {
         if let Some(fault) = &self.scenes.fault
             && shown.fault == Some(Place::Footer)
         {
-            messages.outcome(Outcome::Refused(as_sentence(&fault.words)));
+            messages.outcome(FaultMessage::new(&fault.what));
         }
         if shown.added == Some(Place::Footer)
             && let Some(undo) = &self.scenes.added
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
-            kept_at(
-                messages,
-                self.scenes.added_order,
-                Said::new(crate::sentence!("Scene added to tonight.")).undo(
-                    UndoStep::of(Verb::Add, "scene")
-                        .pressed_as(pressed(FooterAct::Scene(SceneAct::UndoAdd))),
-                ),
-            );
+            self.plan_line(frame, messages, PlanKind::SceneAdded, || {
+                Said::new(crate::sentence!("Scene added to tonight."))
+                    .undo(
+                        UndoStep::of(Verb::Add, "scene")
+                            .pressed_as(pressed(FooterAct::Scene(SceneAct::UndoAdd))),
+                    )
+                    .into()
+            });
         }
         if shown.removed == Some(Place::Footer)
             && let Some((_, words, undo)) = &self.scenes.removed
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
-            kept_at(
-                messages,
-                self.scenes.removed_order,
-                Said::new(crate::sentence!("Removed “{}” from tonight.", words)).undo(
-                    UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::Scene(
-                        SceneAct::UndoRemove(Place::Footer),
-                    ))),
-                ),
-            );
+            self.plan_line(frame, messages, PlanKind::SceneRemoved, || {
+                Said::new(crate::sentence!("Removed “{}” from tonight.", words))
+                    .undo(
+                        UndoStep::of(Verb::Remove, words.as_str()).pressed_as(pressed(
+                            FooterAct::Scene(SceneAct::UndoRemove(Place::Footer)),
+                        )),
+                    )
+                    .into()
+            });
         }
     }
 
@@ -5214,9 +5330,14 @@ impl Sessions {
         }
     }
 
-    /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, in the room the
-    /// open field keeps for its result (R30), so neither the field nor `Add` moves for it.
-    /// `undo`: Undo was pressed.
+    /// The Scene field's fault, and `Scene added to tonight.` with `Undo add scene`, in the room
+    /// the open field keeps for its result (R30), so neither the field nor `Add` moves for it.
+    /// `undo`: Undo was pressed. Its Undo is the note's (`Scenes::added`), as the footer's
+    /// line of the same result says it (`scene_messages`).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "an added scene: its result and its Undo under the open Scene field (Ban::Body)"
+    )]
     fn field_result(&self, ui: &mut egui::Ui, shown: Shown, undo: &mut bool) {
         self.row_fault(ui, Place::Field, shown);
         if shown.added == Some(Place::Field)
@@ -5224,22 +5345,18 @@ impl Sessions {
             && self.draft.as_ref().is_some_and(|draft| added.live(draft))
         {
             design::gap(ui, design::Gap::XS);
-            *undo |= design::undo_message(
-                ui,
-                Tone::Success,
-                "Scene added to tonight.",
-                "Undo add scene",
-            );
+            *undo |= PlacedResult::new(
+                crate::sentence!("Scene added to tonight."),
+                UndoStep::of(Verb::Add, "scene").pressed_as(()),
+            )
+            .show(ui)
+            .is_some();
         }
     }
 
     /// One scene act, through the note's one act path: it follows the disk, changes the one line
     /// that the row was drawn from and saves at once. What it could not do shows where the DM
     /// acted. An act whose save failed keeps its Undo: the fragment waits in the draft.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn scene_act(&mut self, act: SceneAct, session: Option<Uuid>) {
         if let SceneAct::StartFight(fight) = act {
             self.wants_start_fight = Some(fight);
@@ -5252,67 +5369,133 @@ impl Sessions {
         let (Some(draft), Some(note)) = (&mut self.draft, session) else {
             return;
         };
+        // The session as a refusal names it.
+        let within = self
+            .notes
+            .iter()
+            .find(|one| one.id == note)
+            .map(crate::sessions::Note::label)
+            .and_then(design::results::Name::new)
+            .unwrap_or(design::results::Name::fallback(
+                design::results::Fallback::ThatSession,
+            ));
         let scenes = &mut self.scenes;
+        let (marks, folder) = (&mut self.plan_marks, self.folder.as_deref());
         scenes.fault = None;
-        let (result, place) = match act {
+        // What the act would not have done, to which scene, when it is refused.
+        let scene = |words: &str| {
+            design::results::Thing::new(
+                design::results::Kind::Scene,
+                design::results::Name::new(words).unwrap_or(design::results::Name::fallback(
+                    design::results::Fallback::ThisScene,
+                )),
+            )
+        };
+        use design::results::FailedAct;
+        let (result, place, failed) = match act {
             SceneAct::StartFight(_) | SceneAct::AddToLog(..) => return,
             SceneAct::Add(words) => {
                 let result = draft.apply(note, Apply::Now, |text| Some(add_scene(text, &words)));
+                let failed = FailedAct::NotAdded {
+                    what: scene(&plain_links(&words)),
+                    to: within.clone(),
+                };
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.added = Some(undo.clone());
-                    scenes.added_order = design::ResultOrder::issue();
+                    scenes.added_words = plain_links(&words);
+                    Self::mark_plan(marks, folder, PlanKind::SceneAdded);
                     if let Some(field) = &mut scenes.field {
                         field.clear();
                         field.focus = true;
                     }
                 }
-                (result.map(drop), Place::Field)
+                (result.map(drop), Place::Field, (failed, false))
             }
-            SceneAct::Tick(slot, task) => (
-                draft
-                    .apply(note, Apply::Now, |text| {
-                        change_line(
-                            text,
-                            task.at,
-                            &task.line,
-                            Some(&ticked(&task.line, !task.done)),
-                        )
-                    })
-                    .map(drop),
-                Place::Row(slot),
-            ),
+            SceneAct::Tick(slot, task) => {
+                let what = scene(&plain_links(&task.words));
+                let within = within.clone();
+                let failed = if task.done {
+                    FailedAct::NotUnticked { what, within }
+                } else {
+                    FailedAct::NotTicked { what, within }
+                };
+                let result = draft.apply(note, Apply::Now, |text| {
+                    change_line(
+                        text,
+                        task.at,
+                        &task.line,
+                        Some(&ticked(&task.line, !task.done)),
+                    )
+                });
+                (result.map(drop), Place::Row(slot), (failed, false))
+            }
             SceneAct::Remove(slot, line, task) => {
                 let result = draft.apply(note, Apply::Now, |text| {
                     change_line(text, task.at, &task.line, None)
                 });
+                let failed = FailedAct::NotRemoved {
+                    what: scene(&plain_links(&task.words)),
+                    from: within.clone(),
+                };
                 if let Ok(undo) | Err(ActFault::NotSaved(_, undo)) = &result {
                     scenes.removed = Some((line, plain_links(&task.words), undo.clone()));
-                    scenes.removed_order = design::ResultOrder::issue();
+                    Self::mark_plan(marks, folder, PlanKind::SceneRemoved);
                 }
-                (result.map(drop), Place::Row(slot))
+                (result.map(drop), Place::Row(slot), (failed, false))
             }
+            // The Undo of an add takes the scene back out of the note.
             SceneAct::UndoAdd => (
                 scenes.added.take().map_or(Ok(()), |undo| undo.undo(draft)),
                 Place::Field,
+                (
+                    FailedAct::NotRemoved {
+                        what: scene(&scenes.added_words),
+                        from: within.clone(),
+                    },
+                    true,
+                ),
             ),
-            SceneAct::UndoRemove(place) => (
-                scenes
-                    .removed
-                    .take()
-                    .map_or(Ok(()), |(_, _, undo)| undo.undo(draft)),
-                place,
-            ),
+            SceneAct::UndoRemove(place) => {
+                let removed = scenes.removed.take();
+                let failed = FailedAct::NotPutBack {
+                    what: scene(removed.as_ref().map_or("", |(_, words, _)| words.as_str())),
+                    into: within.clone(),
+                };
+                (
+                    removed.map_or(Ok(()), |(_, _, undo)| undo.undo(draft)),
+                    place,
+                    (failed, true),
+                )
+            }
         };
         if let Err(fault) = result {
+            let (failed, undo) = failed;
+            let what = if matches!(fault, ActFault::NotSaved(..)) {
+                SceneFault::NotSaved
+            } else {
+                let (cause, step) = kept::note_cause(&fault, undo);
+                SceneFault::Refused(design::results::Refusal::new(
+                    failed,
+                    cause,
+                    design::results::Recovery::First(step),
+                ))
+            };
             scenes.fault = Some(Fault {
-                words: fault.words().to_owned(),
                 met: draft.body.clone(),
                 place,
-                waits: matches!(fault, ActFault::NotSaved(..)),
+                waits: matches!(what, SceneFault::NotSaved),
+                what,
             });
         }
     }
 
+    /// `Removed “…” from tonight.` with `Undo remove …`, at the removed fight's place, while
+    /// the note is as the removal left it. Its Undo is the note's, held with the fight's data
+    /// (`removed_fight`), so it is a placed result, not a kept line.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a removed fight: its result and its Undo where its row was (Ban::Body)"
+    )]
     fn removed_fight_message(&mut self, ui: &mut egui::Ui, session: Option<Uuid>, position: usize) {
         let Some((id, at, name, undo)) = &self.removed_fight else {
             return;
@@ -5324,12 +5507,13 @@ impl Sessions {
             return;
         }
         design::gap(ui, design::Gap::S);
-        if design::undo_message(
-            ui,
-            Tone::Success,
-            &format!("Removed “{name}” from tonight."),
-            "Undo remove",
-        ) {
+        if PlacedResult::new(
+            crate::sentence!("Removed “{}” from tonight.", name),
+            UndoStep::of(Verb::Remove, name.as_str()).pressed_as(()),
+        )
+        .show(ui)
+        .is_some()
+        {
             if let Some(draft) = &mut self.draft {
                 let _ = undo.undo(draft);
             }
@@ -5354,17 +5538,17 @@ impl Sessions {
 
     /// The deletion's result. While it shows, it replaces the result of the removal action it
     /// follows, when that removal is of this run's own event.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn record_deleted_run(
         &mut self,
         book: &Book,
         deleted: crate::encounter_run::DeletedRun,
         run: Option<Uuid>,
     ) {
-        self.deleted_run_order = design::ResultOrder::issue();
+        Self::mark_plan(
+            &mut self.plan_marks,
+            self.folder.as_deref(),
+            PlanKind::DeletedRun,
+        );
         self.deleted_run = Some((deleted, removal_replaced_by(book, run)));
         self.wants_runs_refresh = true;
     }
@@ -5403,24 +5587,22 @@ impl Sessions {
         })
     }
 
-    fn deleted_run_message(&self, messages: &mut Messages<'_, super::SessionAct>) {
+    fn deleted_run_message<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, super::SessionAct>,
+    ) {
         if let Some((tone, words)) = self.deleted_run_words() {
             let undo =
                 UndoStep::of(Verb::Delete, "run").pressed_as(pressed(FooterAct::UndoDeletedRun));
             let words = as_sentence(&words);
-            if tone == Tone::Success {
-                kept_at(
-                    messages,
-                    self.deleted_run_order,
-                    Said::new(words).undo(undo),
-                );
-            } else {
-                kept_at(
-                    messages,
-                    self.deleted_run_order,
-                    KeptOutcome::Fault(FaultMessage::new(&PlanFault::Check(words)), undo),
-                );
-            }
+            self.plan_line(frame, messages, PlanKind::DeletedRun, || {
+                if tone == Tone::Success {
+                    Said::new(words).undo(undo).into()
+                } else {
+                    KeptOutcome::Fault(FaultMessage::new(&PlanFault::Check(words)), undo)
+                }
+            });
         }
     }
 
@@ -5436,7 +5618,7 @@ impl Sessions {
         plan: &Plan<'_>,
         planned: &[(String, bool)],
     ) {
-        self.deleted_run_message(messages);
+        self.deleted_run_message(frame, messages);
         // The Add result: its owner update (`settle_timed`) ended it if it is over (its life, the
         // DM's next edit, another session), so this frame finds its kept line, made again only
         // when the store, the book or the saved-run facts changed, and presents it.
@@ -7251,9 +7433,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -7846,9 +8026,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -8189,9 +8367,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -8272,9 +8448,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -8383,7 +8557,8 @@ mod tests {
         );
         harness.state_mut().1.add(Kind::Day, Some(note.id));
         harness.run_steps(2);
-        harness.get_by_label("Undo remove").click();
+        // M-N1.1: the Undo names the scene (`UndoStep::of`), as every place showing it does.
+        harness.get_by_label("Undo remove Captain Varra").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         assert_eq!(harness.state().1.events.len(), 1, "the other act stays");
@@ -8468,7 +8643,12 @@ mod tests {
             harness.query_all_by_label(removed).next().is_some(),
             "the removal's Undo stays in reach after the fight before it began"
         );
-        harness.get_by_label("Undo remove").click();
+        // Ruling M9: the only Undo at its place shows its whole form where it fits.
+        assert!(
+            !painted(&harness, "Undo remove Captain Varra").is_empty(),
+            "the removal's Undo shows the scene it puts back"
+        );
+        harness.get_by_label("Undo remove Captain Varra").click();
         harness.run_steps(2);
         assert_eq!(read(), outside, "Undo remove puts back only the scene");
         assert!(
@@ -8495,7 +8675,8 @@ mod tests {
             harness.query_all_by_label(removed).next().is_some(),
             "the removal's Undo stays in reach while the scenes fold"
         );
-        harness.get_by_label("Undo remove").click();
+        // The footer's line of the same result names the scene too.
+        harness.get_by_label("Undo remove Captain Varra").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         // Review of PR 280: the closed rows decide the fold, and a result in the footer never
@@ -8608,7 +8789,11 @@ mod tests {
         harness.run_steps(2);
         harness.get_by_label("Open: Pay the toll").click();
         harness.run_steps(2);
-        assert!(harness.query_by_label("Undo remove").is_none());
+        assert!(
+            harness
+                .query_by_label("Undo remove Captain Varra")
+                .is_none()
+        );
         assert!(read().contains("- [x] Pay the toll") && !read().contains("Captain Varra"));
 
         // Scene, in the strip's More list: Enter adds a task line at the end of the plan, keeps
@@ -8692,7 +8877,10 @@ mod tests {
         assert_eq!(read(), obsidian, "the outside edit stays");
         assert!(
             harness
-                .query_all_by_label("That line changed on disk.")
+                .query_all_by_label(
+                    "The scene “Wait for the tide” was not removed from Session 2: The Crossing. \
+                     The session note changed after the act. Check the session note first."
+                )
                 .next()
                 .is_some(),
             "a refused Undo scene says why after the field closed"
@@ -8714,7 +8902,11 @@ mod tests {
         assert_eq!(read(), changed);
         assert!(
             harness
-                .query_by_label("The note changed on disk. Choose in the note first.")
+                .query_by_label(
+                    "The scene “Pay the toll” was not unticked in Session 2: The Crossing. The \
+                     session note has unsaved words, and its file changed on disk. Choose which \
+                     words to keep in the session note first."
+                )
                 .is_some()
         );
 
@@ -8732,7 +8924,7 @@ mod tests {
         std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
         fs::set_permissions(dir.path(), permissions).unwrap();
         assert_eq!(read(), changed);
-        assert!(harness.query_by_label("Notes not saved").is_some());
+        assert!(harness.query_by_label("Notes not saved.").is_some());
         assert!(
             harness
                 .state()
@@ -8803,9 +8995,15 @@ mod tests {
             "the first scene changed on disk; clicking it must not tick the second scene"
         );
         let fault = page.scenes.fault.as_ref().expect("the act says why");
+        // M-N1.4: a refused scene act is a bounded refusal (ruling M7): the act, the scene and
+        // the session, the cause and the next step.
         assert_eq!(
-            (fault.words.as_str(), fault.place),
-            ("That line changed on disk.", Place::Row((0, 0)))
+            (fault.what.cause().as_str(), fault.place),
+            (
+                "The scene “Talk” was not ticked in Session 1: Review. That line of the session \
+                 note changed. Check the session note first.",
+                Place::Row((0, 0))
+            )
         );
         assert_eq!(
             page.draft.as_ref().unwrap().body,
@@ -8838,7 +9036,10 @@ mod tests {
         page.scene_act(SceneAct::Add("Second".into()), Some(note.id));
         std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
         fs::set_permissions(dir.path(), permissions).unwrap();
-        assert_eq!(page.scenes.fault.as_ref().unwrap().words, "Notes not saved");
+        assert_eq!(
+            page.scenes.fault.as_ref().unwrap().what.cause().as_str(),
+            "Notes not saved."
+        );
         assert!(page.draft.as_ref().unwrap().body.contains("- [ ] Second"));
         page.draft.as_mut().unwrap().save();
         assert!(
@@ -9055,9 +9256,7 @@ mod tests {
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
-                        group_discarded: false,
-                        group_discarded_name: String::new(),
-                        group_discarded_order: None,
+                        group_discard: &|_| None,
                         arrivals_open: false,
                         group_editor: std::cell::RefCell::new(&mut group),
                         blocked: None,
@@ -9484,6 +9683,44 @@ mod tests {
         assert!(
             !sessions.removal_superseded(&book),
             "the new removal of the same event shows its message and Undo remove"
+        );
+        // M-N1.2: the deletion's footer line is the plan store's entry, and its Undo acts by
+        // the line's ticket. A, a deletion, undone by its line; B, a new deletion; a press left
+        // over on A's line reaches nothing, and B's line puts B's run back.
+        let owner = Sessions::plan_owner(sessions.folder.as_deref(), PlanKind::DeletedRun);
+        let ticket = |sessions: &Sessions| {
+            sessions
+                .plan_marks
+                .get(&owner)
+                .expect("the deletion is in the plan's store")
+                .ticket_for_caller_test()
+        };
+        let undo = |this: &mut Sessions| {
+            this.undo_deleted_run();
+            this.deleted_run.is_none()
+        };
+        let run_file = folder.path().join("run.json");
+        sessions.undo_deleted_run();
+        delete(&mut sessions, &book, Some(run));
+        let (a, a_again) = (ticket(&sessions), ticket(&sessions));
+        sessions.undo_plan_mark(Some(a), undo);
+        assert!(run_file.exists(), "A's line puts A's run back");
+        delete(&mut sessions, &book, Some(run));
+        sessions.undo_plan_mark(Some(a_again), undo);
+        assert!(
+            !run_file.exists() && sessions.deleted_run.is_some(),
+            "a press on A's line leaves B alone"
+        );
+        let b = ticket(&sessions);
+        sessions.undo_plan_mark(Some(b), undo);
+        assert!(run_file.exists(), "B's line puts B's run back");
+        // Its data gone another way (the note's next edit), the entry ends before the footer.
+        delete(&mut sessions, &book, Some(run));
+        sessions.deleted_run = None;
+        sessions.end_plan_marks();
+        assert!(
+            sessions.plan_marks.get(&owner).is_none(),
+            "the entry ends with its data"
         );
     }
 }

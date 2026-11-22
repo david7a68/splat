@@ -55,7 +55,7 @@ fn checks(d: &Driver<'_>) -> Vec<crate::timeline::Check> {
 }
 
 /// Faults in the open block's layout (V4, V22, V23): `Encounter checks` is a label above the
-/// table menu; the dice words share the menu's line, or start their own line with their words;
+/// table menu, whose word starts at the label's edge; the dice words share the menu's line, or start their own line with their words;
 /// and the act's result, when there is one, sits on its kept line between the menu's line and
 /// `next`, the first control under it.
 fn block_faults(d: &Driver<'_>, result: Option<&str>, next: &str) -> Vec<String> {
@@ -72,10 +72,16 @@ fn block_faults(d: &Driver<'_>, result: Option<&str>, next: &str) -> Vec<String>
         return vec![format!("the label, the menu or {next:?} is missing")];
     };
     let mut faults = Vec::new();
-    // The menu's target starts at the label's edge, as a field's frame does.
-    if label.bottom() > menu.top() || (label.left() - menu.left()).abs() > 1.0 {
+    // The menu starts its line, so its word starts at the label's text edge (`line_start`, SD1);
+    // its padding hangs left of it.
+    let words = |name: &str, at: egui::Rect| d.painted_rect_in(name, at.expand(1.0));
+    let edges = words("Encounter checks", label).zip(words("On the road", menu));
+    if label.bottom() > menu.top()
+        || !edges.is_some_and(|(label, word)| (label.left() - word.left()).abs() <= 1.0)
+    {
         faults.push(format!(
-            "the label {label:?} is not above the menu {menu:?}"
+            "the label {label:?} is not above the menu {menu:?} with its word at the label's \
+             edge: {edges:?}"
         ));
     }
     match nodes

@@ -549,7 +549,8 @@ pub fn run(d: &mut Driver<'_>) {
             let blocked_at = words
                 .zip(blocked.first())
                 .is_some_and(|(words, (left, _, _))| (left - words.left()).abs() <= 1.0);
-            super::file_links_at_message_words_by_hand(
+            // M-P0 item 9: the member's file line is the typed `FileLine`.
+            super::file_links_at_message_words(
                 d,
                 "Scout (as Goblin Warrior) · line",
                 &campaign.path.join("Encounter Groups/Bridge guards.md"),
