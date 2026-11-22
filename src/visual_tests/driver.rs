@@ -2581,6 +2581,63 @@ impl<'a> Driver<'a> {
         )
     }
 
+    /// Layout L5c (design §5 5b, the whole-member pressure): every row of a measured list
+    /// (`owner`) is whole. `expected` holds, row by row, the words its facts must show, from the
+    /// rows' data (a member's number and name, the stats of its detail line): each must be in a
+    /// text painted whole inside its clip, over the row's facts. A label that its clip hides is
+    /// never painted at all, so the words must be found, not only the painted texts be whole
+    /// (PR 772 review, P1). Every text painted over the facts is also whole and not shortened,
+    /// and the actions start `S` or more after the facts on their own line and end inside the
+    /// row's far edge. Returns whether it holds, and each fault.
+    pub fn measured_rows_whole(&self, owner: &str, expected: &[&[&str]]) -> (bool, String) {
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == owner)
+            .collect();
+        let mut faults = Vec::new();
+        if records.len() != expected.len() {
+            faults.push(format!(
+                "{} rows drawn, {} expected",
+                records.len(),
+                expected.len()
+            ));
+        }
+        for (record, words) in records.iter().zip(expected) {
+            let (mut whole, mut cut, mut elided) = (Vec::new(), Vec::new(), Vec::new());
+            self.each_painted_text(|text, clip| {
+                let bounds = text.visual_bounding_rect();
+                if text.galley.job.text.trim().is_empty() || !record.facts.intersects(bounds) {
+                    return;
+                }
+                let words = text.galley.job.text.replace('\u{a0}', " ");
+                if text.galley.elided {
+                    elided.push(words);
+                } else if clip.expand(1.0).contains_rect(bounds) {
+                    whole.push(words);
+                } else {
+                    cut.push(words);
+                }
+            });
+            let missing: Vec<_> = words
+                .iter()
+                .filter(|word| !whole.iter().any(|text| text.contains(*word)))
+                .collect();
+            let clear = record.action.left() >= record.line.right() + crate::design::S - 0.5
+                && record.action.right() <= record.edge + 0.5;
+            if !missing.is_empty() || !cut.is_empty() || !elided.is_empty() || !clear {
+                faults.push(format!(
+                    "row {}: not shown whole {missing:?} (whole {whole:?}), cut {cut:?}, \
+                     shortened {elided:?}, actions {:?} after the line {:?} inside the edge {}",
+                    record.row, record.action, record.line, record.edge
+                ));
+            }
+        }
+        (
+            !records.is_empty() && faults.is_empty(),
+            format!("{owner}: {} rows whole but {faults:?}", records.len()),
+        )
+    }
+
     /// Every whole row the panes registered in the last completed pass (N12, layout step 11a).
     pub fn registered_rows(&self) -> Vec<egui::Rect> {
         super::ergonomics::row_rects(&self.harness.ctx)

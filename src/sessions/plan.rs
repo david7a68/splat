@@ -632,36 +632,27 @@ fn plan_row_with(
                     words(ui);
                 },
             );
-            // Layout PR 5a-2 (I6): each row's actions start `L` after the plan's widest title, in
-            // its own recipe's width (with its alternates); the spare width lies after them. The
-            // column fits beside the plan's widest recipe. Each title keeps the room and the lines
-            // it had, so where the column does not fit the actions keep the far edge.
+            // Layout PR 5a-2 (I6), L5c: each row's actions start `L` after the plan's widest facts,
+            // in its own recipe's width (with its alternates); the spare width lies after them.
+            // The column fits beside the plan's widest recipe. Each title keeps the room and the
+            // lines it had, so where the column does not fit the actions keep the row's far edge
+            // (`MeasuredColumn`).
             let words_width = title.response.rect.width();
-            let (kept, actions) = plan_columns(ui);
-            // Until a pass has measured the plan (or a row's own recipe grew), the far edge.
-            let facts = kept.max(words_width);
-            // The row's far edge: where its actions end when the plan keeps the far edge.
-            let far_edge = ui.max_rect().right();
-            let room = far_edge - left.x;
-            let column = kept > 0.0
-                && actions >= widths[1] - 0.5
-                && facts + design::L + actions <= room + 0.5;
-            let action_rect = if column {
-                egui::Rect::from_min_size(
-                    egui::pos2(left.x + facts + design::L, left.y),
-                    egui::vec2(widths[1], Density::Read.control()),
-                )
-            } else {
-                egui::Rect::from_min_size(
-                    egui::pos2(far_edge - widths[1], left.y),
-                    egui::vec2(widths[1], Density::Read.control()),
-                )
-            };
-            let mut action_ui = ui.new_child(
-                egui::UiBuilder::new()
-                    .max_rect(action_rect)
-                    .layout(egui::Layout::right_to_left(egui::Align::Center)),
+            let slot = design::action_rows::MeasuredColumn::start(
+                "plan_row_columns",
+                widths[1],
+                words_width,
+            )
+            .slot(
+                ui,
+                egui::Rect::from_min_max(
+                    left,
+                    egui::pos2(ui.max_rect().right(), left.y + Density::Read.control()),
+                ),
+                left.x,
             );
+            let action_rect = slot.rect();
+            let mut action_ui = slot.child(ui);
             action(&mut action_ui);
             ui.spacing_mut().item_spacing.y = 0.0;
             ui.advance_cursor_after_rect(
@@ -690,43 +681,23 @@ fn plan_row_with(
             // The row's facts are every line it drew: its title and its summary (PR 605 review,
             // P1: a short title over a long summary set the column inside the summary).
             let facts_width = words_width.max(summary_rect.right() - left.x);
-            plan_measured(ui, facts_width, widths[1]);
-            #[cfg(any(test, feature = "test-support"))]
-            if action_ui.min_rect().is_positive() {
-                design::action_rows::keep(
-                    ui,
-                    design::action_rows::RowRecord {
-                        owner: "plan",
-                        row: 0,
-                        facts: egui::Rect::from_min_max(
-                            left,
-                            egui::pos2(
-                                left.x + facts_width,
-                                summary_rect.bottom().max(title.response.rect.bottom()),
-                            ),
-                        ),
-                        line: title.response.rect,
-                        action: action_ui.min_rect(),
-                        column: action_rect.left(),
-                        edge: far_edge,
-                        wrapped: !column,
-                    },
-                );
-            }
+            slot.done(
+                ui,
+                "plan",
+                0,
+                egui::Rect::from_min_max(
+                    left,
+                    egui::pos2(
+                        left.x + facts_width,
+                        summary_rect.bottom().max(title.response.rect.bottom()),
+                    ),
+                ),
+                title.response.rect,
+                action_ui.min_rect(),
+            );
         });
     });
     design::register_row(ui, row.response.rect);
-}
-
-/// The plan's columns (`design::action_rows::columns`): its widest facts (each row's title and
-/// summary lines) and its widest action recipe, from its last pass.
-fn plan_columns(ui: &egui::Ui) -> (f32, f32) {
-    design::action_rows::columns(ui, egui::Id::new("plan_row_columns"))
-}
-
-/// Add a drawn row's facts (every line) and its action recipe to this pass's columns.
-fn plan_measured(ui: &egui::Ui, facts: f32, actions: f32) {
-    design::action_rows::measured(ui, egui::Id::new("plan_row_columns"), facts, actions);
 }
 
 /// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words
@@ -8489,50 +8460,81 @@ mod tests {
             .into_iter()
             .filter(|record| record.owner == "plan")
             .collect();
-        // Layout PR 5a-2 (I6): a short title over a short summary, in a wide window: the column
-        // fits, and it starts exactly `L` after the widest facts line.
-        let wide = || egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(1200.0, 400.0),
-            )),
-            ..Default::default()
-        };
-        for _ in 0..3 {
-            let _ = ctx.run(wide(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    plan_row(
-                        ui,
-                        &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
-                        icons::RUN,
-                        |ui| {
-                            ui.label(Type::Body.rich(ui, "Bridge Ambush"));
-                        },
-                        |ui| {
-                            ui.label(Type::Small.rich(ui, "5 party · 2 × Cinder Wolf"));
-                        },
-                        |ui| {
-                            let _ = Action::secondary("Start fight")
+        // Layout PR 5a-2 (I6), PR 772 review (P3): the plan's mixed rows (a fight, a running
+        // fight, a group's Edit, a scene's Add to Log), each with its own recipe (its action's
+        // width), at 960, 1200 and 1920. The column fits at each width: one column for all the
+        // rows, exactly `L` after the widest facts line, and each row's actions start at it.
+        let rows: [(&str, &str, &str, bool); 4] = [
+            (
+                "Bridge Ambush",
+                "5 party · 2 × Cinder Wolf",
+                "Start fight",
+                true,
+            ),
+            ("Mill Fight", "Round 2 · 4 left", "Resume", true),
+            ("Rivals", "3 members · XP 600", "Edit", false),
+            ("The miller talks", "", "Add to Log", false),
+        ];
+        for width in [960.0, 1200.0, 1920.0] {
+            let input = || egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(width, 600.0),
+                )),
+                ..Default::default()
+            };
+            for _ in 0..3 {
+                let _ = ctx.run(input(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        for (title, summary, act, secondary) in rows {
+                            let action = || {
+                                if secondary {
+                                    Action::secondary(act)
+                                } else {
+                                    Action::quiet(act)
+                                }
                                 .density(Density::Read)
-                                .show(ui);
-                        },
-                    );
+                            };
+                            let own = action().natural_width(ui);
+                            plan_row(
+                                ui,
+                                &[design::FORM_WIDTH, own],
+                                icons::RUN,
+                                |ui| {
+                                    ui.label(Type::Body.rich(ui, title));
+                                },
+                                |ui| {
+                                    if !summary.is_empty() {
+                                        ui.label(Type::Small.rich(ui, summary));
+                                    }
+                                },
+                                |ui| {
+                                    let _ = action().show(ui);
+                                },
+                            );
+                        }
+                    });
                 });
-            });
+            }
+            let fitting: Vec<_> = design::action_rows::row_records(&ctx)
+                .into_iter()
+                .filter(|record| record.owner == "plan")
+                .collect();
+            let widest = fitting
+                .iter()
+                .map(|record| record.facts.right())
+                .fold(f32::MIN, f32::max);
+            assert!(
+                fitting.len() == rows.len()
+                    && fitting.iter().all(|record| {
+                        !record.wrapped
+                            && (record.column - (widest + design::L)).abs() <= 0.5
+                            && (record.action.left() - record.column).abs() <= 0.5
+                    }),
+                "at {width}, one column for the mixed rows, L after the widest facts \
+                 {widest}: {fitting:?}"
+            );
         }
-        let fitting: Vec<_> = design::action_rows::row_records(&ctx)
-            .into_iter()
-            .filter(|record| record.owner == "plan")
-            .collect();
-        assert!(
-            fitting.len() == 1
-                && fitting.iter().all(|record| {
-                    !record.wrapped
-                        && (record.column - (record.facts.right() + design::L)).abs() <= 0.5
-                        && record.action.left() >= record.column - 0.5
-                }),
-            "the column fits and starts L after the widest facts line: {fitting:?}"
-        );
         assert!(
             records.len() == 1
                 && records.iter().all(|record| {
