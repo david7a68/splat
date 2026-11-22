@@ -43,11 +43,11 @@ pub use layout::{
     ACTION_GAP, BackEdge, BackLink, BackTo, CREATE_FIELD_MIN, Create, CreateChoice, CreateDropdown,
     CreateField, CreateReasons, DraftOwner, Editor, EditorHead, EditorKind, FieldId, FieldName,
     InlineCreate, KeptLine, KeyName, MAX_WORD_CHARS, NARROWEST_PANE, NoReason, Once,
-    ParticipantKey, RowIndex, RowKey, ScrollColumn, Selection, SideAction, Slot, SlotType, TextKey,
-    TextOwner, TitleAction, TitleActionRow, TitleLine, TitlePlacement, TitleType, Unsaved, Word,
-    edit_in_place, first_unsaved, labelled_field, lane_width, line_field, menu_popup, path_help,
-    register_title_row, search_min_row, sideways_scroll, status_slot, title_lead_in,
-    title_placement,
+    ParticipantKey, RowIndex, RowKey, ScrollColumn, Selection, SideAction, Sideways, Slot,
+    SlotType, TextKey, TextOwner, TitleAction, TitleActionRow, TitleLine, TitlePlacement,
+    TitleType, Unsaved, Word, edit_in_place, first_unsaved, labelled_field, lane_width, line_field,
+    menu_popup, path_help, register_title_row, search_min_row, sideways_scroll, status_slot,
+    title_lead_in, title_placement,
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]

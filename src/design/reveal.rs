@@ -535,9 +535,72 @@ fn owning_region(ui: &Ui) -> Option<(Id, Region)> {
         .map(|region| (content, region))
 }
 
+/// Why a column moves by itself without a press in it (ruling M18): a closed list. Each is an
+/// offset the column writes at its next pass, as it writes a reveal's; none is an `Act`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JumpTo {
+    /// A reader opened at a linked section: the section's heading at the view's top.
+    LinkedHeading,
+}
+
+/// A jump queued for a column: the frame it was asked in and the offset it puts the column at.
+#[derive(Clone, Copy, Debug)]
+struct Jump {
+    frame: u64,
+    to: f32,
+    why: JumpTo,
+}
+
+fn jump_id(key: Id) -> Id {
+    key.with("design_jump")
+}
+
+/// The `ScrollColumn` that holds `ui` moves, at its next pass, so that the screen y `top` of
+/// this pass is at its view's top (layout PR 10c, ruling M18). The column is the one writer of
+/// its offset: it applies the jump where it applies a reveal's (`take_offset`). The DM's own
+/// input in between (a wheel, a press, a key) drops it; a later jump replaces it. Outside a
+/// `ScrollColumn` it does nothing.
+pub fn jump(ui: &Ui, top: f32, why: JumpTo) {
+    let Some((_, region)) = owning_region(ui) else {
+        return;
+    };
+    let to = (region.offset + top - region.view.top()).max(0.0);
+    let frame = ui.ctx().cumulative_frame_nr();
+    ui.ctx().data_mut(|data| {
+        data.insert_temp(jump_id(region.key), Jump { frame, to, why });
+    });
+    ui.ctx().request_repaint();
+}
+
+/// The jump queued for the column `key`, taken once: asked in this frame or the last, and with
+/// no input of the DM's in this pass.
+fn take_jump(ui: &Ui, key: Id) -> Option<f32> {
+    let jump = ui
+        .ctx()
+        .data_mut(|data| data.remove_temp::<Jump>(jump_id(key)))?;
+    let frame = ui.ctx().cumulative_frame_nr();
+    let fresh = jump.frame == frame || jump.frame + 1 == frame;
+    let _ = jump.why;
+    let moved = ui.input(|input| {
+        input.events.iter().any(|event| {
+            matches!(
+                event,
+                egui::Event::MouseWheel { .. }
+                    | egui::Event::PointerButton { pressed: true, .. }
+                    | egui::Event::Key { pressed: true, .. }
+            )
+        })
+    });
+    (fresh && !moved).then_some(jump.to)
+}
+
 /// The offset the request of the column `key` queued for this pass, taken once, after this
-/// pass's input is checked. `ScrollColumn` calls it before its area begins.
+/// pass's input is checked: a jump's ([`jump`]), else a reveal's. `ScrollColumn` calls it before
+/// its area begins.
 pub(super) fn take_offset(ui: &Ui, column: Column) -> Option<f32> {
+    if let Some(to) = take_jump(ui, column.key) {
+        return Some(to);
+    }
     // A column that hosts no reveal holds no request: no registry read.
     if !column.hosts {
         return None;
@@ -860,7 +923,12 @@ mod tests {
                 |ui, page: &mut Page| {
                     if page.raw {
                         // A scroll area that is not a `ScrollColumn`.
-                        super::super::sideways_scroll(ui, "raw", |ui| content(ui, page));
+                        super::super::sideways_scroll(
+                            ui,
+                            "raw",
+                            super::super::Sideways::default(),
+                            |ui| content(ui, page),
+                        );
                     } else {
                         let mut column = super::super::ScrollColumn::new("outer");
                         if !page.plain {

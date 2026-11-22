@@ -1157,11 +1157,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "line_row",
             &[Ban::Extras(1), Ban::RowKey(1)],
         ),
-        (
-            "src/markdown_view.rs",
-            "reader_table",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
+        ("src/markdown_view.rs", "reader_table", &[Ban::Extras(1)]),
         (
             "src/markdown_view.rs",
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
@@ -1576,7 +1572,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/visual_tests/ergonomics.rs",
             "only_the_real_scroll_bar_is_chrome",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Extras(1)],
         ),
         (
             "src/visual_tests/ergonomics.rs",

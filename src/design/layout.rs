@@ -1330,8 +1330,33 @@ impl ScrollColumn {
     }
 }
 
+/// How a [`sideways_scroll`] sizes itself and shows its bar. The default takes the whole width
+/// it is given and shows its bar while the content is wider.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Sideways {
+    fit: bool,
+    no_bar: bool,
+}
+
+impl Sideways {
+    /// As wide as its content, up to the width it is given (a reader's table).
+    pub fn fit(mut self) -> Self {
+        self.fit = true;
+        self
+    }
+
+    /// No bar while `hidden` (a table whose foot is out of view: its bar would float over the
+    /// content below the view's edge).
+    pub fn without_bar(mut self, hidden: bool) -> Self {
+        self.no_bar = hidden;
+        self
+    }
+}
+
 /// A sideways scroll for one wide table or strip: it never scrolls up and down, so it sits
-/// inside a page's own `ScrollColumn`.
+/// inside a page's own `ScrollColumn`. Its offset is egui's, kept under its own id: a caller
+/// writes none (`id_salt` names whose content it is, so another document or surface has its
+/// own offset).
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
@@ -1339,11 +1364,17 @@ impl ScrollColumn {
 pub fn sideways_scroll<R>(
     ui: &mut Ui,
     id_salt: impl Hash,
+    view: Sideways,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> ScrollAreaOutput<R> {
     egui::ScrollArea::horizontal()
         .id_salt(Id::new(id_salt))
-        .auto_shrink([false, true])
+        .auto_shrink([view.fit, true])
+        .scroll_bar_visibility(if view.no_bar {
+            egui::scroll_area::ScrollBarVisibility::AlwaysHidden
+        } else {
+            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+        })
         .show(ui, add)
 }
 

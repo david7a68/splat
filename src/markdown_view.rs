@@ -444,8 +444,14 @@ fn show_with_density(
                 heading = Some(level);
             }
             Event::End(TagEnd::Heading(level)) => {
+                // A linked section opens with its heading at the column's top: a typed jump
+                // that the column writes as its own offset (ruling M18).
                 if wanted_heading(ui.ctx(), &job.text) {
-                    ui.scroll_to_cursor(Some(egui::Align::TOP));
+                    design::reveal::jump(
+                        ui,
+                        ui.cursor().top(),
+                        design::reveal::JumpTo::LinkedHeading,
+                    );
                 }
                 draw_figures(ui, &mut figures, &job);
                 flush(ui, &mut job, &mut target);
@@ -913,28 +919,20 @@ fn reader_table(
             };
             if scrolls {
                 ui.style_mut().always_scroll_the_only_direction = false;
-                let bars = if top < outer_clip.bottom() {
-                    egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
-                } else {
-                    egui::scroll_area::ScrollBarVisibility::AlwaysHidden
-                };
+                // Each surface and document keeps its own sideways place for this table: the
+                // scroll's own id says whose it is, so nothing writes its offset back.
                 let document = reader_document(ui);
                 let surface = ui
                     .ctx()
                     .data(|data| data.get_temp::<egui::Id>(egui::Id::new("reader_surface")));
-                let offset_id = egui::Id::new(("reader_table_offset", surface, document, rows));
-                let offset = ui
-                    .ctx()
-                    .data(|data| data.get_temp::<f32>(offset_id))
-                    .unwrap_or_default();
-                let output = egui::ScrollArea::horizontal()
-                    .id_salt(("reader_table", rows))
-                    .horizontal_scroll_offset(offset)
-                    .max_width(ui.available_width())
-                    .scroll_bar_visibility(bars)
-                    .show(ui, &mut show);
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(offset_id, output.state.offset.x));
+                let output = design::sideways_scroll(
+                    ui,
+                    ("reader_table", surface, document, rows),
+                    design::Sideways::default()
+                        .fit()
+                        .without_bar(top >= outer_clip.bottom()),
+                    &mut show,
+                );
                 moving_clip = outer_clip.intersect(output.inner_rect);
             } else {
                 ui.allocate_ui_with_layout(

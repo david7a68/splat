@@ -1755,7 +1755,21 @@ pub fn field<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    field_label(ui, label, Type::Small, help, error, add)
+    field_label(ui, label, Type::Small, (None, help, error), add)
+}
+
+/// A form field whose value something needs now (layout PR 10c, round 31 SR4/AR4): `needs`, when
+/// given, is what the DM must enter, drawn directly below the control as a warning (its icon in
+/// the warning colour, then the words), before the field's own `help`. Advice stays help; a
+/// missing value is never drawn as help. The field block (`field_label`) holds the warning too.
+pub fn small_field_needing<R>(
+    ui: &mut Ui,
+    label: &str,
+    needs: Option<&str>,
+    help: Option<&str>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    field_label(ui, label, Type::Small, (needs, help, None), add)
 }
 
 /// A form field with the same sentence-case label as `field`.
@@ -1766,7 +1780,7 @@ pub fn small_field<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    field_label(ui, label, Type::Small, help, error, add)
+    field_label(ui, label, Type::Small, (None, help, error), add)
 }
 
 /// A field block (layout PR 10): its caption, its control, its help and its error. A focused
@@ -1776,8 +1790,7 @@ fn field_label<R>(
     ui: &mut Ui,
     label: &str,
     role: Type,
-    help: Option<&str>,
-    error: Option<&str>,
+    (warning, help, error): (Option<&str>, Option<&str>, Option<&str>),
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
     let top = ui.cursor().top();
@@ -1790,7 +1803,7 @@ fn field_label<R>(
     field_caption(ui, label, role);
     let inner = add(ui);
     let last = count(ui);
-    let bottom = field_feedback(ui, help, error);
+    let bottom = field_feedback(ui, warning, help, error);
     // Only a focused control of this block: one lookup, nothing that grows with the form.
     if let Some(focused) = ui.memory(|memory| memory.focused())
         && ui.ctx().viewport(|viewport| {
@@ -1827,8 +1840,16 @@ fn field_caption(ui: &mut Ui, label: &str, role: Type) {
 /// caller adds no space after a field.
 ///
 /// Returns the block's bottom: its last line of help or error, else its control's.
-fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) -> f32 {
+fn field_feedback(
+    ui: &mut Ui,
+    warning: Option<&str>,
+    help: Option<&str>,
+    error: Option<&str>,
+) -> f32 {
     let mut last = None;
+    if let Some(warning) = warning {
+        last = Some(tone_message(ui, Tone::Warning, warning).rect.bottom());
+    }
     if let Some(text) = help {
         last = Some(self::help(ui, text).rect.bottom());
     }
@@ -1871,7 +1892,7 @@ fn text_field_label(
     help: Option<&str>,
     error: Option<&str>,
 ) -> Response {
-    field_label(ui, label, role, help, error, |ui| {
+    field_label(ui, label, role, (None, help, error), |ui| {
         let width = ui.available_width().min(FORM_WIDTH) - 2.0 * S;
         let response = ui.add(
             egui::TextEdit::singleline(text)
