@@ -125,7 +125,6 @@ scroll-area	src/design/components.rs	scroll_part	1	design	design implementation 
 scroll-area	src/design/layout.rs	ScrollColumn::area	2	design	design implementation boundary
 scroll-area	src/design/layout.rs	sideways_scroll	1	design	design implementation boundary
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
-scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-request	src/design/components.rs	reveal_least	1	design	design implementation boundary
 scroll-request	src/design/components.rs	scroll_part	2	design	design implementation boundary
 scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
