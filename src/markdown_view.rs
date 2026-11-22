@@ -1994,7 +1994,13 @@ fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> e
                 } else {
                     egui::Sense::CLICK
                 };
-                let part_response = ui.interact(rect.translate(at), id.with(part), sense);
+                // On the UI's grid, as a target built where it stands would be: a target kept at
+                // the galley's origin and moved keeps its whole size.
+                let part_response = ui.interact(
+                    egui::emath::GuiRounding::round_ui(rect.translate(at)),
+                    id.with(part),
+                    sense,
+                );
                 let role = if first {
                     egui::WidgetType::Link
                 } else {

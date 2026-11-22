@@ -443,7 +443,7 @@ fn content_cases() -> Vec<String> {
         }
         if change == "renamed" {
             // The entry's name is in its file: renamed there, and the file with it.
-            let words = std::fs::read_to_string(&path).expect("the target's file");
+            let words = std::fs::read_to_string(&path).expect("the target’s file");
             std::fs::write(
                 path.with_file_name("Gatehouse.md"),
                 words.replace("Gate", "Gatehouse"),
@@ -456,7 +456,7 @@ fn content_cases() -> Vec<String> {
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index again"));
         let after = reader.frame(&a, 1, text, Some(&index));
         check(
-            &format!("the link's target {change} (only the index's load)"),
+            &format!("the link’s target {change} (only the index’s load)"),
             &before,
             &after,
             !before.contains(warn) && after.contains(warn),
@@ -486,7 +486,7 @@ fn content_cases() -> Vec<String> {
         .data_mut(|data| data.insert_temp(egui::Id::new("art_index"), art));
     let after = reader.frame(&a, 1, text, None);
     check(
-        "the image's local copy (only the art index)",
+        "the image’s local copy (only the art index)",
         &before,
         &after,
         before.contains("image") && !after.contains("image"),
