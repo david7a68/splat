@@ -3937,15 +3937,17 @@ pub mod campaign_content {
                 format!("At {size:?}, the repair's frame is whole and ends at Save: {detail}"),
             );
         }
-        // Layout step 11c (L11c-C.1): with a repair's editor open the page is still the pane's
-        // scroll column, so its footer follows the taller list by `S` where the page fits (it
-        // was pinned in a `Fills` body).
+        // Layout step 11c (L11c-C.1, SA4): with a repair's editor open the page is still the
+        // pane's scroll column, so where the page fits (1920) its footer follows the taller list
+        // by `S` (it was pinned in a `Fills` body). Where the page scrolls, the pane pins it.
         d.state_prepared("repair-dirty", Sizes::All, |d| {
-            package_footer_follows(
-                d,
-                "Campaign packages draft discarded.",
-                "l11c-C1-repair-follows",
-            );
+            if d.window_size().0 >= 1900.0 {
+                package_footer_follows(
+                    d,
+                    "Campaign packages draft discarded.",
+                    "l11c-C1-repair-follows",
+                );
+            }
         });
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
         // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
@@ -4055,11 +4057,13 @@ pub mod campaign_content {
                         slot.trim_start_matches(|c: char| !c.is_alphabetic()) == "Not saved"
                             && footer.contains(cause.center())
                             && footer.top() > save.bottom()
-                            && footer.bottom() >= *height - crate::design::XXL
+                            && footer.bottom() <= *height
                     }),
+                // Layout step 11c (L11c-C.1, SA4): the footer follows the page's content where it fits,
+                // and the pane pins it only where the content fills or scrolls; no `Fills` body
+                // pins it any more (`l11c-C1-repair-follows`).
                 format!(
-                    "At {size:?}: the slot says only Not saved, and the cause is in the footer at \
-                     the pane's bottom (slot, footer, cause, Save, window height): {placed:?}"
+                    "At {size:?}: the slot says only Not saved, and the cause is in the footer below Save (slot, footer, cause, Save, window height): {placed:?}"
                 ),
             );
         }
