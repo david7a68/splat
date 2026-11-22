@@ -1693,8 +1693,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 2),
             ("src/timeline/test_support.rs", 2),
-            ("src/world.rs", 1),
-            ("src/world/repair.rs", 1),
         ],
     ),
     // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
