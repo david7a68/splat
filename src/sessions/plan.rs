@@ -680,7 +680,21 @@ pub(crate) type KeptFight = (
     Uuid,
     Option<Result<std::path::PathBuf, crate::encounter_run::FindRunFault>>,
     Result<crate::encounter_run::FightSummary, FightFault>,
+    // The summary's log as read: a hash of its entries, taken once at the read, which keys the
+    // Log's laid-out view (`log_view`), so a log read again with other words is laid out again.
+    LogRevision,
 );
+
+/// A hash of a played fight's log, taken when its summary is read from disk.
+pub(crate) type LogRevision = u64;
+
+/// The revision of `log`: its entries' words, in order.
+fn log_revision(log: &[String]) -> LogRevision {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    log.hash(&mut hasher);
+    hasher.finish()
+}
 
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
 fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
@@ -1678,18 +1692,18 @@ struct LogView {
     notice: Option<Arc<egui::Galley>>,
 }
 
-/// What a `LogView` was laid out from: the log's length and its newest entry's length, the width,
-/// the text size and the scale.
-type LogKey = (usize, usize, u32, u32, u32);
+/// What a `LogView` was laid out from: the log's revision as read, the width, the text size and
+/// the scale.
+type LogKey = (LogRevision, u32, u32, u32);
 
-/// The played fight's Log, laid out again only when its run, its log, the width or the text size
-/// changed: a quiet frame lays out and hashes nothing, however long the log or a note in it.
-fn log_view(ui: &egui::Ui, run: Uuid, log: &[String]) -> Arc<LogView> {
+/// The played fight's Log, laid out again only when its log as read (`revision`, taken once per
+/// read from disk), the width or the text size changed: a quiet frame lays out and hashes
+/// nothing, however long the log or a note in it.
+fn log_view(ui: &egui::Ui, run: Uuid, revision: LogRevision, log: &[String]) -> Arc<LogView> {
     let width = ui.available_width();
     let font = Type::Small.font(ui);
     let key: LogKey = (
-        log.len(),
-        log.first().map_or(0, String::len),
+        revision,
         width.to_bits(),
         font.size.to_bits(),
         ui.ctx().pixels_per_point().to_bits(),
@@ -5853,7 +5867,7 @@ impl Sessions {
         if self
             .fight
             .as_ref()
-            .is_none_or(|(id, kept, _)| *id != run || *kept != found)
+            .is_none_or(|(id, kept, _, _)| *id != run || *kept != found)
         {
             let result = match (&found, &self.campaign) {
                 (Some(Ok(path)), Some(campaign)) => {
@@ -5869,9 +5883,12 @@ impl Sessions {
                     "The run folder is not available.".to_owned(),
                 )),
             };
-            self.fight = Some((run, found, result));
+            let revision = result
+                .as_ref()
+                .map_or(0, |summary| log_revision(&summary.log));
+            self.fight = Some((run, found, result, revision));
         }
-        let Some((_, _, result)) = &self.fight else {
+        let Some((_, _, result, revision)) = &self.fight else {
             return false;
         };
         match result {
@@ -5973,7 +5990,7 @@ impl Sessions {
                 if self.show_fight_log {
                     // A capped block, not a scroll column of its own: the plan's pane is the
                     // scroll column (`Body::Content`).
-                    let view = log_view(ui, run, &summary.log);
+                    let view = log_view(ui, run, *revision, &summary.log);
                     for (row, whole) in &view.rows {
                         let shown = ui.label(row.clone());
                         if row.elided {
@@ -9615,6 +9632,70 @@ mod tests {
             "the log block is {} px, over a third of the reader's measure",
             notice.bottom() - newest.top()
         );
+        // Review of PR 645 (re-checks): the Log is laid out from the log as read from disk. A
+        // note rewritten on disk and read again shows its new words, also at the same length;
+        // and at 960 and 1920 px a note that grows moves no later plan row.
+        let write_newest = |note: &str| {
+            let mut saved: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            let entries = saved["state"]["log"].as_array_mut().unwrap();
+            *entries.last_mut().unwrap() = note.into();
+            fs::write(&path, saved.to_string()).unwrap();
+        };
+        // Close the fight and open it again (its summary is read again), then its Log.
+        let reopen = |harness: &mut egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness.get_by_label(long).click();
+            harness.run_steps(2);
+            harness.get_by_label(long).click();
+            harness.run_steps(2);
+            harness.get_by_label("Log").click();
+            harness.run_steps(2);
+        };
+        let same_length = log[0].replacen("creaks", "groans", 1);
+        assert_eq!(same_length.len(), log[0].len());
+        write_newest(&same_length);
+        reopen(&mut harness);
+        assert!(
+            harness.query_by_label(&same_length).is_some()
+                && harness.query_by_label(&log[0]).is_none(),
+            "a note rewritten to the same length shows its new words"
+        );
+        let later = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness.get_by_label("Shrine").rect().top()
+        };
+        for size in [egui::vec2(960.0, 800.0), egui::vec2(1920.0, 1080.0)] {
+            harness.set_size(size);
+            write_newest(&same_length);
+            reopen(&mut harness);
+            let before = later(&harness);
+            let grown = format!(
+                "Note: {}",
+                "The gate holds, and the wolves wait outside. ".repeat(40)
+            );
+            write_newest(&grown);
+            reopen(&mut harness);
+            let newest = harness
+                .query_by_label(&grown)
+                .expect("the grown note shows, whole in its name")
+                .rect();
+            let notice = harness
+                .query_by_label_contains("Whole run has ")
+                .expect("a last line says what Whole run has")
+                .rect();
+            assert!(
+                notice.bottom() - newest.top() <= design::READER_MEASURE / 3.0 + 0.5,
+                "at {size:?} the log block is {} px",
+                notice.bottom() - newest.top()
+            );
+            assert!(
+                (later(&harness) - before).abs() < 0.5,
+                "at {size:?} the grown note moved the next plan row from {before} to {}",
+                later(&harness)
+            );
+        }
+        harness.set_size(egui::vec2(design::FORM_WIDTH, 800.0));
+        write_newest(&log[0]);
+        reopen(&mut harness);
         harness.get_by_label("Log").click();
         harness.run_steps(2);
 
