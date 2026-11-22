@@ -541,16 +541,16 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
         // The token rule between the tables and `No checks`; the item gaps keep `S` around it.
         design::rule(ui);
         let results = !view.event.checks.is_empty();
-        if Action::quiet("No checks")
+        let no_checks = Action::quiet("No checks")
             .blocked_if(results, "Clear the results first.")
-            .show(ui)
-            .clicked()
-        {
+            .show(ui);
+        if no_checks.clicked() {
             *act = Some(Act::Choose(None));
             ui.close();
         }
         if results {
-            design::blocked_reason(ui, Some("Clear the results first."));
+            // A note under its choice, at its words (M-P0.26).
+            design::choice_note(ui, false, Some("Clear the results first."));
         }
     });
     let Some(table) = table else {

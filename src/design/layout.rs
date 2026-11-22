@@ -1894,6 +1894,12 @@ pub struct TitleLine<'a> {
     toggle: Option<(&'static str, &'a str, &'a str, bool)>,
     /// A plain status at the right end of the title's line, left of the toggle (`state`).
     state: Option<(Status<'a>, Vec<Status<'a>>)>,
+    /// What the title is, before it (`kind`): the words shown and the accessible name.
+    kind: Option<(&'a str, &'a str)>,
+    /// A `⋯` menu at the line's right end (`more`): its name and its menu.
+    more: Option<(&'a str, Menu<'a>)>,
+    /// The actions end at the line's end, before its status and `⋯` (`actions_at_end`).
+    at_end: bool,
 }
 
 /// A menu's content: the caller draws its own choices.
@@ -1909,6 +1915,9 @@ pub enum TitleType {
     Title,
     /// A reader's or a panel's title.
     Section,
+    /// A form's or a detail's own title in `Heading` type, as `Heading::Panel` (the Timeline
+    /// event's title above its form, M0558).
+    Panel,
 }
 
 /// What a title line did this frame.
@@ -1982,6 +1991,8 @@ pub fn title_action_rows(ctx: &egui::Context) -> Vec<TitleActionRow> {
 
 /// A title line's widths, measured once per frame and used by both the placement and the draw.
 struct TitleMetrics {
+    /// The kind's width before the title, with the gap after it.
+    kind: f32,
     title: f32,
     /// The context's width, with the gap before it.
     context: f32,
@@ -1991,7 +2002,7 @@ struct TitleMetrics {
 
 impl TitleMetrics {
     fn beside(&self) -> f32 {
-        self.title + self.context
+        self.kind + self.title + self.context
     }
 }
 
@@ -2011,7 +2022,37 @@ impl<'a> TitleLine<'a> {
             close: None,
             toggle: None,
             state: None,
+            kind: None,
+            more: None,
+            at_end: false,
         }
+    }
+
+    /// The actions end at the right end of their line, before a plain status and the `⋯`, as a
+    /// form's header has them (the Timeline event's `Copy link`, which ends at the form's edge
+    /// for every event, M0558); placed and kept by the same rule, only right-aligned: on the
+    /// title's line when they fit, else on rows under it.
+    pub fn actions_at_end(mut self) -> Self {
+        self.at_end = true;
+        self
+    }
+
+    /// What the title is, before it, in muted `Small`, `XS` from the title (a Timeline event's
+    /// `⚔ Combat`, or its icon alone for a day or an event with no title of its own, M0558).
+    /// `words` is what shows; `name` is its accessible name, and its hover when the words are not
+    /// the name (an icon alone), so the kind is never only an icon to a screen reader.
+    pub fn kind(mut self, words: &'a str, name: &'a str) -> Self {
+        self.kind = Some((words, name));
+        self
+    }
+
+    /// A `⋯` menu named `name` at the right end of the title's own line, right of a plain status
+    /// and left of a view toggle and a close icon, however the actions are placed (the Timeline
+    /// event's `More actions for …`, M0558). It opens `menu` under it (`menu_popup`, in the
+    /// line's `menu_room`); the title and the actions beside it keep clear of it.
+    pub fn more(mut self, name: &'a str, menu: impl FnOnce(&mut Ui) + 'a) -> Self {
+        self.more = Some((name, Box::new(menu)));
+        self
     }
 
     pub fn role(mut self, role: TitleType) -> Self {
@@ -2119,11 +2160,15 @@ impl<'a> TitleLine<'a> {
         match self.role {
             TitleType::Title => Type::Title,
             TitleType::Section => Type::Section,
+            TitleType::Panel => Type::Heading,
         }
     }
 
     fn metrics(&self, ui: &Ui) -> TitleMetrics {
         TitleMetrics {
+            kind: self.kind.map_or(0.0, |(words, _)| {
+                number_width(ui, words, &Type::Small.font(ui)).ceil() + XS
+            }),
             title: number_width(ui, self.title, &self.font().font(ui)).ceil(),
             context: self.context.map_or(0.0, |context| {
                 XS + number_width(ui, context, &Type::Small.font(ui)).ceil()
@@ -2286,6 +2331,22 @@ impl<'a> TitleLine<'a> {
         let _ = super::status(&mut child, state.0);
     }
 
+    /// The `⋯` menu (`more`), its right edge at `right`, on the line from `top`,
+    /// `line_height` high; its menu opens under it.
+    fn more_at(&mut self, ui: &mut Ui, right: f32, top: f32, line_height: f32) {
+        let Some((name, menu)) = self.more.take() else {
+            return;
+        };
+        let size = Density::Read.control();
+        let rect = Rect::from_min_size(
+            egui::pos2(right - size, top + (line_height - size) / 2.0),
+            vec2(size, size),
+        );
+        let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
+        let button = super::icon_button(&mut child, super::icons::EXPAND, name);
+        self.menu_under(&child, &button).show(menu);
+    }
+
     /// The view toggle, its right edge at `right` (left of the close icon), on the line from
     /// `top`, `line_height` high.
     fn toggle_at(&self, ui: &mut Ui, right: f32, top: f32, line_height: f32) -> bool {
@@ -2309,11 +2370,12 @@ impl<'a> TitleLine<'a> {
         let end_icon = Density::Read.control() + ACTION_GAP;
         let close = if self.close.is_some() { end_icon } else { 0.0 };
         let toggle = if self.toggle.is_some() { end_icon } else { 0.0 };
+        let more = if self.more.is_some() { end_icon } else { 0.0 };
         let state = self
             .state
             .as_ref()
             .map_or(0.0, |state| Self::state_room(ui, state) + ACTION_GAP);
-        let end = close + toggle + state;
+        let end = close + toggle + more + state;
         // Issue #567: a title with no actions that is wider than its line (less the close
         // icon) wraps under nothing, as the `Under` form wraps it; it never paints past the
         // line or under the close icon.
@@ -2340,6 +2402,21 @@ impl<'a> TitleLine<'a> {
                 egui::Label::new(Type::Small.rich(ui, context).color(colors().muted)),
             )
         });
+        let kind = self.kind.map(|(words, name)| {
+            (
+                words,
+                name,
+                egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)),
+            )
+        });
+        // The kind's accessible name is its name, never its icon's glyph; shown as an icon
+        // alone, it also says its name on hover.
+        let named_kind = |ui: &Ui, response: Response, words: &str, name: &str| {
+            super::named(ui, &response, name);
+            if !words.contains(name) {
+                let _ = response.on_hover_text(name);
+            }
+        };
         let rows = match placement {
             TitlePlacement::OnTitle => {
                 // A page's header line is at least a `Scan` control high, as `page_header`'s.
@@ -2375,12 +2452,25 @@ impl<'a> TitleLine<'a> {
                     )
                     .inner
                 };
+                if let Some((words, name, kind)) = kind {
+                    let shown = at_left(ui, piece(metrics.kind - XS), kind.extend());
+                    named_kind(ui, shown, words, name);
+                    let _ = piece(XS);
+                }
                 at_left(ui, piece(metrics.title), title.extend());
                 if let Some((words, context)) = context {
                     let _ = piece(XS);
                     at_left(ui, piece(metrics.context - XS), context.extend()).on_hover_text(words);
                 }
-                let _ = piece(metrics.lead_in);
+                // At the end: the actions' row ends where the line's end pieces start.
+                let row = metrics.widths.iter().sum::<f32>()
+                    + ACTION_GAP * metrics.widths.len().saturating_sub(1) as f32;
+                let lead_in = if self.at_end {
+                    (line.width() - end - row - metrics.beside()).max(metrics.lead_in)
+                } else {
+                    metrics.lead_in
+                };
+                let _ = piece(lead_in);
                 for (at, width) in metrics.widths.iter().enumerate() {
                     if at > 0 {
                         let _ = piece(ACTION_GAP);
@@ -2390,7 +2480,13 @@ impl<'a> TitleLine<'a> {
                     }
                 }
                 // Drawn in their order on the line, so the keyboard reaches the toggle first.
-                self.state_at(ui, line.right() - close - toggle, line.top(), line_height);
+                self.state_at(
+                    ui,
+                    line.right() - close - toggle - more,
+                    line.top(),
+                    line_height,
+                );
+                self.more_at(ui, line.right() - close - toggle, line.top(), line_height);
                 toggled = self.toggle_at(ui, line.right() - close, line.top(), line_height);
                 closed = self.close_at(ui, line.right(), line.top(), line_height);
                 0
@@ -2401,6 +2497,10 @@ impl<'a> TitleLine<'a> {
                     .horizontal_wrapped(|ui| {
                         ui.set_max_width(room - end);
                         ui.spacing_mut().item_spacing.x = XS;
+                        if let Some((words, name, kind)) = kind {
+                            let shown = ui.add(kind);
+                            named_kind(ui, shown, words, name);
+                        }
                         ui.add(title.wrap());
                         if let Some((words, context)) = context {
                             ui.add(context.wrap()).on_hover_text(words);
@@ -2409,7 +2509,8 @@ impl<'a> TitleLine<'a> {
                     .response
                     .rect;
                 let right = line_left + room;
-                self.state_at(ui, right - close - toggle, line_top, font.line());
+                self.state_at(ui, right - close - toggle - more, line_top, font.line());
+                self.more_at(ui, right - close - toggle, line_top, font.line());
                 toggled = self.toggle_at(ui, right - close, line_top, font.line());
                 closed = self.close_at(ui, right, line_top, font.line());
                 for row in &rows {
@@ -2419,7 +2520,15 @@ impl<'a> TitleLine<'a> {
                             .max_rect(line)
                             .layout(Layout::left_to_right(Align::Center)),
                     );
-                    let mut x = line.left();
+                    let row_width = row.clone().map(|at| metrics.widths[at]).sum::<f32>()
+                        + ACTION_GAP * row.len().saturating_sub(1) as f32;
+                    // At the end: rows under the title end where the line's actions end on the
+                    // title's line, before the status and the `⋯`, so an action keeps one x.
+                    let mut x = if self.at_end {
+                        line.right() - end - row_width
+                    } else {
+                        line.left()
+                    };
                     for at in row.clone() {
                         if at > row.start {
                             x += ACTION_GAP;
