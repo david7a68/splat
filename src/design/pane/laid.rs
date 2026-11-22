@@ -44,12 +44,23 @@ pub struct Laid {
     /// The laid words a slot draws (`LaidUi::part`), by the slot's place; `None` for a slot the
     /// block fills itself.
     slot_texts: Vec<Option<Arc<Galley>>>,
+    /// Each slot's own key, by the slot's place (`Laid::with_slot_keys`): a keyed slot's `Ui`
+    /// (and so its controls' ids and their focus) follows its key, not its place.
+    slot_keys: Vec<Option<Id>>,
 }
 
 impl Laid {
     /// This layout with the words its slots draw (`LaidUi::part`), by the slots' places.
     pub(in crate::design) fn with_slot_texts(mut self, texts: Vec<Option<Arc<Galley>>>) -> Self {
         self.slot_texts = texts;
+        self
+    }
+
+    /// This layout with a key for each slot that has one, by the slots' places: a control drawn
+    /// in a keyed slot keeps its id (and its focus) when an earlier slot comes or goes (an action
+    /// hidden before it).
+    pub(in crate::design) fn with_slot_keys(mut self, keys: Vec<Option<Id>>) -> Self {
+        self.slot_keys = keys;
         self
     }
 
@@ -98,6 +109,7 @@ impl Laid {
             slots,
             links: Vec::new(),
             slot_texts: Vec::new(),
+            slot_keys: Vec::new(),
         }
     }
 
@@ -234,9 +246,15 @@ impl LaidUi<'_> {
     /// `add` in a `Ui` that is slot `at`'s rect, with no item spacing.
     pub fn in_slot<R>(&mut self, at: usize, add: impl FnOnce(&mut Ui) -> R) -> R {
         let rect = self.slot(at);
-        let mut child = self
-            .ui
-            .new_child(UiBuilder::new().id_salt(("slot", at)).max_rect(rect));
+        // A keyed slot's `Ui` is its key's own within its block, whatever slots come before it;
+        // another follows its place.
+        let builder = match self.laid.slot_keys.get(at).copied().flatten() {
+            Some(key) => UiBuilder::new()
+                .id_salt(self.ui.id().with(("slot", key)))
+                .global_scope(true),
+            None => UiBuilder::new().id_salt(("slot", at)),
+        };
+        let mut child = self.ui.new_child(builder.max_rect(rect));
         child.spacing_mut().item_spacing = Vec2::ZERO;
         add(&mut child)
     }

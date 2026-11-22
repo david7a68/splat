@@ -1995,6 +1995,30 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
         wide,
         "Undo of 1000 / 120 keeps the value column, and no action moves back"
     );
+    // Layout 11c scope C: the Due rows are laid out before paint (`design::NoticeRow`) and kept
+    // by the trackers' revision and the panel's measure. Taking the Party's first seal brings a
+    // notice due: the rows are laid again and the new row draws; unchanged frames lay none.
+    let laid = crate::design::notices_laid;
+    h.state_mut()
+        .press("seals", Some("Party"), "Take seal", None);
+    h.run_steps(4);
+    let done = "Done: First seal for Party";
+    assert!(
+        h.query_by_label(done).is_some(),
+        "the new Due row draws its Done"
+    );
+    let after = laid();
+    h.run_steps(5);
+    assert!(
+        h.query_by_label(done).is_some() && laid() == after,
+        "an unchanged frame with Due rows lays none out: {} then {}",
+        after,
+        laid()
+    );
+    // A change of the width is a new measure: the rows are laid again.
+    h.set_size(eframe::egui::vec2(520.0, 640.0));
+    h.run_steps(4);
+    assert!(laid() > after, "a new width lays the Due rows again");
 }
 
 #[test]

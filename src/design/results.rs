@@ -1214,6 +1214,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "one_fault_has_one_tone_in_every_place",
             &[Ban::Body],
         ),
+        // Layout 11c scope C: the proof that a row fault's measure is its painted height.
+        (
+            "src/design/outcome.rs",
+            "a_row_fault_paints_at_its_measured_height",
+            &[Ban::Body],
+        ),
         ("src/encounter_run/view.rs", "outside_words", &[Ban::Words]),
         ("src/encounters.rs", "cause", &[Ban::Words]),
         ("src/encounters.rs", "kept_outcome", &[Ban::Words]),

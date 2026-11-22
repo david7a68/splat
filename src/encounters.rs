@@ -8901,23 +8901,32 @@ impl Encounters {
                                     )
                                 });
                             }
-                        } else if Action::quiet(if creature.is_none() {
-                            "Replace…"
                         } else {
-                            "Edit"
-                        })
-                        .density(Density::Read)
-                        .name(groups::SLOT_OPTIONS)
-                        .selected(is_open)
-                        .show(ui)
-                        .clicked()
-                        {
-                            *expanded = if is_open {
-                                None
+                            let edit = Action::quiet(if creature.is_none() {
+                                "Replace…"
                             } else {
-                                groups::show_form_when_it_opens(ui);
-                                Some(slot.key.clone())
-                            };
+                                "Edit"
+                            })
+                            .density(Density::Read)
+                            .name(groups::SLOT_OPTIONS)
+                            .selected(is_open)
+                            .show(ui);
+                            if edit.clicked() {
+                                *expanded = if is_open {
+                                    None
+                                } else {
+                                    // M0237: the form comes whole into view, by its column's
+                                    // reveal.
+                                    if let Some(act) = design::reveal::Act::clicked(ui, &edit) {
+                                        draft.roster_reveal.ask(
+                                            act,
+                                            draft_id,
+                                            ("roster_form", &slot.key),
+                                        );
+                                    }
+                                    Some(slot.key.clone())
+                                };
+                            }
                         }
                         let actions = ui.min_rect();
                         // The facts keep their old room: the row less this row's actions (the item spacing
@@ -9035,8 +9044,17 @@ impl Encounters {
                                                             egui::Align::Min,
                                                         )),
                                                 );
-                                                if groups::change_link(&mut inline, &word) {
-                                                    groups::show_form_when_it_opens(ui);
+                                                let link = groups::change_link(&mut inline, &word);
+                                                if link.clicked() {
+                                                    if let Some(act) =
+                                                        design::reveal::Act::clicked(&inline, &link)
+                                                    {
+                                                        draft.roster_reveal.ask(
+                                                            act,
+                                                            draft_id,
+                                                            ("roster_form", &slot.key),
+                                                        );
+                                                    }
                                                     *expanded = Some(slot.key.clone());
                                                 }
                                                 // Layout PR 5b: the facts' width holds the
@@ -9201,6 +9219,14 @@ impl Encounters {
                             Some(&sides),
                             &mut draft.typed,
                         );
+                        if let Some(form) = end.form {
+                            draft.roster_reveal.mark(
+                                ui,
+                                draft_id,
+                                ("roster_form", &slot.key),
+                                form,
+                            );
+                        }
                         if end.done {
                             *expanded = None;
                             // The row comes whole into view, by its column's one reveal.
