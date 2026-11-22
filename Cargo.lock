@@ -3993,6 +3993,7 @@ dependencies = [
  "serde_json",
  "splat-assets",
  "splat-campaign",
+ "splat-design",
  "syn 2.0.119",
  "tempfile",
  "unicode-segmentation",
