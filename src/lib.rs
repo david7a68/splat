@@ -270,11 +270,6 @@ enum Page {
     Settings,
 }
 
-/// FF2: the page (and Campaign tab) that holds the draft a rail status names. The rail's draft
-/// list and this table share one constant for each draft, so a new draft names its page here.
-/// A failed package rename from the Library, drawn under the page for the pass that made it.
-/// Wave 2 (L) moves it into the Library's footer, where the rename is.
-#[allow(deprecated)] // Old message functions; the one call left in this file.
 /// A feeder of the Settings footers' lines from one owner `T`. It names the lifetime that ties a
 /// footer's lines to the pane's frame (a closure's own signature cannot).
 fn settings_feed<T: ?Sized, F>(feed: F) -> F
@@ -288,6 +283,11 @@ where
     feed
 }
 
+/// FF2: the page (and Campaign tab) that holds the draft a rail status names. The rail's draft
+/// list and this table share one constant for each draft, so a new draft names its page here.
+/// A failed package rename from the Library, drawn under the page for the pass that made it.
+/// Wave 2 (L) moves it into the Library's footer, where the rename is.
+#[allow(deprecated)] // Old message functions; the one call left in this file.
 fn rename_failed(ui: &mut egui::Ui, error: &str) {
     design::message(ui, Tone::Error, error);
 }
