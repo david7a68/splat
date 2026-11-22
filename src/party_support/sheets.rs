@@ -1547,6 +1547,7 @@ mod sheet_now_tests {
     use serde_json::json;
     #[test]
     fn iter7_b_overflow_tabs_have_no_button_border_and_keep_selected_underline() {
+        use crate::design::test_harness::ThemedPage as _;
         use crate::design::{self, colors};
         use eframe::egui;
         use egui_kittest::kittest::Queryable;
@@ -1554,12 +1555,11 @@ mod sheet_now_tests {
             let mut page = selected;
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(350.0, 640.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         design::overflow_tabs(ui, &mut page, &super::SHEET_PAGES)
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let menu = harness.get_by_label("More sheet pages").rect();
             assert!(!harness.output().shapes.iter().any(|shape| matches!(&shape.shape,
@@ -1731,6 +1731,7 @@ mod sheet_now_tests {
     }
     #[test]
     fn sheet_labels_use_a_colon_then_dot_separated_values() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::new_ui(|ui| {
             design::fact::line(ui, "Resistance", ["Fire", "Cold"]);
@@ -1751,8 +1752,7 @@ mod sheet_now_tests {
             let record = wizard(10);
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(width, 900.0))
-                .build_ui(|ui| overview(ui, &record, None));
-            design::theme::install(&harness.ctx);
+                .themed_ui(|ui| overview(ui, &record, None));
             harness.run();
             for ability in ["Str", "Dex", "Con", "Int", "Wis", "Cha"] {
                 assert!(
@@ -1772,6 +1772,7 @@ mod sheet_now_tests {
     #[test]
     fn both_wide_columns_end_whole_at_every_height() {
         use crate::design::outcome::{Messages, NoPress, PaneFrame};
+        use crate::design::test_harness::ThemedPage as _;
         let record = std::sync::Arc::new(wizard_with(
             10,
             json!({
@@ -1788,7 +1789,7 @@ mod sheet_now_tests {
             let record = record.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(760.0, height as f32))
-                .build_ui(move |ui| {
+                .themed_ui(move |ui| {
                     let frame = PaneFrame::new(ui);
                     let mut messages =
                         Messages::<NoPress>::new(&frame, "sheet_probe", ui.available_width());
@@ -1798,7 +1799,6 @@ mod sheet_now_tests {
                         overview(ui, &record, None)
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(4);
             let output = harness.output();
             let mut darkvision = false;

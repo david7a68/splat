@@ -3405,7 +3405,8 @@ mod tests {
     /// the file is cut last. No cut is inside a word or ends on a separator before `…`.
     #[test]
     fn result_detail_shortens_by_whole_parts() {
-        let mut harness = egui_kittest::Harness::new_ui(|ui| {
+        use crate::design::test_harness::ThemedPage as _;
+        let mut harness = egui_kittest::Harness::builder().themed_ui(|ui| {
             let mark = icons::WARN;
             let fault = format!("{mark} Same note in two files");
             let path = "NPCs/Rook Ambry copy.md";
@@ -3480,7 +3481,6 @@ mod tests {
                 "long file"
             );
         });
-        design::theme::install(&harness.ctx);
         harness.run_steps(1);
     }
 
@@ -3488,6 +3488,7 @@ mod tests {
     /// only says so. A campaign table replaces the words in every place.
     #[test]
     fn generator_card_names_help_fits_its_place() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let npc = crate::npc_generator::Generated {
             name: "Wren Hallam".into(),
@@ -3501,7 +3502,7 @@ mod tests {
             (NamesHelp::Link, table.clone(), false, false, false),
         ] {
             let npc = npc.clone();
-            let mut harness = egui_kittest::Harness::new_ui_state(
+            let mut harness = egui_kittest::Harness::builder().themed_ui_state(
                 move |ui, pressed: &mut (bool, bool)| {
                     let choice = generator_card(
                         ui,
@@ -3517,7 +3518,6 @@ mod tests {
                 },
                 (false, false),
             );
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let case = format!("{help:?}");
             assert!(harness.query_by_label("Save NPC").is_some(), "{case}");
@@ -3669,6 +3669,7 @@ mod tests {
 
     #[test]
     fn forward_returns_to_what_back_left_until_another_entry() {
+        use crate::design::test_harness::Themed as _;
         let mut lookup = browsed_lookup();
         lookup.step(Step::Back);
         assert_eq!(lookup.current, Some(0));
@@ -3825,7 +3826,7 @@ mod tests {
         lookup.navigate(6);
         lookup.navigate(7);
         use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::new_ui_state(
+        let mut harness = egui_kittest::Harness::builder().themed_ui_state(
             |ui, lookup: &mut Lookup| {
                 lookup.panel(
                     ui,
@@ -3834,7 +3835,6 @@ mod tests {
             },
             std::mem::take(&mut lookup),
         );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label(SEARCH_NAME).focus();
         harness.run_steps(1);
