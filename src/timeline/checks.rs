@@ -544,8 +544,8 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
         let no_checks = Action::quiet("No checks")
             .blocked_if(results, "Clear the results first.")
             .show(ui);
-        // Where the choice paints its words: its rect, in by the menu's button padding.
-        let words_left = no_checks.rect.left() + ui.spacing().button_padding.x;
+        // Where the choice paints its words: its rect, in by the quiet action's padding `S`.
+        let words_left = no_checks.rect.left() + design::S;
         if no_checks.clicked() {
             *act = Some(Act::Choose(None));
             ui.close();
