@@ -1121,7 +1121,7 @@ mod tests {
         );
         let mut press = |h: &mut egui_kittest::Harness<'_, Page>| {
             h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::S);
-            h.run();
+            h.step();
             h.state().taken
         };
         assert_eq!(press(&mut h), (true, false), "a ready page takes it, once");
