@@ -21280,8 +21280,14 @@ pub mod encounter_groups {
             );
             // Layout 11c (M0122, M0125): Add ends at its group's block edge, the right edge of
             // the group's heading (its drag handle), and Initiative stands just before Add.
+            // A changed group's handle adds `. Changed.` to its name.
+            let nodes = d.nodes();
             let grips = groups.map(|name| {
-                d.place_of(&format!("Drag {name} to the initiative list"))
+                let grip = format!("Drag {name} to the initiative list");
+                nodes
+                    .iter()
+                    .find(|node| node.name.starts_with(&grip))
+                    .map(|node| node.rect)
                     .expect("Required group heading")
             });
             let placed: Vec<_> = (0..groups.len())
