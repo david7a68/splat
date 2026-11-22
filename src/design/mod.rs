@@ -20,6 +20,8 @@ pub mod results;
 pub mod reveal;
 pub mod save_row;
 pub mod status;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_harness;
 pub mod text_draft;
 pub mod theme;
 pub mod tokens;
