@@ -944,7 +944,7 @@ impl Run {
             self.amount.push_str(&typed);
             self.focus_amount = true;
         }
-        if let Some(amount) = self.amount.parse::<i64>().ok().filter(|_| enter || heal) {
+        if let Some(amount) = design::parse_signed(&self.amount).filter(|_| enter || heal) {
             let make = if heal { Command::Heal } else { Command::Damage };
             self.run_command(self.amount_command(amount, make));
             self.amount.clear();
@@ -2039,7 +2039,7 @@ impl Run {
                             let enter = ui.input(|i| i.key_pressed(Key::Enter));
                             if enter
                                 && (response.has_focus() || response.lost_focus())
-                                && let Ok(total) = text.parse()
+                                && let Some(total) = design::parse_signed(text)
                             {
                                 set_initiative = Some((index, total));
                             } else if response.lost_focus() {
@@ -4945,7 +4945,7 @@ impl Run {
                     let field = format!("Initiative for {}", p.name);
                     let id = self.participant_field(CORRECT_INITIATIVE_FIELD, p);
                     let text = self.setup_inputs.entry(index).or_default();
-                    let total = text.trim().parse::<i64>().ok();
+                    let total = design::parse_signed(text);
                     ui.horizontal(|ui| {
                         correction_label(ui, "Initiative");
                         let response = design::number_field_with_id(
@@ -5732,9 +5732,9 @@ impl Run {
             let field_name = format!("Initiative for {name}");
             // Beside Notes, a letter goes to the note, and the number stays as it is.
             let in_field = self.setup_initiative_id(&self.state.participants[index]);
-            if let Some(typed) = Self::words_in_number_field(self.notes_open, ui, in_field, |c| {
-                c.is_ascii_digit() || c == '-'
-            }) {
+            if let Some(typed) =
+                Self::words_in_number_field(self.notes_open, ui, in_field, design::number_char)
+            {
                 self.for_note = Some(typed);
                 self.return_focus = true;
             }
@@ -5758,7 +5758,7 @@ impl Run {
                         number_slot,
                         Density::Scan.control(),
                     );
-                    let parsed = text.parse::<i64>().ok();
+                    let parsed = design::parse_signed(text);
                     if response.changed() {
                         if parsed != initiative {
                             command = Some(Command::Initiative(index, parsed));
@@ -13339,11 +13339,32 @@ mod tests {
         harness.run_steps(1);
         harness.key_press(Key::Enter);
         harness.run_steps(3);
+        {
+            let run = run.borrow();
+            assert_eq!(run.state.participants[2].initiative, Some(18));
+            assert_eq!(run.state.order, vec![0, 2, 1]);
+            assert_eq!(run.current(), Some(0));
+            assert_eq!(run.live_initiative, None);
+        }
+        // M-P0 item 11: the field reads a total typed with a true minus, as the app writes a
+        // negative number (`design::parse_signed`).
+        harness
+            .get_by_label("Change initiative for Guard Captain")
+            .click();
+        harness.run_steps(3);
+        harness
+            .get_by_label("Initiative for Guard Captain")
+            .type_text("\u{2212}2");
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
         let run = run.borrow();
-        assert_eq!(run.state.participants[2].initiative, Some(18));
-        assert_eq!(run.state.order, vec![0, 2, 1]);
-        assert_eq!(run.current(), Some(0));
-        assert_eq!(run.live_initiative, None);
+        assert_eq!(
+            run.state.participants[2].initiative,
+            Some(-2),
+            "m-p0-20-true-minus"
+        );
+        assert_eq!(run.state.order, vec![0, 1, 2]);
     }
 
     #[test]
