@@ -834,6 +834,10 @@ pub enum JumpTo {
     /// A list's row brought to the top because the page opened at it, a link revealed it, or
     /// it moved there (the Timeline's events, M0556): the row before it at the view's top.
     ListedRow,
+    /// A journey's check whose result an act just wrote (a roll, an entered number; M0546): the
+    /// least scroll that shows its line whole ([`bring_into_view`]), so the DM sees what the act
+    /// did.
+    CheckResult,
 }
 
 /// The `ScrollColumn` that holds `ui` moves, at its next pass, so that the screen y `top` of
