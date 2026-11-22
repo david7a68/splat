@@ -389,6 +389,21 @@ fn kept_layouter(
     }
 }
 
+/// The text edit of an editor viewport: the caller's `style`, then the part's own frame (none:
+/// the viewport draws it), margin and width, and its least height.
+fn viewport_text(
+    style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+    least: f32,
+) -> impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t> {
+    move |edit| {
+        style(edit)
+            .frame(false)
+            .margin(egui::Vec2::ZERO)
+            .desired_width(f32::INFINITY)
+            .min_size(vec2(0.0, least))
+    }
+}
+
 /// How tall an editor viewport of its own is ([`editor_view`]).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ViewHeight {
@@ -692,13 +707,7 @@ impl EditorRegion<'_> {
                 // Where the content starts in this layout (the view's top less the offset used).
                 let origin = ui.max_rect().top();
                 let least_text = if fills { max } else { 0.0 };
-                let shaped = |edit: egui::TextEdit<'_>| {
-                    style(edit)
-                        .frame(false)
-                        .margin(egui::Vec2::ZERO)
-                        .desired_width(f32::INFINITY)
-                        .min_size(vec2(0.0, least_text))
-                };
+                let shaped = viewport_text(style, least_text);
                 let editor = match laid {
                     None => field.editor(ui, text, shaped),
                     Some((face, revision)) => {
