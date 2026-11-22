@@ -21279,7 +21279,8 @@ pub mod encounter_groups {
                 format!("Initiative fields keep one column: {fields:?}"),
             );
             // Layout 11c (M0122, M0125): Add ends at its group's block edge, the right edge of
-            // the group's heading (its drag handle), and Initiative stands just before Add.
+            // the group's heading (its drag handle), and Initiative stands just before Add: no
+            // more than `L` (the line's item gap and the field's margin) between them.
             // A changed group's handle adds `. Changed.` to its name.
             let nodes = d.nodes();
             let grips = groups.map(|name| {
@@ -21302,7 +21303,7 @@ pub mod encounter_groups {
                 "m32-L11c-arrival-controls-edge",
                 placed.iter().all(|(edge, before)| {
                     edge.abs() <= 1.0
-                        && (0.0..=crate::design::S + crate::design::XS + 1.0).contains(before)
+                        && (0.0..=crate::design::L + 1.0).contains(before)
                 }),
                 format!("Add's right edge from its heading's, and the gap from the field to Add, per group: {placed:?}"),
             );
