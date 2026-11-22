@@ -316,7 +316,7 @@ pub fn painted_in_block(block: Rect, tail: f32, painted: &[Rect]) -> Result<(), 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::design::components::{ACTION_WORDS_LAID, Action};
+    use crate::design::components::{ACTION_WORDS_LAID, Action, LaidAction};
     use crate::design::memo::{Changed, Revised, Revision};
     use crate::design::outcome::{Messages, NoPress, PaneFrame};
     use crate::design::pane::{Block, BlockRegion, Body, RegionState, draw_laid};
@@ -346,8 +346,25 @@ mod tests {
         )
     }
 
+    /// Every word the last pass painted, as its painted galley holds it.
+    fn painted_words(harness: &Harness<'_, List>) -> Vec<String> {
+        fn walk(shape: &egui::Shape, words: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Text(text) => words.push(text.galley.text().to_owned()),
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, words)),
+                _ => {}
+            }
+        }
+        let mut words = Vec::new();
+        for clipped in &harness.output().shapes {
+            walk(&clipped.shape, &mut words);
+        }
+        words
+    }
+
     /// One line of the test list: its words, its actions' words, the words of its parts below.
-    #[derive(Clone, PartialEq)]
+    /// Neither `Clone` nor `PartialEq`: the host keeps its layouts by their key, so a per-frame
+    /// copy or compare of its lines cannot come back (review of PR 892, P3).
     struct Line {
         heading: Option<(&'static str, usize)>,
         title: Option<&'static str>,
@@ -400,7 +417,7 @@ mod tests {
     struct Kept {
         inputs: LineInputs,
         laid: Vec<Laid>,
-        words: Vec<Vec<Arc<Galley>>>,
+        words: Vec<Vec<LaidAction>>,
         below: Vec<Vec<Arc<Galley>>>,
         counted: Vec<(f32, f32)>,
     }
@@ -468,8 +485,15 @@ mod tests {
         ]
     }
 
+    /// The test's actions: "Light one" shows its keyboard hint and "Eat one" its icon, so the
+    /// quiet frame and the measures cover both (review of PR 892, P2).
     fn action(words: &str) -> Action<'_> {
-        Action::secondary(words).density(Density::Read)
+        let action = Action::secondary(words).density(Density::Read);
+        match words {
+            "Light one" => action.key("L"),
+            "Eat one" => action.icon(crate::design::icons::ADD),
+            _ => action,
+        }
     }
 
     fn actions(ui: &Ui, at: usize, line: &Line) -> Vec<LineAction> {
@@ -611,7 +635,7 @@ mod tests {
         let mut drew = Vec::new();
         for (index, words) in line.actions.iter().enumerate() {
             let at_slot = slot::FIRST_ACTION + index;
-            let laid = Arc::clone(&kept.words[at][index]);
+            let laid = kept.words[at][index].clone();
             let rect = ui.in_slot(at_slot, |ui| action(words).laid(laid).show(ui).rect);
             lowest = lowest.max(rect.bottom());
             drew.push((ui.slot(at_slot), rect));
@@ -928,30 +952,78 @@ mod tests {
     }
 
     /// A quiet frame lays out and measures no text, from the host's entry through its paint:
-    /// no line by the recipe, no measure by the host, no word by an action (each paints its laid
-    /// words); the host compares its key, never its lines. A new value, a new action, a wider
-    /// name column, a new font atlas, another theme and another scale each lay the lines out
-    /// again, and the pass shows it. Red: actions that lay their own words; a key without the
-    /// atlas; a host that lays its lines every frame.
+    /// no line by the recipe, no measure by the host, no word, keyboard hint or icon by an action
+    /// (each paints what was laid); the host compares its key, never its lines. The theme's atlas
+    /// probe is its one layout, at most once a pass. A new value and a renamed action of the same
+    /// length paint their new words (as painted, not as named) in the same pass, and the next
+    /// quiet frame paints them again from what was laid. A new action, a wider name column, a new
+    /// font atlas, another theme and another scale each lay the lines out again, and the pass
+    /// shows it. Red: actions that lay their own words, hints or icons; a key without the atlas;
+    /// a host that lays its lines every frame; a host that keeps its laid lines after an edit.
     #[test]
     fn a_quiet_frame_lays_no_line_and_a_change_lays_it_again() {
+        use crate::design::theme::ATLAS_PROBES;
         let laid = || LINES_LAID.with(std::cell::Cell::get);
+        let probes = || ATLAS_PROBES.with(std::cell::Cell::get);
         let mut harness = harness(560.0, 1.0, (0.0, false));
-        let before = work();
-        harness.run_steps(3);
-        assert_eq!(
-            work(),
-            before,
-            "quiet frames lay out and measure no text (recipe, host, actions)"
+        let quiet = |harness: &mut Harness<'_, List>, what: &str| {
+            let (before, probed, pass) = (work(), probes(), harness.ctx.cumulative_pass_nr());
+            harness.run_steps(3);
+            let passes = (harness.ctx.cumulative_pass_nr() - pass) as usize;
+            assert_eq!(
+                work(),
+                before,
+                "{what}: quiet frames lay out and measure no text (recipe, host, actions)"
+            );
+            assert!(
+                probes() - probed <= passes,
+                "{what}: the atlas probe is laid at most once a pass ({} in {passes})",
+                probes() - probed
+            );
+        };
+        quiet(&mut harness, "at first");
+        let painted = painted_words(&harness);
+        assert!(
+            painted.iter().any(|words| words == "L")
+                && painted
+                    .iter()
+                    .any(|words| words == crate::design::icons::ADD),
+            "the hinted and the icon action paint their hint and icon: {painted:?}"
         );
         let before = laid();
         harness
             .state_mut()
             .edit(|lines| lines[0].value = "4".to_owned());
         harness.step();
+        let painted = painted_words(&harness);
         assert!(
-            laid() > before && harness.query_by_label("4").is_some(),
-            "a new value is laid out and shown in the same pass"
+            laid() > before
+                && painted.iter().any(|words| words == "4")
+                && !painted.iter().any(|words| words == "3"),
+            "a new value of the same length is laid out and painted in the same pass: {painted:?}"
+        );
+        quiet(&mut harness, "after a new value");
+        assert!(
+            painted_words(&harness).iter().any(|words| words == "4"),
+            "a quiet frame paints the new value from what was laid"
+        );
+        let before = laid();
+        harness
+            .state_mut()
+            .edit(|lines| lines[1].actions[0] = "Ask");
+        harness.step();
+        let painted = painted_words(&harness);
+        let count = |painted: &[String], word: &str| painted.iter().filter(|w| *w == word).count();
+        assert!(
+            laid() > before && count(&painted, "Ask") == 1 && count(&painted, "Use") == 1,
+            "a renamed action of the same length paints its new words in the same pass: \
+             {painted:?}"
+        );
+        quiet(&mut harness, "after a renamed action");
+        assert_eq!(
+            count(&painted_words(&harness), "Ask"),
+            1,
+            "a quiet frame paints the renamed action from what was laid"
         );
         let before = laid();
         harness
@@ -991,6 +1063,87 @@ mod tests {
         harness.ctx.set_pixels_per_point(1.5);
         harness.step();
         assert!(laid() > before, "another scale lays the lines out again");
+    }
+
+    /// Review of PR 892 (P2): laid words hold no colour and no state. A laid primary that is
+    /// blocked paints its laid words (no layout of its own) in the colour and font that the same
+    /// action paints its own words in; one that is selected paints as a secondary, so its laid
+    /// words (laid in the primary's font) are not its words: it lays its own, in the secondary's
+    /// font and colour. Red: words laid in their kind's colour; laid words painted whatever their
+    /// font.
+    #[test]
+    fn a_laid_action_paints_in_its_state() {
+        let save = || Action::primary("Save").density(Density::Read);
+        let mut harness = Harness::builder()
+            .with_size(vec2(400.0, 300.0))
+            .themed_ui_state(
+                |ui, own: &mut Vec<usize>| {
+                    own.clear();
+                    let laid = save().laid_words(ui, 200.0);
+                    let blocked = || save().blocked_if(true, "Name it first.");
+                    let selected = || save().selected(true);
+                    for action in [
+                        blocked(),
+                        blocked().laid(laid.clone()),
+                        selected(),
+                        selected().laid(laid.clone()),
+                    ] {
+                        let before = ACTION_WORDS_LAID.with(std::cell::Cell::get);
+                        action.show(ui);
+                        own.push(ACTION_WORDS_LAID.with(std::cell::Cell::get) - before);
+                    }
+                },
+                Vec::new(),
+            );
+        harness.run_steps(2);
+        fn walk(shape: &egui::Shape, texts: &mut Vec<egui::epaint::TextShape>) {
+            match shape {
+                egui::Shape::Text(text) if text.galley.text() == "Save" => texts.push(text.clone()),
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, texts)),
+                _ => {}
+            }
+        }
+        let mut texts = Vec::new();
+        for clipped in &harness.output().shapes {
+            walk(&clipped.shape, &mut texts);
+        }
+        // As the tessellator paints it: the first glyph's colour, or the paint's colour for a laid
+        // word without one, at the shape's opacity; and its font.
+        let seen = |text: &egui::epaint::TextShape| {
+            let glyph = text.galley.rows[0].row.visuals.mesh.vertices[0].color;
+            let color = if glyph == egui::Color32::PLACEHOLDER {
+                text.fallback_color
+            } else {
+                glyph
+            };
+            (
+                text.galley.job.sections[0].format.font_id.clone(),
+                text.override_text_color
+                    .unwrap_or(color)
+                    .gamma_multiply(text.opacity_factor),
+            )
+        };
+        assert_eq!(texts.len(), 4, "four actions paint their words");
+        assert_eq!(
+            seen(&texts[1]),
+            seen(&texts[0]),
+            "a blocked action paints its laid words as its own"
+        );
+        assert_eq!(
+            seen(&texts[3]),
+            seen(&texts[2]),
+            "a selected primary paints as a secondary"
+        );
+        assert_ne!(
+            seen(&texts[2]).0,
+            seen(&texts[0]).0,
+            "selected, it is a secondary"
+        );
+        assert_eq!(
+            harness.state(),
+            &vec![1, 0, 1, 1],
+            "the blocked action paints what was laid; the selected one lays its own words"
+        );
     }
 
     /// What the threshold case drew: the tail, the one-row width, and at each width its block,
