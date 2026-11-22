@@ -2,7 +2,6 @@
 //! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 #[path = "world/checks.rs"]
 pub mod checks;
 #[path = "world/edit.rs"]
