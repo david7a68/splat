@@ -9731,6 +9731,7 @@ mod tests {
     /// act stays (`Undo: 2 loot rolls`), never cut inside a word.
     #[test]
     fn ended_undo_long_target_ends_in_view_with_its_whole_words_in_hover_and_name() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let mut run = super::super::tests::run();
         run.state.phase = super::super::Phase::Ended {
@@ -9753,12 +9754,11 @@ mod tests {
         let shown = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(454.0, 640.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     shown.borrow_mut().ended_view(ui);
                 });
             });
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(4);
         let painted: Vec<_> = harness
             .output()
@@ -9809,12 +9809,11 @@ mod tests {
         let full = format!("Undo: initiative for {name}");
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(454.0, 640.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     setup.setup_view(ui);
                 });
             });
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(4);
         let painted: Vec<_> = harness
             .output()
@@ -9865,12 +9864,11 @@ mod tests {
                         }
                         let mut harness = egui_kittest::Harness::builder()
                             .with_size(egui::vec2(width, 800.0))
-                            .build(move |ctx| {
+                            .themed(move |ctx| {
                                 egui::CentralPanel::default().show(ctx, |ui| {
                                     run.ended_view(ui);
                                 });
                             });
-                        crate::design::theme::install(&harness.ctx);
                         harness.run_steps(4);
                         let top = harness
                             .output()
@@ -9922,6 +9920,7 @@ mod tests {
 
     #[test]
     fn iter8_b_setup_places_show_while_typing_and_fields_hold_still() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for width in [450.0, 960.0, 1920.0] {
             let mut run = super::super::tests::run();
@@ -9937,7 +9936,7 @@ mod tests {
             let shown = run.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 640.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let mut run = shown.borrow_mut();
                         for i in 0..3 {
@@ -9948,7 +9947,6 @@ mod tests {
                         }
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let label = "Initiative for Guard 3";
             // The field's id is its participant's in this run (`ParticipantKey`).
@@ -10068,6 +10066,7 @@ mod tests {
     /// start. With no group to roll, or individual rolls, setup shows no empty tie slot.
     #[test]
     fn iter18_b_grouped_roll_reserves_the_tie_slot_from_the_start() {
+        use crate::design::test_harness::ThemedPage as _;
         use crate::encounter_settings::Grouping;
         use egui_kittest::kittest::Queryable;
         let slot = Density::Read.control() * 2.0;
@@ -10076,7 +10075,7 @@ mod tests {
             let shown = run.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(1200.0, 640.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let mut run = shown.borrow_mut();
                         for i in 0..run.state.participants.len() {
@@ -10084,7 +10083,6 @@ mod tests {
                         }
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let read = |harness: &egui_kittest::Harness<'_>| {
                 ["Guard 1", "Guard 2", "Guard 3"].map(|name| {
@@ -10149,6 +10147,7 @@ mod tests {
 
     #[test]
     fn iter8_b_arrival_fields_share_a_column_for_add_and_add_ten() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for width in [440.0, 760.0] {
             let mut run = super::super::tests::run();
@@ -10184,13 +10183,12 @@ mod tests {
             run.set_groups(Arc::new(groups));
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 800.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let arrival = run.arrival_block(ui);
                         run.group_list(ui, arrival);
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             // iter-25-R review 2: a frame scans the participants once per group for the panel's
             // width and once per group for its row, and builds no list of rounds besides.
@@ -10240,6 +10238,7 @@ mod tests {
     /// its kept line is dropped.
     #[test]
     fn iter_29_r1_arrivals_add_stays_across_a_difficulty_boundary() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         use std::{cell::RefCell, rc::Rc};
         let base = super::super::tests::run().state.participants[0]
@@ -10316,7 +10315,7 @@ mod tests {
             let shown = run.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width as f32, 800.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let mut run = shown.borrow_mut();
                         let arrival = run.arrival_block(ui);
@@ -10325,7 +10324,6 @@ mod tests {
                         }
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(3);
             let before = harness.get_by_label(&label).rect();
             harness.get_by_label(&label).click();
@@ -10408,7 +10406,7 @@ mod tests {
             let floor_words = format!("{} {first}…", icons::DRAG);
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width as f32, 600.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         measured.set(design::number_width(
                             ui,
@@ -10419,7 +10417,6 @@ mod tests {
                         run.group_list(ui, arrival);
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let title = harness
                 .output()
@@ -10464,6 +10461,7 @@ mod tests {
 
     #[test]
     fn iter10_b_arrival_controls_share_one_edge_and_bad_totals_warn_once() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let names = ["Ash Hounds", "Shrine Reserve", "Lost Patrol"];
         let mut edges = Vec::new();
@@ -10516,13 +10514,12 @@ mod tests {
                 let seen = edge.clone();
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(vec2(width, 800.0))
-                    .build(move |ctx| {
+                    .themed(move |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             seen.set(ui.max_rect().right());
                             run.groups_tab(ui);
                         });
                     });
-                design::theme::install(&harness.ctx);
                 harness.run_steps(2);
                 harness
             };
@@ -10659,13 +10656,12 @@ mod tests {
             let seen = parent.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(440.0, 640.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         seen.set(ui.id());
                         run.groups_tab(ui)
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(3);
             let focus = parent.get().with(local).with("focus");
             (harness, focus)
@@ -10798,7 +10794,7 @@ mod tests {
         let drawn = shared.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(760.0, 800.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let (run, open) = &mut *drawn.borrow_mut();
                     if *open {
@@ -10806,7 +10802,6 @@ mod tests {
                     }
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let texts = |harness: &egui_kittest::Harness<'_>| {
             harness
@@ -10928,10 +10923,9 @@ mod tests {
         let drawn = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(760.0, 800.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| drawn.borrow_mut().groups_tab(ui));
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         const RIDERS: &str = "Mist Riders: The first member has no initiative bonus. Type a total.";
         const VANGUARD: &str = "Vanguard: Enter a whole number, or clear the field to roll.";
@@ -11636,6 +11630,7 @@ mod tests {
 
     #[test]
     fn iter7_b_setup_counts_partly_hidden_rows_from_scroll_content_top() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let mut checked = 0;
         for height in (300..640).step_by(4) {
@@ -11643,10 +11638,9 @@ mod tests {
             run.state.participants[2].name = "Last guard".into();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(600.0, height as f32))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| run.setup_body(ui));
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let row = harness.get_by_label_contains("Last guard ·").rect();
             let Some(clip) = harness
@@ -11673,6 +11667,7 @@ mod tests {
 
     #[test]
     fn iter7_b_death_saves_follow_party_and_recorded_counts() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for (side, linked, successes, failures, shown) in [
             ("party", false, 0, 0, true),
@@ -11697,10 +11692,9 @@ mod tests {
             p.hp = Some(0);
             p.successes = successes;
             p.failures = failures;
-            let mut harness = egui_kittest::Harness::new(move |ctx| {
+            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| run.side_panel(ui));
             });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             assert_eq!(
                 harness.query_by_label("Add a death save success").is_some(),
@@ -11712,6 +11706,7 @@ mod tests {
 
     #[test]
     fn iter7_b_setup_names_fit_and_initiative_fields_align() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let mut run = super::super::tests::run();
         run.state.participants.truncate(2);
@@ -11729,14 +11724,13 @@ mod tests {
         }
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(450.0, 640.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     for i in 0..2 {
                         ui.push_id(i, |ui| run.setup_row(ui, i));
                     }
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let a = harness
             .get_by_label("Initiative for Kestrel Dunmoor")
@@ -11768,13 +11762,13 @@ mod tests {
 
     #[test]
     fn iter6_b_sheet_notice_keeps_text_colour_and_warning_bar() {
+        use crate::design::test_harness::ThemedPage as _;
         let words = "Brannoch Vale’s sheet changed: HP 58 → 54, temp HP 5 → 0";
-        let mut harness = egui_kittest::Harness::new(|ctx| {
+        let mut harness = egui_kittest::Harness::builder().themed(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 design::small_message(ui, design::Tone::Warning, words);
             });
         });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let texts: Vec<_> = harness
             .output()
@@ -12032,6 +12026,7 @@ mod tests {
 
     #[test]
     fn card_origin_does_not_repeat_a_name_change_and_joins_group_and_npc() {
+        use crate::design::test_harness::ThemedPage as _;
         let text = crate::library::note_text("Guard", "creature", None);
         let mut p = Participant::with_overrides(
             "guard".into(),
@@ -12055,10 +12050,9 @@ mod tests {
         assert_eq!(change_origin(&p).as_deref(), None);
         use egui_kittest::kittest::Queryable;
         let card = p.clone();
-        let mut harness = egui_kittest::Harness::new(move |ctx| {
+        let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| changes_block(ui, &card, true));
         });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label(&format!(
             "{} Changed · arrived with Rival Team",
@@ -13217,6 +13211,7 @@ mod tests {
 
     #[test]
     fn iter5_b_arrival_fault_uses_text_colour_and_warning_mark() {
+        use crate::design::test_harness::ThemedPage as _;
         // iter-22-B FT1: the mark's tone comes from the fault's kind. An unread change is a
         // warning; an invalid maximum HP is an error here, as it is in the group editor.
         for (fault, tone, other) in [
@@ -13236,7 +13231,7 @@ mod tests {
             ),
         ] {
             let shown = fault.clone();
-            let mut harness = egui_kittest::Harness::new(move |ctx| {
+            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     crate::encounters::member_fault_row(
                         ui,
@@ -13245,7 +13240,6 @@ mod tests {
                     );
                 });
             });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let texts: Vec<_> = harness
                 .output()
@@ -13304,14 +13298,13 @@ mod tests {
             );
             let pressed = std::rc::Rc::new(std::cell::Cell::new(None));
             let seen = pressed.clone();
-            let mut harness = egui_kittest::Harness::new(move |ctx| {
+            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     if let Some(repair) = crate::encounters::member_fault_row(ui, &fault, view) {
                         seen.set(Some(repair));
                     }
                 });
             });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             assert_eq!(
                 harness.query_by_label("Edit group").is_some(),
@@ -13342,6 +13335,7 @@ mod tests {
 
     #[test]
     fn iter_1_b_saved_footer_closes_in_one_step() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let run = std::rc::Rc::new(std::cell::RefCell::new(super::super::tests::run()));
         let directory = tempfile::tempdir().unwrap();
@@ -13351,14 +13345,13 @@ mod tests {
         let closed = std::rc::Rc::new(std::cell::Cell::new(false));
         let shown = run.clone();
         let result = closed.clone();
-        let mut harness = egui_kittest::Harness::new(move |ctx| {
+        let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 if shown.borrow_mut().live_footer(ui) {
                     result.set(true);
                 }
             });
         });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Close run").click();
         harness.run_steps(2);
@@ -13368,6 +13361,7 @@ mod tests {
 
     #[test]
     fn iter_2_b_tie_arrows_keep_their_columns() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let mut run = super::super::tests::run();
         run.initiative.roster_ties = false;
@@ -13377,7 +13371,7 @@ mod tests {
         }
         let first = run.state.participants[0].name.clone();
         let last = run.state.participants[1].name.clone();
-        let mut harness = egui_kittest::Harness::new(move |ctx| {
+        let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 for i in [0, 1] {
                     ui.push_id(i, |ui| {
@@ -13386,7 +13380,6 @@ mod tests {
                 }
             });
         });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let down = harness
             .get_by_label(&format!("Move {first} after {last}"))
@@ -13399,6 +13392,7 @@ mod tests {
 
     #[test]
     fn a_combat_row_initiative_opens_a_field_to_change_it() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let mut run = super::super::tests::run();
         for (index, total) in [20, 15, 10].into_iter().enumerate() {
@@ -13409,14 +13403,13 @@ mod tests {
         let shown = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(1280.0, 720.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let mut run = shown.borrow_mut();
                     run.live_keys(ui);
                     run.roster(ui, 600.0, 0.0, 0.0);
                 });
             });
-        design::theme::install(&harness.ctx);
         run.borrow_mut().select(1);
         harness.run_steps(2);
         // Escape leaves the total as it was, and the DM's look at another row stays.
@@ -13561,6 +13554,7 @@ mod tests {
 
     #[test]
     fn iter9_b_correct_does_not_change_sync_and_explicit_stop_stays() {
+        use crate::design::test_harness::ThemedPage as _;
         use std::{cell::RefCell, rc::Rc};
         for connected in [false, true] {
             for explicitly_stopped in [false, true] {
@@ -13581,11 +13575,10 @@ mod tests {
                 let shown = run.clone();
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(vec2(960.0, 1080.0))
-                    .build(move |ctx| {
+                    .themed(move |ctx| {
                         egui::CentralPanel::default()
                             .show(ctx, |ui| shown.borrow_mut().record_tab(ui, 0));
                     });
-                design::theme::install(&harness.ctx);
                 harness.run_steps(3);
                 let run = run.borrow();
                 assert_eq!(
@@ -13613,10 +13606,9 @@ mod tests {
         let shown = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(560.0, 900.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| shown.borrow_mut().record_tab(ui, 0));
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(3);
         let painted = |harness: &egui_kittest::Harness<'_>| {
             harness
@@ -13665,6 +13657,7 @@ mod tests {
 
     #[test]
     fn iter9_b_exhaustion_stepper_uses_scan_and_keeps_undo() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         use std::{cell::RefCell, rc::Rc};
         let mut run = super::super::tests::run();
@@ -13673,11 +13666,10 @@ mod tests {
         let shown = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(560.0, 640.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default()
                     .show(ctx, |ui| shown.borrow_mut().conditions_tab(ui, 0));
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         for name in ["Decrease Exhaustion level", "Increase Exhaustion level"] {
             let rect = harness.get_by_label(name).rect();
@@ -13813,6 +13805,7 @@ mod tests {
         std::rc::Rc<std::cell::RefCell<Run>>,
         egui_kittest::Harness<'static>,
     ) {
+        use crate::design::test_harness::ThemedPage as _;
         use std::{cell::RefCell, rc::Rc};
         let mut run = super::super::tests::run();
         run.state.participants[0].conditions = vec![level.into()];
@@ -13820,13 +13813,12 @@ mod tests {
         let shown = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(560.0, 640.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let at = shown.borrow().selected;
                     shown.borrow_mut().conditions_tab(ui, at);
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         (run, harness)
     }
@@ -14203,6 +14195,7 @@ mod tests {
 
     #[test]
     fn iter9_b_below_roster_notice_centres_compact_and_top_aligns_wrapped() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for (width, height) in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
             for wrapped in [false, true] {
@@ -14221,12 +14214,11 @@ mod tests {
                 run.notice_summary = (!wrapped).then(|| summary.into());
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(vec2(width, height))
-                    .build(move |ctx| {
+                    .themed(move |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             run.live_view(ui);
                         });
                     });
-                design::theme::install(&harness.ctx);
                 harness.run_steps(3);
                 let log = harness
                     .query_all_by_label("Log")
@@ -14274,6 +14266,7 @@ mod tests {
     /// message, and its underline covers only the word.
     #[test]
     fn iter14_b_log_link_word_starts_at_its_gap_and_underline_covers_only_it() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let summary = "Guard 1: HP 17 → 15";
         let mut paths = std::collections::BTreeSet::new();
@@ -14291,12 +14284,11 @@ mod tests {
                 run.notice_summary = Some(summary.into());
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(vec2(width, height))
-                    .build(move |ctx| {
+                    .themed(move |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             run.live_view(ui);
                         });
                     });
-                design::theme::install(&harness.ctx);
                 harness.run_steps(3);
                 let gap = harness.ctx.style().spacing.item_spacing.x;
                 let target = harness
@@ -14378,6 +14370,7 @@ mod tests {
 
     #[test]
     fn iter_1_b_unsaved_close_still_asks_and_keeps_the_run() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{cell::RefCell, rc::Rc};
         let mut run = super::super::tests::run();
@@ -14394,7 +14387,7 @@ mod tests {
         let elsewhere = away.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(960.0, 640.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let mut run = shown.borrow_mut();
                     if run.closing.is_open() && !elsewhere.get() {
@@ -14402,7 +14395,6 @@ mod tests {
                     }
                 });
             });
-        design::theme::install(&harness.ctx);
         let keep_focused = |harness: &egui_kittest::Harness<'_>| {
             harness
                 .query_by_label("Keep running")
@@ -14524,6 +14516,7 @@ mod tests {
     #[test]
     fn iter_29_r1_g178_the_pending_line_names_what_waits() {
         use crate::combat_sync::CombatSync;
+        use crate::design::test_harness::ThemedPage as _;
         let pending = CombatSync::simulated_state(SyncState::Pending, 7, 62, 8);
         assert_eq!(
             pending_words(&pending),
@@ -14565,12 +14558,11 @@ mod tests {
         let shown = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(1200.0, 800.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     shown.borrow_mut().show(ui);
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(3);
         let first = work();
         assert!(
@@ -14618,6 +14610,7 @@ mod tests {
     /// dialog closes the focus is back where it was.
     #[test]
     fn iter_29_r1_the_open_close_dialog_keeps_the_focus_in_the_whole_view() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{cell::RefCell, rc::Rc};
         let mut run = super::super::tests::run();
@@ -14633,7 +14626,7 @@ mod tests {
         let prompt = app_prompt.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(1200.0, 800.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     shown.borrow_mut().show(ui);
                 });
@@ -14655,7 +14648,6 @@ mod tests {
                     ctx.data_mut(|data| data.remove::<bool>(once));
                 }
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(4);
         let focused_name = |harness: &egui_kittest::Harness<'_>| {
             harness
@@ -14741,6 +14733,7 @@ mod tests {
     /// field keeps the focus. Keep running (Enter or Escape) gives the focus back to Amount.
     #[test]
     fn iter_29_r1_a_newer_focus_cancels_the_dialog_return() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{cell::RefCell, rc::Rc};
         #[derive(Default)]
@@ -14762,7 +14755,7 @@ mod tests {
             let shown = page.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(800.0, 600.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     let owner = egui::Id::new("close_run_test");
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let mut page = shown.borrow_mut();
@@ -14800,7 +14793,6 @@ mod tests {
                         });
                     }
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(3);
             let focused_name = |harness: &egui_kittest::Harness<'_>| {
                 harness

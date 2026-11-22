@@ -865,6 +865,10 @@ pub enum JumpTo {
     /// events, M0556); as [`bring_into_view`], the least scroll that shows the row whole with
     /// what it opened (History's opened run, M0194).
     ListedRow,
+    /// A journey's check whose result an act just wrote (a roll, an entered number; M0546): the
+    /// least scroll that shows its line whole ([`bring_into_view`]), so the DM sees what the act
+    /// did.
+    CheckResult,
 }
 
 /// The `ScrollColumn` that holds `ui` moves, at its next pass, so that the screen y `top` of

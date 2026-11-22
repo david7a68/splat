@@ -619,10 +619,11 @@ mod tests {
 
     #[test]
     fn a_creatures_line_keeps_a_typed_space_and_an_emptied_row_leaves_the_rest() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(640.0, 400.0))
-            .build_state(
+            .themed_state(
                 |ctx, (key, name, loot): &mut (&str, &str, Option<String>)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         show_cell(ui, *key, name, loot);
@@ -630,7 +631,6 @@ mod tests {
                 },
                 ("goblin", "Goblin", Some("Iron; Roll gems".to_owned())),
             );
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
         // M-U0.1 (M0401): the row menu's Remove is a design action, one `Read` control high as
         // every row menu's actions are (a raw egui button is 26 px), and its Undo brings the
