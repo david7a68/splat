@@ -2807,6 +2807,21 @@ impl<'f, A: 'static> Messages<'f, A> {
         self.kept_at(Ticket::of(order), outcome.into().typed(), None)
     }
 
+    /// The footer that places a `pane_then` body: empty until the body's acts are in (`then`
+    /// gives it its lines), and with this pane's edges (#511: `rows_end_whole` holds here too, so
+    /// the body's own bottom ends it at a whole row).
+    fn first_footer(&self) -> Footer<'static> {
+        let empty: TypedFooter<A> = TypedFooter {
+            lines: Vec::new(),
+            sink: PressSink(std::rc::Rc::default()),
+            retained: None,
+            plan: None,
+        };
+        let mut footer = Footer::typed(self.id, self.width, Box::new(empty));
+        footer.whole_rows = self.rows_end_whole;
+        footer
+    }
+
     /// Every line is in: the refused attempts take their places (`refusal_rank`). Then the
     /// typed footer, and the pane's one press slot.
     fn into_footer(self) -> (Footer<'static>, PressSink<A>) {
@@ -2866,16 +2881,9 @@ impl<'f, A: 'static> Messages<'f, A> {
         add: impl FnOnce(&mut Ui) -> R,
         then: impl FnOnce(R, &mut Self) -> T,
     ) -> Paned<T, A> {
-        let (id, width) = (self.id, self.width);
+        let footer = self.first_footer();
         let mut messages = self;
         let mut sink = None;
-        let empty: TypedFooter<A> = TypedFooter {
-            lines: Vec::new(),
-            sink: PressSink(std::rc::Rc::default()),
-            retained: None,
-            plan: None,
-        };
-        let footer = Footer::typed(id, width, Box::new(empty));
         let body = footer.pane_then(ui, body, add, |inner, footer| {
             let out = then(inner, &mut messages);
             let (lines, press) = messages.into_footer();
@@ -2898,16 +2906,9 @@ impl<'f, A: 'static> Messages<'f, A> {
         add: impl FnOnce(&mut Ui) -> R,
         then: impl FnOnce(R, &mut Self) -> T,
     ) -> Paned<T, A> {
-        let (id, width) = (self.id, self.width);
+        let footer = self.first_footer();
         let mut messages = self;
         let mut sink = None;
-        let empty: TypedFooter<A> = TypedFooter {
-            lines: Vec::new(),
-            sink: PressSink(std::rc::Rc::default()),
-            retained: None,
-            plan: None,
-        };
-        let footer = Footer::typed(id, width, Box::new(empty));
         let body = footer.pane_content_then(ui, scroll, add, |inner, footer| {
             let out = then(inner, &mut messages);
             let (lines, press) = messages.into_footer();

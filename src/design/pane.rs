@@ -2073,6 +2073,18 @@ pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -
     let first = widget_count(ui);
     let inner = add(ui);
     let last = widget_count(ui);
+    if let Some(cut) = kept {
+        // The clip's cut holds for presses and for a screen reader too.
+        let layer = ui.layer_id();
+        edge_widgets(
+            ui,
+            key.with("edge"),
+            layer,
+            (first, last),
+            cut,
+            Some(view.bottom()),
+        );
+    }
     let rows = super::components::rows_this_pass(ui.ctx());
     let after = rows.len();
     let pass = ui.ctx().cumulative_pass_nr();
@@ -2204,39 +2216,28 @@ struct Stop {
     rows_before: usize,
 }
 
-/// The body stops where the next pass's body room ends (`Stop`): at that room's end, or at its
-/// last whole registered row there (N12) with that row cut's hairline, which the next pass keeps,
-/// so it is drawn the same; a line cut's hairline at the footer's top. Nothing moves: the footer
-/// was drawn once, in its place. The edge holds for presses and for a screen reader as for the
-/// paint (review of PR 456, P2): each body widget that reaches below it takes presses only above
-/// it from now on (re-registered with its rect cut at the edge, for hover only: egui keeps the
-/// last rect, so its press area ends there, and its focus order, accessible node and id stay), and one wholly below it is hidden from a
-/// screen reader. The focused control keeps both: the next pass, in the new room, brings it whole
-/// into view (`reveal_focus`: the room changed under it). Returns whether content goes on below
-/// the body's room. The tooltip of a control it hides goes in that pass too (PR 456's P3).
+/// Each body widget of `layer` (`widgets`: its range in this pass's list) that reaches below
+/// the edge `limit` takes presses only above it from now on: it is registered again with its
+/// rect cut at the edge, for hover only (egui keeps the last rect given for an id, so its press
+/// area and its accessible node end there, and its focus order and id stay). One wholly below it
+/// is hidden from a screen reader, with its tooltip. The focused control keeps both: the pane
+/// brings it whole into view (`reveal_focus`). So the edge holds for presses and for a screen
+/// reader as for the paint: in the pass that stops the body (`stop_body`), and in every pass a
+/// kept whole-row cut ends the body or a column (#511). `kept` is that view's bottom: the clip
+/// already ends at the cut there (so egui's press rect is empty), and only widgets whose top is
+/// above the view's bottom count, so content past the view stays the scroll's own.
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
-    use egui::layers::ShapeIdx;
-    let Stop {
-        id,
-        layer,
-        room,
-        width,
-        next,
-        body,
-        widgets,
-        cut_line,
-        rows_before,
-    } = stop;
-    let cut = next.view.is_some_and(Scroll::cut);
-    let row_cut = next.view.filter(|_| cut).and_then(|view| {
-        let rows = super::components::rows_this_pass(ui.ctx());
-        whole_row_cut(rows.get(rows_before..).unwrap_or_default(), view.viewport)
-    });
-    let limit = row_cut.unwrap_or(next.body_room.bottom());
+fn edge_widgets(
+    ui: &mut Ui,
+    salt: Id,
+    layer: LayerId,
+    widgets: (usize, usize),
+    limit: f32,
+    kept: Option<f32>,
+) {
     let focused = ui.ctx().memory(|memory| memory.focused());
     let below: Vec<egui::WidgetRect> = ui.ctx().viewport(|viewport| {
         viewport
@@ -2245,21 +2246,24 @@ fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
             .get_layer(layer)
             .skip(widgets.0)
             .take(widgets.1.saturating_sub(widgets.0))
-            .filter(|widget| widget.interact_rect.bottom() > limit && Some(widget.id) != focused)
+            .filter(|widget| {
+                let reaches = match kept {
+                    Some(bottom) => widget.rect.bottom() > limit && widget.rect.top() < bottom,
+                    None => widget.interact_rect.bottom() > limit,
+                };
+                reaches && Some(widget.id) != focused
+            })
             .copied()
             .collect()
     });
     if !below.is_empty() {
         // Its rect cut at the edge: egui keeps the last rect given for an id, and its press area
         // is that rect inside the clip (empty for a widget wholly below the edge).
-        let edge = ui.new_child(
-            egui::UiBuilder::new()
-                .id_salt(id.with("stop_body"))
-                .disabled(),
-        );
+        let edge = ui.new_child(egui::UiBuilder::new().id_salt(salt).disabled());
         let above = Rect::everything_above(limit);
         for widget in &below {
-            let _ = edge.interact(widget.rect.intersect(above), widget.id, Sense::hover());
+            let cut = edge.interact(widget.rect.intersect(above), widget.id, Sense::hover());
+            super::layout::field_cut_at_edge(ui.ctx(), widget.id, cut.rect);
             if widget.rect.top() >= limit {
                 ui.ctx()
                     .accesskit_node_builder(widget.id, |node| node.set_hidden());
@@ -2281,6 +2285,38 @@ fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
             }
         }
     }
+}
+
+/// The body stops where the next pass's body room ends (`Stop`): at that room's end, or at its
+/// last whole registered row there (N12) with that row cut's hairline, which the next pass keeps,
+/// so it is drawn the same; a line cut's hairline at the footer's top. Nothing moves: the footer
+/// was drawn once, in its place. The edge holds for presses and for a screen reader as for the
+/// paint (review of PR 456, P2): each body widget that reaches below it takes presses only above
+/// it from now on (re-registered with its rect cut at the edge, for hover only: egui keeps the
+/// last rect, so its press area ends there, and its focus order, accessible node and id stay), and one wholly below it is hidden from a
+/// screen reader. The focused control keeps both: the next pass, in the new room, brings it whole
+/// into view (`reveal_focus`: the room changed under it). Returns whether content goes on below
+/// the body's room. The tooltip of a control it hides goes in that pass too (PR 456's P3).
+fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
+    use egui::layers::ShapeIdx;
+    let Stop {
+        id,
+        layer,
+        room,
+        width,
+        next,
+        body,
+        widgets,
+        cut_line,
+        rows_before,
+    } = stop;
+    let cut = next.view.is_some_and(Scroll::cut);
+    let row_cut = next.view.filter(|_| cut).and_then(|view| {
+        let rows = super::components::rows_this_pass(ui.ctx());
+        whole_row_cut(rows.get(rows_before..).unwrap_or_default(), view.viewport)
+    });
+    let limit = row_cut.unwrap_or(next.body_room.bottom());
+    edge_widgets(ui, id.with("stop_body"), layer, widgets, limit, None);
     ui.ctx().graphics_mut(|graphics| {
         let list = graphics.entry(layer);
         for at in body.0..body.1 {
@@ -2711,6 +2747,8 @@ impl Footer<'_> {
         // Content goes on below the room: the footer cuts it, and draws its hairline.
         let mut cut = shown && scroll.is_some_and(Scroll::cut);
         let mut footer = None;
+        // Whether `stop_body` ended the body at its next room's edge in this pass.
+        let mut stopped = false;
         if shown {
             let third = most;
             // Where the footer starts, and the most it may take there: below a short body, `S`
@@ -2794,6 +2832,7 @@ impl Footer<'_> {
                 .0;
             if let Some(next) = after {
                 placement = next.placement;
+                stopped = true;
                 cut = stop_body(
                     ui,
                     Stop {
@@ -2818,6 +2857,21 @@ impl Footer<'_> {
                 ui.ctx()
                     .request_discard("the message footer measures its height");
             }
+        }
+        // #511: the kept whole-row cut ends the body for presses and a screen reader as for the
+        // paint (`body_clip`), in every pass; `stop_body` did it at its own edge.
+        if !stopped
+            && let Some(cut) = row_cut
+            && let Some(scroll) = scroll
+        {
+            edge_widgets(
+                ui,
+                id.with("row_cut_edge"),
+                layer,
+                (widgets_from, widgets_to),
+                cut,
+                Some(scroll.viewport.bottom()),
+            );
         }
         // The held press, once the footer has measured this pass.
         if let Some((held_key, facts)) = hold_facts {
@@ -3462,16 +3516,28 @@ mod row_cut_tests {
     /// the same in a `Body::Fills` pane for the rows of its scroll columns, two side by side with
     /// rows of different heights: each column cuts at its own last whole row. Layout step 11a
     /// (SM5, AM16): with no footer line, a pane whose messages ask for it (`rows_end_whole`) cuts
-    /// at its own bottom as at a footer.
+    /// at its own bottom as at a footer. #511: the same through `Messages::pane_then`, whose body
+    /// is placed before its lines are in.
     #[test]
     fn a_footer_never_cuts_through_a_registered_row() {
         use crate::design::layout::ScrollColumn;
         use crate::design::test_harness::Themed as _;
         use crate::design::test_harness::ThemedPage as _;
         let (mut hidden_by_the_cut, mut hidden_when_asked) = (0, 0);
+        let mut hidden_when_asked_then = 0;
+        let mut hidden_from_reader = 0;
         let (mut columns_apart, mut plain_fills_cut) = (0, 0);
         for fills in [false, true] {
-            for (message, whole) in [(true, false), (false, false), (false, true)] {
+            for (message, whole, then) in [
+                (true, false, false),
+                (false, false, false),
+                (false, true, false),
+                (true, false, true),
+                (false, true, true),
+            ] {
+                if fills && then {
+                    continue;
+                }
                 // A whole-row cut: at the footer, or at the body's own bottom when asked.
                 let cuts = message || whole;
                 for height in (300..=360).step_by(7) {
@@ -3522,6 +3588,13 @@ mod row_cut_tests {
                                     column(ui, left, "rows_left", "Row", 44.0);
                                     column(ui, right, "rows_right", "Tall", 60.0);
                                 });
+                            } else if then {
+                                let _ = messages.pane_then(
+                                    ui,
+                                    Body::Content,
+                                    |ui| rows(ui, "Row", 44.0),
+                                    |(), _| (),
+                                );
                             } else {
                                 let _ =
                                     messages.pane(ui, Body::Content, |ui| rows(ui, "Row", 44.0));
@@ -3577,7 +3650,8 @@ mod row_cut_tests {
                         .next()
                         .expect("the pane keeps its record");
                     let room = record.room();
-                    for (view, side) in &sides {
+                    for (at, (view, side)) in sides.iter().enumerate() {
+                        let name = if at == 0 { "Row " } else { "Tall " };
                         let clip = view.bottom();
                         // The column's own view: a `Content` pane's viewport, or the clip of
                         // a `Fills` column with no cut (the room's bottom bounds it).
@@ -3591,7 +3665,7 @@ mod row_cut_tests {
                         for row in side.iter().filter(|_| cuts) {
                             assert!(
                                 row.bottom() <= clip + 0.5 || row.top() >= clip - 0.5,
-                                "n12-cut: fills {fills}, message {message}, whole {whole}, height {height}: row {row:?} cut at {clip}"
+                                "n12-cut: fills {fills}, message {message}, whole {whole}, then {then}, height {height}: row {row:?} cut at {clip}"
                             );
                         }
                         if cuts {
@@ -3605,6 +3679,9 @@ mod row_cut_tests {
                             if whole {
                                 hidden_when_asked += hidden;
                             }
+                            if whole && then {
+                                hidden_when_asked_then += hidden;
+                            }
                             let hairline = output.shapes.iter().any(|clipped| {
                                 matches!(&clipped.shape, egui::Shape::LineSegment { points, .. }
                                     if (points[0].y - clip).abs() <= 1.0 && points[0].y == points[1].y
@@ -3614,6 +3691,28 @@ mod row_cut_tests {
                                 hairline || clip >= viewport.bottom() - 0.5,
                                 "n12-hairline: fills {fills}, whole {whole}, height {height}, cut {clip}"
                             );
+                            // #511: in every pass the cut holds for a screen reader and for presses
+                            // as for the paint. A row the cut hides inside the view is hidden from a
+                            // screen reader; no row node shown to one reaches below the cut there.
+                            use egui_kittest::kittest::{NodeT, Queryable};
+                            for node in harness.query_all_by_role(egui::accesskit::Role::Button) {
+                                let Some(label) = node.accesskit_node().label() else {
+                                    continue;
+                                };
+                                let mine = label.starts_with(name);
+                                let in_the_gap = node.rect().bottom() > clip + 0.5
+                                    && node.rect().top() < viewport.bottom() - 0.5;
+                                if mine && in_the_gap {
+                                    assert!(
+                                        node.accesskit_node().is_hidden(),
+                                        "n12-reader: fills {fills}, message {message}, whole {whole}, then {then}, height {height}: {label} at {:?} is under the cut at {clip} and not hidden",
+                                        node.rect()
+                                    );
+                                }
+                                if mine && node.accesskit_node().is_hidden() {
+                                    hidden_from_reader += 1;
+                                }
+                            }
                         } else if fills {
                             plain_fills_cut += side
                                 .iter()
@@ -3650,6 +3749,14 @@ mod row_cut_tests {
         assert!(
             hidden_when_asked > 0,
             "n12-rows-end-whole: with no footer line, `rows_end_whole` cut a row at the body's bottom"
+        );
+        assert!(
+            hidden_from_reader > 0,
+            "n12-reader-reached: some row under a cut was hidden from a screen reader"
+        );
+        assert!(
+            hidden_when_asked_then > 0,
+            "#511: `rows_end_whole` cuts at the body's bottom through `Messages::pane_then` too"
         );
         assert!(
             columns_apart > 0,

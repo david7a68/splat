@@ -1542,7 +1542,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         // Package K2: the popup parts.
         ("src/design/outcome.rs", "measuring", &[Ban::Layout(1)]),
-        ("src/design/pane.rs", "stop_body", &[Ban::Layout(1)]),
+        ("src/design/pane.rs", "edge_widgets", &[Ban::Layout(1)]),
         // Layout PR 9b: the quiet-frame harnesses' bare screen and their stock reference, egui's
         // own text edit, whose cost a document editor is measured against (shared by
         // `quiet_text` and `splat-content-ui`'s `quiet_markdown`).
