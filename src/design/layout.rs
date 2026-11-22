@@ -539,35 +539,17 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Editor {
         let id = self.id();
+        // A document lent by `pane::EditorRegion::document` brings its kept layout (layout PR 9b).
+        let mut kept = text
+            .kept()
+            .map(|(face, live)| super::pane::kept_layouter(id, face, live));
         let guard = TextGuard::before(ui, id, &|| text.bound().0);
-        let output = style(TextEdit::multiline(text).id(id)).show(ui);
-        guard.after(ui, &|| text.bound().0, &output.response);
-        record_field(ui, &output.response);
-        Editor {
-            frame: output.response.rect,
-            view: output.text_clip_rect,
-            response: output.response,
-            galley: output.galley,
-            galley_pos: output.galley_pos,
-            text_clip_rect: output.text_clip_rect,
-            cursor_range: output.cursor_range,
-        }
-    }
-
-    /// [`editor`](Self::editor) with the part's own `layouter` (an editor viewport keeps its laid
-    /// out text by revision: `pane::EditorRegion::document`).
-    pub(in crate::design) fn editor_laid<T: GuardedText>(
-        self,
-        ui: &mut Ui,
-        text: &mut T,
-        layouter: &mut dyn FnMut(&Ui, &dyn TextBuffer, f32) -> std::sync::Arc<egui::Galley>,
-        style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
-    ) -> Editor {
-        let id = self.id();
-        let guard = TextGuard::before(ui, id, &|| text.bound().0);
-        let output = style(TextEdit::multiline(text).id(id))
-            .layouter(layouter)
-            .show(ui);
+        let edit = style(TextEdit::multiline(text).id(id));
+        let edit = match kept.as_mut() {
+            Some(layouter) => edit.layouter(layouter),
+            None => edit,
+        };
+        let output = edit.show(ui);
         guard.after(ui, &|| text.bound().0, &output.response);
         record_field(ui, &output.response);
         Editor {
@@ -731,6 +713,17 @@ impl BoundText {
 pub trait GuardedText: TextBuffer + guarded::Sealed {
     #[doc(hidden)]
     fn bound(&self) -> Bound;
+
+    /// The face and the live key of a document lent for one draw, whose layout the part keeps.
+    #[doc(hidden)]
+    fn kept(
+        &self,
+    ) -> Option<(
+        super::pane::Face,
+        std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
+    )> {
+        None
+    }
 }
 
 /// What a [`GuardedText`] is to the guard. Opaque.
@@ -759,6 +752,15 @@ impl GuardedText for super::text_draft::TextDraft {
 impl GuardedText for super::text_draft::Lent<'_> {
     fn bound(&self) -> Bound {
         Bound(BoundText::Draft(self.draft.key()))
+    }
+
+    fn kept(
+        &self,
+    ) -> Option<(
+        super::pane::Face,
+        std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
+    )> {
+        Some((self.face.clone(), self.live.clone()))
     }
 }
 

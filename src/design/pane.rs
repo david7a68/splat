@@ -359,11 +359,11 @@ struct LaidKey {
 /// it with the text it was given and again after each edit in its own pass (several in one
 /// frame too); each call reads the draft's live key (`text_draft::Lent`), so an edited text is
 /// never answered with the galley of another revision.
-fn kept_layouter<'a>(
+pub(in crate::design) fn kept_layouter(
     field: Id,
     face: Face,
-    live: &'a std::cell::Cell<super::text_draft::DraftKey>,
-) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> + 'a {
+    live: std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
+) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> {
     let store = field.with("kept_layout");
     move |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| {
         let font = match &face {
@@ -416,21 +416,6 @@ fn kept_layouter<'a>(
         ui.ctx()
             .data_mut(|data| data.insert_temp(store, (key, galley.clone())));
         galley
-    }
-}
-
-/// The text edit of an editor viewport: the caller's `style`, then the part's own frame (none:
-/// the viewport draws it), margin and width, and its least height.
-fn viewport_text(
-    style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
-    least: f32,
-) -> impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t> {
-    move |edit| {
-        style(edit)
-            .frame(false)
-            .margin(egui::Vec2::ZERO)
-            .desired_width(f32::INFINITY)
-            .min_size(vec2(0.0, least))
     }
 }
 
@@ -592,6 +577,28 @@ fn region_drawn(ui: &Ui, pane: Id) -> Option<f32> {
 }
 
 impl EditorRegion<'_> {
+    /// [`editor`](Self::editor) for a document (`text_draft::TextDraft`, layout PR 9b, rulings
+    /// L8 and M25). The part lays the text out in `face` and keeps the laid-out text by its full
+    /// key (the draft's identity and revision, the measure, the font atlas's epoch, the visuals,
+    /// the face, and the caret for a face that folds): a quiet frame lays out, hashes and copies
+    /// none of it in the app. egui's own per-frame text copies stay, counted (M25). `style` sets
+    /// the rest of the text edit, not its font.
+    pub fn document(
+        self,
+        ui: &mut Ui,
+        field: super::layout::FieldId,
+        text: &mut super::text_draft::TextDraft,
+        face: Face,
+        style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+    ) -> super::layout::Editor {
+        let mut lent = super::text_draft::Lent {
+            live: std::rc::Rc::new(std::cell::Cell::new(text.key())),
+            draft: text,
+            face,
+        };
+        self.editor(ui, field, &mut lent, style)
+    }
+
     /// The pane's one editor, drawn through `field` (its id and text guard, `FieldId::editor`)
     /// inside the region, as tall as its text up to the region's height, then scrolling.
     ///
@@ -610,39 +617,6 @@ impl EditorRegion<'_> {
         ui: &mut Ui,
         field: super::layout::FieldId,
         text: &mut T,
-        style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
-    ) -> super::layout::Editor {
-        self.draw(ui, field, text, None, style)
-    }
-
-    /// [`editor`](Self::editor) for a document (`text_draft::TextDraft`, layout PR 9b, rulings
-    /// L8 and M25). The part lays the text out in `face` and keeps the laid-out text by its full
-    /// key (the draft's identity and revision, the measure, the font atlas's epoch, the visuals,
-    /// the face, and the caret for a face that folds): a quiet frame lays out, hashes and copies
-    /// none of it in the app. egui's own per-frame text copies stay, counted (M25). `style` sets
-    /// the rest of the text edit, not its font.
-    pub fn document(
-        self,
-        ui: &mut Ui,
-        field: super::layout::FieldId,
-        text: &mut super::text_draft::TextDraft,
-        face: Face,
-        style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
-    ) -> super::layout::Editor {
-        let live = std::cell::Cell::new(text.key());
-        let mut lent = super::text_draft::Lent {
-            draft: text,
-            live: &live,
-        };
-        self.draw(ui, field, &mut lent, Some((face, &live)), style)
-    }
-
-    fn draw<T: super::layout::GuardedText>(
-        self,
-        ui: &mut Ui,
-        field: super::layout::FieldId,
-        text: &mut T,
-        laid: Option<(Face, &std::cell::Cell<super::text_draft::DraftKey>)>,
         style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
     ) -> super::layout::Editor {
         let pane = innermost(ui);
@@ -743,14 +717,13 @@ impl EditorRegion<'_> {
                 // Where the content starts in this layout (the view's top less the offset used).
                 let origin = ui.max_rect().top();
                 let least_text = if fills { max } else { 0.0 };
-                let shaped = viewport_text(style, least_text);
-                let editor = match laid {
-                    None => field.editor(ui, text, shaped),
-                    Some((face, live)) => {
-                        let mut layouter = kept_layouter(field.id(), face, live);
-                        field.editor_laid(ui, text, &mut layouter, shaped)
-                    }
-                };
+                let editor = field.editor(ui, text, |edit| {
+                    style(edit)
+                        .frame(false)
+                        .margin(egui::Vec2::ZERO)
+                        .desired_width(f32::INFINITY)
+                        .min_size(vec2(0.0, least_text))
+                });
                 // The editor asks its scroll area to follow a caret that moved (egui's
                 // `scroll_to_rect`, animated, to the nearest edge). The region follows the caret
                 // itself, so that ask is replaced by one that moves nothing: no animated target

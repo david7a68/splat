@@ -144,12 +144,14 @@ impl egui::TextBuffer for TextDraft {
     }
 }
 
-/// A draft lent to egui's `TextEdit` for one draw: each change reaches `live`, so the part's
-/// layouter reads the live key on every call (egui lays out again after each edit in its own
-/// pass, also several in one frame).
+/// A draft lent to egui's `TextEdit` for one draw, with the face its kept layout is made in
+/// (`pane::EditorRegion::document`): each change reaches `live`, so the part's layouter reads
+/// the live key on every call (egui lays out again after each edit in its own pass, also
+/// several in one frame).
 pub(in crate::design) struct Lent<'a> {
     pub draft: &'a mut TextDraft,
-    pub live: &'a std::cell::Cell<DraftKey>,
+    pub live: std::rc::Rc<std::cell::Cell<DraftKey>>,
+    pub face: super::pane::Face,
 }
 
 impl egui::TextBuffer for Lent<'_> {

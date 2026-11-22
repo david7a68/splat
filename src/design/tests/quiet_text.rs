@@ -177,7 +177,7 @@ impl Editor {
         let ctx = self.ctx.clone();
         let mut shown = None;
         let output = ctx.run(input, |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| shown = self.draw(ui));
+            shown = self.draw(&mut root(ctx));
         });
         (output, shown)
     }
@@ -211,17 +211,7 @@ impl Editor {
                     .clone();
                 let mut layouter =
                     move |_: &egui::Ui, _: &dyn egui::TextBuffer, _: f32| galley.clone();
-                #[allow(
-                    clippy::disallowed_methods,
-                    reason = "the stock reference is egui's own text edit"
-                )]
-                let _ = egui::TextEdit::multiline(&mut self.plain)
-                    .id(FIELD.id())
-                    .layouter(&mut layouter)
-                    .frame(false)
-                    .margin(egui::Vec2::ZERO)
-                    .desired_width(wrap)
-                    .show(ui);
+                stock_text_edit(ui, &mut self.plain, wrap, &mut layouter);
                 None
             }
         }
@@ -234,6 +224,42 @@ impl Editor {
         drop(shown);
         allocated
     }
+}
+
+/// The whole screen, with no panel or frame of its own (both sides draw in the same one).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+fn root(ctx: &egui::Context) -> egui::Ui {
+    egui::Ui::new(
+        ctx.clone(),
+        egui::Id::new("quiet_text_root"),
+        egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(800.0, 600.0),
+        )),
+    )
+}
+
+/// The stock reference: egui's own text edit, laid out by `layouter`, at `wrap`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+fn stock_text_edit(
+    ui: &mut egui::Ui,
+    text: &mut String,
+    wrap: f32,
+    layouter: &mut dyn FnMut(&egui::Ui, &dyn egui::TextBuffer, f32) -> Arc<egui::Galley>,
+) {
+    let _ = egui::TextEdit::multiline(text)
+        .id(FIELD.id())
+        .layouter(layouter)
+        .frame(false)
+        .margin(egui::Vec2::ZERO)
+        .desired_width(wrap)
+        .show(ui);
 }
 
 /// About `bytes` bytes of `pattern`, repeated.
