@@ -243,7 +243,53 @@ fn removal(
     if names.len() > 1 {
         words = words.then(crate::sentence!("With it: {}.", names[1..].join("; ")));
     }
+    // A notice that the removal takes off the Due list says so, as an act's fall does
+    // (`result_words`): the DM sees Due go down and reads why.
+    for name in ended_notices(rules, today, ledger, &next) {
+        words = words.then(crate::sentence!("{} is no longer due.", name));
+    }
     Ok((placed, words.to_string(), names.swap_remove(0)))
+}
+
+/// The names of the notices due with `ledger` that are not due with `next`, oldest first. A
+/// day mark's open days share one row, named by its oldest day: each of its days that is no
+/// longer open is named, and a day that opens again ends nothing.
+fn ended_notices(rules: &Rules, today: &Today, ledger: &Ledger, next: &Ledger) -> Vec<String> {
+    let (before, after) = (
+        super::replay(rules, ledger, today),
+        super::replay(rules, next, today),
+    );
+    let mut ended = Vec::new();
+    for notice in &before.due {
+        match &notice.id {
+            NoticeRef::Day { mark, .. } => {
+                let open: Vec<u64> = after
+                    .due
+                    .iter()
+                    .filter(
+                        |still| matches!(&still.id, NoticeRef::Day { mark: m, .. } if m == mark),
+                    )
+                    .flat_map(|still| still.days.iter().copied())
+                    .collect();
+                for day in notice.days.iter().filter(|day| !open.contains(day)) {
+                    let one = super::Notice {
+                        id: NoticeRef::Day {
+                            mark: mark.clone(),
+                            day: *day,
+                        },
+                        ..notice.clone()
+                    };
+                    ended.push(one.name(rules));
+                }
+            }
+            id => {
+                if !after.due.iter().any(|still| still.id == *id) {
+                    ended.push(notice.name(rules));
+                }
+            }
+        }
+    }
+    ended
 }
 
 impl Trackers {

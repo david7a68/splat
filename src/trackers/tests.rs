@@ -1474,6 +1474,25 @@ fn each_write_path_of_the_ledger_holds() {
     fs::write(&path, &text).unwrap();
     race.trackers.read_disk();
     assert_eq!(value(&race, "favor", None), 1);
+    // M0566 (SH7, AH7): a Remove that takes a notice off the Due list says so in its result,
+    // as an act's fall does; a Remove that ends none says nothing more.
+    let t = &mut race.trackers;
+    t.press("seals", Some("Old Guard"), "Take seal", None);
+    let due = t.due();
+    let seal = t.test_history()["seals"]
+        .iter()
+        .find(|row| row.entry.instance.as_deref() == Some("Old Guard"))
+        .unwrap()
+        .entry
+        .clone();
+    t.remove(note, &seal);
+    let words = t.test_removed().map(|removed| removed.words).unwrap();
+    assert!(
+        words.starts_with("Removed ")
+            && words.ends_with(". First seal for Old Guard is no longer due."),
+        "{words}"
+    );
+    assert_eq!(t.due(), due - 1);
     // An Undo whose place changed on disk: the entry before the removed one was edited in
     // Obsidian. It puts nothing back, says so, and ends.
     let t = &mut race.trackers;

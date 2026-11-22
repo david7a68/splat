@@ -766,7 +766,8 @@ played, `Remove` is off and says `Use Undo in Trackers for a change of this sess
 Only the rows inside the reader's clip are laid out and drawn. A row's words that do not fit end at a whole word with `…` (`words_that_fit`), whole on hover and to assistive technology, fitted once for each change of the trackers and of the row's room. `Remove` takes the entry, the others of its press, and the entries of the notices
 it raised, and the reader's footer names the line and the change that went, so two rows with one label differ:
 `Removed Take seal: Keyring +1.` (a tracker without lines gives its name, a notice's press its label, `Removed End
-of month, Day 32 done: Crowd Favor +1.`), with `With it: …` for what went with it, and offers
+of month, Day 32 done: Crowd Favor +1.`), with `With it: …` for what went with it, then each notice it took off the
+Due list, as an act's fall says it (`First seal for Keyring is no longer due.`), and offers
 `Undo remove`, one step, as the Timeline's removal; it shows only while the note is in play. A refusal (the entry
 changed or is gone on disk, or a notice or a roll on a notice depends on it) and a failed save are the footer's reason line. When `Trackers.md` cannot be read the
 reader names it and shows no history and no value; when `Campaign.md` or a note in play cannot be read it says
