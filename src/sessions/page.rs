@@ -705,6 +705,8 @@ pub struct Sessions {
     rewards: plan::Rewards,
     /// The note's plan as rows, built when the note, the content or the encounters change.
     plan_model: plan::PlanModelCache,
+    /// What the plan's closed rows read from their data, kept by its inputs' revisions.
+    plan_projection: plan::ProjectionCache,
     /// The fight behind the open event, read once.
     /// The open played fight's summary, kept with the run's file as last found (or why not):
     /// a different answer from the folder reads it again (R41, round 30 review F2).

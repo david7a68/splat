@@ -3728,6 +3728,13 @@ impl Default for RunFactsRevised {
     }
 }
 
+/// The Session plan's fights and groups, shared, not copied (`Encounters::plan_kept`).
+#[derive(Clone, Default)]
+pub struct PlanKept {
+    pub fights: Arc<[PlanFight]>,
+    pub groups: Arc<[Arc<crate::encounter_run::RunGroup>]>,
+}
+
 #[derive(Default)]
 pub struct Encounters {
     active: Option<Campaign>,
@@ -3738,6 +3745,12 @@ pub struct Encounters {
     /// The snapshot that `plan_fights` lists, as its revision: a new read or a save of an
     /// encounter makes a new snapshot revision, and so a new revision here.
     plan_fights_read: crate::design::memo::Revised<Option<Uuid>>,
+    /// The Session plan's fights and groups, as `plan_fights` and `plan_groups` list them, kept
+    /// by that revision (layout 11c A2a): a quiet frame copies none.
+    plan_kept: crate::design::memo::Memo<
+        (crate::design::memo::Revision, crate::design::memo::Revision),
+        PlanKept,
+    >,
     /// G118: the Ready rows' difficulty lines, by template id, each under its `Roster::key`,
     /// room, font and scale. The page owns them; a new key replaces an entry, and a template
     /// that leaves the snapshot loses its entry at the next snapshot revision.
@@ -4405,6 +4418,24 @@ impl Encounters {
         self.plan_fights_read
             .set(self.snapshot.as_ref().map(|snapshot| snapshot.revision));
         self.plan_fights_read.revision()
+    }
+
+    /// The Session plan's fights and groups (`plan_fights`, `plan_groups`), listed again only when
+    /// the snapshot changed (`plan_fights_revision`; both come from it) or the saved runs did (a
+    /// fight lists its unfinished run: `saved_runs_revision`), never on a quiet frame.
+    pub fn plan_kept(&mut self) -> PlanKept {
+        let revision = (self.plan_fights_revision(), self.saved_runs_revision());
+        if self.plan_kept.get(revision).is_none() {
+            let built = PlanKept {
+                fights: self.plan_fights().into(),
+                groups: self.plan_groups().into(),
+            };
+            let _ = self.plan_kept.get_or(revision, || built);
+        }
+        self.plan_kept
+            .get(revision)
+            .expect("the plan's lists were just kept")
+            .clone()
     }
 
     pub fn plan_fights(&self) -> Vec<PlanFight> {

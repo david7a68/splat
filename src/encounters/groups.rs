@@ -5431,13 +5431,23 @@ mod tests {
         free.name = "Reinforcements".into();
         free.add(scout);
         free.save(&campaign, &[]).unwrap();
-        let encounters = Encounters {
+        let mut encounters = Encounters {
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Encounters::default()
         };
         let offered = encounters.plan_groups();
         assert_eq!(offered.len(), 1);
         assert_eq!(offered[0].encounter, None);
+        // Layout 11c A2a: the plan's lists are kept by the snapshot's and the saved runs'
+        // revisions: two frames with no change share one list, copied once.
+        let kept = encounters.plan_kept();
+        let again = encounters.plan_kept();
+        assert!(
+            std::sync::Arc::ptr_eq(&kept.groups, &again.groups)
+                && std::sync::Arc::ptr_eq(&kept.fights, &again.fights),
+            "a quiet frame copies no plan list"
+        );
+        assert_eq!(kept.groups.len(), 1, "the kept groups are the offered ones");
     }
 
     #[test]

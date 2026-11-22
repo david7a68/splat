@@ -2114,11 +2114,12 @@ impl Splat {
             }
             Page::Sessions => {
                 if let Some(campaign) = &active {
-                    let fights = self.encounters.plan_fights();
+                    // Layout 11c A2a: the plan's lists, shared and kept by the snapshot's revision.
+                    let kept = self.encounters.plan_kept();
+                    let (fights, groups) = (&kept.fights, &kept.groups);
                     let fights_revision = self.encounters.plan_fights_revision();
                     let saved_runs = self.encounters.saved_runs();
                     let saved_runs_revision = self.encounters.saved_runs_revision();
-                    let groups = self.encounters.plan_groups();
                     let blocked = self.encounters.plan_blocked();
                     let group_blocked = self.encounters.plan_group_blocked();
                     let group_open = self.encounters.group_open_in_plan();
