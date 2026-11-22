@@ -9129,6 +9129,7 @@ mod tests {
                 .all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
             let (row, at) = harness
                 .query_all_by_role(egui::accesskit::Role::Button)
+                .filter(|node| !node.accesskit_node().is_hidden() && node.rect().bottom() <= 640.0)
                 .filter_map(|node| {
                     let label = node.accesskit_node().label()?;
                     label

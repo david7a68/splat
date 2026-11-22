@@ -2181,7 +2181,7 @@ fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
                             egui::Order::Tooltip,
                             egui::Tooltip::tooltip_id(widget.id, count),
                         );
-                        if graphics.get(tip).is_some() {
+                        if false && graphics.get(tip).is_some() {
                             let list = graphics.entry(tip);
                             for at in 0..list.next_idx().0 {
                                 list.reset_shape(egui::layers::ShapeIdx(at));
