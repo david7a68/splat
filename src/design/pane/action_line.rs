@@ -109,11 +109,22 @@ impl ActionLine<'_> {
             (self.indent, top + control + XS)
         };
         let widths: Vec<f32> = self.actions.iter().map(|action| action.width).collect();
-        wrap_actions(&widths, (start, width), top, XS)
+        let wrapped = wrap(
+            &widths,
+            WrapRoom {
+                start,
+                width,
+                top,
+                height: control,
+                row_gap: XS,
+            },
+        );
+        let bottom = wrapped.bottom();
+        (wrapped.rects, bottom)
     }
 
     /// Each action's width in a row `width` wide, as the line lays it: its own, or a whole row's
-    /// room when it is wider (`wrap_actions`). A host that lays an action's words before paint
+    /// room when it is wider (`wrap`). A host that lays an action's words before paint
     /// (`Action::laid_words`) lays them in this width.
     pub fn action_widths(&self, width: f32) -> Vec<f32> {
         self.flow(width, 0.0)
@@ -199,34 +210,69 @@ impl ActionLine<'_> {
     }
 }
 
-/// The wrapping rule of a row of actions (`ActionLine`, and the Trackers page's Due rows, L7):
-/// each action as wide as `widths` says, `S` apart from `start`; an action that would pass
-/// `width` starts a new row unless it is a row's first; rows `row_gap` apart, a control tall
-/// each; an action wider than a whole row (`width - start`) takes a row of its own, cut to it.
-/// Returns each action's rect and the bottom of its last row (`top` with no actions).
-pub(in crate::design) fn wrap_actions(
-    widths: &[f32],
-    (start, width): (f32, f32),
-    top: f32,
-    row_gap: f32,
-) -> (Vec<Rect>, f32) {
-    let control = Density::Read.control();
-    if widths.is_empty() {
-        return (Vec::new(), top);
+/// The room a row of items wraps in (`wrap`): where each row starts and ends, the first row's
+/// top, each row's height and the gap between rows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WrapRoom {
+    pub start: f32,
+    pub width: f32,
+    pub top: f32,
+    pub height: f32,
+    pub row_gap: f32,
+}
+
+/// Items wrapped in their room (`wrap`): each item's rect and the bottom of the last row. Only
+/// `wrap` makes one, so every rect lies inside its room: a recipe places its items only from
+/// here (invariants note, class 8).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Wrapped {
+    rects: Vec<Rect>,
+    bottom: f32,
+}
+
+impl Wrapped {
+    /// Each item's rect, in order.
+    pub fn rects(&self) -> &[Rect] {
+        &self.rects
     }
-    let room = (width - start).max(0.0);
-    let (mut x, mut y) = (start, top);
+
+    /// The bottom of the last row (the room's top with no items).
+    pub fn bottom(&self) -> f32 {
+        self.bottom
+    }
+}
+
+/// The one wrap of a row of items (W1): `ActionLine`'s actions and the Trackers page's Due
+/// rows (`NoticeRow`, L7) both place their items from it. Each item is as wide as `widths`
+/// says, `S` after the one before; an item that would pass the room's right edge starts a new
+/// row unless it is a row's first; an item wider than a whole row (`width - start`) takes a row
+/// of its own and the row's width (it is cut there by its own rule). Its result can never be
+/// wider than its room.
+pub fn wrap(widths: &[f32], room: WrapRoom) -> Wrapped {
+    if widths.is_empty() {
+        return Wrapped {
+            rects: Vec::new(),
+            bottom: room.top,
+        };
+    }
+    // A row starts at its start, or at its right edge when the start passes it: never outside.
+    let start = room.start.min(room.width);
+    let row = (room.width - start).max(0.0);
+    let (mut x, mut y) = (start, room.top);
     let mut rects = Vec::with_capacity(widths.len());
-    for &action in widths {
-        if x > start + 0.5 && x + action > width + 0.5 {
+    for &item in widths {
+        if x > start + 0.5 && x + item > room.width + 0.5 {
             x = start;
-            y += control + row_gap;
+            y += room.height + room.row_gap;
         }
-        let shown = action.min(room);
-        rects.push(Rect::from_min_size(pos2(x, y), vec2(shown, control)));
+        let shown = item.clamp(0.0, row);
+        rects.push(Rect::from_min_size(pos2(x, y), vec2(shown, room.height)));
         x += shown + S;
     }
-    (rects, y + control)
+    Wrapped {
+        rects,
+        bottom: y + room.height,
+    }
 }
 
 /// For a caller's tests (the Trackers page's, L7): the narrowest row width at which `line`'s
@@ -702,6 +748,132 @@ mod tests {
         }
         assert!(wrapped > 0, "some width wraps a line's actions");
     }
+    /// W1 (invariants note, class 8): for any widths and any room, every rect `wrap` gives lies
+    /// inside its room, a row's items do not overlap and stand `S` apart, and the bottom follows
+    /// the rows; also one point below and one point above the width at which the items take one
+    /// row. Red: an item that keeps its width past the room.
+    #[test]
+    fn a_wrap_never_leaves_its_room() {
+        // A fixed sequence (xorshift), so every run checks the same cases.
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 10_000) as f32 / 10.0
+        };
+        let check = |widths: &[f32], room: WrapRoom| {
+            let wrapped = wrap(widths, room);
+            let start = room.start.min(room.width);
+            let rects = wrapped.rects();
+            assert_eq!(rects.len(), widths.len());
+            for (at, rect) in rects.iter().enumerate() {
+                assert!(
+                    rect.left() >= start - 0.5
+                        && rect.right() <= room.width.max(start) + 0.5
+                        && rect.top() >= room.top - 0.5
+                        && rect.bottom() <= wrapped.bottom() + 0.5
+                        && (rect.height() - room.height).abs() < 0.5,
+                    "item {at} {rect:?} leaves its room {room:?} ({widths:?})"
+                );
+                if let Some(before) = at.checked_sub(1).map(|at| rects[at])
+                    && (before.top() - rect.top()).abs() < 0.5
+                {
+                    assert!(
+                        rect.left() >= before.right() + S - 0.5,
+                        "items {} and {at} overlap in a row: {before:?} {rect:?}",
+                        at - 1
+                    );
+                }
+            }
+            let rows = rects
+                .windows(2)
+                .filter(|pair| pair[1].top() > pair[0].top() + 0.5)
+                .count()
+                + usize::from(!rects.is_empty());
+            let expected = if rows == 0 {
+                room.top
+            } else {
+                room.top + rows as f32 * room.height + (rows - 1) as f32 * room.row_gap
+            };
+            assert!(
+                (wrapped.bottom() - expected).abs() < 0.5,
+                "the bottom {} follows {rows} rows ({room:?})",
+                wrapped.bottom()
+            );
+        };
+        for case in 0..2_000 {
+            let width = 40.0 + next();
+            let start = next() % (width * 1.2);
+            let widths: Vec<f32> = (0..1 + case % 7).map(|_| next() * 0.4).collect();
+            let room = WrapRoom {
+                start,
+                width,
+                top: 10.0,
+                height: Density::Read.control(),
+                row_gap: XS,
+            };
+            check(&widths, room);
+            let one_row = start + widths.iter().sum::<f32>() + S * (widths.len() - 1) as f32;
+            for edge in [one_row - 1.0, one_row + 1.0] {
+                check(
+                    &widths,
+                    WrapRoom {
+                        width: edge,
+                        ..room
+                    },
+                );
+            }
+            check(&[], room);
+        }
+    }
+
+    /// W1: a real long item ("Score for Old Guard") in a room one point wider than it and one
+    /// point narrower: it keeps its width, then takes its row's width and cuts its own words;
+    /// at both, the action painted in its rect lies inside the room.
+    #[test]
+    fn a_wrapped_long_action_paints_inside_its_room() {
+        let mut harness = Harness::builder()
+            .with_size(vec2(600.0, 300.0))
+            .themed_ui_state(
+                |ui, painted: &mut Vec<(WrapRoom, Rect, Rect)>| {
+                    painted.clear();
+                    let long = action("Score for Old Guard");
+                    let width = long.natural_width(ui);
+                    let origin = ui.max_rect().min;
+                    for (at, row) in [width + 1.0, width - 1.0].into_iter().enumerate() {
+                        let room = WrapRoom {
+                            start: origin.x,
+                            width: origin.x + row,
+                            top: origin.y + at as f32 * 60.0,
+                            height: Density::Read.control(),
+                            row_gap: XS,
+                        };
+                        let wrapped = wrap(&[width], room);
+                        let rect = wrapped.rects()[0];
+                        let drew = ui
+                            .new_child(egui::UiBuilder::new().max_rect(rect))
+                            .add_enabled_ui(true, |ui| action("Score for Old Guard").show(ui).rect)
+                            .inner;
+                        painted.push((room, rect, drew));
+                    }
+                },
+                Vec::new(),
+            );
+        harness.run_steps(2);
+        for (room, rect, drew) in harness.state() {
+            assert!(
+                drew.left() >= room.start - 0.5 && drew.right() <= room.width + 0.5,
+                "the action painted at {drew:?} (its rect {rect:?}) leaves its room {room:?}"
+            );
+        }
+        let state = harness.state();
+        assert!(
+            state[1].1.width() < state[0].1.width(),
+            "one point narrower, the item takes its row's width: {state:?}"
+        );
+    }
+
     /// Review of PR 876 (P2): an action wider than a whole row of actions takes a row of its
     /// own, cut to the row's room, so every action stays in the block (width 340, columns 120 and
     /// 48, actions 40, 40 and 200: the third ended at 384). Red: the wrap that let it run on.
