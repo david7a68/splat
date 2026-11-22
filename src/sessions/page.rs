@@ -7783,26 +7783,42 @@ let paned = messages.pane_editor(ui, |ui, region| {
                 let frame = PaneFrame::new(ui);
                 let messages =
                     self.draft_messages(&frame, "template_footer", true, ui.available_width());
-                // One thing at a time, so that the DM does not type into another template. The
-                // new template's form does not take the region: the pane is then a content pane.
-                let paned = messages.pane_editor(ui, |ui, region| {
-                    if self.new_template.is_some() {
-                        // Round 27: `Cancel` starts its line, and its target reaches into the
-                        // gutter: an `L` gutter keeps it clear of the column's splitter.
-                        egui::Frame::new()
-                            .inner_margin(egui::Margin {
-                                left: (design::L - design::S) as i8,
-                                ..Default::default()
-                            })
-                            .show(ui, |ui| self.new_template_form(ui));
-                    } else {
-                        self.template_editor(ui, region);
-                    }
-                });
+                // The pane is drawn in its template's scope (review of PR 898): the region's
+                // scroll belongs to the template it shows, so each template opens at its place.
+                let scope = self.template_scope();
+                let paned = ui
+                    .push_id(scope, |ui| {
+                        messages.pane_editor(ui, |ui, region| self.template_pane_body(ui, region))
+                    })
+                    .inner;
                 if let Some(press) = paned.pressed {
                     self.draft_press(press, true);
                 }
             });
+    }
+
+    /// The template pane's scope: its template (review of PR 898). The pane drawn in it keeps
+    /// one editor scroll per template.
+    fn template_scope(&self) -> (&'static str, Option<String>) {
+        ("template_pane", self.template.clone())
+    }
+
+    /// The template pane's body: the template editor in the pane's editor region, or the new
+    /// template's form. One thing at a time, so that the DM does not type into another
+    /// template; the form does not take the region, so the pane is then a content pane.
+    fn template_pane_body(&mut self, ui: &mut egui::Ui, region: design::pane::EditorRegion<'_>) {
+        if self.new_template.is_some() {
+            // Round 27: `Cancel` starts its line, and its target reaches into the gutter: an `L`
+            // gutter keeps it clear of the column's splitter.
+            egui::Frame::new()
+                .inner_margin(egui::Margin {
+                    left: (design::L - design::S) as i8,
+                    ..Default::default()
+                })
+                .show(ui, |ui| self.new_template_form(ui));
+        } else {
+            self.template_editor(ui, region);
+        }
     }
 
     /// The template list's footer, with the list alone on screen: the delete result.
@@ -9840,6 +9856,53 @@ mod tests {
             Some("## Plan\n"),
             "n0-template-owner: Ctrl+Z in Travel gave it the words typed in Downtime"
         );
+        // Review of PR 898 (P2): the editor's scroll belongs to its template. Long A scrolled,
+        // long B opens at its own top; B scrolled less; A opens again where A was.
+        let long: String = (0..120).map(|line| format!("Line {line}\n")).collect();
+        let (long_a, long_b) = (
+            create_template(dir.path(), "Long A", &long).unwrap(),
+            create_template(dir.path(), "Long B", &long).unwrap(),
+        );
+        harness
+            .state_mut()
+            .templates
+            .extend([long_a.clone(), long_b.clone()]);
+        let offset = |harness: &egui_kittest::Harness<'_, Sessions>| {
+            design::pane::editor_frames(&harness.ctx)
+                .first()
+                .map_or(-1.0, |frame| frame.offset())
+        };
+        let scroll = |harness: &mut egui_kittest::Harness<'_, Sessions>, by: f32| {
+            let view = harness.get_by_label("Template text").rect();
+            harness.hover_at(egui::pos2(view.center().x, 300.0));
+            harness.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -by),
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(30);
+        };
+        harness.state_mut().select_template(&long_a.name);
+        harness.run_steps(4);
+        scroll(&mut harness, 600.0);
+        let at_a = offset(&harness);
+        assert!(at_a > 100.0, "the wheel scrolls long A: {at_a}");
+        harness.state_mut().select_template(&long_b.name);
+        harness.run_steps(4);
+        let at_b = offset(&harness);
+        assert!(
+            at_b.abs() < 0.5,
+            "n0-template-scroll: long B opens at its own top, not at A's {at_a}: {at_b}"
+        );
+        scroll(&mut harness, 200.0);
+        let at_b = offset(&harness);
+        harness.state_mut().select_template(&long_a.name);
+        harness.run_steps(4);
+        let back = offset(&harness);
+        assert!(
+            (back - at_a).abs() < 1.0 && (at_b - at_a).abs() > 50.0,
+            "n0-template-scroll: A opens again at its own {at_a}, not B's {at_b}: {back}"
+        );
     }
 
     /// Review of PR 594 (Astra, second P1): words typed and erased in note A come back with
@@ -9877,8 +9940,20 @@ mod tests {
             .themed_state(
                 |ctx, (sessions, draw, panel): &mut (Sessions, bool, bool)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        if *draw {
-                            sessions.note_editor(ui, *panel, None);
+                        if *draw && *panel {
+                            // The Notes panel as `notes_panel` draws it: its editor in the
+                            // pane's editor region (review of PR 898).
+                            let frame = PaneFrame::new(ui);
+                            let messages = Messages::<()>::new(
+                                &frame,
+                                "notes_panel_test",
+                                ui.available_width(),
+                            );
+                            let _ = messages.pane_editor(ui, |ui, region| {
+                                sessions.note_editor(ui, true, Some(region));
+                            });
+                        } else if *draw {
+                            sessions.note_editor(ui, false, None);
                         }
                     });
                 },
@@ -10554,7 +10629,10 @@ mod tests {
     fn template_pane(ui: &mut egui::Ui, sessions: &mut Sessions) {
         let frame = PaneFrame::new(ui);
         let messages = Messages::<()>::new(&frame, "template_test", ui.available_width());
-        let _ = messages.pane_editor(ui, |ui, region| sessions.template_editor(ui, region));
+        let scope = sessions.template_scope();
+        let _ = ui.push_id(scope, |ui| {
+            messages.pane_editor(ui, |ui, region| sessions.template_pane_body(ui, region))
+        });
     }
 
     /// The page's kept results as the session footer draws them, with the press acted on as
