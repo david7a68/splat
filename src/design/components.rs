@@ -1808,6 +1808,7 @@ fn field_label<R>(
     };
     let first = count(ui);
     field_caption(ui, label, role);
+    let controls = count(ui);
     // The block's top while its control draws (`field_top`); the field around it, if any, after.
     let pass = ui.ctx().cumulative_pass_nr();
     let outer = ui.ctx().data_mut(|data| {
@@ -1822,6 +1823,25 @@ fn field_label<R>(
         .data_mut(|data| data.insert_temp(Id::new(FIELD_TOP), outer));
     let last = count(ui);
     let bottom = field_feedback(ui, warning, help, error);
+    // A warning is the field's own: its controls carry it as their accessible description, so a
+    // screen reader says it when the empty field takes the focus (layout PR 10d). Only while a
+    // warning shows: no work for a field without one.
+    if let Some(warning) = warning {
+        let ids: Vec<Id> = ui.ctx().viewport(|viewport| {
+            viewport
+                .this_pass
+                .widgets
+                .get_layer(layer)
+                .skip(controls)
+                .take(last.saturating_sub(controls))
+                .map(|widget| widget.id)
+                .collect()
+        });
+        for id in ids {
+            ui.ctx()
+                .accesskit_node_builder(id, |node| node.set_description(warning));
+        }
+    }
     // Only a focused control of this block, or the control whose list is open: one or two
     // lookups, nothing that grows with the form.
     let inside = |id: Id| {
@@ -2617,7 +2637,7 @@ fn keys_field<T>(
 
 /// A state as an icon, a word and a colour. Colour is never the only signal. A status whose
 /// icon and word differ in colour is a `KindStatus` (`design::status`).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Status<'a> {
     pub icon: &'a str,
     pub word: &'a str,
@@ -4870,6 +4890,35 @@ impl<H: std::hash::Hash> Section<H> {
     }
 }
 
+/// A section whose header is a row the caller draws, not a title: a list whose rows open in
+/// place (a sheet's spells, each a fixed row with its name and its facts). `header` draws the row
+/// for its state (`open`, for its caret) and gives back its response. The row says whether it is
+/// open to a screen reader, a click on it opens or closes it, and the body opens under it, at
+/// the row's left edge. It starts closed; its state is kept under `id`. The body's value, while
+/// it is open. Review of PR 730: the one other way to open a section; `clippy.toml` refuses
+/// egui's `CollapsingState` drawing and `Ui::collapsing` outside the design system.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+pub fn section_row<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    header: impl FnOnce(&mut Ui, bool) -> Response,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> Option<R> {
+    let id = ui.make_persistent_id(id);
+    let mut state =
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+    let row = header(ui, state.is_open());
+    ui.ctx()
+        .accesskit_node_builder(row.id, |node| node.set_expanded(state.is_open()));
+    if row.clicked() {
+        state.toggle(ui);
+    }
+    state.show_body_unindented(ui, add).map(|body| body.inner)
+}
+
 /// A collapsing section ([`Section`]) under its title.
 pub fn section<R>(
     ui: &mut Ui,
@@ -6498,11 +6547,13 @@ mod tests {
     /// and the state follows a click on its own header only.
     #[test]
     fn a_section_says_whether_it_is_open() {
+        let notes = std::rc::Rc::new(std::cell::Cell::new("3 notes"));
+        let title = notes.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 300.0))
-            .build_ui(|ui| {
+            .build_ui(move |ui| {
                 let _ = section(ui, "Details", |ui| ui.label("Inside details"));
-                let _ = section_with_id(ui, "notes", "3 notes", |ui| ui.label("Inside notes"));
+                let _ = section_with_id(ui, "notes", title.get(), |ui| ui.label("Inside notes"));
                 let _ = quiet_section(ui, "Technical", |ui| ui.label("Inside technical"));
                 // A section its owner opens (a History run read from a link).
                 let _ = section_opened(ui, "runs", "2 runs", Some(true), |ui| {
@@ -6556,6 +6607,22 @@ mod tests {
             expanded(&harness)[4],
             Some(false),
             "m-p0-section-default-open: the DM closes a section open by default, and it stays closed"
+        );
+        // Review of PR 730: a section with an id keeps its state when its count changes (a
+        // repair in Campaign content's issues).
+        notes.set("2 notes");
+        harness.run_steps(3);
+        assert_eq!(
+            {
+                use egui_kittest::kittest::{NodeT, Queryable};
+                harness
+                    .get_by_label("2 notes")
+                    .accesskit_node()
+                    .data()
+                    .is_expanded()
+            },
+            Some(true),
+            "m-p0-section-id: the open section stays open under its new count"
         );
         assert!(
             {
@@ -6675,6 +6742,14 @@ mod tests {
                             ui.label("second control")
                         });
                         field(ui, "Last label", None, None, |ui| ui.label("third control"));
+                        // Layout PR 10d: a field's warning is its control's description.
+                        small_field_needing(
+                            ui,
+                            "Needed label",
+                            Some("Enter the address."),
+                            None,
+                            |ui| ui.button("Needed control"),
+                        );
                     } else {
                         help(ui, HELP);
                     }
@@ -6712,6 +6787,17 @@ mod tests {
                 assert!(
                     (gap - L).abs() <= 0.5,
                     "n3-error: {gap} from error to label"
+                );
+                use egui_kittest::kittest::{NodeT, Queryable};
+                let description = harness
+                    .get_by_label("Needed control")
+                    .accesskit_node()
+                    .description()
+                    .map(|words| words.to_string());
+                assert_eq!(
+                    description.as_deref(),
+                    Some("Enter the address."),
+                    "warning-described: the control says its field's warning"
                 );
             }
         }
