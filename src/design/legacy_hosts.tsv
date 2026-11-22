@@ -109,6 +109,7 @@ row-clip	src/design/components.rs	draft_comparison_labeled	1	design	design imple
 row-clip	src/design/layout.rs	MenuPopup::show	1	design	design implementation boundary
 row-clip	src/design/pane.rs	Footer::place	1	design	design implementation boundary
 row-clip	src/design/pane.rs	whole_rows	2	design	design implementation boundary
+row-clip	src/design/pane/region.rs	clip_to_part	1	design	a block an edge cuts draws only its parts (layout 11c A1b, review of PR 743; raised)
 row-clip	src/design/turn_heading.rs	paint	1	design	design implementation boundary
 row-clip	src/encounter_run/view.rs	Run::roster	4	Run
 row-clip	src/encounters/groups.rs	Encounters::group_editor_view	1	Encounters
@@ -137,6 +138,7 @@ scroll-request	src/design/components.rs	reveal_least	1	design	design implementat
 scroll-request	src/design/components.rs	scroll_part	2	design	design implementation boundary
 scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
 scroll-request	src/design/pane.rs	reveal_focus	1	design	design implementation boundary
+scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes a column after a region request (layout 11c A1b; raised)
 scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
 scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run

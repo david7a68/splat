@@ -492,14 +492,208 @@ fn dm_input(facts: &Facts, run: &Run) -> bool {
     false
 }
 
-/// A `ScrollColumn`: its persistent key, and whether it may host a reveal (R46,
-/// `ScrollColumn::hosts_reveals`).
+/// A `ScrollColumn`: its persistent key, whether it may host a reveal (R46,
+/// `ScrollColumn::hosts_reveals`), and the offset a region's request queued for it that this
+/// pass applies (`take_queued`), which `settle_queued` keeps from egui's own scroll targets.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Column {
     pub key: Id,
     pub hosts: bool,
     /// The egui scroll area's own id: its state says whether it still moves from the DM's drag.
     pub area: Id,
+    pub applied: Option<f32>,
+}
+
+/// The one request queued for a column (layout 11c, A1b; review of PR 770): a measured region's
+/// request, or a typed jump ([`jump`]). A newer request for the column replaces it, whatever
+/// asked it; one rule applies and cancels them all (`take_queued`).
+#[derive(Clone, Copy, Debug)]
+struct Queued {
+    offset: f32,
+    /// What asked it: a region's request (`None`) or a jump's reason.
+    why: Option<JumpTo>,
+    /// The column's view (screen points) when it was queued: only input over it is the DM's
+    /// input for this request.
+    view: Rect,
+    /// The frame it was queued in, and the last frame it waited in.
+    made: u64,
+    frame: u64,
+}
+
+fn queued_id(column: Id) -> Id {
+    column.with("design_region_queued")
+}
+
+/// Queue a move of `by` points for the column `ui` is drawn in (a region's resolved request,
+/// layout 11c): the column applies it at the start of its next pass (`take_queued`), drawn in
+/// another pass of this frame. A newer request replaces it. Outside a `ScrollColumn`, nothing.
+pub(in crate::design) fn queue(ui: &Ui, by: f32) {
+    if let Some((_, region)) = owning_region(ui) {
+        enqueue(ui, &region, by, None);
+    }
+}
+
+/// Queue the column's offset `by` points from where it is now, for its next pass: its one
+/// request, replacing an older one.
+fn enqueue(ui: &Ui, region: &Region, by: f32, why: Option<JumpTo>) {
+    let frame = ui.ctx().cumulative_frame_nr();
+    let queued = Queued {
+        offset: (region.offset + by).max(0.0),
+        why,
+        view: region.view,
+        made: frame,
+        frame,
+    };
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(queued_id(region.key), queued));
+    ui.ctx().request_discard("a request moves its column");
+}
+
+/// The view of the `ScrollColumn` that `ui` is drawn in, in screen points (its area's viewport
+/// inside its clip): a sideways clip egui keeps wider than the column is cut to the column.
+pub(in crate::design) fn column_view(ui: &Ui) -> Option<Rect> {
+    owning_region(ui).map(|(_, region)| region.view)
+}
+
+/// The offset queued for the column `key`, taken at the start of its pass. Only the DM's input
+/// over that column (or to a control in it) counts (review of PR 757): a wheel turn over it or a
+/// drag begun in it ends the request, also while the press is held; a press held still in it
+/// makes the request wait, up to `QUEUED_FRAMES`; any other press in it, or a key, text or input
+/// method event while the focus is in it, ends it; else it applies in its own frame or the next
+/// one. A release ends a held press and is not input. A key counts only when it moves a view or
+/// a caret (`moves_view`) and goes to this column (`keys_in`).
+pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
+    let id = queued_id(key);
+    let mut queued = ui.ctx().data(|data| data.get_temp::<Queued>(id))?;
+    let _ = queued.why;
+    let frame = ui.ctx().cumulative_frame_nr();
+    let input = column_input(ui, queued.view, Some(area));
+    if !input.moved && input.held && frame <= queued.made + QUEUED_FRAMES {
+        // A press held still: the request waits, up to its bound.
+        queued.frame = frame;
+        ui.ctx().data_mut(|data| data.insert_temp(id, queued));
+        return None;
+    }
+    ui.ctx().data_mut(|data| data.remove::<Queued>(id));
+    (frame <= queued.frame + 1 && !input.moved && !input.held && !input.other)
+        .then_some(queued.offset)
+}
+
+/// The DM's input to one column in this pass (reviews of PRs 757, 770 and 780): the one rule
+/// every request that moves a column by itself answers to (a region's request, a jump,
+/// `bring_into_view`, a retry).
+#[derive(Clone, Copy, Debug)]
+struct ColumnInput {
+    /// The DM scrolls it: a wheel with the pointer over its view or its bar, a drag begun there, or (with
+    /// its area's id) its own fling after a drag.
+    moved: bool,
+    /// A press that began in it is held.
+    held: bool,
+    /// Another input to it: a press in it, or a key that moves a view or a caret
+    /// (`moves_view`) that goes to it (`keys_in`).
+    other: bool,
+}
+
+/// The DM's input in this pass to the column whose view (screen points) is `view`.
+fn column_input(ui: &Ui, view: Rect, area: Option<Id>) -> ColumnInput {
+    let fling = area
+        .and_then(|area| egui::scroll_area::State::load(ui.ctx(), area))
+        .is_some_and(|state| state.velocity() != Vec2::ZERO);
+    let keys = keys_in(ui, view);
+    // The content's view and the scroll bar's lane right of it: a press on the bar is the DM's.
+    let reach = Rect::from_min_max(
+        view.min,
+        egui::pos2(view.right() + super::layout::lane_width(), view.bottom()),
+    );
+    ui.input(|input| {
+        let pointer = &input.pointer;
+        let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| reach.contains(pos));
+        let wheel = input.raw_scroll_delta != Vec2::ZERO
+            || input.smooth_scroll_delta != Vec2::ZERO
+            || input
+                .events
+                .iter()
+                .any(|event| matches!(event, egui::Event::MouseWheel { .. }));
+        let held = pointer.any_down() && over(pointer.press_origin());
+        let dragged = held && pointer.is_decidedly_dragging();
+        let other = input.events.iter().any(|event| match event {
+            egui::Event::PointerButton {
+                pos, pressed: true, ..
+            } => reach.contains(*pos) && !held,
+            event => keys && moves_view(event),
+        });
+        ColumnInput {
+            moved: (wheel && over(pointer.hover_pos())) || dragged || fling,
+            held,
+            other,
+        }
+    })
+}
+
+/// The DM's keyboard input that moves a view or a caret (review of PR 757): Tab, an arrow, Page
+/// Up or Down, Home or End (with Shift or none), typed text, a paste, an input method event. A
+/// shortcut with Ctrl, Cmd or Alt (Save) moves nothing.
+pub(in crate::design) fn moves_view(event: &egui::Event) -> bool {
+    use egui::Key;
+    match event {
+        egui::Event::Key {
+            key,
+            pressed: true,
+            modifiers,
+            ..
+        } => {
+            !(modifiers.ctrl || modifiers.command || modifiers.mac_cmd || modifiers.alt)
+                && matches!(
+                    key,
+                    Key::Tab
+                        | Key::ArrowUp
+                        | Key::ArrowDown
+                        | Key::ArrowLeft
+                        | Key::ArrowRight
+                        | Key::PageUp
+                        | Key::PageDown
+                        | Key::Home
+                        | Key::End
+                )
+        }
+        egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Ime(_) => true,
+        _ => false,
+    }
+}
+
+/// Whether this pass's keys go to the column whose view (screen points) is `view`: the focused
+/// control lies in it (as last drawn) or, with nothing focused, the pointer is over it. A key
+/// never belongs to two columns.
+pub(in crate::design) fn keys_in(ui: &Ui, view: Rect) -> bool {
+    match ui.ctx().memory(|memory| memory.focused()) {
+        Some(focused) => ui
+            .ctx()
+            .read_response(focused)
+            .is_some_and(|response| view.intersects(response.rect)),
+        None => ui.input(|input| {
+            input
+                .pointer
+                .hover_pos()
+                .is_some_and(|pos| view.contains(pos))
+        }),
+    }
+}
+
+/// The frames a queued request may wait for a held press to end.
+const QUEUED_FRAMES: u64 = 8;
+
+/// After a column's content, in a pass that queued a region's request or applied one: a raw
+/// `scroll_to_rect` of that content (egui keeps it as a target that lands at the start of the
+/// next pass, after the queued offset) is replaced by a target already in view, so no egui target
+/// writes the offset after the request. The DM's own wheel is not a target.
+fn settle_queued(ui: &mut Ui, column: Column, view: Rect) {
+    let queued = ui
+        .ctx()
+        .data(|data| data.get_temp::<Queued>(queued_id(column.key)))
+        .is_some_and(|queued| queued.frame == ui.ctx().cumulative_frame_nr());
+    if (queued || column.applied.is_some()) && view.height() > 2.0 {
+        ui.scroll_to_rect(view.shrink(1.0), None);
+    }
 }
 
 /// A `ScrollColumn`'s facts in one pass, recorded where its content starts.
@@ -549,36 +743,24 @@ pub enum JumpTo {
     OpenMenuControl,
 }
 
-/// A jump queued for a column: the frame it was asked in and the offset it puts the column at.
-#[derive(Clone, Copy, Debug)]
-struct Jump {
-    frame: u64,
-    to: f32,
-    why: JumpTo,
-}
-
-fn jump_id(key: Id) -> Id {
-    key.with("design_jump")
-}
-
 /// The `ScrollColumn` that holds `ui` moves, at its next pass, so that the screen y `top` of
-/// this pass is at its view's top (layout PR 10c, ruling M18). The column is the one writer of
-/// its offset: it applies the jump where it applies a reveal's (`take_offset`). The DM's own
-/// input in between (a wheel, a press, a key) drops it; a later jump replaces it. Outside a
-/// `ScrollColumn` it does nothing.
+/// this pass is at its view's top (layout PR 10c, ruling M18). It is the column's one queued
+/// request (`enqueue`): a newer request for the column, a jump or a region's, replaces it, and
+/// the DM's own input over that column (or to a control in it) drops it (`take_queued`). Outside
+/// a `ScrollColumn` it does nothing.
 pub fn jump(ui: &Ui, top: f32, why: JumpTo) {
     let Some((_, region)) = owning_region(ui) else {
         return;
     };
-    queue_jump(ui, &region, top - region.view.top(), why);
+    enqueue(ui, &region, top - region.view.top(), Some(why));
 }
 
 /// The least scroll, with no press, that shows the whole `rect` (a rect of this pass) in the
 /// view of the `ScrollColumn` that holds `ui` (M-P0.25): none when it is whole in view; else
 /// its nearer edge at the view's edge, and its top at the view's top when it is taller than
-/// the view. The column writes it as its own offset at its next pass, as it writes [`jump`]'s,
-/// and the DM's own input in between drops it. Outside a `ScrollColumn` it does nothing.
-/// Whether it asked for a scroll.
+/// the view. It is the column's one queued request, as [`jump`]'s is: a newer request for the
+/// column replaces it, and the DM's own input over that column (or to a control in it) drops it
+/// (`take_queued`). Outside a `ScrollColumn` it does nothing. Whether it asked for a scroll.
 pub fn bring_into_view(ui: &Ui, rect: Rect, why: JumpTo) -> bool {
     let Some((_, region)) = owning_region(ui) else {
         return false;
@@ -594,101 +776,27 @@ pub fn bring_into_view(ui: &Ui, rect: Rect, why: JumpTo) -> bool {
     if by.abs() < 0.5 {
         return false;
     }
-    queue_jump(ui, &region, by, why);
+    enqueue(ui, &region, by, Some(why));
     true
 }
 
-/// Whether the DM's own input scrolls or holds the `ScrollColumn` that holds `ui` in this pass
-/// (review of PR 770): a wheel over it, a press or a drag that started on its content or its
-/// bar, or a scroll key. A retry that would move the column by itself (a row menu's bring-back
-/// after a resize, M0259) ends on it, so the column stays where the DM leaves it. Outside a
-/// `ScrollColumn` it is false.
+/// Whether the DM's own input scrolls, holds or keys the `ScrollColumn` that holds `ui` in this
+/// pass (reviews of PRs 770 and 780): its column's one rule (`column_input`), the rule its queued
+/// request answers to. A retry that would move the column by itself (a row menu's bring-back
+/// after a resize, M0259) ends on it, so the column stays where the DM leaves it, and input to
+/// another column never ends it. Outside a `ScrollColumn` it is false.
 pub fn dm_scrolls(ui: &Ui) -> bool {
     let Some((_, region)) = owning_region(ui) else {
         return false;
     };
-    // The content's view and the scroll bar's lane right of it.
-    let column = Rect::from_min_max(
-        region.view.min,
-        egui::pos2(
-            region.view.right() + super::layout::lane_width(),
-            region.view.bottom(),
-        ),
-    );
-    ui.input(|input| {
-        let over = input
-            .pointer
-            .hover_pos()
-            .is_some_and(|at| column.contains(at));
-        let wheel = over
-            && (input.raw_scroll_delta != Vec2::ZERO || input.smooth_scroll_delta != Vec2::ZERO);
-        let held = input.pointer.any_down()
-            && input
-                .pointer
-                .press_origin()
-                .is_some_and(|at| column.contains(at));
-        let keys = [
-            egui::Key::PageUp,
-            egui::Key::PageDown,
-            egui::Key::Home,
-            egui::Key::End,
-            egui::Key::ArrowUp,
-            egui::Key::ArrowDown,
-        ]
-        .into_iter()
-        .any(|key| input.key_pressed(key));
-        wheel || held || keys
-    })
+    let input = column_input(ui, region.view, None);
+    input.moved || input.held || input.other
 }
 
-/// Queue the column's offset `by` points from where it is now, for its next pass.
-fn queue_jump(ui: &Ui, region: &Region, by: f32, why: JumpTo) {
-    let to = (region.offset + by).max(0.0);
-    let frame = ui.ctx().cumulative_frame_nr();
-    ui.ctx().data_mut(|data| {
-        data.insert_temp(jump_id(region.key), Jump { frame, to, why });
-    });
-    ui.ctx().request_repaint();
-}
-
-/// The jump queued for the column `key`, taken once: asked in this frame or the last, and with
-/// no input of the DM's in this pass. The DM's scroll that is still going on drops it too
-/// (layout PR 10d): a drag of the column or its bar, the wheel's smooth rest still being
-/// applied, or the column's own fling after a drag (its area `area` still has a velocity).
-fn take_jump(ui: &Ui, key: Id, area: Id) -> Option<f32> {
-    let jump = ui.ctx().data_mut(|data| {
-        let jump = data.get_temp::<Jump>(jump_id(key));
-        if jump.is_some() {
-            data.remove::<Jump>(jump_id(key));
-        }
-        jump
-    })?;
-    let frame = ui.ctx().cumulative_frame_nr();
-    let fresh = jump.frame == frame || jump.frame + 1 == frame;
-    let _ = jump.why;
-    let moved = ui.input(|input| {
-        input.smooth_scroll_delta != Vec2::ZERO
-            || input.events.iter().any(|event| {
-                matches!(
-                    event,
-                    egui::Event::MouseWheel { .. }
-                        | egui::Event::PointerButton { pressed: true, .. }
-                        | egui::Event::Key { pressed: true, .. }
-                )
-            })
-    }) || ui.ctx().dragged_id().is_some()
-        || egui::scroll_area::State::load(ui.ctx(), area)
-            .is_some_and(|state| state.velocity() != Vec2::ZERO);
-    (fresh && !moved).then_some(jump.to)
-}
-
-/// The offset the request of the column `key` queued for this pass, taken once, after this
-/// pass's input is checked: a jump's ([`jump`]), else a reveal's. `ScrollColumn` calls it before
+/// The offset the reveal of the column `key` queued for this pass, taken once, after this pass's
+/// input is checked (a jump's and a region's are the column's queued request: `take_queued`). `ScrollColumn` calls it before
 /// its area begins.
 pub(super) fn take_offset(ui: &Ui, column: Column) -> Option<f32> {
-    if let Some(to) = take_jump(ui, column.key, column.area) {
-        return Some(to);
-    }
     // A column that hosts no reveal holds no request: no registry read.
     if !column.hosts {
         return None;
@@ -741,11 +849,14 @@ pub(super) fn region<R>(
         .data_mut(|data| data.insert_temp(region_id(content), region));
     if !column.hosts {
         // No request can bind here: no input copy and no registry read.
-        return add(ui);
+        let inner = add(ui);
+        settle_queued(ui, column, view);
+        return inner;
     }
     // The DM's input, read before any child can consume a key.
     let facts = facts(ui);
     let inner = add(ui);
+    settle_queued(ui, column, view);
     // The request that runs in this column now (one asked by this content's act replaced any
     // older one), judged by the input of this pass.
     let run = running(ui.ctx())
