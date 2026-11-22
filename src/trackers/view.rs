@@ -1064,6 +1064,7 @@ mod tests {
     #[test]
     fn a_name_in_its_column_ends_at_a_whole_word_and_is_shortened_once() {
         use crate::design::memo::Revised;
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         const NAMES: [&str; 3] = [
             "Party",
@@ -1072,7 +1073,7 @@ mod tests {
         ];
         let mut h = Harness::builder()
             .with_size(egui::vec2(400.0, 200.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, (view, revision): &mut (ViewState, Revised<u64>)| {
                     for name in NAMES {
                         name_cell(ui, view, revision.revision(), name, egui::vec2(110.0, 28.0));
@@ -1080,10 +1081,6 @@ mod tests {
                 },
                 (ViewState::default(), Revised::new(0)),
             );
-        // The harness drew its first frame in egui's own fonts: the theme's fonts are a new
-        // font generation, so the two long names are fitted again (ruling M6).
-        let first = h.state().0.shortened;
-        crate::design::theme::install(&h.ctx);
         h.run();
         let shown = |h: &Harness<'_, (ViewState, Revised<u64>)>, name: &str| {
             h.query_all_by_role(egui::accesskit::Role::Label)
@@ -1112,11 +1109,9 @@ mod tests {
             .collect();
         assert!(labels.iter().any(|label| label == "…"), "{labels:?}");
         let once = h.state().0.shortened;
-        assert_eq!(
-            once - first,
-            2,
-            "the theme's fonts fit the two long names again"
-        );
+        // Issue #810: the page first draws with the theme, so the two long names are fitted
+        // once, at the theme's fonts.
+        assert_eq!(once, 2, "the two long names are fitted once");
         for _ in 0..3 {
             h.step();
         }

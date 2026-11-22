@@ -1770,6 +1770,7 @@ fn each_write_path_of_the_ledger_holds() {
 
 #[test]
 fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
+    use crate::design::test_harness::Themed as _;
     use crate::test_support::{CachedWork, Counts};
     use egui_kittest::{Harness, kittest::Queryable};
     let mut race = race();
@@ -1794,14 +1795,13 @@ fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
     t.test_settle();
     let mut h = Harness::builder()
         .with_size(eframe::egui::vec2(346.0, 640.0))
-        .build_ui_state(
+        .themed_ui_state(
             move |ui, t: &mut Trackers| {
                 crate::design::ScrollColumn::new("tracker history")
                     .show(ui, |ui| history::show(ui, t, &note));
             },
             t,
         );
-    crate::design::theme::install(&h.ctx);
     let counts = |_: &mut Harness<'_, Trackers>| {
         let (reached, _) = history::DRAWN.with(std::cell::Cell::get);
         Counts {
@@ -1900,6 +1900,7 @@ fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
 /// each change of the trackers, never on an unchanged frame.
 #[test]
 fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
+    use crate::design::test_harness::Themed as _;
     use egui_kittest::{Harness, kittest::Queryable};
     let mut race = race();
     let t = std::mem::take(&mut race.trackers);
@@ -1907,11 +1908,7 @@ fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
         // Wide enough that every line's first two actions fit after the values (round 30
         // `tracker-action-wrap`): the layout in which a wider value could push the actions.
         .with_size(eframe::egui::vec2(640.0, 640.0))
-        .build_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
-    crate::design::theme::install(&h.ctx);
-    // The harness drew a first frame with egui's own fonts, before the theme's: measure the
-    // columns again with the theme's, as the app does from its first frame.
-    h.state_mut().test_remeasure();
+        .themed_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
     h.run_steps(4);
     let left = |h: &Harness<'_, Trackers>, name: &str| h.get_by_label(name).rect().left();
     let firsts = |h: &Harness<'_, Trackers>| {

@@ -1175,16 +1175,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/sessions/page.rs", "banner", &[Ban::Body]),
-        (
-            "src/sessions/page.rs",
-            "note_editor",
-            &[Ban::Layout(1), Ban::Body],
-        ),
+        ("src/sessions/page.rs", "note_editor", &[Ban::Body]),
         (
             "src/timeline/page.rs",
             "detail",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Layout(1), Ban::ByOwner(1)],
+            &[Ban::ByOwner(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         ("src/world/repair.rs", "source_editor", &[Ban::RowKey(1)]),
@@ -1562,11 +1558,16 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Package K2: the popup parts.
         ("src/design/outcome.rs", "measuring", &[Ban::Layout(1)]),
         ("src/design/pane.rs", "stop_body", &[Ban::Layout(1)]),
-        // Layout PR 9b: the quiet-text harness's bare screen and its stock reference, egui's
-        // own text edit, whose cost the document editor is measured against.
-        ("src/design/tests/quiet_text.rs", "root", &[Ban::Layout(1)]),
+        // Layout PR 9b: the quiet-frame harnesses' bare screen and their stock reference, egui's
+        // own text edit, whose cost a document editor is measured against (shared by
+        // `quiet_text` and `splat-content-ui`'s `quiet_markdown`).
         (
-            "src/design/tests/quiet_text.rs",
+            "src/design/tests/quiet/counting.rs",
+            "root",
+            &[Ban::Layout(1)],
+        ),
+        (
+            "src/design/tests/quiet/counting.rs",
             "stock_text_edit",
             &[Ban::Layout(1)],
         ),
@@ -1688,8 +1689,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 2),
             ("src/timeline/test_support.rs", 2),
-            ("src/world.rs", 1),
-            ("src/world/repair.rs", 1),
         ],
     ),
     // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.

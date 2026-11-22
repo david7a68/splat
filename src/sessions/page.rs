@@ -8,6 +8,7 @@ use super::{
     rename_links, rename_links_in_file, save_folder, section_text, unreadable_notes,
     update_details, without_empty_sections, without_own_heading,
 };
+use crate::design::text_draft::TextDraft;
 use crate::{
     credentials::{self, KeySlot},
     design::{
@@ -705,6 +706,8 @@ pub struct Sessions {
     rewards: plan::Rewards,
     /// The note's plan as rows, built when the note, the content or the encounters change.
     plan_model: plan::PlanModelCache,
+    /// What the plan's closed rows read from their data, kept by its inputs' revisions.
+    plan_projection: plan::ProjectionCache,
     /// The fight behind the open event, read once.
     /// The open played fight's summary, kept with the run's file as last found (or why not):
     /// a different answer from the folder reads it again (R41, round 30 review F2).
@@ -732,6 +735,8 @@ pub struct Sessions {
     templates: Vec<Template>,
     template: Option<String>,
     template_draft: Option<Draft>,
+    /// The kept answer of the open note's compare with a move result's words (layout PR 9b-C).
+    same_moved: design::text_draft::KeptCompare,
     /// The shown built-in template's name and its words as a document (layout PR 9b).
     builtin_text: Option<(String, design::text_draft::TextDraft)>,
     new_template: Option<String>,
@@ -801,6 +806,8 @@ pub struct Sessions {
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
+    /// The Notes panel's slice of the open note (`PanelSlice`).
+    panel_slice: Option<PanelSlice>,
     note_scroll_to_top: bool,
     last_check: Option<Instant>,
     last_scan: Option<Instant>,
@@ -1432,20 +1439,20 @@ fn dated_before_today(note: &Note, today: &str) -> Option<String> {
 fn insert_at_caret(
     ctx: &egui::Context,
     id: egui::Id,
-    draft: &mut Draft,
+    text: &mut TextDraft,
     words: &str,
     new_line: bool,
-) {
+) -> bool {
     let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
     let Some(range) = state.cursor.char_range() else {
         if !words.is_empty() {
-            design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
-            draft.edited();
+            design::edit_in_place(ctx, id, text, |body| insert_in_note(body, words));
+            return true;
         }
-        return;
+        return false;
     };
     let at = range.primary.index;
-    let chars: Vec<char> = draft.body.chars().collect();
+    let chars: Vec<char> = text.chars().collect();
     let ends_words = at > 0
         && chars.get(at - 1).is_some_and(|c| *c != '\n')
         && chars.get(at).is_none_or(|c| *c == '\n');
@@ -1455,23 +1462,44 @@ fn insert_at_caret(
         words.to_owned()
     };
     if added.is_empty() {
-        return;
+        return false;
     }
-    let byte = draft
-        .body
+    let byte = text
         .char_indices()
         .nth(at)
-        .map_or(draft.body.len(), |(byte, _)| byte);
-    design::edit_in_place(ctx, id, &mut draft.body, |body| {
-        body.insert_str(byte, &added)
-    });
-    draft.edited();
+        .map_or(text.len(), |(byte, _)| byte);
+    design::edit_in_place(ctx, id, text, |body| body.insert_str(byte, &added));
     state
         .cursor
         .set_char_range(Some(egui::text::CCursorRange::one(
             egui::text::CCursor::new(at + added.chars().count()),
         )));
     egui::TextEdit::store_state(ctx, id, state);
+    true
+}
+
+/// The Notes panel's slice of the open note (lead, choice a): the note from its `## What
+/// happened` on, which the panel's editor edits; the part before it stays as it is in the note
+/// (whole on the Sessions page). Kept with the note's key it was cut from, so a quiet frame
+/// cuts nothing, and written back as `prefix` and the slice when the slice changes.
+struct PanelSlice {
+    session: Option<Uuid>,
+    body: design::text_draft::DraftKey,
+    prefix: String,
+    tail: TextDraft,
+}
+
+impl PanelSlice {
+    fn of(session: Option<Uuid>, body: &TextDraft) -> Self {
+        let text = body.as_str();
+        let at = text.find("## What happened").unwrap_or(0);
+        Self {
+            session,
+            body: body.key(),
+            prefix: text[..at].to_owned(),
+            tail: TextDraft::new(&text[at..]),
+        }
+    }
 }
 
 /// Words the page adds to the open note (a reading's summary, a plan's link). It is the note's
@@ -1801,12 +1829,17 @@ impl Sessions {
         match self.removal_note.as_mut().filter(|_| same_removal) {
             Some(seen) => {
                 match (&seen.words, words) {
-                    (Some(before), Some(draft)) if *before != draft.body.as_str() => {
+                    (Some(before), Some(draft))
+                        if !draft.body.same_as(before.revision(), before, &seen.same) =>
+                    {
                         book.forget_removed();
                         self.removal_note = None;
                         return;
                     }
-                    (None, Some(draft)) => seen.words = Some(draft.body.as_str().to_owned()),
+                    (None, Some(draft)) => {
+                        seen.words =
+                            Some(design::memo::Revised::new(draft.body.as_str().to_owned()));
+                    }
                     _ => {}
                 }
                 seen.revision = revision;
@@ -1815,7 +1848,9 @@ impl Sessions {
                 self.removal_note = Some(RemovalNote {
                     id,
                     revision,
-                    words: words.map(|draft| draft.body.as_str().to_owned()),
+                    words: words
+                        .map(|draft| design::memo::Revised::new(draft.body.as_str().to_owned())),
+                    same: design::text_draft::KeptCompare::default(),
                 });
             }
         }
@@ -3358,7 +3393,7 @@ impl Sessions {
                         Recovery::First(Step::Check(File::SessionNote)),
                     ))
                 }
-                Some(draft) if !same_file(&draft) || draft.body.as_str() != write.after => {
+                Some(draft) if !same_file(&draft) || !draft.body.same_words(&write.after) => {
                     let within = write.within();
                     Some((
                         Cause::EditedSince(within.clone()),
@@ -4552,10 +4587,11 @@ impl Sessions {
             session,
             before,
             open_run,
-            body: self
-                .draft
-                .as_ref()
-                .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
+            body: design::memo::Revised::new(
+                self.draft
+                    .as_ref()
+                    .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
+            ),
             events: book.events.clone(),
             name,
             number,
@@ -4571,10 +4607,11 @@ impl Sessions {
         let changed = self.moves.get(&page).is_some_and(|shown| {
             let moved = shown.value();
             moved.events != book.events
-                || self
-                    .draft
-                    .as_ref()
-                    .is_none_or(|draft| draft.body.as_str() != moved.body)
+                || self.draft.as_ref().is_none_or(|draft| {
+                    !draft
+                        .body
+                        .same_as(moved.body.revision(), &moved.body, &self.same_moved)
+                })
         });
         if changed {
             self.moves.owner_changed(&page);
@@ -4879,6 +4916,38 @@ impl Sessions {
                 self.refocus_note = true;
             }
         }
+        // M0465–M0470: the note is an editor viewport of its own (`pane::editor_view`): its
+        // fixed frame, its text scroll inside it, and the caret follow and reveal are the part's.
+        // In the Notes panel the editor holds the note from its `## What happened` on (the
+        // panel's own slice, written back into the note when it changes; lead, choice a): the
+        // panel is for notes during play, and its title line names the session.
+        let field = if in_panel {
+            NOTE_IN_PANEL
+        } else {
+            NOTE_ON_PAGE
+        }
+        .of(self.selected);
+        if in_panel
+            && self.panel_slice.as_ref().is_none_or(|slice| {
+                slice.session != self.selected || slice.body != draft.body.key()
+            })
+        {
+            self.panel_slice = Some(PanelSlice::of(self.selected, &draft.body));
+        }
+        let (prefix_chars, tail_before) = match &self.panel_slice {
+            Some(slice) if in_panel => (slice.prefix.chars().count(), Some(slice.tail.key())),
+            _ => (0, None),
+        };
+        // A newly selected note opens at its top: the selection owns the reset (`select`), once
+        // per change of note, never on a reload of the same note.
+        if !in_panel && std::mem::take(&mut self.note_scroll_to_top) {
+            design::pane::jump_editor_view(ui.ctx(), field, design::pane::EditorJump::Top);
+        }
+        let text: &mut TextDraft = match &mut self.panel_slice {
+            Some(slice) if in_panel => &mut slice.tail,
+            _ => &mut draft.body,
+        };
+        let mut edited = false;
         if self.break_before_words
             && let Some(id) = editor_id
             && ui.ctx().memory(|memory| memory.has_focus(id))
@@ -4905,24 +4974,9 @@ impl Sessions {
                 self.break_before_words = false;
             }
             if typed && !correcting {
-                insert_at_caret(ui.ctx(), id, draft, "", true);
+                edited |= insert_at_caret(ui.ctx(), id, text, "", true);
             }
         }
-        let heading_id = ui.id().with(("note_heading_offset", self.selected));
-        let heading_offset = if in_panel {
-            ui.data(|data| data.get_temp::<f32>(heading_id).unwrap_or(0.0))
-        } else {
-            0.0
-        };
-        let reset_scroll = !in_panel && std::mem::take(&mut self.note_scroll_to_top);
-        let frame = egui::Frame::new()
-            .fill(colors().well)
-            .stroke(egui::Stroke::new(
-                design::HAIRLINE_WIDTH,
-                colors().field_border,
-            ))
-            .corner_radius(design::RADIUS_CONTROL)
-            .inner_margin(design::S);
         self.slash.take_keys(ui, editor_id);
         let index = ui.ctx().data(|data| {
             data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
@@ -4930,209 +4984,128 @@ impl Sessions {
             ))
         });
         let mut pressed_link = None;
-        // ScrollArea derives its ID from its Ui. Give that Ui a global session ID,
-        // so tab and side-by-side layouts share the same scroll state.
+        // The viewport's scroll takes its id from its `Ui`: one id per session and place, so the
+        // tab and the side-by-side layouts share one scroll (a breakpoint keeps the DM's place).
         ui.scope_builder(
             egui::UiBuilder::new().id(("session_editor_scope", self.selected, in_panel)),
             |ui| {
-                // On the page, the note's column sets its width (`note_frame_width`).
+                // On the page, the note's column sets its width (`note_frame_width`); in the panel,
+                // the reader's measure and the frame's edges.
                 let width = if in_panel {
-                    design::READER_MEASURE + frame.total_margin().sum().x
+                    design::READER_MEASURE + 2.0 * (design::S + design::HAIRLINE_WIDTH)
                 } else {
                     note_frame_width(ui.ctx())
                 };
                 ui.set_max_width(ui.available_width().min(width));
-                frame.show(ui, |ui| {
-                    let visible_height = ui.available_height().max(design::XL);
-                    let mut scroll = egui::ScrollArea::vertical().id_salt((
-                        "session_editor",
-                        self.selected,
-                        in_panel,
-                    ));
-                    // A view at the note's end stays there when it gets shorter (a bottom banner
-                    // arrives), so the line being typed stays in view. Only a shorter view does
-                    // this; a note that grows keeps its place.
-                    let view_id = egui::Id::new(("session_editor_view", self.selected, in_panel));
-                    let before: Option<(f32, bool, f32)> = ui.data(|data| data.get_temp(view_id));
-                    if reset_scroll {
-                        scroll = scroll.vertical_scroll_offset(0.0);
-                    } else if let Some((height, at_end, content)) = before
-                        && at_end
-                        && visible_height < height - 0.5
-                    {
-                        scroll = scroll.vertical_scroll_offset((content - visible_height).max(0.0));
+                let font = design::reader::prose_type(ui).font(ui);
+                let face = markdown_face(font.clone());
+                // Beside a page, Tab indents. It must not walk to `Next turn`, where the next space
+                // would press it. Escape still leaves the panel.
+                let output = design::pane::editor_view(
+                    ui,
+                    design::pane::ViewHeight::Fills,
+                    field,
+                    text,
+                    face,
+                    |edit| edit.lock_focus(in_panel).font(font),
+                );
+                crate::markdown_source::paint_section_rules(ui, &output, Some(text.key()));
+                pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
+                let place = super::slash::Place {
+                    session: self.selected,
+                    campaign: self.campaign.as_ref(),
+                    index: index.as_deref(),
+                    run_open: self.run_open,
+                };
+                let done = self.slash.show(ui, &output, text, &place);
+                self.wants_content_refresh |= done.created;
+                edited |= done.edited;
+                let response = &output.response;
+                design::named(ui, response, "Note text");
+                self.note_had_focus = response.has_focus();
+                // Narrowing keeps whichever side the DM last worked in: the note while it has
+                // focus, the plan once focus moves to a plan field.
+                if !in_panel && response.has_focus() {
+                    self.tab = Tab::Note;
+                } else if !in_panel
+                    && self.tab == Tab::Note
+                    && ui.memory(|memory| memory.focused().is_some())
+                {
+                    self.tab = Tab::Plan;
+                }
+                self.last_note_editor = Some(NoteEditor {
+                    session: self.selected,
+                    id: response.id,
+                });
+                // A click chooses the place, so what is typed goes exactly there.
+                if focus || response.clicked() {
+                    self.break_before_words = false;
+                }
+                if std::mem::take(&mut self.refocus_note) {
+                    response.request_focus();
+                    let words = std::mem::take(&mut self.words_for_note);
+                    if !words.is_empty() {
+                        // These words had their break, and what follows goes on from them.
+                        self.break_before_words = false;
+                        let new_line = std::mem::take(&mut self.words_new_line);
+                        edited |= insert_at_caret(ui.ctx(), response.id, text, &words, new_line);
                     }
-                    let output = scroll
-                        .max_height(visible_height)
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
-                            // space would press it. Escape still leaves the panel.
-                            // The note's text field is its session's (M0468), one on the page
-                            // and one in the panel beside another page.
-                            let field = if in_panel {
-                                NOTE_IN_PANEL
-                            } else {
-                                NOTE_ON_PAGE
-                            };
-                            let width = if in_panel {
-                                ui.available_width().min(design::READER_MEASURE)
-                            } else {
-                                ui.available_width()
-                            };
-                            let font = design::reader::prose_type(ui).font(ui);
-                            let face = markdown_face(font.clone());
-                            let output =
-                                field
-                                    .of(self.selected)
-                                    .editor(ui, &mut draft.body, face, |edit| {
-                                        edit.lock_focus(in_panel)
-                                            .frame(false)
-                                            .font(font)
-                                            .margin(egui::Vec2::ZERO)
-                                            .desired_width(width)
-                                            .min_size(egui::vec2(
-                                                0.0,
-                                                visible_height + heading_offset,
-                                            ))
-                                    });
-                            crate::markdown_source::paint_section_rules(
-                                ui,
-                                &output,
-                                Some(draft.body.key()),
-                            );
-                            pressed_link =
-                                crate::markdown_source::pressed_note_link(ui, &output, None);
-                            let place = super::slash::Place {
-                                session: self.selected,
-                                campaign: self.campaign.as_ref(),
-                                index: index.as_deref(),
-                                run_open: self.run_open,
-                            };
-                            let done = self.slash.show(ui, &output, &mut draft.body, &place);
-                            self.wants_content_refresh |= done.created;
-                            if done.edited {
-                                draft.edited();
-                                if let Some(session) = self.selected {
-                                    self.mentions
-                                        .insert(session, timeline::referenced_ids(&draft.body));
-                                }
-                            }
-                            if in_panel && let Some(at) = draft.body.find("## What happened") {
-                                // Even a short note must scroll its repeated heading out of the panel.
-                                let heading = draft.body[..at].chars().count();
-                                let offset = output
-                                    .galley
-                                    .pos_from_cursor(egui::text::CCursor::new(heading))
-                                    .top();
-                                ui.data_mut(|data| data.insert_temp(heading_id, offset.max(0.0)));
-                            }
-                            let response = output.response;
-                            design::named(ui, &response, "Note text");
-                            self.note_had_focus = response.has_focus();
-                            // Narrowing keeps whichever side the DM last worked in: the note
-                            // while it has focus, the plan once focus moves to a plan field.
-                            if !in_panel && response.has_focus() {
-                                self.tab = Tab::Note;
-                            } else if !in_panel
-                                && self.tab == Tab::Note
-                                && ui.memory(|memory| memory.focused().is_some())
-                            {
-                                self.tab = Tab::Plan;
-                            }
-                            self.last_note_editor = Some(NoteEditor {
-                                session: self.selected,
-                                id: response.id,
-                            });
-                            // A click chooses the place, so what is typed goes exactly there.
-                            if focus || response.clicked() {
-                                self.break_before_words = false;
-                            }
-                            if std::mem::take(&mut self.refocus_note) {
-                                response.request_focus();
-                                let words = std::mem::take(&mut self.words_for_note);
-                                if !words.is_empty() {
-                                    // These words had their break, and what follows goes on from them.
-                                    self.break_before_words = false;
-                                    let new_line = std::mem::take(&mut self.words_new_line);
-                                    insert_at_caret(ui.ctx(), response.id, draft, &words, new_line);
-                                }
-                            }
-                            if let Some(caret) = self.caret_to_show.take() {
-                                let rect = output
-                                    .galley
-                                    .pos_from_cursor(egui::text::CCursor::new(if in_panel {
-                                        draft
-                                            .body
-                                            .find("## What happened")
-                                            .map_or(caret, |at| draft.body[..at].chars().count())
-                                    } else {
-                                        caret
-                                    }))
-                                    .translate(output.galley_pos.to_vec2());
-                                if in_panel {
-                                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                                } else {
-                                    let clip = ui.clip_rect();
-                                    if rect.top() < clip.top() || rect.bottom() > clip.bottom() {
-                                        let wanted = (rect.bottom() - clip.height()).max(0.0);
-                                        let top = output
-                                            .galley
-                                            .rows
-                                            .iter()
-                                            .map(|row| row.pos.y + output.galley_pos.y)
-                                            .find(|top| *top >= wanted)
-                                            .unwrap_or(rect.top());
-                                        let visible = egui::Rect::from_min_size(
-                                            egui::pos2(rect.left(), top),
-                                            egui::vec2(rect.width(), clip.height()),
-                                        );
-                                        ui.scroll_to_rect(visible, Some(egui::Align::TOP));
-                                    }
-                                }
-                            }
-                            if focus {
-                                response.request_focus();
-                                let (caret, changed) = draft.body.edit(fresh_line_in_note);
-                                if changed {
-                                    draft.edited();
-                                }
-                                self.caret_to_show = Some(caret);
-                                let end = egui::text::CCursor::new(caret);
-                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                    .unwrap_or_default();
-                                state
-                                    .cursor
-                                    .set_char_range(Some(egui::text::CCursorRange::one(end)));
-                                egui::TextEdit::store_state(ui.ctx(), response.id, state);
-                            }
-                            if response.changed() {
-                                draft.edited();
-                                if let Some(session) = self.selected {
-                                    self.mentions
-                                        .insert(session, timeline::referenced_ids(&draft.body));
-                                }
-                            }
-                        });
-                    // Only a note that scrolls can be at its end.
-                    let room = output.content_size.y - output.inner_rect.height();
-                    let at_end = room > 1.0 && output.state.offset.y >= room - 1.0;
-                    ui.data_mut(|data| {
-                        data.insert_temp(view_id, (visible_height, at_end, output.content_size.y));
-                    });
-                    #[cfg(any(test, feature = "test-support"))]
-                    ui.data_mut(|data| {
-                        data.insert_temp(
-                            egui::Id::new("session_editor_proof"),
-                            (
-                                self.last_note_editor.map(|editor| editor.id).unwrap(),
-                                output.state.offset,
-                            ),
-                        )
-                    });
+                }
+                // A place another act wrote to (the plan's rewards) comes into view, focus or not:
+                // the viewport's named jump, in the note's own text (in the panel, past its slice's
+                // start).
+                if let Some(caret) = self.caret_to_show.take()
+                    && let Some(at) = caret.checked_sub(prefix_chars)
+                {
+                    let rect = output.galley.pos_from_cursor(egui::text::CCursor::new(at));
+                    design::pane::jump_editor_view(
+                        ui.ctx(),
+                        field,
+                        design::pane::EditorJump::Show {
+                            top: rect.top(),
+                            bottom: rect.bottom(),
+                        },
+                    );
+                    ui.ctx().request_repaint();
+                }
+                // Asked for the note: a fresh line at the end of `What happened`, the caret on it.
+                // The part reveals a caret that moved, so the line comes into view.
+                if focus {
+                    response.request_focus();
+                    let (caret, changed) = text.edit(fresh_line_in_note);
+                    edited |= changed;
+                    let end = egui::text::CCursor::new(caret);
+                    let mut state =
+                        egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
+                    state
+                        .cursor
+                        .set_char_range(Some(egui::text::CCursorRange::one(end)));
+                    egui::TextEdit::store_state(ui.ctx(), response.id, state);
+                }
+                edited |= response.changed();
+                #[cfg(any(test, feature = "test-support"))]
+                ui.data_mut(|data| {
+                    data.insert_temp(egui::Id::new("session_editor_proof"), response.id)
                 });
             },
         );
+        // The panel's slice changed: the note is the part before it and the slice.
+        if let Some(slice) = &mut self.panel_slice
+            && in_panel
+            && Some(slice.tail.key()) != tail_before
+        {
+            let _ = draft
+                .body
+                .replace(format!("{}{}", slice.prefix, slice.tail.as_str()));
+            slice.body = draft.body.key();
+        }
+        if edited {
+            draft.edited();
+            if let Some(session) = self.selected {
+                self.mentions
+                    .insert(session, timeline::referenced_ids(&draft.body));
+            }
+        }
         if save && let Some(draft) = &mut self.draft {
             draft.save();
         }
@@ -7795,24 +7768,29 @@ impl Sessions {
     )]
     fn template_editor(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        let Some(template) = self
+        let Some(index) = self
             .template
             .as_ref()
-            .and_then(|name| self.templates.iter().find(|t| &t.name == name))
-            .cloned()
+            .and_then(|name| self.templates.iter().position(|t| &t.name == name))
         else {
             return;
         };
+        // Its name and place only (layout PR 9b-C): its words stay in `self.templates`, read
+        // there by the event that needs them, so a frame copies none of them.
+        let (name, path) = (
+            self.templates[index].name.clone(),
+            self.templates[index].path.clone(),
+        );
         // M0493: the template's title line, the shared part: `More` (its menu: Delete, or Go
         // back to built-in) and the draft's state for a template file; `Customize` and
         // `Read-only` for a built-in one.
         let mut delete = false;
-        let more_name = format!("More actions for {}", template.name);
-        let mut line = design::TitleLine::new(&template.name).role(design::TitleType::Section);
-        if template.path.is_some() {
+        let more_name = format!("More actions for {}", name);
+        let mut line = design::TitleLine::new(&name).role(design::TitleType::Section);
+        if path.is_some() {
             let built_in = super::BUILT_IN_TEMPLATES
                 .iter()
-                .any(|(name, _)| *name == template.name);
+                .any(|(other, _)| *other == name);
             let delete = &mut delete;
             line = line.menu(
                 design::TitleAction::quiet(MORE).name(&more_name),
@@ -7853,7 +7831,7 @@ impl Sessions {
         }
         let customize = line.show(ui).clicked(CUSTOMIZE);
         if customize && let Some(folder) = &self.folder {
-            match create_template(folder, &template.name, &template.body) {
+            match create_template(folder, &name, &self.templates[index].body) {
                 Ok(created) => {
                     self.refresh();
                     self.select_template(&created.name);
@@ -7862,18 +7840,18 @@ impl Sessions {
             }
             return;
         }
-        if delete && let Some(path) = &template.path {
+        if delete && let Some(path) = &path {
             match super::remove_file(path) {
                 Ok(()) => {
                     let body = self.template_draft.take().map_or_else(
-                        || template.body.as_str().to_owned(),
+                        || self.templates[index].body.as_str().to_owned(),
                         |draft| draft.body.into_string(),
                     );
                     self.deleted_templates.record(kept::DeletedTemplate {
                         page: kept::Page {
                             root: self.folder.clone().unwrap_or_default(),
                         },
-                        name: template.name.clone(),
+                        name: name.clone(),
                         body,
                     });
                     self.template = None;
@@ -7892,10 +7870,8 @@ impl Sessions {
         // The template's text field is its file's (M0495, M0496). A template has no typed owner
         // key yet: its path is the key (`TextKey::from_data`, counted).
         let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
-            template
-                .path
-                .as_deref()
-                .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
+            path.as_deref()
+                .map_or_else(|| name.clone(), |path| path.display().to_string()),
         ));
         if let Some(draft) = &mut self.template_draft {
             // One closed editor viewport (layout PR 9): its fixed frame fills the pane's body
@@ -7926,15 +7902,15 @@ impl Sessions {
             if self
                 .builtin_text
                 .as_ref()
-                .is_none_or(|(name, _)| *name != template.name)
+                .is_none_or(|(other, _)| *other != name)
             {
                 self.builtin_text = Some((
-                    template.name.clone(),
-                    design::text_draft::TextDraft::new(template.body.as_str()),
+                    name.clone(),
+                    design::text_draft::TextDraft::new(self.templates[index].body.as_str()),
                 ));
             }
             let body = &mut self.builtin_text.as_mut().expect("kept above").1;
-            design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
+            design::ScrollColumn::new(("template_editor", &name)).show(ui, |ui| {
                 let (width, height) = (ui.available_width(), ui.available_height());
                 let font = design::reader::prose_type(ui).font(ui);
                 let output = field.editor(ui, body, markdown_face(font.clone()), |edit| {
@@ -8587,7 +8563,10 @@ struct RemovalNote {
     /// The removed event.
     id: String,
     revision: Option<u64>,
-    words: Option<String>,
+    /// The note's words when the result began, with their revision (layout PR 9b-C), and the
+    /// kept answer of the draft's compare with them: a quiet frame compares two revisions.
+    words: Option<design::memo::Revised<String>>,
+    same: design::text_draft::KeptCompare,
 }
 
 /// Keep the note and group editor under stable IDs across the side-by-side breakpoint.
@@ -9114,18 +9093,18 @@ mod tests {
         reason = "the test of the old Undo message under the plan’s spacing"
     )]
     fn message_words_and_undo_keep_their_place_whatever_the_spacing() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let words = "Removed “Shrine of Cinders” from tonight.";
         let place = |spacing: f32| {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(260.0, 200.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.spacing_mut().item_spacing.x = spacing;
                         design::undo_message(ui, Tone::Info, words, "Undo remove");
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let message = harness.get_by_label(words).rect();
             let undo = harness.get_by_label("Undo remove").rect();
@@ -9617,6 +9596,7 @@ mod tests {
     /// when both hold the same words (the case the field's text guard leaves to the owner key).
     #[test]
     fn a_template_field_keeps_its_own_text_history() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let a = create_template(dir.path(), "Downtime", "## Plan\n").unwrap();
@@ -9628,21 +9608,20 @@ mod tests {
         sessions.select_template(&a.name);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 600.0))
-            .build_state(
+            .themed_state(
                 |ctx, sessions: &mut Sessions| {
                     egui::CentralPanel::default().show(ctx, |ui| sessions.template_editor(ui));
                 },
                 sessions,
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Template text").focus();
         harness.run_steps(2);
         // Layout PR 9b: the focused template's quiet frames lay out and hash none of its text.
-        assert_eq!(
-            design::pane::text_work(|| harness.run_steps(4)),
-            (0, 0),
-            "9b-quiet: the template editor's quiet frames"
+        let work = design::pane::text_work(|| harness.run_steps(4));
+        assert!(
+            work.is_quiet(4),
+            "9b-quiet: the template editor's quiet frames: {work:?}"
         );
         harness.get_by_label("Template text").type_text("Dusk");
         harness.run_steps(16);
@@ -9679,6 +9658,7 @@ mod tests {
     /// guard, and B keeps its words.
     #[test]
     fn a_note_keeps_its_undo_when_the_page_adds_words_to_another_note() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let new = |number| {
@@ -9704,18 +9684,17 @@ mod tests {
         // The harness draws the open note's editor, or no editor.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 600.0))
-            .build_state(
-                |ctx, (sessions, draw): &mut (Sessions, bool)| {
+            .themed_state(
+                |ctx, (sessions, draw, panel): &mut (Sessions, bool, bool)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         if *draw {
-                            sessions.note_editor(ui, false);
+                            sessions.note_editor(ui, *panel);
                         }
                     });
                 },
-                (sessions, true),
+                (sessions, true, false),
             );
-        design::theme::install(&harness.ctx);
-        let body = |harness: &egui_kittest::Harness<'_, (Sessions, bool)>| {
+        let body = |harness: &egui_kittest::Harness<'_, (Sessions, bool, bool)>| {
             harness
                 .state()
                 .0
@@ -9729,10 +9708,10 @@ mod tests {
         harness.get_by_label("Note text").focus();
         harness.run_steps(2);
         // Layout PR 9b: the focused note's quiet frames lay out and hash none of its text.
-        assert_eq!(
-            design::pane::text_work(|| harness.run_steps(4)),
-            (0, 0),
-            "9b-quiet: the note editor's quiet frames"
+        let work = design::pane::text_work(|| harness.run_steps(4));
+        assert!(
+            work.is_quiet(4),
+            "9b-quiet: the note editor's quiet frames: {work:?}"
         );
         harness.get_by_label("Note text").type_text("Lost words");
         harness.run_steps(8);
@@ -9770,12 +9749,106 @@ mod tests {
                 .contains("B’s summary."),
             "n0-note-owner: B keeps its words"
         );
+        // M0466: a newly selected note opens at its top, once per change of note; selecting the
+        // open note again keeps its place. M0469, M0470: a place the plan wrote to comes into
+        // view without focus. Both are the editor viewport's named jump (`jump_editor_view`).
+        let offset = |harness: &egui_kittest::Harness<'_, (Sessions, bool, bool)>| {
+            let field = NOTE_ON_PAGE.of(harness.state().0.selected).id();
+            design::pane::editor_frames(&harness.ctx)
+                .into_iter()
+                .find(|frame| frame.field() == field)
+                .map_or(-1.0, |frame| frame.offset())
+        };
+        let long: String = (0..150).map(|line| format!("Line {line}\n")).collect();
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            let _ = draft.body.replace(format!("## What happened\n{long}"));
+            draft.edited();
+        }
+        harness.run_steps(2);
+        let view = harness.get_by_label("Note text").rect();
+        harness.hover_at(egui::pos2(view.center().x, 300.0));
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -900.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(3);
+        let scrolled = offset(&harness);
+        assert!(scrolled > 100.0, "the wheel scrolls the note: {scrolled}");
+        harness.state_mut().0.select(Some(a.id));
+        harness.run_steps(2);
+        assert!(
+            (offset(&harness) - scrolled).abs() < 1.0,
+            "n0-note-reset: selecting the open note again keeps its place: {} from {scrolled}",
+            offset(&harness)
+        );
+        harness.state_mut().0.select(Some(b.id));
+        harness.run_steps(2);
+        harness.state_mut().0.select(Some(a.id));
+        harness.run_steps(3);
+        assert!(
+            offset(&harness).abs() < 0.5,
+            "n0-note-reset: a newly selected note opens at its top: {}",
+            offset(&harness)
+        );
+        let late = harness.state().0.draft.as_ref().unwrap().body.as_str()[..]
+            .find("Line 140")
+            .map(|at| {
+                harness.state().0.draft.as_ref().unwrap().body.as_str()[..at]
+                    .chars()
+                    .count()
+            })
+            .unwrap();
+        harness.ctx.memory_mut(|memory| {
+            if let Some(focused) = memory.focused() {
+                memory.surrender_focus(focused);
+            }
+        });
+        harness.state_mut().0.caret_to_show = Some(late);
+        harness.run_steps(3);
+        assert!(
+            offset(&harness) > 2000.0,
+            "n0-note-show: the plan's place at line 140 comes into view, no focus: {}",
+            offset(&harness)
+        );
+        // Lead, choice a: in the Notes panel the editor holds the note from its `## What
+        // happened` on; what is typed there goes into that part, and the part before it stays.
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            let _ = draft
+                .body
+                .replace("# Session 1\n\nRecap words.\n\n## What happened\nNight one.\n");
+            draft.edited();
+        }
+        harness.state_mut().2 = true;
+        harness.run_steps(2);
+        let shown = harness
+            .get_by_label("Note text")
+            .value()
+            .unwrap_or_default();
+        assert!(
+            shown.starts_with("## What happened") && !shown.contains("Recap words."),
+            "n0-panel-slice: the panel's editor starts at What happened: {shown:?}"
+        );
+        harness.get_by_label("Note text").focus();
+        harness.run_steps(2);
+        harness.get_by_label("Note text").type_text(" More.");
+        harness.run_steps(2);
+        let note = body(&harness);
+        assert!(
+            note.starts_with("# Session 1\n\nRecap words.\n\n## What happened")
+                && note.contains("Night one.")
+                && note.contains(" More."),
+            "n0-panel-slice: what is typed in the panel goes into the note, its start kept: {note:?}"
+        );
     }
 
     /// Issue #513: Ctrl+S is taken before the editor and saves after it, in the note editor and
     /// in the template editor. Words typed and Ctrl+S in ONE input frame are saved together.
     #[test]
     fn ctrl_s_saves_the_words_typed_in_its_frame() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let note = create_note(
@@ -9800,7 +9873,7 @@ mod tests {
         // The harness draws the note's editor, or the template's.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 600.0))
-            .build_state(
+            .themed_state(
                 |ctx, (sessions, template): &mut (Sessions, bool)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         if *template {
@@ -9812,7 +9885,6 @@ mod tests {
                 },
                 (sessions, false),
             );
-        design::theme::install(&harness.ctx);
         for (template, field, path) in [
             (false, "Note text", note.path.clone()),
             (true, "Template text", template.path.clone().unwrap()),
@@ -10088,9 +10160,10 @@ mod tests {
         sessions: Sessions,
         book: Book,
     ) -> egui_kittest::Harness<'static, (Sessions, Book)> {
-        let harness = egui_kittest::Harness::builder()
+        use crate::design::test_harness::Themed as _;
+        egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 300.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book): &mut (Sessions, Book)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let frame = PaneFrame::new(ui);
@@ -10103,9 +10176,7 @@ mod tests {
                     });
                 },
                 (sessions, book),
-            );
-        design::theme::install(&harness.ctx);
-        harness
+            )
     }
 
     #[test]
@@ -10340,6 +10411,7 @@ mod tests {
     /// ends B's only. The missing folder is a typed fault in a sentence (routing row 136).
     #[test]
     fn a_folder_move_result_is_its_campaigns_over_a_switch_and_a_lost_folder() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         let dirs = [
             tempfile::tempdir().unwrap(),
@@ -10392,7 +10464,7 @@ mod tests {
         type State = (Sessions, Book, Campaign, Option<&'static str>);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(900.0, 700.0))
-            .build_state(
+            .themed_state(
                 |ctx, (sessions, book, campaign, lock): &mut State| {
                     sessions.poll(ctx, Some(campaign), book);
                     egui::CentralPanel::default().show(ctx, |ui| {
@@ -10401,7 +10473,6 @@ mod tests {
                 },
                 (Sessions::default(), Book::default(), a.clone(), None),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let shows = |harness: &egui_kittest::Harness<'_, State>, words: &str| {
             harness.query_all_by_label_contains(words).next().is_some()
@@ -10993,6 +11064,7 @@ mod tests {
     /// B's form never offers A's template).
     #[test]
     fn the_new_session_form_reads_its_template_at_the_press_and_keeps_to_its_campaign() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dirs = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
         let [a, b] = [0, 1].map(|at| {
@@ -11033,14 +11105,13 @@ mod tests {
         type State = (Sessions, Book, Campaign);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(900.0, 700.0))
-            .build_state(
+            .themed_state(
                 |ctx, (sessions, book, campaign): &mut State| {
                     sessions.poll(ctx, Some(campaign), book);
                     egui::CentralPanel::default().show(ctx, |ui| sessions.show_form(ui));
                 },
                 (Sessions::default(), Book::default(), a.clone()),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let shows = |harness: &egui_kittest::Harness<'_, State>, words: &str| {
             harness.query_all_by_label_contains(words).next().is_some()

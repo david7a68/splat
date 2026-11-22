@@ -4,7 +4,8 @@
 use super::{
     ADD_PANE_MAX_WIDTH, Creature, Draft, EditorPane, Encounters, ROSTER_MAX_WIDTH, Snapshot,
 };
-use crate::design::text_draft::TextDraft;
+use crate::design::memo::Revised;
+use crate::design::text_draft::{KeptCompare, TextDraft};
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
@@ -168,7 +169,11 @@ pub(super) struct GroupDraft {
     notes: TextDraft,
     saved_name: String,
     saved_setup: GroupSetup,
-    saved_notes: String,
+    /// The saved notes, with their revision (layout PR 9b-C): `dirty` compares two revisions on
+    /// a quiet frame.
+    saved_notes: Revised<String>,
+    /// The last answer of the notes' compare with the saved ones.
+    same_notes: KeptCompare,
     flags: Vec<splat::content::layout::Flag>,
     repair: Option<(usize, Mapping)>,
     /// The words typed in a change form's field while it has focus ([`TypedWords`]).
@@ -550,7 +555,8 @@ impl GroupDraft {
             setup: setup.clone(),
             saved_setup: setup,
             notes: TextDraft::default(),
-            saved_notes: String::new(),
+            saved_notes: Revised::default(),
+            same_notes: KeptCompare::default(),
             flags: Vec::new(),
             repair: None,
             member_new: None,
@@ -601,7 +607,8 @@ impl GroupDraft {
             name: entry.name,
             saved_setup: setup.clone(),
             setup,
-            saved_notes: notes.clone(),
+            saved_notes: Revised::new(notes.clone()),
+            same_notes: KeptCompare::default(),
             notes: TextDraft::new(notes),
         })
     }
@@ -724,11 +731,20 @@ impl GroupDraft {
     pub(super) fn origin(&self) -> design::save_row::DraftOrigin {
         self.origin
     }
+    /// Whether the notes are the saved ones: compared once per pair of revisions.
+    fn notes_saved(&self) -> bool {
+        self.notes.same_as(
+            self.saved_notes.revision(),
+            &self.saved_notes,
+            &self.same_notes,
+        )
+    }
+
     pub(super) fn dirty(&self) -> bool {
         self.baseline.is_none()
             || self.name != self.saved_name
             || self.setup != self.saved_setup
-            || self.notes.as_str() != self.saved_notes
+            || !self.notes_saved()
             || self.baseline.as_deref() != Some(self.source.as_str())
     }
     fn text(&self) -> Result<String, String> {
@@ -738,7 +754,7 @@ impl GroupDraft {
             .as_ref()
             .and_then(|change| change.text.as_deref())
             .unwrap_or(&self.source);
-        let source = if self.notes.as_str() == self.saved_notes {
+        let source = if self.notes_saved() {
             disk_source.to_owned()
         } else {
             splat::content::list_formats::with_prose(disk_source, &self.notes)?
@@ -1185,10 +1201,10 @@ impl GroupDraft {
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
         let trimmed = self.notes.trim().to_owned();
-        if trimmed != self.notes.as_str() {
+        if !self.notes.same_words(&trimmed) {
             let _ = self.notes.replace(trimmed);
         }
-        self.saved_notes = self.notes.as_str().to_owned();
+        self.saved_notes = Revised::new(self.notes.as_str().to_owned());
     }
 }
 
@@ -5431,13 +5447,61 @@ mod tests {
         free.name = "Reinforcements".into();
         free.add(scout);
         free.save(&campaign, &[]).unwrap();
-        let encounters = Encounters {
+        let mut encounters = Encounters {
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Encounters::default()
         };
         let offered = encounters.plan_groups();
         assert_eq!(offered.len(), 1);
         assert_eq!(offered[0].encounter, None);
+        // Layout 11c A2a: the plan's lists are kept by the snapshot's and the saved runs'
+        // revisions: two frames with no change share one list, copied once.
+        let kept = encounters.plan_kept();
+        let _ = encounters.plan_kept();
+        assert_eq!(
+            encounters.plan_kept_builds, 1,
+            "a quiet frame copies no plan list"
+        );
+        assert_eq!(kept.groups.len(), 1, "the kept groups are the offered ones");
+        // Review of PR 804 (a cache proof changes content): each input of the kept lists, alone.
+        // The snapshot: the free group renamed on disk, with the same count, read again.
+        free.name = "Wolf Pack".into();
+        free.save(&campaign, &[]).unwrap();
+        encounters.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
+        let kept = encounters.plan_kept();
+        assert_eq!(
+            kept.groups
+                .iter()
+                .map(|group| group.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Wolf Pack"],
+            "a group renamed on disk is listed by its new name"
+        );
+        // The saved runs: Bridge's unfinished run, listed with the snapshot's revision kept.
+        let run = crate::encounter_run::SavedRunInfo {
+            path: std::path::PathBuf::from("bridge.json"),
+            id: Some(Uuid::new_v4()),
+            source: Some(bridge),
+            encounter: "Bridge".into(),
+            label: "Round 2".into(),
+            standing: crate::encounter_run::Standing::Unfinished,
+            setup: false,
+            saved_at: None,
+            unsent: vec![],
+        };
+        encounters
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .take_run_list(Ok(vec![run]), false);
+        encounters.note_run_facts();
+        let kept = encounters.plan_kept();
+        assert!(
+            kept.fights
+                .iter()
+                .any(|fight| fight.name == "Bridge" && fight.saved.is_some()),
+            "a run saved for a fight is listed with it"
+        );
     }
 
     #[test]

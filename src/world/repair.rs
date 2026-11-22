@@ -2,7 +2,8 @@
 #![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::file_fault::FileFault;
 use crate::design::memo::Changed;
-use crate::design::text_draft::{DraftKey, TextDraft};
+use crate::design::memo::Revised;
+use crate::design::text_draft::{DraftKey, KeptCompare, TextDraft};
 use crate::{
     design::{
         self, colors,
@@ -284,8 +285,12 @@ enum RepairAct {
 pub struct Repair {
     pub path: String,
     campaign: Uuid,
-    baseline: String,
+    /// The text on disk, with its revision (layout PR 9b-C): set when the repair loads, saves or
+    /// follows the file, so `dirty` compares two revisions on a quiet frame.
+    baseline: Revised<String>,
     draft: TextDraft,
+    /// The last answer of `dirty`'s compare, by the draft's and the baseline's revisions.
+    same: KeptCompare,
     /// The Undo of the last Discard or Reload of this draft.
     undos: design::Results<RepairOwner, RepairUndo>,
     disk: Option<String>,
@@ -305,8 +310,9 @@ impl Repair {
         Ok(Self {
             path: path.into(),
             campaign: campaign.id,
-            baseline: text.clone(),
+            baseline: Revised::new(text.clone()),
             draft: TextDraft::new(text),
+            same: KeptCompare::default(),
             undos: design::Results::new(),
             disk: None,
             failed: None,
@@ -327,7 +333,9 @@ impl Repair {
     }
 
     pub fn dirty(&self) -> bool {
-        self.draft.as_str() != self.baseline
+        !self
+            .draft
+            .same_as(self.baseline.revision(), &self.baseline, &self.same)
     }
 
     /// Save's last failure on the disk, while the draft is still the one it tried to write.
@@ -343,12 +351,12 @@ impl Repair {
     pub fn show(&mut self, ui: &mut egui::Ui, campaign: &Campaign, run_open: bool) -> bool {
         if let Ok(path) = crate::library::note_path(&campaign.path, &self.path)
             && let Ok(text) = std::fs::read_to_string(path)
-            && text != self.baseline
+            && text != *self.baseline
         {
             if self.dirty() {
                 self.disk = Some(text);
             } else {
-                self.baseline = text.clone();
+                self.baseline = Revised::new(text.clone());
                 let _ = self.draft.replace(text);
                 // A newer file ends the Undo of Discard and of Reload, so Undo never hides that
                 // change.
@@ -395,7 +403,8 @@ impl Repair {
                             Notice::new(crate::sentence!(
                                 "Reloaded from disk. Your draft is kept until you edit."
                             )),
-                            UndoStep::verb(Verb::Reload).pressed_as(RepairAct::Undo),
+                            // `Undo reload Broken.md`, the name its discard's Undo has (M0548).
+                            UndoStep::of(Verb::Reload, name.clone()).pressed_as(RepairAct::Undo),
                         ),
                     }
                 }));
@@ -478,11 +487,11 @@ impl Repair {
         disk: String,
         refused: bool,
     ) -> bool {
-        self.baseline = disk;
+        self.baseline = Revised::new(disk);
         self.disk = None;
         match choice {
             design::DiskConflictChoice::Reload => {
-                let draft = self.draft.replace(self.baseline.clone());
+                let draft = self.draft.replace(self.baseline.as_str());
                 // Reload replaces Discard's Undo: one Undo per draft.
                 self.undos.record(RepairUndo::Reload {
                     owner: self.owner(),
@@ -550,7 +559,7 @@ impl Repair {
             saved = self.save(campaign);
         }
         if pressed.discard {
-            let draft = self.draft.replace(self.baseline.clone());
+            let draft = self.draft.replace(self.baseline.as_str());
             // Discard replaces Reload's Undo: one Undo per draft.
             self.undos.record(RepairUndo::Discard {
                 owner: self.owner(),
@@ -575,7 +584,7 @@ impl Repair {
         };
         match result {
             Ok(_) => {
-                self.baseline = self.draft.as_str().to_owned();
+                self.baseline = Revised::new(self.draft.as_str().to_owned());
                 // A saved draft ends its Undo results.
                 self.undos.owner_changed(&self.owner());
                 self.failed = None;
@@ -619,12 +628,20 @@ mod tests {
                 });
             })
         };
-        let output = frame();
-        // Layout PR 9b: the repair's next frames lay out and hash none of its text.
-        let work = design::pane::text_work(|| {
-            let _ = (frame(), frame());
-        });
-        assert_eq!(work, (0, 0), "9b-quiet: the repair editor's quiet frames");
+        let mut output = None;
+        let shown = design::pane::text_work(|| output = Some(frame()));
+        let output = output.expect("one frame");
+        // Layout PR 9b: when the repair shows its editor, the next frames draw it again and do
+        // no text work.
+        if shown.drawn > 0 {
+            let work = design::pane::text_work(|| {
+                let _ = (frame(), frame());
+            });
+            assert!(
+                work.is_quiet(2),
+                "9b-quiet: the repair editor's quiet frames: {work:?}"
+            );
+        }
         let accent = colors().accent_fill;
         let mut words = String::new();
         let mut primary = false;
@@ -875,8 +892,9 @@ mod tests {
         let mut outside = Repair {
             path: "../Outside.md".into(),
             campaign: campaign.id,
-            baseline: before.into(),
+            baseline: Revised::new(before.to_owned()),
             draft: draft.clone().into(),
+            same: KeptCompare::default(),
             undos: design::Results::new(),
             disk: None,
             failed: None,

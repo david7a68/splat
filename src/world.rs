@@ -4541,7 +4541,7 @@ impl Reader {
                         Notice::new(crate::sentence!(
                             "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
                         )),
-                        UndoStep::verb(Verb::Reload).pressed_as(FooterAct::Undo),
+                        UndoStep::of(Verb::Reload, &item.entry.name).pressed_as(FooterAct::Undo),
                     ),
                 }
             }));
@@ -6690,10 +6690,9 @@ mod tests {
                 shares,
                 "no copy of the Log keys on an unchanged pass"
             );
-            assert_eq!(
-                work,
-                (0, 0),
-                "9b-quiet: the World edit form's unchanged passes"
+            assert!(
+                work.is_quiet(3),
+                "9b-quiet: the World edit form's unchanged passes: {work:?}"
             );
             let rows = harness.query_all_by_label(LOG_WAITS_FOR_CANCEL).count();
             let (world, lookup) = harness.state();

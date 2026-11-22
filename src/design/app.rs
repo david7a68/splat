@@ -16,15 +16,15 @@ mod tests {
 
     #[test]
     fn a_wrapped_message_keeps_its_whole_action() {
+        use crate::design::test_harness::ThemedPage as _;
         for width in [240.0, 360.0, 440.0, 880.0] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 240.0))
-                .build_ui(|ui| {
+                .themed_ui(|ui| {
                     message_with_action(ui, Tone::Info,
                         "The party has full HP after this long rest. Every changed value is kept for undo.",
                         "Undo delete saved run");
                 });
-            theme::install(&harness.ctx);
             harness.run_steps(2);
             let cut = crate::visual_tests::ergonomics::cut_text(
                 &harness.output().shapes,
@@ -65,10 +65,9 @@ mod tests {
             the open session's note, so go back to the played session before you add what happened.";
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(1800.0, 240.0))
-            .build_ui(|ui| {
+            .themed_ui(|ui| {
                 message_with_action(ui, Tone::Warning, LONG, "Go to the played session");
             });
-        theme::install(&harness.ctx);
         harness.run_steps(2);
         let texts = painted_texts(&harness);
         let words = texts
@@ -90,10 +89,9 @@ mod tests {
             let links = false;
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(1800.0, 240.0))
-                .build_ui(move |ui| {
+                .themed_ui(move |ui| {
                     undo_message(ui, Tone::Success, LONG, "Undo");
                 });
-            theme::install(&harness.ctx);
             harness.run_steps(2);
             let texts = painted_texts(&harness);
             let right = texts
@@ -204,17 +202,17 @@ mod tests {
 
     #[test]
     fn a_rolling_tile_matches_a_stat_tiles_label_and_value() {
+        use crate::design::test_harness::ThemedPage as _;
         // The rolling tile has the stat tile's label line and value type; only its value rolls.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(400.0, 200.0))
-            .build_ui(|ui| {
+            .themed_ui(|ui| {
                 ui.horizontal(|ui| {
                     stat_tile(ui, &fact::tile_label("Str", 8), "−1");
                     let link = RollLink::d20(D20::Check, 2, "Dexterity");
                     let _ = fact::roll_tile(ui, &fact::tile_label("Dex", 14), "+2", &link);
                 });
             });
-        theme::install(&harness.ctx);
         harness.run();
         let style = |words: &str| {
             harness

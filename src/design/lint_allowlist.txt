@@ -44,3 +44,24 @@ src/encounter_run/notice.rs heading-owner 1
 # `line` builds `<label>: <cells>` as a line's search words, not drawn (lane W0 decides).
 src/encounter_run/notice.rs fact-owner 1
 src/world/lines.rs fact-owner 1
+# Issue #810: a theme installed on a test harness after it drew (`late-theme`). Build the harness
+# with `design::test_harness` instead. Shrink only: each move lowers its file's count. src/trackers/view.rs
+# keeps 1: its name test installs the theme again on purpose, to prove a new font generation fits again.
+src/design/outcome.rs late-theme 10
+src/design/pane.rs late-theme 12
+src/design/pane/laid.rs late-theme 2
+src/design/reveal.rs late-theme 1
+src/encounters.rs late-theme 15
+src/encounters/groups.rs late-theme 3
+src/library/creature.rs late-theme 1
+src/lookup.rs late-theme 3
+src/markdown_view.rs late-theme 5
+src/party_support/sheets.rs late-theme 3
+src/sessions/slash.rs late-theme 1
+src/settings.rs late-theme 3
+src/timeline/checks.rs late-theme 1
+src/timeline/test_support.rs late-theme 1
+src/trackers/view.rs late-theme 1
+src/visual_tests/ergonomics.rs late-theme 2
+src/world.rs late-theme 3
+src/world/page.rs late-theme 2
