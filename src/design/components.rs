@@ -9003,7 +9003,11 @@ mod tests {
                                 // 456, P2: the footer's new edge cuts a row below its button).
                                 for line in 0..60 {
                                     let row = ui.vertical(|ui| {
-                                        if ui.button(format!("Row {line}")).clicked() {
+                                        if ui
+                                            .button(format!("Row {line}"))
+                                            .on_hover_text(format!("Tip {line}"))
+                                            .clicked()
+                                        {
                                             row_in.set(Some(line));
                                         }
                                         ui.label(format!("Line {line}"));
@@ -9109,6 +9113,65 @@ mod tests {
                 });
             }
         };
+        // Issue #510: a hovered body button's tooltip goes with the button. Below the tall body,
+        // with no footer, the lowest row button's tooltip shows; a keyboard act brings three
+        // reasons in one pass, and the footer they make covers that row: in that frame the row
+        // is hidden, and no tooltip of it is painted.
+        {
+            use egui_kittest::kittest::{NodeT, Queryable};
+            tall.set(true);
+            shown.set(0);
+            harness.event(egui::Event::PointerGone);
+            harness.run_steps(6);
+            let delay = harness.ctx.style().interaction.tooltip_delay;
+            harness
+                .ctx
+                .all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+            let (row, at) = harness
+                .query_all_by_role(egui::accesskit::Role::Button)
+                .filter_map(|node| {
+                    let label = node.accesskit_node().label()?;
+                    label
+                        .strip_prefix("Row ")?
+                        .parse::<usize>()
+                        .ok()
+                        .map(|row| (row, node.rect()))
+                })
+                .max_by(|a, b| a.1.bottom().total_cmp(&b.1.bottom()))
+                .expect("the tall body draws its rows");
+            harness
+                .input_mut()
+                .events
+                .push(egui::Event::PointerMoved(at.center()));
+            harness.run_steps(4);
+            let tip = format!("Tip {row}");
+            assert!(
+                painted(&harness, &tip).is_some(),
+                "#510 setup: the hovered row {row}'s tooltip shows"
+            );
+            harness.get_by_label("Show three").focus();
+            harness.step();
+            harness.input_mut().events.push(egui::Event::Key {
+                key: egui::Key::Enter,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.step();
+            let hidden = harness
+                .query_by_label(&format!("Row {row}"))
+                .is_none_or(|node| node.accesskit_node().is_hidden());
+            assert!(
+                shown.get() == 2 && hidden && painted(&harness, &tip).is_none(),
+                "#510: in the frame the footer covers row {row}, the row is hidden ({hidden}) and \
+                 its tooltip is gone (shown {})",
+                shown.get()
+            );
+            harness
+                .ctx
+                .all_styles_mut(|style| style.interaction.tooltip_delay = delay);
+        }
         let mut press_checked = false;
         let mut gap_checked = false;
         for (is_tall, probe_gap) in [(false, false), (true, false), (true, true)] {
