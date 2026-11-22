@@ -1045,6 +1045,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         "Change on Status in Lookup puts the keyboard in the field, with the status on disk",
     );
     d.type_text("missing");
+    const STATUS_ENTRY: &str = ": Status away → missing.";
     let lookup_pane = |d: &Driver<'_>| {
         d.place_of(SEARCH_LOOKUP).map(|search| {
             egui::Rect::from_min_max(
@@ -1065,6 +1066,11 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.expect("Undo change to Status");
     let title_after = lookup_pane(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
     let change_after = d.place_of("Change Status");
+    // Layout step 11b, in the act's own frame: the new entry is whole in the body room
+    // (`design::pane::keep_room`), and the result's Undo is whole in the footer, which grew into
+    // room the arbiter kept clear (`reveal_with_focus_and_growth`).
+    let entry_at_act = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY));
+    let undo_at_act = d.in_view("Undo change to Status");
     let changed = fs::read_to_string(&path).unwrap();
     d.observe(
         "T15.4",
@@ -1098,24 +1104,27 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // across resizes before it would scroll the reader away from what the act left in view.
     let mut at_capture = Vec::new();
     // Capture all three reviewer sizes; each look is after its resize.
-    const STATUS_ENTRY: &str = ": Status away → missing.";
     d.state_prepared("status-changed-in-lookup", Sizes::All, |d| {
         d.settle();
         let entry = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY));
         at_capture.push((named(d), entry));
     });
-    // D-2 (a), before and after the act at 960: `Change` stands where the focused field stood.
-    let _ = (title_before, title_after);
+    // D-2 (a), before and after the act at 960: `Change` stands where the focused field stood,
+    // the title does not move (nothing scrolls when the entry and the result come), and the
+    // entry and the Undo are whole in the act's frame.
     let still = field_before
         .zip(change_after)
         .is_some_and(|(field, change)| {
             change.top() >= field.top() - 0.5
                 && change.bottom() <= field.bottom() + crate::design::L
-        });
+        })
+        && title_before
+            .zip(title_after)
+            .is_some_and(|(before, after)| (before.top() - after.top()).abs() <= 0.5);
     d.observe(
         "iter-29-D2-status-still",
-        still,
-        format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}"),
+        still && entry_at_act && undo_at_act,
+        format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}; entry whole {entry_at_act}, Undo whole {undo_at_act}"),
     );
     for (size, ((fits, detail), entry)) in [SMALL, DEFAULT, LARGE].into_iter().zip(at_capture) {
         d.observe(

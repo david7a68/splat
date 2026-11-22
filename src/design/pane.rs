@@ -1061,6 +1061,64 @@ pub fn reveal_with_focus(ui: &Ui, words: Rect) {
     }
 }
 
+/// Room a body keeps for content that an act will add (layout step 11b; ruling R30, D-2). A
+/// closed set: each room's height comes from tokens and line heights, never from the content.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Room {
+    /// A Log heading and one new entry of at most two prose lines, under a note's body.
+    LogEntry,
+}
+
+impl Room {
+    /// The room's height in `ui`'s fonts.
+    pub fn height(self, ui: &Ui) -> f32 {
+        match self {
+            Self::LogEntry => {
+                let prose =
+                    ui.fonts_mut(|fonts| fonts.row_height(&super::reader::prose_type(ui).font(ui)));
+                super::L + super::Type::Heading.line() + S + 2.0 * prose
+            }
+        }
+    }
+}
+
+/// The body's room for content that an act will add, where the body's content ends: blank
+/// space of the room's height, drawn here and nowhere else, so the content lands in room
+/// already in view and nothing moves. Its rect, for [`reveal_with_focus_and_growth`].
+pub fn keep_room(ui: &mut Ui, room: Room) -> Rect {
+    let top = ui.cursor().top();
+    let height = room.height(ui);
+    super::extras::space(ui, height);
+    Rect::from_min_max(
+        pos2(ui.max_rect().left(), top),
+        pos2(ui.max_rect().right(), top + height),
+    )
+}
+
+/// How much a pane's footer grows when an act ends (layout step 11b). A closed set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Growth {
+    /// The act's result line and its Undo.
+    ResultWithUndo,
+}
+
+impl Growth {
+    /// The footer's growth.
+    pub fn height(self) -> f32 {
+        match self {
+            Self::ResultWithUndo => S + 2.0 * super::Density::Read.control(),
+        }
+    }
+}
+
+/// [`reveal_with_focus`] for an act's room: `room` (a [`keep_room`]) and, below it, as much
+/// again as the footer will grow when the act ends. The pane's focus arbiter keeps the focused
+/// field and all of that whole above the footer as it is now, so when the act's content and its
+/// result come, nothing moves and nothing is covered.
+pub fn reveal_with_focus_and_growth(ui: &Ui, room: Rect, growth: Growth) {
+    reveal_with_focus(ui, room.with_max_y(room.max.y + growth.height()));
+}
+
 /// What the hold needs of a pass's scroll column, kept until the footer has measured.
 #[derive(Clone, Copy)]
 struct ColumnFacts {

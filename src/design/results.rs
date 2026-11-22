@@ -1395,7 +1395,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "draw", &[Ban::Extras(2), Ban::Body]),
         // M20 (M-W0.4): an unread value's warning (was `message`).
         ("src/world.rs", "unread_warning", &[Ban::Body]),
-        ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
         // `message` and a link).
