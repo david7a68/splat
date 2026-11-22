@@ -5150,9 +5150,9 @@ impl Reader {
                 let stat_block = &index.items[adding.stat_block?].entry;
                 let total = match adding.initiative.trim() {
                     "" => None,
-                    text => match text.parse::<i64>() {
-                        Ok(total) => Some(total),
-                        Err(_) => {
+                    text => match design::parse_signed(text) {
+                        Some(total) => Some(total),
+                        None => {
                             self.error = Some("Initiative must be a whole number.".to_owned());
                             return None;
                         }

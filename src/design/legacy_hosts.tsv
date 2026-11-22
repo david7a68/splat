@@ -133,8 +133,6 @@ scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
 scroll-area	src/markdown_view.rs	reader_table	1	Reader
 scroll-area	src/sessions/page.rs	Sessions::note_editor	1	Sessions
-scroll-area	src/sessions/plan.rs	Sessions::fight_block	1	Sessions
-scroll-area	src/sessions/plan.rs	plan_menu	1	Sessions
 scroll-area	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 scroll-request	src/campaign_content.rs	CampaignContent::repair_section_content	1	Campaign
 scroll-request	src/campaign_content.rs	CampaignContent::scroll_to_focus	1	Campaign

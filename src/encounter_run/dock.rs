@@ -46,7 +46,7 @@ impl Run {
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
                 ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-                let value = self.amount.parse::<i64>().ok();
+                let value = design::parse_signed(&self.amount);
                 let empty = value.is_none().then_some("Type an amount first.");
                 // The narrowest dock keeps every word by giving up the hint and an icon.
                 let narrow = ui.available_width() < DOCK_ALL_WORDS_FROM;
