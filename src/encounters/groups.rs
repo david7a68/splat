@@ -2662,7 +2662,7 @@ pub(super) fn overrides_form(
         ui.set_max_width(loot_width.min(ui.available_width()));
         crate::loot_editor::show_cell(
             ui,
-            id,
+            &key,
             &shown_name(block, entry.name.clone()),
             &mut overrides.loot,
         );

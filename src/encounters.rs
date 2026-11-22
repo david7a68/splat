@@ -1592,7 +1592,7 @@ fn roster_scroll_key(draft: Uuid) -> egui::Id {
 
 /// The page's Ctrl+S, taken from this frame's input (`Encounters::save_shortcut`).
 pub(super) fn take_save_key(ctx: &egui::Context) -> bool {
-    ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
+    design::save_row::save_key_before_drawing(ctx, true)
 }
 
 struct Creature {
@@ -9272,10 +9272,7 @@ impl Encounters {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
                 // other change too. Not under a modal (the app's one test) nor the form's lock
                 // (review of PR 525).
-                let save_key = state.can_save()
-                    && !modal
-                    && ui.is_enabled()
-                    && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+                let save_key = design::save_row::save_key(ui, state.can_save() && !modal);
                 // The state and Discard start the row, the lock's reason after them, and Save
                 // ends it (`save_row`), in every state (M4).
                 let row = design::save_row(ui, &state, SAVE_RUN_SETTINGS);

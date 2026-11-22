@@ -551,9 +551,7 @@ impl Repair {
             state = state.not_saved();
         }
         let pressed = design::save_row(ui, &state, "Save repaired note");
-        let save = pressed.save
-            || (state.can_save()
-                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
+        let save = pressed.save || design::save_row::save_key(ui, state.can_save());
         let mut saved = false;
         if save {
             saved = self.save(campaign);

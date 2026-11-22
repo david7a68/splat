@@ -1297,11 +1297,8 @@ impl Reader {
                 design::save_row(ui, &state, "Save changes")
             })
             .inner;
-        let save = overwrite
-            || row.save
-            || (state.can_save()
-                && focused
-                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
+        let save =
+            overwrite || row.save || design::save_row::save_key(ui, state.can_save() && focused);
         let cancel = row.discard || row.cancel;
         if cancel {
             self.error = None;

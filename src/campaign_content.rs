@@ -1046,10 +1046,10 @@ impl CampaignContent {
     /// A repair editor takes its own key (`repair_section`), so the key is left for it while a
     /// repair stands.
     pub fn save_shortcut(&mut self, ctx: &egui::Context, modal: bool) {
-        self.save_key = !modal
-            && self.snapshot.is_some()
-            && self.repairs.is_empty()
-            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        self.save_key = design::save_row::save_key_before_drawing(
+            ctx,
+            !modal && self.snapshot.is_some() && self.repairs.is_empty(),
+        );
     }
 
     /// The page wrote the open campaign's package choices: the check is due again, and the app
@@ -1972,11 +1972,7 @@ impl CampaignContent {
                         state = state.not_saved();
                     }
                     let row = design::save_row(ui, &state, "Save repaired note");
-                    if row.save
-                        || (state.can_save()
-                            && ui.input_mut(|i| {
-                                i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
-                            }))
+                    if row.save || design::save_row::save_key(ui, state.can_save())
                     {
                         // The last act's result, failed or successful (see `Answer`).
                         if repair.save(active) {
