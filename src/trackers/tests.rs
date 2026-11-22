@@ -2205,13 +2205,11 @@ fn a_tracker_line_paints_in_its_block_at_its_wrap_threshold() {
             })
             .map(|(_, rows)| rows)
             .unwrap_or_default();
-        // The line's own block: the registered row that holds its first action and starts at
-        // its name's line (not the Pinned heading's block over it).
+        // The line's own block: the smallest registered row that holds its first action (with
+        // the `Pinned` heading laid over it: the race clock is the first pinned tracker).
         let block = rows
             .into_iter()
-            .filter(|row| {
-                row.contains(actions[0].center()) && row.top() >= name.top() - crate::design::S
-            })
+            .filter(|row| row.contains(actions[0].center()))
             .min_by(|a, b| a.height().total_cmp(&b.height()));
         let mut tops: Vec<f32> = actions.iter().map(|rect| rect.top()).collect();
         tops.dedup_by(|a, b| (*a - *b).abs() < 0.5);

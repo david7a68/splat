@@ -12,7 +12,7 @@ use crate::design::outcome::{
     Said, Sentence, UndoStep, Verb,
 };
 use crate::design::pane::{Body, ContentScroll, held_seen, hold_press};
-use crate::design::{self, Action, Density, Gap, Heading, TextKey, Type, icons};
+use crate::design::{self, Action, Density, Gap, TextKey, Type, icons};
 use egui;
 use std::collections::HashSet;
 
@@ -57,7 +57,7 @@ pub(crate) struct ViewState {
     /// in their order (two instances can share a name, and a repeated one leaves its fields
     /// out), by the tracker, all kept by one key (the trackers' revision, the panel's measure, the
     /// font atlas's epoch and the theme): a new key lays each tracker out again as it is drawn.
-    line_laid: Option<(DueKey, std::collections::HashMap<String, TrackerLaid>)>,
+    line_laid: Option<(DueKey, LinesLaid)>,
 }
 
 /// The columns that every tracker line of the panel shares, so the values end at one edge
@@ -447,17 +447,15 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     }
     let columns = columns(ui, rules, state, view, revision.revision());
     if usable(true).next().is_some() {
-        let heading_top = ui.cursor().top();
-        design::heading(
-            ui,
-            Heading::Group {
-                title: "Pinned",
-                count: 0,
-            },
-        );
+        // The `Pinned` heading is laid with its first tracker's first line, one block (SH9), with
+        // no space above it where it starts the panel (`design::heading`'s rule).
+        let first = ui.cursor().top() <= ui.max_rect().top() + 0.5;
         for (at, (key, def)) in usable(true).enumerate() {
-            // The heading and its first tracker's first line, as one block (SH9).
-            let heading = (at == 0).then_some(heading_top);
+            let heading = if at == 0 {
+                LineHead::Laid { first }
+            } else {
+                LineHead::None
+            };
             tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
         }
     }
@@ -473,7 +471,11 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
                 for (at, (key, def)) in usable(false).enumerate() {
                     // The open section's heading and its first tracker's first line, as one
                     // block.
-                    let heading = (at == 0).then_some(heading_top);
+                    let heading = if at == 0 {
+                        LineHead::Bound(heading_top)
+                    } else {
+                        LineHead::None
+                    };
                     tracker_lines(ui, rules, state, view, &columns, key, def, act, heading);
                 }
             },
@@ -857,6 +859,18 @@ fn register_block(ui: &egui::Ui, top: f32) {
     }
 }
 
+/// The section heading a tracker comes first under.
+#[derive(Clone, Copy)]
+enum LineHead {
+    None,
+    /// `Pinned`, laid with the first line (`design::LineHeading`); whether it starts the panel.
+    Laid {
+        first: bool,
+    },
+    /// A heading the host draws (`More trackers`, a toggle), bound to the first line from its top.
+    Bound(f32),
+}
+
 /// One tracker line's parts, as `design::ActionLine` lays them and the view draws them, kept with
 /// its layout so a quiet frame builds none.
 struct LineParts {
@@ -876,6 +890,10 @@ struct LineParts {
 /// A tracker's lines laid out: each line's parts and its layout.
 type TrackerLaid = Vec<(LineParts, design::Laid)>;
 
+/// Each tracker's lines, by the tracker, with the laid heading over its first line (whether it
+/// starts the panel), if any.
+type LinesLaid = std::collections::HashMap<String, (Option<bool>, TrackerLaid)>;
+
 /// A tracker's lines, laid out before paint: one line, or its name over one line for each
 /// instance, each in the panel's columns. Of two amount fields with one owner (`Repeat`), the line
 /// that leaves one out says why under it, once for the tracker.
@@ -889,6 +907,8 @@ fn lay_tracker(
     key: &str,
     def: &super::Definition,
     width: f32,
+    // A laid `Pinned` heading over the first line, and whether it starts the panel.
+    heading: Option<bool>,
 ) -> TrackerLaid {
     #[cfg(feature = "test-support")]
     TRACKERS_LAID.with(|laid| laid.set(laid.get() + 1));
@@ -953,7 +973,13 @@ fn lay_tracker(
             .collect();
         let laid = design::ActionLine {
             key: egui::Id::new(("trackers_line", key, line)),
-            heading: None,
+            heading: heading
+                .filter(|_| line == 0)
+                .map(|first| design::LineHeading {
+                    title: "Pinned",
+                    count: 0,
+                    first,
+                }),
             over: &[],
             row: 0.0,
             title: (indented && line == 0).then_some(def.name.as_str()),
@@ -1012,10 +1038,10 @@ fn tracker_lines(
     key: &str,
     def: &super::Definition,
     act: &mut Option<Act>,
-    // The top of the section heading this tracker comes first under, if it does: the heading and
-    // the tracker's FIRST line are one block (layout step 11a, SH9); its other lines are blocks
-    // of their own.
-    heading_top: Option<f32>,
+    // The section heading this tracker comes first under, if it does: the heading and the
+    // tracker's FIRST line are one block (layout step 11a, SH9); its other lines are blocks of
+    // their own.
+    heading: LineHead,
 ) {
     let width = ui.available_width();
     let panel = DueKey {
@@ -1032,14 +1058,30 @@ fn tracker_lines(
     {
         view.line_laid = Some((panel, std::collections::HashMap::new()));
     }
-    if !view
-        .line_laid
-        .as_ref()
-        .is_some_and(|(_, lines)| lines.contains_key(key))
-    {
-        let lines = lay_tracker(ui, rules, state, view, columns, key, def, width);
+    // A laid heading is part of the first line's layout: a tracker laid with another heading
+    // (it became the first pinned, or `Pinned` began to start the panel) is laid again.
+    let laid_heading = match heading {
+        LineHead::Laid { first } => Some(first),
+        _ => None,
+    };
+    if !view.line_laid.as_ref().is_some_and(|(_, lines)| {
+        lines
+            .get(key)
+            .is_some_and(|(kept, _)| *kept == laid_heading)
+    }) {
+        let lines = lay_tracker(
+            ui,
+            rules,
+            state,
+            view,
+            columns,
+            key,
+            def,
+            width,
+            laid_heading,
+        );
         if let Some((_, kept)) = view.line_laid.as_mut() {
-            kept.insert(key.to_owned(), lines);
+            kept.insert(key.to_owned(), (laid_heading, lines));
         }
     }
     let ViewState {
@@ -1048,7 +1090,7 @@ fn tracker_lines(
         focus_asking,
         ..
     } = &mut *view;
-    let Some(lines) = line_laid.as_ref().and_then(|(_, lines)| lines.get(key)) else {
+    let Some((_, lines)) = line_laid.as_ref().and_then(|(_, lines)| lines.get(key)) else {
         return;
     };
     for (line, (parts, laid)) in lines.iter().enumerate() {
@@ -1079,9 +1121,10 @@ fn tracker_lines(
                 });
             }
         });
-        // The heading and this tracker's first line, as one block (SH9).
+        // A host-drawn heading (`More trackers`, a toggle) and this tracker's first line, as one
+        // block (SH9).
         if line == 0
-            && let Some(top) = heading_top
+            && let LineHead::Bound(top) = heading
         {
             register_block(ui, top);
         }
