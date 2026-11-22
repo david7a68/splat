@@ -879,6 +879,42 @@ fn design_or_capture(path: &str) -> bool {
     path.starts_with("src/design/") || path.starts_with("src/visual_tests/")
 }
 
+/// Issue #810: each `theme::install(&<harness>.ctx)`, a theme installed on a test harness's
+/// context after `egui_kittest`'s builder already drew the page, so the page's one-time results
+/// were measured at egui's default sizes. A harness is built with `design::test_harness`
+/// instead, whose first frame installs the theme. A context made by hand and themed before its
+/// first `run` (`theme::install(&ctx)`) is not counted.
+fn late_theme_installs(text: &str) -> usize {
+    text.lines()
+        .map(|line| line.split("//").next().unwrap_or(""))
+        .map(|code| {
+            code.match_indices("theme::install(&")
+                .filter(|(at, call)| {
+                    let rest = &code[at + call.len()..];
+                    rest.split(')')
+                        .next()
+                        .is_some_and(|argument| argument.trim().ends_with(".ctx"))
+                })
+                .count()
+        })
+        .sum()
+}
+
+#[test]
+fn a_theme_on_a_built_harness_is_counted() {
+    // Split, so this file holds no counted call of its own.
+    let text = concat!(
+        "    design::theme::install",
+        "(&harness.ctx);\n",
+        "crate::design::theme::install",
+        "(&h.ctx); // after build_state\n",
+        "theme::install(&ctx);\n",
+        "// design::theme::install",
+        "(&harness.ctx);\n",
+    );
+    assert_eq!(late_theme_installs(text), 2);
+}
+
 /// Counts the rules of every source file under `folder`, and keeps each file's text by its key
 /// in `files` (for the legacy host freeze).
 fn scan(
@@ -898,6 +934,10 @@ fn scan(
             let key = relative.strip_prefix(&root).unwrap_or(&relative);
             // The legacy host freeze reads every file: a name does not make a file test-only.
             files.push((key.to_owned(), text.clone()));
+            // Issue #810, in tests too: a theme installed on a harness that already drew.
+            for _ in 0..late_theme_installs(&text) {
+                *counts.entry(format!("{key} late-theme")).or_default() += 1;
+            }
             // A file of unit tests, such as `formats_tests.rs`, does not ship either.
             if relative.ends_with("tests.rs") {
                 continue;
@@ -1003,6 +1043,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Put `#[allow(deprecated)]` on the function that calls, not on the crate"
                 }
                 "reason-end-mark" => "End a blocked reason with `.`, `?` or `!`",
+                "late-theme" => {
+                    "Build the harness with `design::test_harness` (`themed_state`, `themed_ui_state`, `themed`, `themed_ui`): its first frame installs the theme, so the page never draws at egui's default sizes (issue #810)"
+                }
                 "fitting-escape" => {
                     "Fit the run's words through a design part (`design::TurnHeading`), not a raw cut"
                 }

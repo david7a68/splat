@@ -343,21 +343,53 @@ thread_local! {
     pub static KEPT_LAYOUTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// The text work of the document editors while `frames` runs: how many layouts the kept
-/// layouter made, and how many bytes of documents the field guard hashed (layout PR 9b: a
-/// host's quiet frames do neither; a short `String` field keeps its own hash, ruling Q3).
+/// The text work of the document editors and their hosts (layout PR 9b and 9b-C), counted from
+/// the host's entry through its paint: a host's quiet frames do none of it. A short `String`
+/// field keeps its own hash (ruling Q3).
 #[cfg(any(test, feature = "test-support"))]
-pub fn text_work(frames: impl FnOnce()) -> (usize, usize) {
-    let read = || {
-        (
-            KEPT_LAYOUTS_MADE.with(std::cell::Cell::get),
-            super::layout::DRAFT_TEXT_BYTES.with(std::cell::Cell::get),
-        )
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TextWork {
+    /// Document editors drawn (`FieldId::editor`): the proof that the host's editor was there.
+    pub drawn: usize,
+    /// Layouts the kept layouter made.
+    pub layouts: usize,
+    /// Bytes of documents the field guard hashed.
+    pub hashed: usize,
+    /// Whole-text compares the drafts made.
+    pub compared: usize,
+    /// Bytes of words copied (a draft's clone, a host's counted copy).
+    pub copied: usize,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl TextWork {
+    /// A document editor drew in each of `frames` frames, and nothing else was done.
+    pub fn is_quiet(&self, frames: usize) -> bool {
+        self.drawn >= frames
+            && (self.layouts, self.hashed, self.compared, self.copied) == (0, 0, 0, 0)
+    }
+}
+
+/// The [`TextWork`] done while `frames` runs.
+#[cfg(any(test, feature = "test-support"))]
+pub fn text_work(frames: impl FnOnce()) -> TextWork {
+    let read = || TextWork {
+        drawn: super::layout::DOCUMENTS_DRAWN.with(std::cell::Cell::get),
+        layouts: KEPT_LAYOUTS_MADE.with(std::cell::Cell::get),
+        hashed: super::layout::DRAFT_TEXT_BYTES.with(std::cell::Cell::get),
+        compared: super::text_draft::WORDS_COMPARED.with(std::cell::Cell::get),
+        copied: super::text_draft::WORDS_COPIED.with(std::cell::Cell::get),
     };
     let before = read();
     frames();
     let after = read();
-    (after.0 - before.0, after.1 - before.1)
+    TextWork {
+        drawn: after.drawn - before.drawn,
+        layouts: after.layouts - before.layouts,
+        hashed: after.hashed - before.hashed,
+        compared: after.compared - before.compared,
+        copied: after.copied - before.copied,
+    }
 }
 
 /// Everything a kept layout of a document was made from (layout PR 9b, note v2 §3): the
@@ -388,8 +420,24 @@ struct KeptLayouts {
 struct KeptLayout {
     key: LaidKey,
     galley: std::sync::Arc<egui::Galley>,
+    /// Which layout this is: new for each galley the kept layouter makes ([`kept_layout_made`]).
+    made: u64,
     /// Drawn in this pass.
     used: bool,
+}
+
+/// Which kept galley the document editor `field` (its text edit's id) showed last: a number new
+/// for each galley the part lays out, so a host keeps its own work per laid-out text (a
+/// Markdown source's rules and fold marks) by it, exactly. None while the field keeps none.
+pub fn kept_layout_made(ctx: &egui::Context, field: Id) -> Option<u64> {
+    ctx.memory_mut(|memory| {
+        memory
+            .caches
+            .cache::<KeptLayouts>()
+            .kept
+            .get(&field)
+            .map(|kept| kept.made)
+    })
 }
 
 impl egui::cache::CacheTrait for KeptLayouts {
@@ -464,9 +512,11 @@ pub(in crate::design) fn kept_layouter<'a>(
             Face::Laid { layout, .. } => layout(ui, text, wrap),
         };
         ui.memory_mut(|memory| {
+            static MADE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
             let kept = KeptLayout {
                 key,
                 galley: galley.clone(),
+                made: MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
                 used: true,
             };
             memory

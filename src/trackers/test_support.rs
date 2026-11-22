@@ -76,8 +76,4 @@ impl Trackers {
     pub fn test_measured(&self) -> usize {
         self.view.measured
     }
-
-    pub fn test_remeasure(&mut self) {
-        self.count_settle();
-    }
 }

@@ -73,7 +73,7 @@ fn actions_line(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui)) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::design::{Action, Density, theme};
+    use crate::design::{Action, Density};
     use egui_kittest::{Harness, kittest::Queryable};
 
     const WORDS: &str = "Old Guard: the second seal is taken, and the gate of the cistern opens \
@@ -83,9 +83,10 @@ mod tests {
     /// the last line's centre within a pixel, and its target never reaches over the line above.
     #[test]
     fn a_last_line_and_its_action_share_one_centre() {
+        use crate::design::test_harness::ThemedPage as _;
         let mut h = Harness::builder()
             .with_size(vec2(360.0, 300.0))
-            .build_ui(|ui| {
+            .themed_ui(|ui| {
                 let done = Action::quiet("Done").density(Density::Read);
                 let trailing = done.natural_width(ui);
                 words_ending_with(
@@ -98,7 +99,6 @@ mod tests {
                     },
                 );
             });
-        theme::install(&h.ctx);
         h.run();
         let done = h.get_by_label("Done").rect();
         let last = h
