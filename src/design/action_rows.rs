@@ -142,6 +142,9 @@ pub struct RowRecord {
     pub owner: &'static str,
     pub row: usize,
     pub facts: Rect,
+    /// The facts on the actions' own line (a plan row's title above its summary); the same as
+    /// `facts` where all the facts share that line.
+    pub line: Rect,
     pub action: Rect,
     /// Where the action column starts, as planned: `L` after the widest facts.
     pub column: f32,
@@ -235,6 +238,7 @@ pub fn action_row<R>(
             owner,
             row,
             facts: Rect::from_min_size(facts_rect.min, vec2(facts_width, facts_rect.height())),
+            line: Rect::from_min_size(facts_rect.min, vec2(facts_width, facts_rect.height())),
             action: drawn,
             column: action_rect.left(),
             wrapped: columns.wrapped,
@@ -281,10 +285,18 @@ pub fn columns(ui: &Ui, list: Id) -> (f32, f32) {
 }
 
 /// Add a drawn row's facts and actions widths to this pass's columns.
+/// A row wider than the kept column means this pass placed rows with a stale column: the pass
+/// is discarded and drawn again with the new one, so the stale positions never reach the screen
+/// (PR 641 review, P2). A column that only shrinks follows on the next frame; it never puts an
+/// action over facts.
 pub fn measured(ui: &Ui, list: Id, facts: f32, actions: f32) {
-    kept_columns(ui, list, |kept| {
+    let grew = kept_columns(ui, list, |kept| {
         kept.next = (kept.next.0.max(facts), kept.next.1.max(actions));
+        facts > kept.last.0 + 0.5 || actions > kept.last.1 + 0.5
     });
+    if grew {
+        ui.ctx().request_discard("a list's measured column grew");
+    }
 }
 
 /// The height a row needs: `base` (its facts), and an action line when the columns wrap.

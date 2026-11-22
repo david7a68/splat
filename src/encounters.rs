@@ -8732,6 +8732,11 @@ impl Encounters {
                                         egui::pos2(left, facts.top()),
                                         egui::vec2(natural, facts.height()),
                                     ),
+                                    // The row's facts share the actions' line.
+                                    line: egui::Rect::from_min_size(
+                                        egui::pos2(left, facts.top()),
+                                        egui::vec2(natural, facts.height()),
+                                    ),
                                     action: actions,
                                     column: if column {
                                         left + kept_facts + design::L

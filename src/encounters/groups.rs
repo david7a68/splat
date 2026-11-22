@@ -3982,6 +3982,11 @@ fn members(
                             facts.min,
                             egui::vec2(own_facts, facts.height()),
                         ),
+                        // The actions' line holds the count, after the name and detail lines.
+                        line: egui::Rect::from_min_max(
+                            egui::pos2(left, count.rect.top()),
+                            count.rect.max,
+                        ),
                         action: actions,
                         column: if column {
                             left + kept_facts + design::L
@@ -4926,10 +4931,9 @@ mod tests {
             "A's draft was typed"
         );
         harness.get_by_label("Done with changes").click();
-        // Layout PR 5b: closing A's form changes its facts; the members' column follows on the
-        // next frame (it is measured in the list's last pass, and egui draws again at once), so
-        // B's Changes is pressed once the column has settled.
-        harness.run_steps(3);
+        // Layout PR 5b: closing A's form widens its facts; the members' column grows in the same
+        // frame (the pass is discarded and drawn again), so B's Changes is where it is drawn.
+        harness.run_steps(2);
         harness.get_by_label("Changes for Wolf").click();
         harness.run_steps(2);
         harness.get_by_label("Other effect").click();

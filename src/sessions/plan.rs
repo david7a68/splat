@@ -718,6 +718,7 @@ fn plan_row_with(
                                 summary_rect.bottom().max(title.response.rect.bottom()),
                             ),
                         ),
+                        line: title.response.rect,
                         action: action_ui.min_rect(),
                         column: action_rect.left(),
                         wrapped: !column,
