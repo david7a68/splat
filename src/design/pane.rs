@@ -2680,7 +2680,9 @@ mod hold_tests {
             modifiers: egui::Modifiers::NONE,
         });
         h.run_steps(4);
-        let cut = caption(&h);
+        let cut = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Clip caption")
+            .rect();
         assert!(
             cut.top() < viewport.top() - 0.5 && h.ctx.memory(|memory| memory.focused()) == focused,
             "i9-again-setup: the wheel cut the caption {cut:?} at the view's top {viewport:?}, \
@@ -2689,7 +2691,9 @@ mod hold_tests {
         h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Clip caption")
             .click();
         h.run_steps(4);
-        let caption = caption(&h);
+        let caption = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Clip caption")
+            .rect();
         assert!(
             caption.top() >= viewport.top() - 0.5,
             "i9-again: a second click on the focused field brings its caption {caption:?} into \
