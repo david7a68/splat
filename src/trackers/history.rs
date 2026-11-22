@@ -11,6 +11,7 @@ use super::{
     NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, orphaned, place_name,
     result_words, with_dependents,
 };
+use crate::design::memo::{Measure, Memos, Revision};
 use crate::design::outcome::PagePlaceholder;
 use crate::design::outcome::{FaultMessage, Messages, Said, Sentence, UndoStep, Verb};
 use crate::design::{self, Action, Density, Gap, Type, colors};
@@ -25,6 +26,8 @@ thread_local! {
     pub static PREPARED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Open sections drawn, and rows drawn in them.
     pub static DRAWN: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    /// Rows' words fitted to their room (`history_row`).
+    pub static FITTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// One row of a member's history: the entry as the file held it, its words, and the value it
@@ -469,6 +472,8 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat_content::co
     }
     let mut pressed = None;
     let played = trackers.played;
+    let revision = trackers.revision.revision();
+    let fits = &mut trackers.view.history_fits;
     let rules = &trackers.rules;
     let sections = rules
         .trackers
@@ -495,7 +500,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat_content::co
                 if let Some(start) = start {
                     ui.label(Type::Small.rich(ui, start).color(colors().muted));
                 }
-                rows_in_view(ui, rows, played, &mut pressed);
+                rows_in_view(ui, rows, played, (fits, revision), &mut pressed);
             },
         );
     }
@@ -526,6 +531,7 @@ fn rows_in_view(
     ui: &mut egui::Ui,
     rows: &[Row],
     played: Option<Uuid>,
+    (fits, revision): (&mut RowFits, Revision),
     pressed: &mut Option<Entry>,
 ) {
     let height = Density::Read.control();
@@ -561,7 +567,10 @@ fn rows_in_view(
                 .max_rect(rect)
                 .id_salt(&row.entry.id)
                 .layout(egui::Layout::right_to_left(egui::Align::Center)),
-            |ui| history_row(ui, row, row.entry.session != played, pressed),
+            |ui| {
+                let removable = row.entry.session != played;
+                history_row(ui, row, removable, (&mut *fits, revision), pressed);
+            },
         );
     }
 }
@@ -571,8 +580,16 @@ pub const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this sessi
 
 /// A row, laid out from its right end: its menu with `Remove` (off, with its reason painted under
 /// it, on a row of the session being played), so every row looks alike and the values stand in one column; the
-/// value it left; then its words, cut with `…` when they do not fit, whole on hover.
-fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Option<Entry>) {
+/// value it left; then its words, cut at a whole word with `…` when they do not fit (the shared
+/// `words_that_fit`), whole on hover and to assistive technology. The fit is kept by the row's
+/// entry with the trackers' revision and its measure (`ViewState::history_fits`).
+fn history_row(
+    ui: &mut egui::Ui,
+    row: &Row,
+    removable: bool,
+    (fits, revision): (&mut RowFits, Revision),
+    pressed: &mut Option<Entry>,
+) {
     let menu = Density::Read.control();
     design::row_menu(ui, &row.words, |ui| {
         if Action::quiet("Remove")
@@ -603,6 +620,26 @@ fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Opti
         );
     }
     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        ui.add(egui::Label::new(Type::Body.rich(ui, &row.words)).truncate());
+        let (font, room) = (Type::Body.font(ui), ui.available_width());
+        let key = (revision, Measure::of(ui, room, &font));
+        let shown = fits.get_or(&row.entry.id, key, || {
+            #[cfg(feature = "test-support")]
+            FITTED.with(|n| n.set(n.get() + 1));
+            let words = design::words_that_fit(ui, &row.words, &font, room);
+            // A first word wider than the room is `…` alone, so nothing paints over the value.
+            if design::number_width(ui, &words, &font) > room {
+                "…".to_owned()
+            } else {
+                words
+            }
+        });
+        let response = ui.add(egui::Label::new(Type::Body.rich(ui, shown.as_str())));
+        if *shown != row.words {
+            design::named(ui, &response, &row.words);
+            response.on_hover_text(&row.words);
+        }
     });
 }
+
+/// The history rows' words as fitted, by entry: see [`history_row`].
+pub(super) type RowFits = Memos<String, (Revision, Measure), String>;

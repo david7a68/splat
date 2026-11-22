@@ -711,6 +711,8 @@ impl Trackers {
     /// Work the values, the notices, the histories and the newest act out of the ledger again.
     fn settle(&mut self) {
         self.count_settle();
+        // Every row's words were fitted for the old revision: none is read again.
+        self.view.history_fits.retain(|_| false);
         self.state = replay(&self.rules, &self.ledger, &self.today);
         self.history = history::rows(&self.rules, &self.ledger, &self.state);
         self.problems = history::problems(&self.rules, &self.state);
