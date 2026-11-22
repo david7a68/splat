@@ -30,10 +30,8 @@
 //! Each part after the first stands the column's gap (`LINE_GAP`) below the one before.
 use egui::{Id, Rect, Ui, pos2, vec2};
 
-use super::action_line::{WrapRoom, wrap};
+use super::action_line::{WrapRoom, lay_group_heading, wrap};
 use super::laid::{Laid, LaidText};
-use crate::design::components::group_heading_text;
-use crate::design::extras::Heading;
 use crate::design::theme::LINE_GAP;
 use crate::design::tokens::{Density, L, S, Type, XS, colors};
 use egui::Galley;
@@ -136,16 +134,10 @@ impl NoticeRow<'_> {
         let mut slots = vec![Rect::from_min_size(pos2(0.0, 0.0), vec2(0.0, 0.0)); slot::FIRST_ROLL];
         let mut y = 0.0;
         let mut head = None;
-        if let Some((title, count)) = self.heading {
-            let group = Heading::Group { title, count };
-            let galley =
-                ui.fonts_mut(|fonts| fonts.layout_job(group_heading_text(ui, title, count)));
-            let above = if self.first { 0.0 } else { group.above() };
-            let height = above + galley.size().y + group.below();
-            texts.push(LaidText {
-                at: pos2(0.0, above),
-                galley,
-            });
+        if let Some(heading) = self.heading {
+            // The one heading of the measured recipes (`ActionLine`'s too).
+            let (words, height) = lay_group_heading(ui, heading, self.first);
+            texts.push(words);
             slots[slot::HEADING] = Rect::from_min_size(pos2(0.0, 0.0), vec2(width, height));
             y = height;
             head = Some(height);
@@ -339,6 +331,7 @@ impl NoticeRow<'_> {
 mod tests {
     use super::*;
     use crate::design::components::Action;
+    use crate::design::extras::Heading;
     use crate::design::outcome::{Messages, NoPress, PaneFrame};
     use crate::design::pane::{Body, draw_laid};
     use crate::design::test_harness::Themed;
