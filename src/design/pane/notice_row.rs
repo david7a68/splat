@@ -76,6 +76,12 @@ thread_local! {
     pub static NOTICES_LAID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// How many notice rows were laid out so far on this thread (test builds).
+#[cfg(any(test, feature = "test-support"))]
+pub fn notices_laid() -> usize {
+    NOTICES_LAID.with(std::cell::Cell::get)
+}
+
 /// How tall egui's check box draws `words` in a row `width` wide: its icon and the gap after it,
 /// then its words wrapped in the rest, at least an interact height.
 pub fn check_height(ui: &Ui, words: &str, width: f32) -> f32 {
@@ -438,7 +444,7 @@ mod tests {
                     .collect();
                 for (index, (rect, controls)) in drawn.iter().enumerate() {
                     for (slot, drew, fills) in controls {
-                        let width = if *fills {
+                        let wide = if *fills {
                             (slot.width() - drew.width()).abs() < 0.5
                         } else {
                             drew.width() <= slot.width() + 0.5
@@ -446,7 +452,7 @@ mod tests {
                         assert!(
                             (slot.min - drew.min).length() < 0.5
                                 && (slot.height() - drew.height()).abs() < 0.5
-                                && width,
+                                && wide,
                             "notice-row-slot: {width}@{scale}: row {index} drew {drew:?} in slot {slot:?}"
                         );
                     }

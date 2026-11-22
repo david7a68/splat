@@ -5,7 +5,7 @@ use super::{
     Rules, Says, State, TrackerFault, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef,
     mark_of,
 };
-use crate::design::memo::{Measure, Memos, Revision};
+use crate::design::memo::{Measure, Memo, Memos, Revision};
 use crate::design::outcome::PaneFrame;
 use crate::design::outcome::{
     Banner, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, PagePlaceholder,
@@ -48,6 +48,10 @@ pub(crate) struct ViewState {
     /// How many times the columns were measured.
     #[cfg(feature = "test-support")]
     pub(super) measured: usize,
+    /// The Due rows as laid out before paint (layout 11c scope C, `design::NoticeRow`), kept by
+    /// the trackers' revision and the panel's measure: a quiet frame lays none out. One for each
+    /// place of the `Due` heading: at the panel's top (no space above it), or under a banner.
+    due_laid: [Memo<(Revision, Measure), DueLaid>; 2],
 }
 
 /// The columns that every tracker line of the panel shares, so the values end at one edge
@@ -405,21 +409,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             .filter(move |(_, def)| def.pin == pin)
     };
     if !state.due.is_empty() {
-        // Layout step 11a (SH9, AH6): a heading is one block with its first row, so the pane's
-        // cut never leaves it alone over a cut row; the next rows are blocks of their own.
-        let heading_top = ui.cursor().top();
-        design::heading(
-            ui,
-            Heading::Group {
-                title: "Due",
-                count: state.due.len(),
-            },
-        );
-        for (at, notice) in state.due.iter().enumerate() {
-            let top = ui.cursor().top();
-            notice_row(ui, rules, view, notice, act);
-            register_block(ui, if at == 0 { heading_top } else { top });
-        }
+        due_rows(ui, rules, state, view, revision.revision(), act);
         // A heading adds its own space above it, so a `Pinned` heading needs none here.
         if usable(true).next().is_none() {
             design::gap(ui, Gap::S);
@@ -466,103 +456,171 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     }
 }
 
-/// A Due row: its words, its rolls with their results, its proposed changes, and `Done` with
-/// the row's menu at the end.
-fn notice_row(
+/// The Due rows laid out: each row's parts and its layout, in the Due list's order.
+type DueLaid = Vec<(DueParts, design::Laid)>;
+
+/// A Due row's parts, as `design::NoticeRow` lays them: its words, each roll's label with why
+/// it is blocked, the rolls' results, and each proposed change's words.
+struct DueParts {
+    words: String,
+    rolls: Vec<(String, Option<&'static str>)>,
+    results: Option<String>,
+    checks: Vec<String>,
+}
+
+/// Why a roll is blocked: each name of its table has its roll.
+const EACH_ROLLED: &str = "Each name has its roll.";
+
+fn due_parts(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> DueParts {
+    let rolls = mark
+        .tables
+        .iter()
+        .map(|table| {
+            let key = table.key();
+            let rolled = notice.rolls.iter().filter(|r| r.table == key).count();
+            let each_rolled = !table.names().is_empty() && rolled >= table.names().len();
+            (
+                format!("Roll {}", rules.table_name(key)),
+                each_rolled.then_some(EACH_ROLLED),
+            )
+        })
+        .collect();
+    // The results are listed under the buttons, one line each, as one block of words.
+    let results = (!mark.tables.is_empty() && !notice.rolls.is_empty()).then(|| {
+        notice
+            .rolls
+            .iter()
+            .map(|roll| {
+                let name = roll
+                    .name
+                    .as_deref()
+                    .unwrap_or_else(|| rules.table_name(&roll.table));
+                format!("{name}: {} · {}", roll.value, roll.row)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    });
+    let checks = mark
+        .changes
+        .iter()
+        .map(|change| {
+            let key = change.tracker.as_deref().unwrap_or(&notice.key);
+            let name = rules.def(key).map_or(key, |def| def.name.as_str());
+            let name = match &change.instance {
+                Some(line) => format!("{name} ({line})"),
+                None => name.to_owned(),
+            };
+            let amount = match (&change.add, change.set) {
+                (_, Some(set)) => format!("set to {set}"),
+                (Some(super::Amount::Number(n)), None) => crate::design::signed(*n),
+                (Some(super::Amount::Words(words)), None) => format!("+{words}"),
+                (None, None) => String::new(),
+            };
+            format!("{name} {amount}")
+        })
+        .collect();
+    DueParts {
+        words: notice_words(rules, notice, mark),
+        rolls,
+        results,
+        checks,
+    }
+}
+
+fn roll_action(label: &str) -> Action<'_> {
+    Action::secondary(label)
+        .icon(icons::DICE)
+        .density(Density::Read)
+}
+
+/// The Due rows: the `Due` heading bound to the first (SH9), then one row for each notice, each
+/// laid out before paint (layout 11c scope C, `design::NoticeRow`) and drawn in place, a whole
+/// row of the pane (`design::draw_laid`). A row's words, its reasons and its results are the
+/// layout's; its rolls, its check boxes and its `Done` with the row's menu are drawn in their
+/// slots.
+fn due_rows(
     ui: &mut egui::Ui,
     rules: &Rules,
+    state: &State,
     view: &mut ViewState,
-    notice: &super::Notice,
+    revision: Revision,
     act: &mut Option<Act>,
 ) {
-    let Some(mark) = mark_of(rules, notice) else {
-        return;
-    };
-    let words = notice_words(rules, notice, mark);
-    let short = notice.name(rules);
-    let ends_words = mark.tables.is_empty() && mark.changes.is_empty();
-    if ends_words {
-        design::line_end::words_ending_with(
-            ui,
-            Type::Body,
-            &words,
-            (finish_width(ui, notice), Density::Read.control()),
-            |ui| finish(ui, &short, notice, mark, view, act),
-        );
-    } else {
-        ui.add(egui::Label::new(Type::Body.rich(ui, &words)).wrap());
-    }
-    if !mark.tables.is_empty() {
-        ui.horizontal_wrapped(|ui| {
-            for table in mark.tables {
-                let key = table.key();
-                let rolled = notice.rolls.iter().filter(|r| r.table == key).count();
-                let each_rolled = !table.names().is_empty() && rolled >= table.names().len();
-                let label = format!("Roll {}", rules.table_name(key));
-                if Action::secondary(&label)
-                    .icon(icons::DICE)
-                    .density(Density::Read)
-                    .blocked(each_rolled.then_some("Each name has its roll."))
-                    .show(ui)
-                    .clicked()
-                {
+    // The heading starts the panel unless a banner stands above it (`design::heading`'s rule).
+    let first = ui.cursor().top() <= ui.max_rect().top() + 0.5;
+    let width = ui.available_width();
+    let key = (revision, Measure::of(ui, width, &Type::Body.font(ui)));
+    let count = state.due.len();
+    let ViewState {
+        due_laid, unticked, ..
+    } = view;
+    let rows = due_laid[usize::from(first)].get_or(key, || {
+        state
+            .due
+            .iter()
+            .enumerate()
+            .filter_map(|(at, notice)| {
+                let mark = mark_of(rules, notice)?;
+                let parts = due_parts(rules, notice, mark);
+                let rolls: Vec<design::NoticeRoll<'_>> = parts
+                    .rolls
+                    .iter()
+                    .map(|(label, reason)| design::NoticeRoll {
+                        width: roll_action(label).natural_width(ui),
+                        reason: *reason,
+                    })
+                    .collect();
+                let checks: Vec<&str> = parts.checks.iter().map(String::as_str).collect();
+                let laid = design::NoticeRow {
+                    key: egui::Id::new(("trackers_due", &notice.id)),
+                    heading: (at == 0).then_some(("Due", count)),
+                    first,
+                    words: &parts.words,
+                    rolls: &rolls,
+                    results: parts.results.as_deref(),
+                    checks: &checks,
+                    finish: finish_width(ui, notice),
+                    tail: design::XS,
+                }
+                .lay(ui, width);
+                Some((parts, laid))
+            })
+            .collect()
+    });
+    // The rows are laid only for notices with a mark, in the Due list's order.
+    let shown = state
+        .due
+        .iter()
+        .filter_map(|notice| mark_of(rules, notice).map(|mark| (notice, mark)));
+    for ((notice, mark), (parts, laid)) in shown.zip(rows) {
+        let short = notice.name(rules);
+        design::draw_laid(ui, laid, |ui| {
+            for (at, (label, reason)) in parts.rolls.iter().enumerate() {
+                let slot = design::notice_slot::FIRST_ROLL + at;
+                if ui.in_slot(slot, |ui| {
+                    roll_action(label).blocked(*reason).show(ui).clicked()
+                }) {
+                    let key = mark.tables[at].key();
                     *act = Some(Act::Roll(notice.clone(), key.to_owned()));
                 }
-                if each_rolled {
-                    design::blocked_reason(ui, Some("Each name has its roll."));
+            }
+            for (at, words) in parts.checks.iter().enumerate() {
+                let slot = design::notice_slot::FIRST_ROLL + parts.rolls.len() + at;
+                let ticked = (notice.id.clone(), at);
+                let mut on = !unticked.contains(&ticked);
+                if ui.in_slot(slot, |ui| ui.checkbox(&mut on, words).changed()) {
+                    if on {
+                        unticked.remove(&ticked);
+                    } else {
+                        unticked.insert(ticked);
+                    }
                 }
             }
+            ui.actions(design::notice_slot::FINISH, |ui| {
+                finish(ui, &short, notice, mark, unticked, act);
+            });
         });
-        // The results are listed under the buttons, one line each, as one block of words.
-        if !notice.rolls.is_empty() {
-            let lines: Vec<String> = notice
-                .rolls
-                .iter()
-                .map(|roll| {
-                    let name = roll
-                        .name
-                        .as_deref()
-                        .unwrap_or_else(|| rules.table_name(&roll.table));
-                    format!("{name}: {} · {}", roll.value, roll.row)
-                })
-                .collect();
-            egui::Frame::NONE
-                .inner_margin(egui::Margin {
-                    left: design::L as i8,
-                    ..egui::Margin::ZERO
-                })
-                .show(ui, |ui| {
-                    ui.add(egui::Label::new(Type::Body.rich(ui, lines.join("\n"))).wrap());
-                });
-        }
     }
-    for (at, change) in mark.changes.iter().enumerate() {
-        let key = change.tracker.as_deref().unwrap_or(&notice.key);
-        let name = rules.def(key).map_or(key, |def| def.name.as_str());
-        let name = match &change.instance {
-            Some(line) => format!("{name} ({line})"),
-            None => name.to_owned(),
-        };
-        let amount = match (&change.add, change.set) {
-            (_, Some(set)) => format!("set to {set}"),
-            (Some(super::Amount::Number(n)), None) => crate::design::signed(*n),
-            (Some(super::Amount::Words(words)), None) => format!("+{words}"),
-            (None, None) => String::new(),
-        };
-        let slot = (notice.id.clone(), at);
-        let mut on = !view.unticked.contains(&slot);
-        if ui.checkbox(&mut on, format!("{name} {amount}")).changed() {
-            if on {
-                view.unticked.remove(&slot);
-            } else {
-                view.unticked.insert(slot);
-            }
-        }
-    }
-    if !ends_words {
-        right_line(ui, |ui| finish(ui, &short, notice, mark, view, act));
-    }
-    design::gap(ui, Gap::XS);
 }
 
 /// A Due row's words. A mark at a value names its line: `Old Guard: First seal.` A day mark
@@ -580,15 +638,6 @@ fn notice_words(rules: &Rules, notice: &super::Notice, mark: Says<'_>) -> String
         (_, _, Some(name)) => format!("{name}: {}", mark.say),
         (_, _, None) => mark.say.to_owned(),
     }
-}
-
-/// A line of one control's height, laid out from its right end.
-fn right_line(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
-    ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), Density::Read.control()),
-        egui::Layout::right_to_left(egui::Align::Center),
-        add,
-    );
 }
 
 /// The row's last action: `Done`, which applies the ticked changes and ends one notice. On a
@@ -616,7 +665,7 @@ fn finish(
     short: &str,
     notice: &super::Notice,
     mark: Says<'_>,
-    view: &ViewState,
+    unticked: &HashSet<(NoticeRef, usize)>,
     act: &mut Option<Act>,
 ) {
     design::row_menu(ui, short, |ui| {
@@ -647,7 +696,7 @@ fn finish(
         .clicked()
     {
         let ticked = (0..mark.changes.len())
-            .map(|at| !view.unticked.contains(&(notice.id.clone(), at)))
+            .map(|at| !unticked.contains(&(notice.id.clone(), at)))
             .collect();
         *act = Some(Act::Done(notice.clone(), ticked));
     }
