@@ -629,6 +629,7 @@ pub(super) fn list_row(
                         ),
                         action: actions_ui.min_rect(),
                         column: start,
+                        edge: rect.right(),
                         wrapped: columns.wrapped,
                     },
                 );

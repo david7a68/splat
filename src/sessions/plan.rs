@@ -655,7 +655,9 @@ fn plan_row_with(
             let (kept, actions) = plan_columns(ui);
             // Until a pass has measured the plan (or a row's own recipe grew), the far edge.
             let facts = kept.max(words_width);
-            let room = ui.max_rect().right() - left.x;
+            // The row's far edge: where its actions end when the plan keeps the far edge.
+            let far_edge = ui.max_rect().right();
+            let room = far_edge - left.x;
             let column = kept > 0.0
                 && actions >= widths[1] - 0.5
                 && facts + design::L + actions <= room + 0.5;
@@ -666,7 +668,7 @@ fn plan_row_with(
                 )
             } else {
                 egui::Rect::from_min_size(
-                    egui::pos2(ui.max_rect().right() - widths[1], left.y),
+                    egui::pos2(far_edge - widths[1], left.y),
                     egui::vec2(widths[1], Density::Read.control()),
                 )
             };
@@ -721,6 +723,7 @@ fn plan_row_with(
                         line: title.response.rect,
                         action: action_ui.min_rect(),
                         column: action_rect.left(),
+                        edge: far_edge,
                         wrapped: !column,
                     },
                 );

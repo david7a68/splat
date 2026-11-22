@@ -150,6 +150,9 @@ pub struct RowRecord {
     pub action: Rect,
     /// Where the action column starts, as planned: `L` after the widest facts.
     pub column: f32,
+    /// The far edge the row's actions end at when its list keeps the far edge: the row's own
+    /// right edge as the row used it (PR 605 review: proven apart from the actions).
+    pub edge: f32,
     pub wrapped: bool,
 }
 
@@ -243,6 +246,7 @@ pub fn action_row<R>(
             line: Rect::from_min_size(facts_rect.min, vec2(facts_width, facts_rect.height())),
             action: drawn,
             column: action_rect.left(),
+            edge: rect.right(),
             wrapped: columns.wrapped,
         },
     );

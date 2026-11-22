@@ -4038,10 +4038,6 @@ pub(super) fn plan_rows_hold(
         .iter()
         .map(|record| record.facts.right())
         .fold(f32::MIN, f32::max);
-    let end = records
-        .iter()
-        .map(|record| record.action.right())
-        .fold(f32::MIN, f32::max);
     let holds = !records.is_empty()
         && records.iter().all(|record| record.wrapped != column)
         && records.iter().all(|record| {
@@ -4051,10 +4047,10 @@ pub(super) fn plan_rows_hold(
                     && record.action.left() <= record.column + L
             } else {
                 // The far edge, as on main (PR 605 review, P1): each row's actions end at the
-                // one far edge, and start `S` or more after the title on their line. Only the
-                // summary lines below may reach under them; no control lies over text on its
-                // own line.
-                (record.action.right() - end).abs() <= 0.5
+                // row's own far edge, recorded apart from them, and start `S` or more after the
+                // title on their line. Only the summary lines below may reach under them; no
+                // control lies over text on its own line.
+                (record.action.right() - record.edge).abs() <= 0.5
                     && record.action.left() >= record.line.right() + crate::design::S - 0.5
             }
         });
@@ -4109,6 +4105,8 @@ mod driver_tests {
             line: rect(0.0, 0.0, title, 24.0),
             action: rect(action.0, 0.0, action.1, 28.0),
             column: action.0,
+            // The row's own far edge, recorded apart from its actions.
+            edge: 400.0,
             wrapped: true,
         };
         let clear = [row(200.0, (300.0, 400.0)), row(150.0, (320.0, 400.0))];
@@ -4122,6 +4120,13 @@ mod driver_tests {
         assert!(
             !super::plan_rows_hold(&off_edge).0,
             "an action off the far edge fails"
+        );
+        // PR 605 re-check (P1): both rows' actions 24 px in from the far edge still share one
+        // edge, but not the rows' own; the check reads the recorded edge, so it fails.
+        let shifted = [row(200.0, (276.0, 376.0)), row(150.0, (296.0, 376.0))];
+        assert!(
+            !super::plan_rows_hold(&shifted).0,
+            "actions shifted together off the far edge fail"
         );
     }
 
