@@ -337,6 +337,18 @@ pub const CHANGED_ON_DISK: &str = "Choose what to do with the changed file first
 pub const NO_CHANGES: &str = "No changes to save.";
 /// The campaign-switch reason of a draft whose Save would write.
 pub const SAVE_OR_DISCARD_TO_SWITCH: &str = "Save or discard to switch campaign.";
+/// The campaign-switch reason's short forms on a draft head's narrow save row (ruling M24).
+pub const SAVE_OR_DISCARD_SHORT: &str = "Save or discard to switch.";
+pub const DISCARD_SHORT: &str = "Discard to switch.";
+
+/// The short form of a campaign-switch reason (ruling M24), for a row too narrow for it.
+pub fn switch_short(full: &str) -> &'static str {
+    if full == DISCARD_TO_SWITCH {
+        DISCARD_SHORT
+    } else {
+        SAVE_OR_DISCARD_SHORT
+    }
+}
 /// The campaign-switch reason of a draft whose Save waits: Discard is the one way out.
 pub const DISCARD_TO_SWITCH: &str = "Discard to switch campaign.";
 
@@ -634,10 +646,41 @@ impl<'a> DraftState<'a> {
     }
 }
 
+/// The state words of a draft editor that its `DraftState` can reach when it never says
+/// `changed_on_disk`, `not_saved` or `repairs` (the group editor): new, unsaved, invalid in each
+/// cause, saved and no changes.
+pub const EDIT_WORDS: [SaveWord; 8] = [
+    SaveWord::Invalid(InvalidCause::Incomplete),
+    SaveWord::Invalid(InvalidCause::Refused),
+    SaveWord::Invalid(InvalidCause::Missing),
+    SaveWord::Invalid(InvalidCause::Unreadable),
+    SaveWord::New,
+    SaveWord::Unsaved,
+    SaveWord::Saved,
+    SaveWord::NoChanges,
+];
+
+/// Every state word a save row can show.
+pub const ALL_WORDS: [SaveWord; 10] = [
+    SaveWord::Invalid(InvalidCause::Incomplete),
+    SaveWord::Invalid(InvalidCause::Refused),
+    SaveWord::Invalid(InvalidCause::Missing),
+    SaveWord::Invalid(InvalidCause::Unreadable),
+    SaveWord::New,
+    SaveWord::ChangedOnDisk,
+    SaveWord::NotSaved,
+    SaveWord::Unsaved,
+    SaveWord::Saved,
+    SaveWord::NoChanges,
+];
+
 /// Layout step 6 (`DraftHead`): what a draft editor's head is given to plan from. Widths only,
 /// never the draft's state: the plan is the same in every state the draft can reach.
 #[derive(Clone, Copy, Debug)]
 pub struct HeadSpec<'a> {
+    /// Every state word the draft can reach (`EDIT_WORDS` for a draft that is never changed on
+    /// disk, left unsaved by a failed write or repaired): the row is measured by the widest.
+    pub words: &'a [SaveWord],
     /// The room from the name field's start to its owning column's edge.
     pub column: f32,
     /// The room from the name field's start to the end of the title line.
@@ -648,9 +691,78 @@ pub struct HeadSpec<'a> {
     /// The save row's room, from its start to its reasons' edge, less anything that stands at its
     /// end (a run's state).
     pub row: f32,
-    /// Each reason the save row can show, in its longest form, in row order (Save's own reason
-    /// first, then the campaign-switch reason).
-    pub reasons: &'a [&'a str],
+    /// Each reason slot of the save row, in row order (Save's own reason first, then the
+    /// campaign-switch reason).
+    pub reasons: &'a [ReasonSlot<'a>],
+}
+
+/// One reason's place on a draft head's save row (layout step 6): every form the reason can take
+/// in any state, and the words that can take its place after an icon (G122's substitution of a
+/// fault said in its own place). Its room on the row, and its line below the row when it has no
+/// room there, are measured by the widest and tallest of all of them, so the place is the same
+/// whatever the draft holds.
+#[derive(Clone, Copy, Debug)]
+pub struct ReasonSlot<'a> {
+    pub forms: &'a [&'a str],
+    pub substitutes: &'a [&'a str],
+    /// The short forms the row shows in every state when the forms do not fit beside the widest
+    /// word and Discard (ruling M24: `Save or discard to switch.`), the full reason in the hover
+    /// text and the accessible description (`short_reason`). Empty: no short form.
+    pub short: &'a [&'a str],
+}
+
+impl<'a> ReasonSlot<'a> {
+    /// A reason with these forms and nothing in its place.
+    pub const fn of(forms: &'a [&'a str]) -> Self {
+        Self {
+            forms,
+            substitutes: &[],
+            short: &[],
+        }
+    }
+
+    /// The widest of `words` on one line.
+    fn widest(ui: &Ui, words: &[&str]) -> f32 {
+        let small = super::Type::Small.font(ui);
+        words
+            .iter()
+            .map(|words| super::number_width(ui, words, &small))
+            .fold(0.0, f32::max)
+    }
+}
+
+/// A reason in its short form on the save row (ruling M24): the short words, muted, with the
+/// full reason in the hover text and the accessible description.
+pub fn short_reason(ui: &mut Ui, short: &str, full: &str) {
+    let response = ui.label(super::Type::Small.rich(ui, short).color(colors().muted));
+    super::named(ui, &response, full);
+    let _ = response.on_hover_text(full);
+}
+
+/// The height of `slot`'s own line under the save row, `width` wide: the tallest of its forms
+/// and of its substitutes after their icon, so it is the same in every state (layout step 6).
+pub fn slot_height(ui: &Ui, slot: &ReasonSlot<'_>, width: f32) -> f32 {
+    let small = super::Type::Small.font(ui);
+    let tall = |words: &str, width: f32| {
+        ui.painter()
+            .layout(
+                words.to_owned(),
+                small.clone(),
+                colors().muted,
+                width.max(0.0),
+            )
+            .size()
+            .y
+    };
+    let forms = slot
+        .forms
+        .iter()
+        .map(|words| tall(words, width))
+        .fold(0.0, f32::max);
+    slot.substitutes
+        .iter()
+        .map(|words| tall(words, width - super::tokens::ICON_SLOT - super::tokens::S))
+        .fold(forms, f32::max)
 }
 
 /// Where a draft editor's head puts its parts (layout step 6, I7 and I8), from [`head_plan`].
@@ -664,6 +776,8 @@ pub struct HeadPlan {
     /// For each reason of [`HeadSpec::reasons`]: on the save row, or on a line of its own under
     /// it, kept in every state.
     pub on_row: Vec<bool>,
+    /// For each reason on the row: in its short form (ruling M24), in every state.
+    pub short: Vec<bool>,
 }
 
 /// The narrowest a name field gets so that the actions stand beside it; narrower, the actions
@@ -671,25 +785,15 @@ pub struct HeadPlan {
 pub const NAME_LEAST: f32 = 160.0;
 
 /// The widest state word the save row can show, with its icon.
-fn widest_word(ui: &Ui) -> f32 {
+fn widest_word(ui: &Ui, words: &[SaveWord]) -> f32 {
     let small = super::Type::Small.font(ui);
-    [
-        SaveWord::Invalid(InvalidCause::Incomplete),
-        SaveWord::Invalid(InvalidCause::Refused),
-        SaveWord::Invalid(InvalidCause::Unreadable),
-        SaveWord::New,
-        SaveWord::ChangedOnDisk,
-        SaveWord::NotSaved,
-        SaveWord::Unsaved,
-        SaveWord::Saved,
-        SaveWord::NoChanges,
-    ]
-    .into_iter()
-    .map(|word| {
-        let status = word.status();
-        super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
-    })
-    .fold(0.0, f32::max)
+    words
+        .iter()
+        .map(|word| {
+            let status = word.status();
+            super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
+        })
+        .fold(0.0, f32::max)
 }
 
 /// How wide a draft's name field may be, given the room to its column's edge (its margins
@@ -723,25 +827,33 @@ pub fn head_plan(ui: &Ui, spec: &HeadSpec<'_>) -> HeadPlan {
     } else {
         (full, false)
     };
-    let small = super::Type::Small.font(ui);
-    let mut room =
-        spec.row - widest_word(ui) - Action::quiet("Discard").natural_width(ui) - 2.0 * gap;
-    let on_row = spec
+    let mut room = spec.row
+        - widest_word(ui, spec.words)
+        - Action::quiet("Discard").natural_width(ui)
+        - 2.0 * gap;
+    let (on_row, short) = spec
         .reasons
         .iter()
-        .map(|words| {
-            let width = super::number_width(ui, words, &small) + gap;
-            let fits = width <= room;
-            if fits {
-                room -= width;
+        .map(|slot| {
+            // Its forms, else its short forms (M24), else a line of its own below the row.
+            for (words, short) in [(slot.forms, false), (slot.short, true)] {
+                if words.is_empty() {
+                    continue;
+                }
+                let width = ReasonSlot::widest(ui, words) + gap;
+                if width <= room {
+                    room -= width;
+                    return (true, short);
+                }
             }
-            fits
+            (false, false)
         })
-        .collect();
+        .unzip();
     HeadPlan {
         name_width,
         actions_beside,
         on_row,
+        short,
     }
 }
 
@@ -1016,7 +1128,18 @@ mod tests {
         // on the row in its longest form, and the row keeps one height in every state (a reason
         // with no room would wrap and grow it) and stays inside its room: so a state change never
         // pushes a reason off the row, and nothing under it moves.
-        let reasons = ["Add a creature first.", SAVE_OR_DISCARD_TO_SWITCH];
+        // The group editor's two slots, with G122's substitutions in the switch reason's place.
+        let reasons = [
+            ReasonSlot::of(&["Add a creature first."]),
+            ReasonSlot {
+                forms: &[SAVE_OR_DISCARD_TO_SWITCH, DISCARD_TO_SWITCH],
+                substitutes: &[
+                    "Its encounter was deleted. See Belongs to.",
+                    "A creature here cannot be saved. See its row.",
+                ],
+                short: &[SAVE_OR_DISCARD_SHORT, DISCARD_SHORT],
+            },
+        ];
         let head_states = [
             DraftState::new(DraftOrigin::Saved, Changed::No, Primary::Draft).locks_campaign(),
             DraftState::new(DraftOrigin::New, Changed::Yes, Primary::Draft)
@@ -1031,6 +1154,7 @@ mod tests {
                 .just_saved(),
         ];
         let mut placed = std::collections::BTreeSet::new();
+        let mut short_seen = false;
         for width in (240..=900).step_by(4) {
             let width = width as f32;
             let mut heights = Vec::new();
@@ -1046,6 +1170,7 @@ mod tests {
                             let head = head_plan(
                                 ui,
                                 &HeadSpec {
+                                    words: &EDIT_WORDS,
                                     column: width,
                                     line: width,
                                     actions: 120.0,
@@ -1060,20 +1185,57 @@ mod tests {
                                 if state.discard_shown() {
                                     let _ = Action::quiet("Discard").show(ui);
                                 }
-                                for (words, on_row) in reasons.iter().zip(&head.on_row) {
-                                    if *on_row {
-                                        super::super::blocked_reason(ui, Some(words));
+                                for ((slot, on_row), short) in
+                                    reasons.iter().zip(&head.on_row).zip(&head.short)
+                                {
+                                    if *on_row && *short {
+                                        short_reason(ui, slot.short[0], slot.forms[0]);
+                                    } else if *on_row {
+                                        super::super::blocked_reason(ui, Some(slot.forms[0]));
                                     }
                                 }
                             });
                             right = row.response.rect.right() - rect.left();
                             height = row.response.rect.height();
+                            // Each slot under the row is reserved `slot_height` high; every form
+                            // and every substitute (after its icon) fits in it, at this width.
+                            for (slot, on_row) in reasons.iter().zip(&head.on_row) {
+                                if *on_row {
+                                    continue;
+                                }
+                                let kept = slot_height(ui, slot, width);
+                                let drawn = slot
+                                    .forms
+                                    .iter()
+                                    .map(|words| (*words, 0.0))
+                                    .chain(slot.substitutes.iter().map(|words| {
+                                        (*words, super::super::tokens::ICON_SLOT + super::super::tokens::S)
+                                    }))
+                                    .map(|(words, icon)| {
+                                        let rect = egui::Rect::from_min_size(
+                                            ui.cursor().min + egui::vec2(icon, 0.0),
+                                            egui::vec2(width - icon, 1_000.0),
+                                        );
+                                        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                            super::super::blocked_reason(ui, Some(words));
+                                        })
+                                        .response
+                                        .rect
+                                        .height()
+                                    })
+                                    .fold(0.0, f32::max);
+                                assert!(
+                                    drawn <= kept + 0.5,
+                                    "at {width} a form of {slot:?} is {drawn} tall in its slot of {kept}"
+                                );
+                            }
                             plan = Some(head);
                         });
                     });
                 });
                 let plan = plan.expect("the head was planned");
                 placed.insert(plan.on_row.clone());
+                short_seen |= plan.short.iter().any(|short| *short);
                 assert!(
                     right <= width + 0.5,
                     "at {width} the row of {:?} is {right} wide, past its room: {plan:?}",
@@ -1087,8 +1249,8 @@ mod tests {
             );
         }
         assert!(
-            placed.len() >= 2,
-            "the sweep reached a reason under the row: {placed:?}"
+            placed.len() >= 2 && short_seen,
+            "the sweep reached a reason under the row and a short form on it (M24): {placed:?}, {short_seen}"
         );
     }
 

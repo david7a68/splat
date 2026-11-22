@@ -556,6 +556,22 @@ fn field_tops(d: &Driver<'_>, prefixes: &[&'static str]) -> Vec<(&'static str, O
         .collect()
 }
 
+/// Whether the save row shows the campaign-switch reason: its full words, or (where they do not
+/// fit beside the widest word and Discard) its short form, painted, with the full reason in its
+/// accessible description (ruling M24).
+fn switch_reason_shown(d: &Driver<'_>) -> bool {
+    const FULL: &str = "Save or discard to switch campaign.";
+    d.visible_text(FULL)
+        || (d.visible_text(crate::design::save_row::SAVE_OR_DISCARD_SHORT)
+            && d.has_containing(FULL))
+}
+
+/// Whether neither form of the campaign-switch reason is painted.
+fn no_switch_reason(d: &Driver<'_>) -> bool {
+    !d.visible_text("Save or discard to switch campaign.")
+        && !d.visible_text(crate::design::save_row::SAVE_OR_DISCARD_SHORT)
+}
+
 /// Whether two `group_head_tops` readings agree: every field shown in `clean` (the name,
 /// `Default side` and `Belongs to` always) is at the same top (±0.5 px) in `changed`.
 fn group_head_still(
@@ -3377,9 +3393,25 @@ pub mod campaign_content {
             permissions.set_readonly(read_only);
             std::fs::set_permissions(&manifest, permissions).unwrap();
         };
+        // Issue #509: the search results the encounter search's `Use it` offers (Lookup's
+        // index, which that search reads) follow each saved package choice, and Encounters
+        // reads its creatures again. A draft and a failed Save change neither.
+        let offers_wraith = |d: &Driver<'_>| {
+            d.app().lookup.index().is_some_and(|index| {
+                index
+                    .unused_creatures("ash wraith")
+                    .iter()
+                    .any(|(_, _, name, _)| name == UNSELECTED_ENTRY)
+            })
+        };
+        let encounters_read = |d: &Driver<'_>| d.app().encounters.snapshot_revision();
+        let draft_offers = offers_wraith(d);
+        let draft_read = encounters_read(d);
         set_read_only(true);
         d.click(SAVE_SELECTIONS);
         d.settle();
+        let failed_offers = offers_wraith(d);
+        let failed_read = encounters_read(d);
         let failed_tops = package_tops(d);
         let failed = std::fs::read(&manifest).unwrap() == on_disk && d.visible_text("read only");
         set_read_only(false);
@@ -3387,6 +3419,8 @@ pub mod campaign_content {
         d.settle();
         let saved_tops = package_tops(d);
         let saved = d.visible_text("Campaign selections saved.");
+        let saved_offers = offers_wraith(d);
+        let saved_read = encounters_read(d);
         d.observe(
             "iter-25-C-page-results",
             draft_tops.iter().all(Option::is_some)
@@ -3402,6 +3436,22 @@ pub mod campaign_content {
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.click(SAVE_SELECTIONS);
         d.settle();
+        let unused_offers = offers_wraith(d);
+        let unused_read = encounters_read(d);
+        d.observe(
+            "m32-C0-509-choices-refresh",
+            draft_offers
+                && failed_offers
+                && !saved_offers
+                && unused_offers
+                && draft_read.is_some()
+                && failed_read == draft_read
+                && saved_read.is_some_and(|read| Some(read) != draft_read)
+                && unused_read.is_some_and(|read| Some(read) != saved_read),
+            format!(
+                "Use it offers {UNSELECTED_ENTRY}: draft {draft_offers}, failed Save {failed_offers}, saved {saved_offers}, saved unused {unused_offers}; Encounters read {draft_read:?}, {failed_read:?}, {saved_read:?}, {unused_read:?}"
+            ),
+        );
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.expect(CHANGED);
         d.click(DISCARD_SELECTION);
@@ -20429,7 +20479,7 @@ pub mod encounter_groups {
         d.observe_both(
             "iter-18-B-ST1",
             "A dirty group opened in Encounters says why the campaign cannot change",
-            |d| d.visible_text("Unsaved") && d.visible_text("Save or discard to switch campaign."),
+            |d| d.visible_text("Unsaved") && switch_reason_shown(d),
         );
         // FD4 family: the group notes field ends at the members' right edge, as the encounter
         // editor's notes field ends at the roster's.
@@ -20506,7 +20556,7 @@ pub mod encounter_groups {
         let without_member = |tops: &[(&'static str, Option<f32>)]| tops[..4].to_vec();
         d.observe(
             "l6-SL4-AL9",
-            d.visible_text("Save or discard to switch campaign.")
+            switch_reason_shown(d)
                 && clean_head.iter().zip(&dirty_head).all(|(clean, dirty)| {
                     group_head_still(&without_member(clean), &without_member(dirty))
                 }),
@@ -20522,7 +20572,7 @@ pub mod encounter_groups {
         );
         d.observe(
             "iter-18-B-ST1-clean",
-            !d.visible_text("Save or discard to switch campaign."),
+            no_switch_reason(d),
             "A group with nothing to save gives no switch reason",
         );
         d.expect_same("Undo restores the complete group editor with the changed member.");
@@ -21925,6 +21975,9 @@ pub mod encounter_owned_groups {
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
     const SAVE_ENCOUNTER: &str = "Save encounter";
+    /// The gap from the save row's `Invalid` to `Default side` in a group editor, on main
+    /// (318bde49) at 960, 1200 and 1920.
+    const SAVE_ROW_TO_FIELDS: f32 = 28.0;
 
     fn edit_group(name: &str) -> String {
         format!("Edit group {name}")
@@ -22045,6 +22098,25 @@ pub mod encounter_owned_groups {
                     d.window_size()
                 ),
             );
+            // Lead, round 29 (the band at 960), and ruling M24 for the shared draft head: the
+            // cause's place is on the save row, so the gap from the save row's word to the first
+            // field is main's at every size.
+            let band = d
+                .painted_rect_in("Invalid", egui::Rect::EVERYTHING)
+                .zip(
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with("Default side for "))
+                        .map(|node| node.rect),
+                )
+                .map(|(word, side)| side.top() - word.bottom());
+            d.observe(
+                "iter-29-BC5-G122-no-band",
+                band.is_some_and(|band| (band - SAVE_ROW_TO_FIELDS).abs() <= 0.5),
+                format!(
+                    "From the save row's word to Default side: {band:?}, main {SAVE_ROW_TO_FIELDS}"
+                ),
+            );
             let edges = group_field_edges(d, GROUP_ORPHAN);
             // As before this state took all sizes: FD3 holds at 960 and 1200 (at 1920 the
             // fields end at FORM_WIDTH, `iter-19-B-FD3-wide`).
@@ -22090,22 +22162,24 @@ pub mod encounter_owned_groups {
         // mouse and the keyboard (Encounters page).
         // The same for a member whose creature is gone: the group goes to Any encounter, and
         // its Cinder Wolf's package entry is deleted, then put back; Discard ends the edit.
-        // Lead, round 29 (the band at 960), as ruled again for layout step 6 (L4): the gone
-        // encounter's cause takes the planned place of the switch reason, so it adds no band. The
-        // old check held the gap from the save row's word to Default side at main's 28 px; the
-        // shared draft head plans the row for every state, and at 960 that plan keeps the switch
-        // reason's line below the row in every state. So the check is now that no state change
-        // moves a field: the clean, refused group and the same group with an edit (Unsaved,
-        // Discard, the switch reason or the cause in its place) keep the name, Default side,
-        // Belongs to, the search and the first member at one top, at 960, 1200 and 1920. The
-        // cause is said once (`iter-29-BC5-G122`, `-off-screen`).
+        // Layout step 6: the gone encounter's cause takes the planned place of the switch reason,
+        // so it adds no band (`iter-29-BC5-G122-no-band` above holds main's distance, ruling M24),
+        // and no state change moves a field either: the clean, refused group, the same group with an edit (Unsaved,
+        // Discard, the switch reason or the cause in its place) and that edited group once the
+        // refusal ends (Any encounter) keep the name, Default side, Belongs to, the search and
+        // the first member at one top, at 960, 1200 and 1920, so a band that only the refusal
+        // brings fails (Astra's P1 on PR 643; `l6-G122-no-band-plan` follows one group before,
+        // during and after its refusal). The cause is said once (`iter-29-BC5-G122`,
+        // `-off-screen`).
         let refused_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
-        let (once, detail, member, member_detail, edited_head) = d.aside(|d| {
+        let (once, detail, member, member_detail, edited_head, cleared_head) = d.aside(|d| {
             d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
             let edited_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
             let (once, detail) = gone_encounter_said_once(d);
             d.click("Belongs to: Deleted encounter");
             d.click("Any encounter");
+            // The same edited group with the refusal ended: nothing of the head moves.
+            let cleared_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
             let wolf = d
                 .root
                 .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
@@ -22129,16 +22203,31 @@ pub mod encounter_owned_groups {
             d.focus_window(true);
             d.click("Discard");
             d.expect("Deleted encounter");
-            (once, detail, member, member_detail, edited_head)
+            (
+                once,
+                detail,
+                member,
+                member_detail,
+                edited_head,
+                cleared_head,
+            )
         });
         d.observe(
-            "iter-29-BC5-G122-no-band",
+            "l6-G122-owned-head-still",
             refused_head.iter().all(|tops| tops[1].1.is_some())
                 && refused_head
                     .iter()
                     .zip(&edited_head)
-                    .all(|(refused, edited)| group_head_still(refused, edited)),
-            format!("The head's tops, refused {refused_head:?}, edited {edited_head:?}"),
+                    .zip(&cleared_head)
+                    .all(|((refused, edited), cleared)| {
+                        // The head's fields (the first member is below the cause's own words
+                        // under Belongs to, which a refusal adds in their place).
+                        group_head_still(&refused[..4], &edited[..4])
+                            && group_head_still(&edited[..4], &cleared[..4])
+                    }),
+            format!(
+                "The head's tops, refused {refused_head:?}, edited {edited_head:?}, the refusal ended {cleared_head:?}"
+            ),
         );
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
         d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
@@ -24754,7 +24843,11 @@ pub mod session_plan_groups {
         // iter-29 G122 on the Sessions page: the plan's group comes to belong to an encounter
         // that is then deleted. With Belongs to off screen, the save row says the cause once,
         // by the mouse and the keyboard. The file and the group are put back after.
-        let (once, detail) = d.aside(|d| {
+        // Layout step 6 (Astra's P1 on PR 643): the same group before the refusal (its encounter
+        // chosen), during it (the encounter deleted) and after it (the file back) keeps its head's
+        // tops at 960, 1200 and 1920: a refusal adds no band, here or anywhere in the head.
+        let ((once, detail), (before, during, after)) = d.aside(|d| {
+            let sizes = [SMALL, DEFAULT, LARGE];
             let arena = d.root.join(format!(
                 "campaigns/emberfall/Encounters/{}.md",
                 crate::visual_tests::fixture::RUN_ARENA
@@ -24762,19 +24855,41 @@ pub mod session_plan_groups {
             let text = std::fs::read_to_string(&arena).unwrap();
             d.click("Belongs to: Any encounter");
             d.click(crate::visual_tests::fixture::RUN_ARENA);
+            let before = sizes.map(|size| d.at_size(size, group_head_tops));
             std::fs::remove_file(&arena).unwrap();
             d.focus_window(false);
             d.focus_window(true);
             d.wait_for_text("Deleted encounter");
+            let during = sizes.map(|size| d.at_size(size, group_head_tops));
             let once = gone_encounter_said_once(d);
             std::fs::write(&arena, text).unwrap();
             d.focus_window(false);
             d.focus_window(true);
+            d.wait_for_control(&format!(
+                "Belongs to: {}",
+                crate::visual_tests::fixture::RUN_ARENA
+            ));
+            let after = sizes.map(|size| d.at_size(size, group_head_tops));
             d.click("Discard");
             d.expect("Belongs to: Any encounter");
-            once
+            (once, (before, during, after))
         });
         d.observe("iter-29-BC5-G122-off-screen-plan", once, detail);
+        d.observe(
+            "l6-G122-no-band-plan",
+            before.iter().all(|tops| tops[1].1.is_some())
+                && before
+                    .iter()
+                    .zip(&during)
+                    .zip(&after)
+                    .all(|((before, during), after)| {
+                        // The head's fields; the first member is below the cause's own words
+                        // under Belongs to, which the refusal adds in their place.
+                        group_head_still(&before[..4], &during[..4])
+                            && group_head_still(&during[..4], &after[..4])
+                    }),
+            format!("The head's tops before the refusal {before:?}, during it {during:?}, after it {after:?}"),
+        );
         let (member, member_detail) = d.aside(|d| {
             // A member whose creature is gone, with a changed name: its Cinder Wolf's package
             // entry is deleted, then put back.

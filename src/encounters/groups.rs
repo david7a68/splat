@@ -41,6 +41,25 @@ const GONE_BESIDE_SAVE: &str = "Its encounter was deleted. See Belongs to.";
 /// A member's fault beside Save, while its row is not on screen: fixed words with no name, so
 /// the place's width is known; the row keeps the full cause with the name.
 const MEMBER_BESIDE_SAVE: &str = "A creature here cannot be saved. See its row.";
+
+/// Layout step 6: the group head's two reason slots (`save_row::head_plan`): Save's own reason,
+/// then the campaign-switch reason in both its forms, whose place G122's short words for a fault
+/// said elsewhere can take. Each slot's room and line are measured by all of them, so neither a
+/// state nor a refusal moves a field.
+const HEAD_REASONS: [design::save_row::ReasonSlot<'static>; 2] = [
+    design::save_row::ReasonSlot::of(&[EMPTY_REASON]),
+    design::save_row::ReasonSlot {
+        forms: &[
+            design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
+            design::save_row::DISCARD_TO_SWITCH,
+        ],
+        substitutes: &[GONE_BESIDE_SAVE, MEMBER_BESIDE_SAVE],
+        short: &[
+            design::save_row::SAVE_OR_DISCARD_SHORT,
+            design::save_row::DISCARD_SHORT,
+        ],
+    },
+];
 /// The Groups list's heading for groups whose encounter is gone; Arrivals says the same words
 /// beside such a group's name (FB10).
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
@@ -2859,11 +2878,13 @@ impl Encounters {
         let plan = design::save_row::head_plan(
             ui,
             &design::save_row::HeadSpec {
+                // The group's state never says changed on disk, not saved or repair.
+                words: &design::save_row::EDIT_WORDS,
                 column: members_right - left,
                 line: ui.max_rect().right() - left,
                 actions: save_width,
                 row: members_right - left,
-                reasons: &[EMPTY_REASON, design::save_row::SAVE_OR_DISCARD_TO_SWITCH],
+                reasons: &HEAD_REASONS,
             },
         );
         let button = || {
@@ -2926,6 +2947,10 @@ impl Encounters {
         let mut gone_place: Option<egui::Rect> = None;
         let mut deferred_switch: Option<&'static str> = None;
         let reasons_right = members_right;
+        // Ruling M24: where the switch reason does not fit beside the widest word and Discard,
+        // the row says its short form in every state, the full reason in hover and the accessible
+        // description; no line is kept for it below.
+        let switch_short = plan.short[1];
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
             discard =
@@ -2958,7 +2983,7 @@ impl Encounters {
                 ));
                 deferred_switch = switch;
             } else {
-                super::blocked_reason(ui, switch);
+                switch_reason(ui, switch, switch_short);
             }
             ui.allocate_ui_with_layout(
                 egui::vec2(
@@ -2969,34 +2994,16 @@ impl Encounters {
                 |ui| super::blocked_reason(ui, empty_reason),
             );
         });
-        for (reason, shown, switch) in below {
+        for (_, shown, switch) in below {
             let top = ui.cursor().top();
-            let height = ui
-                .painter()
-                .layout(
-                    reason.to_owned(),
-                    Type::Small.font(ui),
-                    colors().muted,
-                    ui.available_width(),
-                )
-                .size()
-                .y;
-            // A layout too narrow for the switch reason on the row (narrower than 960, beside
-            // Lookup): its own line, as on main, is the place, as tall as the taller of the two.
-            let height = match elsewhere {
-                Some((_, words)) if switch => height.max(
-                    ui.painter()
-                        .layout(
-                            words.to_owned(),
-                            Type::Small.font(ui),
-                            colors().muted,
-                            (ui.available_width() - design::ICON_SLOT - design::S).max(0.0),
-                        )
-                        .size()
-                        .y,
-                ),
-                _ => height,
-            };
+            // A layout too narrow for the reason on the row (narrower than 960, beside Lookup):
+            // its own line, as tall as the tallest of its forms and of the words that can take
+            // its place, whether or not any shows or a refusal stands (layout step 6, Astra's P2).
+            let height = design::save_row::slot_height(
+                ui,
+                &HEAD_REASONS[usize::from(switch)],
+                ui.available_width(),
+            );
             let shown = if gone && switch {
                 gone_place = Some(egui::Rect::from_min_size(
                     egui::pos2(ui.cursor().left(), top),
@@ -3135,7 +3142,7 @@ impl Encounters {
             // Nothing is painted outside the place.
             beside.set_clip_rect(place.intersect(ui.clip_rect()));
             if gone_shown.get() {
-                super::blocked_reason(&mut beside, deferred_switch);
+                switch_reason(&mut beside, deferred_switch, switch_short);
             } else {
                 design::outcome::row_fault(&mut beside, &editor_fault(*tone, words));
             }
@@ -3357,6 +3364,17 @@ fn member_key(path: &str, member: &MemberDraft) -> String {
 }
 
 /// Where a group editor's members column ended in the last pass, for the name field above it.
+/// The campaign-switch reason on the group's save row: its full words, or its short form with
+/// the full words in hover and the accessible description (ruling M24).
+fn switch_reason(ui: &mut egui::Ui, words: Option<&str>, short: bool) {
+    match words {
+        Some(full) if short => {
+            design::save_row::short_reason(ui, design::save_row::switch_short(full), full);
+        }
+        words => super::blocked_reason(ui, words),
+    }
+}
+
 /// Layout step 6: where the members column ends, from the room the editor has and the widths its
 /// body draws the columns with (`group_editor_body`: the Add creatures panel, then the members at
 /// most `ROSTER_MAX_WIDTH`; `members_pane`: the scroll bar's lane kept, at most `LIST_MEASURE`).

@@ -7174,6 +7174,7 @@ impl Encounters {
                 let plan = design::save_row::head_plan(
                     ui,
                     &design::save_row::HeadSpec {
+                        words: &design::save_row::ALL_WORDS,
                         column: (roster_right - left).min(line),
                         line,
                         actions,
