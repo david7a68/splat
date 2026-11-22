@@ -288,3 +288,50 @@ impl Kept for LinkUpdate {
         self.page.clone()
     }
 }
+
+/// One kind of the plan's kept result whose data the plan's own fields hold: a scene act's Undo
+/// (`Scenes::added`, `Scenes::removed`), the group removed from tonight (`removed_group`), the
+/// deleted run (`deleted_run`). One of each kind per campaign, as each kind's data is held once.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PlanKind {
+    SceneAdded,
+    SceneRemoved,
+    GroupRemoved,
+    DeletedRun,
+}
+
+/// Whose plan result it is: the campaign's session folder and its kind. A campaign switch hides
+/// it, and ends its data (`open_campaign`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct PlanOwner {
+    pub root: PathBuf,
+    pub kind: PlanKind,
+}
+
+impl Owner for PlanOwner {
+    type Scope = Path;
+    fn scope(&self) -> &Path {
+        &self.root
+    }
+}
+
+/// A plan result in the plan's store: its owner only, for the footer's order (issued at the act)
+/// and the press's ticket. Its words and its Undo come from the data its kind holds, which ends
+/// it: when that data goes (an Undo, the note's next edit, another act of the kind), the plan
+/// ends this entry before its footer is made (`Sessions::end_plan_marks`).
+pub(super) struct PlanMark(pub PlanOwner);
+
+impl Kept for PlanMark {
+    type Owner = PlanOwner;
+    const ENDS: Ends = Ends {
+        // Its data was dropped (`end_plan_marks`).
+        owner_changed: OwnerChanged::Ends,
+        // A reload keeps the data it undoes; the data's own checks end it.
+        disk_changed: DiskChanged::Stays,
+        // Its Undo puts its data back; it leaves only when that was done.
+        press: Press::Undo,
+    };
+    fn owner(&self) -> PlanOwner {
+        self.0.clone()
+    }
+}
