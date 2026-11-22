@@ -5732,15 +5732,10 @@ impl Sessions {
                 .any(|event| event.id == just.id && event.restores)
                 .then(|| timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs));
             let words = as_sentence(&added_message(&just.label, just.to.as_deref(), restores));
-            // M-N1.7: the Undo names the event by its title (the words already give its day),
-            // as Timeline's Undo of an add does.
-            let title = book
-                .events
-                .iter()
-                .find(|event| event.id == just.id)
-                .map_or_else(|| just.label.clone(), |event| event.title.clone());
+            // M0529 waits for layout 11c: an Add Undo that names its event moves under its words
+            // and makes the footer a line taller, which shifts the plan under the DM.
             Said::new(words)
-                .undo(UndoStep::of(Verb::Add, title).pressed_as(pressed(FooterAct::UndoAdd)))
+                .undo(UndoStep::verb(Verb::Add).pressed_as(pressed(FooterAct::UndoAdd)))
                 .into()
         });
         if let Ok(Some(line)) = self.added.present(frame, projection, &key, inputs) {
@@ -8166,10 +8161,7 @@ mod tests {
                 .is_some()
         };
         let rest_stands = |harness: &egui_kittest::Harness<'_, State>| {
-            harness
-                .query_all_by_label_contains("Undo add ")
-                .next()
-                .is_some()
+            harness.query_by_label("Undo add").is_some()
                 && harness
                     .query_all_by_label_contains("Long rest added.")
                     .next()
@@ -8713,16 +8705,11 @@ mod tests {
             harness.set_size(egui::vec2(design::FORM_WIDTH, height));
             harness.run_steps(4);
         }
-        let (id, label, title, count) = {
+        let (id, label, count) = {
             let book = &harness.state().1;
             let event = book.events.last().unwrap();
             let day = *timeline::day_numbers(&book.events).last().unwrap();
-            (
-                event.id.clone(),
-                event.label(day),
-                event.title.clone(),
-                book.events.len(),
-            )
+            (event.id.clone(), event.label(day), book.events.len())
         };
         let added_at = 1000.0;
         crate::frame_clock::set(added_at);
@@ -8740,9 +8727,7 @@ mod tests {
         }
         harness.run_steps(4);
         assert!(
-            harness
-                .query_by_label(&format!("Undo add {title}"))
-                .is_some(),
+            harness.query_by_label("Undo add").is_some(),
             "the footer holds a result"
         );
         assert!(
@@ -8768,9 +8753,7 @@ mod tests {
         let start = crate::design::results::projection_work();
         let stands = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
             (
-                harness
-                    .query_by_label(&format!("Undo add {title}"))
-                    .is_some(),
+                harness.query_by_label("Undo add").is_some(),
                 harness.query_all_by_label(&words).next().is_some(),
             )
         };

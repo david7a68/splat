@@ -1230,8 +1230,6 @@ impl TimelinePage {
                 let label = at.map_or_else(String::new, |at| {
                     book.events[at].label(day_numbers(&book.events)[at])
                 });
-                // M-N1.7: the Undo names the event by its title (the words give its day).
-                let title = at.map_or_else(String::new, |at| book.events[at].title.clone());
                 let restores = at
                     .map(|at| &book.events[at])
                     .filter(|event| event.kind == Kind::LongRest && event.restores)
@@ -1241,7 +1239,7 @@ impl TimelinePage {
                 // Timeline lists every session, so its result names only the event.
                 let words = as_sentence(&added_message(&label, None, restores));
                 Said::new(words)
-                    .undo(UndoStep::of(Verb::Add, title).pressed_as(ListAct::UndoAdd))
+                    .undo(UndoStep::verb(Verb::Add).pressed_as(ListAct::UndoAdd))
                     .into()
             });
         if let Ok(Some(line)) = self.added.present(frame, projection, &file, inputs) {
@@ -2262,10 +2260,7 @@ mod tests {
         };
         let shows = |harness: &egui_kittest::Harness<'_, State>| {
             (
-                harness
-                    .query_all_by_label_contains("Undo add ")
-                    .next()
-                    .is_some(),
+                harness.query_by_label("Undo add").is_some(),
                 harness
                     .query_all_by_label_contains(" added.")
                     .next()

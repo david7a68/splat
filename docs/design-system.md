@@ -2450,7 +2450,7 @@ events, and when combat begins in that session (its event reaches Timeline; open
 session's edit, opening a note, a run's new round and a reload that leaves that session alone keep them. A
 newer removal replaces them. One step gives one result in the plan: after a removal, Delete the saved run
 replaces the removal's message there, and Timeline keeps its Undo remove until the book's removal changes.
-Undo puts the event back after the event that was before it. Plan additions offer `Undo add <title>` (the event's title; its words give the day), as Timeline's additions do. Every Add result
+Undo puts the event back after the event that was before it. Plan additions offer Undo add. Every Add result
 comes from one function: `<event> added to Session 2.` names the session it went to; a restoring long rest
 then says `Everyone starts the next fight at full.` Timeline lists every session, so its result names only
 the event. A Timeline event's link update uses the Library's words: `Links now say “<name>”.` with
@@ -2461,7 +2461,7 @@ once. When the second line is too long, its `Last:` part gives up whole words fi
 Kestrel…`), and goes when no word of it fits; the save time stays whole. Hover keeps the full line. Resume has
 the run icon.
 
-Session and Timeline add long rests with the same full-HP ruling, message and `Undo add <title>`. Every closed
+Session and Timeline add long rests with the same full-HP ruling, message and Undo add. Every closed
 long-rest row shows an icon and either Everyone at full or Not at full. Open rows hide that summary so the
 ruling stays in place. Actions say Mark everyone at full
 or Mark not at full; they change data, so each is a quiet button `L` after the state, never a link. States say

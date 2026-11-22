@@ -697,7 +697,7 @@ pub fn run(d: &mut Driver<'_>) {
     let rest_undo = |d: &Driver<'_>| {
         d.nodes()
             .into_iter()
-            .find(|node| node.name.starts_with("Undo add ") && node.name != "Undo add scene")
+            .find(|node| node.name == "Undo add")
             .map(|node| node.name)
             .unwrap_or_default()
     };

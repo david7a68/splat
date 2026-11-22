@@ -1152,14 +1152,15 @@ impl<'a> Driver<'a> {
             .unwrap_or_default()
     }
 
-    /// The whole name of a Timeline event's Undo on screen (M-N1.7: `Undo add <label>`,
-    /// `Undo remove <label>`, on the plan as on Timeline), never a scene's `Undo add scene`.
+    /// The whole name of a Timeline event's Undo on screen (M-N1.7: `Undo remove <label>`, on
+    /// the plan as on Timeline; `Undo add` for an added event), never a scene's `Undo add scene`.
     pub fn event_undo(&self, verb: &str) -> Option<String> {
         let start = format!("Undo {verb} ");
         self.nodes()
             .into_iter()
             .find(|node| {
-                node.name.starts_with(&start)
+                // An added event's Undo keeps no object yet (M0529 waits for layout 11c).
+                (node.name.starts_with(&start) || (verb == "add" && node.name == "Undo add"))
                     && node.name != "Undo add scene"
                     && Self::is_control(node)
             })
