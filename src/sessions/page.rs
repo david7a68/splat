@@ -4971,106 +4971,111 @@ impl Sessions {
             ))
         });
         let mut pressed_link = None;
-        ui.scope(|ui| {
-            // On the page, the note's column sets its width (`note_frame_width`); in the panel,
-            // the reader's measure and the frame's edges.
-            let width = if in_panel {
-                design::READER_MEASURE + 2.0 * (design::S + design::HAIRLINE_WIDTH)
-            } else {
-                note_frame_width(ui.ctx())
-            };
-            ui.set_max_width(ui.available_width().min(width));
-            let font = design::reader::prose_type(ui).font(ui);
-            let face = markdown_face(font.clone());
-            // Beside a page, Tab indents. It must not walk to `Next turn`, where the next space
-            // would press it. Escape still leaves the panel.
-            let output = design::pane::editor_view(
-                ui,
-                design::pane::ViewHeight::Fills,
-                field,
-                text,
-                face,
-                |edit| edit.lock_focus(in_panel).font(font),
-            );
-            crate::markdown_source::paint_section_rules(ui, &output, Some(text.key()));
-            pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
-            let place = super::slash::Place {
-                session: self.selected,
-                campaign: self.campaign.as_ref(),
-                index: index.as_deref(),
-                run_open: self.run_open,
-            };
-            let done = self.slash.show(ui, &output, text, &place);
-            self.wants_content_refresh |= done.created;
-            edited |= done.edited;
-            let response = &output.response;
-            design::named(ui, response, "Note text");
-            self.note_had_focus = response.has_focus();
-            // Narrowing keeps whichever side the DM last worked in: the note while it has
-            // focus, the plan once focus moves to a plan field.
-            if !in_panel && response.has_focus() {
-                self.tab = Tab::Note;
-            } else if !in_panel
-                && self.tab == Tab::Note
-                && ui.memory(|memory| memory.focused().is_some())
-            {
-                self.tab = Tab::Plan;
-            }
-            self.last_note_editor = Some(NoteEditor {
-                session: self.selected,
-                id: response.id,
-            });
-            // A click chooses the place, so what is typed goes exactly there.
-            if focus || response.clicked() {
-                self.break_before_words = false;
-            }
-            if std::mem::take(&mut self.refocus_note) {
-                response.request_focus();
-                let words = std::mem::take(&mut self.words_for_note);
-                if !words.is_empty() {
-                    // These words had their break, and what follows goes on from them.
-                    self.break_before_words = false;
-                    let new_line = std::mem::take(&mut self.words_new_line);
-                    edited |= insert_at_caret(ui.ctx(), response.id, text, &words, new_line);
-                }
-            }
-            // A place another act wrote to (the plan's rewards) comes into view, focus or not:
-            // the viewport's named jump, in the note's own text (in the panel, past its slice's
-            // start).
-            if let Some(caret) = self.caret_to_show.take()
-                && let Some(at) = caret.checked_sub(prefix_chars)
-            {
-                let rect = output.galley.pos_from_cursor(egui::text::CCursor::new(at));
-                design::pane::jump_editor_view(
-                    ui.ctx(),
+        // The viewport's scroll takes its id from its `Ui`: one id per session and place, so the
+        // tab and the side-by-side layouts share one scroll (a breakpoint keeps the DM's place).
+        ui.scope_builder(
+            egui::UiBuilder::new().id(("session_editor_scope", self.selected, in_panel)),
+            |ui| {
+                // On the page, the note's column sets its width (`note_frame_width`); in the panel,
+                // the reader's measure and the frame's edges.
+                let width = if in_panel {
+                    design::READER_MEASURE + 2.0 * (design::S + design::HAIRLINE_WIDTH)
+                } else {
+                    note_frame_width(ui.ctx())
+                };
+                ui.set_max_width(ui.available_width().min(width));
+                let font = design::reader::prose_type(ui).font(ui);
+                let face = markdown_face(font.clone());
+                // Beside a page, Tab indents. It must not walk to `Next turn`, where the next space
+                // would press it. Escape still leaves the panel.
+                let output = design::pane::editor_view(
+                    ui,
+                    design::pane::ViewHeight::Fills,
                     field,
-                    design::pane::EditorJump::Show {
-                        top: rect.top(),
-                        bottom: rect.bottom(),
-                    },
+                    text,
+                    face,
+                    |edit| edit.lock_focus(in_panel).font(font),
                 );
-                ui.ctx().request_repaint();
-            }
-            // Asked for the note: a fresh line at the end of `What happened`, the caret on it.
-            // The part reveals a caret that moved, so the line comes into view.
-            if focus {
-                response.request_focus();
-                let (caret, changed) = text.edit(fresh_line_in_note);
-                edited |= changed;
-                let end = egui::text::CCursor::new(caret);
-                let mut state =
-                    egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
-                state
-                    .cursor
-                    .set_char_range(Some(egui::text::CCursorRange::one(end)));
-                egui::TextEdit::store_state(ui.ctx(), response.id, state);
-            }
-            edited |= response.changed();
-            #[cfg(any(test, feature = "test-support"))]
-            ui.data_mut(|data| {
-                data.insert_temp(egui::Id::new("session_editor_proof"), response.id)
-            });
-        });
+                crate::markdown_source::paint_section_rules(ui, &output, Some(text.key()));
+                pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
+                let place = super::slash::Place {
+                    session: self.selected,
+                    campaign: self.campaign.as_ref(),
+                    index: index.as_deref(),
+                    run_open: self.run_open,
+                };
+                let done = self.slash.show(ui, &output, text, &place);
+                self.wants_content_refresh |= done.created;
+                edited |= done.edited;
+                let response = &output.response;
+                design::named(ui, response, "Note text");
+                self.note_had_focus = response.has_focus();
+                // Narrowing keeps whichever side the DM last worked in: the note while it has
+                // focus, the plan once focus moves to a plan field.
+                if !in_panel && response.has_focus() {
+                    self.tab = Tab::Note;
+                } else if !in_panel
+                    && self.tab == Tab::Note
+                    && ui.memory(|memory| memory.focused().is_some())
+                {
+                    self.tab = Tab::Plan;
+                }
+                self.last_note_editor = Some(NoteEditor {
+                    session: self.selected,
+                    id: response.id,
+                });
+                // A click chooses the place, so what is typed goes exactly there.
+                if focus || response.clicked() {
+                    self.break_before_words = false;
+                }
+                if std::mem::take(&mut self.refocus_note) {
+                    response.request_focus();
+                    let words = std::mem::take(&mut self.words_for_note);
+                    if !words.is_empty() {
+                        // These words had their break, and what follows goes on from them.
+                        self.break_before_words = false;
+                        let new_line = std::mem::take(&mut self.words_new_line);
+                        edited |= insert_at_caret(ui.ctx(), response.id, text, &words, new_line);
+                    }
+                }
+                // A place another act wrote to (the plan's rewards) comes into view, focus or not:
+                // the viewport's named jump, in the note's own text (in the panel, past its slice's
+                // start).
+                if let Some(caret) = self.caret_to_show.take()
+                    && let Some(at) = caret.checked_sub(prefix_chars)
+                {
+                    let rect = output.galley.pos_from_cursor(egui::text::CCursor::new(at));
+                    design::pane::jump_editor_view(
+                        ui.ctx(),
+                        field,
+                        design::pane::EditorJump::Show {
+                            top: rect.top(),
+                            bottom: rect.bottom(),
+                        },
+                    );
+                    ui.ctx().request_repaint();
+                }
+                // Asked for the note: a fresh line at the end of `What happened`, the caret on it.
+                // The part reveals a caret that moved, so the line comes into view.
+                if focus {
+                    response.request_focus();
+                    let (caret, changed) = text.edit(fresh_line_in_note);
+                    edited |= changed;
+                    let end = egui::text::CCursor::new(caret);
+                    let mut state =
+                        egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
+                    state
+                        .cursor
+                        .set_char_range(Some(egui::text::CCursorRange::one(end)));
+                    egui::TextEdit::store_state(ui.ctx(), response.id, state);
+                }
+                edited |= response.changed();
+                #[cfg(any(test, feature = "test-support"))]
+                ui.data_mut(|data| {
+                    data.insert_temp(egui::Id::new("session_editor_proof"), response.id)
+                });
+            },
+        );
         // The panel's slice changed: the note is the part before it and the slice.
         if let Some(slice) = &mut self.panel_slice
             && in_panel

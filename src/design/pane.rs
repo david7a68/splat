@@ -854,15 +854,21 @@ impl EditorRegion<'_> {
                 before
             })
             .is_some_and(|before| before + 1 >= pass);
+        // The caret's place in the text, kept beside its position: the text laid out again at
+        // another width (a window or column change) moves the caret's pixels, not the caret.
+        let index_key = key.with("caret_index");
+        let index = editor
+            .response
+            .has_focus()
+            .then_some(())
+            .and(editor.cursor_range.map(|range| range.primary.index));
+        let index_before = ui.ctx().data(|data| data.get_temp::<usize>(index_key));
         if let Some(caret) = caret {
             let (caret_top, caret_bottom) = (caret.top() - origin, caret.bottom() - origin);
             let moved = !drawn_before
                 || editor.response.changed()
-                || kept.is_none_or(|(left, top, bottom, _, _)| {
-                    (left - caret.left()).abs() > 0.5
-                        || (top - caret_top).abs() > 0.5
-                        || (bottom - caret_bottom).abs() > 0.5
-                });
+                || kept.is_none()
+                || index_before != index;
             let offset = output.state.offset.y;
             if moved && (caret_top < offset - 0.5 || caret_bottom > offset + max + 0.5) {
                 ui.ctx().data_mut(|data| data.insert_temp(reveal_key, true));
@@ -885,6 +891,10 @@ impl EditorRegion<'_> {
                 );
             }
             None => data.remove::<(f32, f32, f32, f32, f32)>(caret_key),
+        });
+        ui.ctx().data_mut(|data| match index {
+            Some(index) => data.insert_temp(index_key, index),
+            None => data.remove::<usize>(index_key),
         });
         if self.host == Host::Pane {
             ui.ctx().data_mut(|data| {
