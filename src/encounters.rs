@@ -3012,7 +3012,8 @@ impl SearchRanked {
         key: SearchKey,
         list: SearchList<'_>,
         filter: &Filter,
-        (already, on_roster): (&dyn Fn(&Creature) -> bool, Vec<Uuid>),
+        already: &dyn Fn(&Creature) -> bool,
+        on_roster: Vec<Uuid>,
     ) -> Self {
         let parsed = Query::parse(&key.query);
         let typed = crate::matching::Typed::new(&parsed.words);
@@ -8077,7 +8078,8 @@ impl Encounters {
                     key,
                     list,
                     &filter,
-                    (roster.already, roster.on_roster.to_vec()),
+                    roster.already,
+                    roster.on_roster.to_vec(),
                 ));
                 ui.data_mut(|data| data.insert_temp(kept_id, ranked.clone()));
                 ranked
@@ -11868,6 +11870,7 @@ mod tests {
         // trimmed, and the save row's record is the settings as the file holds them, so the
         // reload that follows (which reads them back) does not end it.
         let mut encounters = Encounters {
+            active: Some(active.clone()),
             snapshot: Some(Snapshot::load(&active, &[]).unwrap()),
             ..Default::default()
         };
