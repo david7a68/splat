@@ -2148,11 +2148,22 @@ impl<'a> TitleLine<'a> {
                     x += width;
                     rect
                 };
-                ui.put(piece(metrics.title), title.extend());
+                // Each piece starts at its rect's left edge, as `page_header`'s did: `ui.put`
+                // centres a label, which puts its text's origin mid-piece (iter-24-B FE4 reads
+                // that origin as the title's x).
+                let at_left = |ui: &mut Ui, rect: Rect, label: egui::Label| {
+                    ui.scope_builder(
+                        UiBuilder::new()
+                            .max_rect(rect)
+                            .layout(Layout::left_to_right(Align::Center)),
+                        |ui| ui.add(label),
+                    )
+                    .inner
+                };
+                at_left(ui, piece(metrics.title), title.extend());
                 if let Some((words, context)) = context {
                     let _ = piece(XS);
-                    ui.put(piece(metrics.context - XS), context.extend())
-                        .on_hover_text(words);
+                    at_left(ui, piece(metrics.context - XS), context.extend()).on_hover_text(words);
                 }
                 let _ = piece(metrics.lead_in);
                 for (at, width) in metrics.widths.iter().enumerate() {
