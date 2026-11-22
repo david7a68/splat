@@ -692,8 +692,9 @@ pub fn run(d: &mut Driver<'_>) {
             .count()
     };
     let rests = events(d);
-    // M-N1.7: an event's Undo names it (`Undo add <label>`, `Undo remove <label>`), on the plan
-    // as on Timeline. The scene's is `Undo add scene`.
+    // M-N1.7: a removed event's Undo names it (`Undo remove Long rest`), on the plan as on
+    // Timeline; an added event's is `Undo add` (M0529 waits for layout 11c), a scene's
+    // `Undo add scene`.
     let rest_undo = |d: &Driver<'_>| {
         d.nodes()
             .into_iter()
@@ -701,7 +702,10 @@ pub fn run(d: &mut Driver<'_>) {
             .map(|node| node.name)
             .unwrap_or_default()
     };
-    let remove_undo = |d: &Driver<'_>| d.name_starting("Undo remove ");
+    let remove_undo = |d: &Driver<'_>| {
+        d.removal_undo("Long rest")
+            .expect("the removal\u{2019}s Undo names the Long rest")
+    };
     d.click("Add Long rest");
     assert!(
         !rest_undo(d).is_empty(),
@@ -767,7 +771,7 @@ pub fn run(d: &mut Driver<'_>) {
         d.click("More actions for Long rest");
         d.click("Remove this event");
         d.click(NAV_SESSIONS);
-        d.expect("Undo remove ");
+        d.expect("Undo remove Long rest");
         let (remove_top, scene_top) = (top(d, &remove_undo(d)), top(d, "Undo add scene"));
         (
             events(d) == rests

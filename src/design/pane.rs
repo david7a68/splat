@@ -124,6 +124,8 @@ use super::{layout::ScrollColumn, tokens::S};
 
 /// Composite columns and their edges, resolved before the pane paints (layout step 7).
 mod columns;
+/// A block laid out before paint by a design recipe (layout 11c).
+mod laid;
 /// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
 mod plan;
 /// The scroll region of an owned list body over its plan (layout step 3b).
@@ -132,7 +134,8 @@ mod region;
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
-pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Row};
+pub use laid::{Laid, LaidUi};
+pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Measured, Row};
 pub use region::{BlockRegion, Navigation, RegionState};
 
 /// What a pane's body is, for the footer's place.

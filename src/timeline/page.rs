@@ -2814,6 +2814,14 @@ mod tests {
             state.1.save();
         }
         harness.run_steps(3);
+        // B shows no Undo of A's removal (review of PR 720: a wrong owner's label fails).
+        assert!(
+            harness
+                .query_all_by_label_contains("Undo remove ")
+                .next()
+                .is_none(),
+            "campaign B shows no Undo of A's removal"
+        );
         let b_bytes = std::fs::read(b.path().join(super::super::FILE)).unwrap();
         // Back to A: the removal and its warning are still A's.
         {
@@ -2824,11 +2832,8 @@ mod tests {
         }
         harness.run_steps(3);
         assert!(warned(&harness), "A's warning came back with A's removal");
-        harness
-            .query_all_by_label_contains("Undo remove ")
-            .next()
-            .expect("the removal\u{2019}s Undo")
-            .click();
+        // The Undo names A's event, exactly.
+        harness.get_by_label("Undo remove Toll gate").click();
         harness.run_steps(3);
         assert!(
             harness.state().1.events.iter().any(|event| event.id == id),
