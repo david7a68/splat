@@ -104,6 +104,12 @@ thread_local! {
     static REPAIR_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times the entry list searched the matches for the selected row (issue #539).
+    static ROW_SEARCHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The row that links a repair's reference. Every repair lookup goes through here, and the
 /// test count is kept here.
 fn repair_row(entry: &Entry, target: &splat::content::Reference) -> Option<usize> {
@@ -179,6 +185,9 @@ pub struct Library {
     draft_parse: Option<(String, crate::design::text_draft::DraftKey, ParsedDraft)>,
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
+    /// The selected entry's row in the matches when last found (issue #539): checked in one
+    /// step on a quiet frame (`matches[row]` is still the entry), searched again only when not.
+    selected_row: Option<usize>,
     /// The entry list's region (layout step 3b) and its rows: whole rows only, one offset writer.
     entry_region: Option<design::RegionState>,
     entry_rows: Option<design::memo::Revised<Vec<design::Block>>>,
@@ -2616,8 +2625,19 @@ impl Library {
                 let region = self
                     .entry_region
                     .get_or_insert_with(|| design::RegionState::new("library_entries"));
-                let selected_row =
-                    selected.and_then(|selected| matches.iter().position(|i| *i == selected));
+                let selected_row = selected.and_then(|selected| {
+                    if let Some(row) = self
+                        .selected_row
+                        .filter(|&row| matches.get(row) == Some(&selected))
+                    {
+                        return Some(row);
+                    }
+                    #[cfg(test)]
+                    ROW_SEARCHES.with(|searches| searches.set(searches.get() + 1));
+                    let row = matches.iter().position(|i| *i == selected);
+                    self.selected_row = row;
+                    row
+                });
                 if std::mem::take(&mut self.reveal_row)
                     && let Some(row) = selected_row
                 {
@@ -9988,6 +10008,23 @@ mod tests {
             library.selected,
             Some(1),
             "the reload reselects the campaign's file"
+        );
+        // Issue #539: the list finds the selected entry's row once; quiet frames search the
+        // matches no more.
+        let mut frame = || {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
+            });
+        };
+        frame();
+        frame();
+        let searched = ROW_SEARCHES.with(std::cell::Cell::get);
+        frame();
+        frame();
+        frame();
+        assert!(
+            searched > 0 && ROW_SEARCHES.with(std::cell::Cell::get) == searched,
+            "#539: the selected row was found ({searched} searches) and then kept"
         );
     }
 
