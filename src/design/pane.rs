@@ -343,6 +343,23 @@ thread_local! {
     pub static KEPT_LAYOUTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// The text work of the document editors while `frames` runs: how many layouts the kept
+/// layouter made, and how many bytes the field guard hashed (layout PR 9b: a host's quiet
+/// frames do neither).
+#[cfg(any(test, feature = "test-support"))]
+pub fn text_work(frames: impl FnOnce()) -> (usize, usize) {
+    let read = || {
+        (
+            KEPT_LAYOUTS_MADE.with(std::cell::Cell::get),
+            super::layout::BOUND_TEXT_BYTES.with(std::cell::Cell::get),
+        )
+    };
+    let before = read();
+    frames();
+    let after = read();
+    (after.0 - before.0, after.1 - before.1)
+}
+
 /// Everything a kept layout of a document was made from (layout PR 9b, note v2 §3): the
 /// draft's identity and revision, the measure (width, font, fonts' generation, which the theme's
 /// installation also raises, scale), the font atlas's epoch, the light or dark visuals, the face,

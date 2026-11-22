@@ -9645,6 +9645,12 @@ mod tests {
         harness.run_steps(2);
         harness.get_by_label("Template text").focus();
         harness.run_steps(2);
+        // Layout PR 9b: the focused template's quiet frames lay out and hash none of its text.
+        assert_eq!(
+            design::pane::text_work(|| harness.run_steps(4)),
+            (0, 0),
+            "9b-quiet: the template editor's quiet frames"
+        );
         harness.get_by_label("Template text").type_text("Dusk");
         harness.run_steps(16);
         harness.get_by_label("Template text").type_text("!");
@@ -9729,6 +9735,12 @@ mod tests {
         let left = body(&harness);
         harness.get_by_label("Note text").focus();
         harness.run_steps(2);
+        // Layout PR 9b: the focused note's quiet frames lay out and hash none of its text.
+        assert_eq!(
+            design::pane::text_work(|| harness.run_steps(4)),
+            (0, 0),
+            "9b-quiet: the note editor's quiet frames"
+        );
         harness.get_by_label("Note text").type_text("Lost words");
         harness.run_steps(8);
         for _ in 0.."Lost words".len() {

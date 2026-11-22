@@ -1304,6 +1304,22 @@ mod tests {
             "fe9-cost: {steps} steps for {runs} runs and 500 marks"
         );
         assert!(steps > 0, "fe9-cost: the counter counts");
+        // Layout PR 9b: a quiet frame lays out, hashes and looks up none of the words: the
+        // layout and the rules' parse are kept by the draft's key.
+        let lookups = STYLED_LOOKUPS.with(std::cell::Cell::get);
+        let work = design::pane::text_work(|| {
+            let _ = context.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let output = styled_editor(ui, &mut body, 1000.0);
+                    paint_section_rules(ui, &output, Some(body.key()));
+                });
+            });
+        });
+        assert_eq!(
+            (work, STYLED_LOOKUPS.with(std::cell::Cell::get) - lookups),
+            ((0, 0), 0),
+            "9b-quiet: a quiet frame's layouts, hashed bytes and lookups of the words"
+        );
     }
 
     #[test]

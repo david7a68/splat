@@ -10254,14 +10254,28 @@ mod tests {
                 // A quiet frame after each batch, a second later, so the editor settles its Undo.
                 [batch, vec![]]
             }));
+        let mut last = 0.0;
         for (at, events) in frames.enumerate() {
-            let _ = ctx.run(input(events, at as f64 * 2.0), |ctx| {
+            last = at as f64 * 2.0;
+            let _ = ctx.run(input(events, last), |ctx| {
                 ctx.memory_mut(|memory| memory.request_focus(id));
                 egui::CentralPanel::default().show(ctx, |ui| {
                     library.editor(ui, "Entry", &Campaigns::default());
                 });
             });
         }
+        // Layout PR 9b: the focused editor's quiet frames lay out and hash none of its text.
+        let work = crate::design::pane::text_work(|| {
+            for at in 1..=3 {
+                let _ = ctx.run(input(Vec::new(), last + f64::from(at)), |ctx| {
+                    ctx.memory_mut(|memory| memory.request_focus(id));
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        library.editor(ui, "Entry", &Campaigns::default());
+                    });
+                });
+            }
+        });
+        assert_eq!(work, (0, 0), "9b-quiet: the Library editor's quiet frames");
     }
 
     /// Row 125: the owner line's status that ends with `words`, after two frames: its icon, the

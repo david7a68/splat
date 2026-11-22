@@ -612,11 +612,19 @@ mod tests {
     fn painted(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> (bool, String) {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let output = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                assert!(!repair.show(ui, campaign, run_open));
-            });
+        let mut frame = || {
+            ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    assert!(!repair.show(ui, campaign, run_open));
+                });
+            })
+        };
+        let output = frame();
+        // Layout PR 9b: the repair's next frames lay out and hash none of its text.
+        let work = design::pane::text_work(|| {
+            let _ = (frame(), frame());
         });
+        assert_eq!(work, (0, 0), "9b-quiet: the repair editor's quiet frames");
         let accent = colors().accent_fill;
         let mut words = String::new();
         let mut primary = false;
