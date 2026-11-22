@@ -2317,7 +2317,7 @@ impl<'a> Driver<'a> {
     /// Layout PR 5a-2 (I6): the Session plan's rows, from their records. In column mode every
     /// row's actions start at one column exactly `L` after the widest title (a row whose drawn
     /// action is narrower than its recipe's widest alternate starts up to `L` in); otherwise (the plan too narrow for the column) each row keeps its actions
-    /// at the far edge, `L` or more after its title's room. Returns whether it holds, whether the
+    /// at the far edge, as on main. Returns whether it holds, whether the
     /// plan is in column mode, and the rows.
     pub fn plan_columns_hold(&self) -> (bool, bool, String) {
         const L: f32 = crate::design::L;
@@ -2338,7 +2338,9 @@ impl<'a> Driver<'a> {
                         && record.action.left() >= record.column - 0.5
                         && record.action.left() <= record.column + L
                 } else {
-                    record.action.left() >= record.facts.right() + crate::design::S - 0.5
+                    // The far edge, as on main: the facts' summary lines lie below the actions'
+                    // line and may reach under them (PR 605 review: every line is measured).
+                    true
                 }
             });
         let rows: Vec<_> = records
