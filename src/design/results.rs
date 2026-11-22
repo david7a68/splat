@@ -1482,6 +1482,9 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "menu_submenu",
             &[Ban::Layout(1)],
         ),
+        // M0412: the one collapsing section (`Section::show`); `CollapsingHeader::new` is
+        // banned outside it.
+        ("src/design/components.rs", "show", &[Ban::Layout(1)]),
         (
             "src/design/components.rs",
             "number_field_with_id",

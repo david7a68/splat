@@ -2729,8 +2729,7 @@ impl CampaignContent {
             };
             // A fault count is a status: the warning icon and colour, then the count.
             let job = crate::content_actions::issue_count_title(ui, &heading);
-            let issues = egui::CollapsingHeader::new(job)
-                .icon(design::section_icon)
+            let issues = design::Section::new(job)
                 .default_open(!campaign_flags.is_empty())
                 .show(ui, |ui| {
                     design::ScrollColumn::new("campaign_issues")

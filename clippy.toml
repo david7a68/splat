@@ -74,6 +74,7 @@ disallowed-methods = [
     { path = "egui::Popup::from_response", reason = "use design::menu_popup", allow-invalid = true },
     { path = "egui::Popup::from_toggle_button_response", reason = "use design::menu_popup", allow-invalid = true },
     { path = "egui::Ui::menu_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
+    { path = "egui::CollapsingHeader::new", reason = "use design::Section (id, default_open, open)", allow-invalid = true },
     { path = "egui::Ui::menu_image_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
     { path = "egui::Ui::menu_image_text_button", reason = "use design::row_menu or design::menu_popup", allow-invalid = true },
     { path = "egui::Response::context_menu", reason = "use design::menu_popup", allow-invalid = true },
