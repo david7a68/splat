@@ -4724,7 +4724,9 @@ impl Sessions {
         if let Some((_, _, before, _, _, _)) = self.removed_group.take()
             && let Some(draft) = &mut self.draft
         {
+            let key = draft.body.key();
             let _ = draft.body.replace(before);
+            draft.own_write(key);
             draft.edited();
         }
     }
@@ -5609,7 +5611,9 @@ impl Sessions {
             && let Some(draft) = &mut self.draft
         {
             let before = draft.body.as_str().to_owned();
+            let key = draft.body.key();
             draft.body.edit(|body| unlink_group(body, &name));
+            draft.own_write(key);
             draft.edited();
             Self::mark_plan(
                 &mut self.plan_marks,

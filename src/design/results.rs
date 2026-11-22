@@ -1161,14 +1161,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        // M-R0.7: the add field is keyed by the list's owner (the caller's `egui::Id`), as
-        // `line_row`'s lines are; the list has no typed owner yet.
-        (
-            "src/loot_editor.rs",
-            "add_row",
-            &[Ban::Extras(1), Ban::RowKey(1)],
-        ),
-        ("src/loot_editor.rs", "line_row", &[Ban::RowKey(1)]),
+        ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
         (
             "src/markdown_view.rs",
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
@@ -1600,6 +1593,8 @@ mod suppressions;
 ///   issued by hand can be keyed by kind, or issued while drawing (reviews of PR 298).
 /// - `save_row_state(`: a save row whose word, Save weight and reasons the caller decides
 ///   (`design::save_row` decides them from a `DraftState`).
+/// - `consume_key(… Key::S)`: a page's own take of `Ctrl+S`, with its own order and its own modal
+///   test. `design::save_row::save_key` is the one rule (issues #513, #514).
 /// - `ptr_eq(`: a cache keyed by a pointer address. Key it by a `Revision` in a
 ///   `design::memo::Memo`, which takes no other key.
 /// - `TitleLine::back(`: the old back link part, which a caller can place inside a row and block
@@ -1656,6 +1651,11 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/components.rs", 1),
             ("src/design/gallery.rs", 2),
         ],
+    ),
+    (
+        "consume_key(egui::Modifiers::COMMAND, egui::Key::S)",
+        "A page's Ctrl+S is `design::save_row::save_key`: one rule for its order and for modals (issues #513, #514).",
+        &[("src/design/save_row.rs", 1)],
     ),
     (
         "ptr_eq(",

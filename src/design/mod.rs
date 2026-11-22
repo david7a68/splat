@@ -52,7 +52,7 @@ pub use layout::{
     SlotType, Submenus, TextKey, TextOwner, TitleAction, TitleActionRow, TitleLine, TitlePlacement,
     TitleType, Unsaved, Word, edit_in_place, first_unsaved, labelled_field, lane_width, line_field,
     menu_popup, menu_popup_at, path_help, register_title_row, search_min_row, sideways_scroll,
-    status_slot, title_lead_in, title_placement,
+    status_slot, title_lead_in, title_placement, write_under_history,
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]

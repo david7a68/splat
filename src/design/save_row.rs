@@ -17,7 +17,8 @@
 //! `docs/design-system.md` (Buttons, the save row paragraph) is the rule; this is its one copy.
 //!
 //! Caller duties left: route `Ctrl+S` through [`DraftState::can_save`], so the key saves exactly
-//! when the button can, and show a refusal's or a failure's sentence in the pane's footer. A
+//! when the button can (taken through [`save_key`], the one rule for every page's key), and show
+//! a refusal's or a failure's sentence in the pane's footer. A
 //! caller that paints a word itself (`SaveWord::status`) holds the rule only when it takes that
 //! word from [`DraftState::word`].
 //!
@@ -73,6 +74,46 @@
 use super::{Action, Density, Status, Tone, colors, components::status, icons};
 use egui::{self, Ui};
 use std::borrow::Cow;
+
+/// The page's `Ctrl+S`, one rule for every page (issues #513, #514): it is taken from this
+/// frame's input only while `ready` (the draft can be saved; the editor is the one the key is
+/// for), the place is enabled, and no modal is open ([`set_modal`]). A page takes it before its
+/// fields, so no field reads it, and saves after them, so the words typed in that frame are in
+/// the save. A raw take of the key is counted (`design::results::STAGED`).
+pub fn save_key(ui: &Ui, ready: bool) -> bool {
+    ready && ui.is_enabled() && take_save_key(ui.ctx())
+}
+
+/// [`save_key`] for a page that takes the key before it draws (it has no `Ui` yet); its caller
+/// knows whether the page is enabled.
+pub fn save_key_before_drawing(ctx: &egui::Context, ready: bool) -> bool {
+    ready && take_save_key(ctx)
+}
+
+fn take_save_key(ctx: &egui::Context) -> bool {
+    if modal_open(ctx) {
+        return false;
+    }
+    ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
+}
+
+fn modal_id() -> egui::Id {
+    egui::Id::new("design_save_key_modal")
+}
+
+/// The app says, once each pass before any page draws, whether a modal is open (its own dialogs,
+/// the full-window image, any egui modal: `art::modal_open`). No page's `Ctrl+S` acts beneath
+/// it ([`save_key`]).
+pub fn set_modal(ctx: &egui::Context, open: bool) {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|data| data.insert_temp(modal_id(), (pass, open)));
+}
+
+fn modal_open(ctx: &egui::Context) -> bool {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|data| data.get_temp::<(u64, bool)>(modal_id()))
+        .is_some_and(|(set, open)| open && set == pass)
+}
 
 /// Whether the draft differs from the saved text: the same type as a revised value's change.
 pub use super::memo::Changed;
@@ -1065,6 +1106,71 @@ pub(in crate::design) fn save_row_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issues #513 and #514: every page's `Ctrl+S` is `save_key`, one rule. It is taken once,
+    /// and only while the page is ready, its place is enabled, and the app says no modal is open
+    /// (`set_modal`); a key it refuses stays in the input for no one.
+    #[test]
+    fn ctrl_s_is_taken_only_by_a_ready_enabled_page_with_no_modal() {
+        use crate::design::test_harness::Themed as _;
+        #[derive(Default)]
+        struct Page {
+            ready: bool,
+            enabled: bool,
+            modal: bool,
+            /// The takes of this frame: the page's, then a second asker's.
+            taken: (bool, bool),
+        }
+        let mut h = egui_kittest::Harness::builder().themed_ui_state(
+            |ui, page: &mut Page| {
+                set_modal(ui.ctx(), page.modal);
+                if !page.enabled {
+                    ui.disable();
+                }
+                page.taken = (save_key(ui, page.ready), save_key(ui, true));
+            },
+            Page {
+                ready: true,
+                enabled: true,
+                ..Page::default()
+            },
+        );
+        // The theme's frame first: the page draws from the next one.
+        h.run();
+        let press = |h: &mut egui_kittest::Harness<'_, Page>| {
+            // One frame holds the whole press (a queued key press spreads over frames).
+            h.input_mut().events.push(egui::Event::Key {
+                key: egui::Key::S,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            });
+            h.step();
+            h.state().taken
+        };
+        assert_eq!(press(&mut h), (true, false), "a ready page takes it, once");
+        h.state_mut().modal = true;
+        assert_eq!(
+            press(&mut h),
+            (false, false),
+            "#514: beneath a modal no page takes it"
+        );
+        h.state_mut().modal = false;
+        h.state_mut().enabled = false;
+        assert_eq!(
+            press(&mut h),
+            (false, false),
+            "a disabled page takes it not"
+        );
+        h.state_mut().enabled = true;
+        h.state_mut().ready = false;
+        assert_eq!(
+            press(&mut h),
+            (false, true),
+            "a page that is not ready leaves it"
+        );
+    }
 
     /// M2 (B2 packet 3, F2): the save row with the toolbar's draft reason chooses its form
     /// (long or short on its line, or the slot under it) from the width only. Across widths on

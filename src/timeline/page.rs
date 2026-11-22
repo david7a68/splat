@@ -1982,8 +1982,7 @@ impl TimelinePage {
         // Ctrl+S is taken here, before the fields, and saves after they took this frame's
         // input (issue #513): words typed in the same frame are saved with it. Under a modal it
         // waits, as every shortcut does.
-        let save =
-            !self.modal && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        let save = design::save_row::save_key(ui, !self.modal);
         // The page under its header and the file's problems: the quick add, the list and the
         // open event. An early end leaves only this closure, so the save after it always runs.
         let mut body = || {
