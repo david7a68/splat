@@ -4476,18 +4476,8 @@ pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
     undo_message_capped(ui, tone, text, action, None)
 }
 
-/// A kept line for an act's result and its Undo: one control high whether or not a result
-/// shows, so the result moves nothing below it. Words that do not fit beside Undo end in `…`,
-/// and their hover keeps them whole. Capped at `LIST_MEASURE` like every notice.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool {
-    result_line(ui, tone, result)
-}
-
-/// `undo_line`'s drawing, which `outcome::PlacedResult::show_line` draws its typed result with
-/// (M0561): one `Read` control high whether or not a result shows; its words cut by whole words
+/// A kept line for an act's result and its action, which `outcome::PlacedResult::show_line`
+/// draws its typed result with (M0561; the old `undo_line`, whose last callers moved onto it): one `Read` control high whether or not a result shows; its words cut by whole words
 /// to leave room for its action (the whole words on hover and as their name); the action's
 /// words (`label`) whole at the end.
 pub(in crate::design) fn result_line(

@@ -5,7 +5,7 @@ use super::{
     reference,
 };
 use crate::design::{
-    self, Action, Density, Status, Tone, Type, colors, icons,
+    self, Action, Density, Status, Type, colors, icons,
     outcome::{
         BodyMessage, Choice, Fault, FaultMessage, FileLine, KeptOutcome, MessageChoice, Messages,
         Notice, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,

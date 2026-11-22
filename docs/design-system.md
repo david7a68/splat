@@ -2290,7 +2290,7 @@ which waits with `Clear the results first.` while a result stands. With several 
 table of the latest journey with checks, else on `Choose a table`, and `Roll` waits with `Choose a table first.`.
 A journey of more than 31 checks says `This journey has N checks. Split it into shorter journeys to roll them
 here.` Each act's message, with `Undo checks`, `Undo roll` or `Undo clear`, shows on one kept line under the table's
-line (`design::undo_line`): reserved while the block shows, so the message moves nothing; words that do not fit
+line (`PlacedResult::show_line`, typed words and Undo): reserved while the block shows, so the message moves nothing; words that do not fit
 beside Undo give up whole words and end in `…`, never inside a word, and keep their whole text on hover. It is kept by its journey's event: it
 lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
 leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving

@@ -3359,12 +3359,13 @@ impl Sessions {
             reveal: None,
         };
         let mut act = checks::header(ui, &view, &mut travel.block);
-        let done = travel.done.get(&event.id);
-        if design::undo_line(
-            ui,
-            Tone::Success,
-            done.map(|done| (done.words.as_str(), done.undo)),
-        ) {
+        // M0515 (M-P0.27): the journey's check result keeps its line, as the Timeline's does;
+        // the two share `checks::Done`, now typed.
+        let result = travel
+            .done
+            .get(&event.id)
+            .map(|done| PlacedResult::new(done.words.clone(), done.undo.clone().pressed_as(())));
+        if PlacedResult::show_line(result, ui).is_some() {
             undo = TravelUndo::Checks;
         }
         act = checks::lines(ui, &view, &mut travel.block).or(act);
