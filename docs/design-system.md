@@ -2413,8 +2413,10 @@ the end of the plan, `Plan a scene: words, a person or a place`, with `Add` and 
 end), keeps the field open, and shows `Scene added to tonight.` with `Undo add scene` directly under the field's action line, so
 the field does not move for it; once the field closes, the result is in the plan's message footer. Escape or
 `Cancel` clears and closes it. Every scene act goes through `Draft::apply` with `Apply::Now`, on the one line its row was drawn
-from (its place and its whole text): what it cannot do shows, in a warning, where the DM acted, until the note's
-words change or, for `Notes not saved`, until the note saves. An act whose save failed keeps its Undo.
+from (its place and its whole text): a refused act is a bounded `Refusal` (`The scene “<words>” was not ticked in
+<session>.`, its cause and its next step; ruling M7), drawn where the DM acted (`row_fault`) or in the footer,
+until the note's words change; a save that failed is the error `Notes not saved.` until the note saves. An act
+whose save failed keeps its Undo.
 
 Remove from tonight removes one fight or group link, retaining surrounding words, with `Undo remove <name>` below
 that row after `S` (`PlacedResult`). A removed group's message and Undo sit in the plan's message footer until the next note or plan

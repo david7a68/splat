@@ -4,7 +4,7 @@
 use super::{Plan, Sessions, prose};
 use crate::{
     content_workspace::patch_fields,
-    design::{self, Action, Tone, Type, colors},
+    design::{self, Action, Type, colors},
     encounter_run::RunGroup,
     encounters::PlanFight,
     sessions::{
@@ -517,22 +517,6 @@ impl design::results::Kept for CarryMark {
     }
 }
 
-/// A refused carry-over act or Undo, as its footer line says it: the refusal's words, and the
-/// severity of its tone (R41: an unreadable note is an error).
-struct CarryRefused<'a>(&'a Refusal);
-
-impl design::outcome::Fault for CarryRefused<'_> {
-    fn severity(&self) -> design::outcome::Severity {
-        match self.0.tone() {
-            Tone::Error => design::outcome::Severity::CannotRead,
-            _ => design::outcome::Severity::NeedsFixing,
-        }
-    }
-    fn cause(&self) -> design::outcome::Sentence {
-        self.0.words()
-    }
-}
-
 /// Why a carry-over act (`undo`: its Undo) could not change the session note: the cause from
 /// the note act's fault, and the step that lets the DM try again.
 fn carry_refusal(fault: &ActFault, from: &str, into: &str, undo: bool) -> Refusal {
@@ -541,15 +525,7 @@ fn carry_refusal(fault: &ActFault, from: &str, into: &str, undo: bool) -> Refusa
         name(from, Fallback::ThatSession),
         name(into, Fallback::ThatSession),
     );
-    let file = File::SessionNote;
-    let (cause, step) = match fault {
-        ActFault::LineChanged if undo => (Cause::ChangedAfter(file), Step::Check(file)),
-        ActFault::LineChanged => (Cause::LineChanged(file), Step::Check(file)),
-        ActFault::Changed => (Cause::Conflict(file), Step::ChooseWords(file)),
-        ActFault::Missing => (Cause::Gone(file), Step::Check(file)),
-        ActFault::OtherNote => (Cause::Replaced(file), Step::Check(file)),
-        ActFault::NotSaved(..) => (Cause::NotSaved(file), Step::Check(file)),
-    };
+    let (cause, step) = super::kept::note_cause(fault, undo);
     let act = if undo {
         FailedAct::CarryNotUndone { from, into }
     } else {
@@ -906,7 +882,7 @@ impl Sessions {
         };
         match self.carries.results.get(&session) {
             Some(Outcome::Refused { refusal, .. }) => {
-                messages.outcome(FaultMessage::new(&CarryRefused(refusal)));
+                messages.outcome(FaultMessage::new(&super::kept::RefusalFault(refusal)));
             }
             Some(Outcome::Done {
                 words, undo, from, ..
