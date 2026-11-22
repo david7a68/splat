@@ -695,7 +695,21 @@ pub(crate) type KeptFight = (
     Uuid,
     Option<Result<std::path::PathBuf, crate::encounter_run::FindRunFault>>,
     Result<crate::encounter_run::FightSummary, FightFault>,
+    // The summary's log as read: a hash of its entries, taken once at the read, which keys the
+    // Log's laid-out view (`log_view`), so a log read again with other words is laid out again.
+    LogRevision,
 );
+
+/// A hash of a played fight's log, taken when its summary is read from disk.
+pub(crate) type LogRevision = u64;
+
+/// The revision of `log`: its entries' words, in order.
+fn log_revision(log: &[String]) -> LogRevision {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    log.hash(&mut hasher);
+    hasher.finish()
+}
 
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
 fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
@@ -1245,10 +1259,6 @@ enum MenuChoice {
 }
 
 /// A button whose menu offers a new thing, then the campaign's, with a search when they are many.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn plan_menu(
     ui: &mut egui::Ui,
     menu: &PlanMenu<'_>,
@@ -1291,12 +1301,12 @@ fn plan_menu(
                     field.request_focus();
                 }
             }
-            ui.separator();
+            design::rule(ui);
             let query = search.trim().to_lowercase();
             let mut chosen = None;
-            egui::ScrollArea::vertical()
-                .id_salt(menu.word)
+            design::ScrollColumn::new(menu.word)
                 .max_height(FIGHT_MENU_HEIGHT)
+                .fit_height()
                 .show(ui, |ui| {
                     for name in names {
                         if name.to_lowercase().contains(&query) {
@@ -1685,6 +1695,74 @@ pub(super) struct Fault {
     place: Place,
     /// The act waits in the draft: its words end when the note is saved.
     waits: bool,
+}
+
+/// The played fight's Log as laid out for one width: its newest entries first (the run's summary
+/// holds the log newest first), each on one line, cut by whole words with `…` and whole on hover,
+/// and, when an entry is left out or cut, a last line that says what Whole run has. Every row is
+/// one `Small` line, the notice included, so the block is never taller than a third of the
+/// reader's measure, whatever a DM's note holds.
+struct LogView {
+    rows: Vec<(Arc<egui::Galley>, String)>,
+    notice: Option<Arc<egui::Galley>>,
+}
+
+/// What a `LogView` was laid out from: the log's revision as read, the width, the text size and
+/// the scale.
+type LogKey = (LogRevision, u32, u32, u32);
+
+/// The played fight's Log, laid out again only when its log as read (`revision`, taken once per
+/// read from disk), the width or the text size changed: a quiet frame lays out and hashes
+/// nothing, however long the log or a note in it.
+fn log_view(ui: &egui::Ui, run: Uuid, revision: LogRevision, log: &[String]) -> Arc<LogView> {
+    let width = ui.available_width();
+    let font = Type::Small.font(ui);
+    let key: LogKey = (
+        revision,
+        width.to_bits(),
+        font.size.to_bits(),
+        ui.ctx().pixels_per_point().to_bits(),
+    );
+    let id = egui::Id::new(("plan_fight_log", run));
+    if let Some((seen, view)) = ui.data(|data| data.get_temp::<(LogKey, Arc<LogView>)>(id))
+        && seen == key
+    {
+        return view;
+    }
+    // One row: a `Small` line and the gap after it; the block holds as many as a third of the
+    // reader's measure does, and at least the newest entry and the notice.
+    let gap = ui.spacing().item_spacing.y;
+    let room = ((design::READER_MEASURE / 3.0 + gap) / (Type::Small.line() + gap))
+        .floor()
+        .max(2.0) as usize;
+    let line = |words: &str| {
+        let mut job = egui::text::LayoutJob::simple_singleline(
+            words.replace(['\n', '\r'], " "),
+            font.clone(),
+            colors().muted,
+        );
+        job.wrap.max_width = width.max(1.0);
+        job.wrap.max_rows = 1;
+        job.wrap.break_anywhere = false;
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    };
+    let mut rows: Vec<_> = log
+        .iter()
+        .take(room)
+        .map(|entry| (line(entry), entry.clone()))
+        .collect();
+    let notice = (log.len() > rows.len() || rows.iter().any(|(row, _)| row.elided)).then(|| {
+        rows.truncate(room - 1);
+        let words = match log.len() - rows.len() {
+            0 => "Whole run has every line whole.".to_owned(),
+            1 => "Whole run has 1 more line.".to_owned(),
+            more => format!("Whole run has {more} more lines."),
+        };
+        line(&words)
+    });
+    let view = Arc::new(LogView { rows, notice });
+    ui.data_mut(|data| data.insert_temp(id, (key, view.clone())));
+    view
 }
 
 /// What a scene act could not do.
@@ -4746,11 +4824,12 @@ impl Sessions {
                             // in its own fault's tone; then the group's own reason, as a warning.
                             for warning in &group.warnings {
                                 design::gap(ui, design::Gap::XS);
-                                design::small_message(ui, warning.tone(), warning);
+                                let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(warning)).compact().show(ui);
                             }
                             for reason in group.own_problems() {
                                 design::gap(ui, design::Gap::XS);
-                                design::small_message(ui, Tone::Warning, reason);
+                                let fault = PlanFault::Check(as_sentence(reason));
+                                let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).compact().show(ui);
                             }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {
@@ -5680,7 +5759,7 @@ impl Sessions {
     /// link is then `Add rewards`, or the words `In notes`. Returns whether the DM pressed it.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "the open played fight’s fault in its details (Ban::Body)"
     )]
     fn fight_block(
         &mut self,
@@ -5709,7 +5788,7 @@ impl Sessions {
         if self
             .fight
             .as_ref()
-            .is_none_or(|(id, kept, _)| *id != run || *kept != found)
+            .is_none_or(|(id, kept, _, _)| *id != run || *kept != found)
         {
             let result = match (&found, &self.campaign) {
                 (Some(Ok(path)), Some(campaign)) => {
@@ -5725,22 +5804,24 @@ impl Sessions {
                     "The run folder is not available.".to_owned(),
                 )),
             };
-            self.fight = Some((run, found, result));
+            let revision = result
+                .as_ref()
+                .map_or(0, |summary| log_revision(&summary.log));
+            self.fight = Some((run, found, result, revision));
         }
-        let Some((_, _, result)) = &self.fight else {
+        let Some((_, _, result, revision)) = &self.fight else {
             return false;
         };
         match result {
             // R41: the folder's cause in Encounters' words and tone.
             Err(FightFault::Folder(folder)) => {
-                design::message(ui, folder.tone(), &folder.message());
+                let fault = PlanFault::Toned(as_sentence(&folder.message()), folder.severity());
+                let _ =
+                    design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).show(ui);
             }
             Err(FightFault::Other(error)) => {
-                design::message(
-                    ui,
-                    Tone::Info,
-                    &format!("This fight’s run cannot be read. {error}"),
-                );
+                let words = as_sentence(&format!("This fight’s run cannot be read. {error}"));
+                let _ = design::outcome::BodyMessage::<()>::from(Notice::new(words)).show(ui);
             }
             Ok(summary) => {
                 let known = |n: Option<i64>| n.map_or_else(|| "?".to_owned(), |n| n.to_string());
@@ -5828,14 +5909,18 @@ impl Sessions {
                     }
                 });
                 if self.show_fight_log {
-                    egui::ScrollArea::vertical()
-                        .id_salt(("fight_log", run))
-                        .max_height(design::READER_MEASURE / 3.0)
-                        .show(ui, |ui| {
-                            for line in &summary.log {
-                                wrapped_words(ui, Type::Small, line, colors().muted);
-                            }
-                        });
+                    // A capped block, not a scroll column of its own: the plan's pane is the
+                    // scroll column (`Body::Content`).
+                    let view = log_view(ui, run, *revision, &summary.log);
+                    for (row, whole) in &view.rows {
+                        let shown = ui.label(row.clone());
+                        if row.elided {
+                            shown.on_hover_text(whole);
+                        }
+                    }
+                    if let Some(notice) = &view.notice {
+                        ui.label(notice.clone());
+                    }
                 }
             }
         }
@@ -9049,6 +9134,22 @@ mod tests {
                 joined("wolf2", creature("Wolf", "1 (XP 200; PB +2)")),
             ],
         );
+        // Review of PR 645: Bridge's log is long, and its newest entry is a long DM note. The run
+        // file holds the log oldest first.
+        {
+            let path = crate::encounter_run::find_run(&runs, campaign, bridge.id).unwrap();
+            let mut saved: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            let mut log: Vec<String> = (1..=30)
+                .map(|round| format!("Round {round}: the Wolf bites for {round}."))
+                .collect();
+            log.push(format!(
+                "Note: {}",
+                "The bridge creaks under the weight of the whole party. ".repeat(12)
+            ));
+            saved["state"]["log"] = log.into();
+            fs::write(&path, saved.to_string()).unwrap();
+        }
         let shrine = ended(
             "Shrine",
             "# Shrine",
@@ -9422,6 +9523,102 @@ mod tests {
         harness.run_steps(2);
         assert!(read().contains(&format!("- [[Timeline#^{a}|{long}]]\n  - XP 200")));
         assert!(shown(&harness, "In notes"));
+        // Review of PR 645 (P1s): Log opens the played fight's log in place, in the plan's own
+        // pane, which scrolls it: no scroll column of its own nests there (a debug build refuses
+        // one). Its newest entries show first (the summary holds the log newest first), the
+        // newest a long note cut to one line, and the oldest is left to Whole run, which a last
+        // line says. However long a note, the block is no taller than a third of the reader's
+        // measure.
+        harness.get_by_label("Log").click();
+        harness.run_steps(2);
+        let path = crate::encounter_run::find_run(&runs, campaign, bridge.id).unwrap();
+        let log = crate::encounter_run::fight_summary(&path, campaign)
+            .unwrap()
+            .log;
+        assert!(log[0].starts_with("Note: "), "the newest entry is the note");
+        let newest = harness
+            .query_by_label(&log[0])
+            .expect("the newest entry shows, whole in its name")
+            .rect();
+        assert!(
+            harness.query_by_label(log.last().unwrap()).is_none(),
+            "the oldest entry is left to Whole run"
+        );
+        let notice = harness
+            .query_by_label_contains("Whole run has ")
+            .expect("a last line says what Whole run has")
+            .rect();
+        assert!(
+            notice.bottom() - newest.top() <= design::READER_MEASURE / 3.0 + 0.5,
+            "the log block is {} px, over a third of the reader's measure",
+            notice.bottom() - newest.top()
+        );
+        // Review of PR 645 (re-checks): the Log is laid out from the log as read from disk. A
+        // note rewritten on disk and read again shows its new words, also at the same length;
+        // and at 960 and 1920 px a note that grows moves no later plan row.
+        let write_newest = |note: &str| {
+            let mut saved: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            let entries = saved["state"]["log"].as_array_mut().unwrap();
+            *entries.last_mut().unwrap() = note.into();
+            fs::write(&path, saved.to_string()).unwrap();
+        };
+        // Close the fight and open it again (its summary is read again), then its Log.
+        let reopen = |harness: &mut egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness.get_by_label(long).click();
+            harness.run_steps(2);
+            harness.get_by_label(long).click();
+            harness.run_steps(2);
+            harness.get_by_label("Log").click();
+            harness.run_steps(2);
+        };
+        let same_length = log[0].replacen("creaks", "groans", 1);
+        assert_eq!(same_length.len(), log[0].len());
+        write_newest(&same_length);
+        reopen(&mut harness);
+        assert!(
+            harness.query_by_label(&same_length).is_some()
+                && harness.query_by_label(&log[0]).is_none(),
+            "a note rewritten to the same length shows its new words"
+        );
+        let later = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness.get_by_label("Shrine").rect().top()
+        };
+        for size in [egui::vec2(960.0, 800.0), egui::vec2(1920.0, 1080.0)] {
+            harness.set_size(size);
+            write_newest(&same_length);
+            reopen(&mut harness);
+            let before = later(&harness);
+            let grown = format!(
+                "Note: {}",
+                "The gate holds, and the wolves wait outside. ".repeat(40)
+            );
+            write_newest(&grown);
+            reopen(&mut harness);
+            let newest = harness
+                .query_by_label(&grown)
+                .expect("the grown note shows, whole in its name")
+                .rect();
+            let notice = harness
+                .query_by_label_contains("Whole run has ")
+                .expect("a last line says what Whole run has")
+                .rect();
+            assert!(
+                notice.bottom() - newest.top() <= design::READER_MEASURE / 3.0 + 0.5,
+                "at {size:?} the log block is {} px",
+                notice.bottom() - newest.top()
+            );
+            assert!(
+                (later(&harness) - before).abs() < 0.5,
+                "at {size:?} the grown note moved the next plan row from {before} to {}",
+                later(&harness)
+            );
+        }
+        harness.set_size(egui::vec2(design::FORM_WIDTH, 800.0));
+        write_newest(&log[0]);
+        reopen(&mut harness);
+        harness.get_by_label("Log").click();
+        harness.run_steps(2);
 
         // Too narrow for the link after Timeline: no line is added, and the action is the last
         // line of the row's menu. With one blank at each `·` (round 27 FH4), the links fit at
@@ -9572,6 +9769,15 @@ mod tests {
         assert!(
             sessions.plan_marks.get(&owner).is_none(),
             "the entry ends with its data"
+        );
+        // Review of PR 629 (P2): a campaign switch ends the old campaign's entries, whatever
+        // folder the new campaign has.
+        delete(&mut sessions, &book, Some(run));
+        assert!(!sessions.plan_marks.is_empty());
+        sessions.open_campaign(None);
+        assert!(
+            sessions.plan_marks.is_empty(),
+            "the old campaign's plan results end with the switch"
         );
     }
 }

@@ -482,6 +482,9 @@ enum Outcome {
     },
     /// Why the act (or its Undo) wrote nothing, until the note's text changes.
     Refused { refusal: Refusal, seen: u64 },
+    /// Its Undo took the carried words out of the draft, and the note could not be saved: the
+    /// failed save, until the note saves or its text changes again (review of PR 631, P2).
+    UndoNotSaved { seen: u64 },
 }
 
 /// Whose carry-over result it is: the session note the act changed. A session's ID is its own
@@ -613,6 +616,7 @@ impl Carries {
                 !undo.live(draft)
             }
             Some(Outcome::Refused { seen, .. }) => *seen != revision,
+            Some(Outcome::UndoNotSaved { seen }) => *seen != revision || !draft.unsaved(),
             _ => false,
         };
         if ended {
@@ -881,6 +885,11 @@ impl Sessions {
             return;
         };
         match self.carries.results.get(&session) {
+            Some(Outcome::UndoNotSaved { .. }) => {
+                messages.outcome(FaultMessage::new(&super::PageFault::Failed(
+                    crate::sentence!("Notes not saved."),
+                )));
+            }
             Some(Outcome::Refused { refusal, .. }) => {
                 messages.outcome(FaultMessage::new(&super::kept::RefusalFault(refusal)));
             }
@@ -939,16 +948,24 @@ impl Sessions {
         else {
             return;
         };
-        if let Err(fault) = undo.undo(draft) {
-            let seen = draft.revision();
-            // A refused Undo is an act of its own: its result takes a new order.
-            self.carries.record(
-                session,
-                Outcome::Refused {
-                    refusal: carry_refusal(&fault, &from, &into, true),
-                    seen,
-                },
-            );
+        match undo.undo(draft) {
+            Ok(()) => {}
+            // The Undo is in the draft; only its save failed, and the note saves it later.
+            Err(ActFault::NotSaved(..)) => {
+                let seen = draft.revision();
+                self.carries.record(session, Outcome::UndoNotSaved { seen });
+            }
+            Err(fault) => {
+                let seen = draft.revision();
+                // A refused Undo is an act of its own: its result takes a new order.
+                self.carries.record(
+                    session,
+                    Outcome::Refused {
+                        refusal: carry_refusal(&fault, &from, &into, true),
+                        seen,
+                    },
+                );
+            }
         }
     }
 }
@@ -1806,6 +1823,49 @@ mod tests {
         let draft = harness.state().0.draft.as_ref().unwrap();
         assert!(!draft.text().contains("carried_"));
         assert!(!draft.body.contains("Who burned the ropes?"));
+        // Review of PR 631 (P2): an Undo whose save fails is in the draft. The footer says the
+        // save failed, never that Carry over was not undone, until the note saves.
+        harness.run_steps(1);
+        harness.get_by_label("Carry over").click();
+        harness.run_steps(2);
+        assert!(
+            read().contains("Who burned the ropes?"),
+            "the act wrote the note"
+        );
+        locked(0o555);
+        harness
+            .get_by_label("Undo carry over from Session 1")
+            .click();
+        harness.run_steps(2);
+        locked(0o755);
+        let draft = harness.state().0.draft.as_ref().unwrap();
+        assert!(
+            !draft.body.contains("Who burned the ropes?"),
+            "the Undo is in the draft"
+        );
+        assert!(
+            harness
+                .query_all_by_label("Notes not saved.")
+                .next()
+                .is_some(),
+            "the failed save says so"
+        );
+        assert!(
+            harness
+                .query_all_by_label_contains("was not undone")
+                .next()
+                .is_none(),
+            "an Undo that is in the draft is not a refusal"
+        );
+        harness.state_mut().0.draft.as_mut().unwrap().save();
+        harness.run_steps(2);
+        assert!(
+            harness
+                .query_all_by_label("Notes not saved.")
+                .next()
+                .is_none(),
+            "the save ends it"
+        );
         // The save fails again, and a later save writes the note with no change of its words:
         // the result says so, and its Undo writes the note back at once.
         harness.run_steps(1);
