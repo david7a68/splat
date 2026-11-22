@@ -1998,7 +1998,7 @@ mod iter_2_c_tests {
             .shapes
             .iter()
             .find_map(|clipped| find(&clipped.shape, MENU_LINE))
-            .expect("the menu's reason line is painted");
+            .expect("the reason line in the menu is painted");
         assert!(
             line.rows.len() >= 2 && !line.job.justify,
             "m-p0-blocked-reason: a wrapped reason line in a justified menu is not justified \
@@ -2014,7 +2014,7 @@ mod iter_2_c_tests {
                 && (at.x - (choice.left() + design::S + design::ICON_SLOT)).abs() <= 1.0
                 && at.x + galley.size().x <= menu_right - design::S + 0.5,
             "m-p0-choice-note: at 960 the reason wraps ({} rows), unjustified ({}), at the \
-             choice's words {} (it starts at {}), ending S before the menu's edge {menu_right} \
+             words of the choice {} (it starts at {}), ending S before the edge of the menu {menu_right} \
              ({})",
             galley.rows.len(),
             !galley.job.justify,

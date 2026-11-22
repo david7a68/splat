@@ -713,12 +713,17 @@ pub fn row_menu(ui: &mut Ui, name: &str, add: impl FnOnce(&mut Ui)) {
 /// layout).
 pub fn blocked_reason(ui: &mut Ui, reason: Option<&str>) {
     if let Some(reason) = reason {
-        ui.scope_builder(
-            egui::UiBuilder::new().layout(Layout::top_down(Align::Min)),
-            |ui| {
-                ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
-            },
-        );
+        let label = egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap();
+        // Only a justified layout changes: a row, a right-to-left save row and a column keep
+        // the reason where it always was.
+        if ui.layout().horizontal_justify() {
+            ui.scope_builder(
+                egui::UiBuilder::new().layout(Layout::top_down(Align::Min)),
+                |ui| ui.add(label),
+            );
+        } else {
+            ui.add(label);
+        }
     }
 }
 

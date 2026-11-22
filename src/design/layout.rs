@@ -2511,8 +2511,10 @@ impl<'a> TitleLine<'a> {
                     );
                     let row_width = row.clone().map(|at| metrics.widths[at]).sum::<f32>()
                         + ACTION_GAP * row.len().saturating_sub(1) as f32;
+                    // At the end: rows under the title end where the line's actions end on the
+                    // title's line, before the status and the `⋯`, so an action keeps one x.
                     let mut x = if self.at_end {
-                        line.right() - row_width
+                        line.right() - end - row_width
                     } else {
                         line.left()
                     };
