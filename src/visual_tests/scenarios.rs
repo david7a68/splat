@@ -23704,6 +23704,7 @@ pub mod encounter_owned_groups {
             shrine_menu_in_view(d);
             d.click_first(&format!("More actions for {GROUP_SHRINE}"));
             d.click("Make available to any encounter");
+            d.settle();
             d.expect(&format!("Undo move {GROUP_SHRINE}"));
             let order = footer_tops(d).is_some_and(|(member, moved)| moved < member);
             d.click("Undo remove member");
@@ -23720,6 +23721,7 @@ pub mod encounter_owned_groups {
             shrine_menu_in_view(d);
             d.click_first(&format!("More actions for {GROUP_SHRINE}"));
             d.click("Make available to any encounter");
+            d.settle();
             d.expect(&format!("Undo move {GROUP_SHRINE}"));
             d.click("More actions for Wolf");
             d.click("Remove");
@@ -23739,15 +23741,16 @@ pub mod encounter_owned_groups {
             d.click("Remove");
             d.click_first(&format!("More actions for {NEW_NAME}"));
             d.click("Make available to any encounter");
-            d.expect(&format!("Undo move {GROUP_SHRINE}"));
+            d.settle();
+            d.expect(&format!("Undo move {NEW_NAME}"));
             d.click("Undo remove member");
             let cleared = !d.has("Undo remove member");
-            d.click(&format!("Undo move {GROUP_SHRINE}"));
+            d.click(&format!("Undo move {NEW_NAME}"));
             d.expect(&format!("Group name: {NEW_NAME}"));
             cleared
                 && d.has("1. Wolf")
                 && !d.has("Undo remove member")
-                && !d.has(&format!("Undo move {GROUP_SHRINE}"))
+                && !d.has(&format!("Undo move {NEW_NAME}"))
         });
         d.observe(
             "iter-26-B-undo-move-owner",
