@@ -2286,13 +2286,21 @@ mod tests {
             .build_ui_state(
                 |ui, (campaigns, dndbeyond): &mut (Campaigns, crate::dndbeyond::DndBeyond)| {
                     dndbeyond.poll(ui.ctx(), 0, true, campaigns);
+                    // The switcher draws after `poll`, in the same frame (the sidebar).
+                    if let Some(id) = ui
+                        .ctx()
+                        .data_mut(|data| data.remove_temp::<Uuid>(egui::Id::new("switch")))
+                    {
+                        campaigns.select(Some(id));
+                    }
                     campaigns.show_active(ui, None, dndbeyond, None);
                     campaigns.show_form_if_editing(ui);
                     let frame = design::outcome::PaneFrame::new(ui);
                     let mut messages =
                         design::outcome::Messages::<CampaignAct>::new(&frame, "link_footer", 600.0);
                     campaigns.footer_messages(&frame, &mut messages, false, None);
-                    dndbeyond.footer_messages(&frame, &mut messages, true);
+                    let open = campaigns.active_campaign().map(|campaign| campaign.id);
+                    dndbeyond.footer_messages(&frame, &mut messages, open);
                     let paned = messages.pane(ui, design::Body::Content, |_| ());
                     if let Some(press) = paned.pressed {
                         campaigns.footer_act(press);
@@ -2334,7 +2342,19 @@ mod tests {
         // result ends with the change, and it does not come back with A.
         pick(&mut harness, "Not linked");
         assert!(shows(&harness, SAVED), "unlinking A says its result");
-        open(&mut harness, first);
+        // The switcher opens B after `poll` ran this frame (review of PR 665): the footer of
+        // that same frame reads the campaign open now, so A's result is not in it.
+        harness
+            .ctx
+            .data_mut(|data| data.insert_temp(egui::Id::new("switch"), first));
+        let frame = harness.ctx.cumulative_frame_nr();
+        harness.step();
+        assert_eq!(harness.ctx.cumulative_frame_nr() - frame, 1, "one frame");
+        assert!(
+            !shows(&harness, SAVED),
+            "A's link result showed in the frame B opened"
+        );
+        harness.run_steps(3);
         assert!(!shows(&harness, SAVED), "A's link result followed into B");
         open(&mut harness, second);
         assert!(!shows(&harness, SAVED), "A's ended link result came back");
@@ -2351,10 +2371,27 @@ mod tests {
                 harness.run_steps(1);
                 harness.event(egui::Event::Text(" A".into()));
                 harness.run_steps(3);
+                // And the folder (review of PR 665: A's folder comes back too).
+                harness
+                    .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Folder")
+                    .next()
+                    .expect("the folder field")
+                    .focus();
+                harness.run_steps(1);
+                harness.event(egui::Event::Text("-a".into()));
+                harness.run_steps(3);
                 harness.get_by_label("Discard").click();
                 harness.run_steps(3);
             };
         const UNDO: &str = "Undo discard of Campaign details";
+        let saved_folder = harness
+            .state()
+            .0
+            .active_campaign()
+            .unwrap()
+            .path
+            .to_string_lossy()
+            .into_owned();
         edit_name(&mut harness);
         // Unrelated B: A's link changes (a result of its own). Undo of A then puts A's draft
         // back into A's form, and B's change and its result stay.
@@ -2363,9 +2400,12 @@ mod tests {
         harness.get_by_label(UNDO).click();
         harness.run_steps(3);
         assert_eq!(
-            harness.state().0.name,
-            "Campaign A",
-            "Undo of A in A's form"
+            (
+                harness.state().0.name.as_str(),
+                harness.state().0.path.as_str()
+            ),
+            ("Campaign A", format!("{saved_folder}-a").as_str()),
+            "Undo of A puts A's name and folder back in A's form"
         );
         assert!(
             shows(&harness, SAVED)

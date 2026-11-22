@@ -2050,7 +2050,7 @@ impl Splat {
                                 .borrow()
                                 .footer_messages(&frame, messages, true, blocked);
                             settings.footer_messages(messages);
-                            dndbeyond.footer_messages(&frame, messages, false);
+                            dndbeyond.footer_messages(&frame, messages, None);
                         },
                     );
                     if let Some(press) = paned.pressed {
@@ -2321,10 +2321,13 @@ impl Splat {
                                     dndbeyond
                                 },
                                 |dndbeyond, messages| {
-                                    campaigns_ref
-                                        .borrow()
-                                        .footer_messages(&frame, messages, false, blocked);
-                                    dndbeyond.footer_messages(&frame, messages, true);
+                                    let campaigns = campaigns_ref.borrow();
+                                    campaigns.footer_messages(&frame, messages, false, blocked);
+                                    dndbeyond.footer_messages(
+                                        &frame,
+                                        messages,
+                                        campaigns.active_campaign().map(|campaign| campaign.id),
+                                    );
                                 },
                             );
                             if let Some(press) = paned.pressed {
