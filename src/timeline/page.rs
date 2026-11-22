@@ -523,6 +523,15 @@ pub enum FileAct {
     SaveAgain,
 }
 
+/// The reload result's Undo: `Undo reload Timeline`, the file's note name, as a session note's
+/// and a World note's name theirs (M0548, M0438); a book with no file gives `Undo reload`.
+fn reload_step(book: &Book) -> UndoStep {
+    match book.file().0.file_stem() {
+        Some(name) => UndoStep::of(Verb::Reload, name.to_string_lossy()),
+        None => UndoStep::verb(Verb::Reload),
+    }
+}
+
 /// The file's notices that block nothing, in a pane's typed footer: the reload result with its
 /// Undo (from the book's store), then the failed save with `Try to save again`, the flags and a
 /// second timeline file. They arrive from outside edits and autosave, so every pane that shows
@@ -542,7 +551,7 @@ pub fn file_messages<'f, A: 'static>(
                     "Reloaded. Your version, with {}, is gone unless you undo.",
                     design::count(reloaded.count(), "event", "events")
                 )),
-                UndoStep::verb(Verb::Reload).pressed_as(undo),
+                reload_step(book).pressed_as(undo),
             )
         }));
     }
@@ -2475,6 +2484,14 @@ mod tests {
         harness.step();
         assert_eq!(shows(&harness), (false, false), "another selection ends it");
         assert!(!harness.state().1.events.iter().all(|event| event.id != a3));
+        // M0548: the reload result's Undo names its file's note, as a session note's and a World
+        // note's do.
+        harness.state_mut().1.reload_keeping_undo();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo reload Timeline").is_some(),
+            "the reload's Undo names its file"
+        );
     }
 
     #[test]
