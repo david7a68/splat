@@ -4713,7 +4713,8 @@ mod editor_region_tests {
             .build_ui_state(
                 |ui, state: &mut State| {
                     let want = state.lines;
-                    if state.text.lines().count() != want {
+                    // `lines` 0: the test owns the text (a document, the differential script).
+                    if want > 0 && state.text.lines().count() != want {
                         state.text = (0..want)
                             .map(|line| format!("Line {line}"))
                             .collect::<Vec<_>>()
@@ -5391,7 +5392,6 @@ mod editor_region_tests {
                     region: true,
                     focus: true,
                     text: words.to_owned(),
-                    lines: 2,
                     doc: doc.then(|| crate::design::text_draft::TextDraft::new(words)),
                     ..State::default()
                 },
