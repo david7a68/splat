@@ -2149,11 +2149,11 @@ impl Splat {
                     let plan = sessions::page::Plan {
                         party: &party,
                         tables: sources.as_ref().map_or(&[], |sources| &sources.tables),
-                        fights: &fights,
+                        fights,
                         fights_revision,
                         saved_runs: &saved_runs,
                         saved_runs_revision,
-                        groups: &groups,
+                        groups,
                         group_blocked,
                         group_open,
                         group_discard,
