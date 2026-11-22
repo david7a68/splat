@@ -1834,9 +1834,18 @@ fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
     t.test_settle();
     h.run_steps(2);
     assert!(fitted() > before, "a settle fits the rows in view again");
+    let seen: Vec<String> = h
+        .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+            node.label()
+                .or(node.value())
+                .is_some_and(|text| text.contains("Crowd") || text.contains("banner"))
+        }))
+        .take(6)
+        .map(|node| format!("{:?}", node))
+        .collect();
     assert!(
         h.query_by_label(&format!("{long}: +1")).is_some(),
-        "the cut row says its words whole"
+        "the cut row says its words whole: {seen:#?}"
     );
 }
 
