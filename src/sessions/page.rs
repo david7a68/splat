@@ -4057,10 +4057,6 @@ impl Sessions {
     }
 
     /// The live state, or the step before it. Always in the same place.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn record_line(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         if self.tab == Tab::Recordings
             && self.reading.is_none()
@@ -4078,12 +4074,13 @@ impl Sessions {
             .live
             .as_ref()
             .is_some_and(|live| Some(live.session) == self.selected);
-        let top = ui.cursor().top();
-        self.record_line_body(ui, settings);
-        if live && !self.confirm_record {
-            let used = ui.cursor().top() - top;
-            ui.add_space((Density::Read.control() + design::XS - used).max(0.0));
-        }
+        // The body asks to confirm a recording only while none runs, so this holds for its pass.
+        let height = if live && !self.confirm_record {
+            Density::Read.control() + design::XS
+        } else {
+            0.0
+        };
+        design::at_least(ui, height, |ui| self.record_line_body(ui, settings));
     }
 
     /// Whether another session's recording state shows in the bottom banner: its recording
@@ -5838,7 +5835,7 @@ impl Sessions {
                     );
                 },
             );
-            ui.add_space(design::L - ui.spacing().item_spacing.x);
+            design::gap_to_next(ui, design::Gap::L);
             {
                 design::row_menu(ui, &recording.title, |ui| {
                     if recording.summary
@@ -6463,17 +6460,7 @@ impl Sessions {
                                     // and the footer follows the list `S` below it.
                                     if placement.is_empty() && index + 1 < row_count {
                                         // As tall as the label it stands for.
-                                        let height =
-                                            egui::WidgetText::from(Type::Small.rich(ui, "After"))
-                                                .into_galley(
-                                                    ui,
-                                                    Some(egui::TextWrapMode::Wrap),
-                                                    f32::INFINITY,
-                                                    egui::TextStyle::Body,
-                                                )
-                                                .size()
-                                                .y;
-                                        ui.allocate_space(egui::vec2(0.0, height));
+                                        design::empty_line(ui, Type::Small);
                                     } else {
                                         ui.add(
                                             egui::Label::new(
