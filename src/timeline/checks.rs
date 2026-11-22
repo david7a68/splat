@@ -541,21 +541,22 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
         // The token rule between the tables and `No checks`; the item gaps keep `S` around it.
         design::rule(ui);
         let results = !view.event.checks.is_empty();
-        if Action::quiet("No checks")
+        let no_checks = Action::quiet("No checks")
             .blocked_if(results, "Clear the results first.")
-            .show(ui)
-            .clicked()
-        {
+            .show(ui);
+        // Where the choice paints its words: its rect, in by the menu's button padding.
+        let words_left = no_checks.rect.left() + ui.spacing().button_padding.x;
+        if no_checks.clicked() {
             *act = Some(Act::Choose(None));
             ui.close();
         }
         if results {
-            // The reason is a note under its choice (M-T0.7): it starts at the choice's words,
-            // the quiet action's padding `S` in, and ends `S` before the menu's edge, in a column
-            // that does not justify its words as the menu's own layout does.
+            // The reason is a note under its choice (M-T0.7): it starts at the choice's measured
+            // words and ends `S` before the menu's edge, in a column that does not justify its
+            // words as the menu's own layout does.
             let room = ui.available_rect_before_wrap();
             let column = egui::Rect::from_min_max(
-                egui::pos2(room.left() + design::S, room.top()),
+                egui::pos2(words_left.max(room.left()), room.top()),
                 egui::pos2(room.right() - design::S, room.bottom()),
             );
             let note = ui
