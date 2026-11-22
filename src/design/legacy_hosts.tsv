@@ -138,9 +138,6 @@ scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
-scroll-request	src/sessions/plan.rs	Reveal::show	1	Sessions
-scroll-request	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
-scroll-request	src/sessions/plan.rs	reveal_opened_played	3	Sessions
 scroll-offset	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area_in	1	design	design implementation boundary

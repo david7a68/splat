@@ -78,10 +78,12 @@ impl Reveal {
         }
     }
 
+    /// The least scroll that shows the row whole, by the column's typed request (ruling M18,
+    /// `JumpTo::ListedRow`): the DM's own input in the column drops it.
     fn show(&mut self, ui: &egui::Ui, rect: egui::Rect) {
         self.shown = ui.clip_rect().contains_rect(rect);
         if !self.shown {
-            ui.scroll_to_rect(rect, None);
+            let _ = design::reveal::bring_into_view(ui, rect, design::reveal::JumpTo::ListedRow);
         }
     }
 }
@@ -1551,12 +1553,17 @@ fn reveal_opened_played(
     let Some(opened) = opened else {
         return;
     };
+    // The column's typed requests (ruling M18, `JumpTo::ListedRow`: a row with what it opened).
+    use design::reveal::{JumpTo, bring_into_view, jump};
     match next_action.filter(|action| action.top() > opened.top()) {
         Some(action) if opened.union(action).height() <= ui.clip_rect().height() => {
-            ui.scroll_to_rect(opened.union(action), None);
+            let _ = bring_into_view(ui, opened.union(action), JumpTo::ListedRow);
         }
-        Some(action) => ui.scroll_to_rect(action, Some(egui::Align::BOTTOM)),
-        None => ui.scroll_to_rect(opened, Some(egui::Align::TOP)),
+        // The least scroll that shows the action: below the view, its bottom at the view's.
+        Some(action) => {
+            let _ = bring_into_view(ui, action, JumpTo::ListedRow);
+        }
+        None => jump(ui, opened.top(), JumpTo::ListedRow),
     }
 }
 
@@ -5317,7 +5324,7 @@ impl Sessions {
                     // The opened row and the next row stay in reach.
                     if is_open && std::mem::take(&mut self.reveal_event) {
                         // A played fight's row waits for the next fight's action (review round 1).
-                        if event.run.is_some() { opened_played = Some(row.response.rect); } else { row.response.scroll_to_me(Some(egui::Align::TOP)); }
+                        if event.run.is_some() { opened_played = Some(row.response.rect); } else { design::reveal::jump(ui, row.response.rect.top(), design::reveal::JumpTo::ListedRow); }
                     }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
