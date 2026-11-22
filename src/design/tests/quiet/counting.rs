@@ -116,3 +116,30 @@ pub fn stock_text_edit(
         .desired_width(wrap)
         .show(ui);
 }
+
+/// A bare screen of `size`, with no panel or frame of its own (layout PR 9b-R1a: the Reader's
+/// harness draws a column as wide as its case, tall enough to see a whole note).
+#[allow(
+    dead_code,
+    reason = "the Reader’s harness (`quiet_reader`) is its only user"
+)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+pub fn root_sized(ctx: &egui::Context, size: egui::Vec2) -> egui::Ui {
+    egui::Ui::new(
+        ctx.clone(),
+        egui::Id::new("quiet_harness_root"),
+        egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+    )
+}
+
+/// The Reader's stock reference: egui's own label over a galley laid out once.
+#[allow(
+    dead_code,
+    reason = "the Reader’s harness (`quiet_reader`) is its only user"
+)]
+pub fn stock_label(ui: &mut egui::Ui, galley: std::sync::Arc<egui::Galley>) {
+    ui.add(egui::Label::new(galley));
+}

@@ -32,11 +32,11 @@
 #[path = "../../design/tests/quiet/counting.rs"]
 #[allow(
     dead_code,
-    reason = "the shared module's own bare screen and text edit are the editor harnesses'"
+    reason = "the shared module’s own bare screen and text edit are the editor harnesses’"
 )]
 mod counting;
 
-use counting::{Allocated, measured};
+use counting::{Allocated, measured, root_sized, stock_label};
 use eframe::egui;
 use splat_content_ui::{
     lookup::ContentIndex,
@@ -59,7 +59,7 @@ enum Host {
 /// seen, so the host and the stock labels must see the same paragraphs.
 const SCREEN_HEIGHT: f32 = 1_000_000.0;
 
-/// The first words of the note's body: the frame proves the host drew them.
+/// The first words of the note’s body: the frame proves the host drew them.
 const OPENING: &str = "Opening words of the crossing";
 
 /// A note body of about `bytes` bytes, with the same blocks and links at every size: a heading,
@@ -112,9 +112,9 @@ impl Reading {
         let found = &first.items[first.position(id).expect("the note in the index")];
         assert!(found.is_note(), "the fixture is a plain note");
         let path = dir.path().join(&found.entry.path);
-        let mut text = std::fs::read_to_string(&path).expect("the note's file");
+        let mut text = std::fs::read_to_string(&path).expect("the note’s file");
         text.push_str(&note_body(bytes));
-        std::fs::write(&path, text).expect("the note's body");
+        std::fs::write(&path, text).expect("the note’s body");
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index"));
         let at = index.position(id).expect("the note in the index");
         let ctx = egui::Context::default();
@@ -162,7 +162,7 @@ impl Reading {
             ctx.data_mut(|data| {
                 data.insert_temp(egui::Id::new("reader_link_index"), self.index.clone());
             });
-            let mut ui = root(ctx, self.width);
+            let mut ui = root_sized(ctx, egui::vec2(self.width, SCREEN_HEIGHT));
             let _ = self.reader.read_with(
                 &mut ui,
                 &self.index.items[self.at],
@@ -188,7 +188,7 @@ impl Reading {
         );
         assert!(
             painted(&output).iter().any(|text| text.contains(OPENING)),
-            "{what}: the real reader host drew the note's words in the measured frame"
+            "{what}: the real reader host drew the note’s words in the measured frame"
         );
         drop(output);
         allocated
@@ -211,27 +211,7 @@ fn painted(output: &egui::FullOutput) -> Vec<String> {
     out
 }
 
-/// The whole screen, with no panel or frame of its own.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-)]
-fn root(ctx: &egui::Context, width: f32) -> egui::Ui {
-    egui::Ui::new(
-        ctx.clone(),
-        egui::Id::new("quiet_reader_root"),
-        egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
-            egui::Pos2::ZERO,
-            egui::vec2(width, SCREEN_HEIGHT),
-        )),
-    )
-}
-
 /// The stock reference: egui's own label over each galley, in a context set up as the host's.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-)]
 fn stock_labels(galleys: &[Arc<egui::Galley>], accesskit: bool) -> Allocated {
     let ctx = egui::Context::default();
     splat_design::design::theme::install(&ctx);
@@ -250,9 +230,9 @@ fn stock_labels(galleys: &[Arc<egui::Galley>], accesskit: bool) -> Allocated {
             ..Default::default()
         };
         ctx.run(input, |ctx| {
-            let mut ui = root(ctx, 900.0);
+            let mut ui = root_sized(ctx, egui::vec2(900.0, SCREEN_HEIGHT));
             for galley in galleys {
-                ui.add(egui::Label::new(galley.clone()));
+                stock_label(&mut ui, galley.clone());
             }
         })
     };
@@ -267,7 +247,7 @@ fn stock_labels(galleys: &[Arc<egui::Galley>], accesskit: bool) -> Allocated {
         assert_eq!(
             measured(|| shown = Some(frame(&ctx))),
             first,
-            "the stock reference's quiet frames are equal"
+            "the stock reference’s quiet frames are equal"
         );
         drop(shown);
     }
