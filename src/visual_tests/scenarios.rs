@@ -5538,13 +5538,19 @@ pub mod party {
         // Layout step 11a (Astra's P1 on PR 700): at 1920 the sheet's two wide columns end
         // whole together under the footer at every scroll offset, from its top to its end. Proof
         // steps that end at the sheet's top.
-        // At 1920x720 too: the same wide columns with more to scroll, so the edge meets more rows.
-        let sweeps =
-            d.aside(|d| [LARGE, (1920.0, 720.0)].map(|size| d.act_at_size(size, sheet_sweep)));
+        // At 1920x720 and 1920x480 too: the same wide columns with more to scroll, so the edge
+        // meets every row, the tiles at the top as well.
+        let sweeps = d.aside(|d| {
+            [LARGE, (1920.0, 720.0), (1920.0, 480.0)].map(|size| d.act_at_size(size, sheet_sweep))
+        });
         d.observe(
             "l11a-SF4-sheet-sweep",
-            sweeps[1].0 >= 40 && sweeps.iter().all(|(_, faults)| faults.is_empty()),
-            format!("At 1920x1080 and 1920x720, steps of 6 points and faults: {sweeps:?}"),
+            sweeps[1].0 >= 40
+                && sweeps[2].0 > sweeps[1].0
+                && sweeps.iter().all(|(_, faults)| faults.is_empty()),
+            format!(
+                "At 1920x1080, 1920x720 and 1920x480, steps of 6 points and faults: {sweeps:?}"
+            ),
         );
         let with_result = list_tops(d, REPLACED);
         let archive = note.with_extension("md.splat-archive");

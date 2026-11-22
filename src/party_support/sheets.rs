@@ -1703,6 +1703,11 @@ mod sheet_now_tests {
         assert!(cells[1].top() >= cells[2].bottom());
     }
     fn wizard(fetched: u64) -> EntitySnapshot {
+        wizard_with(fetched, json!({}))
+    }
+
+    /// `wizard`, with `extra`'s keys added to its computed sheet.
+    fn wizard_with(fetched: u64, extra: serde_json::Value) -> EntitySnapshot {
         let abilities: Vec<_> = ["str", "dex", "con", "int", "wis", "cha"]
             .iter()
             .map(|name| json!({"name": name, "score": 14, "modifier": 2, "save": 4}))
@@ -1715,9 +1720,13 @@ mod sheet_now_tests {
         .iter()
         .map(|name| json!({"name": name, "modifier": 5, "isProficient": true, "isExpert": false, "isHalfProficient": false, "isAdvantage": false, "isDisadvantage": false}))
         .collect();
+        let mut computed = json!({"characterId": 123, "name": "Example", "campaign": {"id": 456}, "level": 1, "armorClass": 19, "proficiencyBonus": 2, "initiativeBonus": 7, "passivePerception": 15, "passiveInsight": 12, "passiveInvestigation": 13, "abilities": abilities, "skills": skills, "hitPointInfo": {"maximum": 25, "current": 17, "temp": 4}, "deathSaveInfo": {"successCount": 0, "failCount": 0}, "speeds": [{"name": "Walking", "distance": 40}], "race": {"name": "Goblin"}, "classes": [], "attacks": [], "castingInfo": {"saveDcs": []}, "conditions": [{"name": "Poisoned"}], "inspiration": false});
+        if let (Some(computed), Some(extra)) = (computed.as_object_mut(), extra.as_object()) {
+            computed.extend(extra.clone());
+        }
         EntitySnapshot::from_beyond(
             json!({"id": 123, "name": "Example", "campaign": {"id": 456}, "race": {"sizeId": 3, "creatureTypeId": 11}, "classes": [{"id": 8, "level": 1, "hitDiceUsed": 0, "definition": {"name": "Wizard", "spellRules": {"levelSpellSlots": [[], [2]]}}}], "spellSlots": [{"level": 1, "used": 1}], "notes": {"otherNotes": ""}}),
-            json!({"characterId": 123, "name": "Example", "campaign": {"id": 456}, "level": 1, "armorClass": 19, "proficiencyBonus": 2, "initiativeBonus": 7, "passivePerception": 15, "passiveInsight": 12, "passiveInvestigation": 13, "abilities": abilities, "skills": skills, "hitPointInfo": {"maximum": 25, "current": 17, "temp": 4}, "deathSaveInfo": {"successCount": 0, "failCount": 0}, "speeds": [{"name": "Walking", "distance": 40}], "race": {"name": "Goblin"}, "classes": [], "attacks": [], "castingInfo": {"saveDcs": []}, "conditions": [{"name": "Poisoned"}], "inspiration": false}),
+            computed,
             "456",
             "123",
             fetched,
@@ -1757,6 +1766,69 @@ mod sheet_now_tests {
                 );
             }
         }
+    }
+
+    /// Layout step 11a (Astra's P1 on PR 700): the sheet's two wide columns end whole together
+    /// under a footer. A wrapped Armor fact in the left column, Resistance and then Darkvision in
+    /// the right: at some heights the footer's edge crosses Darkvision only, and a cut moved to
+    /// Darkvision's top would cross Armor's lower lines. At every height from 300 to 1300 px, no
+    /// text of the body is cut from below. The reference is the clip that paints each text,
+    /// against the text's own bounds.
+    #[test]
+    fn both_wide_columns_end_whole_at_every_height() {
+        use crate::design::outcome::{Messages, NoPress, Outcome, PaneFrame};
+        let record = std::sync::Arc::new(wizard_with(
+            10,
+            json!({
+                "proficiencyGroups": [
+                    {"group": "Armor", "values": "Light, Medium, Heavy, Shields, Padded, Leather, Studded leather, Hide, Chain shirt"},
+                    {"group": "Weapons", "values": "Simple, Martial"},
+                ],
+                "resistances": [{"name": "Fire"}],
+                "senses": [{"name": "Darkvision", "distance": "60 ft."}],
+            }),
+        ));
+        let (mut hidden, mut faults) = (0, Vec::new());
+        for height in (300..=1300).step_by(2) {
+            let record = record.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(760.0, height as f32))
+                .build_ui(move |ui| {
+                    let frame = PaneFrame::new(ui);
+                    let mut messages =
+                        Messages::<NoPress>::new(&frame, "sheet_probe", ui.available_width());
+                    messages.outcome(Outcome::Refused(crate::sentence!("Save the draft first.")));
+                    let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
+                        overview(ui, &record, None)
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(4);
+            let output = harness.output();
+            let mut darkvision = false;
+            for clipped in &output.shapes {
+                if let egui::Shape::Text(text) = &clipped.shape {
+                    let (bounds, clip) = (text.visual_bounding_rect(), clipped.clip_rect);
+                    if clip.intersects(bounds) && bounds.bottom() > clip.bottom() + 1.0 {
+                        faults.push(format!(
+                            "{height} px: {:?} {bounds:?} cut by {clip:?}",
+                            text.galley.job.text
+                        ));
+                    }
+                    darkvision |=
+                        clip.intersects(bounds) && text.galley.job.text.starts_with("Darkvision");
+                }
+            }
+            // egui paints no text wholly outside its clip.
+            if !darkvision {
+                hidden += 1;
+            }
+        }
+        assert!(
+            hidden > 0,
+            "sheet-columns-reached: some height hides Darkvision"
+        );
+        assert!(faults.is_empty(), "sheet-columns-whole: {faults:#?}");
     }
 
     #[test]
