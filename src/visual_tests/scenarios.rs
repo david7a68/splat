@@ -16498,7 +16498,8 @@ pub mod session_notes {
             let page_right = nodes
                 .iter()
                 .filter(|node| {
-                    ["New session", crate::sessions::page::LIST_TOGGLE].contains(&node.name.as_str())
+                    ["New session", crate::sessions::page::LIST_TOGGLE]
+                        .contains(&node.name.as_str())
                 })
                 .map(|node| node.rect.right())
                 .reduce(f32::max)?;
