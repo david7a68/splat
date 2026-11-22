@@ -2356,14 +2356,17 @@ fn creature_facts(ui: &mut egui::Ui, c: &Creature) -> (bool, f32) {
         .clicked();
     if let Some(reason) = &c.unavailable {
         // A status is an icon, a word and a colour, like the other warnings here. It wraps,
-        // because a warning must not be cut to an ellipsis at 960.
-        design::wrapped_status(
+        // because a warning must not be cut to an ellipsis at 960, in the two lines its row
+        // reserves (`Row::Action { status }`): in a very narrow pane, a longer one ends in `…`
+        // there, its whole words on hover and in its accessible name (issue #585).
+        design::wrapped_status_rows(
             ui,
             design::Status {
                 icon: icons::WARN,
                 word: reason,
                 color: colors().result.warning,
             },
+            2,
         );
     } else {
         detail_columns(ui, &c.detail, c.source.as_deref(), c.hp_missing);
