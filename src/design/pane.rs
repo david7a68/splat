@@ -331,11 +331,11 @@ pub enum ViewHeight {
 /// [`EditorRegion::editor`], with the same fixed frame, inner text scroll and lane, caret
 /// follow and reveal. For an editor that a page's own scroll holds (Campaign's repair) or that
 /// fills its pane's body (a Session template). Keyed by `field`'s id.
-pub fn editor_view(
+pub fn editor_view<T: super::layout::GuardedText>(
     ui: &mut Ui,
     height: ViewHeight,
     field: super::layout::FieldId,
-    text: &mut dyn egui::TextBuffer,
+    text: &mut T,
     style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
 ) -> super::layout::Editor {
     let (max, fills) = match height {
@@ -466,11 +466,11 @@ impl EditorRegion<'_> {
     /// line), or the first caret after the editor was not drawn, and lies outside the view is
     /// revealed, centred and with no animation, in the next pass; a caret that did not move is
     /// never scrolled to, so the DM's own wheel stays.
-    pub fn editor(
+    pub fn editor<T: super::layout::GuardedText>(
         self,
         ui: &mut Ui,
         field: super::layout::FieldId,
-        text: &mut dyn egui::TextBuffer,
+        text: &mut T,
         style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
     ) -> super::layout::Editor {
         let pane = innermost(ui);

@@ -508,9 +508,9 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, text.as_str());
+        let guard = TextGuard::before(ui, id, &|| BoundText::of(text.as_str()));
         let response = ui.add(style(TextEdit::singleline(text).id(id)));
-        guard.after(ui, text.as_str(), &response);
+        guard.after(ui, &|| BoundText::of(text.as_str()), &response);
         record_field(ui, &response);
         response
     }
@@ -532,16 +532,16 @@ impl FieldId {
         clippy::disallowed_methods,
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
     )]
-    pub fn editor(
+    pub fn editor<T: GuardedText>(
         self,
         ui: &mut Ui,
-        text: &mut dyn TextBuffer,
+        text: &mut T,
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Editor {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, text.as_str());
+        let guard = TextGuard::before(ui, id, &|| text.bound().0);
         let output = style(TextEdit::multiline(text).id(id)).show(ui);
-        guard.after(ui, text.as_str(), &output.response);
+        guard.after(ui, &|| text.bound().0, &output.response);
         record_field(ui, &output.response);
         Editor {
             frame: output.response.rect,
@@ -595,9 +595,9 @@ impl FieldId {
         let id = self.named(name).id();
         // Clear's place, kept inside the frame's right end whether or not Clear shows.
         let place = search_clear().natural_width(ui);
-        let guard = TextGuard::before(ui, id, text);
+        let guard = TextGuard::before(ui, id, &|| BoundText::of(text));
         let field = super::components::search_box(ui, id, name, text, hint, width, place);
-        guard.after(ui, text, &field);
+        guard.after(ui, &|| BoundText::of(text), &field);
         record_field(ui, &field);
         if !text.is_empty() {
             let frame = field.rect;
@@ -633,9 +633,9 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, text.as_str());
+        let guard = TextGuard::before(ui, id, &|| BoundText::of(text.as_str()));
         let response = ui.add(style(TextEdit::multiline(text).id(id)));
-        guard.after(ui, text.as_str(), &response);
+        guard.after(ui, &|| BoundText::of(text.as_str()), &response);
         record_field(ui, &response);
         response
     }
@@ -674,11 +674,12 @@ pub struct Editor {
     pub view: Rect,
 }
 
-/// What the bound text was when the field last drew with focus: its length and a hash.
+/// What the bound text was when the field last drew with focus: its length and a hash, or the
+/// revision of a revised document (`Revised<String>`, layout PR 9b), which needs no hash.
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct BoundText {
-    len: usize,
-    hash: u64,
+enum BoundText {
+    Hash { len: usize, hash: u64 },
+    Revision(super::memo::Revision),
 }
 
 impl BoundText {
@@ -686,11 +687,43 @@ impl BoundText {
     /// history every frame it has focus, so this adds less than egui does).
     fn of(text: &str) -> Self {
         #[cfg(any(test, feature = "test-support"))]
-        BOUND_TEXT_HASHES.with(|count| count.set(count.get() + 1));
-        Self {
+        {
+            BOUND_TEXT_HASHES.with(|count| count.set(count.get() + 1));
+            BOUND_TEXT_BYTES.with(|count| count.set(count.get() + text.len()));
+        }
+        Self::Hash {
             len: text.len(),
             hash: egui::util::hash(text),
         }
+    }
+}
+
+/// A field's text, as the guard knows it: a plain text by its hash, a revised document by its
+/// revision (layout PR 9b: a quiet frame of a document field hashes nothing). Sealed.
+pub trait GuardedText: TextBuffer + guarded::Sealed {
+    #[doc(hidden)]
+    fn bound(&self) -> Bound;
+}
+
+/// What a [`GuardedText`] is to the guard. Opaque.
+#[doc(hidden)]
+pub struct Bound(BoundText);
+
+mod guarded {
+    pub trait Sealed {}
+    impl Sealed for String {}
+    impl Sealed for super::super::memo::Revised<String> {}
+}
+
+impl GuardedText for String {
+    fn bound(&self) -> Bound {
+        Bound(BoundText::of(self))
+    }
+}
+
+impl GuardedText for super::memo::Revised<String> {
+    fn bound(&self) -> Bound {
+        Bound(BoundText::Revision(self.revision()))
     }
 }
 
@@ -698,6 +731,8 @@ impl BoundText {
 thread_local! {
     /// How many times a field part hashed its text, for the cost proof.
     pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many bytes of text the field parts hashed (layout PR 9b's quiet-frame proof).
+    pub(crate) static BOUND_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many fields keep a record. The oldest record goes first, and egui's Undo history for
@@ -745,7 +780,7 @@ struct TextGuard {
 }
 
 impl TextGuard {
-    fn before(ui: &Ui, id: Id, text: &str) -> Self {
+    fn before(ui: &Ui, id: Id, text: &dyn Fn() -> BoundText) -> Self {
         let focused_before = ui.memory(|memory| memory.has_focus(id));
         let check = focused_before
             || ui.input(|input| {
@@ -764,7 +799,7 @@ impl TextGuard {
         Self { id, focused_before }
     }
 
-    fn after(self, ui: &Ui, text: &str, response: &Response) {
+    fn after(self, ui: &Ui, text: &dyn Fn() -> BoundText, response: &Response) {
         if !response.has_focus() {
             return;
         }
@@ -773,7 +808,7 @@ impl TextGuard {
         if !self.focused_before && Self::stale(ui, self.id, text) {
             Self::drop_history(ui.ctx(), self.id);
         }
-        let bound = BoundText::of(text);
+        let bound = text();
         let ctx = ui.ctx();
         let oldest = ctx.data_mut(|data| {
             let records = &mut data
@@ -789,7 +824,7 @@ impl TextGuard {
     }
 
     /// Whether the field last had focus with another text.
-    fn stale(ui: &Ui, id: Id, text: &str) -> bool {
+    fn stale(ui: &Ui, id: Id, text: &dyn Fn() -> BoundText) -> bool {
         let Some(bound) = ui.ctx().data(|data| {
             data.get_temp::<BoundTexts>(bound_texts_id())
                 .and_then(|records| {
@@ -802,7 +837,7 @@ impl TextGuard {
         }) else {
             return false;
         };
-        bound.len != text.len() || bound != BoundText::of(text)
+        bound != text()
     }
 
     fn forget(ctx: &egui::Context, id: Id) {
@@ -829,9 +864,9 @@ pub(super) fn guarded_field(
     text: &mut String,
     draw: impl FnOnce(&mut Ui, &mut String) -> Response,
 ) -> Response {
-    let guard = TextGuard::before(ui, id, text);
+    let guard = TextGuard::before(ui, id, &|| BoundText::of(text));
     let response = draw(ui, text);
-    guard.after(ui, text, &response);
+    guard.after(ui, &|| BoundText::of(text), &response);
     response
 }
 

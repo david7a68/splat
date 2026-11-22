@@ -235,6 +235,41 @@ impl<T: Sync> Revised<T> {
     }
 }
 
+/// A document's text with a trusted revision (layout PR 9b, ruling L8): an editor edits it in
+/// place, and each edit is a new revision, so the field parts know an unchanged text by its
+/// revision and never hash or copy it on a quiet frame. The program changes it with
+/// [`Revised::set`] (a new revision when the words differ) or [`Revised::revise`].
+impl egui::TextBuffer for Revised<String> {
+    fn is_mutable(&self) -> bool {
+        true
+    }
+
+    fn as_str(&self) -> &str {
+        self.value.as_str()
+    }
+
+    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
+        let mut inserted = 0;
+        self.revise(|value| {
+            inserted = value.insert_text(text, char_index);
+            Changed::from(inserted > 0)
+        });
+        inserted
+    }
+
+    fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
+        self.revise(|value| {
+            let before = value.len();
+            value.delete_char_range(char_range);
+            Changed::from(value.len() != before)
+        });
+    }
+
+    fn type_id(&self) -> std::any::TypeId {
+        std::any::TypeId::of::<Self>()
+    }
+}
+
 /// A new value made with its default, as `Revised::new(T::default())`: a new version.
 impl<T: Sync + Default> Default for Revised<T> {
     fn default() -> Self {
