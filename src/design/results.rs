@@ -1150,11 +1150,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "add_row",
             &[Ban::Extras(1), Ban::RowKey(1)],
         ),
-        (
-            "src/loot_editor.rs",
-            "line_row",
-            &[Ban::Extras(1), Ban::RowKey(1)],
-        ),
+        ("src/loot_editor.rs", "line_row", &[Ban::RowKey(1)]),
         (
             "src/markdown_view.rs",
             "reader_table",
@@ -1374,7 +1370,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
-        ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),

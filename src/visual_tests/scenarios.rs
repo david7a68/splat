@@ -23859,6 +23859,25 @@ pub mod run_loot {
                 && d.has("Library item"),
             "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
         );
+        // Layout step 11c (M0402): a line's reason stands in its key's column, below the row,
+        // placed by the key's own edge and not by a measured space, at every size.
+        let reasons = [DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let key = d.place_of("Table for the encounter loot line 2")?;
+                let reason = painted_bounds(d, "No roll table has the key")?;
+                Some((size, key.left(), reason.left(), reason.top() - key.bottom()))
+            })
+        });
+        d.observe(
+            "m32-L11c-loot-reason-column",
+            reasons.iter().all(|at| {
+                at.is_some_and(|(_, key, reason, below)| {
+                    // The key menu's rect starts 1 px before its first painted edge.
+                    (reason - key - crate::design::S - 1.0).abs() <= 1.5 && below >= -0.5
+                })
+            }),
+            format!("The reason starts at the key menu's column (its left plus S) and below it (size, key left, reason left, gap below): {reasons:?}"),
+        );
         d.goal("add loot and a roll on a campaign table");
         // iter-25-R, Astra 4: a removed loot line is a finished change: a success message, with
         // its Undo, which puts the line back.
@@ -29209,6 +29228,36 @@ pub mod run_rolls {
             "T16.1",
             d.has_containing("Click a target") && d.has_containing("% to hit"),
             "An armed tile says what to do, and each row shows the chance to hit it",
+        );
+        // Layout step 11c (M0424, M0425): the crosshair is centred on the first line of the
+        // words, whether they wrap or not, placed by rects and not by measured spaces.
+        let centred = [SMALL, DEFAULT].map(|size| {
+            d.at_size(size, |d| {
+                // The accessible rects are the rows' own boxes, not the ink.
+                let nodes = d.nodes();
+                let words = nodes
+                    .iter()
+                    .find(|node| node.in_view() && node.name.contains("Click a target"))?
+                    .rect;
+                // The crosshair of this hint: the glyph that ends `XS` before the words.
+                let icon = nodes
+                    .iter()
+                    .find(|node| {
+                        node.in_view()
+                            && node.name == crate::design::icons::ARMED
+                            && (words.left() - node.rect.right()).abs() <= crate::design::XS + 2.0
+                    })?
+                    .rect;
+                let first = words.top() + crate::design::Type::Small.line() / 2.0;
+                Some((size, icon.center().y, first))
+            })
+        });
+        d.observe(
+            "m32-L11c-armed-hint-centred",
+            centred
+                .iter()
+                .all(|at| at.is_some_and(|(_, icon, first)| (icon - first).abs() <= 0.6)),
+            format!("The crosshair's centre and the words' first line's centre (size, icon y, line y): {centred:?}"),
         );
         d.goal_within("T16.1", "arm the selected creature's attack", 1);
         action_at_text(d, "iter-19-R-FT4", BITE, "Stop");
