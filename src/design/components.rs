@@ -1170,8 +1170,25 @@ impl<'a> Action<'a> {
         self.icon.map_or(0.0, |_| ICON_SLOT)
     }
 
+    /// What its natural width is made of (`natural_width`), apart from the fonts and the scale.
+    fn width_facts(&self, state: &mut impl std::hash::Hasher) {
+        use std::hash::Hash;
+        self.label.hash(state);
+        self.key.hash(state);
+        self.icon.is_some().hash(state);
+        (
+            self.kind == Kind::Primary,
+            self.kind == Kind::Quiet,
+            self.plain,
+        )
+            .hash(state);
+        self.height.to_bits().hash(state);
+    }
+
     /// The width before any text is cut, using the same parts as the painted button.
     pub fn natural_width(&self, ui: &Ui) -> f32 {
+        #[cfg(any(test, feature = "test-support"))]
+        text_measured();
         let icon = self.icon_width();
         let key = self
             .key
@@ -5112,6 +5129,36 @@ pub fn focus_and_select(ui: &Ui, id: Id, text: &str) {
     }
 }
 
+/// The strip's actions' natural widths with their gaps, kept by the actions' own facts, the font
+/// generation and the scale: a quiet frame measures none (layout 11c A2c, counted from a host's
+/// entry through its paint).
+fn kept_strip_width(ui: &Ui, actions: &[Action<'_>]) -> f32 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for action in actions {
+        action.width_facts(&mut hasher);
+    }
+    (
+        super::theme::font_generation(ui.ctx()),
+        ui.ctx().pixels_per_point().to_bits(),
+    )
+        .hash(&mut hasher);
+    let key = hasher.finish();
+    let id = ui.id().with("kept_strip_width");
+    if let Some((kept, width)) = ui.ctx().data(|data| data.get_temp::<(u64, f32)>(id))
+        && kept == key
+    {
+        return width;
+    }
+    let width = actions
+        .iter()
+        .map(|action| action.natural_width(ui))
+        .sum::<f32>()
+        + XS * actions.len().saturating_sub(1) as f32;
+    ui.ctx().data_mut(|data| data.insert_temp(id, (key, width)));
+    width
+}
+
 /// Keep frequent Add actions visible. Other actions share More when space is short.
 /// `always_visible` names the actions that stay beside the caller's frequent actions.
 /// `menu_only` are lines of More alone, after the others: they take no part in the fit, so no
@@ -5137,11 +5184,7 @@ pub fn hanging_add_strip(
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = XS;
             first(ui);
-            let width = actions
-                .iter()
-                .map(|action| action.natural_width(ui))
-                .sum::<f32>()
-                + XS * actions.len().saturating_sub(1) as f32;
+            let width = kept_strip_width(ui, &actions);
             if width <= ui.available_size_before_wrap().x {
                 for (index, action) in actions.into_iter().enumerate() {
                     if action.show(ui).clicked() {
@@ -9995,4 +10038,18 @@ fn dialog_action_row_fits_the_long_run_close_choices() {
         assert_eq!(save.center().y, keep.center().y);
         assert!(area.contains_rect(lose) && area.contains_rect(keep) && area.contains_rect(save));
     }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// Text measured outside a widget's own drawing: an action's natural width, a recipe's
+    /// facts or layout, a host's fit. A host's quiet frames measure none, counted from its entry
+    /// through its paint (layout 11c A2c).
+    pub static TEXT_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Count one measure of text (`TEXT_MEASURES`).
+#[cfg(any(test, feature = "test-support"))]
+pub fn text_measured() {
+    TEXT_MEASURES.with(|measures| measures.set(measures.get() + 1));
 }

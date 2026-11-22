@@ -478,12 +478,103 @@ struct Reading {
     made: Made,
     parts: Vec<(String, String)>,
     part: usize,
-    /// The words to bring into view, once, when a marker opened this.
-    mark: Option<String>,
+    /// The jump to the marker's line, when a marker opened this, until it lands (`MarkJump`).
+    mark: Option<MarkJump>,
     /// The marker that opened this, with its key, so it can be added from here.
     marker: Option<(crate::timeline::Marker, String)>,
     /// A raw transcript that stops early: parts done, and parts in all.
     short_of: Option<(u64, u64)>,
+    /// The shown part as the reader draws it, made once per part (`ShownPart`).
+    shown: Option<ShownPart>,
+}
+
+/// The jump that opens a text at its marker's line (M0481; review of PR 862). The line's top is
+/// measured again in every draw until the jump lands, and the column's typed jump is asked again
+/// from that measure (ruling M18), so a width change before the column moves keeps it right. It
+/// ends when the line is at the view's top, when the column moved no further since the last ask
+/// (the text ends too soon), when the DM's own input moves the column (`reveal::dm_scrolls`,
+/// the column's one cancel rule), or after `MarkJump::ASKS` asks.
+struct MarkJump {
+    /// The marker's words in the text.
+    words: String,
+    /// Asks left.
+    left: u8,
+    /// The line's distance below the view's top when it last asked.
+    last: Option<f32>,
+}
+
+impl MarkJump {
+    const ASKS: u8 = 4;
+
+    fn new(words: String) -> Self {
+        Self {
+            words,
+            left: Self::ASKS,
+            last: None,
+        }
+    }
+
+    /// Whether to ask the column again, for the line `below` the view's top in this draw; the
+    /// DM's own input in the column this pass is `moved`.
+    fn ask(&mut self, below: f32, moved: bool) -> bool {
+        let landed = below.abs() <= 0.5;
+        let stuck = self.last.is_some_and(|last| (last - below).abs() <= 0.5);
+        if moved || landed || stuck || self.left == 0 {
+            return false;
+        }
+        self.left -= 1;
+        self.last = Some(below);
+        true
+    }
+}
+
+/// The shown part's words as the reader draws them (the draft's warning line out; with several
+/// parts, the part's own heading out) and where the marker's line starts in them (review of PR
+/// 862, P3): made once per part, so a quiet frame copies and scans nothing. The parts are read
+/// once when the text opens, so the part is the words' revision.
+struct ShownPart {
+    part: usize,
+    body: String,
+    at: Option<usize>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a shown part was made (tests).
+    static SHOWN_PARTS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+impl ShownPart {
+    fn of(reading: &Reading) -> Self {
+        #[cfg(test)]
+        SHOWN_PARTS_MADE.with(|made| made.set(made.get() + 1));
+        let (time, text) = &reading.parts[reading.part];
+        let cleaned = text.replace(
+            "> This is a draft from an LLM. Check it against your own memory.\n",
+            "",
+        );
+        let heading = format!("## {time}");
+        let body = if reading.parts.len() > 1 {
+            cleaned
+                .trim_start()
+                .strip_prefix(&heading)
+                .filter(|rest| rest.starts_with('\n'))
+                .map_or_else(|| cleaned.clone(), |rest| rest.trim_start().to_owned())
+        } else {
+            cleaned
+        };
+        let at = reading
+            .marker
+            .as_ref()
+            .map(|(marker, _)| marker.reading_words())
+            .or_else(|| reading.mark.as_ref().map(|mark| mark.words.clone()))
+            .and_then(|words| body.find(&words));
+        Self {
+            part: reading.part,
+            body,
+            at,
+        }
+    }
 }
 
 /// An event just added, with its one step of undo. It goes at the next thing the DM does.
@@ -710,6 +801,11 @@ pub struct Sessions {
     plan_projection: plan::ProjectionCache,
     /// The plan's closed rows as their recipe laid them, kept by their inputs (layout 11c A2c).
     plan_rows: plan::PlanRowsCache,
+    /// The plan's measured region, while its body is one (layout 11c A2c-3): its offset, its
+    /// requests and its mask.
+    plan_region: Option<crate::design::RegionState>,
+    /// Whether the plan's body was its measured region in the last frame (A2c-3).
+    pub(super) plan_measured: bool,
     /// The fight behind the open event, read once.
     /// The open played fight's summary, kept with the run's file as last found (or why not):
     /// a different answer from the folder reads it again (R41, round 30 review F2).
@@ -3966,10 +4062,6 @@ impl Sessions {
     }
 
     /// The live state, or the step before it. Always in the same place.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn record_line(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         if self.tab == Tab::Recordings
             && self.reading.is_none()
@@ -3987,12 +4079,13 @@ impl Sessions {
             .live
             .as_ref()
             .is_some_and(|live| Some(live.session) == self.selected);
-        let top = ui.cursor().top();
-        self.record_line_body(ui, settings);
-        if live && !self.confirm_record {
-            let used = ui.cursor().top() - top;
-            ui.add_space((Density::Read.control() + design::XS - used).max(0.0));
-        }
+        // The body asks to confirm a recording only while none runs, so this holds for its pass.
+        let height = if live && !self.confirm_record {
+            Density::Read.control() + design::XS
+        } else {
+            0.0
+        };
+        design::at_least(ui, height, |ui| self.record_line_body(ui, settings));
     }
 
     /// Whether another session's recording state shows in the bottom banner: its recording
@@ -5747,7 +5840,7 @@ impl Sessions {
                     );
                 },
             );
-            ui.add_space(design::L - ui.spacing().item_spacing.x);
+            design::gap_to_next(ui, design::Gap::L);
             {
                 design::row_menu(ui, &recording.title, |ui| {
                     if recording.summary
@@ -6218,7 +6311,9 @@ impl Sessions {
         at: Option<&str>,
         marker: Option<(crate::timeline::Marker, String)>,
     ) {
-        let mark = marker.as_ref().map(|(marker, _)| marker.reading_words());
+        let mark = marker
+            .as_ref()
+            .map(|(marker, _)| MarkJump::new(marker.reading_words()));
         let text = fs::read_to_string(made.path(&recording.path)).unwrap_or_default();
         let body = timeline::markers_for_reading(body_of(&text));
         let parts = parts_of(&body);
@@ -6238,6 +6333,7 @@ impl Sessions {
             short_of: matches!(made, Made::Transcript)
                 .then(|| processing::transcript_short_of(&recording.path))
                 .flatten(),
+            shown: None,
         });
     }
 
@@ -6369,17 +6465,7 @@ impl Sessions {
                                     // and the footer follows the list `S` below it.
                                     if placement.is_empty() && index + 1 < row_count {
                                         // As tall as the label it stands for.
-                                        let height =
-                                            egui::WidgetText::from(Type::Small.rich(ui, "After"))
-                                                .into_galley(
-                                                    ui,
-                                                    Some(egui::TextWrapMode::Wrap),
-                                                    f32::INFINITY,
-                                                    egui::TextStyle::Body,
-                                                )
-                                                .size()
-                                                .y;
-                                        ui.allocate_space(egui::vec2(0.0, height));
+                                        design::empty_line(ui, Type::Small);
                                     } else {
                                         ui.add(
                                             egui::Label::new(
@@ -6609,42 +6695,39 @@ impl Sessions {
             });
         }
         design::gap(ui, design::Gap::XS);
+        if reading
+            .shown
+            .as_ref()
+            .is_none_or(|shown| shown.part != reading.part)
+        {
+            reading.shown = Some(ShownPart::of(reading));
+        }
+        let mut landed = false;
         // The text is the session page's pane content: the pane is its scroll column.
         ui.scope(|ui| {
             note_width(ui, |ui| {
-                let body = &reading.parts[reading.part].1;
-                let body = body.replace(
-                    "> This is a draft from an LLM. Check it against your own memory.\n",
-                    "",
-                );
-                let heading = format!("## {}", reading.parts[reading.part].0);
-                let body = if count > 1 {
-                    body.trim_start()
-                        .strip_prefix(&heading)
-                        .filter(|rest| rest.starts_with('\n'))
-                        .map(str::trim_start)
-                        .unwrap_or(&body)
-                } else {
-                    &body
+                let Some(shown) = &reading.shown else {
+                    return;
                 };
-                let at = reading
-                    .marker
-                    .as_ref()
-                    .map(|(marker, _)| marker.reading_words())
-                    .as_deref()
-                    .or(reading.mark.as_deref())
-                    .and_then(|mark| body.find(mark));
-                match at {
+                let body = shown.body.as_str();
+                match shown.at {
                     Some(at) => {
                         markdown_view::show_reader(ui, &body[..at]);
-                        // Opened at a timeline marker: its line at the view's top, once (M0481,
-                        // ruling M18's linked-reader jump).
-                        if reading.mark.is_some() {
-                            design::reveal::jump(
-                                ui,
-                                ui.cursor().top(),
-                                design::reveal::JumpTo::LinkedHeading,
-                            );
+                        // Opened at a timeline marker: its line at the view's top, by the
+                        // column's typed jump (M0481, ruling M18), measured again in each draw
+                        // until it lands (`MarkJump`).
+                        if let Some(mark) = &mut reading.mark {
+                            let top = ui.cursor().top();
+                            let below = top - ui.clip_rect().top();
+                            if mark.ask(below, design::reveal::dm_scrolls(ui)) {
+                                design::reveal::jump(
+                                    ui,
+                                    top,
+                                    design::reveal::JumpTo::LinkedHeading,
+                                );
+                            } else {
+                                landed = true;
+                            }
                         }
                         if let Some((marker, key)) = &reading.marker {
                             let line_end = body[at..].find('\n').map_or(body.len(), |end| at + end);
@@ -6697,7 +6780,15 @@ impl Sessions {
                     None => markdown_view::show_reader(ui, body),
                 }
             });
-            reading.mark = None;
+            // Landed, ended, or nothing to land on in this part.
+            if landed
+                || reading
+                    .shown
+                    .as_ref()
+                    .is_some_and(|shown| shown.at.is_none())
+            {
+                reading.mark = None;
+            }
             // A part fills several screens, so the way on is also where the reading ends. With
             // no part after it, nothing follows the words: the footer comes `S` below them.
             if reading.part + 1 < count {
@@ -10533,66 +10624,189 @@ mod tests {
         assert!(source.contains("|Old name]]"));
     }
 
-    /// M0481 (ruling M18): a recording's text opened at a timeline marker opens with the
-    /// marker's line at the view's top, once (the reader's typed jump); the DM's wheel after it
-    /// is not pulled back.
+    /// M0481 (ruling M18; review of PR 862): a recording's text opened at a timeline marker opens
+    /// with the marker's line at the view's top, by the column's typed jump, measured again in
+    /// each draw until it lands. Each case opens the text in a fresh page that draws one pass a
+    /// frame, so the jump asked in the first frame lands in the next one, and input or a resize
+    /// can come before it lands.
     #[test]
-    fn a_text_opened_at_a_marker_shows_the_marker_line_at_the_top_once() {
+    fn a_text_opened_at_a_marker_shows_the_marker_line_at_the_top() {
         use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
+        type Page = egui_kittest::Harness<'static, (Sessions, Book)>;
         let dir = tempfile::tempdir().unwrap();
         let recording = dir.path().join("Session 1.wav");
         fs::write(Made::Marked.path(&recording), "").unwrap();
         let before: String = (1..=60)
-            .map(|line| format!("Line {line} of what the table said before.\n\n"))
+            .map(|line| {
+                format!(
+                    "Line {line} of what the table said before, with enough words that it wraps \
+                     at another width.\n\n"
+                )
+            })
             .collect();
-        let sessions = Sessions {
-            reading: Some(Reading {
-                recording,
-                name: "Session 1".to_owned(),
-                made: Made::Marked,
-                parts: vec![(
+        let reading = || Reading {
+            recording: recording.clone(),
+            name: "Session 1".to_owned(),
+            made: Made::Marked,
+            parts: vec![
+                (
                     "00:10:00".to_owned(),
-                    format!("{before}We rest at the mill.\n\n{before}"),
-                )],
-                part: 0,
-                mark: Some("We rest at the mill.".to_owned()),
-                marker: None,
-                short_of: None,
-            }),
-            ..Sessions::default()
+                    format!("## 00:10:00\n{before}We rest at the mill.\n\n{before}"),
+                ),
+                (
+                    "00:20:00".to_owned(),
+                    "## 00:20:00\nThe second part.\n".to_owned(),
+                ),
+            ],
+            part: 0,
+            mark: Some(MarkJump::new("We rest at the mill.".to_owned())),
+            marker: None,
+            short_of: None,
+            shown: None,
         };
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(800.0, 400.0))
-            .themed_state(
-                |ctx, (page, book): &mut (Sessions, Book)| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let frame = PaneFrame::new(ui);
-                        let messages = Messages::<()>::new(&frame, "reading", ui.available_width());
-                        let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
-                            page.reading_view(ui, book);
+        // The text's pane on the left; another scroll column, with a button, on the right.
+        let page = || -> Page {
+            let mut page = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(1000.0, 400.0))
+                .themed_state(
+                    |ctx, (page, book): &mut (Sessions, Book)| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let full = ui.available_rect_before_wrap();
+                            let (left, right) =
+                                full.split_left_right_at_x(full.left() + full.width() * 0.7);
+                            ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                                design::ScrollColumn::new("other column").show(ui, |ui| {
+                                    let _ = Action::secondary("Other button").show(ui);
+                                    for line in 0..80 {
+                                        ui.label(Type::Body.rich(ui, format!("Other {line}")));
+                                    }
+                                });
+                            });
+                            ui.scope_builder(egui::UiBuilder::new().max_rect(left), |ui| {
+                                let frame = PaneFrame::new(ui);
+                                let messages =
+                                    Messages::<()>::new(&frame, "reading", ui.available_width());
+                                let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
+                                    page.reading_view(ui, book);
+                                });
+                            });
                         });
-                    });
-                },
-                (sessions, Book::default()),
-            );
-        harness.run_steps(4);
-        let line = harness.get_by_label("We rest at the mill.").rect();
+                    },
+                    (Sessions::default(), Book::default()),
+                );
+            page.ctx
+                .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+            page.run_steps(2);
+            page
+        };
+        // Open the text: its first draw asks for the jump, which lands in the next frame.
+        let open = |page: &mut Page| {
+            page.state_mut().0.reading = Some(reading());
+            page.step();
+        };
+        let line = |page: &Page| page.get_by_label("We rest at the mill.").rect();
+        let at_top = |page: &Page| (0.0..40.0).contains(&line(page).top());
+        // A scroll of `by` (up, or down when negative) with the pointer `at`, in touchpad steps
+        // of less than 8 points, which egui applies in their own frame: nothing moves after it.
+        let wheel = |page: &mut Page, at: egui::Pos2, by: f32| {
+            page.input_mut().events.push(egui::Event::PointerMoved(at));
+            let steps = (by.abs() / 6.0).ceil() as usize;
+            for _ in 0..steps {
+                page.input_mut().events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, by / steps as f32),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            page.step();
+        };
+        // The text's column, and the other column after the resize to 640 px (its 30 % on the
+        // right starts at 448 px).
+        let (text, other) = (egui::pos2(350.0, 200.0), egui::pos2(600.0, 200.0));
+        // Opened, it lands with the line at the top; the part is made once for all its frames.
+        let mut one = page();
+        SHOWN_PARTS_MADE.with(|made| made.set(0));
+        open(&mut one);
+        one.run_steps(6);
         assert!(
-            (0.0..40.0).contains(&line.top()),
-            "m0481-jump: the marker's line {line:?} is at the view's top"
+            at_top(&one),
+            "m0481-jump: the marker's line {:?} is at the view's top",
+            line(&one)
         );
-        harness.hover_at(egui::pos2(400.0, 200.0));
-        harness.event(egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Point,
-            delta: egui::vec2(0.0, 120.0),
+        let made = SHOWN_PARTS_MADE.with(std::cell::Cell::get);
+        assert_eq!(
+            made, 1,
+            "m0481-made-once: the shown part is made once, not in each frame"
+        );
+        // After it landed, the DM's wheel moves the line, and nothing pulls it back.
+        let landed = line(&one);
+        wheel(&mut one, text, 120.0);
+        one.run_steps(6);
+        assert!(
+            line(&one).top() > landed.top() + 60.0,
+            "m0481-landed-wheel: the wheel moved the line from {landed:?} to {:?}, and it stays",
+            line(&one)
+        );
+        // Another part is made once more, and then not again.
+        one.state_mut().0.reading.as_mut().unwrap().part = 1;
+        one.run_steps(6);
+        let made = SHOWN_PARTS_MADE.with(std::cell::Cell::get);
+        assert_eq!(made, 2, "m0481-made-per-part: another part is made once");
+        // A resize before it lands: the line is measured again in the new layout.
+        let mut resized = page();
+        open(&mut resized);
+        resized.set_size(egui::vec2(640.0, 400.0));
+        resized.run_steps(8);
+        assert!(
+            at_top(&resized),
+            "m0481-resize: after a resize before it landed, the line {:?} is at the view's top",
+            line(&resized)
+        );
+        // The DM's wheel in the text's own column before it lands ends it, also with a resize in
+        // the same frame (which moves the line, so the jump would be asked again).
+        let mut own = page();
+        open(&mut own);
+        own.set_size(egui::vec2(640.0, 400.0));
+        wheel(&mut own, text, -120.0);
+        own.run_steps(6);
+        assert!(
+            line(&own).top() > 400.0,
+            "m0481-own-wheel: the wheel in the text's column ended the jump; the line {:?} stays \
+             below the view",
+            line(&own)
+        );
+        // A wheel in another column does not end it: with a resize in the same frame, the jump
+        // asked before it is stale, and only the jump asked again lands the line.
+        let mut wheeled = page();
+        open(&mut wheeled);
+        wheeled.set_size(egui::vec2(640.0, 400.0));
+        wheel(&mut wheeled, other, 120.0);
+        wheeled.run_steps(6);
+        assert!(
+            at_top(&wheeled),
+            "m0481-other-wheel: a wheel in another column leaves the jump: the line {:?}",
+            line(&wheeled)
+        );
+        // A key in another column (the focus there) does not end it, also with a resize.
+        let mut keyed = page();
+        keyed.get_by_label("Other button").focus();
+        keyed.run_steps(2);
+        open(&mut keyed);
+        keyed.set_size(egui::vec2(640.0, 400.0));
+        keyed.input_mut().events.push(egui::Event::Key {
+            key: egui::Key::ArrowDown,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
             modifiers: egui::Modifiers::NONE,
         });
-        harness.run_steps(4);
-        let moved = harness.get_by_label("We rest at the mill.").rect();
+        keyed.step();
+        keyed.run_steps(6);
         assert!(
-            moved.top() > line.top() + 60.0,
-            "m0481-once: the wheel moved the line from {line:?} to {moved:?}, and it stays"
+            at_top(&keyed),
+            "m0481-other-key: a key in another column leaves the jump: the line {:?}",
+            line(&keyed)
         );
     }
 

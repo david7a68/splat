@@ -68,6 +68,10 @@ pub struct PlanRow<'a> {
     /// The rule after the row is part of the block (a closed row); an opened row draws its
     /// details first, then the rule.
     pub rule: bool,
+    /// Space at the block's end: the gap a column leaves after each of its items, where the
+    /// block stands in a region that stacks blocks with none (the Session plan's measured body),
+    /// so a row has one pitch in place and in the region. Zero in place.
+    pub tail: f32,
 }
 
 /// The plan's shared column: its widest facts and its widest action recipe, from every closed
@@ -249,6 +253,8 @@ impl PlanRow<'_> {
     /// The row's facts (its title and every summary line, from its words' column) and its
     /// action recipe, at `width`: what the shared column is made of.
     pub fn facts(&self, ui: &Ui, width: f32) -> (f32, f32) {
+        #[cfg(any(test, feature = "test-support"))]
+        crate::design::components::text_measured();
         // The title's press target, at least 24 px wide (review of PR 840): a short title's
         // target is its facts, so no action stands on it.
         let title = Self::target_width(self.title(ui, width).size().x);
@@ -260,6 +266,8 @@ impl PlanRow<'_> {
 
     /// The row laid out at `width` with the plan's shared column.
     pub fn lay(&self, ui: &Ui, width: f32, columns: PlanColumns) -> Laid {
+        #[cfg(any(test, feature = "test-support"))]
+        crate::design::components::text_measured();
         let x0 = Self::x0();
         let lead = ui.fonts_mut(|fonts| {
             fonts.layout_no_wrap(self.lead.to_owned(), Type::Body.font(ui), colors().muted)
@@ -289,7 +297,7 @@ impl PlanRow<'_> {
         } else {
             Rect::from_min_size(pos2(0.0, row + LINE_GAP), vec2(width, 0.0))
         };
-        let height = rule.bottom();
+        let height = rule.bottom() + self.tail;
         let mut texts = vec![LaidText {
             at: Pos2::new(lead_at.x, lead_at.y),
             galley: lead,
@@ -486,6 +494,7 @@ mod tests {
                                 actions: place.0,
                                 actions_height: place.1,
                                 rule: true,
+                                tail: 0.0,
                             })
                             .collect();
                         // The shared column, from every row, before any row draws.
@@ -728,6 +737,7 @@ mod tests {
                             actions: 60.0,
                             actions_height: Density::Read.control(),
                             rule: true,
+                            tail: 0.0,
                         };
                         let laid = row.lay(ui, width, PlanColumns::default());
                         let _ = crate::design::draw_laid(ui, &laid, |ui| {
