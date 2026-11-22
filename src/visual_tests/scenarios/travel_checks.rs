@@ -54,6 +54,65 @@ fn checks(d: &Driver<'_>) -> Vec<crate::timeline::Check> {
         .unwrap_or_default()
 }
 
+/// Faults of the open table menu (review of PR 654): its choices (the tables and `No checks`,
+/// under the menu's button) inside a frame that stays in the window and keeps `S` clear of each
+/// splitter and scroll bar beside it.
+fn table_menu_faults(d: &Driver<'_>) -> Vec<String> {
+    let nodes = d.nodes();
+    let Some(button) = nodes
+        .iter()
+        .filter(|node| {
+            node.name == "On the road"
+                && node.role == egui::accesskit::Role::Button
+                && node.in_view()
+        })
+        .map(|node| node.rect)
+        .min_by(|a, b| a.top().total_cmp(&b.top()))
+    else {
+        return vec!["the table menu's button is not in view".to_owned()];
+    };
+    let Some(no_checks) = nodes
+        .iter()
+        .find(|node| node.name == "No checks" && node.in_view())
+        .map(|node| node.rect)
+    else {
+        let names: Vec<_> = nodes
+            .iter()
+            .filter(|node| node.name.contains("check") || node.name.contains("road"))
+            .map(|node| (node.name.clone(), node.role, node.in_view()))
+            .collect();
+        return vec![format!("the open menu has no `No checks`: {names:?}")];
+    };
+    // The menu's choices: `No checks` and the tables above it, under the button.
+    let choices = nodes
+        .iter()
+        .filter(|node| {
+            node.in_view()
+                && node.rect.top() >= button.bottom() - 1.0
+                && node.rect.bottom() <= no_checks.bottom() + 1.0
+                && (node.rect.left() - no_checks.left()).abs() < crate::design::XL
+        })
+        .fold(no_checks, |frame, node| frame.union(node.rect));
+    let frame = choices + egui::Frame::menu(&d.app_style()).total_margin();
+    let window = d.window_size();
+    let mut faults = Vec::new();
+    if frame.left() < 0.0 || frame.right() > window.0 || frame.bottom() > window.1 {
+        faults.push(format!("the menu {frame:?} leaves the window {window:?}"));
+    }
+    for lane in d.chrome_lanes() {
+        if lane.bottom() <= frame.top() || lane.top() >= frame.bottom() {
+            continue;
+        }
+        let clear = (lane.left() - frame.right()).max(frame.left() - lane.right());
+        if clear < crate::design::S - 0.5 {
+            faults.push(format!(
+                "the menu {frame:?} is {clear:.1} px from the lane {lane:?}"
+            ));
+        }
+    }
+    faults
+}
+
 /// Faults in the open block's layout (V4, V22, V23): `Encounter checks` is a label above the
 /// table menu, whose word starts at the label's edge; the dice words share the menu's line, or start their own line with their words;
 /// and the act's result, when there is one, sits on its kept line between the menu's line and
@@ -494,6 +553,19 @@ pub fn run(d: &mut Driver<'_>) {
         d.has("Clear the results first."),
         "No checks waits while a result stands",
     );
+    // Review of PR 654: the open table menu is captured at each size, and its frame stays in
+    // the window and keeps `S` clear of each splitter and scroll bar beside it.
+    d.state_prepared("travel-checks-table-menu", Sizes::All, |d| {
+        // A resize lays the menu out again: its first pass draws no choices.
+        d.settle();
+        let size = d.window_size();
+        let faults = table_menu_faults(d);
+        d.observe(
+            "s654-table-menu-clear",
+            faults.is_empty(),
+            format!("At {size:?}, the open table menu: {faults:?}"),
+        );
+    });
     d.press(Key::Escape);
     d.click("Clear the check for Day 1");
     d.click("On the road");

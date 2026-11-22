@@ -69,7 +69,7 @@
       "signed-in": 17,
       "stat-formats": 3,
       "trackers": 7,
-      "travel-checks": 10,
+      "travel-checks": 12,
       "travel-checks-plan": 4,
       "world": 1,
       "world-broken-note": 1,
@@ -97,6 +97,7 @@
       "session-plan-scenes": 4,
       "session-recording": 6,
       "settings": 1,
+      "travel-checks": 4,
       "world": 4
     },
     "target-size/egui-chrome": {
@@ -175,7 +176,7 @@
       "signed-in": 74,
       "stat-formats": 42,
       "trackers": 57,
-      "travel-checks": 48,
+      "travel-checks": 57,
       "travel-checks-plan": 26,
       "world": 60,
       "world-broken-note": 79,
