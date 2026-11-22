@@ -3924,34 +3924,21 @@ fn members(
                 if count.changed() {
                     edited = true;
                 }
-                // Layout PR 5b (I6): Edit and the menu start `L` after the members' widest facts
-                // (the name, its detail, the count) and end at their widest actions, from the
-                // list's last pass; where they do not fit, the far edge, as before.
-                let list = egui::Id::new("member_row_columns");
-                let (kept_facts, kept_actions) = design::action_rows::columns(ui, list);
+                // Layout PR 5b (I6), L5c: Edit and the menu end at the members' column, `L` after
+                // their widest facts (the name, its detail, the count); where it does not fit,
+                // the line's far edge, as before (`MeasuredColumn`). The line keeps its height.
                 let left = facts.left();
-                let room = ui.max_rect().right() - left;
-                let column =
-                    kept_facts > 0.0 && kept_facts + design::L + kept_actions <= room + 0.5;
-                // The line's far edge, where its actions end when the column does not fit.
-                let far_edge = ui.max_rect().right();
-                let end = if column {
-                    left + kept_facts + design::L + kept_actions
-                } else {
-                    far_edge
-                };
                 let own_facts = facts.width().max(count.rect.right() - left);
-                // The line's own height, as before; its width ends at the column.
-                let region = egui::Rect::from_min_max(
-                    egui::pos2(ui.cursor().left(), ui.max_rect().top()),
-                    egui::pos2(end.max(ui.cursor().left()), ui.max_rect().bottom()),
+                let slot = design::action_rows::MeasuredColumn::end("member_row_columns").slot(
+                    ui,
+                    egui::Rect::from_min_max(
+                        egui::pos2(ui.cursor().left(), ui.max_rect().top()),
+                        ui.max_rect().max,
+                    ),
+                    left,
                 );
-                let actions = ui
-                    .scope_builder(
-                        egui::UiBuilder::new()
-                            .max_rect(region)
-                            .layout(egui::Layout::right_to_left(egui::Align::Center)),
-                        |ui| {
+                let actions = slot
+                    .scope(ui, |ui| {
                             super::row_menu(ui, &name, |ui| {
                                 if super::menu_action(
                                     ui,
@@ -3989,35 +3976,17 @@ fn members(
                                     Some(key.clone())
                                 };
                             }
-                        },
-                    )
+                    })
                     .response
                     .rect;
-                design::action_rows::measured(ui, list, own_facts, actions.width());
-                #[cfg(any(test, feature = "test-support"))]
-                design::action_rows::keep(
+                slot.done(
                     ui,
-                    design::action_rows::RowRecord {
-                        owner: "members",
-                        row: index,
-                        facts: egui::Rect::from_min_size(
-                            facts.min,
-                            egui::vec2(own_facts, facts.height()),
-                        ),
-                        // The actions' line holds the count, after the name and detail lines.
-                        line: egui::Rect::from_min_max(
-                            egui::pos2(left, count.rect.top()),
-                            count.rect.max,
-                        ),
-                        action: actions,
-                        column: if column {
-                            left + kept_facts + design::L
-                        } else {
-                            actions.left()
-                        },
-                        edge: far_edge,
-                        wrapped: !column,
-                    },
+                    "members",
+                    index,
+                    egui::Rect::from_min_size(facts.min, egui::vec2(own_facts, facts.height())),
+                    // The actions' line holds the count, after the name and detail lines.
+                    egui::Rect::from_min_max(egui::pos2(left, count.rect.top()), count.rect.max),
+                    actions,
                 );
             });
             // FA1, FJ6: every member fault is in the one member-fault form, with its line while

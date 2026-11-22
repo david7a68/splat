@@ -20942,14 +20942,34 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         // Layout PR 5b (I6): the members' actions start `L` after their widest facts; at
-        // 1920 they have room for the column.
+        // 1920 they have room for the column. L5c (the whole-member pressure): at each size, 960
+        // too, every member is whole: its name and detail are not cut or shortened, and its
+        // actions stand clear of its Count line and inside the row.
         d.state_prepared("group-editor", Sizes::All, |d| {
             let (holds, column, detail) = d.kept_columns_hold("members", true, None);
+            // The group's members, from the fixture: each member's number and name, and the
+            // stats its detail line shows (Rival Captain is an Ember Cultist renamed).
+            let (whole, rows) = d.measured_rows_whole(
+                "members",
+                &[
+                    &[
+                        "1. Rival Captain",
+                        "CR 1",
+                        "HP 43",
+                        "AC 15",
+                        "as Ember Cultist",
+                    ],
+                    &["2. Cinder Wolf", "CR 1", "HP 22", "AC 13"],
+                ],
+            );
             let wide = d.window_size().0 >= LARGE.0;
             d.observe(
                 "pr5b-members-columns",
-                holds && (column || !wide),
-                format!("At {:?}, column {column}: {detail}", d.window_size()),
+                holds && (column || !wide) && whole,
+                format!(
+                    "At {:?}, column {column}: {detail}; {rows}",
+                    d.window_size()
+                ),
             );
         });
         // Layout step 6 (SL4, AL9): the clean editor's head and first fields, for the dirty
