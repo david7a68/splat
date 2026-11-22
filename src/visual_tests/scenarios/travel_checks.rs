@@ -556,7 +556,15 @@ pub fn run(d: &mut Driver<'_>) {
     // Review of PR 654: the open table menu is captured at each size, and its frame stays in
     // the window and keeps `S` clear of each splitter and scroll bar beside it.
     d.state_prepared("travel-checks-table-menu", Sizes::All, |d| {
-        // A resize lays the menu out again: its first pass draws no choices.
+        // A resize closes an open menu: it opens again at each size, then settles (its first
+        // pass draws no choices).
+        if !d
+            .nodes()
+            .iter()
+            .any(|node| node.name == "No checks" && node.in_view())
+        {
+            d.click("On the road");
+        }
         d.settle();
         let size = d.window_size();
         let faults = table_menu_faults(d);
