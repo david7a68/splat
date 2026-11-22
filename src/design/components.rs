@@ -4767,9 +4767,23 @@ pub fn section_with_id<R>(
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
+    section_opened(ui, id, title, None, add)
+}
+
+/// `section_with_id` whose owner opens (`Some(true)`) or closes (`Some(false)`) it this frame,
+/// as a search that shows only its matches does; `None` leaves it as the DM left it. Its header
+/// says the state it is drawn in to a screen reader either way.
+pub fn section_opened<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    title: impl Into<egui::WidgetText>,
+    open: Option<bool>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::CollapsingResponse<R> {
     let response = egui::CollapsingHeader::new(title)
         .id_salt(id)
         .icon(section_icon)
+        .open(open)
         .show(ui, add);
     with_expanded(ui, response)
 }
@@ -6353,8 +6367,8 @@ mod tests {
         );
     }
 
-    /// Every section form says to a screen reader whether it is open, and the state follows a
-    /// click on its own header only.
+    /// Every section form says to a screen reader whether it is open, also one its owner opens,
+    /// and the state follows a click on its own header only.
     #[test]
     fn a_section_says_whether_it_is_open() {
         let mut harness = egui_kittest::Harness::builder()
@@ -6363,12 +6377,16 @@ mod tests {
                 let _ = section(ui, "Details", |ui| ui.label("Inside details"));
                 let _ = section_with_id(ui, "notes", "3 notes", |ui| ui.label("Inside notes"));
                 let _ = quiet_section(ui, "Technical", |ui| ui.label("Inside technical"));
+                // A section its owner opens (a History run read from a link).
+                let _ = section_opened(ui, "runs", "2 runs", Some(true), |ui| {
+                    ui.label("Inside runs")
+                });
             });
         super::super::theme::install(&harness.ctx);
         harness.run_steps(2);
         let expanded = |harness: &egui_kittest::Harness<'_>| {
             use egui_kittest::kittest::{NodeT, Queryable};
-            ["Details", "3 notes", "Technical"].map(|name| {
+            ["Details", "3 notes", "Technical", "2 runs"].map(|name| {
                 harness
                     .get_by_label(name)
                     .accesskit_node()
@@ -6376,7 +6394,11 @@ mod tests {
                     .is_expanded()
             })
         };
-        assert_eq!(expanded(&harness), [Some(false); 3], "closed at first");
+        assert_eq!(
+            expanded(&harness),
+            [Some(false), Some(false), Some(false), Some(true)],
+            "closed at first; the owner's open one says it is open"
+        );
         {
             use egui_kittest::kittest::Queryable;
             harness.get_by_label("3 notes").click();
@@ -6384,7 +6406,7 @@ mod tests {
         harness.run_steps(3);
         assert_eq!(
             expanded(&harness),
-            [Some(false), Some(true), Some(false)],
+            [Some(false), Some(true), Some(false), Some(true)],
             "only the clicked section opens"
         );
     }

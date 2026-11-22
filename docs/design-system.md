@@ -218,7 +218,7 @@ that hosts reveals (R34, R44, R46); the Settings pane's column (the import form)
 | Per-change cache | `Memo`, `Revised`, `Revision` (`design::memo`) | A cache keyed only by revisions. A revision advances only on a stated change: `Revised::revise` when its closure returns `Changed::Yes`, `Revised::set` when the new value differs (it needs `Eq`). A pointer address, a frame count or an input epoch is not a key: the type does not take one. A `Revised` or `Memo` value is `Sync`, so it holds no `Cell` or `RefCell`. `ptr_eq` calls are counted and can only go down |
 | Side panel | `side_panel_width`, `TitleLine::close` | One width rule for Lookup, Notes and the run; separate participant and fight tabs. A panel's title row is a title line with its close icon (`panel_header` is gone) |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
-| Composite columns | `PaneColumns` (`shared_task`, `independent`; `fixed`, `resizable`, `rest`, `least_height`; `edges`), `PaneEdges` (`header`, `child_header`, `show_children`, `outer`, `child`) | Children side by side in one pane (layout step 7). `edges` resolves every child's edges once, before anything of the pane paints, from the room and this pass's splitter drag or key; the header (`header`, the composite's outer edge: its children and gutters, never the window), a child's toolbar (`child_header`) and the children (`show_children`) all use those edges, so they share one right edge in every pass of a drag. Edges kept to a later pass or used in another room are refused and resolved again. A shared task in a `Body::Content` pane is as tall as its tallest child's whole content (each child's scroll columns add what they hide), up to the room left and at least its `least_height` while taller, so the footer follows the taller child by `S` and a resizable child's rule ends there; in any other body it fills the room left. Independent children are whole-height hosts of their own panes and footers. Children are still drawn by a closure: each host is a counted `composite-child` row of the legacy freeze until its children are closed blocks |
+| Composite columns | `PaneColumns` (`shared_task`, `independent`; `fixed`, `resizable`, `rest`, `trailing`, `least_height`; `edges`, `edges_in`), `PaneEdges` (`header`, `child_header`, `show_children`, `outer`, `child`, `child_within`) | Children side by side in one pane (layout step 7). `edges` resolves every child's edges once, before anything of the pane paints, from the room and this pass's splitter drag or key; the header (`header`, the composite's outer edge: its children and gutters, never the window), a child's toolbar (`child_header`) and the children (`show_children`) all use those edges, so they share one right edge in every pass of a drag. Edges kept to a later pass or used in another room are refused and resolved again. A shared task in a `Body::Content` pane is as tall as its tallest child's whole content (each child's scroll columns add what they hide), up to the room left and at least its `least_height` while taller, so the footer follows the taller child by `S` and a resizable child's rule ends there; in any other body it fills the room left. Independent children are whole-height hosts of their own panes and footers. Children are still drawn by a closure: each host is a counted `composite-child` row of the legacy freeze until its children are closed blocks |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
@@ -1043,7 +1043,7 @@ two choices in the tab's footer, offered only while no run and no encounter draf
 save stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
 run-settings saves while a run is open. Folder changes name hidden unfinished runs and their states. A move
-result gives counts and destination without another Saved label. A moved run has confirmation and Undo move
+result gives counts and destination without another Saved label. A moved run has confirmation and `Undo move <fight>`
 until the next note or plan edit.
 
 ## World
@@ -1501,7 +1501,16 @@ also gives the open fight from that encounter its new read-aloud text and notes 
 state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
 fight says `Close the open run first.` beside it. The actions are measured as they are drawn, in their widest
-weight, and the place is planned from the widths only, so nothing moves while the DM types. Sync and repeat options follow the roster. Use group_heading
+weight, and the place is planned from the widths only, so nothing moves while the DM types. The roster and Add
+participants are one composite (`PaneColumns`: the roster has the rest of the room, Add participants trails at the
+right at its own or dragged width); the head resolves their edges before it paints, so the name ends at the
+roster's edge (its rows' and rules' end, less the scroll bar's lane) in the same pass as the roster, a drag
+included, never at an edge from an earlier frame. The save row's reasons follow the draft head plan and ruling M24:
+the campaign-switch reason, then the row's other reason (the creature's open changes, a read in progress, no
+participants), each on the row in full where it fits beside the widest state word and Discard (and the paused run's
+state), else in its short form in every state (`Save or discard to switch.`, `Save or discard the creature first.`,
+`Still reading.`; `Add participants first.` keeps its words), with the full reason in hover and the accessible
+description; only a row narrower than the short form keeps a line below. Sync and repeat options follow the roster. Use group_heading
 for groups of controls and sentence-case field labels over single inputs; tabbed Add participants has no repeated heading. Group frames choose where Add goes;
 search says `Adding to <name>` as read-only text. The frame's Add slot keeps the width of `Adding here` with its
 check in every frame, so every name field ends at one edge and does not move with the Add target. Each encounter group has a frame below the roster with name,
@@ -2110,8 +2119,8 @@ The Read/Write switch sits at the right end of the note frame’s top edge at ev
 
 The DM can hide the session list to give the session its room. In a wide page with a session open, the page header
 (the shared title line, `TitleLine::page`) has its view toggle at its right end (`TitleLine::toggle`,
-`SIDEBAR_SIMPLE`), named `Hide the session list` or `Show the session list`; its hover adds `Ctrl+\`, which does
-the same on the notes view. The header's actions (`New session` or `New template`, `Stop recording`, `Templates`,
+`SIDEBAR_SIMPLE`), named `Session list` in both states and pressed while the list shows; its hover says
+`Hide the session list (Ctrl+\)` or `Show the session list (Ctrl+\)`, and `Ctrl+\` does the same on the notes view. The header's actions (`New session` or `New template`, `Stop recording`, `Templates`,
 `Show party`) follow the title and come and go there, so they never move it, and it is one size in both states.
 The Notes panel's header is a title line too: the note's title, its date after it, and the close icon. The
 choice is the DM's for the app, saved with the window's state, and only the toggle changes it. With the list
@@ -2207,7 +2216,7 @@ creation form with its actions under the field (`InlineCreate::actions_under`): 
 `Create template` and quiet `Cancel` together on the action line, then the kept line with `Type a name first.`. Enter
 in the field creates, Escape cancels. Built-ins leave one blank line below each heading.
 Template editors use the note's styled source face in the shared editor viewport (`pane::editor_view`, `ViewHeight::Fills`): its input well and fixed frame take the full column width and the body's height above the footer, with the text and its lane scrolling inside it. A built-in template reads with no well. `Deleted
-“<name>”.` with `Undo delete` is a result in the template editor's message footer (in a narrow window with the
+“<name>”.` with `Undo delete <name>` is a result in the template editor's message footer (in a narrow window with the
 list alone, in the list's footer), never under the list. A campaign change or an edit to a template ends it.
 
 ### The session's plan
@@ -2567,8 +2576,9 @@ A new file takes a new identity only once it exists: if a file arrived at that p
 keeps its identity and the File gone state, and the warning says why above the choices. Discarded or reloaded
 words stay recoverable when the draft follows a later outside edit; their Undo then meets the conflict choice. When Splat found the note under a new name, the warning
 says so: `The note of <session> was moved or renamed. It is now <file>. Your draft is still here.`; `gone from the folder`
-is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard`. After
-`Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
+is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard of <note>`. After
+`Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload <note>`, as World does; each Undo
+names the note (or template) whose draft it brings back, as its warnings name it. Missing session and run folders offer Choose folder.
 
 A session notice that arrives on its own, not as the result of the DM's action on this page, sits in the bottom
 banner where the recording banners sit, never above the tabs or the note: processing finished (`“<session>” is
@@ -2600,7 +2610,7 @@ typed footer until a footer notice can colour a state word.) The plan has its ow
 footer below its rows for its Add, Remove, ruling and deleted-run results with their Undo, the file's notices, the
 group being assembled elsewhere and a rename problem, and each fight's `Add rewards` result and fault, naming the
 fight; no result sits under a row. The row keeps its own state word (`✓ In notes`). The marker `Add` result
-(`<event> added to <session>.` with `Undo add`) is in the session pane's footer; the marker row keeps `✓ On the
+(`<event> added to <session>.` with `Undo add <event>`) is in the session pane's footer; the marker row keeps `✓ On the
 timeline`. The Notes panel beside a run and the Templates editor have one footer each for their draft's result,
 the panel's date warning, the template action's error and the delete result. When the
 banner makes the note's view shorter and the view was at the note's end, it stays at the end, so the line being
@@ -2746,7 +2756,7 @@ session list shows the warning icon and Processed in warning colour, then ` · P
 its sibling states do. A clean result is a status too: the check icon and Processed in the success colour, as
 on the recording row; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
 and transcript markers. Marker text takes its content width, capped at READER_MEASURE. A marker's Add
-result (`<event> added to <session>.` with `Undo add`), from the list or the marked transcript, is in the session
+result (`<event> added to <session>.` with `Undo add <event>`), from the list or the marked transcript, is in the session
 pane's message footer, newest first among its results; the row keeps On the timeline. One action column
 sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line is kept on every marker row, empty until the marker is added, so an Add moves no row below it. It does not affect that column’s width and wraps below the facts.
 
@@ -2785,11 +2795,15 @@ layout with no account, `To import from D&D Beyond, connect your account first.`
 the form, the session and the layout, never on what is in view, so it never moves the form. The edit form is a save
 row, with Cancel or Discard at the left and the commit at the right. An unchanged form blocks Save details with No changes to save.
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
-at the right. Discard restores saved details with Undo discard; clean forms use Cancel. The tab's messages sit in
-its one footer: the discard result with its live Undo first (while the form is open), then a registered copy
-with `Undo register campaign` (disabled with the reason while a run, a recording or an unsaved draft blocks a
-campaign change, as the list is), then the error (Save's error with its own recovery, the D&D Beyond list's
-error), then the add result with `Build an encounter`. So none of them moves the form, Connect or
+at the right. Discard restores saved details with Undo discard; clean forms use Cancel. In the wide tab (1000 px
+and wider), each column is its own pane with its own footer, `S` below its content, so a result stands under the
+column that owns it. The campaigns' footer holds the discard result with its live Undo first (while the form is
+open), then a registered copy with `Undo register campaign` (disabled with the reason while a run, a recording or an
+unsaved draft blocks a campaign change, as the list is), then the error (Save's error with its own recovery, the
+D&D Beyond list's error), then the add result with `Build an encounter`, and the campaign link's result. The
+account's footer holds the account's errors that are not a failed Connect. One column's result never moves the
+other column. The stacked narrow tab keeps one footer for all of them, in that order, then the account's errors:
+two footers in one scroll would leave one in the middle of the page. So no message moves the form, Connect or
 the campaign rows. Campaign → Link and folder has the same footer for the details form and the link's result. The D&D Beyond list's
 Add or Added sits in one column, `L` after the widest remote name. Import opens below its
 chosen row with a new sibling folder filled in. Keep campaign name in its field; omit remote ID, repeated
