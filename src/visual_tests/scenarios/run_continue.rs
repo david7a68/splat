@@ -333,9 +333,8 @@ fn death_saves_move_nothing(d: &mut Driver<'_>) {
 }
 
 /// Layout 11c (review of PR 750): the ended view opened first at 1920, with no height kept from
-/// a smaller window (a restart). P1: its short columns are measured as they are, so the footer
-/// follows them. P2: the header (Close run) comes before the footer (its message's Dismiss, its
-/// group) in Tab order. Then the base size again.
+/// a smaller window (a restart): its short columns are measured as they are, so the footer
+/// follows them (P1). Then the base size again.
 fn ended_fresh_at_1920(d: &mut Driver<'_>) {
     let base = d.window_size();
     d.set_base(LARGE);
@@ -348,6 +347,13 @@ fn ended_fresh_at_1920(d: &mut Driver<'_>) {
         }),
         format!("Opened first at 1920, the ended pane: {pane:?}"),
     );
+    d.set_base(base);
+}
+
+/// Layout 11c (review of PR 750, P2): the ended view's header (Close run) comes before its
+/// footer (a message's Dismiss, the footer's group) in Tab order.
+fn ended_tab_order(d: &mut Driver<'_>) {
+    let pane = ended_pane(d);
     let footer = pane.and_then(|pane| pane.footer);
     d.harness_focus_nothing();
     let (mut close, mut first_footer, mut stops) = (None, None, Vec::new());
@@ -379,7 +385,6 @@ fn ended_fresh_at_1920(d: &mut Driver<'_>) {
         close.zip(first_footer).is_some_and(|(close, footer)| close < footer),
         format!("Tab reaches Close run at stop {close:?} and the footer at {first_footer:?}; stops: {stops:?}"),
     );
-    d.set_base(base);
 }
 
 pub fn run(d: &mut Driver<'_>) {
@@ -511,6 +516,7 @@ pub fn run(d: &mut Driver<'_>) {
         still,
         "No restart bypass: an Undo of the saved ending leaves the fight ended after a later rest",
     );
+    ended_tab_order(d);
     if d.has("Dismiss this message") {
         d.click("Dismiss this message");
     }

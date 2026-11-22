@@ -6405,15 +6405,22 @@ impl Run {
     /// then the Combat log. With choices to make, they have the column, and the log waits behind
     /// a heading. Never a pair of choices cut by a second scroll.
     fn ended_panel(&mut self, ui: &mut egui::Ui) {
-        let room = if self.conflict_count() > 0 {
-            ui.available_height() - Density::Read.control() - design::M
-        } else {
+        // The Combat log's own line while it is closed: its heading and the gap above it.
+        let log_line = Density::Read.control() + design::M;
+        let log_id = ui.make_persistent_id("run_ended_combat_log");
+        let log_open = egui::collapsing_header::CollapsingState::load(ui.ctx(), log_id)
+            .is_some_and(|state| state.is_open());
+        // An open log shares the column (the sync block up to 60%, as before); a closed one
+        // takes only its line, so the sync block is whole while the column has room for it.
+        let room = if log_open && self.conflict_count() == 0 {
             ui.available_height() * 0.6
+        } else {
+            ui.available_height() - log_line
         };
         // A quiet action at the text edge (`Stop sync for …`) hangs into the panel's gutter: the
         // column's scroll area starts where it reaches (`ScrollColumn`), so it shows the whole
         // target, and the text stays at the panel's text edge.
-        design::ScrollColumn::new("run_ended_sync")
+        let sync = design::ScrollColumn::new("run_ended_sync")
             .max_height(room.max(0.0))
             .fit_height()
             .show(ui, |ui| {
@@ -6421,9 +6428,18 @@ impl Run {
                 if !self.setup_details.is_empty() {
                     design::section(ui, "Prep", |ui| self.prep_notes(ui));
                 }
-            });
+            })
+            .inner_rect
+            .height();
         // SM11, AM14: Prep's peer, so one form, closed, with or without choices to make.
-        design::section(ui, "Combat log", |ui| self.log_tab(ui));
+        design::section_with_id(ui, "run_ended_combat_log", "Combat log", |ui| {
+            self.log_tab(ui)
+        });
+        // The shared columns measure this column (`PaneColumns::shared_task`): a closed log's
+        // whole line counts, so the room it gives the sync block is the room it was measured with.
+        if !log_open {
+            ui.set_min_height(sync + log_line);
+        }
     }
 
     fn ended_undo_whole(&self, ui: &egui::Ui) -> Option<f32> {
