@@ -140,7 +140,7 @@ scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named fo
 scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-request	src/encounters/groups.rs	members	1	Encounters
-scroll-request	src/encounters/groups.rs	of_encounter	2	Encounters
+scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters
 scroll-request	src/encounters/groups.rs	overrides_form	1	Encounters
 scroll-request	src/encounters/groups.rs	unread_member	1	Encounters
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup

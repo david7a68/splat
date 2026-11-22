@@ -4064,6 +4064,59 @@ mod row_cut_tests {
         );
         list.state_mut().state.navigate(Navigation::Reset);
         list.run_steps(2);
+        // Issue #539: the wheel cancels a key's jump and its focus. A press held in the region
+        // makes End's jump wait; the wheel cancels it; a jump made later to that row by other
+        // means draws it, and the row takes no focus the wheel cancelled.
+        {
+            use egui_kittest::kittest::{NodeT, Queryable};
+            let first = shown(&list)[0].0;
+            list.get_by_label(&format!("Row {first}")).focus();
+            list.step();
+            let (held, away) = (shown(&list)[1].1.center(), egui::pos2(395.0, 5.0));
+            list.input_mut()
+                .events
+                .push(egui::Event::PointerMoved(held));
+            list.input_mut().events.push(egui::Event::PointerButton {
+                pos: held,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            });
+            list.step();
+            list.key_press(egui::Key::End);
+            list.step();
+            list.input_mut().events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -10.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            list.step();
+            list.input_mut()
+                .events
+                .push(egui::Event::PointerMoved(away));
+            list.input_mut().events.push(egui::Event::PointerButton {
+                pos: away,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            });
+            list.step();
+            assert!(
+                !whole(&list, "key-wheel").contains(&59),
+                "region: the wheel cancels End's jump"
+            );
+            list.state_mut()
+                .state
+                .navigate(Navigation::Jump { block: 59 });
+            list.run_steps(3);
+            assert!(
+                whole(&list, "key-wheel-later").contains(&59)
+                    && !list.get_by_label("Row 59").accesskit_node().is_focused(),
+                "#539: the row End asked for takes no focus after the wheel cancelled it"
+            );
+        }
+        list.state_mut().state.navigate(Navigation::Reset);
+        list.run_steps(2);
         // A press held in the region makes a jump wait; it lands after the release.
         let centre = shown(&list)[1].1.center();
         list.input_mut()

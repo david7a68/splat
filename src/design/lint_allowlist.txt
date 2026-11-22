@@ -50,21 +50,10 @@ src/world/lines.rs fact-owner 1
 # src/content_ui/tests/quiet_reader.rs keeps 1 (layout PR 9b-R1a): its eviction case installs the theme
 # again on purpose between frames, to prove the Reader prepares again for a new font generation.
 src/content_ui/tests/quiet_reader.rs late-theme 1
-src/design/outcome.rs late-theme 10
 src/design/pane.rs late-theme 12
-src/design/pane/laid.rs late-theme 2
 src/design/reveal.rs late-theme 1
-src/encounters.rs late-theme 15
-src/encounters/groups.rs late-theme 3
-src/library/creature.rs late-theme 1
-src/lookup.rs late-theme 3
 src/markdown_view.rs late-theme 5
-src/party_support/sheets.rs late-theme 3
-src/sessions/slash.rs late-theme 1
 src/settings.rs late-theme 2
 src/timeline/checks.rs late-theme 1
-src/timeline/test_support.rs late-theme 1
 src/trackers/view.rs late-theme 1
-src/visual_tests/ergonomics.rs late-theme 2
 src/world.rs late-theme 3
-src/world/page.rs late-theme 2

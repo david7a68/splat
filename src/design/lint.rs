@@ -881,23 +881,42 @@ fn design_or_capture(path: &str) -> bool {
 
 /// Issue #810: each `theme::install(&<harness>.ctx)`, a theme installed on a test harness's
 /// context after `egui_kittest`'s builder already drew the page, so the page's one-time results
-/// were measured at egui's default sizes. A harness is built with `design::test_harness`
-/// instead, whose first frame installs the theme. A context made by hand and themed before its
-/// first `run` (`theme::install(&ctx)`) is not counted.
+/// were measured at egui's default sizes; and each `theme::install(&<name>)` on a context taken
+/// from a harness (`let ctx = harness.ctx.clone();`, Sol 2-010). A harness is built with
+/// `design::test_harness` instead, whose first frame installs the theme. A context made by hand
+/// and themed before its first `run` (`theme::install(&ctx)`) is not counted.
 fn late_theme_installs(text: &str) -> usize {
-    text.lines()
+    // The names bound to a harness's context so far (`let [mut] ctx[: T] = [&]<expr>.ctx[.clone()];`).
+    // A later `let` of the same name to anything else ends it, so a plain context is not counted.
+    let mut taken: Vec<&str> = Vec::new();
+    let mut found = 0;
+    for code in text
+        .lines()
         .map(|line| line.split("//").next().unwrap_or(""))
-        .map(|code| {
-            code.match_indices("theme::install(&")
-                .filter(|(at, call)| {
-                    let rest = &code[at + call.len()..];
-                    rest.split(')')
-                        .next()
-                        .is_some_and(|argument| argument.trim().ends_with(".ctx"))
+    {
+        if let Some(rest) = code.trim().strip_prefix("let ")
+            && let Some((name, value)) = rest.strip_prefix("mut ").unwrap_or(rest).split_once('=')
+        {
+            let name = name.split(':').next().unwrap_or(name).trim();
+            let value = value.trim().trim_end_matches(';').trim();
+            let value = value.strip_suffix(".clone()").unwrap_or(value);
+            taken.retain(|known| *known != name);
+            if value.ends_with(".ctx") {
+                taken.push(name);
+            }
+        }
+        found += code
+            .match_indices("theme::install(&")
+            .filter(|(at, call)| {
+                let rest = &code[at + call.len()..];
+                rest.split(')').next().is_some_and(|argument| {
+                    let argument = argument.trim();
+                    argument.ends_with(".ctx") || taken.contains(&argument)
                 })
-                .count()
-        })
-        .sum()
+            })
+            .count();
+    }
+    found
 }
 
 #[test]
@@ -909,10 +928,14 @@ fn a_theme_on_a_built_harness_is_counted() {
         "crate::design::theme::install",
         "(&h.ctx); // after build_state\n",
         "theme::install(&ctx);\n",
+        "let shared = harness.ctx",
+        ".clone();\ndesign::theme::install(&shared);\n",
+        "let plain = egui::Context::default();\ndesign::theme::install(&plain);\n",
         "// design::theme::install",
         "(&harness.ctx);\n",
     );
-    assert_eq!(late_theme_installs(text), 2);
+    // The harness's own context twice, and a context taken from a harness; not a plain one.
+    assert_eq!(late_theme_installs(text), 3);
 }
 
 /// Counts the rules of every source file under `folder`, and keeps each file's text by its key
@@ -1044,7 +1067,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 }
                 "reason-end-mark" => "End a blocked reason with `.`, `?` or `!`",
                 "late-theme" => {
-                    "Build the harness with `design::test_harness` (`themed_state`, `themed_ui_state`, `themed`, `themed_ui`): its first frame installs the theme, so the page never draws at egui's default sizes (issue #810)"
+                    "A theme installed on a harness after it drew (issue #810). (a) The test draws before it installs the theme by accident: build the harness with `design::test_harness` (`themed_state`, `themed_ui_state`, `themed`, `themed_ui`), whose first frame installs the theme. (b) The test changes the theme on purpose after a draw (a new font generation): keep the visible `theme::install` call on the harness's own context and add a counted row to `lint_allowlist.txt` with its reason, for review; never hide the call behind another binding. Examples of (b): `src/content_ui/tests/quiet_reader.rs`, `src/trackers/view.rs`"
                 }
                 "fitting-escape" => {
                     "Fit the run's words through a design part (`design::TurnHeading`), not a raw cut"
