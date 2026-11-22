@@ -691,8 +691,12 @@ fn tile_label(words: &str) -> bool {
 /// independent of the sheet's rows: the clip that paints the text, and the tile's own label.
 /// `None` when no sheet shows.
 fn sheet_faults(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>)> {
+    Some(sheet_faults_in(d, sheet_left(d)?))
+}
+
+/// `sheet_faults` in the column that starts at `left`.
+fn sheet_faults_in(d: &Driver<'_>, left: f32) -> (Vec<String>, Vec<String>) {
     let (width, height) = d.window_size();
-    let left = sheet_left(d)?;
     let area = egui::Rect::from_min_max(egui::pos2(left, 0.0), egui::pos2(width, height));
     // Each text in the column: its words, its bounds, whether it shows whole.
     let mut texts: Vec<(String, egui::Rect, bool)> = Vec::new();
@@ -729,7 +733,7 @@ fn sheet_faults(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>)> {
         })
         .map(|(words, _, _)| words.clone())
         .collect();
-    Some((cut, missing))
+    (cut, missing)
 }
 
 /// The painted texts in `area` that their clip cuts from below (an edge through them). Only a cut
@@ -793,9 +797,12 @@ fn sheet_sweep(d: &mut Driver<'_>) -> (usize, Vec<String>) {
     let (mut steps, mut faults) = (0, Vec::new());
     for _ in 0..300 {
         steps += 1;
-        let (whole, found) = sheet_whole(d);
-        if !whole {
-            faults.push(format!("step {steps}: {found}"));
+        // The column found at the top: the sheet's end shows none of its known words.
+        let (cut, missing) = sheet_faults_in(d, left);
+        if !cut.is_empty() || !missing.is_empty() {
+            faults.push(format!(
+                "step {steps}: cut from below {cut:?}, labels without their value {missing:?}"
+            ));
         }
         let before = tops(d);
         d.scroll_points_at(wheel, 6.0);
