@@ -10272,7 +10272,10 @@ mod tests {
                 });
             }
         });
-        assert_eq!(work, (0, 0), "9b-quiet: the Library editor's quiet frames");
+        assert!(
+            work.is_quiet(3),
+            "9b-quiet: the Library editor's quiet frames: {work:?}"
+        );
     }
 
     /// Row 125: the owner line's status that ends with `words`, after two frames: its icon, the

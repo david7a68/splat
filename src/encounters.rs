@@ -10573,10 +10573,10 @@ mod tests {
         harness.event(egui::Event::Text("Unsent tactics.\n".repeat(60)));
         harness.run_steps(2);
         // Layout PR 9b: the focused notes' quiet frames lay out and hash none of their text.
-        assert_eq!(
-            design::pane::text_work(|| harness.run_steps(3)),
-            (0, 0),
-            "9b-quiet: the encounter notes' quiet frames"
+        let work = design::pane::text_work(|| harness.run_steps(3));
+        assert!(
+            work.is_quiet(3),
+            "9b-quiet: the encounter notes' quiet frames: {work:?}"
         );
         let focus = harness.ctx.memory(|memory| memory.focused()).unwrap();
         let text = draft.borrow().body.as_str().to_owned();
@@ -11025,10 +11025,10 @@ mod tests {
         harness.get_by_label("Its text, as Markdown").click();
         harness.run_steps(3);
         harness.get_by_label("Creature text");
-        assert_eq!(
-            design::pane::text_work(|| harness.run_steps(3)),
-            (0, 0),
-            "9b-quiet: the creature text's quiet frames"
+        let work = design::pane::text_work(|| harness.run_steps(3));
+        assert!(
+            work.is_quiet(3),
+            "9b-quiet: the creature text's quiet frames: {work:?}"
         );
     }
 

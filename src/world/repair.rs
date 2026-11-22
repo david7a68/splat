@@ -624,7 +624,10 @@ mod tests {
         let work = design::pane::text_work(|| {
             let _ = (frame(), frame());
         });
-        assert_eq!(work, (0, 0), "9b-quiet: the repair editor's quiet frames");
+        assert!(
+            work.is_quiet(2),
+            "9b-quiet: the repair editor's quiet frames: {work:?}"
+        );
         let accent = colors().accent_fill;
         let mut words = String::new();
         let mut primary = false;

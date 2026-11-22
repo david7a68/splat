@@ -573,36 +573,134 @@ impl Laid for design::Editor {
 }
 
 /// The rule under a section heading, as in the Reader, and the mark of each folded `splat:`
-/// comment. A layouter cannot draw either.
+/// comment. A layouter cannot draw either. `words`: the draft's key, when the text is a
+/// document's (`TextDraft`): its rules and marks are then placed once per laid-out text (keyed by
+/// the draft's key and `pane::kept_layout_made`, which changes with the fold state too), and a
+/// frame paints only those inside the clip (layout PR 9b-C: a quiet frame scans and allocates
+/// nothing that grows with the note).
 pub fn paint_section_rules(ui: &egui::Ui, output: &impl Laid, words: Option<DraftKey>) {
     let galley = output.galley();
     let galley_pos = output.galley_pos();
-    let painter = ui.painter().with_clip_rect(output.text_clip_rect());
-    let left = galley_pos.x;
-    let styled = match words {
-        Some(key) => kept_styles(ui, key, &galley.job.text),
-        None => styled_text(ui, &galley.job.text),
+    let clip = output.text_clip_rect();
+    let painter = ui.painter().with_clip_rect(clip);
+    let field = output.response().id;
+    let made = words.and_then(|_| design::pane::kept_layout_made(ui.ctx(), field));
+    let plan = match (words, made) {
+        (Some(key), Some(made)) => kept_plan(ui, field, (key, made), galley),
+        _ => Arc::new(Plan::of(galley, &styled_text(ui, &galley.job.text))),
     };
-    for end in &styled.section_ends {
-        let row = galley.pos_from_cursor(egui::text::CCursor::new(*end));
+    // What is in view, in the galley's own coordinates: rules and marks are in text order, so
+    // in height order too.
+    let (top, bottom) = (clip.top() - galley_pos.y, clip.bottom() - galley_pos.y);
+    let right = galley_pos.x + galley.job.wrap.max_width;
+    let first = plan.rules.partition_point(|y| *y + RULE_GAP < top);
+    for y in plan.rules[first..]
+        .iter()
+        .take_while(|y| **y + RULE_GAP <= bottom)
+    {
         painter.hline(
-            left..=left + galley.job.wrap.max_width,
-            galley_pos.y + row.bottom() + RULE_GAP,
+            galley_pos.x..=right,
+            galley_pos.y + y + RULE_GAP,
             Stroke::new(design::HAIRLINE_WIDTH, colors().rule),
         );
     }
-    for at in folded_marks(galley, &styled) {
-        let glyph = galley
-            .pos_from_cursor(egui::text::CCursor::new(at.char))
-            .translate(galley_pos.to_vec2());
+    let first = plan.marks.partition_point(|mark| mark.y < top - FOLD_ROOM);
+    for mark in plan.marks[first..]
+        .iter()
+        .take_while(|mark| mark.y <= bottom + FOLD_ROOM)
+    {
         painter.text(
-            egui::pos2(glyph.left() - at.room / 2.0, glyph.center().y),
+            galley_pos + mark.to_vec2(),
             egui::Align2::CENTER_CENTER,
             FOLD_MARK,
             Type::Body.font(ui),
             colors().faint,
         );
     }
+}
+
+/// How far past the clip a fold mark's centre can be and still show part of its `⋯`.
+const FOLD_ROOM: f32 = 2.0 * design::L;
+
+/// Where a laid-out text's rules and fold marks go, in the galley's own coordinates: each
+/// rule's row bottom, and each mark's centre, in text order.
+struct Plan {
+    rules: Vec<f32>,
+    marks: Vec<egui::Pos2>,
+}
+
+impl Plan {
+    fn of(galley: &egui::Galley, styled: &Styled) -> Self {
+        let rules = styled
+            .section_ends
+            .iter()
+            .map(|end| {
+                galley
+                    .pos_from_cursor(egui::text::CCursor::new(*end))
+                    .bottom()
+            })
+            .collect();
+        let marks = folded_marks(galley, styled)
+            .into_iter()
+            .map(|at| {
+                let glyph = galley.pos_from_cursor(egui::text::CCursor::new(at.char));
+                egui::pos2(glyph.left() - at.room / 2.0, glyph.center().y)
+            })
+            .collect();
+        Self { rules, marks }
+    }
+}
+
+/// Each drawn document's plan, by its field, with the (draft key, laid-out text) it was made
+/// for. egui runs `update` at the end of each pass: a field not drawn in a pass loses its plan.
+#[derive(Default)]
+struct KeptPlans {
+    kept: egui::IdMap<((DraftKey, u64), Arc<Plan>, bool)>,
+}
+
+impl egui::cache::CacheTrait for KeptPlans {
+    fn update(&mut self) {
+        self.kept.retain(|_, (_, _, used)| std::mem::take(used));
+    }
+
+    fn len(&self) -> usize {
+        self.kept.len()
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many rule and mark plans were made (a test reads it: a quiet frame makes none).
+    static PLANS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The plan of field `field`'s galley, the laid-out text `key` names: made once per key.
+fn kept_plan(
+    ui: &egui::Ui,
+    field: egui::Id,
+    key: (DraftKey, u64),
+    galley: &egui::Galley,
+) -> Arc<Plan> {
+    let hit = ui.ctx().memory_mut(|memory| {
+        let (kept, plan, used) = memory.caches.cache::<KeptPlans>().kept.get_mut(&field)?;
+        *used = true;
+        (*kept == key).then(|| plan.clone())
+    });
+    if let Some(plan) = hit {
+        return plan;
+    }
+    #[cfg(any(test, feature = "test-support"))]
+    PLANS_MADE.with(|made| made.set(made.get() + 1));
+    let plan = Arc::new(Plan::of(galley, &kept_styles(ui, key.0, &galley.job.text)));
+    ui.ctx().memory_mut(|memory| {
+        let kept = &mut memory.caches.cache::<KeptPlans>().kept;
+        kept.insert(field, (key, plan.clone(), true));
+    });
+    plan
 }
 
 /// A folded mark in a laid-out text: the character it starts at and the room left for its `⋯`.
@@ -1306,7 +1404,11 @@ mod tests {
         assert!(steps > 0, "fe9-cost: the counter counts");
         // Layout PR 9b: a quiet frame lays out, hashes and looks up none of the words: the
         // layout and the rules' parse are kept by the draft's key.
-        let lookups = STYLED_LOOKUPS.with(std::cell::Cell::get);
+        let (lookups, steps, plans) = (
+            STYLED_LOOKUPS.with(std::cell::Cell::get),
+            FOLD_STEPS.with(std::cell::Cell::get),
+            PLANS_MADE.with(std::cell::Cell::get),
+        );
         let work = design::pane::text_work(|| {
             let _ = context.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -1316,9 +1418,14 @@ mod tests {
             });
         });
         assert_eq!(
-            (work, STYLED_LOOKUPS.with(std::cell::Cell::get) - lookups),
-            ((0, 0), 0),
-            "9b-quiet: a quiet frame's layouts, hashed bytes and lookups of the words"
+            (
+                work.is_quiet(1),
+                STYLED_LOOKUPS.with(std::cell::Cell::get) - lookups,
+                FOLD_STEPS.with(std::cell::Cell::get) - steps,
+                PLANS_MADE.with(std::cell::Cell::get) - plans,
+            ),
+            (true, 0, 0, 0),
+            "9b-quiet: a quiet frame's text work ({work:?}), word lookups, fold steps and rule plans"
         );
     }
 
