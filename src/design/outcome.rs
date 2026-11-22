@@ -4720,6 +4720,29 @@ pub fn row_fault(ui: &mut Ui, fault: &dyn Fault) -> Response {
     response
 }
 
+/// The height `row_fault` takes for `fault` in a row `width` wide, measured before paint (layout
+/// 11c scope C: a recipe's slot for a row fault, such as a tracker line's repeated-field
+/// warning). It follows `small_tone_message`: the bar's room (`S` and a hairline), the icon and
+/// the item gap, less `XS`, then the words wrapped in the rest of the row; the row is as tall as
+/// the taller of the icon and the words.
+pub fn row_fault_height(ui: &Ui, fault: &dyn Fault, width: f32) -> f32 {
+    let (icon, _) = fault.severity().tone().parts();
+    let small = Type::Small.font(ui);
+    let icon = ui.fonts_mut(|fonts| {
+        fonts.layout_no_wrap(icon.to_owned(), small.clone(), egui::Color32::PLACEHOLDER)
+    });
+    let used = S + HAIRLINE_WIDTH + icon.size().x + ui.spacing().item_spacing.x - XS;
+    let words = ui.fonts_mut(|fonts| {
+        fonts.layout(
+            fault_words(fault).as_str().to_owned(),
+            small,
+            egui::Color32::PLACEHOLDER,
+            (width - used).max(0.0),
+        )
+    });
+    icon.size().y.max(words.size().y)
+}
+
 /// A notice that came by itself, at the top of a pane's body, in the compact form. It holds no
 /// Undo, no choice and no order, so it cannot carry a result's way back; its words can still say
 /// anything. `banner`, `row_fault` and `PagePlaceholder` are the body places: they take any `Ui`,
@@ -5660,6 +5683,62 @@ mod tests {
                 ],
             "{results:?}"
         );
+    }
+
+    /// Layout 11c scope C: a row fault's measured height (`row_fault_height`) is the height it
+    /// paints, at every width and for words of one line and of several, in each tone. The
+    /// reference is the painted row's own rect.
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test draws row faults to compare their measure"
+    )]
+    fn a_row_fault_paints_at_its_measured_height() {
+        use crate::design::test_harness::ThemedPage as _;
+        let long = "line 12: the field `ask` is set twice for one name, so the second line \
+                    leaves its amount out and keeps its other actions";
+        let mut wrapped = 0;
+        for severity in [Severity::NeedsFixing, Severity::CannotRead] {
+            for words in ["Not saved.", long] {
+                for width in [180.0, 260.0, 340.0, 520.0, 900.0] {
+                    let painted = std::rc::Rc::new(std::cell::Cell::new((0.0, 0.0)));
+                    let out = painted.clone();
+                    let mut h = Harness::builder()
+                        .with_size(egui::vec2(width, 400.0))
+                        .themed_ui(move |ui| {
+                            let fault = Said(severity, words);
+                            let measured = row_fault_height(ui, &fault, ui.available_width());
+                            let rect = row_fault(ui, &fault).rect;
+                            out.set((measured, rect.height()));
+                        });
+                    h.run_steps(2);
+                    let (measured, height) = painted.get();
+                    assert!(
+                        (measured - height).abs() < 0.5,
+                        "row-fault-measure: {severity:?} {width} px {words:?}: measured {measured}, painted {height}"
+                    );
+                    if height > 30.0 {
+                        wrapped += 1;
+                    }
+                }
+            }
+        }
+        assert!(
+            wrapped > 0,
+            "row-fault-measure-reached: some width wraps the words"
+        );
+    }
+
+    /// A fault of the given severity whose cause is the given words, for the measure's proof.
+    struct Said(Severity, &'static str);
+
+    impl Fault for Said {
+        fn severity(&self) -> Severity {
+            self.0
+        }
+        fn cause(&self) -> Sentence {
+            Sentence(Cow::Borrowed(self.1))
+        }
     }
 
     /// One fault drawn in every place has one tone, its severity's, and one form of words.
