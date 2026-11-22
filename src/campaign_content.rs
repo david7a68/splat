@@ -498,9 +498,6 @@ impl design::outcome::Fault for ContentFault<'_> {
 pub struct CampaignContent {
     /// The unavailable packages whose Technical details are open, by their reference.
     details: BTreeSet<String>,
-    /// Where each open repair's editor sits this frame. Focus scrolling leaves them to the
-    /// editor, which scrolls the page to its own viewport.
-    editor_rects: Vec<egui::Rect>,
     /// The page's kept results, each with the order its action took (newest first) and what
     /// its action left (`Payload`): the one owner of each result's words and Undo.
     results: design::Results<PageOwner, PageKept>,
@@ -1234,7 +1231,7 @@ impl CampaignContent {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the columns of the package list fill the page (`Fills::because`) (design::results::STAGED_ALLOWS)"
+        reason = "staged: the page's pane, placed by hand around its columns (design::results::STAGED_ALLOWS)"
     )]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         let scope = (self.module, self.dependencies);
@@ -1325,31 +1322,12 @@ impl CampaignContent {
             &active,
             width.min(design::LIST_MEASURE),
         );
-        // A page with a list or an editor that scrolls inside it above the package columns
-        // (`inner_scrolls`) keeps its own scroll in a `Fills` body, its footer pinned: egui gives
-        // a scroll's content only the visible height, so a scroll area inside it would shrink
-        // below the fold, and the page's content has all the height it needs instead.
-        let inner = self.inner_scrolls(&active);
-        let body = if inner {
-            design::Body::Fills(design::Fills::because(design::FillsReason::Columns))
-        } else {
-            design::Body::Content
-        };
-        let paned = footer.pane(ui, body, |ui| {
-            if inner {
-                let page_height = ui.available_height();
-                design::ScrollColumn::new("campaign_packages_page").show(ui, |ui| {
-                    ui.allocate_ui(egui::vec2(width, f32::INFINITY), |ui| {
-                        self.editor_rects.clear();
-                        self.page(ui, campaigns, &active, Some(page_height));
-                        self.scroll_to_focus(ui);
-                    });
-                });
-            } else {
-                self.editor_rects.clear();
-                self.page(ui, campaigns, &active, None);
-                self.scroll_to_focus(ui);
-            }
+        // Layout step 11c (L11c-C.1): the page is always the pane's scroll column. The changes
+        // to review and the issue list are drawn in place (whole rows), a repair's editor keeps
+        // its own framed region (layout step 9), and the pane brings a focused control whole
+        // into view (focus clearance, layout step 10): no inner scroll is left above the columns.
+        let paned = footer.pane(ui, design::Body::Content, |ui| {
+            self.page(ui, campaigns, &active);
         });
         let write = matches!(
             paned.pressed,
@@ -1366,73 +1344,12 @@ impl CampaignContent {
         self.save_key = false;
     }
 
-    /// Whether the page shows, above the package columns, a list or an editor that scrolls inside
-    /// it: a repair's editor, the changes to review, or the issue list. The pane's scroll column
-    /// refuses a scroll inside it, so until those have closed blocks (layout steps 9 and 10) such
-    /// a page keeps its own scroll in a `Fills` body, with its footer pinned (counted).
-    fn inner_scrolls(&mut self, active: &Campaign) -> bool {
-        if !self.repairs.is_empty() || !self.reconcile.proposals.is_empty() {
-            return true;
-        }
-        let Some(snapshot) = &mut self.snapshot else {
-            return false;
-        };
-        let errors = !snapshot.issue_lines(active.id).is_empty();
-        let (catalogue, document) = (&snapshot.catalogue, &snapshot.document);
-        let campaign_flags = catalogue
-            .entries
-            .get(&active.id)
-            .map(|entry| entry.entry.flags.as_slice())
-            .unwrap_or_default();
-        (!campaign_flags.is_empty() || errors)
-            && !missing_package(catalogue, document)
-            && removal_of(&self.results, active.id).is_none_or(|removed| removed.users.is_empty())
-    }
-
-    /// Keyboard and screen-reader focus bring the focused control into view. egui scrolls to a
-    /// focused text cursor, not to a focused button, so the page does it.
-    fn scroll_to_focus(&self, ui: &mut egui::Ui) {
-        let id = egui::Id::new("campaign_page_focus");
-        let focused = ui.memory(|memory| memory.focused());
-        let last = ui
-            .data(|data| data.get_temp::<Option<egui::Id>>(id))
-            .flatten();
-        if focused == last {
-            return;
-        }
-        ui.data_mut(|data| data.insert_temp(id, focused));
-        let page = ui.min_rect();
-        if let Some(rect) = focused
-            .and_then(|focused| ui.ctx().read_response(focused))
-            .map(|response| response.rect)
-            .filter(|rect| page.x_range().contains(rect.center().x))
-            .filter(|rect| page.y_range().contains(rect.center().y))
-            .filter(|rect| {
-                !self
-                    .editor_rects
-                    .iter()
-                    .any(|editor| editor.intersects(*rect))
-            })
-        {
-            ui.scroll_to_rect_animation(rect, None, egui::style::ScrollAnimation::none());
-        }
-    }
-
     /// The Packages page below the tabs, inside its scroll area.
     #[allow(
         clippy::disallowed_methods,
         reason = "a missing campaign folder is the page’s fault with its repair, at the top of the body"
     )]
-    /// `page_height`: the page keeps its own scroll (`inner_scrolls`), and the package columns
-    /// fill the rest of its height, keeping room for a few rows when what is above them is tall.
-    fn page(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        active: &Campaign,
-        page_height: Option<f32>,
-    ) {
-        let top = ui.cursor().top();
+    fn page(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let active = active.clone();
         let save = self.snapshot.is_some() && self.selection_bar(ui, campaigns, &active);
         if self.body_missing() {
@@ -1468,21 +1385,8 @@ impl CampaignContent {
             return;
         }
         self.reconcile_section(ui, campaigns, &active);
-        match (&self.snapshot, page_height) {
-            (None, _) => {}
-            (Some(_), None) => self.packages(ui, campaigns, &active),
-            (Some(_), Some(page_height)) => {
-                let rows = 4.0 * (Density::Glance.row() + design::XS) + design::XXL;
-                let height = (page_height - (ui.cursor().top() - top)).max(rows);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), height),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.set_min_height(height);
-                        self.packages(ui, campaigns, &active);
-                    },
-                );
-            }
+        if self.snapshot.is_some() {
+            self.packages(ui, campaigns, &active);
         }
         // Issue #513: after the package list, which takes the frame's input.
         if save || std::mem::take(&mut self.save_key) {
@@ -1804,44 +1708,42 @@ impl CampaignContent {
             ui,
             design::Heading::Section("Campaign package: changes to review"),
         );
-        design::ScrollColumn::new("campaign package changes")
-            .max_height(220.0)
-            .fit_height()
-            .show(ui, |ui| {
-                for proposal in &reconcile.proposals {
-                    let line = format!(
-                        "{} ({}): {}",
-                        proposal.name,
-                        proposal.kind,
-                        match &proposal.change {
-                            Move::ToPackage(package) => format!("move to {package}"),
-                            Move::ToCampaign =>
-                                "move back to the campaign package; its package is no longer enabled"
-                                    .to_owned(),
-                            Move::Forget => "remove; no current entry uses it".to_owned(),
-                        }
-                    );
-                    if let Some(reason) = &proposal.blocked {
-                        ui.add(
-                            egui::Label::new(
-                                Type::Small
-                                    .rich(ui, format!("{line}. Not available: {reason}"))
-                                    .color(c.muted),
-                            )
-                            .wrap(),
-                        );
-                        continue;
+        // Drawn in place, whole rows of the page's column (L11c-C.1).
+        ui.vertical(|ui| {
+            for proposal in &reconcile.proposals {
+                let line = format!(
+                    "{} ({}): {}",
+                    proposal.name,
+                    proposal.kind,
+                    match &proposal.change {
+                        Move::ToPackage(package) => format!("move to {package}"),
+                        Move::ToCampaign =>
+                            "move back to the campaign package; its package is no longer enabled"
+                                .to_owned(),
+                        Move::Forget => "remove; no current entry uses it".to_owned(),
                     }
-                    let mut chosen = !reconcile.declined.contains(&proposal.key);
-                    if ui.checkbox(&mut chosen, line).changed() {
-                        if chosen {
-                            reconcile.declined.remove(&proposal.key);
-                        } else {
-                            reconcile.declined.insert(proposal.key.clone());
-                        }
+                );
+                if let Some(reason) = &proposal.blocked {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(ui, format!("{line}. Not available: {reason}"))
+                                .color(c.muted),
+                        )
+                        .wrap(),
+                    );
+                    continue;
+                }
+                let mut chosen = !reconcile.declined.contains(&proposal.key);
+                if ui.checkbox(&mut chosen, line).changed() {
+                    if chosen {
+                        reconcile.declined.remove(&proposal.key);
+                    } else {
+                        reconcile.declined.insert(proposal.key.clone());
                     }
                 }
-            });
+            }
+        });
         let keys: BTreeSet<String> = reconcile
             .proposals
             .iter()
@@ -1965,24 +1867,10 @@ impl CampaignContent {
                             repair.error_line,
                         )
                     });
-                    self.editor_rects.push(editor.response.rect);
                     let (edited, focused) = editor.inner;
-                    // A click into the editor does not scroll the page: the DM clicked what was
-                    // in view. The editor's reveal (`world::repair::editor_events`) asks the page
-                    // to show the editor's whole viewport when it gains focus; after a pointer
-                    // press, this frame's scroll target becomes the part already in view, which
-                    // moves nothing. Keyboard and screen-reader focus keep the reveal.
-                    let shown = editor.response.rect.intersect(ui.clip_rect());
-                    if focused
-                        && shown.is_positive()
-                        && ui.input(|input| input.pointer.any_pressed() || input.pointer.any_released())
-                    {
-                        ui.scroll_to_rect_animation(
-                            shown,
-                            None,
-                            egui::style::ScrollAnimation::none(),
-                        );
-                    }
+                    // A click into the editor does not scroll the page: the pane's focus
+                    // clearance keeps a pressed control where it is (layout step 10), and
+                    // keyboard and screen-reader focus bring the editor's block into view.
                     if edited || focused {
                         self.active_repair = Some(path.clone());
                     }
@@ -2733,84 +2621,80 @@ impl CampaignContent {
                 .icon(design::section_icon)
                 .default_open(!campaign_flags.is_empty())
                 .show(ui, |ui| {
-                    design::ScrollColumn::new("campaign_issues")
-                        .max_height(design::FORM_WIDTH / 2.0)
-                        .fit_height()
-                        .show(ui, |ui| {
-                            flag_lines(ui, &mut self.open_run_settings);
-                            for e in errors.iter().filter(|error| {
-                                !closure
+                    // Drawn in place, whole rows of the page's column (L11c-C.1).
+                    ui.vertical(|ui| {
+                        flag_lines(ui, &mut self.open_run_settings);
+                        for e in errors.iter().filter(|error| {
+                            !closure
+                                .missing_dependencies
+                                .iter()
+                                .any(|issue| issue.message.as_str() == error.as_str())
+                        }) {
+                            ui.add(
+                                egui::Label::new(Type::Small.rich(ui, e.as_str()).color(c.muted))
+                                    .wrap(),
+                            );
+                        }
+                        for issue in &closure.missing_dependencies {
+                            ui.push_id(&issue.reference, |ui| {
+                                // FA6: a dependency issue is a warning like the flags above
+                                // it, and its repairs start at its words, one per owner.
+                                let mut fault = design::outcome::BodyFault::new(
+                                    &ContentFault::Flag(&issue.message),
+                                );
+                                for id in &issue.owners {
+                                    if let Some(path) = catalogue.file_path_of(*id) {
+                                        let owner = &catalogue.entries[id];
+                                        fault = fault.repair(design::outcome::Repair::new(
+                                            crate::choice!("Repair {}", owner.entry.name),
+                                            path.to_path_buf(),
+                                        ));
+                                    }
+                                }
+                                let repair = fault.show(ui);
+                                if let Some(path) = repair {
+                                    ui.ctx().data_mut(|data| {
+                                        data.insert_temp(
+                                            egui::Id::new("open_library_repair"),
+                                            path,
+                                        );
+                                        // The editor names the missing link and opens at
+                                        // its line.
+                                        if let Some(target) = &issue.target {
+                                            data.insert_temp(
+                                                egui::Id::new("open_library_repair_link"),
+                                                Some((target.clone(), issue.message.clone())),
+                                            );
+                                        }
+                                    });
+                                }
+                                design::quiet_section(ui, "Technical details", |ui| {
+                                    ui.label(
+                                        Type::Small.rich(ui, issue.technical()).color(c.muted),
+                                    );
+                                });
+                            });
+                        }
+                        for entry in catalogue.entries.values().filter(|entry| {
+                            entry.private
+                                && !closure
                                     .missing_dependencies
                                     .iter()
-                                    .any(|issue| issue.message.as_str() == error.as_str())
-                            }) {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, e.as_str()).color(c.muted),
-                                    )
-                                    .wrap(),
-                                );
-                            }
-                            for issue in &closure.missing_dependencies {
-                                ui.push_id(&issue.reference, |ui| {
-                                    // FA6: a dependency issue is a warning like the flags above
-                                    // it, and its repairs start at its words, one per owner.
-                                    let mut fault = design::outcome::BodyFault::new(
-                                        &ContentFault::Flag(&issue.message),
-                                    );
-                                    for id in &issue.owners {
-                                        if let Some(path) = catalogue.file_path_of(*id) {
-                                            let owner = &catalogue.entries[id];
-                                            fault = fault.repair(design::outcome::Repair::new(
-                                                crate::choice!("Repair {}", owner.entry.name),
-                                                path.to_path_buf(),
-                                            ));
-                                        }
-                                    }
-                                    let repair = fault.show(ui);
-                                    if let Some(path) = repair {
-                                        ui.ctx().data_mut(|data| {
-                                            data.insert_temp(
-                                                egui::Id::new("open_library_repair"),
-                                                path,
-                                            );
-                                            // The editor names the missing link and opens at
-                                            // its line.
-                                            if let Some(target) = &issue.target {
-                                                data.insert_temp(
-                                                    egui::Id::new("open_library_repair_link"),
-                                                    Some((target.clone(), issue.message.clone())),
-                                                );
-                                            }
-                                        });
-                                    }
-                                    design::quiet_section(ui, "Technical details", |ui| {
-                                        ui.label(
-                                            Type::Small.rich(ui, issue.technical()).color(c.muted),
-                                        );
-                                    });
-                                });
-                            }
-                            for entry in catalogue.entries.values().filter(|entry| {
-                                entry.private
-                                    && !closure
-                                        .missing_dependencies
+                                    .any(|issue| issue.owners.contains(&entry.entry.id))
+                        }) {
+                            if splat::content::required_references(&entry.entry).is_ok_and(
+                                |references| {
+                                    references
                                         .iter()
-                                        .any(|issue| issue.owners.contains(&entry.entry.id))
-                            }) {
-                                if splat::content::required_references(&entry.entry).is_ok_and(
-                                    |references| {
-                                        references
-                                            .iter()
-                                            .any(|reference| catalogue.resolve(reference).is_err())
-                                    },
-                                ) && design::link(ui, &format!("Open {}", entry.entry.name))
-                                    .clicked()
-                                {
-                                    self.open_lookup = Some(entry.entry.id);
-                                }
+                                        .any(|reference| catalogue.resolve(reference).is_err())
+                                },
+                            ) && design::link(ui, &format!("Open {}", entry.entry.name))
+                                .clicked()
+                            {
+                                self.open_lookup = Some(entry.entry.id);
                             }
-                        });
+                        }
+                    });
                 });
             design::named(ui, &issues.header_response, &heading);
         }

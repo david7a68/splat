@@ -873,12 +873,12 @@ repair choice and file line start at its words. Packages keeps its save row dire
 The Packages page scrolls as one page and keeps the scroll bar's lane whether or not the bar shows. The package list
 and the chosen package beside it are one task (`PaneColumns::shared_task`): the two columns are as tall as the taller
 list, up to the room left, each list scrolls on its own when it is taller, and they keep room for a few rows, so tall
-content above them makes the page scroll. The splitter's rule ends where the taller list ends. A control that
-gains focus (Tab or a screen reader) scrolls into view, and a repair editor brings its whole viewport into view.
-The page's messages sit in its one footer, `S` below the taller list while the page fits its room, and pinned at the
-pane's bottom when the content fills it or scrolls. While a repair's editor, the changes to review or the issue list
-stands above the columns (each scrolls inside the page), the page keeps its own scroll in a `Fills` body and the
-footer is pinned, until those have closed blocks (layout steps 9 and 10). The footer holds every live result with an Undo (a
+content above them makes the page scroll. The splitter's rule ends where the taller list ends. The page is always
+the pane's scroll column: the changes to review and the issue list are whole rows of it, and a repair's editor keeps
+its own framed region (layout step 9). The pane brings a control that gains focus (Tab or a screen reader) whole
+into view, and a control the DM presses keeps its place (focus clearance, layout step 10). The page's messages sit
+in its one footer, `S` below the taller list while the page fits its room, and pinned at the pane's bottom when the
+content fills it or scrolls. The footer holds every live result with an Undo (a
 discard, a written Campaign.md or manifest, a found folder, a removed package, each repair's discarded draft),
 newest first, then the reasons (each repair's failed Save, and an open repair's refusal, named by its path, then
 the page's errors: Save's or a load's, the change check's), then the latest plain result (`Campaign selections saved.`, applied
