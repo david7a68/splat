@@ -7,7 +7,7 @@ use egui::{
 };
 use std::sync::Arc;
 
-pub(crate) fn fonts() -> FontDefinitions {
+fn fonts() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     for &(name, bytes) in &splat_assets::FONTS {

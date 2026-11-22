@@ -5363,9 +5363,16 @@ mod editor_region_tests {
             h.set_size(vec2(520.0, 400.0));
         });
         relaid(&mut h, "atlas", &mut |h| {
-            // The same fonts, set again: egui makes its fonts and atlas again; the app's own
+            // egui makes its font atlas again for a new text alpha mode, and again when it comes
+            // back: the same fonts, style, size and fill as before, in a new atlas. The app's own
             // font generation does not change.
-            h.ctx.set_fonts(crate::design::theme::fonts());
+            let alpha = h.ctx.style().visuals.text_alpha_from_coverage;
+            h.ctx.all_styles_mut(|style| {
+                style.visuals.text_alpha_from_coverage = egui::epaint::AlphaFromCoverage::Linear;
+            });
+            h.step();
+            h.ctx
+                .all_styles_mut(|style| style.visuals.text_alpha_from_coverage = alpha);
         });
     }
 }
