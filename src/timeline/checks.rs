@@ -287,6 +287,9 @@ pub fn name(start: Option<u64>, at: u64, per: &Per) -> String {
     }
 }
 
+/// The Undo of `Encounter checks added to this journey.`
+const UNDO_CHECKS: design::outcome::UndoStep = design::outcome::UndoStep::words("Undo checks");
+
 /// The result of a Timeline act, with its Undo. It lasts while the event is as the act left
 /// it, with no time limit; the page drops it when the DM leaves.
 #[derive(Clone, Debug, PartialEq)]
@@ -294,8 +297,8 @@ pub struct Done {
     pub id: String,
     before: Event,
     after: Event,
-    pub words: String,
-    pub undo: &'static str,
+    pub words: Sentence,
+    pub undo: design::outcome::UndoStep,
 }
 
 impl Done {
@@ -385,8 +388,8 @@ pub fn apply(
         Act::Start => {
             event.checks_table = Some(first);
             Some((
-                "Encounter checks added to this journey.".to_owned(),
-                "Undo checks",
+                crate::sentence!("Encounter checks added to this journey."),
+                UNDO_CHECKS,
             ))
         }
         Act::Choose(Some(key)) => {
@@ -408,11 +411,17 @@ pub fn apply(
                 }
             }
             let rolled = design::count(offsets.len(), "travel check", "travel checks");
-            Some((format!("{rolled} rolled."), "Undo roll"))
+            Some((
+                crate::sentence!("{} rolled.", rolled),
+                design::outcome::UndoStep::verb(design::outcome::Verb::Roll),
+            ))
         }
         Act::Enter(at, value) => {
             add(event, *at, Some(*value))?;
-            Some(("1 travel check rolled.".to_owned(), "Undo roll"))
+            Some((
+                crate::sentence!("1 travel check rolled."),
+                design::outcome::UndoStep::verb(design::outcome::Verb::Roll),
+            ))
         }
         Act::Clear(label, words) => {
             let at = event
@@ -421,7 +430,10 @@ pub fn apply(
                 .position(|check| check.label == *label && check.words == *words)
                 .ok_or("That check changed on disk.")?;
             event.checks.remove(at);
-            Some(("Check cleared.".to_owned(), "Undo clear"))
+            Some((
+                crate::sentence!("Check cleared."),
+                design::outcome::UndoStep::verb(design::outcome::Verb::Clear),
+            ))
         }
         Act::Plan(_) => return Ok(None),
     };

@@ -5722,21 +5722,14 @@ impl Sessions {
                             .job
                             .as_ref()
                             .is_some_and(|(job, _)| job.recording == recording.path);
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        delete = Action::quiet("Delete…")
-                            .name(&format!("Delete recording: {}", recording.name))
-                            .density(Density::Read)
-                            .blocked_if(busy, "This recording is in use.")
-                            .show(ui)
-                            .clicked();
-                        if busy {
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, "This recording is in use.")
-                                    .color(c.muted),
-                            );
-                        }
-                    });
+                    delete = Action::quiet("Delete…")
+                        .name(&format!("Delete recording: {}", recording.name))
+                        .density(Density::Read)
+                        .blocked_if(busy, "This recording is in use.")
+                        .show(ui)
+                        .clicked();
+                    // A note under its choice, at its words, as every menu's (M-P0.27).
+                    design::choice_note(ui, false, busy.then_some("This recording is in use."));
                     if delete {
                         ui.close();
                     }

@@ -1640,9 +1640,14 @@ impl TimelinePage {
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.
-                let done = self.checks_done.get(&id);
-                let result = done.map(|done| (done.words.as_str(), done.undo));
-                undo_checks |= design::undo_line(ui, Tone::Success, result);
+                // M0561 (M-P0.27): a typed result line that keeps its room.
+                let result = self.checks_done.get(&id).map(|done| {
+                    design::outcome::PlacedResult::new(
+                        done.words.clone(),
+                        done.undo.clone().pressed_as(()),
+                    )
+                });
+                undo_checks |= design::outcome::PlacedResult::show_line(result, ui).is_some();
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
             }
             design::gap(ui, design::Gap::M);

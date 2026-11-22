@@ -712,7 +712,7 @@ fn history_row(
         }
         // Opened by keyboard, the off `Remove` takes no focus and shows no tooltip: the reason
         // stands under it.
-        design::blocked_reason(ui, (!removable).then_some(REMOVE_PLAYED));
+        design::choice_note(ui, false, (!removable).then_some(REMOVE_PLAYED));
     });
     if let Some(value) = row.value {
         let value = value.to_string();

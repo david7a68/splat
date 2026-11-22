@@ -2371,12 +2371,14 @@ impl<'a> TitleLine<'a> {
         let placement = if metrics.widths.is_empty() && metrics.beside() > room - end {
             TitlePlacement::Under(Vec::new())
         } else {
+            // At the end, rows under the title end before the status and the `⋯` too, so they
+            // wrap within that room (review of PR 780).
             title_placement(
                 metrics.beside(),
                 metrics.lead_in,
                 &metrics.widths,
                 room - end,
-                room,
+                if self.at_end { room - end } else { room },
             )
         };
         let closed;
