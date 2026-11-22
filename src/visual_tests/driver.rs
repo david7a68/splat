@@ -2506,9 +2506,10 @@ impl<'a> Driver<'a> {
     }
 
     /// Layout L5c (design §5 5b, the whole-member pressure): every row of a measured list
-    /// (`owner`) is whole. No text over its facts is cut by a clip or shortened to an ellipsis,
-    /// and its actions start `S` or more after the facts on their own line and end inside the
-    /// row's far edge. Returns whether it holds, and each fault.
+    /// (`owner`) is whole. Every text over its facts is whole inside its clip (not cut, not
+    /// hidden) and not shortened to an ellipsis, and its actions start `S` or more after the
+    /// facts on their own line and end inside the row's far edge. Returns whether it holds, and
+    /// each fault.
     pub fn measured_rows_whole(&self, owner: &str) -> (bool, String) {
         let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
             .into_iter()
@@ -2516,10 +2517,16 @@ impl<'a> Driver<'a> {
             .collect();
         let mut faults = Vec::new();
         for record in &records {
-            let cut = self.cut_texts_in(record.facts);
-            let mut elided = Vec::new();
-            self.each_painted_text(|text, _| {
-                if text.galley.elided && record.facts.intersects(text.visual_bounding_rect()) {
+            let (mut cut, mut elided) = (Vec::new(), Vec::new());
+            self.each_painted_text(|text, clip| {
+                let bounds = text.visual_bounding_rect();
+                if text.galley.job.text.trim().is_empty() || !record.facts.intersects(bounds) {
+                    return;
+                }
+                if !clip.expand(1.0).contains_rect(bounds) {
+                    cut.push(text.galley.job.text.clone());
+                }
+                if text.galley.elided {
                     elided.push(text.galley.job.text.clone());
                 }
             });
