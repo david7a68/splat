@@ -319,7 +319,7 @@ enum Host {
 }
 
 /// How a document editor lays its text out ([`EditorRegion::document`]).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Face {
     /// Plain text in one font (a note's source in monospace, prose).
     Font(egui::TextStyle),
@@ -346,7 +346,7 @@ fn kept_layouter(
     let mut first = true;
     move |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| {
         let fresh = std::mem::take(&mut first);
-        let font = match face {
+        let font = match &face {
             Face::Font(style) => style.resolve(ui.style()),
             Face::Laid(_) => super::tokens::Type::Body.font(ui),
         };
@@ -368,7 +368,7 @@ fn kept_layouter(
         }
         #[cfg(any(test, feature = "test-support"))]
         KEPT_LAYOUTS_MADE.with(|made| made.set(made.get() + 1));
-        let galley = match face {
+        let galley = match &face {
             Face::Font(_) => {
                 let color = ui
                     .visuals()
@@ -591,7 +591,7 @@ impl EditorRegion<'_> {
         ui: &mut Ui,
         field: super::layout::FieldId,
         text: &mut T,
-        kept: Option<(Face, super::memo::Revision)>,
+        laid: Option<(Face, super::memo::Revision)>,
         style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
     ) -> super::layout::Editor {
         let pane = innermost(ui);
@@ -699,7 +699,7 @@ impl EditorRegion<'_> {
                         .desired_width(f32::INFINITY)
                         .min_size(vec2(0.0, least_text))
                 };
-                let editor = match kept {
+                let editor = match laid {
                     None => field.editor(ui, text, shaped),
                     Some((face, revision)) => {
                         let mut layouter = kept_layouter(field.id(), face, revision);
