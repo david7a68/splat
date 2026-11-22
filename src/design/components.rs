@@ -1644,7 +1644,18 @@ pub fn small_link(ui: &mut Ui, label: &str) -> Response {
     text_link(ui, label, Type::Small)
 }
 
+/// A body link whose target is one `Read` control high: a title line's link action
+/// (`TitleAction::link`), level with the actions beside it (M-Y0.2).
+pub fn title_link(ui: &mut Ui, label: &str) -> Response {
+    link_of_height(ui, label, Type::Body, Density::Read.control())
+}
+
 fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
+    link_of_height(ui, label, role, XL)
+}
+
+/// A one-line link whose target is at least `XL` wide and at least `height` high.
+fn link_of_height(ui: &mut Ui, label: &str, role: Type, height: f32) -> Response {
     let c = colors();
     let room = ui.available_width().max(1.0);
     let galley = one_line(ui, label, role.font(ui), c.accent, room);
@@ -1652,7 +1663,7 @@ fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
     // word such as `Ox` sits at its left, and the next item starts after the whole target,
     // so two short links side by side never share a press area.
     let (target, response) = ui.allocate_exact_size(
-        vec2(galley.size().x.max(XL), galley.size().y.max(XL)),
+        vec2(galley.size().x.max(XL), galley.size().y.max(height)),
         Sense::click(),
     );
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), label));
