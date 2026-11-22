@@ -1133,7 +1133,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "roster", &[Ban::RowKey(1)]),
         ("src/encounters/groups.rs", "change_row", &[Ban::Extras(1)]),
-        ("src/encounters/groups.rs", "members", &[Ban::Layout(1)]),
+        (
+            "src/encounters/groups.rs",
+            "members",
+            &[Ban::Layout(1), Ban::Body],
+        ),
         (
             "src/encounters/groups.rs",
             "members_pane",
@@ -1349,7 +1353,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "unread_member",
-            &[Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::Body],
         ),
         ("src/encounters/list.rs", "choice_note", &[Ban::Extras(2)]),
         (
