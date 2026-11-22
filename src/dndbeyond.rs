@@ -648,11 +648,11 @@ mod tests {
 
     #[test]
     fn iter1_c_offline_link_opens_account_settings() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
-        let mut harness = egui_kittest::Harness::builder().build(|ctx| {
+        let mut harness = egui_kittest::Harness::builder().themed(|ctx| {
             egui::CentralPanel::default().show(ctx, connection_help);
         });
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Settings").click();
         harness.run_steps(2);

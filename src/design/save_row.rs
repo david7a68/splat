@@ -1710,6 +1710,7 @@ mod tests {
     /// its weight's type. One press reaches only its own control.
     #[test]
     fn the_row_draws_the_state() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         // M-W0.3: an open form's draft (`cancels`, World's edit form): clean, `Cancel` and its
         // reason; changed, `Discard` and the caller's sentence (`holds`).
@@ -1757,13 +1758,12 @@ mod tests {
             let pressed = std::cell::Cell::new(SaveRow::default());
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(600.0, 80.0))
-                .build_ui(|ui| {
+                .themed_ui(|ui| {
                     let row = save_row(ui, &state, "Save");
                     if row.save || row.discard || row.cancel {
                         pressed.set(row);
                     }
                 });
-            crate::design::theme::install(&harness.ctx);
             harness.run();
             assert!(harness.query_by_label_contains(word).is_some(), "{word}");
             assert_eq!(
@@ -1838,13 +1838,12 @@ mod tests {
                 );
                 let mut harness = egui_kittest::Harness::builder()
                     .with_size(egui::vec2(width + 20.0, 200.0))
-                    .build_ui(|ui| {
+                    .themed_ui(|ui| {
                         ui.set_max_width(width);
                         let start = ui.cursor().top();
                         let _ = save_row(ui, &state, "Save changes");
                         after.set(ui.label("After").rect.top() - start);
                     });
-                crate::design::theme::install(&harness.ctx);
                 harness.run();
                 save.set(harness.get_by_label("Save changes").rect());
                 let reason = match (changed, waits) {

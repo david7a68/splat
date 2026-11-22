@@ -1211,6 +1211,7 @@ mod tests {
     #[test]
     fn iter_3_b_storage_actions_stay_with_their_message() {
         use crate::design;
+        use crate::design::test_harness::ThemedPage as _;
         use eframe::egui;
         use egui_kittest::kittest::Queryable;
         // Two characters with local edits, A and B, in the page's real footer: B's Replace
@@ -1227,7 +1228,7 @@ mod tests {
         let drawn = party.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(960.0, 640.0))
-            .build_ui(move |ui| {
+            .themed_ui(move |ui| {
                 let frame = design::outcome::PaneFrame::new(ui);
                 let mut party = drawn.borrow_mut();
                 let mut page = PartyPage::default();
@@ -1239,7 +1240,6 @@ mod tests {
                 let paned = footer.pane(ui, design::Body::Content, |_| ());
                 view.page_pressed(ui.ctx(), paned.pressed);
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(3);
         const REPLACE: &str = "Replace with D&D Beyond sheet";
         // Every Replace and Show file, top to bottom: the footer's controls.

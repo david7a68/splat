@@ -1511,6 +1511,7 @@ mod tests {
     /// with no save recorded.
     #[test]
     fn the_compact_line_offers_death_saves_only_where_the_panel_has_them() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         use std::{cell::RefCell, rc::Rc};
         let mut run = live();
@@ -1522,11 +1523,10 @@ mod tests {
         let shown = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(960.0, 200.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default()
                     .show(ctx, |ui| shown.borrow_mut().compact_actions(ui));
             });
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(
             harness.query_by_label("Death saves").is_none(),

@@ -6239,6 +6239,7 @@ mod tests {
 
     #[test]
     fn iter2_d_copied_folder_blocks_add_until_the_path_changes() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         let folder = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
@@ -6252,11 +6253,10 @@ mod tests {
             ..Default::default()
         };
         let mut campaigns = Campaigns::default();
-        let mut harness = egui_kittest::Harness::new_ui_state(
+        let mut harness = egui_kittest::Harness::builder().themed_ui_state(
             move |ui, library| library.package_form(ui, &mut campaigns),
             library,
         );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(
             harness
@@ -6315,6 +6315,7 @@ mod tests {
 
     #[test]
     fn iter2_d_about_selects_its_own_navigation_row() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         let mut library = navigation_library();
         let owner = library.loaded.as_ref().unwrap().notes[0].owner.clone();
@@ -6333,12 +6334,9 @@ mod tests {
             library.loaded.as_ref().unwrap().notes[0].owner.clone();
         library.scope = Scope::Package(package);
         let mut campaigns = Campaigns::default();
-        let mut harness = egui_kittest::Harness::new_ui_state(
-            move |ui, library| library.show(ui, &mut campaigns),
-            library,
-        );
+        let mut harness = egui_kittest::Harness::builder()
+            .themed_ui_state(move |ui, library| library.show(ui, &mut campaigns), library);
         harness.set_size(egui::vec2(1920.0, 1080.0));
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("About First").click();
         harness.run_steps(2);
@@ -9756,6 +9754,7 @@ mod tests {
 
     #[test]
     fn the_empty_readers_undos_name_their_object_whole_or_short() {
+        use crate::design::test_harness::Themed as _;
         // M-L0.4b, the three proofs of the M9 labels (`Undo unregister <package>`, `Undo remove
         // <name>`) in the empty reader's typed footer:
         // 8. At every width each Undo shows its whole label where it fits the Undo's own room
@@ -9810,11 +9809,10 @@ mod tests {
             path: temp.path().join("modules/ashen-marches"),
         });
         assert!(library.selected.is_none(), "fixture: no entry open");
-        let mut harness = egui_kittest::Harness::new_ui_state(
+        let mut harness = egui_kittest::Harness::builder().themed_ui_state(
             |ui, library: &mut Library| library.editor(ui, "Entry", &Campaigns::default()),
             library,
         );
-        design::theme::install(&harness.ctx);
         let (unregister, remove) = (
             format!("Undo unregister {package}"),
             format!("Undo remove {entry}"),

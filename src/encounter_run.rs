@@ -8160,6 +8160,7 @@ mod tests {
     }
     #[test]
     fn use_the_saved_hp_is_its_own_step_and_undo_gives_back_the_full_hp() {
+        use crate::design::test_harness::ThemedPage as _;
         let folder = tempfile::tempdir().unwrap();
         let mut setup = run();
         linked(&mut setup, 0, "42");
@@ -8224,7 +8225,7 @@ mod tests {
         let inner = shared.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 400.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let (run, add_b) = &mut *inner.borrow_mut();
                     let frame = crate::design::outcome::PaneFrame::new(ui);
@@ -8237,7 +8238,6 @@ mod tests {
                     run.run_press(paned.pressed, &mut None);
                 });
             });
-        crate::design::theme::install(&harness.ctx);
         harness.run_steps(2);
         shared.borrow_mut().1 = true;
         {

@@ -38,17 +38,36 @@ pub struct Laid {
     revision: Revision,
     texts: Vec<LaidText>,
     slots: Vec<Rect>,
+    /// Words drawn as links (`LaidUi::link`), each at its rect: its galley, and the press
+    /// target's height (at least 24 px, the galley centred in it).
+    links: Vec<(LaidText, f32)>,
 }
 
 impl Laid {
+    /// This layout with `links`, drawn by the block through `LaidUi::link`. Each must lie in the
+    /// block.
+    pub(in crate::design) fn with_links(mut self, links: Vec<(LaidText, f32)>) -> Self {
+        debug_assert!(
+            links.iter().all(|(text, height)| {
+                Rect::from_min_size(egui::Pos2::ZERO, self.size)
+                    .expand(0.5)
+                    .contains_rect(Rect::from_min_size(
+                        text.at,
+                        egui::vec2(text.galley.size().x, *height),
+                    ))
+            }),
+            "a recipe lays out every link inside its block"
+        );
+        self.links = links;
+        self
+    }
+
+    /// The block's size.
+    pub fn size(&self) -> Vec2 {
+        self.size
+    }
+
     /// A recipe's layout of the block `key`. Each text and slot must lie in the block.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "layout 11c A2's `PlanRow` recipe is the first to lay out a block"
-        )
-    )]
     pub(in crate::design) fn new(
         key: Id,
         size: Vec2,
@@ -71,6 +90,7 @@ impl Laid {
             revision: Revision::next(),
             texts,
             slots,
+            links: Vec::new(),
         }
     }
 
@@ -108,6 +128,36 @@ impl LaidUi<'_> {
     /// Slot `at`'s rect, on the screen.
     pub fn slot(&self, at: usize) -> Rect {
         self.laid.slots[at].translate(self.ui.max_rect().min.to_vec2())
+    }
+
+    /// Link `at` (`Laid::with_links`): its laid words at their rect, a press target as tall as the
+    /// recipe made it, named `name` to a screen reader, as `design::wrapped_link` draws one.
+    pub fn link(&mut self, at: usize, name: &str) -> Response {
+        let (text, height) = &self.laid.links[at];
+        let origin = self.ui.max_rect().min;
+        let rect = Rect::from_min_size(
+            origin + text.at.to_vec2(),
+            egui::vec2(text.galley.size().x, *height),
+        );
+        let response = self.ui.interact(
+            rect,
+            self.ui.id().with(("laid_link", at)),
+            egui::Sense::click(),
+        );
+        let enabled = self.ui.is_enabled();
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, enabled, name));
+        if self.ui.is_rect_visible(rect) {
+            let top = rect.center().y - text.galley.size().y / 2.0;
+            self.ui.painter().galley(
+                egui::pos2(rect.left(), top),
+                text.galley.clone(),
+                crate::design::tokens::colors().accent,
+            );
+            if response.has_focus() {
+                crate::design::components::focus_ring(self.ui, rect);
+            }
+        }
+        response.on_hover_cursor(egui::CursorIcon::PointingHand)
     }
 
     /// `widget` in slot `at`, at its rect.
