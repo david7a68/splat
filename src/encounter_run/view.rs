@@ -3447,7 +3447,7 @@ impl Run {
             self.totals_revision,
             groups_revision,
             self.source,
-            self.revision,
+            *self.revision,
             self.initiative.grouping,
         );
         if let Some((_, reasons)) = self.arrival_reasons.as_ref().filter(|(at, _)| *at == key) {
@@ -3541,7 +3541,11 @@ impl Run {
     /// party is the characters who are present; the fight is every present creature against them.
     /// Worked out again only after a step, a new read of the groups or of the scale.
     pub(super) fn arrival_words(&mut self) -> Option<&super::ArrivalWords> {
-        let key = (self.revision, self.groups_revision(), self.scale_revision());
+        let key = (
+            *self.revision,
+            self.groups_revision(),
+            self.scale_revision(),
+        );
         let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
         #[cfg(any(test, feature = "test-support"))]
         {
@@ -4090,13 +4094,13 @@ impl Run {
             )
         };
         // Point 3 (round 29 review): the line's parts change only with the run, the groups or
-        // the scale, so its fit is kept by those revisions, its room and its font: an unchanged
-        // frame builds no line and measures nothing.
+        // the scale, so its fit is kept by those revisions and the measure it was fitted in (its
+        // room, font, font generation and scale; ruling M6): an unchanged frame builds no line
+        // and measures nothing.
         let content = (
-            self.revision,
+            self.revision.revision(),
             self.groups_revision(),
             self.scale_revision(),
-            group.id,
         );
         let font = Type::Small.font(ui);
         // Point 2 (round 29 review, R1): the heading reserves the smallest COMPLETE

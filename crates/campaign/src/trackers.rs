@@ -20,6 +20,10 @@ pub trait RuleSource {
     /// The entry in the index and whether to reread its campaign file before using it.
     fn note(&self, id: Uuid) -> Option<(&crate::content::Entry, bool)>;
     fn loot_sources(&self) -> Arc<Sources>;
+    /// Which load of the index this is: different for each index the process loads, so a
+    /// reader can tell a new index from the one it holds (never by its address, which a freed
+    /// index can hand to the next one).
+    fn generation(&self) -> u64;
 }
 
 // Definitions: the members of a house rule note.
