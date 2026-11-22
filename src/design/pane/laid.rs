@@ -1317,6 +1317,8 @@ mod tests {
         Key(egui::Key, egui::Modifiers),
         Text,
         Ime,
+        /// A key pressed while a press is held in the column (review of PR 757).
+        HeldKey(egui::Key),
     }
 
     /// The resolver's case table (Sol sweep 2-001; reviews of PRs 757 and 770): two columns, a
@@ -1361,8 +1363,21 @@ mod tests {
             ),
             ("Tab", Input::Key(Key::Tab, Modifiers::NONE), true),
             ("Shift+Tab", Input::Key(Key::Tab, Modifiers::SHIFT), true),
-            ("text", Input::Text, true),
             ("IME", Input::Ime, true),
+            ("Ctrl+Home", Input::Key(Key::Home, Modifiers::CTRL), true),
+            ("Ctrl+End", Input::Key(Key::End, Modifiers::CTRL), true),
+            (
+                "Ctrl+ArrowLeft",
+                Input::Key(Key::ArrowLeft, Modifiers::CTRL),
+                true,
+            ),
+            (
+                "Ctrl+ArrowDown",
+                Input::Key(Key::ArrowDown, Modifiers::CTRL),
+                true,
+            ),
+            ("Page Down while held", Input::HeldKey(Key::PageDown), true),
+            ("text", Input::Text, true),
             ("Ctrl+S", Input::Key(Key::S, Modifiers::CTRL), false),
         ];
         let mut page = Page::new(texts(40));
@@ -1467,6 +1482,23 @@ mod tests {
                         }
                     }
                     Input::Text => events.push(egui::Event::Text("x".to_owned())),
+                    Input::HeldKey(key) => {
+                        events.push(button(point, true));
+                        harness.step();
+                        observe(&harness);
+                        for pressed in [true, false] {
+                            harness.input_mut().events.push(egui::Event::Key {
+                                key,
+                                physical_key: None,
+                                pressed,
+                                repeat: false,
+                                modifiers: Modifiers::NONE,
+                            });
+                        }
+                        harness.step();
+                        observe(&harness);
+                        harness.input_mut().events.push(button(point, false));
+                    }
                     Input::Ime => {
                         events.push(egui::Event::Ime(egui::ImeEvent::Commit("x".to_owned())));
                     }
@@ -1496,5 +1528,145 @@ mod tests {
             }
         }
         assert!(wrong.is_empty(), "the case table: {wrong:#?}");
+    }
+
+    /// Two columns, one inside the other: a jump for the outer one, asked once.
+    struct Nested {
+        jump: bool,
+        /// A jump to the outer column's top, asked once.
+        top: bool,
+        /// The outer column's view and the inner column's, in the last pass.
+        outer: Rect,
+        inner: Rect,
+    }
+
+    /// Review of PR 757 (P2, P3): a key or a wheel belongs to the innermost column, not to every
+    /// column whose rect holds its control or the pointer. A jump queued for the outer column
+    /// survives each input aimed at the inner column (the focus on its control, the pointer over
+    /// it) and ends on the same input aimed at the outer column. Red: ownership by rect.
+    #[test]
+    fn a_nested_column_owns_its_own_keys() {
+        use egui::{Key, Modifiers};
+        use egui_kittest::kittest::Queryable;
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(600.0, 340.0))
+            .build_ui_state(
+                |ui, nested: &mut Nested| {
+                    crate::design::layout::ScrollColumn::new("laid_test_outer")
+                        .max_height(300.0)
+                        .show(ui, |ui| {
+                            nested.outer = ui.clip_rect();
+                            if std::mem::take(&mut nested.top) {
+                                crate::design::reveal::jump(
+                                    ui,
+                                    ui.cursor().top(),
+                                    JumpTo::LinkedHeading,
+                                );
+                            }
+                            let _ = ui.button("Outer button");
+                            for line in 0..80 {
+                                if line == 4 {
+                                    crate::design::layout::ScrollColumn::new("laid_test_inner")
+                                        .max_height(100.0)
+                                        .show(ui, |ui| {
+                                            nested.inner = ui.clip_rect();
+                                            let _ = ui.button("Inner button");
+                                            for inner in 0..20 {
+                                                let _ = ui.label(format!("Inner {inner}"));
+                                            }
+                                        });
+                                }
+                                if line == 60 && std::mem::take(&mut nested.jump) {
+                                    crate::design::reveal::jump(
+                                        ui,
+                                        ui.cursor().top(),
+                                        JumpTo::LinkedHeading,
+                                    );
+                                }
+                                let _ = ui.label(format!("Outer {line}"));
+                            }
+                        });
+                },
+                Nested {
+                    jump: false,
+                    top: false,
+                    outer: Rect::NOTHING,
+                    inner: Rect::NOTHING,
+                },
+            );
+        crate::design::theme::install(&harness.ctx);
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        harness.run_steps(3);
+        let jumped = |harness: &Harness<'_, Nested>| {
+            harness
+                .query_by_label("Outer 60")
+                .is_some_and(|node| harness.state().outer.contains_rect(node.rect()))
+        };
+        let rows = [
+            ("wheel", None, true),
+            ("Page Down", Some((Key::PageDown, Modifiers::NONE)), true),
+            ("ArrowDown", Some((Key::ArrowDown, Modifiers::NONE)), true),
+            ("Ctrl+Home", Some((Key::Home, Modifiers::CTRL)), true),
+            ("Tab", Some((Key::Tab, Modifiers::NONE)), true),
+        ];
+        let mut wrong = Vec::new();
+        for (name, key, _) in rows {
+            for at_inner in [true, false] {
+                // From the outer column's top, the focus and the pointer where the input aims.
+                harness.run_steps(10);
+                harness.state_mut().top = true;
+                harness.run_steps(4);
+                let (focus, point) = if at_inner {
+                    ("Inner button", harness.state().inner.center())
+                } else {
+                    (
+                        "Outer button",
+                        harness.state().outer.left_bottom() + egui::vec2(40.0, -20.0),
+                    )
+                };
+                harness.get_by_label(focus).focus();
+                harness
+                    .input_mut()
+                    .events
+                    .push(egui::Event::PointerMoved(point));
+                harness.run_steps(2);
+                harness.state_mut().jump = true;
+                harness.step();
+                match key {
+                    None => harness.input_mut().events.push(egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, -10.0),
+                        modifiers: Modifiers::NONE,
+                    }),
+                    Some((key, modifiers)) => {
+                        for pressed in [true, false] {
+                            harness.input_mut().events.push(egui::Event::Key {
+                                key,
+                                physical_key: None,
+                                pressed,
+                                repeat: false,
+                                modifiers,
+                            });
+                        }
+                    }
+                }
+                // Whether the jump applied in any frame (the input itself may move the column after
+                // it, as a wheel does once the jump moved the inner column from under the pointer).
+                let mut survived = false;
+                for _ in 0..3 {
+                    harness.step();
+                    survived |= jumped(&harness);
+                }
+                if survived != at_inner {
+                    wrong.push(format!(
+                        "{name} at the {} column: the outer jump survived {survived}",
+                        if at_inner { "inner" } else { "outer" }
+                    ));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "nested columns: {wrong:#?}");
     }
 }

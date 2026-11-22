@@ -707,8 +707,10 @@ fn resolve_in_place(
     // Review of PR 757: a key moves this column only when it goes to it (the focused control is
     // in it, or with no focus the pointer is over it), never another column's.
     // The column's own view: egui keeps a sideways clip as wide as the parent's.
-    let column = crate::design::reveal::column_view(ui).unwrap_or(clip);
-    let keys = crate::design::reveal::keys_in(ui, column);
+    let (column, keys) = match crate::design::reveal::column_view(ui) {
+        Some((key, view)) => (view, crate::design::reveal::keys_in(ui, key)),
+        None => (clip, false),
+    };
     let (moved, held) = ui.input(|input| {
         let pointer = &input.pointer;
         let in_column = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| column.contains(pos));

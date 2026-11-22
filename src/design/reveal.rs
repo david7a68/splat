@@ -549,10 +549,10 @@ fn enqueue(ui: &Ui, region: &Region, by: f32, why: Option<JumpTo>) {
     ui.ctx().request_discard("a request moves its column");
 }
 
-/// The view of the `ScrollColumn` that `ui` is drawn in, in screen points (its area's viewport
+/// The key and the view of the `ScrollColumn` that `ui` is drawn in, the view in screen points (its area's viewport
 /// inside its clip): a sideways clip egui keeps wider than the column is cut to the column.
-pub(in crate::design) fn column_view(ui: &Ui) -> Option<Rect> {
-    owning_region(ui).map(|(_, region)| region.view)
+pub(in crate::design) fn column_view(ui: &Ui) -> Option<(Id, Rect)> {
+    owning_region(ui).map(|(_, region)| (region.key, region.view))
 }
 
 /// The offset queued for the column `key`, taken at the start of its pass. Only the DM's input
@@ -567,8 +567,10 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
     let mut queued = ui.ctx().data(|data| data.get_temp::<Queued>(id))?;
     let _ = queued.why;
     let frame = ui.ctx().cumulative_frame_nr();
-    let input = column_input(ui, queued.view, Some(area));
-    if !input.moved && input.held && frame <= queued.made + QUEUED_FRAMES {
+    let input = column_input(ui, key, queued.view, Some(area));
+    // Review of PR 757 (P2): a key or another input during a held press ends the request as at
+    // any other time; only a press held still makes it wait.
+    if !input.moved && !input.other && input.held && frame <= queued.made + QUEUED_FRAMES {
         // A press held still: the request waits, up to its bound.
         queued.frame = frame;
         ui.ctx().data_mut(|data| data.insert_temp(id, queued));
@@ -595,16 +597,18 @@ struct ColumnInput {
 }
 
 /// The DM's input in this pass to the column whose view (screen points) is `view`.
-fn column_input(ui: &Ui, view: Rect, area: Option<Id>) -> ColumnInput {
+fn column_input(ui: &Ui, key: Id, view: Rect, area: Option<Id>) -> ColumnInput {
     let fling = area
         .and_then(|area| egui::scroll_area::State::load(ui.ctx(), area))
         .is_some_and(|state| state.velocity() != Vec2::ZERO);
-    let keys = keys_in(ui, view);
+    let keys = keys_in(ui, key);
+    let pointer = pointer_in(ui, key);
     // The content's view and the scroll bar's lane right of it: a press on the bar is the DM's.
     let reach = Rect::from_min_max(
         view.min,
         egui::pos2(view.right() + super::layout::lane_width(), view.bottom()),
     );
+    let pointer_here = pointer;
     ui.input(|input| {
         let pointer = &input.pointer;
         let over = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| reach.contains(pos));
@@ -623,16 +627,17 @@ fn column_input(ui: &Ui, view: Rect, area: Option<Id>) -> ColumnInput {
             event => keys && moves_view(event),
         });
         ColumnInput {
-            moved: (wheel && over(pointer.hover_pos())) || dragged || fling,
+            moved: (wheel && pointer_here && over(pointer.hover_pos())) || dragged || fling,
             held,
             other,
         }
     })
 }
 
-/// The DM's keyboard input that moves a view or a caret (review of PR 757): Tab, an arrow, Page
-/// Up or Down, Home or End (with Shift or none), typed text, a paste, an input method event. A
-/// shortcut with Ctrl, Cmd or Alt (Save) moves nothing.
+/// The DM's keyboard input that moves a view or a caret (reviews of PR 757): an arrow, Home or
+/// End with any modifiers (Ctrl+Home moves the caret too); Tab, Page Up or Page Down with Shift
+/// or none; typed text, a paste, an input method event. A shortcut (Ctrl+S, Ctrl+Page Down: the
+/// next tab) moves nothing.
 pub(in crate::design) fn moves_view(event: &egui::Event) -> bool {
     use egui::Key;
     match event {
@@ -642,41 +647,121 @@ pub(in crate::design) fn moves_view(event: &egui::Event) -> bool {
             modifiers,
             ..
         } => {
-            !(modifiers.ctrl || modifiers.command || modifiers.mac_cmd || modifiers.alt)
-                && matches!(
-                    key,
-                    Key::Tab
-                        | Key::ArrowUp
-                        | Key::ArrowDown
-                        | Key::ArrowLeft
-                        | Key::ArrowRight
-                        | Key::PageUp
-                        | Key::PageDown
-                        | Key::Home
-                        | Key::End
-                )
+            let shortcut =
+                modifiers.ctrl || modifiers.command || modifiers.mac_cmd || modifiers.alt;
+            // A caret key moves the caret with any modifier (Ctrl+Home, Ctrl+Left: review of PR
+            // 757); Tab and the page keys with Ctrl, Cmd or Alt are shortcuts (the next tab).
+            matches!(
+                key,
+                Key::ArrowUp
+                    | Key::ArrowDown
+                    | Key::ArrowLeft
+                    | Key::ArrowRight
+                    | Key::Home
+                    | Key::End
+            ) || (!shortcut && matches!(key, Key::Tab | Key::PageUp | Key::PageDown))
         }
         egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Ime(_) => true,
         _ => false,
     }
 }
 
-/// Whether this pass's keys go to the column whose view (screen points) is `view`: the focused
-/// control lies in it (as last drawn) or, with nothing focused, the pointer is over it. A key
-/// never belongs to two columns.
-pub(in crate::design) fn keys_in(ui: &Ui, view: Rect) -> bool {
-    match ui.ctx().memory(|memory| memory.focused()) {
-        Some(focused) => ui
-            .ctx()
-            .read_response(focused)
-            .is_some_and(|response| view.intersects(response.rect)),
-        None => ui.input(|input| {
-            input
-                .pointer
-                .hover_pos()
-                .is_some_and(|pos| view.contains(pos))
-        }),
+/// Which column this pass's keys go to (review of PR 757): the innermost `ScrollColumn` whose
+/// content drew the focused control, or with nothing focused, the innermost one under the
+/// pointer. Each column records it after its content (`record_keys`); a nested column finishes
+/// first, so it is the innermost. Kept for the pass it was recorded in and the one before it.
+#[derive(Clone, Copy, Debug, Default)]
+struct KeyOwner {
+    pass: u64,
+    focused: Option<Id>,
+    focus: Option<Id>,
+    pointer: Option<Id>,
+}
+
+fn key_owner_id() -> Id {
+    Id::new("design_reveal_key_owner")
+}
+
+/// After a column's content (its widgets on `layer` are `widgets`): whether it is the innermost
+/// column of the focused control, or under the pointer, in this pass.
+fn record_keys(
+    ui: &Ui,
+    key: Id,
+    layer: egui::LayerId,
+    widgets: std::ops::Range<usize>,
+    view: Rect,
+) {
+    let ctx = ui.ctx();
+    let pass = ctx.cumulative_pass_nr();
+    let focused = ctx.memory(|memory| memory.focused());
+    let holds = focused.is_some_and(|id| {
+        ctx.viewport(|viewport| {
+            viewport
+                .this_pass
+                .widgets
+                .order(id)
+                .is_some_and(|(at_layer, at)| at_layer == layer && widgets.contains(&at))
+        })
+    });
+    let reach = Rect::from_min_max(
+        view.min,
+        egui::pos2(view.right() + super::layout::lane_width(), view.bottom()),
+    );
+    let under = ui.input(|input| {
+        input
+            .pointer
+            .hover_pos()
+            .is_some_and(|pos| reach.contains(pos))
+    });
+    ctx.data_mut(|data| {
+        let owners = data.get_temp_mut_or_default::<[KeyOwner; 2]>(key_owner_id());
+        if owners[1].pass != pass {
+            owners[0] = owners[1];
+            owners[1] = KeyOwner {
+                pass,
+                focused,
+                ..KeyOwner::default()
+            };
+        }
+        let now = &mut owners[1];
+        if holds && now.focus.is_none() {
+            now.focus = Some(key);
+        }
+        if under && now.pointer.is_none() {
+            now.pointer = Some(key);
+        }
+    });
+}
+
+/// Whether this pass's keys go to the column `key` (`KeyOwner`). A focus not yet recorded (it
+/// moved in this frame) goes to no column. A key never belongs to two columns.
+pub(in crate::design) fn keys_in(ui: &Ui, key: Id) -> bool {
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    match focused {
+        Some(_) => {
+            newest_owner(ui, |owner| {
+                (owner.focused == focused).then_some(owner.focus?)
+            }) == Some(key)
+        }
+        None => pointer_in(ui, key),
     }
+}
+
+/// Whether the column `key` is the innermost one under the pointer (`KeyOwner`): a wheel there
+/// scrolls it, not the column around it.
+fn pointer_in(ui: &Ui, key: Id) -> bool {
+    newest_owner(ui, |owner| owner.pointer) == Some(key)
+}
+
+/// The newest recorded owner that `pick` finds.
+fn newest_owner(ui: &Ui, pick: impl Fn(&KeyOwner) -> Option<Id>) -> Option<Id> {
+    ui.ctx()
+        .data(|data| data.get_temp::<[KeyOwner; 2]>(key_owner_id()))
+        .unwrap_or_default()
+        .iter()
+        .rev()
+        .filter(|owner| owner.pass != 0)
+        .find_map(pick)
 }
 
 /// The frames a queued request may wait for a held press to end.
@@ -789,7 +874,7 @@ pub fn dm_scrolls(ui: &Ui) -> bool {
     let Some((_, region)) = owning_region(ui) else {
         return false;
     };
-    let input = column_input(ui, region.view, None);
+    let input = column_input(ui, region.key, region.view, None);
     input.moved || input.held || input.other
 }
 
@@ -847,15 +932,23 @@ pub(super) fn region<R>(
     let content = ui.unique_id();
     ui.ctx()
         .data_mut(|data| data.insert_temp(region_id(content), region));
+    let layer = ui.layer_id();
+    let count = |ui: &Ui| {
+        ui.ctx()
+            .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
+    };
+    let from = count(ui);
     if !column.hosts {
         // No request can bind here: no input copy and no registry read.
         let inner = add(ui);
+        record_keys(ui, key, layer, from..count(ui), view);
         settle_queued(ui, column, view);
         return inner;
     }
     // The DM's input, read before any child can consume a key.
     let facts = facts(ui);
     let inner = add(ui);
+    record_keys(ui, key, layer, from..count(ui), view);
     settle_queued(ui, column, view);
     // The request that runs in this column now (one asked by this content's act replaced any
     // older one), judged by the input of this pass.
