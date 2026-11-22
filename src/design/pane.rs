@@ -4681,6 +4681,8 @@ mod editor_region_tests {
         set_caret: Option<usize>,
         /// Draw this document (`EditorRegion::document`, layout PR 9b) in place of `text`.
         doc: Option<crate::design::text_draft::TextDraft>,
+        /// Lay the document out with a face that folds (`Face::Laid { folds: true }`).
+        folds: bool,
         /// Each frame's `changed()` of the editor, and the text its galley holds.
         changed: Vec<bool>,
         galley_text: String,
@@ -4760,12 +4762,20 @@ mod editor_region_tests {
                                 ui.label("Title");
                                 let mut caret = None;
                                 if region {
+                                    let face = if state.folds {
+                                        Face::Laid {
+                                            layout: laid_plainly,
+                                            folds: true,
+                                        }
+                                    } else {
+                                        Face::Font(egui::TextStyle::Body)
+                                    };
                                     let output = match state.doc.as_mut() {
                                         Some(doc) => editor.document(
                                             ui,
                                             FIELD.once(Once::Example),
                                             doc,
-                                            Face::Font(egui::TextStyle::Body),
+                                            face,
                                             |edit| edit,
                                         ),
                                         None => editor.editor(
@@ -5283,8 +5293,24 @@ mod editor_region_tests {
         }
     }
 
-    /// A harness on a document (layout PR 9b) of `lines` lines, focused, after warm frames.
-    fn document(lines: usize) -> egui_kittest::Harness<'static, State> {
+    /// A face's layout that does not fold, for a test of the caret part of the key.
+    fn laid_plainly(
+        ui: &Ui,
+        text: &dyn egui::TextBuffer,
+        wrap: f32,
+    ) -> std::sync::Arc<egui::Galley> {
+        let job = egui::text::LayoutJob::simple(
+            text.as_str().to_owned(),
+            egui::TextStyle::Body.resolve(ui.style()),
+            ui.visuals().widgets.inactive.text_color(),
+            wrap,
+        );
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    }
+
+    /// A harness on a document (layout PR 9b) of `lines` lines, focused, after warm frames;
+    /// `folds`: with a face that folds.
+    fn document(lines: usize, folds: bool) -> egui_kittest::Harness<'static, State> {
         let words: String = (0..lines)
             .map(|line| format!("Line {line}"))
             .collect::<Vec<_>>()
@@ -5296,6 +5322,7 @@ mod editor_region_tests {
                 region: true,
                 focus: true,
                 doc: Some(crate::design::text_draft::TextDraft::new(words)),
+                folds,
                 ..State::default()
             },
         );
@@ -5315,10 +5342,17 @@ mod editor_region_tests {
     /// frames lay out and hash nothing; each part of the key, alone, lays it out again: an edit,
     /// two edits in one frame (the galley always holds the words the draft holds), the program's
     /// replacement with equal words, another draft in the same field, a resize, and a font atlas
-    /// made again with the same fonts (its size and fill can come back equal).
+    /// made again with the same fonts (its size and fill can come back equal). A caret move
+    /// with the same words lays out again only a face that folds.
     #[test]
     fn a_document_keeps_its_layout_until_its_key_changes() {
-        let mut h = document(40);
+        for folds in [false, true] {
+            a_document_keeps_its_layout(folds);
+        }
+    }
+
+    fn a_document_keeps_its_layout(folds: bool) {
+        let mut h = document(40, folds);
         let (layouts, bytes) = (made(), hashed());
         h.run_steps(5);
         assert_eq!(
@@ -5336,13 +5370,38 @@ mod editor_region_tests {
                 let draft = h.state().doc.as_ref().map(|doc| doc.as_str().to_owned());
                 assert!(
                     made() > before && Some(h.state().galley_text.clone()) == draft,
-                    "{case}: laid out again ({} more) and the galley holds the draft's words",
+                    "{case}, folds {folds}: laid out again ({} more) and the galley holds the \
+                     draft's words",
                     made() - before
                 );
                 let quiet = made();
                 h.run_steps(3);
-                assert_eq!(made(), quiet, "{case}: quiet again after");
+                assert_eq!(made(), quiet, "{case}, folds {folds}: quiet again after");
             };
+        let up = |h: &mut egui_kittest::Harness<'static, State>| {
+            let key = |pressed| egui::Event::Key {
+                key: egui::Key::ArrowUp,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            };
+            h.input_mut().events.extend([key(true), key(false)]);
+        };
+        if folds {
+            relaid(&mut h, "caret", &mut |h| up(h));
+        } else {
+            let (before, words) = (made(), h.state().doc.as_ref().map(|doc| doc.key()));
+            let caret = h.state().caret;
+            up(&mut h);
+            h.run_steps(3);
+            assert_ne!(h.state().caret, caret, "caret: the caret moved");
+            assert_eq!(
+                (made(), h.state().doc.as_ref().map(|doc| doc.key())),
+                (before, words),
+                "caret: a plain face keeps its layout when only the caret moves"
+            );
+        }
         relaid(&mut h, "edit", &mut |h| {
             h.event(egui::Event::Text("!".into()))
         });
