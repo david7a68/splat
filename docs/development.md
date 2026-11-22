@@ -57,6 +57,28 @@ with its reason in `lint_allowlist.txt`; it never hides the call behind another 
 `scripts/late_theme.py` moves the standard cases: by default it prints a diff and the cases it
 leaves for a hand edit (`MANUAL`); `--write` applies it.
 
+### Red runs
+
+A red run proves a new or changed check can fail: a mutation breaks the code it checks, and the
+check fails at its own assertion. `scripts/red_run.py` does it the same way in every lane. It
+takes the mutation as a patch (`git diff > mutant.diff` on a scratch edit, then undo the edit),
+the expected assertion's words or visual check id, and the focused command after `--`:
+
+```sh
+scripts/red_run.py --patch mutant.diff --expect "the two long names are fitted once" \
+  -- devenv shell -- cargo test --locked --lib -p splat-trackers -- a_name_in_its_column
+scripts/red_run.py --patch t19.diff --expect "T19.4" \
+  -- devenv shell -- visual-test red-t19 --only trackers
+```
+
+It applies the patch in a scratch copy of the proved head (`--head`, default `HEAD`) under
+`artifacts/screenshots/red/`, runs the command there, and keeps the log in
+`artifacts/screenshots/red-<label>.log`. It rejects the run (exit 1) when the patch does not
+apply, the mutant does not compile, the command passes, or it fails without the expected words in
+a failure message (another assertion). Otherwise it prints one row for the PR:
+`| patch summary | command | failed assertion | log path |`. Put the command under your build
+lease as for any other build (`local-compile.sh <label> -- …`).
+
 ## Build layout
 
 | Path | Contents |
