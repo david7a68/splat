@@ -12000,6 +12000,7 @@ mod tests {
                 before,
                 after: after.clone(),
                 words: words.into(),
+                replaced: "Wolf".into(),
             });
             harness.run_steps(2);
             *hold.borrow_mut() = Some(None);
@@ -12055,6 +12056,7 @@ mod tests {
                 before: roster.clone(),
                 after: roster,
                 words: format!("Round {round}."),
+                replaced: "Wolf".into(),
             });
             // Its file went: the group left the draft, and only its Undo holds it (FF7).
             draft.new_results.push(DraftUndo::RemovedGroup {
