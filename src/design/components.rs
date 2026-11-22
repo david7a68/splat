@@ -1639,6 +1639,24 @@ fn stepper_as(
                 }
                 widgets.inactive.bg_stroke = Stroke::new(HAIRLINE_WIDTH, c.field_border);
                 ui.spacing_mut().interact_size.y = density.control();
+                // The field's arrow keys step by one whole number (issue #633). egui's drag
+                // value steps by its drag speed, 0.1, which a whole number rounds back. The keys
+                // are taken here, before the field reads them, and the field's open words go,
+                // so it shows the new number.
+                let id = ui.next_auto_id();
+                if ui.is_enabled() && ui.memory(|memory| memory.has_focus(id)) {
+                    let step = ui.input_mut(|input| {
+                        input.count_and_consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)
+                            as i64
+                            - input
+                                .count_and_consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)
+                                as i64
+                    });
+                    if step != 0 {
+                        *value = (*value + step).clamp(low, high);
+                        ui.data_mut(|data| data.remove::<String>(id));
+                    }
+                }
                 let mut field = egui::DragValue::new(value).range(low..=high).speed(0.1);
                 match shown {
                     Shown::Plain => {}
@@ -6424,6 +6442,24 @@ mod tests {
         h.key_press(egui::Key::Tab);
         h.run_steps(2);
         assert_eq!(*h.state(), 1_000, "typed `1,000`, the value is 1000");
+        // Issue #633: with the count open, an arrow key steps by one whole number (egui's step
+        // of 0.1 rounded back): Down at 1000 gives 999, and Up at 999 gives 1000 again.
+        let at = h.get_by_label("How many").rect().center();
+        for pressed in [true, false] {
+            h.event(egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.run_steps(1);
+        }
+        h.run_steps(1);
+        for (key, after) in [(egui::Key::ArrowDown, 999), (egui::Key::ArrowUp, 1_000)] {
+            h.key_press(key);
+            h.run_steps(2);
+            assert_eq!(*h.state(), after, "{key:?} steps by one");
+        }
     }
 
     #[test]

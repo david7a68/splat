@@ -376,6 +376,9 @@ pub struct DraftState<'a> {
     cancels: Option<Option<&'a str>>,
     /// The lock sentence while something else waits for this draft too (`holds`).
     holds: Option<&'a str>,
+    /// Discard's accessible name, when another draft's Discard can show on the same page
+    /// (`discard_named`).
+    discard_name: Option<&'a str>,
 }
 
 impl<'a> DraftState<'a> {
@@ -396,7 +399,16 @@ impl<'a> DraftState<'a> {
             elsewhere: false,
             cancels: None,
             holds: None,
+            discard_name: None,
         }
+    }
+
+    /// Discard's accessible name, when another draft's Discard can show on the same page
+    /// (issue #553: the creature pane beside the encounter, `Discard creature changes`), so a
+    /// screen reader tells the two apart. Its visible word stays `Discard`.
+    pub fn discard_named(mut self, name: &'a str) -> Self {
+        self.discard_name = Some(name);
+        self
     }
 
     /// A clean draft whose Save writes to repair its file (Rules and runs' unread choice): the
@@ -993,7 +1005,11 @@ pub(in crate::design) fn save_row_with(
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 status(ui, state.status());
                 if state.discard_shown() {
-                    pressed.discard = Action::quiet("Discard").show(ui).clicked();
+                    let mut discard = Action::quiet("Discard");
+                    if let Some(name) = state.discard_name {
+                        discard = discard.name(name);
+                    }
+                    pressed.discard = discard.show(ui).clicked();
                 }
                 if state.cancel_shown() {
                     pressed.cancel = Action::quiet("Cancel").show(ui).clicked();
