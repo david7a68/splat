@@ -10,9 +10,6 @@
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","MultilineTextInput \"Note text: Notes/The ledger of the toll keeper at the old Ashford bridge and every name he wrote down.md\"",1]
   ],
   "column-resize": [
-    ["G3/far-action","13-session-events-fill-their-column","1920x1080","Button \"Add to notes: Major event\"",1],
-    ["G3/far-action","17-session-list-hidden","1920x1080","Button \"Add to notes: Major event\"",1],
-    ["G3/far-action","18-session-note-widened","1920x1080","Button \"Add to notes: Major event\"",1]
   ],
   "data-integrity": [
     ["G3/far-action","06-run-folder-gone","1920x1080","Button \"Start fight\"",1]
@@ -171,6 +168,7 @@
     ["G6/footer-far-below-body","05-recording-retry-with-input","1920x1080","Pane 0E31",1]
   ],
   "run-continue": [
+    ["N2/icon-off-text-centre","10-plan-with-continued-fight","960x640","Button \"More actions for Sunken Vault\"",1],
     ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1],
     ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Cinder Wolf, enemies, HP 22/22, Temp 0, AC 13, Initiative 9\"",1],
     ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Copy loot\"",1],
@@ -207,8 +205,7 @@
   ],
   "run-loot": [
     ["G1b/pressed-control-moved","07-rewards-for-loot","960x640","Button \"Sunken Vault · Fight · Undecided · Ended · Round 2\"",1],
-    ["G3/far-action","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1],
-    ["G3/far-action","07-rewards-for-loot","1920x1080","Button \"Add rewards: Sunken Vault\"",1]
+    ["G3/far-action","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1]
   ],
   "run-overrides": [
     ["G1b/pressed-control-moved","03-slot-changes-open","960x640","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1]
@@ -240,17 +237,17 @@
     ["N4/quiet-action-line-start","03-ended-with-conflict","960x640","Button \"Stop sync for Iselle Marrowind\"",1]
   ],
   "session-carry-over": [
-    ["G3/far-action","03-carried-over","1920x1080","Button \"More actions for Talk to Hobb the miller about the ropes\"",1],
     ["G3/far-action","03-carried-over","1920x1080","Button \"Resume: Bridge Ambush\"",1]
   ],
   "session-notes": [
+    ["N2/icon-off-text-centre","45-plan-open-fight-aligned","960x640","Button \"More actions for Bridge Ambush\"",1],
+    ["N2/icon-off-text-centre","39-sessions-with-notes","1920x1080","Button \"More actions for Bridge Ambush\"",1],
+    ["N2/icon-off-text-centre","39-sessions-with-notes","1200x800","Button \"More actions for Bridge Ambush\"",1],
     ["G1b/pressed-control-moved","23-timeline-time-not-counted","960x640","Button \"Travel · Session 1\"",1],
     ["G1b/pressed-control-moved","39-sessions-with-notes","960x640","Button \"Conditions for this participant\"",1],
-    ["G3/far-action","28-session-long-title","1920x1080","Button \"Add to notes: Major event\"",1],
-    ["G3/far-action","39-sessions-with-notes","1920x1080","Button \"More actions for Bridge Ambush\"",1]
+    ["G3/far-action","28-session-long-title","1920x1080","Button \"Add to notes: Major event\"",1]
   ],
   "session-plan": [
-    ["G3/far-action","03-planned-fight-removed","1920x1080","Button \"Resume: Bridge Ambush\"",1],
     ["G3/far-action","05-plan-with-fights","1920x1080","Button \"Resume: Bridge Ambush\"",1],
     ["G3/far-action","16-plan-after-a-fight","1920x1080","Button \"Add rewards: Bridge Ambush\"",1],
     ["G3/far-action","17-fight-in-place","1920x1080","Button \"Add rewards: Bridge Ambush\"",1],
@@ -268,7 +265,6 @@
     ["G3/far-action","29-plan-rest-ruling-on","1920x1080","Button \"Add rewards: Bridge Ambush\"",1],
     ["G3/far-action","29-plan-rest-ruling-on","1920x1080","Button \"Add to notes: Long rest\"",1],
     ["G3/far-action","29-plan-rest-ruling-on","1920x1080","Button \"Resume: Shrine of Cinders\"",1],
-    ["G3/far-action","36-session-party-bar","1920x1080","Button \"Add rewards: Bridge Ambush\"",1],
     ["G3/far-action","36-session-party-bar","1920x1080","Button \"Add to notes: Long rest\"",2],
     ["G3/far-action","36-session-party-bar","1920x1080","Button \"Resume: Bridge Ambush\"",1],
     ["G3/far-action","36-session-party-bar","1920x1080","Button \"Resume: Shrine of Cinders\"",1],
@@ -284,11 +280,8 @@
     ["G1b/pressed-control-moved","02-plan-group-assembled","960x640","Button \"Add\"",1],
     ["G1b/pressed-control-moved","10-plan-group-in-another-session","960x640","Button \"Add\"",1],
     ["G1b/pressed-control-moved","16-plan-group-refused","960x640","Button \"Add\"",1],
-    ["G3/far-action","03-plan-group-saved","1920x1080","Button \"Edit group Ash Pack\"",1],
     ["G3/far-action","04-plan-with-groups","1920x1080","Button \"Edit group Ash Pack\"",1],
-    ["G3/far-action","04-plan-with-groups","1920x1080","Button \"Edit group Rival Team\"",1],
     ["G3/far-action","05-plan-groups-read","1920x1080","Button \"Edit group Ash Pack\"",1],
-    ["G3/far-action","05-plan-groups-read","1920x1080","Button \"Edit group Rival Team\"",1],
     ["G3/far-action","09-plan-groups-fight-open","1920x1080","Button \"Add Ash Pack to fight\"",1],
     ["G3/far-action","09-plan-groups-fight-open","1920x1080","Button \"More actions for Bridge Ambush\"",1],
     ["G3/far-action","15-plan-group-no-member-can-join","1920x1080","Button \"Add Ash Pack to fight\"",1],
@@ -296,6 +289,7 @@
     ["G3/far-action","15-plan-group-no-member-can-join","1920x1080","Button \"More actions for Mill Watch\"",1]
   ],
   "session-plan-scenes": [
+    ["N2/icon-off-text-centre","03-scene-menu-with-lookup","1200x800","Button \"More actions for The miller is the informer\"",1],
     ["G1b/pressed-control-moved","07-scene-removed","1200x800","Button \"Add\"",1],
     ["G1b/pressed-control-moved","07-scene-removed","1920x1080","Button \"Add\"",1],
     ["G1b/pressed-control-moved","07-scene-removed","960x640","Button \"Add\"",1],
@@ -321,9 +315,7 @@
     ["G1b/pressed-control-moved","05-run-silent","960x640","Button \"Note\"",1],
     ["G1b/pressed-control-moved","13-processing-llm-choices","960x640","ComboBox \"Transcript and summary service: Codex CLI, GPT-6.1 Sol\"",1],
     ["G1b/pressed-control-moved","38-input-during-recording","960x640","Button \"Record again\"",1],
-    ["G3/far-action","39-note-file-gone","1920x1080","Button \"Add to notes: Rest at the mill\"",1],
     ["G3/far-action","39-note-file-gone","1920x1080","Button \"Resume: Bridge Ambush\"",1],
-    ["G3/far-action","43-timeline-fight-resume","1920x1080","Button \"Add to notes: Rest at the mill\"",1],
     ["G3/far-action","43-timeline-fight-resume","1920x1080","Button \"Resume: Bridge Ambush\"",1],
     ["N4/quiet-action-line-start","15-key-for-another-service","1200x800","Button \"Remove transcript and summary key (OpenAI): Transcript and summary API key\"",1],
     ["N4/quiet-action-line-start","15-key-for-another-service","1920x1080","Button \"Remove transcript and summary key (OpenAI): Transcript and summary API key\"",1],
@@ -346,7 +338,6 @@
   "travel-checks": [
     ["G1b/pressed-control-moved","06-travel-checks-timeline","960x640","Button \"Travel · 1 day · Session 1\"",1],
     ["G1b/pressed-control-moved","10-travel-checks-road-fight","960x640","Button \"Shrine of Cinders · Fight · Round 1 · Session 1 · Day 2 of Travel\"",1],
-    ["G3/far-action","01-travel-checks-rolled","1920x1080","Button \"Add to notes: Travel\"",1],
     ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Journey B\"",1],
     ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Travel\"",1],
     ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1]
