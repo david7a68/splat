@@ -1021,6 +1021,9 @@ struct Held {
     pending: Option<f32>,
     /// The content's height (without the blank room) in the last pass.
     content: f32,
+    /// The scroll offset the next body pass draws with: the last pass's, as egui left it (its
+    /// clamp at the content's new end comes after the pass drew), or the correction applied.
+    offset: f32,
     /// The frame the pane last drew in.
     drawn: u64,
 }
@@ -1054,7 +1057,11 @@ fn hold_before_body(ui: &Ui, held: &mut Held) -> Option<f32> {
         }
     }
     held.drawn = frame;
-    held.pending.take()
+    let pending = held.pending.take();
+    if let Some(offset) = pending {
+        held.offset = offset;
+    }
+    pending
 }
 
 /// How many frames after its press a change may come and still be the press's own (the shell
@@ -1465,6 +1472,10 @@ fn hold_place(ui: &Ui, mut held: Held, output: ColumnFacts) -> Held {
     let state = output.state;
     let content = output.content_size.y - held.room;
     held.content = content;
+    // The offset this pass drew with. egui clamps the offset after the pass when the content
+    // shrank past it, so the pass's own state can be smaller than the offset the control's place
+    // was drawn at (a press at the list's end that removes rows above it).
+    let drew = std::mem::replace(&mut held.offset, state.offset.y);
     // The DM's own wheel or drag over the pane's column ends the hold, by the one cancel rule
     // (`reveal::cancel`; review of #852): a wheel over another column never does.
     let scrolled = output.owner.is_some_and(|(key, view)| {
@@ -1497,7 +1508,7 @@ fn hold_place(ui: &Ui, mut held: Held, output: ColumnFacts) -> Held {
                 && let Some(now) = keep.now
                 && (now - keep.top).abs() > 0.5
             {
-                held.pending = Some((state.offset.y + now - keep.top).max(0.0));
+                held.pending = Some((drew + now - keep.top).max(0.0));
                 ui.ctx()
                     .request_discard("a press moved the content above its control");
                 return held;
@@ -2870,6 +2881,8 @@ mod hold_tests {
         grown_gap: usize,
         /// That room, as the last pass drew it.
         room: Option<Rect>,
+        /// The press removes rows above the button instead of adding them.
+        shrink: bool,
     }
 
     impl State {
@@ -2889,6 +2902,7 @@ mod hold_tests {
                 grown: None,
                 grown_gap: 0,
                 room: None,
+                shrink: false,
             }
         }
     }
@@ -2921,6 +2935,7 @@ mod hold_tests {
                 if response.clicked() {
                     hold_press(ui, "add", &response);
                     match state.later.as_mut() {
+                        _ if state.shrink => state.rows_above -= 3,
                         Some(rows) => *rows += 3,
                         None => state.rows_above += 3,
                     }
@@ -3396,6 +3411,30 @@ mod hold_tests {
                 assert!(after - before > 20.0, "not held: {before} then {after}");
             }
         }
+        // Layout 11c scope C (the Trackers panel's `Lose seal` at 960): at the list's end, a
+        // press that removes rows above its control. The content shrinks past the offset the
+        // pass drew with, and egui clamps the offset after that pass; the correction is
+        // measured from the offset the pass drew with, so the control stays under the pointer.
+        let mut state = State::new(true, false);
+        (state.rows_above, state.below, state.shrink) = (30, 2, true);
+        let mut h = harness(state);
+        h.hover_at(egui::pos2(200.0, 150.0));
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -4000.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(6);
+        let before = top(&h, "Add a row above");
+        h.get_by_label("Add a row above").click();
+        h.run_steps(8);
+        let after = top(&h, "Add a row above");
+        assert_eq!(h.state().rows_above, 27);
+        assert!(
+            (after - before).abs() < 0.5 && ended(&h) == Some("corrected"),
+            "hold-shrink-at-end: removed rows above at the list's end: {before} then {after}, ended {:?}",
+            ended(&h)
+        );
     }
 }
 
