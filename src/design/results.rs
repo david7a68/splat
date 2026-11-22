@@ -1671,14 +1671,12 @@ pub(crate) const STAGED: &[Staged] = &[
         "ptr_eq(",
         "Key the cache by a `Revision` in a `design::memo::Memo`; a pointer address is not a change.",
         &[
-            ("src/content_workspace.rs", 1),
             ("src/design/comparison.rs", 1),
             ("crates/campaign/src/encounter_run/undo.rs", 2),
             ("src/library.rs", 1),
             ("src/library/catalogue.rs", 1),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
-            ("src/trackers.rs", 1),
         ],
     ),
     (

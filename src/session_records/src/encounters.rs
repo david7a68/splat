@@ -10,9 +10,9 @@ pub struct PlanFight {
     pub path: String,
     /// Its roster's typed parts (G118), so the plan's row names a member once.
     pub summary: crate::difficulty::Summary,
-    /// The roster's line key (`Roster::key`: its parts and its difficulty), for the plan's
-    /// kept line.
-    pub key: u64,
+    /// The roster's revision (`Roster::revision`), for the plan's kept line; `None` with no
+    /// roster.
+    pub revision: Option<splat_design::ownership::Revision>,
     pub difficulty: crate::difficulty::Difficulty,
 }
 /// One encounter note, as the page lists it.
@@ -37,10 +37,10 @@ pub struct Roster {
     pub words: String,
     /// The row's hover: the words, then the difficulty's form (`… · XP not known`).
     pub hover: String,
-    /// The Ready row's line key: a hash of the parts and the fight's difficulty, so the kept
-    /// line is built again when, and only when, what it says changes. One hash per build here,
-    /// none per frame.
-    pub key: u64,
+    /// The Ready row's and the plan's kept lines are keyed by it (ruling M6): a new revision
+    /// for each build with its parts and the fight's difficulty, so a rebuilt roster (a new
+    /// read, another party) is fitted again, and an unchanged frame never is.
+    pub revision: splat_design::ownership::Revision,
 }
 
 impl Roster {
@@ -48,9 +48,6 @@ impl Roster {
         parts: crate::difficulty::Summary,
         difficulty: &crate::difficulty::Difficulty,
     ) -> Self {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        (&parts, difficulty).hash(&mut hasher);
         let words = parts.text();
         Self {
             hover: match difficulty.form() {
@@ -58,7 +55,8 @@ impl Roster {
                 _ => words.clone(),
             },
             words,
-            key: hasher.finish(),
+            // A roster is built whole and never changed after: its build is its one revision.
+            revision: splat_design::ownership::Revised::new(()).revision(),
             parts,
         }
     }

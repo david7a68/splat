@@ -836,7 +836,13 @@ thread_local! {
 
 /// The plan's kept lines: one per planned fight, by the session, the fight's place in the plan
 /// and its note. The Sessions page owns them (`Sessions::plan_lines`).
-pub(super) type PlanLines = crate::difficulty::Kept<(Option<Uuid>, usize, Uuid), KeptPlanLine>;
+pub(super) type PlanLines = crate::difficulty::Kept<
+    PlanLineId,
+    KeptPlanLine,
+    (design::memo::Revision, design::memo::Revision),
+>;
+/// A planned fight's line: its session, its place in the plan and its encounter.
+pub(super) type PlanLineId = (Option<Uuid>, usize, Uuid);
 
 /// `planned_summary` with a journey's day after the summary (`road_day`), not kept (tests).
 #[cfg(test)]
@@ -850,18 +856,21 @@ fn planned_summary_on_road(
     show_plan_line(ui, &line);
 }
 
-/// A kept plan line: fitted again only when its fight's roster key, its day, its room, its
-/// font or the display scale changes.
+/// A kept plan line: fitted again only when its fight's roster, the plan's days (`days`: the
+/// revision of the planned fights with their days), its room, its font, the font generation or
+/// the display scale changes.
 fn kept_plan_line(
     ui: &mut egui::Ui,
     kept: &mut PlanLines,
-    id: (Option<Uuid>, usize, Uuid),
+    id: PlanLineId,
     fight: &PlanFight,
     day: Option<&str>,
+    days: design::memo::Revision,
 ) {
     let font = Type::Small.font(ui);
     let room = ui.available_width();
-    let line = kept.answer(ui, &id, (fight.key, day), room, &font, || {
+    let content = (fight.revision.unwrap_or(days), days);
+    let line = kept.answer(ui, &id, content, room, &font, || {
         let words = fight.summary.text();
         let day = road_day(ui, &words, day);
         prepare_plan_line(ui, &fight.summary, day.as_deref(), Some(&fight.difficulty))
@@ -2533,7 +2542,7 @@ fn plan_fight_stubs(names: &[String]) -> Vec<PlanFight> {
             name: name.clone(),
             path: String::new(),
             summary: Default::default(),
-            key: 0,
+            revision: None,
             difficulty: Default::default(),
         })
         .collect()
@@ -4241,9 +4250,10 @@ impl Sessions {
     /// G118: the one end of the plan's kept lines. Only the lines of the planned fights in
     /// `ids` stay (none at a campaign switch); a fight removed or replaced, another session or
     /// another campaign ends its line.
-    pub(super) fn forget_plan_lines(&mut self, ids: &[(Option<Uuid>, usize, Uuid)]) {
-        self.plan_lines.retain(|id| ids.contains(id));
-        self.plan_lines_seen = ids.to_vec();
+    pub(super) fn forget_plan_lines(&mut self, seen: Vec<(PlanLineId, Option<String>)>) {
+        self.plan_lines
+            .retain(|id| seen.iter().any(|(planned, _)| planned == id));
+        self.plan_lines_seen.set(seen);
     }
 
     /// The session as a list, top to bottom: what happened, then what is still to come. It
@@ -4784,8 +4794,9 @@ impl Sessions {
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
                 let days = self.planned_days(book, session, plan);
-                let ids: Vec<_> = planned.iter().enumerate().map(|(at, fight)| (session, at, fight.id)).collect();
-                if ids != self.plan_lines_seen { self.forget_plan_lines(&ids); }
+                let seen: Vec<_> = planned.iter().enumerate().map(|(at, fight)| ((session, at, fight.id), planned_day(&days, &planned, at))).collect();
+                if seen != *self.plan_lines_seen { self.forget_plan_lines(seen); }
+                let plan_days = self.plan_lines_seen.revision();
                 for (position, fight) in planned.iter().enumerate() {
                     let day = planned_day(&days, &planned, position);
                     self.removed_fight_message(ui, session, position);
@@ -4811,7 +4822,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { kept_plan_line(ui, &mut self.plan_lines, (session, position, fight.id), fight, day.as_deref()); }
+                            } else { kept_plan_line(ui, &mut self.plan_lines, (session, position, fight.id), fight, day.as_deref(), plan_days); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -6122,7 +6133,7 @@ mod tests {
             name: name.into(),
             path: path.into(),
             summary: Default::default(),
-            key: 0,
+            revision: None,
             difficulty: Default::default(),
         }
     }
@@ -8049,39 +8060,51 @@ mod tests {
         // G118 (re-check of PR 390): the plan keeps each fitted line. An unchanged redraw fits
         // none; a new width or a new roster fits again; a removed fight's line goes.
         let mut sessions = super::super::Sessions::default();
-        let fight = |key: u64, summary: &crate::difficulty::Summary| PlanFight {
+        let fight = |summary: &crate::difficulty::Summary| PlanFight {
             saved: None,
             id: Uuid::from_u128(1),
             name: "Mill Road".into(),
             path: "Encounters/Mill Road.md".into(),
             summary: summary.clone(),
-            key,
+            revision: Some(crate::design::memo::Revised::new(()).revision()),
             difficulty: unknown(Unknown::Xp),
         };
         let id = (None, 0, Uuid::from_u128(1));
         let fitted = || PLAN_FITS.with(std::cell::Cell::get);
-        let mut draw = |fight: &PlanFight, width: f32| {
+        let draw = |sessions: &mut super::super::Sessions, fight: &PlanFight, width: f32| {
             let _ = ctx.run(Default::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.scope(|ui| {
                         ui.set_width(width);
-                        kept_plan_line(ui, &mut sessions.plan_lines, id, fight, None);
+                        let days = sessions.plan_lines_seen.revision();
+                        kept_plan_line(ui, &mut sessions.plan_lines, id, fight, None, days);
                     });
                 });
             });
         };
-        let first = fight(1, &mixed);
-        draw(&first, 400.0);
+        let first = fight(&mixed);
+        draw(&mut sessions, &first, 400.0);
         let before = fitted();
-        draw(&first, 400.0);
-        draw(&first, 400.0);
+        draw(&mut sessions, &first, 400.0);
+        draw(&mut sessions, &first, 400.0);
         assert_eq!(fitted(), before, "an unchanged redraw fits no line");
-        draw(&first, 300.0);
+        draw(&mut sessions, &first, 300.0);
         assert_eq!(fitted(), before + 1, "a new width fits again");
-        draw(&fight(2, &two), 300.0);
+        let second = fight(&two);
+        draw(&mut sessions, &second, 300.0);
         assert_eq!(fitted(), before + 2, "a new roster fits again");
+        // A new day for a planned fight fits its line again (ruling M6: the plan's revision).
+        sessions.forget_plan_lines(vec![(id, Some("Day 3".into()))]);
+        draw(&mut sessions, &second, 300.0);
+        assert_eq!(fitted(), before + 3, "a new day fits again");
+        draw(&mut sessions, &second, 300.0);
+        assert_eq!(
+            fitted(),
+            before + 3,
+            "an unchanged redraw after it fits none"
+        );
         assert!(sessions.plan_lines.holds(&id));
-        sessions.forget_plan_lines(&[(None, 0, Uuid::from_u128(2))]);
+        sessions.forget_plan_lines(vec![((None, 0, Uuid::from_u128(2)), None)]);
         assert!(
             !sessions.plan_lines.holds(&id),
             "a removed fight's line goes"
