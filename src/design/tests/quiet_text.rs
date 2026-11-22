@@ -97,7 +97,10 @@ fn measured(run: impl FnOnce()) -> Allocated {
         count: ALL_COUNT.load(Ordering::Relaxed),
         bytes: ALL_BYTES.load(Ordering::Relaxed),
     };
-    assert_eq!(mine, all, "every counted allocation was the measuring thread's");
+    assert_eq!(
+        mine, all,
+        "every counted allocation was the measuring thread's"
+    );
     mine
 }
 
@@ -116,7 +119,8 @@ struct Case {
     accesskit: bool,
 }
 
-const FIELD: layout::FieldId = splat_design::field_id!("quiet_text_harness").once(layout::Once::Example);
+const FIELD: layout::FieldId =
+    splat_design::field_id!("quiet_text_harness").once(layout::Once::Example);
 
 struct Editor {
     ctx: egui::Context,
@@ -146,7 +150,9 @@ impl Editor {
         for frame in 0..4 {
             let _ = editor.frame();
             if frame == 0 && case.focused {
-                editor.ctx.memory_mut(|memory| memory.request_focus(FIELD.id()));
+                editor
+                    .ctx
+                    .memory_mut(|memory| memory.request_focus(FIELD.id()));
             }
         }
         assert_eq!(
@@ -205,7 +211,10 @@ impl Editor {
                     .clone();
                 let mut layouter =
                     move |_: &egui::Ui, _: &dyn egui::TextBuffer, _: f32| galley.clone();
-                #[allow(clippy::disallowed_methods, reason = "the stock reference is egui's own text edit")]
+                #[allow(
+                    clippy::disallowed_methods,
+                    reason = "the stock reference is egui's own text edit"
+                )]
                 let _ = egui::TextEdit::multiline(&mut self.plain)
                     .id(FIELD.id())
                     .layouter(&mut layouter)
@@ -236,7 +245,10 @@ fn text(bytes: usize, pattern: &str) -> String {
 /// characters' UTF-8 widths.
 const PATTERNS: [(&str, &str); 4] = [
     ("prose lines", "Ash road and cinder pass.\n"),
-    ("wide UTF-8, empty lines", "かきくけこ — Ünïcödé wörds ⅔\n\n"),
+    (
+        "wide UTF-8, empty lines",
+        "かきくけこ — Ünïcödé wörds ⅔\n\n",
+    ),
     ("short words", "a b c d e f g h i j k l m n o p\n"),
     (
         "one wrapped line",
@@ -252,7 +264,11 @@ fn quiet_frame(side: Side, text: &str, case: Case) -> Allocated {
     let laid = pane::KEPT_LAYOUTS_MADE.with(Cell::get);
     let first = editor.quiet();
     for _ in 0..4 {
-        assert_eq!(editor.quiet(), first, "{side:?} {case:?}: the quiet frames are equal");
+        assert_eq!(
+            editor.quiet(),
+            first,
+            "{side:?} {case:?}: the quiet frames are equal"
+        );
     }
     assert_eq!(
         layout::BOUND_TEXT_BYTES.with(Cell::get),
@@ -269,7 +285,14 @@ fn quiet_frame(side: Side, text: &str, case: Case) -> Allocated {
 
 /// The wrap width and the row count of the document's galley over `text`.
 fn document_galley(text: &str) -> (f32, usize) {
-    let mut editor = Editor::new(Side::Document, text, Case { focused: false, accesskit: false });
+    let mut editor = Editor::new(
+        Side::Document,
+        text,
+        Case {
+            focused: false,
+            accesskit: false,
+        },
+    );
     let galley = editor.frame().1.expect("the document shows its galley");
     (galley.job.wrap.max_width, galley.rows.len())
 }
@@ -279,9 +302,16 @@ fn both(text: &str, case: Case) -> (Allocated, Allocated) {
     let (wrap, rows) = document_galley(text);
     let mut stock = Editor::new(Side::Stock { wrap }, text, case);
     let stock_rows = stock.galley.as_ref().map(|galley| galley.rows.len());
-    assert_eq!(stock_rows, Some(rows), "the reference has the document's rows");
+    assert_eq!(
+        stock_rows,
+        Some(rows),
+        "the reference has the document's rows"
+    );
     let _ = stock.quiet();
-    (quiet_frame(Side::Document, text, case), quiet_frame(Side::Stock { wrap }, text, case))
+    (
+        quiet_frame(Side::Document, text, case),
+        quiet_frame(Side::Stock { wrap }, text, case),
+    )
 }
 
 fn main() {
@@ -291,8 +321,10 @@ fn main() {
         for focused in [false, true] {
             for accesskit in [false, true] {
                 let case = Case { focused, accesskit };
-                let frames: Vec<_> =
-                    sizes.iter().map(|&bytes| both(&text(bytes, pattern), case)).collect();
+                let frames: Vec<_> = sizes
+                    .iter()
+                    .map(|&bytes| both(&text(bytes, pattern), case))
+                    .collect();
                 let (doc_small, stock_small) = frames[0];
                 for (&bytes, &(doc, stock)) in sizes.iter().zip(&frames).skip(1) {
                     let count = |a: Allocated, b: Allocated| a.count as i64 - b.count as i64;
