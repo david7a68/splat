@@ -6410,6 +6410,7 @@ impl Run {
         let log_id = ui.make_persistent_id("run_ended_combat_log");
         let log_open = egui::collapsing_header::CollapsingState::load(ui.ctx(), log_id)
             .is_some_and(|state| state.is_open());
+        let top = ui.cursor().top();
         // An open log shares the column (the sync block up to 60%, as before); a closed one
         // takes only its line, so the sync block is whole while the column has room for it.
         let room = if log_open && self.conflict_count() == 0 {
@@ -6439,7 +6440,7 @@ impl Run {
         // The shared columns measure this column (`PaneColumns::shared_task`): a closed log's
         // whole line counts, so the room it gives the sync block is the room it was measured with.
         if !log_open {
-            ui.set_min_height(sync + log_line);
+            ui.expand_to_include_y(top + sync + log_line);
         }
     }
 
