@@ -1990,7 +1990,7 @@ impl Splat {
                         });
                     let feed_list =
                         settings_feed(|frame, messages, dndbeyond: &dndbeyond::DndBeyond| {
-                            dndbeyond.footer_messages(frame, messages, false);
+                            dndbeyond.footer_messages(frame, messages, None);
                         });
                     // After a failed Connect, Connect comes into view above the footer.
                     let reveal_connect = |ui: &mut egui::Ui, settings: &mut settings::Settings| {
@@ -2382,10 +2382,13 @@ impl Splat {
                                     dndbeyond
                                 },
                                 |dndbeyond, messages| {
-                                    campaigns_ref
-                                        .borrow()
-                                        .footer_messages(&frame, messages, false, blocked);
-                                    dndbeyond.footer_messages(&frame, messages, true);
+                                    let campaigns = campaigns_ref.borrow();
+                                    campaigns.footer_messages(&frame, messages, false, blocked);
+                                    dndbeyond.footer_messages(
+                                        &frame,
+                                        messages,
+                                        campaigns.active_campaign().map(|campaign| campaign.id),
+                                    );
                                 },
                             );
                             if let Some(press) = paned.pressed {
