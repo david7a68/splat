@@ -2184,11 +2184,24 @@ impl<'a> TitleLine<'a> {
                     false
                 }
                 None if matches!(self.actions[at].weight, TitleWeight::Link) => {
-                    // Review of PR 730: a link keeps its hint, as the other forms do.
-                    let link = super::title_link(ui, self.actions[at].word.as_str());
-                    match self.actions[at].hint {
-                        Some(hint) => link.on_hover_text(hint),
-                        None => link,
+                    // Reviews of PR 730 and 740: a link keeps its hint, as the other forms do;
+                    // a blocked one takes no press and says why on hover and to a screen
+                    // reader, as a blocked `Action` does.
+                    let action = self.actions[at];
+                    let link = ui
+                        .add_enabled_ui(action.blocked.is_none(), |ui| {
+                            super::title_link(ui, action.word.as_str())
+                        })
+                        .inner;
+                    match (action.blocked, action.hint) {
+                        (Some(reason), _) => {
+                            ui.ctx().accesskit_node_builder(link.id, |node| {
+                                node.set_description(reason);
+                            });
+                            link.on_disabled_hover_text(reason)
+                        }
+                        (None, Some(hint)) => link.on_hover_text(hint),
+                        (None, None) => link,
                     }
                     .clicked()
                 }
@@ -4447,6 +4460,27 @@ fn menu_popup_raw(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
 }
 
+/// The submenus of a menu that a click inside does not close ([`MenuPopup::show_submenus`]).
+pub struct Submenus {
+    _by_its_menu: (),
+}
+
+impl Submenus {
+    /// Its submenus, each a row of the menu with its word and caret, whose choices open under it
+    /// in the menu, each on its own; `contents(ui, at)` draws an open one's choices, and `width`
+    /// is the widest submenu's choices, so the menu keeps one width.
+    pub fn show<W: AsRef<str>>(
+        &mut self,
+        ui: &mut Ui,
+        id: impl std::hash::Hash,
+        width: f32,
+        words: &[W],
+        contents: impl FnMut(&mut Ui, usize),
+    ) {
+        super::components::menu_submenus(ui, id, width, words, contents);
+    }
+}
+
 /// A menu from [`menu_popup`]: `show` draws its content at the width the part decides.
 #[must_use = "call `show` to draw the menu"]
 pub struct MenuPopup<'a> {
@@ -4515,6 +4549,18 @@ impl MenuPopup<'_> {
     pub fn close_behavior(mut self, behavior: egui::PopupCloseBehavior) -> Self {
         self.popup = self.popup.close_behavior(behavior);
         self
+    }
+
+    /// A menu of several submenus (M0051, the creature Filter's facts): `content` draws the
+    /// menu, and its submenus through [`Submenus::show`]. Its rows and choices keep it open; a
+    /// click outside it or Escape closes it. Only this menu makes a [`Submenus`], so no menu that
+    /// a click inside closes holds one.
+    pub fn show_submenus<R>(
+        self,
+        content: impl FnOnce(&mut Ui, &mut Submenus) -> R,
+    ) -> Option<egui::InnerResponse<R>> {
+        self.close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| content(ui, &mut Submenus { _by_its_menu: () }))
     }
 
     /// Draw the menu while it is open.
@@ -4594,6 +4640,20 @@ struct MenuMeasure {
 
 fn menu_measure_id() -> Id {
     Id::new("splat_menu_measure")
+}
+
+/// Draw `add` as one block of the menu being drawn, `width` wide (a menu's submenus, with their
+/// wrapped choices and their scroll lane, M0051): the choices in it note no width of their own,
+/// and the block notes its whole width, so the menu is as wide as the block (review of PR 759).
+pub(super) fn menu_block<R>(ui: &mut Ui, width: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let outer = ui.data_mut(|data| data.remove_temp::<MenuMeasure>(menu_measure_id()));
+    let inner = add(ui);
+    if let Some(mut outer) = outer {
+        outer.widest = outer.widest.max(width);
+        outer.any = true;
+        ui.data_mut(|data| data.insert_temp(menu_measure_id(), outer));
+    }
+    inner
 }
 
 /// A choice notes its words' width (`natural`) for the menu it is drawn in, if any.

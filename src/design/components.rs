@@ -5138,6 +5138,168 @@ pub fn menu_submenu<R>(
     .inner
 }
 
+/// A menu of several submenus (the creature Filter's facts, M0051). Each submenu is a row of the
+/// menu, with `menu_submenu`'s inset, type and height and its caret after its word; its choices
+/// open under it, in the same menu. So no submenu lies over the next one's row at any width:
+/// the menu stays the one layer `menu_popup` placed in its owning pane, clear of its splitter
+/// and scroll bar. Each row opens and closes on its own, so a press moves no row above it and
+/// the row the DM pressed stays under the pointer (G1b); the rows scroll in the menu when the
+/// open ones are taller than 60% of the window. The keyboard reaches each row and then its open
+/// choices in order (Tab); Space or Enter on a row opens or closes it; Escape closes the menu,
+/// as any menu. Each row tells a screen reader whether it is open. `words` are the submenus'
+/// words; `contents(ui, at)` draws an open one's choices, from the row's words; `width` is the
+/// widest submenu's choices, so the menu keeps one width whichever are open (the choices from
+/// the rows' inset, or the widest row, and the scroll lane). Only
+/// [`Submenus::show`](super::layout::Submenus::show) calls it, in a menu that a click inside
+/// does not close ([`MenuPopup::show_submenus`](super::layout::MenuPopup::show_submenus)).
+pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    width: f32,
+    words: &[W],
+    mut contents: impl FnMut(&mut Ui, usize),
+) {
+    let key = ui.make_persistent_id(id);
+    let mut state: SubmenuState = ui.data(|data| data.get_temp(key)).unwrap_or_default();
+    // Review of PR 759: Escape closes the innermost open submenu first (the one that held the
+    // keyboard at the end of the last frame, else the last opened) and gives the keyboard to its
+    // row; the menu closes on an Escape only when no submenu is open. egui drops the focus on an
+    // Escape before the menu draws, and moves it by the arrow keys after the menu drew, so the
+    // widget that had it at the end of the last frame (`had_focus_last_frame`, after that move)
+    // is found among the menu layer's widgets of the last pass, on an Escape only.
+    if !state.open.is_empty() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+        let layer = ui.layer_id();
+        let widgets: Vec<(Id, Rect)> = ui.ctx().viewport(|viewport| {
+            viewport
+                .prev_pass
+                .widgets
+                .get_layer(layer)
+                .map(|widget| (widget.id, widget.rect))
+                .collect()
+        });
+        let had = ui.memory(|memory| {
+            widgets
+                .iter()
+                .copied()
+                .find(|(id, _)| memory.had_focus_last_frame(*id))
+        });
+        let held = had.and_then(|(focus, rect)| {
+            state.open.iter().rev().copied().find(|at| {
+                state.rows.get(at) == Some(&focus)
+                    || state
+                        .blocks
+                        .get(at)
+                        .is_some_and(|block| block.contains_rect(rect))
+            })
+        });
+        if let Some(at) = held.or_else(|| state.open.last().copied()) {
+            state.open.retain(|open| *open != at);
+            ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+            if let Some(row) = state.rows.get(&at) {
+                ui.memory_mut(|memory| memory.request_focus(*row));
+            }
+        }
+    }
+    // A row: its padding, its word and its caret, as `menu_submenu`'s.
+    let font = Type::Strong.font(ui);
+    let rows = words
+        .iter()
+        .map(|word| {
+            S + number_width(ui, word.as_ref(), &font) + ui.spacing().item_spacing.x + L + S
+        })
+        .fold(0.0, f32::max);
+    let full = (width + S).max(rows) + super::layout::lane_width();
+    // Review of PR 759 (P1): never wider than the menu has. In the narrowest column the menu is
+    // narrower than `full`: the block is laid out in what is there, and its choices wrap.
+    ui.set_width(full.min(ui.available_width()));
+    let room = ui.ctx().content_rect().height() * 0.6;
+    // Review of PR 759 (P1): the rows and the open submenus are one block of the menu, `full`
+    // wide (wrapped choices and the scroll lane included): the choices in it note no width of
+    // their own, so the menu is as wide as the block, not as its widest single choice.
+    super::layout::menu_block(ui, full, |ui| {
+        super::layout::ScrollColumn::new(key)
+            .max_height(room)
+            .fit_height()
+            .show(ui, |ui| {
+                for (at, word) in words.iter().enumerate() {
+                    submenu_row(ui, &mut state, at, word.as_ref(), &mut contents);
+                }
+            });
+    });
+    ui.data_mut(|data| data.insert_temp(key, state));
+}
+
+/// What `menu_submenus` keeps between frames: the open submenus in the order they opened, and,
+/// from the last frame, each row's id and each open submenu's block.
+#[derive(Clone, Default)]
+struct SubmenuState {
+    open: Vec<usize>,
+    rows: std::collections::HashMap<usize, Id>,
+    blocks: std::collections::HashMap<usize, Rect>,
+}
+
+/// One row of `menu_submenus` and, while it is open, its choices under it. A click, Space or
+/// Enter opens or closes it; with the keyboard on it, Right opens it and Left closes it.
+fn submenu_row(
+    ui: &mut Ui,
+    state: &mut SubmenuState,
+    at: usize,
+    word: &str,
+    contents: &mut impl FnMut(&mut Ui, usize),
+) {
+    let here = state.open.contains(&at);
+    let row = ui
+        .scope(|ui| {
+            ui.spacing_mut().button_padding = vec2(S, XS);
+            ui.spacing_mut().interact_size.y = Density::Read.control();
+            if here {
+                ui.style_mut().visuals.widgets.inactive = ui.style().visuals.widgets.open;
+            }
+            let caret = if here { icons::DOWN } else { icons::NEXT };
+            ui.add(
+                egui::Button::new(Type::Strong.rich(ui, word))
+                    .right_text(Type::Body.rich(ui, caret).color(colors().muted)),
+            )
+        })
+        .inner;
+    // Its name is its word, without the caret; its state is open or closed.
+    named(ui, &row, word);
+    ui.ctx()
+        .accesskit_node_builder(row.id, |node| node.set_expanded(here));
+    state.rows.insert(at, row.id);
+    // An arrow the row takes is its own: egui read it as a focus move before the menu drew, so
+    // the row cancels that move and keeps the keyboard.
+    let key = |key| {
+        let taken = ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, key));
+        if taken {
+            ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+        }
+        taken
+    };
+    let toggle = row.clicked()
+        || (row.has_focus() && !here && key(egui::Key::ArrowRight))
+        || (row.has_focus() && here && key(egui::Key::ArrowLeft));
+    if toggle {
+        if here {
+            state.open.retain(|open| *open != at);
+        } else {
+            state.open.push(at);
+        }
+    }
+    if state.open.contains(&at) {
+        let block = ui
+            .horizontal_top(|ui| {
+                space(ui, S);
+                ui.vertical(|ui| contents(ui, at));
+            })
+            .response
+            .rect;
+        state.blocks.insert(at, block);
+    } else {
+        state.blocks.remove(&at);
+    }
+}
+
 /// Where a submenu of `size` starts (its top left): right of its button, else left of it, each
 /// level with the button; else below the button's row, or above it when it does not fit below,
 /// as far left as the button and inside `inside`. It never covers the button, and it stays `S`
