@@ -10122,8 +10122,10 @@ mod tests {
             }
             undone
         };
-        // Refused: typed in the thread, then a summary at the end of What happened, above the
-        // typing. The step before the typing has no place for it: the history ends.
+        // Typed in the thread, then a summary at the end of What happened, above the typing. The
+        // write is placed in the step before the typing by the DM's own edit (issue #900): Ctrl+Z
+        // takes back the typing and keeps the summary. (A step placed by the words after the
+        // change had no place for it, and the history ended there.)
         let end = panel(&harness).chars().count();
         type_at(&mut harness, end, " Thread typed.");
         assert!(harness.state_mut().0.add_to_note(&ctx, "A summary 2."));
@@ -10138,16 +10140,14 @@ mod tests {
         let (words, file) = (panel(&harness), saved(&mut harness));
         assert!(
             words.contains("A summary 2.")
-                && words.contains(" Thread typed.")
+                && !words.contains(" Thread typed.")
                 && file.contains("A summary 2.")
-                && file.contains(" Thread typed."),
-            "n0-panel-refused: the summary could not reach the step before the typed thread, so \
-             the panel's Undo ended and Ctrl+Z changes nothing: panel {words:?}, saved {file:?} \
-             ({undone:?})"
+                && !file.contains(" Thread typed."),
+            "n0-panel-above-typing: Ctrl+Z takes back the typing below a summary and keeps the \
+             summary: panel {words:?}, saved {file:?} ({undone:?})"
         );
-        // Placed, after that refusal: typed at the end of What happened, then a summary below
-        // the typing. Ctrl+Z takes back only the typing; neither summary goes, also not the one
-        // whose write ended the history before.
+        // Typed at the end of What happened, then a summary below the typing. Ctrl+Z takes back
+        // only the typing; neither summary goes.
         let at = panel(&harness)
             .find("\n\n## Open threads")
             .map(|at| panel(&harness)[..at].chars().count())
@@ -10169,9 +10169,8 @@ mod tests {
                 && !file.contains(" Night typed.")
                 && file.contains("A summary 2.")
                 && file.contains("A summary 4."),
-            "n0-panel-placed-after-refused: Ctrl+Z takes back only the typing after a placed \
-             summary, and the earlier refused write stays: panel {words:?}, saved {file:?} \
-             ({undone:?})"
+            "n0-panel-below-typing: Ctrl+Z takes back only the typing above a summary, and the \
+             earlier summary stays: panel {words:?}, saved {file:?} ({undone:?})"
         );
         // The reviewer's sequence: a renamed link and a summary before Notes draws again.
         let end = panel(&harness).chars().count();

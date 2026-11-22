@@ -57,7 +57,11 @@ struct Reference {
     /// How many of the newest groups the field has undone now.
     undone: usize,
     /// Where new characters stand when characters that are not shown lie at their place: after
-    /// them (else before them). Both orders keep every write; the run allows either.
+    /// them (else before them). The editor may take either order (the note, section 3): its
+    /// steps are whole texts, and a group of several edits shows only their sum, so equal
+    /// letters can hide that the DM removed words exactly where the app then wrote. Both orders
+    /// hold the same characters for every count of undone groups (`run` checks it), so no word
+    /// is lost in either.
     after_gone: bool,
     /// A foreign write came since the text was set: the field's steps were changed under it, and
     /// H2 holds no more (the field may then offer fewer steps, as H1 allows).
@@ -65,6 +69,11 @@ struct Reference {
 }
 
 impl Reference {
+    /// The reference in both orders of a tie.
+    fn both(text: &str) -> Vec<Self> {
+        vec![Self::set(text, false), Self::set(text, true)]
+    }
+
     fn set(text: &str, after_gone: bool) -> Self {
         Self {
             after_gone,
@@ -273,47 +282,105 @@ fn shown(harness: &Harness<'_, Page>) -> String {
     harness.state().draft.as_str().to_owned()
 }
 
-/// Whether the editor maps a kept step by its operations (the note, section 3, v3; issue #900).
-/// Off for today's code: `write_under_history` places the app's change in a kept step by the
-/// words after it, and a step can hold those words at two places. Two faults follow, each a
-/// named test below:
-/// - **F2** (`astras_trace`): a word the DM gets back stands on the wrong side of the app's
-///   words. While this is off, an Undo's text is compared by its characters, not their order.
-/// - **F3** (`a_replaced_word_takes_an_older_equal_word`): when the app REPLACES words the DM
-///   just typed and equal words stand directly before them, Undo takes the older words out.
-///   While this is off, the generated app writes only insert.
-///
-/// The Undo fix turns this on and flips both named tests.
-const BY_OPERATIONS: bool = false;
-
-/// Whether the editor's text `now` is the reference's text `allowed` (`BY_OPERATIONS`).
-fn same(now: &str, allowed: &str) -> bool {
-    if BY_OPERATIONS {
-        return now == allowed;
-    }
-    let sorted = |text: &str| {
-        let mut chars: Vec<char> = text.chars().collect();
-        chars.sort_unstable();
-        chars
-    };
-    sorted(now) == sorted(allowed)
+/// The app's write from `before` to `after` as the reference takes it: the app gives the new
+/// words and no range (a named limit of `write_under_history`), so its write is the smallest
+/// change between the two texts, at the last place it can stand. `(at, removed, new words)`, in
+/// characters. The reference's own code: it calls nothing of the editor's.
+fn smallest_change(before: &str, after: &str) -> (usize, usize, String) {
+    let (old, new): (Vec<char>, Vec<char>) = (before.chars().collect(), after.chars().collect());
+    let head = old
+        .iter()
+        .zip(&new)
+        .take_while(|(one, other)| one == other)
+        .count();
+    let tail = old
+        .iter()
+        .rev()
+        .zip(new.iter().rev())
+        .take_while(|(one, other)| one == other)
+        .count()
+        .min(old.len().min(new.len()) - head);
+    (
+        head,
+        old.len() - head - tail,
+        new[head..new.len() - tail].iter().collect(),
+    )
 }
 
-/// Run `steps` from `start` in the real editor and in the reference. `Err` names the first
-/// step at which the editor shows a text the reference does not allow.
-fn run(start: &str, steps: &[Step]) -> Result<String, String> {
+/// What an Undo's text is checked for.
+#[derive(Clone, Copy, PartialEq)]
+enum Order {
+    /// The reference's exact text: traces in which each of the DM's steps is one edit.
+    Exact,
+    /// The reference's characters, in any order: traces in which a step holds several edits.
+    /// The editor's steps are whole texts, so equal letters can then hide where the DM typed,
+    /// and a word the DM gets back can stand at another place among equal letters
+    /// (`write_under_history`'s named limit). No character may be lost or added.
+    Characters,
+}
+
+/// A fault that a test puts into the run at an Undo or a Redo, to show that the run finds it
+/// (the fixed mutant checks of this model).
+#[derive(Clone, Copy)]
+enum Fault {
+    /// No fault at this key.
+    Nothing,
+    /// The key is not pressed.
+    NoKey,
+    /// After the key, the first two characters change places.
+    Swap,
+    /// After the key, the first character goes.
+    Drop,
+}
+
+fn letters(text: &str) -> Vec<char> {
+    let mut letters: Vec<char> = text.chars().collect();
+    letters.sort_unstable();
+    letters
+}
+
+/// Run `steps` from `start` in the real editor and in the reference. `Err` holds every failure,
+/// one line each:
+/// - a text with other CHARACTERS than the reference allows ends the run (H1);
+/// - a text with the reference's characters in another ORDER is a failure under
+///   [`Order::Exact`]; the run then goes on and checks characters, so a later loss shows too;
+/// - an Undo or a Redo that does not go to the reference's next text (H2).
+///
+/// A run never ends as a pass after a failure. After an order difference the reference's places
+/// are not the editor's, so the run ends at the next step that removes words by their place.
+fn run_with(start: &str, steps: &[Step], order: Order, faults: &[Fault]) -> Result<String, String> {
     let mut harness = page(start);
     // The reference in both orders of a tie; one that the editor leaves is dropped.
-    let mut models = vec![Reference::set(start, false), Reference::set(start, true)];
+    let mut models = Reference::both(start);
+    let mut failures: Vec<String> = Vec::new();
+    // The editor's text has the reference's characters in another order.
+    let mut apart = false;
+    let mut faults = faults.iter().copied();
+    let ended = |failures: Vec<String>, text: String| {
+        if failures.is_empty() {
+            Ok(text)
+        } else {
+            Err(failures.join("\n"))
+        }
+    };
     for (index, step) in steps.iter().enumerate() {
         let before = shown(&harness);
         let chars = before.chars().count();
-        let fail = |what: &str, harness: &Harness<'_, Page>, models: &[Reference]| {
-            Err(format!(
-                "step {index} {step:?}: {what}\n  before: {before:?}\n  editor: {:?}\n  allowed: {:?}",
+        let failure = |what: &str, harness: &Harness<'_, Page>, models: &[Reference]| {
+            format!(
+                "step {index} {step:?}: {what}; before: {before:?}; editor: {:?}; allowed: {:?}",
                 shown(harness),
                 models.iter().map(Reference::reachable).collect::<Vec<_>>(),
-            ))
+            )
+        };
+        // The editor's text is the reference's newest text (its characters, when apart).
+        let follows = |harness: &Harness<'_, Page>, models: &[Reference], apart: bool| {
+            let (now, model) = (shown(harness), models[0].text(models[0].undone));
+            if apart {
+                letters(&now) == letters(&model)
+            } else {
+                now == model
+            }
         };
         match step {
             Step::Type {
@@ -331,8 +398,9 @@ fn run(start: &str, steps: &[Step]) -> Result<String, String> {
                 models
                     .iter_mut()
                     .for_each(|model| model.typed(at, 0, words));
-                if shown(&harness) != models[0].text(0) {
-                    return fail("typing gave another text", &harness, &models);
+                if !follows(&harness, &models, apart) {
+                    failures.push(failure("typing gave another text", &harness, &models));
+                    return ended(failures, shown(&harness));
                 }
                 if *pause {
                     settle(&mut harness);
@@ -347,13 +415,17 @@ fn run(start: &str, steps: &[Step]) -> Result<String, String> {
                 if chars == 0 {
                     continue;
                 }
+                if apart {
+                    return ended(failures, before);
+                }
                 let at = usize::from(*at) % chars;
                 let len = 1 + usize::from(*len) % (chars - at);
                 select(&harness, at, at + len);
                 key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
                 models.iter_mut().for_each(|model| model.typed(at, len, ""));
-                if shown(&harness) != models[0].text(0) {
-                    return fail("a delete gave another text", &harness, &models);
+                if !follows(&harness, &models, apart) {
+                    failures.push(failure("a delete gave another text", &harness, &models));
+                    return ended(failures, shown(&harness));
                 }
                 if *pause {
                     settle(&mut harness);
@@ -369,6 +441,10 @@ fn run(start: &str, steps: &[Step]) -> Result<String, String> {
                     .chain(words.chars())
                     .chain(before.chars().skip(at + len))
                     .collect();
+                let (head, old, new) = smallest_change(&before, &after);
+                if apart && old > 0 {
+                    return ended(failures, before);
+                }
                 let ctx = harness.ctx.clone();
                 layout::write_under_history(
                     &ctx,
@@ -378,11 +454,16 @@ fn run(start: &str, steps: &[Step]) -> Result<String, String> {
                 );
                 harness.step();
                 for model in &mut models {
-                    model.foreign(at, len, words);
+                    model.foreign(head, old, &new);
                     model.open = None;
                 }
-                if shown(&harness) != models[0].text(models[0].undone) {
-                    return fail("the app's write gave another text", &harness, &models);
+                if !follows(&harness, &models, apart) {
+                    failures.push(failure(
+                        "the app's write gave another text",
+                        &harness,
+                        &models,
+                    ));
+                    return ended(failures, shown(&harness));
                 }
             }
             Step::Reload { words } => {
@@ -391,48 +472,104 @@ fn run(start: &str, steps: &[Step]) -> Result<String, String> {
                 // Equal words are no change (the guard's one documented case): the DM's steps
                 // stay, and they take nothing of the outside text away.
                 if *words != before {
-                    models = vec![Reference::set(words, false), Reference::set(words, true)];
+                    models = Reference::both(words);
+                    apart = false;
                 }
                 if shown(&harness) != *words {
-                    return fail("the reload gave another text", &harness, &models);
+                    failures.push(failure("the reload gave another text", &harness, &models));
+                    return ended(failures, shown(&harness));
                 }
             }
             Step::Undo | Step::Redo => {
                 let undo = matches!(step, Step::Undo);
-                if undo {
-                    key(&mut harness, egui::Key::Z, egui::Modifiers::COMMAND);
-                } else {
-                    key(&mut harness, egui::Key::Y, egui::Modifiers::COMMAND);
+                let fault = faults.next();
+                if !matches!(fault, Some(Fault::NoKey)) {
+                    let pressed = if undo { egui::Key::Z } else { egui::Key::Y };
+                    key(&mut harness, pressed, egui::Modifiers::COMMAND);
+                }
+                if let Some(fault @ (Fault::Swap | Fault::Drop)) = fault {
+                    let mut text: Vec<char> = shown(&harness).chars().collect();
+                    if matches!(fault, Fault::Swap) {
+                        text.swap(0, 1);
+                    } else {
+                        text.remove(0);
+                    }
+                    let _ = harness
+                        .state_mut()
+                        .draft
+                        .replace(text.into_iter().collect::<String>());
+                    harness.step();
                 }
                 let now = shown(&harness);
+                // The two orders of a tie differ only in order: the same characters for every
+                // count of undone groups, so neither loses a word.
+                let all = |model: &Reference| -> Vec<Vec<char>> {
+                    (0..=model.groups.len())
+                        .map(|k| letters(&model.text(k)))
+                        .collect()
+                };
+                if models.windows(2).any(|pair| all(&pair[0]) != all(&pair[1])) {
+                    failures.push(failure(
+                        "the orders of a tie hold other characters",
+                        &harness,
+                        &models,
+                    ));
+                    return ended(failures, now);
+                }
                 // H1: the text is the reference's for some count of undone groups, on the side
                 // the key goes to, in one order of a tie at least.
-                let found = |model: &Reference| {
+                let found = |model: &Reference, exact: bool| {
+                    let same = |k: &usize| {
+                        let text = model.text(*k);
+                        if exact {
+                            text == now
+                        } else {
+                            letters(&text) == letters(&now)
+                        }
+                    };
                     if undo {
-                        (model.undone..=model.groups.len()).find(|&k| same(&now, &model.text(k)))
+                        (model.undone..=model.groups.len()).find(same)
                     } else {
-                        (0..=model.undone)
-                            .rev()
-                            .find(|&k| same(&now, &model.text(k)))
+                        (0..=model.undone).rev().find(same)
                     }
                 };
-                if !models.iter().any(|model| found(model).is_some()) {
-                    return fail("H1: a text the reference does not allow", &harness, &models);
+                let exact = !apart && models.iter().any(|model| found(model, true).is_some());
+                if !exact {
+                    if !models.iter().any(|model| found(model, false).is_some()) {
+                        failures.push(failure(
+                            "H1: a text the reference does not allow (a character lost or added)",
+                            &harness,
+                            &models,
+                        ));
+                        return ended(failures, now);
+                    }
+                    if !apart && order == Order::Exact {
+                        failures.push(failure(
+                            "H1: the reference's characters in another order",
+                            &harness,
+                            &models,
+                        ));
+                    }
+                    apart = true;
                 }
-                models.retain(|model| found(model).is_some());
-                let mut one_group = true;
+                models.retain(|model| found(model, exact).is_some());
+                let mut next_text = true;
                 for model in &mut models {
-                    let k = found(model).unwrap_or_default();
+                    let k = found(model, exact).unwrap_or_default();
                     // H2: no foreign write since the text was set: Undo goes to the next text
-                    // that differs. egui's steps are whole texts: a group that changed nothing
-                    // in sum (a letter typed and deleted) is no step.
-                    if undo && !model.crossed {
+                    // that differs, and Redo to the next one toward the newest (a key that does
+                    // nothing does not pass). egui's steps are whole texts: a group that changed
+                    // nothing in sum (a letter typed and deleted) is no step.
+                    if !model.crossed && !apart {
                         let here = model.text(model.undone);
-                        let next = (model.undone + 1..=model.groups.len())
-                            .map(|k| model.text(k))
-                            .find(|text| *text != here)
-                            .unwrap_or(here);
-                        one_group &= next == now;
+                        let mut older = model.undone + 1..=model.groups.len();
+                        let mut newer = (0..model.undone).rev();
+                        let next = if undo {
+                            older.find(|&k| model.text(k) != here)
+                        } else {
+                            newer.find(|&k| model.text(k) != here)
+                        };
+                        next_text &= next.map_or(here, |k| model.text(k)) == now;
                     }
                     // A key that changed nothing leaves an open group open (egui's undoer keeps
                     // it).
@@ -441,21 +578,23 @@ fn run(start: &str, steps: &[Step]) -> Result<String, String> {
                     }
                     model.undone = k;
                 }
-                if !one_group {
-                    return fail("H2: Undo did not go to the next text", &harness, &models);
+                if !next_text {
+                    failures.push(failure(
+                        "H2: Undo or Redo did not go to the next text",
+                        &harness,
+                        &models,
+                    ));
                 }
-                // The same characters in another order (`BY_OPERATIONS` is off): the reference's places
-                // are not the editor's from here, so the trace ends.
-                if models.iter().all(|model| model.text(model.undone) != now) {
-                    return Ok(now);
-                }
-                // Only the orders of a tie that the editor took go on.
-                models.retain(|model| model.text(model.undone) == now);
                 harness.step();
             }
         }
     }
-    Ok(shown(&harness))
+    ended(failures, shown(&harness))
+}
+
+/// [`run_with`] for a trace of one edit per step, with no fault put in: the exact text.
+fn run(start: &str, steps: &[Step]) -> Result<String, String> {
+    run_with(start, steps, Order::Exact, &[])
 }
 
 fn words() -> impl Strategy<Value = String> {
@@ -474,18 +613,24 @@ fn typed_words() -> impl Strategy<Value = String> {
         .prop_map(|parts| parts.concat())
 }
 
-fn steps() -> impl Strategy<Value = Vec<Step>> {
+/// Generated steps. `one_edit`: a pause follows each of the DM's edits, so each of the editor's
+/// steps is one edit.
+fn steps(one_edit: bool) -> impl Strategy<Value = Vec<Step>> {
     let step = prop_oneof![
         4 => (any::<u16>(), typed_words(), any::<bool>())
-            .prop_map(|(at, words, settle)| Step::Type { at, words, settle }),
+            .prop_map(move |(at, words, settle)| Step::Type {
+                at,
+                words,
+                settle: settle || one_edit,
+            }),
         2 => (any::<u16>(), any::<u8>(), any::<bool>())
-            .prop_map(|(at, len, settle)| Step::Delete { at, len, settle }),
-        2 => (any::<u16>(), 0..3u8, words()).prop_map(|(at, len, words)| Step::App {
-            at,
-            // Today's code can lose a word under a replacing write (F3): inserts only.
-            len: if BY_OPERATIONS { len } else { 0 },
-            words,
-        }),
+            .prop_map(move |(at, len, settle)| Step::Delete {
+                at,
+                len,
+                settle: settle || one_edit,
+            }),
+        2 => (any::<u16>(), 0..3u8, words())
+            .prop_map(|(at, len, words)| Step::App { at, len, words }),
         1 => words().prop_map(|words| Step::Reload { words }),
         3 => Just(Step::Undo),
         1 => Just(Step::Redo),
@@ -525,12 +670,50 @@ fn the_reference_undoes_the_dms_groups_and_keeps_a_foreign_write() {
 
 #[test]
 fn undo_and_redo_show_only_texts_the_reference_allows() {
-    let result = runner(1500).run(&(words(), steps()), |(start, steps)| {
-        run(&start, &steps).map(|_| ()).map_err(TestCaseError::fail)
-    });
-    if let Err(failed) = result {
-        panic!("{failed}");
+    // One edit per step: the exact text. Several edits in a step: the characters (`Order`).
+    for (one_edit, order) in [(true, Order::Exact), (false, Order::Characters)] {
+        let result = runner(1000).run(&(words(), steps(one_edit)), |(start, steps)| {
+            run_with(&start, &steps, order, &[])
+                .map(|_| ())
+                .map_err(TestCaseError::fail)
+        });
+        if let Err(failed) = result {
+            panic!("one edit per step: {one_edit}: {failed}");
+        }
     }
+}
+
+/// Fixed mutant checks of the model itself (Sol 2-022): a fault put into the run must show.
+#[test]
+fn the_run_finds_a_fault_put_into_it() {
+    // A Redo that does nothing fails the Redo side of H2. With its key, the same trace passes.
+    let trace = [type_at(1, "b"), Step::Undo, Step::Redo];
+    assert_eq!(run("a", &trace), Ok("ab".to_owned()));
+    let failed = run_with("a", &trace, Order::Exact, &[Fault::Nothing, Fault::NoKey])
+        .expect_err("a Redo that does nothing");
+    assert!(
+        failed.contains("step 2 Redo: H2: Undo or Redo did not go to the next text"),
+        "{failed}"
+    );
+    // An order difference, then a lost character: the run reports both. After the first Undo
+    // two letters change places; after the second Undo one letter goes.
+    let failed = run_with(
+        "ab",
+        &[type_at(2, "c"), Step::Undo, type_at(2, "d"), Step::Undo],
+        Order::Exact,
+        &[Fault::Swap, Fault::Drop],
+    )
+    .expect_err("an order difference and a lost character");
+    let lines: Vec<&str> = failed.lines().collect();
+    assert_eq!(lines.len(), 2, "{failed}");
+    assert!(
+        lines[0].contains("step 1 Undo: H1: the reference's characters in another order"),
+        "{failed}"
+    );
+    assert!(
+        lines[1].contains("step 3 Undo: H1: a text the reference does not allow"),
+        "{failed}"
+    );
 }
 
 fn type_at(at: u16, words: &str) -> Step {
@@ -557,11 +740,12 @@ fn fixed_traces_keep_every_foreign_write() {
         run("one", &[type_at(0, "X"), app(4, 0, " summary"), Step::Undo]),
         Ok("one summary".to_owned())
     );
-    // PR 825-b: the app changes words that a kept step cannot take (the step has no `1` after
-    // the changed word). The step is not kept: Undo changes nothing, and the app's words stay.
+    // PR 825-b: the app changes words before the DM's typing. Undo takes the typing back and
+    // keeps the app's words (a step placed by the words after the change could not take this
+    // one, and the history ended there: `APP1`).
     assert_eq!(
         run("x", &[type_at(1, "1"), app(0, 1, "APP"), Step::Undo]),
-        Ok("APP1".to_owned())
+        Ok("APP".to_owned())
     );
     // An expected outcome, not a fault (egui's steps are whole texts): the DM deletes `a` with
     // no pause, the app writes `a`, the DM types `a`. The kept step took the app's write and is
@@ -601,44 +785,172 @@ fn astras_trace() {
         settle: true,
     };
     let result = run("aa", &[delete, app(0, 1, "b"), Step::Undo]);
-    // Finding F2: the reference gives `ba` (the DM's `a` comes back where it was, after the
-    // app's `b`). Today the kept step `aa` takes the app's change at its end, which gives `ab`.
-    // With `BY_OPERATIONS` on, this is `Ok("ba")`.
-    assert_eq!(
-        result,
-        Ok(if BY_OPERATIONS { "ba" } else { "ab" }.to_owned())
-    );
+    // Issue #900 (F2): the DM's `a` comes back where it was, after the app's `b`. A step placed
+    // by the words after the change took the change at its end, which gave `ab`.
+    assert_eq!(result, Ok("ba".to_owned()));
     let mut model = Reference::set("aa", false);
     model.typed(1, 1, "");
     model.foreign(0, 1, "b");
     assert_eq!(model.text(1), "ba");
 }
 
-/// Finding F3 (issue #900): `éa`; the DM types `é` after the first `é`, with no pause; the app
-/// changes the DM's new `é` to `a`; Undo.
+/// Issue #900 (F3): `éa`; the DM types `é` after the first `é`, with no pause; the app changes
+/// the DM's new `é` to `a`; Undo.
 #[test]
-fn a_replaced_word_takes_an_older_equal_word() {
+fn a_replaced_word_leaves_an_older_equal_word() {
     let typed = Step::Type {
         at: 1,
         words: "é".to_owned(),
         settle: false,
     };
+    // The DM's `é` is gone with the app's change, so Undo has nothing of the DM's to take
+    // back: the older `é` and the app's `a` stay. A step placed by the words after the change
+    // lost its own `é` (`aa`).
     let result = run("éa", &[typed, app(1, 1, "a"), Step::Undo]);
-    // The reference gives `éaa`: the DM's `é` is gone with the app's change, the older `é` and
-    // the app's `a` stay.
-    let mut model = Reference::set("éa", false);
-    model.typed(1, 0, "é");
-    model.foreign(1, 1, "a");
-    assert_eq!(model.reachable(), ["éaa", "éaa"]);
-    if BY_OPERATIONS {
-        assert_eq!(result, Ok("éaa".to_owned()));
-    } else {
-        // Today the kept step `éa` loses its own `é`: the editor shows `aa`, which is no text
-        // of the reference (H1).
-        let failed = result.expect_err("today's code loses the older word");
+    assert_eq!(result, Ok("éaa".to_owned()));
+}
+
+fn ime(harness: &mut Harness<'_, Page>, event: egui::ImeEvent) {
+    harness.input_mut().events.push(egui::Event::Ime(event));
+    harness.step();
+}
+
+/// The app writes `APP ` at the start of the text, under the typing history.
+fn app_writes_at_the_start(harness: &mut Harness<'_, Page>) {
+    let after = format!("APP {}", shown(harness));
+    let ctx = harness.ctx.clone();
+    layout::write_under_history(&ctx, FIELD.id(), &mut harness.state_mut().draft, &after);
+    harness.step();
+}
+
+/// Ctrl+Z, then Ctrl+Y: after each, the app's words and every older word are there.
+fn undo_and_redo_keep(harness: &mut Harness<'_, Page>, stages: &mut Vec<String>) {
+    for key_of in [egui::Key::Z, egui::Key::Y] {
+        key(harness, key_of, egui::Modifiers::COMMAND);
+        stages.push(shown(harness));
+        let text = shown(harness);
         assert!(
-            failed.contains("H1") && failed.contains("editor: \"aa\""),
-            "{failed}"
+            text.starts_with("APP ") && text.contains("one") && text.ends_with(" two"),
+            "the app's write and the older words stay: {stages:?}"
         );
     }
+}
+
+/// An input method's composition and the app's write (the note, section 3, v3 point 2): real
+/// egui composition events; the app writes before the composition's place (a) while it is
+/// open, (b) right after its commit. No character is lost, and the app's write is never left
+/// out, also after Ctrl+Z and Ctrl+Y.
+#[test]
+fn an_app_write_at_a_composition_loses_no_word() {
+    // (a) The write lands while the composition is open.
+    let mut harness = page("one two");
+    select(&harness, 3, 3);
+    let mut stages = Vec::new();
+    ime(&mut harness, egui::ImeEvent::Enabled);
+    ime(&mut harness, egui::ImeEvent::Preedit("k".to_owned()));
+    stages.push(shown(&harness));
+    app_writes_at_the_start(&mut harness);
+    stages.push(shown(&harness));
+    ime(&mut harness, egui::ImeEvent::Preedit("ka".to_owned()));
+    stages.push(shown(&harness));
+    ime(&mut harness, egui::ImeEvent::Preedit(String::new()));
+    ime(&mut harness, egui::ImeEvent::Commit("か".to_owned()));
+    ime(&mut harness, egui::ImeEvent::Disabled);
+    stages.push(shown(&harness));
+    assert_eq!(
+        stages,
+        ["onek two", "APP onek two", "APP oneka two", "APP oneか two"],
+        "the composition goes on in its own words after the app's write"
+    );
+    undo_and_redo_keep(&mut harness, &mut stages);
+
+    // (b) The write lands right after the commit.
+    let mut harness = page("one two");
+    select(&harness, 3, 3);
+    let mut stages = Vec::new();
+    ime(&mut harness, egui::ImeEvent::Enabled);
+    ime(&mut harness, egui::ImeEvent::Preedit("k".to_owned()));
+    ime(&mut harness, egui::ImeEvent::Preedit(String::new()));
+    ime(&mut harness, egui::ImeEvent::Commit("か".to_owned()));
+    ime(&mut harness, egui::ImeEvent::Disabled);
+    stages.push(shown(&harness));
+    app_writes_at_the_start(&mut harness);
+    stages.push(shown(&harness));
+    assert_eq!(stages, ["oneか two", "APP oneか two"]);
+    undo_and_redo_keep(&mut harness, &mut stages);
+}
+
+/// A write among typed words that equal letters hide (issue #900): `éa`; the DM types `é` after
+/// the first `é`, then another `é` at the same place, with no pause; the app changes the second
+/// typed `é` to `X`; Undo. The step holds two edits, and its caret names a wrong place for
+/// them (the start). Read so, the write would stand at the older `é` and take it out (`Xa`).
+/// The step is not kept: Undo changes nothing, and no letter is lost.
+#[test]
+fn a_write_among_typed_equal_letters_ends_the_history() {
+    let typed = || Step::Type {
+        at: 1,
+        words: "é".to_owned(),
+        settle: false,
+    };
+    let result = run_with(
+        "éa",
+        &[typed(), typed(), app(2, 1, "X"), Step::Undo],
+        Order::Characters,
+        &[],
+    );
+    assert_eq!(result, Ok("ééXa".to_owned()));
+}
+
+/// The Notes panel's sequence (`sessions::page`'s panel test), in letters: typing below, a
+/// summary above it, Undo; then typing after the summary, a second summary below it, Undo.
+#[test]
+fn the_notes_panels_sequence() {
+    let typed = |at: u16, words: &str| Step::Type {
+        at,
+        words: words.to_owned(),
+        settle: false,
+    };
+    let start = "N.\n\n## T\n- b.\n";
+    let result = run(
+        start,
+        &[
+            typed(14, " Th."),
+            app(2, 0, "\n\nS2."),
+            Step::Undo,
+            Step::Undo,
+            typed(7, " Ni."),
+            app(11, 0, "\n\nS4."),
+            Step::Undo,
+        ],
+    );
+    assert_eq!(result, Ok("N.\n\nS2.\n\nS4.\n\n## T\n- b.\n".to_owned()));
+}
+
+/// A write over a part of the typed words (the Notes panel's renamed link with a summary above
+/// it: one change from the first changed letter to the last): the DM types a link at the end;
+/// the app's write runs from the summary's place into the typed link. The step is not kept:
+/// Undo changes nothing. Placed, it would take back half of the typing and leave a broken link.
+#[test]
+fn a_write_over_a_part_of_the_typed_words_ends_the_history() {
+    let typed = Step::Type {
+        at: 9,
+        words: " [[Old p]].".to_owned(),
+        settle: false,
+    };
+    let write = app(2, 13, "\n\nS3.\n\n## T\n [[New");
+    let result = run("S.\n\n## T\n", &[typed, write, Step::Undo]);
+    assert_eq!(
+        result,
+        Ok("S.\n\nS3.\n\n## T\n [[New p]].".to_owned()),
+        "a write over a part of the typed words ends the history"
+    );
+}
+
+/// Typed words at a place that equal letters hide, and a write that adds words there: `a`; the
+/// DM types `a` after it; the app writes `b` between them; Undo. The typed `a` can be the first
+/// or the second, and the two readings give other texts (`ba`, `ab`), so the step is not kept.
+#[test]
+fn typed_words_at_a_hidden_place_keep_no_uncertain_step() {
+    let result = run("a", &[type_at(1, "a"), app(1, 0, "b"), Step::Undo]);
+    assert_eq!(result, Ok("aba".to_owned()));
 }
