@@ -2320,6 +2320,41 @@ thread_local! {
     pub static READER_FILE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// The events that can mean a file changed outside a reader, counted. Splat has no watcher (PR
+/// 874 review, P2): the window getting the focus back raises the count, and so does a write or
+/// an Undo of a reader's own that was refused. A reader compares its files on disk once for each
+/// new count and each new load of the index, never on a quiet frame.
+#[derive(Clone, Copy, Default)]
+struct OutsideChanges {
+    count: u64,
+    /// Whether the window had the focus when the count was last asked for.
+    focused: bool,
+}
+
+const OUTSIDE_CHANGES: &str = "world_outside_changes";
+
+/// The count of [`OutsideChanges`]. Whoever asks first in a frame counts a focus gain: the app's
+/// `Lookup::poll` asks in each frame, whichever page shows, and each reader asks as it draws.
+pub fn outside_changes(ctx: &egui::Context) -> u64 {
+    let focused = ctx.input(|input| input.focused);
+    ctx.data_mut(|data| {
+        let seen = data.get_temp_mut_or_default::<OutsideChanges>(egui::Id::new(OUTSIDE_CHANGES));
+        if focused && !seen.focused {
+            seen.count += 1;
+        }
+        seen.focused = focused;
+        seen.count
+    })
+}
+
+/// A reader's own write or Undo was refused: every reader compares its files again.
+fn outside_change(ctx: &egui::Context) {
+    ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<OutsideChanges>(egui::Id::new(OUTSIDE_CHANGES))
+            .count += 1;
+    });
+}
+
 /// Lookup's and the World page's reader, and its controls for the item on show.
 /// What a reader holds for the DM that no reset of the reader may drop: the DM's typed words,
 /// and the results whose end events are their own (`Kept::ENDS`). Lookup's Clear and World's
@@ -2362,10 +2397,14 @@ pub struct Reader {
     picker: Option<Picker>,
     /// The form closed with nothing to write: the note's path and its text, while it reads so.
     kept: Option<(String, String)>,
-    /// The index's load at which the reader last compared its files on disk (a change's result,
-    /// the kept form): the disk is read again only when a new load may hold an outside edit
-    /// (layout PR 9b-R1c), never on a quiet frame.
-    disk_checked: Option<u64>,
+    /// The index's load and the count of outside changes (`outside_changes`) at which the
+    /// reader last compared its files on disk (a change's result, the kept form): the disk is
+    /// read again only after an event that can mean an outside edit (layout PR 9b-R1c; PR 874
+    /// review, P2), never on a quiet frame.
+    disk_checked: Option<(u64, u64)>,
+    /// A write or an Undo of this reader's was refused since it last drew: an outside change
+    /// is likely, so its next draw counts one (`outside_change`).
+    refused: bool,
     error: Option<String>,
     /// Source lookup is cached by note and index generation, including repairs and moves.
     group_fault: Option<GroupFault>,
@@ -3008,10 +3047,15 @@ impl Reader {
         region: Option<design::pane::EditorRegion<'_>>,
     ) -> Option<Nav> {
         self.prepare(item);
-        // The app loads the index again when a file changes, so a new load is when an outside
-        // edit can have come (layout PR 9b-R1c: no file is read on a quiet frame).
-        if self.disk_checked != Some(index.generation()) {
-            self.disk_checked = Some(index.generation());
+        if std::mem::take(&mut self.refused) {
+            outside_change(ui.ctx());
+        }
+        // Splat has no watcher. The reader compares its files on disk only after an event that
+        // can mean an outside edit: the window's focus back, a new load of the index, a refused
+        // write (layout PR 9b-R1c; PR 874 review, P2). No file is read on a quiet frame.
+        let checked = (index.generation(), outside_changes(ui.ctx()));
+        if self.disk_checked != Some(checked) {
+            self.disk_checked = Some(checked);
             #[cfg(any(test, feature = "test-support"))]
             let read = |path: std::path::PathBuf| {
                 READER_FILE_READS.with(|reads| reads.set(reads.get() + 1));
@@ -3045,6 +3089,10 @@ impl Reader {
         let go = self.draw(ui, item, index, campaign, trackers, region);
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
+        // A write refused in this draw is compared at once, in the next frame.
+        if self.refused {
+            ui.ctx().request_repaint();
+        }
         go.and_then(|go| self.settle(go))
     }
 
@@ -3356,7 +3404,7 @@ impl Reader {
                             self.held.results.record(ReaderResult::FileRename(rename));
                             return Some(Go::Reload(item.entry.id));
                         }
-                        Err(error) => self.error = Some(error),
+                        Err(error) => self.write_refused(error),
                     }
                 }
                 if note {
@@ -3386,7 +3434,7 @@ impl Reader {
                             self.held.results.record(ReaderResult::Name(change));
                             return Some(Go::Reload(item.entry.id));
                         }
-                        Err(error) => self.error = Some(error),
+                        Err(error) => self.write_refused(error),
                     }
                 }
             }
@@ -3423,7 +3471,7 @@ impl Reader {
                                 .record(ReaderResult::Identity(campaign.id, undo));
                             return Some(Go::Reload(id));
                         }
-                        Err(error) => self.error = Some(error),
+                        Err(error) => self.write_refused(error),
                     }
                 }
                 // A gap ends the choices, so the fields below do not read as a consequence.
@@ -3653,7 +3701,7 @@ impl Reader {
         match make_entry(campaign, item, &chosen?) {
             Ok(id) => Some(Go::Reload(id)),
             Err(error) => {
-                self.error = Some(error);
+                self.write_refused(error);
                 None
             }
         }
@@ -3732,7 +3780,7 @@ impl Reader {
                 Ok(fresh) => Some(fresh),
                 Err((error, unread, unread_file)) => {
                     self.picker = None;
-                    self.error = Some(error);
+                    self.write_refused(error);
                     self.group_error = true;
                     self.group_error_unread_file = unread_file;
                     // The file on disk has an unread list now. Show that state at once, and
@@ -4022,7 +4070,7 @@ impl Reader {
                 Some(Go::Reload(id))
             }
             Err(error) => {
-                self.error = Some(error);
+                self.write_refused(error);
                 None
             }
         }
@@ -4436,6 +4484,13 @@ impl Reader {
         self.held.results.get(&slot).map(|shown| shown.value())
     }
 
+    /// A write, a move or an Undo of this reader's was refused: its reason shows, and the next
+    /// draw compares the reader's files on disk, since the refusal can mean an outside change.
+    fn write_refused(&mut self, error: String) {
+        self.error = Some(error);
+        self.refused = true;
+    }
+
     /// End the reader's result of this kind (its owner changed: another note, an Edit).
     fn end(&mut self, slot: Slot) {
         self.held.results.owner_changed(&slot);
@@ -4643,7 +4698,8 @@ impl Reader {
                         open.map(Go::Reload)
                     }
                     Err(design::results::ByTicket::Failed(error)) => {
-                        self.error = Some(error);
+                        self.write_refused(error);
+                        ctx.request_repaint();
                         None
                     }
                     Err(design::results::ByTicket::Gone) => None,
@@ -4922,7 +4978,11 @@ impl Reader {
                                 target.link = Some(picker.new_location.trim().to_owned());
                                 chosen = serde_yaml_ng::to_value(target).ok();
                             }
-                            Err(error) => self.error = Some(error),
+                            Err(error) => {
+                                // The fields, not `write_refused`: another borrow of the reader is open here.
+                                self.error = Some(error);
+                                self.refused = true;
+                            }
                         }
                     }
                     design::blocked_reason(ui, reason);
@@ -5123,7 +5183,11 @@ impl Reader {
                             self.held.results.record(ReaderResult::Change(change));
                             self.kept = None;
                         }
-                        Err(error) => self.error = Some(error),
+                        Err(error) => {
+                            // The fields, not `write_refused`: another borrow of the reader is open here.
+                            self.error = Some(error);
+                            self.refused = true;
+                        }
                     }
                 }
                 let group = npc_group(&item.entry, stat_block, &adding.side);
@@ -6616,73 +6680,198 @@ mod tests {
         }
     }
 
-    /// Layout PR 9b-R1c: a change's result reads its file on disk only when the index's load
-    /// is new (the app loads the index again when a file changes), never on a quiet frame; an
-    /// outside edit then ends the result at that load.
+    /// Layout PR 9b-R1c (PR 874 review, P2 and P3; lead brief Sol 2-017): a reader compares its
+    /// files on disk (a change's result, the kept form) only after a production event that can
+    /// mean an outside edit: the window's focus back (counted by the app's `Lookup::poll` in each
+    /// frame, also while the reader is off screen), a refused Undo, a new load of the index.
+    /// Never on a quiet frame, and not when the file changes while the app keeps the focus
+    /// (Splat has no watcher). Each case writes the file through the fixture, fires the real
+    /// event, sees what the outside edit made untrue end by itself (only the last case loads the
+    /// index), then sees the next frames read nothing.
     #[test]
-    fn a_change_result_reads_its_file_only_at_a_new_index_load() {
+    fn a_reader_reads_its_files_on_disk_only_after_an_outside_change_event() {
         use crate::design::test_harness::Themed;
+        /// The app's frame, cut down: `Lookup::poll`, then the reader when it is on screen.
+        struct Host {
+            reader: Reader,
+            index: std::sync::Arc<ContentIndex>,
+            campaign: Campaign,
+            lookup: crate::lookup::Lookup,
+            campaigns: crate::campaigns::Campaigns,
+            shown: bool,
+        }
+        type Kit<'a> = egui_kittest::Harness<'a, Host>;
         let dir = tempfile::tempdir().unwrap();
         let campaign = sample_campaign(dir.path());
         let hob = create_entry(&campaign, "Hob", "npc").unwrap();
-        let path = dir.path().join("NPCs/Hob.md");
+        let relative = "NPCs/Hob.md";
+        let path = dir.path().join(relative);
         let load = |campaign: &Campaign| {
             std::sync::Arc::new(ContentIndex::load(&[], Some(campaign)).unwrap())
         };
         let stands =
             |reader: &Reader| matches!(reader.result(Slot::Change), Some(ReaderResult::Change(_)));
+        let reads = || READER_FILE_READS.with(std::cell::Cell::get);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(520.0, 600.0))
             .themed_ui_state(
-                move |ui,
-                      (reader, index, campaign): &mut (
-                    Reader,
-                    std::sync::Arc<ContentIndex>,
-                    Campaign,
-                )| {
-                    let at = index.position(hob).unwrap();
-                    let _ = reader.read_with(ui, &index.items[at], index, Some(campaign), None);
+                move |ui, host: &mut Host| {
+                    host.lookup.poll(ui.ctx(), &host.campaigns);
+                    if host.shown {
+                        let at = host.index.position(hob).unwrap();
+                        let _ = host.reader.read_with(
+                            ui,
+                            &host.index.items[at],
+                            &host.index,
+                            Some(&host.campaign),
+                            None,
+                        );
+                    }
                 },
-                (
-                    Reader::default(),
-                    load(&campaign),
-                    sample_campaign(dir.path()),
-                ),
+                Host {
+                    reader: Reader::default(),
+                    index: load(&campaign),
+                    campaign: campaign.clone(),
+                    lookup: Default::default(),
+                    campaigns: Default::default(),
+                    shown: true,
+                },
             );
         harness.run_steps(3);
         // The DM changes the status while the reader shows the entry; the app then loads the
         // index again for the written file.
-        {
-            let (reader, index, campaign) = harness.state_mut();
-            let at = index.position(hob).unwrap();
-            let _ = reader.change(campaign, &index.items[at], index, "status", "away".into());
-            assert!(stands(reader), "9b-R1c-setup: the change's result stands");
-        }
-        harness.state_mut().1 = load(&campaign);
-        harness.run_steps(3);
-        let reads = || READER_FILE_READS.with(std::cell::Cell::get);
+        let change = |harness: &mut Kit<'_>, status: &str| {
+            let host = harness.state_mut();
+            let at = host.index.position(hob).unwrap();
+            let _ = host.reader.change(
+                &host.campaign,
+                &host.index.items[at],
+                &host.index,
+                "status",
+                status.into(),
+            );
+            assert!(
+                stands(&host.reader),
+                "9b-R1c-setup: the change's result stands"
+            );
+            host.index = load(&host.campaign);
+            harness.run_steps(3);
+        };
+        // Quiet frames, then an outside edit while the app keeps the focus: no file is read.
+        let quiet_then_outside_edit = |harness: &mut Kit<'_>, case: &str| {
+            let before = reads();
+            harness.run_steps(5);
+            let words = fs::read_to_string(&path).unwrap();
+            fs::write(&path, format!("{words}\nOutside words.\n")).unwrap();
+            harness.run_steps(3);
+            assert_eq!(
+                reads(),
+                before,
+                "9b-R1c-{case}-quiet: quiet frames, and an outside edit while the app keeps the \
+                 focus, read no file"
+            );
+        };
+        // The DM goes to Obsidian and comes back.
+        let focus_back = |harness: &mut Kit<'_>| {
+            harness.input_mut().focused = false;
+            harness.step();
+            harness.input_mut().focused = true;
+            harness.step();
+        };
+        // After the event: one read, what the edit made untrue has ended, and the next frames
+        // reuse that (no read).
+        let ended =
+            |harness: &mut Kit<'_>, case: &str, before: usize, gone: &dyn Fn(&Reader) -> bool| {
+                assert!(
+                    reads() == before + 1 && gone(&harness.state().reader),
+                    "9b-R1c-{case}: the event reads the file once ({}), and what the outside edit \
+                 made untrue ends",
+                    reads() - before
+                );
+                harness.run_steps(3);
+                assert!(
+                    reads() == before + 1 && gone(&harness.state().reader),
+                    "9b-R1c-{case}-reuse: the next frames read nothing ({}), and it stays ended",
+                    reads() - before - 1
+                );
+            };
+        let result_gone = |reader: &Reader| !stands(reader);
+
+        // A change's result, then the window's focus back.
+        change(&mut harness, "away");
+        quiet_then_outside_edit(&mut harness, "focus");
         let before = reads();
-        harness.run_steps(5);
-        assert!(
-            reads() == before && stands(&harness.state().0),
-            "9b-R1c-quiet: quiet frames read no file ({} reads), and the result stands",
-            reads() - before
-        );
-        // An outside edit: nothing reads it until the app loads the index again.
-        let words = fs::read_to_string(&path).unwrap();
-        fs::write(&path, format!("{words}\nOutside words.\n")).unwrap();
+        focus_back(&mut harness);
+        ended(&mut harness, "focus", before, &result_gone);
+
+        // The same while the reader is off screen (another page shows): the app's poll counts
+        // the focus back, and the reader compares its file when it shows again.
+        change(&mut harness, "home");
+        quiet_then_outside_edit(&mut harness, "off-screen");
+        let before = reads();
+        harness.state_mut().shown = false;
+        focus_back(&mut harness);
+        harness.state_mut().shown = true;
+        harness.step();
+        ended(&mut harness, "off-screen", before, &result_gone);
+
+        // The kept form, as a Save with nothing to write leaves it (`edit::Saved::Unchanged`):
+        // the file holds the DM's words.
+        harness.state_mut().reader.kept =
+            Some((relative.into(), fs::read_to_string(&path).unwrap()));
         harness.run_steps(2);
         assert!(
-            reads() == before && stands(&harness.state().0),
-            "9b-R1c-no-load: before the index's load, no read and the result stands"
+            harness.state().reader.kept.is_some(),
+            "9b-R1c-kept-setup: the kept form stands"
         );
-        harness.state_mut().1 = load(&sample_campaign(dir.path()));
-        harness.run_steps(2);
-        assert!(
-            reads() == before + 1 && !stands(&harness.state().0),
-            "9b-R1c-load: at the new load, one read ({}), and the result ends",
-            reads() - before
-        );
+        quiet_then_outside_edit(&mut harness, "kept");
+        let before = reads();
+        focus_back(&mut harness);
+        ended(&mut harness, "kept", before, &|reader: &Reader| {
+            reader.kept.is_none()
+        });
+
+        // A change's result, then its Undo, pressed as the page does, refused for the edit.
+        change(&mut harness, "away");
+        quiet_then_outside_edit(&mut harness, "undo");
+        let before = reads();
+        let ctx = harness.ctx.clone();
+        {
+            let host = harness.state_mut();
+            let ticket = host
+                .reader
+                .held
+                .results
+                .get(&Slot::Change)
+                .unwrap()
+                .ticket_for_caller_test();
+            let press = design::outcome::Press {
+                id: FooterAct::Undo,
+                ticket: Some(ticket),
+            };
+            let _ = host
+                .reader
+                .footer_act(&ctx, press, Some(hob), &host.campaign);
+            assert!(
+                stands(&host.reader)
+                    && host
+                        .reader
+                        .error
+                        .as_deref()
+                        .is_some_and(|error| error.contains("changed on disk")),
+                "9b-R1c-undo-setup: the Undo is refused for the outside edit, the result stands"
+            );
+        }
+        harness.step();
+        ended(&mut harness, "undo", before, &result_gone);
+
+        // A change's result, then a new load of the index (another page wrote a file).
+        change(&mut harness, "home");
+        quiet_then_outside_edit(&mut harness, "load");
+        let before = reads();
+        harness.state_mut().index = load(&campaign);
+        harness.step();
+        ended(&mut harness, "load", before, &result_gone);
     }
 
     #[test]

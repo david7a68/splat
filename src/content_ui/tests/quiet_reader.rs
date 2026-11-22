@@ -444,10 +444,59 @@ fn prepares_again(
     })
 }
 
+/// A figure's image loader whose completion the test delivers (PR 874 review, P3; lead brief
+/// Sol 2-017): it answers "pending" through egui's loaders, the path the reader's figure takes,
+/// until `done`, then the image. No loader thread, no wall-clock wait.
+#[derive(Default)]
+struct HeldImage {
+    done: std::sync::atomic::AtomicBool,
+}
+
+impl HeldImage {
+    /// The load completes, as egui's own loader thread ends it: the image is ready and a
+    /// repaint is asked for.
+    fn complete(&self, ctx: &egui::Context) {
+        self.done.store(true, std::sync::atomic::Ordering::Relaxed);
+        ctx.request_repaint();
+    }
+}
+
+impl egui::load::ImageLoader for HeldImage {
+    fn id(&self) -> &str {
+        "quiet_reader::HeldImage"
+    }
+
+    fn load(&self, _: &egui::Context, uri: &str, _: egui::SizeHint) -> egui::load::ImageLoadResult {
+        if !(uri.starts_with("file://") && uri.ends_with("/Figures/map.png")) {
+            Err(egui::load::LoadError::NotSupported)
+        } else if self.done.load(std::sync::atomic::Ordering::Relaxed) {
+            Ok(egui::load::ImagePoll::Ready {
+                image: Arc::new(egui::ColorImage::filled([40, 20], egui::Color32::GRAY)),
+            })
+        } else {
+            Ok(egui::load::ImagePoll::Pending { size: None })
+        }
+    }
+
+    fn forget(&self, _: &str) {}
+
+    fn forget_all(&self) {}
+
+    fn byte_size(&self) -> usize {
+        0
+    }
+
+    fn has_pending(&self) -> bool {
+        !self.done.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
 /// A document drawn by the Reader directly, frame by frame: for the cache's content cases,
 /// where the document, its revision, the link index and the art each change on their own.
 struct Direct {
     ctx: egui::Context,
+    /// The figure's loader, in the context's loaders.
+    image: Arc<HeldImage>,
     time: f64,
     /// The textured shapes (images) the last frame painted.
     images: usize,
@@ -457,10 +506,12 @@ impl Direct {
     fn new() -> Self {
         let ctx = egui::Context::default();
         splat_design::design::theme::install(&ctx);
-        // The app's image loaders: a figure's local copy loads and paints.
-        egui_extras::install_image_loaders(&ctx);
+        // A figure's local copy loads when the test completes it, then paints.
+        let image = Arc::new(HeldImage::default());
+        ctx.add_image_loader(image.clone());
         Self {
             ctx,
+            image,
             time: 0.0,
             images: 0,
         }
@@ -633,27 +684,27 @@ fn content_cases() -> Vec<String> {
         .ctx
         .data_mut(|data| data.insert_temp(egui::Id::new("art_index"), art));
     let shown_before = reader.images;
-    let mut after = reader.frame(&a, 1, text, None);
-    // The file loads on egui's loader thread: the figure paints once it has.
-    for _ in 0..100 {
-        if reader.images > 0 {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        after = reader.frame(&a, 1, text, None);
-    }
+    // The figure takes the link's place at once; its image is still loading.
+    let loading = reader.frame(&a, 1, text, None);
+    let shown_loading = reader.images;
+    // The loader's completion, delivered through egui's loaders: the next frame paints it.
+    reader.image.complete(&reader.ctx);
+    let after = reader.frame(&a, 1, text, None);
     let shown_after = reader.images;
     let reused = reader.reused(&a, 1, text, None, &after);
     check(
         &format!(
-            "the image’s local copy (only the art index), painted ({shown_before} images, then \
-             {shown_after}), then reused"
+            "the image’s local copy (only the art index), painted when its load completes \
+             ({shown_before} images, {shown_loading} while it loads, then {shown_after}), then \
+             reused"
         ),
         &before,
         &after,
         before.contains("image")
+            && !loading.contains("image")
             && !after.contains("image")
             && shown_before == 0
+            && shown_loading == 0
             && shown_after > 0
             && reused,
     );
