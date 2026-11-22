@@ -483,6 +483,7 @@ mod tests {
     use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
     fn dock(name: &str, width: f32) -> (Rc<RefCell<Run>>, egui_kittest::Harness<'static>) {
+        use crate::design::test_harness::ThemedPage as _;
         let mut run = super::super::tests::run();
         for (index, total) in [20, 15, 10].into_iter().enumerate() {
             run.apply(Command::Initiative(index, Some(total))).unwrap();
@@ -493,10 +494,9 @@ mod tests {
         let shown = run.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(width, 200.0))
-            .build(move |ctx| {
+            .themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| shown.borrow_mut().dock(ui));
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         (run, harness)
     }
