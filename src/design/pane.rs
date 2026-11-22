@@ -5340,7 +5340,8 @@ mod editor_region_tests {
 
     /// Layout PR 9b (note v2 §3): a document lays out its text once per key. Quiet focused
     /// frames lay out and hash nothing; each part of the key, alone, lays it out again: an edit,
-    /// two edits in one frame (the galley always holds the words the draft holds), the program's
+    /// two edits in one frame (the galley holds the draft's words in each frame, also the frame
+    /// of the edit, so the layouter reads the live key on each call), the program's
     /// replacement with equal words, another draft in the same field, a resize, and a font atlas
     /// made again with the same fonts (its size and fill can come back equal). A caret move
     /// with the same words lays out again only a face that folds.
@@ -5366,12 +5367,18 @@ mod editor_region_tests {
              change: &mut dyn FnMut(&mut egui_kittest::Harness<'static, State>)| {
                 let before = made();
                 change(h);
-                h.run_steps(3);
-                let draft = h.state().doc.as_ref().map(|doc| doc.as_str().to_owned());
+                for frame in 1..=3 {
+                    h.step();
+                    let draft = h.state().doc.as_ref().map(|doc| doc.as_str().to_owned());
+                    assert_eq!(
+                        Some(h.state().galley_text.clone()),
+                        draft,
+                        "{case}, folds {folds}, frame {frame}: the galley holds the draft's words"
+                    );
+                }
                 assert!(
-                    made() > before && Some(h.state().galley_text.clone()) == draft,
-                    "{case}, folds {folds}: laid out again ({} more) and the galley holds the \
-                     draft's words",
+                    made() > before,
+                    "{case}, folds {folds}: laid out again ({} more)",
                     made() - before
                 );
                 let quiet = made();
