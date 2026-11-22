@@ -353,7 +353,11 @@ fn main() {
             "the theme installed again",
             1,
             |reading| {
-                splat_design::design::theme::install(&reading.ctx);
+                // The event under test: the theme installed again on the reader's own context, between its
+                // frames (the fonts' generation rises). This is not a kittest harness built before its
+                // theme: `Reading` themes its context before the first frame (issue #810's rule holds).
+                let ctx = reading.ctx.clone();
+                splat_design::design::theme::install(&ctx);
             },
         ));
         failures.extend(prepares_again(
