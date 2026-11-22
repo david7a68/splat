@@ -911,7 +911,7 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
 
     a.task("The scene is wanted after all: take the removal back");
     a.click(Nav, NAV_SESSIONS);
-    a.click(Do, "Undo remove");
+    a.click(Do, &format!("Undo remove {ROPES}"));
     let plan = section(&note_on_disk(a.d), "Plan for tonight").to_owned();
     a.outcome(
         "the plan is as before the removal: the scene at its old place, the Obsidian lines kept",
