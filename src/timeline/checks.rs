@@ -735,11 +735,11 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
     for (label, check, at) in &rows {
         let top = ui.cursor().top();
         act = line(ui, label, *check, Some(*at)).or(act);
-        // The affected check alone, not the block: a block taller than the view would ask for
-        // no scroll at all.
+        // The affected check alone, not the block. M0546 (M-P0.30): the least scroll that shows
+        // it whole, written by the detail's column at its next pass.
         if check.is_some() && view.reveal == Some(*at) {
             let row = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.cursor().top());
-            ui.scroll_to_rect(row, None);
+            design::reveal::bring_into_view(ui, row, design::reveal::JumpTo::CheckResult);
         }
     }
     if table.is_none() {

@@ -705,6 +705,8 @@ pub struct Sessions {
     rewards: plan::Rewards,
     /// The note's plan as rows, built when the note, the content or the encounters change.
     plan_model: plan::PlanModelCache,
+    /// What the plan's closed rows read from their data, kept by its inputs' revisions.
+    plan_projection: plan::ProjectionCache,
     /// The fight behind the open event, read once.
     /// The open played fight's summary, kept with the run's file as last found (or why not):
     /// a different answer from the folder reads it again (R41, round 30 review F2).
@@ -9131,18 +9133,18 @@ mod tests {
         reason = "the test of the old Undo message under the plan’s spacing"
     )]
     fn message_words_and_undo_keep_their_place_whatever_the_spacing() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         let words = "Removed “Shrine of Cinders” from tonight.";
         let place = |spacing: f32| {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(260.0, 200.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.spacing_mut().item_spacing.x = spacing;
                         design::undo_message(ui, Tone::Info, words, "Undo remove");
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             let message = harness.get_by_label(words).rect();
             let undo = harness.get_by_label("Undo remove").rect();
@@ -9634,6 +9636,7 @@ mod tests {
     /// when both hold the same words (the case the field's text guard leaves to the owner key).
     #[test]
     fn a_template_field_keeps_its_own_text_history() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let a = create_template(dir.path(), "Downtime", "## Plan\n").unwrap();
@@ -9645,13 +9648,12 @@ mod tests {
         sessions.select_template(&a.name);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 600.0))
-            .build_state(
+            .themed_state(
                 |ctx, sessions: &mut Sessions| {
                     egui::CentralPanel::default().show(ctx, |ui| sessions.template_editor(ui));
                 },
                 sessions,
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Template text").focus();
         harness.run_steps(2);
@@ -9696,6 +9698,7 @@ mod tests {
     /// guard, and B keeps its words.
     #[test]
     fn a_note_keeps_its_undo_when_the_page_adds_words_to_another_note() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let new = |number| {
@@ -9721,7 +9724,7 @@ mod tests {
         // The harness draws the open note's editor, or no editor.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 600.0))
-            .build_state(
+            .themed_state(
                 |ctx, (sessions, draw): &mut (Sessions, bool)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         if *draw {
@@ -9731,7 +9734,6 @@ mod tests {
                 },
                 (sessions, true),
             );
-        design::theme::install(&harness.ctx);
         let body = |harness: &egui_kittest::Harness<'_, (Sessions, bool)>| {
             harness
                 .state()
@@ -9793,6 +9795,7 @@ mod tests {
     /// in the template editor. Words typed and Ctrl+S in ONE input frame are saved together.
     #[test]
     fn ctrl_s_saves_the_words_typed_in_its_frame() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let note = create_note(
@@ -9817,7 +9820,7 @@ mod tests {
         // The harness draws the note's editor, or the template's.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 600.0))
-            .build_state(
+            .themed_state(
                 |ctx, (sessions, template): &mut (Sessions, bool)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         if *template {
@@ -9829,7 +9832,6 @@ mod tests {
                 },
                 (sessions, false),
             );
-        design::theme::install(&harness.ctx);
         for (template, field, path) in [
             (false, "Note text", note.path.clone()),
             (true, "Template text", template.path.clone().unwrap()),
@@ -10105,9 +10107,10 @@ mod tests {
         sessions: Sessions,
         book: Book,
     ) -> egui_kittest::Harness<'static, (Sessions, Book)> {
-        let harness = egui_kittest::Harness::builder()
+        use crate::design::test_harness::Themed as _;
+        egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 300.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book): &mut (Sessions, Book)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let frame = PaneFrame::new(ui);
@@ -10120,9 +10123,7 @@ mod tests {
                     });
                 },
                 (sessions, book),
-            );
-        design::theme::install(&harness.ctx);
-        harness
+            )
     }
 
     #[test]
@@ -10357,6 +10358,7 @@ mod tests {
     /// ends B's only. The missing folder is a typed fault in a sentence (routing row 136).
     #[test]
     fn a_folder_move_result_is_its_campaigns_over_a_switch_and_a_lost_folder() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::{NodeT, Queryable};
         let dirs = [
             tempfile::tempdir().unwrap(),
@@ -10409,7 +10411,7 @@ mod tests {
         type State = (Sessions, Book, Campaign, Option<&'static str>);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(900.0, 700.0))
-            .build_state(
+            .themed_state(
                 |ctx, (sessions, book, campaign, lock): &mut State| {
                     sessions.poll(ctx, Some(campaign), book);
                     egui::CentralPanel::default().show(ctx, |ui| {
@@ -10418,7 +10420,6 @@ mod tests {
                 },
                 (Sessions::default(), Book::default(), a.clone(), None),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let shows = |harness: &egui_kittest::Harness<'_, State>, words: &str| {
             harness.query_all_by_label_contains(words).next().is_some()
@@ -11010,6 +11011,7 @@ mod tests {
     /// B's form never offers A's template).
     #[test]
     fn the_new_session_form_reads_its_template_at_the_press_and_keeps_to_its_campaign() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dirs = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
         let [a, b] = [0, 1].map(|at| {
@@ -11050,14 +11052,13 @@ mod tests {
         type State = (Sessions, Book, Campaign);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(900.0, 700.0))
-            .build_state(
+            .themed_state(
                 |ctx, (sessions, book, campaign): &mut State| {
                     sessions.poll(ctx, Some(campaign), book);
                     egui::CentralPanel::default().show(ctx, |ui| sessions.show_form(ui));
                 },
                 (Sessions::default(), Book::default(), a.clone()),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let shows = |harness: &egui_kittest::Harness<'_, State>, words: &str| {
             harness.query_all_by_label_contains(words).next().is_some()

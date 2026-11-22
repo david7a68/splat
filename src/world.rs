@@ -4562,7 +4562,7 @@ impl Reader {
                         Notice::new(crate::sentence!(
                             "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
                         )),
-                        UndoStep::verb(Verb::Reload).pressed_as(FooterAct::Undo),
+                        UndoStep::of(Verb::Reload, &item.entry.name).pressed_as(FooterAct::Undo),
                     ),
                 }
             }));

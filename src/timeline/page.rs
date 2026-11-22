@@ -523,6 +523,15 @@ pub enum FileAct {
     SaveAgain,
 }
 
+/// The reload result's Undo: `Undo reload Timeline`, the file's note name, as a session note's
+/// and a World note's name theirs (M0548, M0438); a book with no file gives `Undo reload`.
+fn reload_step(book: &Book) -> UndoStep {
+    match book.file().0.file_stem() {
+        Some(name) => UndoStep::of(Verb::Reload, name.to_string_lossy()),
+        None => UndoStep::verb(Verb::Reload),
+    }
+}
+
 /// The file's notices that block nothing, in a pane's typed footer: the reload result with its
 /// Undo (from the book's store), then the failed save with `Try to save again`, the flags and a
 /// second timeline file. They arrive from outside edits and autosave, so every pane that shows
@@ -542,7 +551,7 @@ pub fn file_messages<'f, A: 'static>(
                     "Reloaded. Your version, with {}, is gone unless you undo.",
                     design::count(reloaded.count(), "event", "events")
                 )),
-                UndoStep::verb(Verb::Reload).pressed_as(undo),
+                reload_step(book).pressed_as(undo),
             )
         }));
     }
@@ -994,7 +1003,7 @@ impl TimelinePage {
             }
             painter.galley(egui::pos2(x, top), galley, c.text);
             if !detail.is_empty() && !open {
-                let second = second_line(ui, &detail, &spans, width);
+                let second = second_line(ui, &detail, 0, &spans, width);
                 painter.galley(
                     egui::pos2(x, top + lines - Type::Small.line()),
                     second,
@@ -1035,9 +1044,11 @@ impl TimelinePage {
                         {
                             self.wants_back_to_run = true;
                         }
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, after).color(c.muted)).truncate(),
-                        );
+                        // The words after the link fit as the closed row's do (M0552): whole
+                        // words to the row's end, in their own colours.
+                        let from = detail.len() - after.len();
+                        let width = ui.available_width();
+                        ui.label(second_line(ui, &detail, from, &spans, width));
                     });
                 },
             );
@@ -1106,13 +1117,15 @@ impl TimelinePage {
     /// book's, the session page's, this page's) and a press acts on the entry its ticket names;
     /// the footer only places them. Round 28 (AL1, FL1, AM1): the column is one pane, so the
     /// footer comes `S` below the last row, pinned only when the rows fill the column. `body`
-    /// draws the rows, the empty state, or (narrow) the open event's form, as the pane's content.
+    /// draws the rows, the empty state, or (narrow) the open event's form, as the pane's content;
+    /// its column behaves as `scroll` says (the open event's form opens at its top: M0560).
     fn list_pane<R>(
         &mut self,
         ui: &mut egui::Ui,
         book: &mut Book,
         notes: &mut crate::sessions::page::Sessions,
-        open: Option<&str>,
+        footer: PaneFooter<'_>,
+        scroll: design::pane::ContentScroll,
         body: impl FnOnce(
             &mut Self,
             &mut egui::Ui,
@@ -1120,11 +1133,22 @@ impl TimelinePage {
             &mut crate::sessions::page::Sessions,
         ) -> R,
     ) -> R {
+        let open = match footer {
+            PaneFooter::Page(open) => open,
+            PaneFooter::Empty => None,
+        };
         let open = open.filter(|id| book.events.iter().any(|event| event.id == *id));
         let offer = open.and_then(|id| notes.event_link_offer(book, id));
         let frame = PaneFrame::new(ui);
-        let messages = self.list_messages(&frame, ui, book, notes, open, offer.as_ref());
-        let paned = messages.pane(ui, design::Body::Content, |ui| body(self, ui, book, notes));
+        let messages = match footer {
+            PaneFooter::Page(_) => {
+                self.list_messages(&frame, ui, book, notes, open, offer.as_ref())
+            }
+            PaneFooter::Empty => {
+                Messages::new(&frame, "timeline_detail_footer", ui.available_width())
+            }
+        };
+        let paned = messages.pane_content(ui, scroll, |ui| body(self, ui, book, notes));
         if let Some(press) = paned.pressed {
             match press.id {
                 ListAct::UndoLinks => {
@@ -1344,6 +1368,7 @@ impl TimelinePage {
         book: &mut Book,
         sessions: &[SessionLink],
         notes: &mut crate::sessions::page::Sessions,
+        narrow: bool,
     ) {
         let c = colors();
         let index = self
@@ -1352,18 +1377,32 @@ impl TimelinePage {
             .and_then(|id| book.events.iter().position(|event| event.id == *id));
         checks::settle_length(book, index);
         let Some(index) = index else {
-            design::heading(ui, design::Heading::Panel("An event"));
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(
-                            ui,
-                            "Select an event to name it, place it or note what it means. Each event has its own link, for a session note or an Obsidian note.",
-                        )
-                        .color(c.muted),
-                )
-                .wrap(),
-            );
+            let empty = |ui: &mut egui::Ui| {
+                design::heading(ui, design::Heading::Panel("An event"));
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(
+                                ui,
+                                "Select an event to name it, place it or note what it means. Each event has its own link, for a session note or an Obsidian note.",
+                            )
+                            .color(c.muted),
+                    )
+                    .wrap(),
+                );
+            };
+            if narrow {
+                self.list_pane(
+                    ui,
+                    book,
+                    notes,
+                    PaneFooter::Page(None),
+                    design::pane::ContentScroll::default(),
+                    |_, ui, _, _| empty(ui),
+                );
+            } else {
+                empty(ui);
+            }
             return;
         };
         let id = book.events[index].id.clone();
@@ -1532,13 +1571,8 @@ impl TimelinePage {
         design::gap(ui, design::Gap::S);
         design::rule(ui);
         let mut ruling = None;
-        let mut area = egui::ScrollArea::vertical()
-            .id_salt(("timeline_detail", &id))
-            .auto_shrink([false, false]);
-        if std::mem::take(&mut self.reset_detail) {
-            area = area.vertical_scroll_offset(0.0);
-        }
-        let clip = ui.available_rect_before_wrap().intersect(ui.clip_rect());
+        // M0560 (M-P0.30): another event, a link or a changed filter opens the form at its top.
+        let from_top = std::mem::take(&mut self.reset_detail);
         // Round 27 FL1: the form leaves the scroll bar's lane free whether or not the bar shows,
         // so its fields and the header's `⋯` end at one x for every event.
         let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
@@ -1551,8 +1585,10 @@ impl TimelinePage {
         // Row 123: a check result's offer asks the plan of the journey's session.
         let journey_plan = checks::shown(&book.events[index])
             .then(|| notes.journey_plan(book, &id, &self.plan_names));
-        area.show(ui, |ui| {
-            ui.set_clip_rect(ui.clip_rect().intersect(clip));
+        // M0559 (M-P0.30): the header above stays; the form under it scrolls in the detail's
+        // own column. Wide, that is the panel's `ScrollColumn`; narrow, the form is the content
+        // of the pane that holds the open event's footer, and the header is drawn before it.
+        let mut form = |page: &mut Self, ui: &mut egui::Ui, book: &mut Book| {
             let form_width = lane_width.min(ui.available_width()).min(design::FORM_WIDTH);
             ui.ctx()
                 .data_mut(|data| data.insert_temp(width_id, form_width));
@@ -1583,7 +1619,7 @@ impl TimelinePage {
                         Kind::ShortRest => "1 hour",
                         _ => "",
                     };
-                    let focus = std::mem::take(&mut self.focus_length);
+                    let focus = std::mem::take(&mut page.focus_length);
                     if checks::shown(event) {
                         let (words, taken) =
                             checks::length_input(ui, &mut book.length, event, hint, focus);
@@ -1643,23 +1679,23 @@ impl TimelinePage {
                     planned: &|name| journey_plan.as_ref().and_then(|plan| plan.get(name)),
                     reveal,
                 };
-                checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
+                checks_act = checks::header(ui, &view, &mut page.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.
                 // M0561 (M-P0.27): a typed result line that keeps its room.
-                let result = self.checks_done.get(&id).map(|done| {
+                let result = page.checks_done.get(&id).map(|done| {
                     design::outcome::PlacedResult::new(
                         done.words.clone(),
                         done.undo.clone().pressed_as(()),
                     )
                 });
                 undo_checks |= design::outcome::PlacedResult::show_line(result, ui).is_some();
-                checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
+                checks_act = checks::lines(ui, &view, &mut page.checks).or(checks_act.take());
             }
             design::gap(ui, design::Gap::M);
             let place = EVENT_PLACE.of(design::TextKey::of(&*event));
             changed |=
                 design::labelled_field(ui, place, "Where", &mut event.place, None, None).changed();
-            changed |= self.place_help(ui, event);
+            changed |= page.place_help(ui, event);
             design::gap(ui, design::Gap::M);
             let session_id = EVENT_SESSION.of(design::TextKey::of(&*event));
             design::field(ui, "Session", None, None, |ui| {
@@ -1678,7 +1714,7 @@ impl TimelinePage {
                 && sessions.iter().any(|known| known.id == session)
                 && design::link(ui, "Open this session").clicked()
             {
-                self.open_session = Some(session);
+                page.open_session = Some(session);
             }
             if !event.result.is_empty() {
                 design::gap(ui, design::Gap::M);
@@ -1689,7 +1725,7 @@ impl TimelinePage {
                                 ui,
                                 super::played_fight_summary(
                                     event,
-                                    event.run.is_some() && event.run == self.open_run,
+                                    event.run.is_some() && event.run == page.open_run,
                                 ),
                             )
                             .color(c.text),
@@ -1728,7 +1764,7 @@ impl TimelinePage {
                 design::field(ui, "Mentioned in", None, None, |ui| {
                     for session in mentions {
                         if design::link(ui, &session.label).clicked() {
-                            self.open_session = Some(session.id);
+                            page.open_session = Some(session.id);
                         }
                     }
                 });
@@ -1754,6 +1790,24 @@ impl TimelinePage {
                     placed = Some(after);
                 }
             });
+        };
+        // Narrow, the pane holds the open event's footer; wide, its results stay in the
+        // list's footer, so the detail's pane has none. Its own pane either way, so the
+        // list's column keeps its place for the way back.
+        let footer = if narrow {
+            PaneFooter::Page(Some(&id))
+        } else {
+            PaneFooter::Empty
+        };
+        ui.push_id("timeline_detail_pane", |ui| {
+            self.list_pane(
+                ui,
+                book,
+                notes,
+                footer,
+                design::pane::ContentScroll::default().from_top(from_top),
+                |page, ui, book, _| form(page, ui, book),
+            );
         });
         if changed {
             book.touch();
@@ -1919,7 +1973,7 @@ impl TimelinePage {
             design::gap(ui, design::Gap::XS);
             if book.events.is_empty() && book.unreadable.is_none() {
                 let open_run = self.open_run.is_some();
-                let first = self.list_pane(ui, book, notes, None, |_, ui, _, _| {
+                let first = self.list_pane(ui, book, notes, PaneFooter::Page(None), design::pane::ContentScroll::default(), |_, ui, _, _| {
                 let mut first = false;
                 design::empty_state(
                     ui,
@@ -2001,22 +2055,34 @@ impl TimelinePage {
                     // With the list hidden, the open event's results are in the form's own footer,
                     // so they move no field.
                     notes.expire_event_link_undo(true, book);
-                    let open = self.selected.clone();
-                    self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, notes| {
-                        page.detail(ui, book, sessions, notes);
-                    });
+                    // M0559 (M-P0.30): the form's header, then its pane.
+                    self.detail(ui, book, sessions, notes, true);
                 } else {
                     notes.expire_event_link_undo(true, book);
-                    self.list_pane(ui, book, notes, None, |page, ui, book, _| {
-                        page.list(ui, book, sessions);
-                    });
+                    self.list_pane(
+                        ui,
+                        book,
+                        notes,
+                        PaneFooter::Page(None),
+                        design::pane::ContentScroll::default(),
+                        |page, ui, book, _| {
+                            page.list(ui, book, sessions);
+                        },
+                    );
                 }
                 return;
             }
             if !event_open {
-                self.list_pane(ui, book, notes, None, |page, ui, book, _| {
-                    page.list(ui, book, sessions);
-                });
+                self.list_pane(
+                    ui,
+                    book,
+                    notes,
+                    PaneFooter::Page(None),
+                    design::pane::ContentScroll::default(),
+                    |page, ui, book, _| {
+                        page.list(ui, book, sessions);
+                    },
+                );
                 return;
             }
             let width = design::side_panel_width(ui.available_width());
@@ -2030,7 +2096,7 @@ impl TimelinePage {
                             left: design::S as i8,
                             ..Default::default()
                         }))
-                        .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
+                        .show_inside(ui, |ui| self.detail(ui, book, sessions, notes, false));
                     egui::CentralPanel::default()
                         // The panel's drag handle lies on this edge, so the rows stop short of it.
                         .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -2044,7 +2110,8 @@ impl TimelinePage {
                                 ui,
                                 book,
                                 notes,
-                                open.as_deref(),
+                                PaneFooter::Page(open.as_deref()),
+                                design::pane::ContentScroll::default(),
                                 |page, ui, book, _| {
                                     page.list(ui, book, sessions);
                                 },
@@ -2067,9 +2134,10 @@ fn short_session(label: &str) -> &str {
 
 #[cfg(test)]
 pub(crate) fn check_long_rest_add(kinds: &'static [Kind]) {
+    use crate::design::test_harness::Themed as _;
     use egui_kittest::kittest::Queryable;
     let session = Some(Uuid::new_v4());
-    let mut harness = egui_kittest::Harness::builder().build_state(
+    let mut harness = egui_kittest::Harness::builder().themed_state(
         move |ctx, book: &mut Book| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 quick_add(ui, book, session, kinds, |_| {});
@@ -2077,7 +2145,6 @@ pub(crate) fn check_long_rest_add(kinds: &'static [Kind]) {
         },
         Book::default(),
     );
-    design::theme::install(&harness.ctx);
     harness.run_steps(2);
     harness.get_by_label("Add Long rest").click();
     harness.run_steps(2);
@@ -2088,17 +2155,18 @@ pub(crate) fn check_long_rest_add(kinds: &'static [Kind]) {
     assert!(!super::party_state(&harness.state().events, session).rested);
 }
 
-/// A row's second line on one line, muted, with the rest ruling from `at` in its own colour.
-/// A row's second line: muted, with each status part (the rest ruling, a length the clock
-/// cannot count) in its own colour. `spans` are byte ranges in `detail`, in order.
+/// A row's second line, from the byte `from` of `detail` (the open row's words after its run
+/// link start there): muted, with each status part (the rest ruling, a length the clock cannot
+/// count) in its own colour. `spans` are byte ranges in `detail`, in order.
 fn second_line(
     ui: &egui::Ui,
     detail: &str,
+    from: usize,
     spans: &[(std::ops::Range<usize>, egui::Color32)],
     width: f32,
 ) -> std::sync::Arc<egui::Galley> {
     let mut job = egui::text::LayoutJob::default();
-    let mut at = 0;
+    let mut at = from.min(detail.len());
     let mut append = |words: &str, color| {
         job.append(
             &words.replace(['\n', '\r'], " "),
@@ -2125,6 +2193,15 @@ fn second_line(
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
 
+/// What a Timeline pane's footer holds (`TimelinePage::list_pane`).
+#[derive(Clone, Copy)]
+enum PaneFooter<'a> {
+    /// The page's messages, with the open event's (`list_messages`).
+    Page(Option<&'a str>),
+    /// None: the wide detail's form, whose results are in the list's footer (M0559).
+    Empty,
+}
+
 /// The Copy link action's words, before and after a copy (M0558).
 const COPY_LINK: design::Word = crate::word!("Copy link");
 const COPIED: design::Word = crate::word!("Copied");
@@ -2145,6 +2222,7 @@ mod tests {
     /// ONE input frame with it are saved with it. Under a modal it saves nothing.
     #[test]
     fn ctrl_s_saves_the_words_typed_in_its_frame() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let mut book = Book::default();
@@ -2157,7 +2235,7 @@ mod tests {
         type State = (TimelinePage, Book, crate::sessions::page::Sessions);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book, notes): &mut State| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
@@ -2165,7 +2243,6 @@ mod tests {
                 },
                 (page, book, crate::sessions::page::Sessions::default()),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness
             .get_by_role_and_label(egui::accesskit::Role::TextInput, "Title")
@@ -2218,6 +2295,56 @@ mod tests {
         );
     }
 
+    /// M0552: the open row's words after its run link are fitted by the closed row's own line
+    /// (`second_line` from the link's end): cut with an ellipsis at the row's end, a status part
+    /// in its own colour (the raw label's were all muted), and the whole words in the line's text.
+    #[test]
+    fn the_open_rows_words_after_its_link_fit_as_a_closed_rows() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let mut seen = None;
+        // New fonts apply from the next frame.
+        for _ in 0..2 {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let detail = "Session 4 · 3 rounds · Time not counted";
+                    let warning = detail.find("Time").unwrap();
+                    let spans = [(warning..detail.len(), colors().result.warning)];
+                    // After a link that ends at "rounds".
+                    let after = detail.find(" · Time").unwrap();
+                    let whole = second_line(ui, detail, after, &spans, f32::INFINITY);
+                    let cut = second_line(ui, detail, after, &spans, whole.size().x / 2.0);
+                    let shown = |galley: &egui::Galley| -> String {
+                        galley.rows[0]
+                            .glyphs
+                            .iter()
+                            .map(|glyph| glyph.chr)
+                            .collect()
+                    };
+                    let warned = whole
+                        .job
+                        .sections
+                        .iter()
+                        .filter(|section| section.format.color == colors().result.warning)
+                        .map(|section| &whole.job.text[section.byte_range.clone()])
+                        .collect::<String>();
+                    seen = Some((shown(&whole), shown(&cut), cut.job.text.clone(), warned));
+                });
+            });
+        }
+        let (whole, cut, text, warned) = seen.unwrap();
+        assert_eq!(
+            whole, " · Time not counted",
+            "the line starts at the link's end"
+        );
+        assert_eq!(warned, "Time not counted", "the warning keeps its colour");
+        assert!(
+            cut.ends_with('…') && cut.len() < whole.len(),
+            "cut to the row: {cut:?}"
+        );
+        assert_eq!(text, whole, "the line's text keeps the whole words");
+    }
+
     /// M0556: the list opens at its last event: the list's column writes the jump
     /// (`reveal::jump`), so the last event is painted whole inside the column's clip and the
     /// first one is not drawn (only the rows in view draw). At a wide window (two columns' width)
@@ -2226,6 +2353,7 @@ mod tests {
     /// default sizes is clamped short of the end once the theme's sizes apply.
     #[test]
     fn the_list_opens_at_its_last_event() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         for size in [egui::vec2(1200.0, 600.0), egui::vec2(960.0, 640.0)] {
             let dir = tempfile::tempdir().unwrap();
@@ -2236,17 +2364,13 @@ mod tests {
                 book.events.last_mut().unwrap().title = format!("Stop {at:02}");
             }
             book.save();
-            type State = (TimelinePage, Book, crate::sessions::page::Sessions, bool);
+            type State = (TimelinePage, Book, crate::sessions::page::Sessions);
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(size)
-                .build_state(
-                    |ctx, (page, book, notes, themed): &mut State| {
-                        // New fonts apply from the next frame: the page draws from then on.
-                        if !std::mem::replace(themed, true) {
-                            design::theme::install(ctx);
-                            ctx.request_repaint();
-                            return;
-                        }
+                // The theme is installed in the harness's first frame; the page draws from the
+                // next (issue #810, `design::test_harness`).
+                .themed_state(
+                    |ctx, (page, book, notes): &mut State| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
                         });
@@ -2255,7 +2379,6 @@ mod tests {
                         TimelinePage::default(),
                         book,
                         crate::sessions::page::Sessions::default(),
-                        false,
                     ),
                 );
             harness.run_steps(6);
@@ -2287,25 +2410,26 @@ mod tests {
         }
     }
 
-    /// Round 30 B7d, ruling L9: the Add result ends in the page's owner update
-    /// (`settle_added`), before the footer presents its kept line: by the frame clock (the
-    /// pane drawn unchanged across the end, with no input: until it, a repaint is asked for
-    /// at the time left; at it, one frame drops the words, `Undo add` and the footer's room);
-    /// when a reload of the book lost its event (A gone, B unchanged; an edit that keeps it is
-    /// the control); and at once when another event is opened.
+    /// M0559, M0560 (M-P0.30): the open event's form scrolls in the detail's own pane, under its
+    /// header, which stays; and an event opened again opens its form at the top. Wide (the
+    /// detail's panel), then narrow (the form is the pane's content, its header drawn before the
+    /// pane).
     #[test]
-    fn the_add_result_ends_by_the_frame_clock() {
+    fn the_detail_form_scrolls_under_its_header() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let mut book = Book::default();
         book.open(Some(dir.path()));
-        let b = book.add(Kind::Event, None);
-        book.events[0].title = "Toll gate".into();
+        for at in 0..60 {
+            book.add(Kind::Event, None);
+            book.events.last_mut().unwrap().title = format!("Stop {at:02}");
+        }
         book.save();
         type State = (TimelinePage, Book, crate::sessions::page::Sessions);
         let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1200.0, 800.0))
-            .build_state(
+            .with_size(egui::vec2(1200.0, 600.0))
+            .themed_state(
                 |ctx, (page, book, notes): &mut State| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
@@ -2317,7 +2441,103 @@ mod tests {
                     crate::sessions::page::Sessions::default(),
                 ),
             );
-        design::theme::install(&harness.ctx);
+        harness.run_steps(6);
+        // M0559, M0560 (M-P0.30, `m-p0-detail-scroll`): the open event's form scrolls in the
+        // detail's own column, under its header, which stays; and an event opened again opens
+        // its form at the top. Wide (the detail's panel), then narrow (the form is the pane's
+        // content, its header drawn before the pane).
+        let ids: Vec<String> = harness
+            .state()
+            .1
+            .events
+            .iter()
+            .map(|event| event.id.clone())
+            .collect();
+        let open = |harness: &mut egui_kittest::Harness<'_, State>, at: usize| {
+            let (page, book, _) = harness.state_mut();
+            page.reveal(&ids[at], book);
+            harness.run_steps(4);
+        };
+        let top = |harness: &egui_kittest::Harness<'_, State>, role, name: &str| {
+            harness.get_by_role_and_label(role, name).rect().top()
+        };
+        let title = |harness: &egui_kittest::Harness<'_, State>| {
+            top(harness, egui::accesskit::Role::TextInput, "Title")
+        };
+        let kind = |harness: &egui_kittest::Harness<'_, State>| {
+            harness
+                .query_by_label_contains("Kind of event: ")
+                .expect("the form's Kind")
+                .rect()
+        };
+        let wheel = |harness: &mut egui_kittest::Harness<'_, State>, at: egui::Pos2| {
+            harness.event(egui::Event::PointerMoved(at));
+            harness.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -200.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(4);
+        };
+        for (size, case) in [(1200.0, "wide"), (600.0, "narrow")] {
+            harness.set_size(egui::vec2(size, 600.0));
+            open(&mut harness, 57);
+            let (opened_title, opened) = (title(&harness), kind(&harness));
+            wheel(&mut harness, opened.center());
+            assert!(
+                (title(&harness) - opened_title).abs() < 0.5,
+                "m-p0-detail-scroll ({case}): the header stays ({opened_title} -> {})",
+                title(&harness)
+            );
+            assert!(
+                kind(&harness).top() < opened.top() - 50.0,
+                "m-p0-detail-scroll ({case}): the form scrolls under it ({} -> {})",
+                opened.top(),
+                kind(&harness).top()
+            );
+            // Another event, then this one again: each opens its form at the top.
+            open(&mut harness, 56);
+            open(&mut harness, 57);
+            assert!(
+                (kind(&harness).top() - opened.top()).abs() < 0.5,
+                "m-p0-detail-scroll ({case}): opened again, the form is at its top ({} -> {})",
+                opened.top(),
+                kind(&harness).top()
+            );
+        }
+    }
+
+    /// Round 30 B7d, ruling L9: the Add result ends in the page's owner update
+    /// (`settle_added`), before the footer presents its kept line: by the frame clock (the
+    /// pane drawn unchanged across the end, with no input: until it, a repaint is asked for
+    /// at the time left; at it, one frame drops the words, `Undo add` and the footer's room);
+    /// when a reload of the book lost its event (A gone, B unchanged; an edit that keeps it is
+    /// the control); and at once when another event is opened.
+    #[test]
+    fn the_add_result_ends_by_the_frame_clock() {
+        use crate::design::test_harness::Themed as _;
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        let b = book.add(Kind::Event, None);
+        book.events[0].title = "Toll gate".into();
+        book.save();
+        type State = (TimelinePage, Book, crate::sessions::page::Sessions);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .themed_state(
+                |ctx, (page, book, notes): &mut State| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
+                    });
+                },
+                (
+                    TimelinePage::default(),
+                    book,
+                    crate::sessions::page::Sessions::default(),
+                ),
+            );
         harness.run_steps(2);
         let footer = |harness: &egui_kittest::Harness<'_, State>| {
             design::pane::footer_rect(&harness.ctx, egui::Id::new("timeline_list_footer"))
@@ -2426,10 +2646,19 @@ mod tests {
         harness.step();
         assert_eq!(shows(&harness), (false, false), "another selection ends it");
         assert!(!harness.state().1.events.iter().all(|event| event.id != a3));
+        // M0548: the reload result's Undo names its file's note, as a session note's and a World
+        // note's do.
+        harness.state_mut().1.reload_keeping_undo();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo reload Timeline").is_some(),
+            "the reload's Undo names its file"
+        );
     }
 
     #[test]
     fn iter3_c_closed_long_rest_rows_show_both_rulings() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for restores in [false, true] {
             let mut book = Book::default();
@@ -2447,12 +2676,11 @@ mod tests {
                 icons::LONG_REST
             };
             let expected = format!("{} · {icon} {word}", event.label(0));
-            let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
+            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     TimelinePage::default().row(ui, &event, 0, None, None, None);
                 });
             });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness.get_by_label(&expected);
         }
@@ -2460,6 +2688,7 @@ mod tests {
 
     #[test]
     fn iter1_c_day_appears_only_when_filters_hide_day_headings() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for filtered in [false, true] {
             let mut book = Book::default();
@@ -2480,7 +2709,7 @@ mod tests {
             } else {
                 format!("{} · {expected_detail}", event.label(1))
             };
-            let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
+            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let mut page = TimelinePage::default();
                     if filtered {
@@ -2489,7 +2718,6 @@ mod tests {
                     page.row(ui, &event, 1, None, None, None);
                 });
             });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness.get_by_label(&expected);
         }
@@ -2497,13 +2725,14 @@ mod tests {
 
     #[test]
     fn iter1_c_rest_ruling_actions_name_the_change_and_keep_undo() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let mut book = Book::default();
         book.add(Kind::LongRest, None);
         book.events[0].restores = true;
         let event_id = book.events[0].id.clone();
         // The ruling line in the row, and its result in the pane's footer, as the pages draw them.
-        let mut harness = egui_kittest::Harness::builder().build_state(
+        let mut harness = egui_kittest::Harness::builder().themed_state(
             move |ctx, book: &mut Book| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let frame = PaneFrame::new(ui);
@@ -2523,7 +2752,6 @@ mod tests {
             },
             book,
         );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Mark not at full").click();
         harness.run_steps(2);
@@ -2585,6 +2813,7 @@ mod tests {
     /// A strip that needs no More has none of those lines; one that has More lists them last.
     /// A list of 30 events in a scroll column, drawn twice.
     fn long_list() -> egui_kittest::Harness<'static, (TimelinePage, Book)> {
+        use crate::design::test_harness::Themed as _;
         let mut book = Book::default();
         for i in 0..30 {
             let id = book.add(Kind::Event, None);
@@ -2594,14 +2823,13 @@ mod tests {
         }
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 400.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, (page, book): &mut (TimelinePage, Book)| {
                     design::ScrollColumn::new("timeline_list_test")
                         .show(ui, |ui| page.list(ui, book, &[]));
                 },
                 (TimelinePage::default(), book),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness
     }
@@ -2700,6 +2928,7 @@ mod tests {
 
     #[test]
     fn a_line_of_more_alone_moves_no_action() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         const KINDS: [Kind; 5] = [
             Kind::Day,
@@ -2711,7 +2940,7 @@ mod tests {
         let draw = |width: f32, scene: bool| {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(width, 300.0))
-                .build_state(
+                .themed_state(
                     move |ctx, (book, chosen): &mut (Book, Option<Result<String, usize>>)| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             let more = if scene {
@@ -2734,7 +2963,6 @@ mod tests {
                     },
                     (Book::default(), None),
                 );
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness
         };
@@ -2820,6 +3048,7 @@ mod tests {
     /// another campaign's Timeline, works there, and comes back: through the page's own `show`
     /// and the book's campaign switch. B's file is not touched by A's Undo.
     fn a_removal_keeps_its_linked_note_warning_over_a_campaign_switch() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let mut book = Book::default();
@@ -2842,7 +3071,7 @@ mod tests {
         );
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book, notes, campaign, links): &mut State| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         page.show(ui, book, *campaign, links, None, notes);
@@ -2856,7 +3085,6 @@ mod tests {
                     links.clone(),
                 ),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.state_mut().0.selected = Some(id.clone());
         harness.run_steps(2);

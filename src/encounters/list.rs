@@ -1498,10 +1498,11 @@ mod iter_2_c_tests {
     /// side's stored form.
     #[test]
     fn the_other_side_field_keeps_its_undo_while_typing() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 200.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, (side, shown): &mut (String, bool)| {
                     let id = ui.make_persistent_id(("Side", "other_side"));
                     ui.data_mut(|data| data.insert_temp(id, true));
@@ -1523,7 +1524,6 @@ mod iter_2_c_tests {
                 },
                 ("rivals".to_owned(), true),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let field = |harness: &egui_kittest::Harness<'_, (String, bool)>| {
             harness
@@ -1844,6 +1844,7 @@ mod iter_2_c_tests {
     /// near the window's bottom, and near the pane's left edge.
     #[test]
     fn iter22_b_row_menu_opens_below_or_above_inside_its_pane() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui::{pos2, vec2};
         use egui_kittest::kittest::Queryable;
         let pane = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(590.0, 632.0));
@@ -1861,7 +1862,7 @@ mod iter_2_c_tests {
         ] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(960.0, 640.0))
-                .build(move |ctx| {
+                .themed(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
                             ui.set_clip_rect(pane);
@@ -1874,7 +1875,6 @@ mod iter_2_c_tests {
                         });
                     });
                 });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness
                 .get_by_label("More actions for Bridge Ambush")
@@ -1910,7 +1910,7 @@ mod iter_2_c_tests {
         // no press: its bottom comes to the view's bottom, not its top to the view's top.
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 600.0))
-            .build(|ctx| {
+            .themed(|ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     design::ScrollColumn::new("rows").show(ui, |ui| {
                         let _ = ui.allocate_exact_size(vec2(1.0, 400.0), egui::Sense::hover());
@@ -1921,7 +1921,6 @@ mod iter_2_c_tests {
                     });
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness
             .get_by_label("More actions for Bridge Ambush")
@@ -1952,7 +1951,7 @@ mod iter_2_c_tests {
             "Runs that are open elsewhere wait for you to close them before they can change.";
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(960.0, 640.0))
-            .build(|ctx| {
+            .themed(|ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     // A 300 px pane, as a narrow list column: the menu's room, so the reason
                     // must wrap.
@@ -1968,7 +1967,6 @@ mod iter_2_c_tests {
                     });
                 });
             });
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness
             .get_by_label("More actions for Bridge Ambush")
