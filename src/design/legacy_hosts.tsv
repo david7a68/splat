@@ -138,7 +138,6 @@ scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named fo
 scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-request	src/encounters/groups.rs	of_encounter	1	Encounters
-scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
 scroll-request	src/sessions/plan.rs	Reveal::show	1	Sessions
 scroll-request	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
