@@ -3949,7 +3949,7 @@ pub mod campaign_content {
                 d.observe(
                     "l11c-C1-repair-follows",
                     gap.is_some_and(|gap| {
-                        (crate::design::S - 0.5..=crate::design::S + Density::Glance.row())
+                        (crate::design::S - 0.5..=crate::design::S + crate::design::Density::Glance.row())
                             .contains(&gap)
                     }),
                     format!(
