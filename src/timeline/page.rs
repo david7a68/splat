@@ -2067,9 +2067,10 @@ fn short_session(label: &str) -> &str {
 
 #[cfg(test)]
 pub(crate) fn check_long_rest_add(kinds: &'static [Kind]) {
+    use crate::design::test_harness::Themed as _;
     use egui_kittest::kittest::Queryable;
     let session = Some(Uuid::new_v4());
-    let mut harness = egui_kittest::Harness::builder().build_state(
+    let mut harness = egui_kittest::Harness::builder().themed_state(
         move |ctx, book: &mut Book| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 quick_add(ui, book, session, kinds, |_| {});
@@ -2077,7 +2078,6 @@ pub(crate) fn check_long_rest_add(kinds: &'static [Kind]) {
         },
         Book::default(),
     );
-    design::theme::install(&harness.ctx);
     harness.run_steps(2);
     harness.get_by_label("Add Long rest").click();
     harness.run_steps(2);
@@ -2145,6 +2145,7 @@ mod tests {
     /// ONE input frame with it are saved with it. Under a modal it saves nothing.
     #[test]
     fn ctrl_s_saves_the_words_typed_in_its_frame() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let mut book = Book::default();
@@ -2157,7 +2158,7 @@ mod tests {
         type State = (TimelinePage, Book, crate::sessions::page::Sessions);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book, notes): &mut State| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
@@ -2165,7 +2166,6 @@ mod tests {
                 },
                 (page, book, crate::sessions::page::Sessions::default()),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness
             .get_by_role_and_label(egui::accesskit::Role::TextInput, "Title")
@@ -2223,6 +2223,7 @@ mod tests {
     /// not (only the rows in view draw). The same rows as `scroll_to_rect` showed.
     #[test]
     fn the_list_opens_at_its_last_event() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let mut book = Book::default();
@@ -2235,7 +2236,7 @@ mod tests {
         type State = (TimelinePage, Book, crate::sessions::page::Sessions);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 600.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book, notes): &mut State| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
@@ -2247,7 +2248,6 @@ mod tests {
                     crate::sessions::page::Sessions::default(),
                 ),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(6);
         let drawn = |words: &str| harness.query_all_by_label_contains(words).next().is_some();
         // The column stops at its content's end: the rows near the last event are in view.
@@ -2266,6 +2266,7 @@ mod tests {
     /// the control); and at once when another event is opened.
     #[test]
     fn the_add_result_ends_by_the_frame_clock() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let mut book = Book::default();
@@ -2276,7 +2277,7 @@ mod tests {
         type State = (TimelinePage, Book, crate::sessions::page::Sessions);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book, notes): &mut State| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
@@ -2288,7 +2289,6 @@ mod tests {
                     crate::sessions::page::Sessions::default(),
                 ),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         let footer = |harness: &egui_kittest::Harness<'_, State>| {
             design::pane::footer_rect(&harness.ctx, egui::Id::new("timeline_list_footer"))
@@ -2401,6 +2401,7 @@ mod tests {
 
     #[test]
     fn iter3_c_closed_long_rest_rows_show_both_rulings() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for restores in [false, true] {
             let mut book = Book::default();
@@ -2418,12 +2419,11 @@ mod tests {
                 icons::LONG_REST
             };
             let expected = format!("{} · {icon} {word}", event.label(0));
-            let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
+            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     TimelinePage::default().row(ui, &event, 0, None, None, None);
                 });
             });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness.get_by_label(&expected);
         }
@@ -2431,6 +2431,7 @@ mod tests {
 
     #[test]
     fn iter1_c_day_appears_only_when_filters_hide_day_headings() {
+        use crate::design::test_harness::ThemedPage as _;
         use egui_kittest::kittest::Queryable;
         for filtered in [false, true] {
             let mut book = Book::default();
@@ -2451,7 +2452,7 @@ mod tests {
             } else {
                 format!("{} · {expected_detail}", event.label(1))
             };
-            let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
+            let mut harness = egui_kittest::Harness::builder().themed(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let mut page = TimelinePage::default();
                     if filtered {
@@ -2460,7 +2461,6 @@ mod tests {
                     page.row(ui, &event, 1, None, None, None);
                 });
             });
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness.get_by_label(&expected);
         }
@@ -2468,13 +2468,14 @@ mod tests {
 
     #[test]
     fn iter1_c_rest_ruling_actions_name_the_change_and_keep_undo() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let mut book = Book::default();
         book.add(Kind::LongRest, None);
         book.events[0].restores = true;
         let event_id = book.events[0].id.clone();
         // The ruling line in the row, and its result in the pane's footer, as the pages draw them.
-        let mut harness = egui_kittest::Harness::builder().build_state(
+        let mut harness = egui_kittest::Harness::builder().themed_state(
             move |ctx, book: &mut Book| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let frame = PaneFrame::new(ui);
@@ -2494,7 +2495,6 @@ mod tests {
             },
             book,
         );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Mark not at full").click();
         harness.run_steps(2);
@@ -2556,6 +2556,7 @@ mod tests {
     /// A strip that needs no More has none of those lines; one that has More lists them last.
     /// A list of 30 events in a scroll column, drawn twice.
     fn long_list() -> egui_kittest::Harness<'static, (TimelinePage, Book)> {
+        use crate::design::test_harness::Themed as _;
         let mut book = Book::default();
         for i in 0..30 {
             let id = book.add(Kind::Event, None);
@@ -2565,14 +2566,13 @@ mod tests {
         }
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(600.0, 400.0))
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, (page, book): &mut (TimelinePage, Book)| {
                     design::ScrollColumn::new("timeline_list_test")
                         .show(ui, |ui| page.list(ui, book, &[]));
                 },
                 (TimelinePage::default(), book),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness
     }
@@ -2671,6 +2671,7 @@ mod tests {
 
     #[test]
     fn a_line_of_more_alone_moves_no_action() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         const KINDS: [Kind; 5] = [
             Kind::Day,
@@ -2682,7 +2683,7 @@ mod tests {
         let draw = |width: f32, scene: bool| {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(width, 300.0))
-                .build_state(
+                .themed_state(
                     move |ctx, (book, chosen): &mut (Book, Option<Result<String, usize>>)| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             let more = if scene {
@@ -2705,7 +2706,6 @@ mod tests {
                     },
                     (Book::default(), None),
                 );
-            design::theme::install(&harness.ctx);
             harness.run_steps(2);
             harness
         };
@@ -2791,6 +2791,7 @@ mod tests {
     /// another campaign's Timeline, works there, and comes back: through the page's own `show`
     /// and the book's campaign switch. B's file is not touched by A's Undo.
     fn a_removal_keeps_its_linked_note_warning_over_a_campaign_switch() {
+        use crate::design::test_harness::Themed as _;
         use egui_kittest::kittest::Queryable;
         let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let mut book = Book::default();
@@ -2813,7 +2814,7 @@ mod tests {
         );
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(1200.0, 800.0))
-            .build_state(
+            .themed_state(
                 |ctx, (page, book, notes, campaign, links): &mut State| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         page.show(ui, book, *campaign, links, None, notes);
@@ -2827,7 +2828,6 @@ mod tests {
                     links.clone(),
                 ),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.state_mut().0.selected = Some(id.clone());
         harness.run_steps(2);
