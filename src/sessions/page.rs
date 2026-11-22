@@ -4962,7 +4962,14 @@ impl Sessions {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn note_editor(&mut self, ui: &mut egui::Ui, in_panel: bool) {
+    /// `region`: the pane's editor region, when the pane gives one (the Notes panel, layout
+    /// step 11c); the page's note keeps `editor_view` (`ViewHeight::Fills`) and its named jumps.
+    fn note_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        in_panel: bool,
+        region: Option<design::pane::EditorRegion<'_>>,
+    ) {
         // The cached editor, only while it is this note's.
         let editor_id = self.note_editor_id();
         let Some(draft) = &mut self.draft else {
@@ -5138,14 +5145,21 @@ impl Sessions {
                 let face = markdown_face(font.clone());
                 // Beside a page, Tab indents. It must not walk to `Next turn`, where the next space
                 // would press it. Escape still leaves the panel.
-                let output = design::pane::editor_view(
-                    ui,
-                    design::pane::ViewHeight::Fills,
-                    field,
-                    text,
-                    face,
-                    |edit| edit.lock_focus(in_panel).font(font),
-                );
+                let output = match region {
+                    // The Notes panel's pane region: the frame grows with the text up to the
+                    // room above the panel's footer, then the text scrolls inside it.
+                    Some(region) => region.editor(ui, field, text, face, |edit| {
+                        edit.lock_focus(in_panel).font(font)
+                    }),
+                    None => design::pane::editor_view(
+                        ui,
+                        design::pane::ViewHeight::Fills,
+                        field,
+                        text,
+                        face,
+                        |edit| edit.lock_focus(in_panel).font(font),
+                    ),
+                };
                 crate::markdown_source::paint_section_rules(ui, &output, Some(text.key()));
                 pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
                 let place = super::slash::Place {
@@ -5439,8 +5453,8 @@ impl Sessions {
                         )),
                     );
                 }
-                let paned = messages.pane(ui, fills_body(design::pane::FillsReason::NoteEditor), |ui| {
-                    self.note_editor(ui, true);
+let paned = messages.pane_editor(ui, |ui, region| {
+                    self.note_editor(ui, true, Some(region));
                 });
                 match paned.pressed.map(|press| press.id) {
                     Some(SessionAct::UndoDrop) => {
@@ -5588,7 +5602,7 @@ impl Sessions {
         if self.reading_note {
             self.read_tab(ui, book, plan, beside);
         } else {
-            self.note_editor(ui, false);
+            self.note_editor(ui, false, None);
         }
     }
 
@@ -7323,7 +7337,7 @@ impl Sessions {
                     ui,
                     fills_body(design::pane::FillsReason::NoteEditor),
                     |ui| {
-                        self.note_editor(ui, false);
+                        self.note_editor(ui, false, None);
                     },
                 );
                 if let Some(press) = paned.pressed {
@@ -7550,7 +7564,7 @@ impl Sessions {
             edges,
         } = view
         else {
-            self.note_editor(ui, false);
+            self.note_editor(ui, false, None);
             return;
         };
         match shown {
@@ -9853,7 +9867,7 @@ mod tests {
                 |ctx, (sessions, draw, panel): &mut (Sessions, bool, bool)| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         if *draw {
-                            sessions.note_editor(ui, *panel);
+                            sessions.note_editor(ui, *panel, None);
                         }
                     });
                 },
@@ -10249,7 +10263,7 @@ mod tests {
                         if *template {
                             template_pane(ui, sessions);
                         } else {
-                            sessions.note_editor(ui, false);
+                            sessions.note_editor(ui, false, None);
                         }
                     });
                 },
