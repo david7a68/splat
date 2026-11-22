@@ -838,7 +838,7 @@ fn settings_footer_under_column(d: &Driver<'_>, name: &str) -> (bool, String) {
     (
         found.viewport.right() <= account.left()
             && (found.gap - crate::design::S).abs() <= 1.0
-            && below.is_some_and(|below| below >= 0.0 && below <= crate::design::S + 12.0),
+            && below.is_some_and(|below| (0.0..=crate::design::S + 12.0).contains(&below)),
         format!(
             "At {size:?}: footer {:?} of the pane {:?} (account heading at {:?}), {} below its content, {below:?} below its column's lowest control",
             found.footer,
