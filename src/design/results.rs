@@ -1683,9 +1683,9 @@ pub(crate) const STAGED: &[Staged] = &[
         "Give the Undo the object its result names, `UndoStep::of(verb, object)`: a lone Undo shows it whenever it fits (M9). An Undo with no object is a named exception the lead rules on.",
         &[
             ("src/design/outcome.rs", 7),
-            ("src/encounters.rs", 4),
+            ("src/encounters.rs", 1),
             ("src/sessions/plan.rs", 1),
-            ("src/timeline/page.rs", 2),
+            ("src/timeline/page.rs", 1),
             ("src/timeline/test_support.rs", 2),
         ],
     ),

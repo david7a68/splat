@@ -32,6 +32,8 @@ pub mod value_block;
 pub(crate) mod attributes;
 #[cfg(test)]
 mod lint;
+#[cfg(test)]
+mod typing_history_model;
 
 pub use column::*;
 pub use components::*;

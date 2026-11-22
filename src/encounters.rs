@@ -3696,6 +3696,8 @@ enum DraftUndo {
         before: Vec<Slot>,
         after: Vec<Slot>,
         words: String,
+        /// The replaced creature, as the rows named it: its Undo names it.
+        replaced: String,
     },
 }
 
@@ -3723,7 +3725,7 @@ impl DraftUndo {
                 let (words, step) = if group.file_gone() {
                     (
                         disk::removed_with_draft(&group.name()),
-                        UndoStep::verb(Verb::Remove),
+                        UndoStep::of(Verb::Remove, group.name()),
                     )
                 } else if *delete {
                     (
@@ -3741,8 +3743,13 @@ impl DraftUndo {
                     step.pressed_as(FooterPress::UndoEditor),
                 )
             }
-            Self::Replacement { words, .. } => Said::new(outcome_words(words))
-                .undo(UndoStep::verb(Verb::Replace).pressed_as(FooterPress::UndoEditor))
+            Self::Replacement {
+                words, replaced, ..
+            } => Said::new(outcome_words(words))
+                .undo(
+                    UndoStep::of(Verb::Replace, replaced.clone())
+                        .pressed_as(FooterPress::UndoEditor),
+                )
                 .into(),
         }
     }
@@ -3826,7 +3833,7 @@ fn discard_outcome<A>(name: String, gone: bool, undo: A) -> design::outcome::Kep
                 "{} removed. Its draft was discarded.",
                 name
             )),
-            UndoStep::verb(Verb::Remove).pressed_as(undo),
+            UndoStep::of(Verb::Remove, name.clone()).pressed_as(undo),
         )
     } else {
         KeptOutcome::Notice(
@@ -9262,6 +9269,7 @@ impl Encounters {
                 before,
                 after: draft.setup.roster.clone(),
                 words: replacement_words(&old, rows, &new),
+                replaced: old,
             });
         }
         for side in draft.setup.roster.iter().flat_map(|slot| {
@@ -11795,6 +11803,7 @@ mod tests {
             before: before.clone(),
             after: roster.clone(),
             words: "1 Wolf row replaced with Wolf.".into(),
+            replaced: "Wolf".into(),
         });
         let owner = EditorOwner {
             root: active.path.clone(),
@@ -11969,7 +11978,7 @@ mod tests {
         );
         harness.run_steps(1);
         *hold.borrow_mut() = Some(None);
-        harness.get_by_label("Undo replace").click();
+        harness.get_by_label("Undo replace Wolf").click();
         harness.run_steps(1);
         assert!(
             matches!(*hold.borrow(), Some(Some(_))),
@@ -11991,7 +12000,7 @@ mod tests {
         );
         assert!(
             harness.query_by_label(WORDS).is_none()
-                && harness.query_by_label("Undo replace").is_none(),
+                && harness.query_by_label("Undo replace Wolf").is_none(),
             "the result no longer holds: its words and its Undo leave"
         );
         // The same for a move and a removal of a row in the pass of the press. Each starts
@@ -12017,10 +12026,11 @@ mod tests {
                 before,
                 after: after.clone(),
                 words: words.into(),
+                replaced: "Wolf".into(),
             });
             harness.run_steps(2);
             *hold.borrow_mut() = Some(None);
-            harness.get_by_label("Undo replace").click();
+            harness.get_by_label("Undo replace Wolf").click();
             harness.run_steps(1);
             assert!(matches!(*hold.borrow(), Some(Some(_))), "held");
             harness
@@ -12072,6 +12082,7 @@ mod tests {
                 before: roster.clone(),
                 after: roster,
                 words: format!("Round {round}."),
+                replaced: "Wolf".into(),
             });
             // Its file went: the group left the draft, and only its Undo holds it (FF7).
             draft.new_results.push(DraftUndo::RemovedGroup {
@@ -12875,7 +12886,7 @@ mod tests {
                 .next()
                 .is_some()
         );
-        harness.get_by_label("Undo remove").click();
+        harness.get_by_label(&format!("Undo remove {name}")).click();
         harness.run_steps(2);
         let back = harness
             .state()
