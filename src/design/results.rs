@@ -959,11 +959,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/encounters/groups.rs",
-            "discard_group_draft",
-            &[Ban::Results],
-        ),
-        (
-            "src/encounters/groups.rs",
             "group_editor_view",
             &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
         ),
@@ -1026,8 +1021,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "show", &[Ban::Body]),
         // M-N0.10: the record line's warning (M0453).
         ("src/sessions/page.rs", "record_line_body", &[Ban::Body]),
-        ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
-        ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "banner_notices",
@@ -1055,16 +1048,26 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/sessions/plan.rs",
             "plan_pane",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Results, Ban::ByOwner(1)],
+            &[Ban::ByOwner(1)],
         ),
-        (
-            "src/sessions/plan.rs",
-            "record_deleted_run",
-            &[Ban::Results],
-        ),
-        ("src/sessions/plan.rs", "scene_act", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
+        // M-N1.3 (ruling M20): Read's embed whose source is gone, typed (`BodyMessage`), in
+        // place of a `small_message`.
+        ("src/sessions/carry.rs", "show_prepared", &[Ban::Body]),
+        // M-N1.1 (ruling M20): a result with the note's Undo at its own place
+        // (`PlacedResult`), replacing three `undo_message` calls.
+        (
+            "src/sessions/plan.rs",
+            "removed_scene_message",
+            &[Ban::Body],
+        ),
+        ("src/sessions/plan.rs", "field_result", &[Ban::Body]),
+        (
+            "src/sessions/plan.rs",
+            "removed_fight_message",
+            &[Ban::Body],
+        ),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),
         ("src/trackers/history.rs", "footer", &[Ban::Order]),
         (
@@ -1241,6 +1244,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_body_fault_gives_its_repairs_back_by_id",
             &[Ban::Body],
         ),
+        (
+            "src/design/outcome.rs",
+            "a_placed_result_shows_its_undo_whole_where_it_fits",
+            &[Ban::Body],
+        ),
         // N0 (ruling M21): a message holds at most one primary choice.
         (
             "src/design/outcome.rs",
@@ -1279,7 +1287,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers/view.rs", "body", &[Ban::Body]),
         // Package T (PR 328 review): a repeated amount field's problem stands at its line.
         ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
-        ("src/trackers/view.rs", "messages", &[Ban::Words]),
         (
             "src/content_ui/src/session_notes.rs",
             "notice_sentence",
@@ -1616,11 +1623,8 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/outcome.rs", 1),
             ("src/design/pane.rs", 5),
-            ("src/sessions/carry.rs", 1),
             ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 1),
-            ("src/trackers/history.rs", 1),
-            ("src/trackers/view.rs", 1),
             ("src/world.rs", 1),
         ],
     ),
@@ -1629,9 +1633,6 @@ pub(crate) const STAGED: &[Staged] = &[
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[
             ("src/design/components.rs", 15),
-            ("src/encounters/groups.rs", 1),
-            ("src/sessions/carry.rs", 1),
-            ("src/sessions/plan.rs", 4),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],
@@ -1685,9 +1686,7 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/outcome.rs", 7),
             ("src/encounters.rs", 4),
-            ("src/sessions/carry.rs", 1),
-            ("src/sessions/page.rs", 6),
-            ("src/sessions/plan.rs", 4),
+            ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 3),
             ("src/timeline/test_support.rs", 2),
             ("src/world.rs", 1),
@@ -1697,7 +1696,11 @@ pub(crate) const STAGED: &[Staged] = &[
     (
         "Refusal::at_limit(",
         "A refusal ends at its cause only at a limit the DM cannot change: a tracker's `min`, every name rolled (M13), or the run rule after the fight's encounter was deleted (M15). A fault in the tracker rules, and every other cause, gets its next step: `Refusal::new`.",
-        &[("src/design/results/refusal.rs", 5)],
+        &[
+            ("src/design/results/refusal.rs", 5),
+            // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
+            ("src/trackers.rs", 2),
+        ],
     ),
 ];
 

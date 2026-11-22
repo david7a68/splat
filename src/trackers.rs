@@ -324,6 +324,9 @@ pub(crate) enum TrackerFault {
     TimelineNotSaved(String),
     /// A problem of the problems list: a member or a note the DM must fix before it counts.
     Problem(String),
+    /// An act that wrote nothing (ruling M7): the act, its cause and the next step, in the tone
+    /// of its cause.
+    Refused(crate::design::results::Refusal),
 }
 
 impl crate::design::outcome::Fault for TrackerFault {
@@ -335,6 +338,10 @@ impl crate::design::outcome::Fault for TrackerFault {
             }
             Self::NotSaved(_) | Self::TimelineNotSaved(_) => Severity::NotSaved,
             Self::Problem(_) => Severity::NeedsFixing,
+            Self::Refused(refusal) => match refusal.tone() {
+                crate::design::Tone::Error => Severity::CannotRead,
+                _ => Severity::NeedsFixing,
+            },
         }
     }
 
@@ -377,6 +384,7 @@ impl crate::design::outcome::Fault for TrackerFault {
             Self::Problem(problem) => {
                 outside(problem.clone(), sentence!("A tracker cannot be used."))
             }
+            Self::Refused(refusal) => refusal.words(),
         }
     }
 }
@@ -385,10 +393,99 @@ impl crate::design::outcome::Fault for TrackerFault {
 /// until the next act or until the ledger is read again: never beside a row that can go away.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Unrecorded {
-    /// The act does not fit the files on disk now.
-    Refused(String),
+    /// The act does not fit the files on disk now: what was not done, why, and the next step.
+    Refused(crate::design::results::Refusal),
     /// The save failed. Nothing waits: the DM presses again.
     NotSaved(String),
+}
+
+/// A tracker name, label or key as the refusal names it; one with no words is `that tracker`.
+pub fn named(words: &str) -> crate::design::results::Name {
+    use crate::design::results::{Fallback, Name};
+    Name::new(words).unwrap_or_else(|| Name::fallback(Fallback::ThatTracker))
+}
+
+/// The bounded answer to an act that wrote nothing (rulings M7, M13): `act` with the domain's
+/// cause, and the one next step. At the tracker's own limit it ends at its cause; a fault in the
+/// tracker rules sends the DM to the house rule notes; a stale file to the file it read.
+pub fn refusal(
+    act: crate::design::results::FailedAct,
+    cause: splat_campaign::trackers::Refused,
+) -> crate::design::results::Refusal {
+    use crate::design::results::{Cause, File, Limit, Part as P, Recovery, Refusal, Step};
+    use splat_campaign::trackers::{Part, Refused};
+    let check = |file| Recovery::First(Step::Check(file));
+    let rules = || check(File::HouseRuleNote);
+    let part = |part: Part| match part {
+        Part::Notice => (P::Notice, File::Trackers),
+        Part::Mark => (P::Mark, File::HouseRuleNote),
+        Part::Table => (P::Table, File::HouseRuleNote),
+        Part::Name => (P::TrackerName, File::HouseRuleNote),
+        Part::Action => (P::Action, File::HouseRuleNote),
+        Part::Entry => (P::Entry, File::Trackers),
+        Part::EntryBefore => (P::EntryBefore, File::Trackers),
+        Part::DayCount => (P::DayCount, File::Timeline),
+    };
+    let (cause, recovery) = match cause {
+        Refused::BelowMin { tracker, min } => {
+            return Refusal::at_limit(
+                act,
+                Limit::Min {
+                    tracker: named(&tracker),
+                    min,
+                },
+            );
+        }
+        Refused::EveryNameRolled => return Refusal::at_limit(act, Limit::EveryNameRolled),
+        Refused::NoLine {
+            tracker,
+            line: Some(line),
+        } => (
+            Cause::NoLine {
+                tracker: named(&tracker),
+                line: named(&line),
+            },
+            Recovery::First(Step::AddLine {
+                tracker: named(&tracker),
+                line: named(&line),
+            }),
+        ),
+        Refused::NoLine { line: None, .. } => (Cause::PartChanged(P::Action), rules()),
+        Refused::UnknownTracker(key) => (Cause::UnknownTracker(named(&key)), rules()),
+        Refused::NoAmount(tracker) => (Cause::NoAmount(named(&tracker)), rules()),
+        Refused::BadAmount(tracker) => (Cause::BadAmount(named(&tracker)), rules()),
+        Refused::UnknownTable(key) => (Cause::UnknownTable(named(&key)), rules()),
+        Refused::TableCannotRoll(key) => (Cause::TableCannotRoll(named(&key)), rules()),
+        Refused::NoRow { table, total } => (
+            Cause::NoRow {
+                table: named(&table),
+                total,
+            },
+            rules(),
+        ),
+        Refused::NoNumber => (Cause::NoNumber, Recovery::First(Step::TypeAmount)),
+        Refused::Changed(changed) => {
+            let (changed, file) = part(changed);
+            (Cause::PartChanged(changed), check(file))
+        }
+        Refused::NoLongerDue => (Cause::NoLongerDue, check(File::Trackers)),
+        Refused::Gone(gone) => (
+            Cause::PartGone(part(gone).0, File::Trackers),
+            check(File::Trackers),
+        ),
+        Refused::LedgerChanged => (Cause::Changed(File::Trackers), check(File::Trackers)),
+        Refused::RulesChanged => (Cause::Changed(File::HouseRuleNote), rules()),
+        Refused::RulesUnreadable => (Cause::Unreadable(File::HouseRuleNote), rules()),
+        Refused::TimelineUnreadable => (
+            Cause::Unreadable(File::Timeline),
+            Recovery::First(Step::FixTimeline),
+        ),
+        Refused::DependsOn(name) => (
+            Cause::DependsOn(named(&name)),
+            Recovery::First(Step::Remove(named(&name))),
+        ),
+    };
+    Refusal::new(act, cause, recovery)
 }
 
 /// `Add to Timeline` made this event for this entry. Its `Undo add` keeps today's 30 seconds.
@@ -656,9 +753,23 @@ impl Trackers {
         let today = self.today.clone();
         let session = self.played;
         let next_id = self.next_id.unwrap_or(Uuid::new_v4);
-        if let Err(Some(reason)) =
-            self.commit(|rules, ledger| act.build(rules, ledger, &today, session, next_id))
-        {
+        // What the act was, for its refusal: the action, the table, or the notice pressed.
+        let failed = match &act {
+            Act::Press { action, .. } => crate::design::results::FailedAct::NotRecorded {
+                act: named(action.label),
+            },
+            Act::Roll { table, .. } => crate::design::results::FailedAct::NotRolled {
+                table: named(self.rules.table_name(table)),
+            },
+            Act::Done { drawn, .. } | Act::Dismiss { drawn } | Act::DismissAll { drawn } => {
+                crate::design::results::FailedAct::NotRecorded {
+                    act: named(&drawn.name(&self.rules)),
+                }
+            }
+        };
+        if let Err(Some(reason)) = self.commit(failed, |rules, ledger| {
+            act.build(rules, ledger, &today, session, next_id)
+        }) {
             self.reason = Some(reason);
         }
     }
@@ -682,7 +793,8 @@ impl Trackers {
     /// ledger cannot be read, which the view and the reader say in place of the history.
     fn commit(
         &mut self,
-        build: impl FnOnce(&Rules, &Ledger) -> Result<Op, String>,
+        failed: crate::design::results::FailedAct,
+        build: impl FnOnce(&Rules, &Ledger) -> Result<Op, Refused>,
     ) -> Result<(), Option<Unrecorded>> {
         let Some(campaign) = self.campaign.clone() else {
             return Err(None);
@@ -690,15 +802,15 @@ impl Trackers {
         let rules = self.rules_now();
         let changed = !rules.same_definitions(&self.rules);
         let result = ledger::commit(&ledger::path(&campaign.path), |ledger| {
-            if let Some(error) = &rules.unreadable {
-                return Err(format!("{error} Nothing was recorded."));
+            if rules.unreadable.is_some() {
+                return Err(Refused::RulesUnreadable);
             }
             if changed {
-                return Err("A house rule note changed on disk. Nothing was recorded.".into());
+                return Err(Refused::RulesChanged);
             }
             build(&rules, ledger)
         });
-        let done = self.finish(result);
+        let done = self.finish(failed, result);
         if changed {
             self.view.widest_value = 0.0;
             self.rules = rules;
@@ -709,6 +821,7 @@ impl Trackers {
 
     fn finish(
         &mut self,
+        failed: crate::design::results::FailedAct,
         result: Result<(Vec<u8>, Ledger, Op), Fault>,
     ) -> Result<(), Option<Unrecorded>> {
         match result {
@@ -727,10 +840,10 @@ impl Trackers {
                 self.baseline = None;
                 Err(None)
             }
-            Err(Fault::Refused(reason)) => {
+            Err(Fault::Refused(cause)) => {
                 // The view draws again from the file, and says why nothing was recorded.
                 self.read_disk();
-                Err(Some(Unrecorded::Refused(reason)))
+                Err(Some(Unrecorded::Refused(refusal(failed, cause))))
             }
             // Nothing waits: the value, the Due rows and the result line show what the file
             // holds now, also an edit made in Obsidian a moment before.
@@ -796,9 +909,12 @@ impl Trackers {
     pub fn undo(&mut self, expected: &[Entry]) {
         let session = self.played;
         let today = self.today.clone();
-        if let Err(Some(reason)) =
-            self.commit(|rules, ledger| undo_op(rules, &today, ledger, session, expected))
-        {
+        let failed = crate::design::results::FailedAct::NotUndone {
+            act: named(&label(&self.rules, &self.ledger, expected)),
+        };
+        if let Err(Some(reason)) = self.commit(failed, |rules, ledger| {
+            undo_op(rules, &today, ledger, session, expected)
+        }) {
             self.reason = Some(reason);
         }
     }

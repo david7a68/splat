@@ -156,7 +156,6 @@ scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
 scroll-request	src/markdown_view.rs	show_with_density	1	Reader
 scroll-request	src/processing/settings.rs	ProcessingSettings::input_section	1	Processing
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
-scroll-request	src/processing/settings.rs	ProcessingSettings::show	1	Processing
 scroll-request	src/sessions/page.rs	Sessions::banner	1	Sessions
 scroll-request	src/sessions/page.rs	Sessions::note_editor	2	Sessions
 scroll-request	src/sessions/page.rs	Sessions::reading_view	1	Sessions
