@@ -1376,7 +1376,7 @@ mod tests {
             .unwrap()
             .unwrap();
             assert_eq!(
-                (cleared.words.as_str(), cleared.undo),
+                (cleared.words.as_str(), cleared.undo.label().as_str()),
                 ("Check cleared.", "Undo clear")
             );
         }
