@@ -629,7 +629,8 @@ mod tests {
 
     /// `indent`: the block starts `levels` steps in with no item spacing added; `dropped`: it starts
     /// `drop` below the slot's top and the slot holds the drop; `unless_empty`: an empty block leaves
-    /// the next item where it would be with no block, a block that draws leaves its gap.
+    /// the next item where it would be with no block, a block that draws leaves its gap;
+    /// `at_least` holds a short block's line to its height; `empty_line` is a label's line.
     #[test]
     fn indent_dropped_and_unless_empty_place_by_rect() {
         run(|ui| {
@@ -657,6 +658,36 @@ mod tests {
             assert!(
                 drew && ui.cursor().top() > before,
                 "a block that draws has its gap"
+            );
+            // `at_least` (layout step 11c): a short block, then room, so the next item starts
+            // `height` below the block's top; a block taller than `height` adds none.
+            let top = ui.cursor().top();
+            let _ = at_least(ui, 60.0, |ui| ui.label("short"));
+            let held = ui.cursor().top() - top;
+            assert!(
+                (held - 60.0).abs() < 0.01,
+                "at_least: room up to 60, got {held}"
+            );
+            let top = ui.cursor().top();
+            let _ = at_least(ui, 5.0, |ui| ui.label("taller than five"));
+            let tall = ui.cursor().top() - top;
+            let top = ui.cursor().top();
+            let _ = ui.label("taller than five");
+            let alone = ui.cursor().top() - top;
+            assert!(
+                (tall - alone).abs() < 0.01,
+                "at_least: a taller block adds nothing: {tall} vs the block alone {alone}"
+            );
+            // `empty_line`: as tall as a label of its type, with the label's gap after it.
+            let top = ui.cursor().top();
+            empty_line(ui, super::super::Type::Small);
+            let empty = ui.cursor().top() - top;
+            let top = ui.cursor().top();
+            let _ = ui.label(super::super::Type::Small.rich(ui, "After"));
+            let label = ui.cursor().top() - top;
+            assert!(
+                empty > 0.0 && (empty - label).abs() < 0.01,
+                "empty_line: {empty}, a Small label: {label}"
             );
         });
     }
