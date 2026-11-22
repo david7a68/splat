@@ -54,6 +54,38 @@ fn checks(d: &Driver<'_>) -> Vec<crate::timeline::Check> {
         .unwrap_or_default()
 }
 
+/// Each `Clear the check for …` in view, with the vertical centre of its result's first line:
+/// the words painted nearest at its left whose first line meets the Clear's height.
+fn result_lines(d: &Driver<'_>) -> Vec<(f32, f32)> {
+    let clears: Vec<egui::Rect> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name.starts_with("Clear the check for ") && node.in_view())
+        .map(|node| node.rect)
+        .collect();
+    clears
+        .into_iter()
+        .filter_map(|clear| {
+            let mut nearest: Option<(f32, f32)> = None;
+            d.each_painted_text(|text, clip| {
+                let Some(row) = text.galley.rows.first() else {
+                    return;
+                };
+                let first = row.rect().translate(text.pos.to_vec2());
+                if clip.intersects(first)
+                    && first.right() <= clear.left()
+                    && first.bottom() > clear.top()
+                    && first.top() < clear.bottom()
+                    && nearest.is_none_or(|(left, _)| first.left() > left)
+                {
+                    nearest = Some((first.left(), first.center().y));
+                }
+            });
+            nearest.map(|(_, centre)| (centre, clear.center().y))
+        })
+        .collect()
+}
+
 /// Faults in the open block's layout (V4, V22, V23): `Encounter checks` is a label above the
 /// table menu, whose word starts at the label's edge; the dice words share the menu's line, or start their own line with their words;
 /// and the act's result, when there is one, sits on its kept line between the menu's line and
@@ -254,6 +286,18 @@ pub fn run(d: &mut Driver<'_>) {
         Some("2 travel checks rolled."),
         "Clear the check for Day 1",
     );
+    // Layout 11c (M0547): each result's words have their first line centred on its Clear.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let lines = d.at_size(size, result_lines);
+        d.observe(
+            "m32-L11c-result-line",
+            lines.len() >= 2
+                && lines
+                    .iter()
+                    .all(|(words, clear)| (words - clear).abs() <= 1.0),
+            format!("At {size:?}, each result's first line and its Clear, by centre: {lines:?}"),
+        );
+    }
     d.observe(
         "T11.9",
         faults.is_empty() && length_at.is_some() && d.place_of("How long") == length_at,
