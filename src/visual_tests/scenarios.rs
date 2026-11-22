@@ -9169,35 +9169,39 @@ pub mod prep_to_table {
                         egui::Rect::from_min_size(text.pos, text.galley.size()),
                     ));
                 });
+                // Every field needs its reference: a row whose name is not painted inside it
+                // (missing or moved out of the row) fails here, never drops out of the check.
                 let off_line: Vec<(String, f32)> = fields
                     .iter()
-                    .filter_map(|field| {
+                    .flat_map(|field| {
                         let name = field.name.trim_start_matches("Initiative for ");
-                        let row = nodes
+                        let title = nodes
                             .iter()
-                            .find(|node| node.name.starts_with(&format!("{name} · ")))?;
-                        let title = painted
+                            .find(|node| node.name.starts_with(&format!("{name} · ")))
+                            .and_then(|row| {
+                                painted.iter().find(|(words, rect)| {
+                                    words == name && row.rect.contains_rect(*rect)
+                                })
+                            })
+                            .map(|(_, rect)| *rect);
+                        let Some(title) = title else {
+                            return vec![(format!("no painted name for {name}"), f32::INFINITY)];
+                        };
+                        nodes
                             .iter()
-                            .find(|(words, rect)| words == name && row.rect.contains_rect(*rect))?
-                            .1;
-                        Some(
-                            nodes
-                                .iter()
-                                .filter(|node| {
-                                    node.name == field.name
-                                        || node.name == format!("Roll for {name}")
-                                        || node.name.starts_with(&format!("Place for {name}:"))
-                                        || node.name == format!("Absent: {name}")
-                                        || node.name == format!("More actions for {name}")
-                                        || node.name.starts_with(&format!("Move {name} "))
-                                })
-                                .map(|node| {
-                                    (node.name.clone(), node.rect.center().y - title.center().y)
-                                })
-                                .collect::<Vec<_>>(),
-                        )
+                            .filter(|node| {
+                                node.name == field.name
+                                    || node.name == format!("Roll for {name}")
+                                    || node.name.starts_with(&format!("Place for {name}:"))
+                                    || node.name == format!("Absent: {name}")
+                                    || node.name == format!("More actions for {name}")
+                                    || node.name.starts_with(&format!("Move {name} "))
+                            })
+                            .map(|node| {
+                                (node.name.clone(), node.rect.center().y - title.center().y)
+                            })
+                            .collect::<Vec<_>>()
                     })
-                    .flatten()
                     .filter(|(_, off)| off.abs() > 1.0)
                     .collect();
                 let heading = painted
