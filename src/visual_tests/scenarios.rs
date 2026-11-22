@@ -5715,6 +5715,25 @@ pub mod encounter_build {
             "The editor offers Resume for its paused run and shows its state",
         );
         d.state("saved-roster", Sizes::All);
+        d.goal("open a saved encounter");
+        d.begin_task();
+
+        // T5.6: what the party has left is in view while the DM decides what to put against it.
+        let (option, together, row) = (
+            d.has(SYNC_OPTION),
+            d.visible_text(PARTY_NOW),
+            d.visible_text(LIVE_ROW)
+                && d.visible_text("AC\u{a0}15")
+                && d.visible_text("Bloodied")
+                && d.visible_text("Poisoned"),
+        );
+        d.observe(
+            "T5.6",
+            option && together && row,
+            format!(
+                "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
+            ),
+        );
         // Layout step 6b (I8): the encounter's first edit brings Unsaved, Discard and the
         // campaign-switch reason (beside Resume's paused run at the row's end); each reason has
         // its planned place, so the name, the creature search and the first roster row keep their
@@ -5755,25 +5774,6 @@ pub mod encounter_build {
             )
         });
         d.observe("l6b-encounter-head-still", still.0, still.1);
-        d.goal("open a saved encounter");
-        d.begin_task();
-
-        // T5.6: what the party has left is in view while the DM decides what to put against it.
-        let (option, together, row) = (
-            d.has(SYNC_OPTION),
-            d.visible_text(PARTY_NOW),
-            d.visible_text(LIVE_ROW)
-                && d.visible_text("AC\u{a0}15")
-                && d.visible_text("Bloodied")
-                && d.visible_text("Poisoned"),
-        );
-        d.observe(
-            "T5.6",
-            option && together && row,
-            format!(
-                "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
-            ),
-        );
         // iter-26-B FB5: the run state keeps its x in the save row when the first edit brings
         // `Unsaved`, Discard and the campaign-switch reason, at 960, 1200 and 1920.
         let run_state_x = |d: &mut Driver<'_>| {
