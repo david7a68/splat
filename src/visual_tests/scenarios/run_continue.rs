@@ -213,11 +213,15 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
                     }
                 });
                 let at_top = row.rect.top() - list?.top() <= crate::design::L;
-                // M0194: the open brought the run's row and its Read-only line whole into view.
-                let whole = row.fully_in_view()
+                // M0194: the open brought the run's row and its Read-only line whole into view,
+                // top to bottom (the row's press area hangs left of the column's clip).
+                let tall = |node: &crate::visual_tests::driver::Found| {
+                    node.in_view() && (node.shown.height() - node.rect.height()).abs() < 1.0
+                };
+                let whole = tall(&row)
                     && d.nodes()
                         .iter()
-                        .any(|node| node.name == "Read-only" && node.fully_in_view());
+                        .any(|node| node.name == "Read-only" && tall(node));
                 Some((at_top, edges, whole))
             })
         });
