@@ -785,10 +785,6 @@ fn table_room(ui: &egui::Ui) -> Option<f32> {
 
 /// The row label has its own column. Only the remaining cells belong to the
 /// horizontal scroll area, so its real viewport also supplies the cell padding.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn reader_table(
     ui: &mut egui::Ui,
     rows: &[Vec<String>],
@@ -853,10 +849,10 @@ fn reader_table(
                 .color(colors().muted),
         );
     }
-    // The sideways scroll bar has its own lane below the last row, so it never covers cell text.
+    // The sideways scroll bar has its own lane below the last row (`Sideways::keeps_lane`), so
+    // it never covers cell text.
     let lane = if scrolls {
-        let scroll = ui.spacing().scroll;
-        scroll.bar_width + scroll.bar_outer_margin
+        design::sideways_lane(ui)
     } else {
         0.0
     };
@@ -912,9 +908,6 @@ fn reader_table(
                         (cut, cover),
                         None,
                     );
-                    if lane > 0.0 {
-                        ui.add_space(lane);
-                    }
                 });
             };
             if scrolls {
@@ -930,6 +923,7 @@ fn reader_table(
                     ("reader_table", surface, document, rows),
                     design::Sideways::default()
                         .fit()
+                        .keeps_lane()
                         .without_bar(top >= outer_clip.bottom()),
                     &mut show,
                 );
@@ -1223,7 +1217,7 @@ fn display_field_value(value: &str) -> String {
 }
 
 /// Each level of quote moves its words this far right. Its bar is in that gap.
-const QUOTE_INDENT: f32 = design::L;
+const QUOTE_INDENT: f32 = design::QUOTE_INDENT;
 const QUOTE_BAR_WIDTH: f32 = 2.0;
 
 /// What the words waiting to be drawn link to, and the quotes they are in.
@@ -2085,10 +2079,6 @@ fn split_job(job: LayoutJob, cut: usize) -> (LayoutJob, LayoutJob) {
     (part(0..cut), part(cut..job.text.len()))
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
     if job.is_empty() {
         return;
@@ -2145,14 +2135,7 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
     if target.quotes.is_empty() {
         draw(ui);
     } else {
-        let rect = ui
-            .horizontal_top(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.add_space(QUOTE_INDENT * target.quotes.len() as f32);
-                ui.vertical(draw);
-            })
-            .response
-            .rect;
+        let rect = design::quote(ui, target.quotes.len(), draw).response.rect;
         target.quote_bottom = rect.bottom();
     }
     if !target.row {

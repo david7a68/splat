@@ -34,7 +34,8 @@ pub use components::*;
 // Wave 2 callers name the extras through `design`, as they name the components.
 #[allow(unused_imports)]
 pub use extras::{
-    Gap, Heading, choice, choice_value, choice_wrapped, choice_wrapped_value, gap, heading,
+    Gap, Heading, QUOTE_INDENT, choice, choice_value, choice_wrapped, choice_wrapped_value, gap,
+    heading, quote,
 };
 // Wave 2 callers name the layout parts through `design`, as they name the components.
 pub use action_rows::{Columns, RowAction, action_row};
@@ -46,8 +47,8 @@ pub use layout::{
     ParticipantKey, RowIndex, RowKey, ScrollColumn, Selection, SideAction, Sideways, Slot,
     SlotType, TextKey, TextOwner, TitleAction, TitleActionRow, TitleLine, TitlePlacement,
     TitleType, Unsaved, Word, edit_in_place, first_unsaved, labelled_field, lane_width, line_field,
-    menu_popup, path_help, register_title_row, search_min_row, sideways_scroll, status_slot,
-    title_lead_in, title_placement,
+    menu_popup, path_help, register_title_row, search_min_row, sideways_lane, sideways_scroll,
+    status_slot, title_lead_in, title_placement,
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
