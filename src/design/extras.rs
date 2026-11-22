@@ -68,6 +68,38 @@ pub fn gap(ui: &mut Ui, gap: Gap) {
     space(ui, gap.size());
 }
 
+/// How far one level of a block quote is set in from the text edge (`quote`).
+pub const QUOTE_INDENT: f32 = L;
+
+/// A block quote's words at its `depth` (1 for a quote, 2 for a quote in a quote): set in by
+/// `QUOTE_INDENT` a level from the text edge, on one line with nothing between (layout PR 10c,
+/// inventory M0409: the reader names the depth, the part owns the indent).
+pub fn quote<R>(
+    ui: &mut Ui,
+    depth: usize,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        space(ui, QUOTE_INDENT * depth as f32);
+        ui.vertical(add).inner
+    })
+}
+
+/// Exactly one step of the scale between the item above (or before) and the next, whatever the
+/// item spacing is: the space is the step less the spacing egui already leaves between two items,
+/// along the layout's main axis, and never less than none. `gap` adds a step on top of that
+/// spacing; this keeps the step the whole distance. A caller no longer reads `item_spacing`.
+pub fn gap_to_next(ui: &mut Ui, gap: Gap) {
+    let spacing = ui.spacing().item_spacing;
+    let along = if ui.layout().main_dir().is_horizontal() {
+        spacing.x
+    } else {
+        spacing.y
+    };
+    space(ui, (gap.size() - along).max(0.0));
+}
+
 /// The design's own space: any amount, for the parts that measure it. Only `src/design/` may use
 /// it, so a caller's space is always a [`Gap`].
 #[allow(
@@ -92,6 +124,15 @@ pub enum Heading<'a> {
     Label(&'a str),
     /// A reader's or stat block's serif section heading over a hairline.
     Section(&'a str),
+    /// A panel's, a form's or a band's own title, in the heading type and the text colour: what
+    /// the block under it is (`Short rest`, the run strip's `Round 3`).
+    Panel(&'a str),
+    /// A heading that says a state in its colour, its icon first, as a status does: colour is
+    /// never the only signal (`⚠ Hit points conflict`). Its accessible name is its word.
+    Status(Status<'a>),
+    /// A sheet's or an entry's own name, in the display type and the text colour, beside its
+    /// picture (Party's sheet).
+    Name(&'a str),
 }
 
 impl Heading<'_> {
@@ -99,16 +140,16 @@ impl Heading<'_> {
     /// under the heading, so a heading belongs to what follows it.
     pub const fn above(self) -> f32 {
         match self {
-            Self::Group { .. } | Self::Label(_) => L,
-            Self::Section(_) => XL,
+            Self::Group { .. } | Self::Label(_) | Self::Panel(_) | Self::Status(_) => L,
+            Self::Section(_) | Self::Name(_) => XL,
         }
     }
 
     /// The space between the heading (its hairline, for a section) and what follows it.
     pub const fn below(self) -> f32 {
         match self {
-            Self::Group { .. } | Self::Label(_) => XS,
-            Self::Section(_) => XS,
+            Self::Group { .. } | Self::Label(_) | Self::Panel(_) | Self::Status(_) => XS,
+            Self::Section(_) | Self::Name(_) => XS,
         }
     }
 }
@@ -158,6 +199,17 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
             rule(ui);
             response
         }
+        Heading::Panel(text) => ui.label(Type::Heading.rich(ui, text).color(colors().text)),
+        Heading::Status(status) => {
+            let response = ui.label(
+                Type::Heading
+                    .rich(ui, format!("{} {}", status.icon, status.word))
+                    .color(status.color),
+            );
+            named(ui, &response, status.word);
+            response
+        }
+        Heading::Name(text) => ui.label(Type::Display.rich(ui, text).color(colors().text)),
     };
     if !in_row {
         space(ui, heading.below() - spacing);
@@ -475,6 +527,43 @@ mod tests {
         });
     }
 
+    /// `gap_to_next`: the whole distance between two items is one step, at the default item
+    /// spacing and at another one, down a column and along a line. `gap` leaves a step plus the
+    /// spacing.
+    #[test]
+    fn gap_to_next_leaves_exactly_one_step_whatever_the_spacing() {
+        for spacing in [6.0_f32, 8.0] {
+            for step in [Gap::S, Gap::L] {
+                for horizontal in [false, true] {
+                    let mut measured = None;
+                    run(|ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(spacing, spacing);
+                        let mut between = |ui: &mut Ui| {
+                            let first = ui.label("first").rect;
+                            gap_to_next(ui, step);
+                            let second = ui.label("second").rect;
+                            measured = Some(if horizontal {
+                                second.left() - first.right()
+                            } else {
+                                second.top() - first.bottom()
+                            });
+                        };
+                        if horizontal {
+                            ui.horizontal(|ui| between(ui));
+                        } else {
+                            between(ui);
+                        }
+                    });
+                    let distance = measured.expect("the labels were laid out");
+                    assert!(
+                        (distance - step.size()).abs() < 0.01,
+                        "{step:?} at spacing {spacing}, horizontal {horizontal}: {distance}"
+                    );
+                }
+            }
+        }
+    }
+
     /// N3: a heading adds its own space above it (none when it is first in its column), and the
     /// space above is more than the space below.
     #[test]
@@ -486,6 +575,13 @@ mod tests {
             },
             Heading::Label("Party"),
             Heading::Section("Actions"),
+            Heading::Panel("Short rest"),
+            Heading::Status(Status {
+                icon: icons::WARN,
+                word: "Hit points conflict",
+                color: colors().sync.conflict,
+            }),
+            Heading::Name("Kaya Brightwater"),
         ] {
             run(|ui| {
                 let top = ui.max_rect().top();
@@ -529,6 +625,74 @@ mod tests {
                 );
             });
         }
+        // M0413, M0041, M0042: each new role's type and colour; a status heading paints its
+        // icon first in its colour and is named by its word.
+        let ctx = Context::default();
+        crate::design::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let conflict = colors().sync.conflict;
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                heading(ui, Heading::Panel("Short rest"));
+                heading(
+                    ui,
+                    Heading::Status(Status {
+                        icon: icons::WARN,
+                        word: "Hit points conflict",
+                        color: conflict,
+                    }),
+                );
+                heading(ui, Heading::Name("Kaya Brightwater"));
+            });
+        });
+        let painted: Vec<(String, f32, egui::Color32)> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some((
+                    text.galley.text().to_owned(),
+                    text.galley.job.sections[0].format.font_id.size,
+                    text.galley.job.sections[0].format.color,
+                )),
+                _ => None,
+            })
+            .collect();
+        let find = |words: &str| {
+            painted
+                .iter()
+                .find(|(text, ..)| text == words)
+                .cloned()
+                .unwrap_or_else(|| panic!("{words:?} painted: {painted:?}"))
+        };
+        let status_words = format!("{} Hit points conflict", icons::WARN);
+        assert_eq!(
+            [
+                find("Short rest"),
+                find(&status_words),
+                find("Kaya Brightwater")
+            ]
+            .map(|(_, size, color)| (size, color)),
+            [
+                (Type::Heading.size(), colors().text),
+                (Type::Heading.size(), conflict),
+                (Type::Display.size(), colors().text),
+            ],
+            "m-p0-heading-roles: Panel, Status and Name in their type and colour"
+        );
+        let named = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .is_some_and(|update| {
+                update
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| node.label() == Some("Hit points conflict"))
+            });
+        assert!(
+            named,
+            "m-p0-heading-roles: the status heading is named by its word"
+        );
     }
 
     /// X2: a choice never takes more width than its column gives. In a 100 px column, a label

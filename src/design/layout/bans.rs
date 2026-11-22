@@ -98,7 +98,7 @@ const BUILDERS: [&str; 1] = ["Button"];
 
 /// The egui types whose banned functions are methods of a value (and the design's `Footer` and
 /// `AddFieldForm`, whose staged methods `legacy_kept` and `keys_only` are).
-const RECEIVERS: [&str; 9] = [
+const RECEIVERS: [&str; 10] = [
     "Footer",
     "AddFieldForm",
     "Ui",
@@ -108,6 +108,8 @@ const RECEIVERS: [&str; 9] = [
     "Areas",
     "UiBuilder",
     "TextEdit",
+    // Review of PR 730: a section's state draws through its methods (`show_body_unindented`).
+    "CollapsingState",
 ];
 
 /// Method names too common to count by name alone (`.id(…)` is on many builders). Clippy holds

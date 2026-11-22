@@ -1469,7 +1469,14 @@ impl CombatSync {
                     sync_heading(ui, name, &status, c.sync.conflict);
                 }
                 None => {
-                    ui.label(Type::Heading.rich(ui, status).color(c.sync.conflict));
+                    design::heading(
+                        ui,
+                        design::Heading::Status(design::Status {
+                            icon: design::icons::WARN,
+                            word: &format!("{} conflict", self.group_name(&key)),
+                            color: c.sync.conflict,
+                        }),
+                    );
                 }
             }
             if explanation {
@@ -1960,7 +1967,7 @@ impl CombatSync {
                         "D&D Beyond restores HP, hit dice, spell slots and resources by its own rules.",
                     ),
                 };
-                ui.label(Type::Heading.rich(ui, title).color(colors().text));
+                design::heading(ui, design::Heading::Panel(title));
                 let reset_max_hp_bonus = match &mut form {
                     RestForm::Short {
                         hit_dice,

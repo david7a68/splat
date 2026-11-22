@@ -1168,6 +1168,7 @@ impl ScrollColumn {
         let column = super::reveal::Column {
             key: ui.make_persistent_id(("design_reveal_column", self.id)),
             hosts: self.hosts_reveals,
+            area: ui.make_persistent_id(self.id),
         };
         let mut area = self.area();
         if let Some(offset) = super::reveal::take_offset(ui, column) {
@@ -1330,8 +1331,34 @@ impl ScrollColumn {
     }
 }
 
+/// How a [`sideways_scroll`] sizes itself and shows its bar. The default takes the whole width
+/// it is given and shows its bar while the content is wider.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Sideways {
+    fit: bool,
+    no_bar: bool,
+}
+
+impl Sideways {
+    /// As wide as its content, up to the width it is given (a reader's table).
+    pub fn fit(mut self) -> Self {
+        self.fit = true;
+        self
+    }
+
+    /// No bar while `hidden` (a table whose foot is out of view: its bar would float over the
+    /// content below the view's edge).
+    pub fn without_bar(mut self, hidden: bool) -> Self {
+        self.no_bar = hidden;
+        self
+    }
+}
+
 /// A sideways scroll for one wide table or strip: it never scrolls up and down, so it sits
-/// inside a page's own `ScrollColumn`.
+/// inside a page's own `ScrollColumn`. Its bar is solid: it has its own lane below the content
+/// and never covers it (a reader's table keeps its last row's text clear of the bar). Its offset is egui's, kept under its own id: a caller
+/// writes none (`id_salt` names whose content it is, so another document or surface has its
+/// own offset).
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
@@ -1339,12 +1366,23 @@ impl ScrollColumn {
 pub fn sideways_scroll<R>(
     ui: &mut Ui,
     id_salt: impl Hash,
+    view: Sideways,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> ScrollAreaOutput<R> {
-    egui::ScrollArea::horizontal()
-        .id_salt(Id::new(id_salt))
-        .auto_shrink([false, true])
-        .show(ui, add)
+    // The app's solid bar, whatever the caller's style: it takes its own lane.
+    ui.scope(|ui| {
+        ui.spacing_mut().scroll = theme::scroll_style();
+        egui::ScrollArea::horizontal()
+            .id_salt(Id::new(id_salt))
+            .auto_shrink([view.fit, true])
+            .scroll_bar_visibility(if view.no_bar {
+                egui::scroll_area::ScrollBarVisibility::AlwaysHidden
+            } else {
+                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+            })
+            .show(ui, add)
+    })
+    .inner
 }
 
 /// Fixed room for a text value that changes in place: as wide as the widest example in its
@@ -2074,7 +2112,13 @@ impl<'a> TitleLine<'a> {
                     false
                 }
                 None if matches!(self.actions[at].weight, TitleWeight::Link) => {
-                    super::title_link(ui, self.actions[at].word.as_str()).clicked()
+                    // Review of PR 730: a link keeps its hint, as the other forms do.
+                    let link = super::title_link(ui, self.actions[at].word.as_str());
+                    match self.actions[at].hint {
+                        Some(hint) => link.on_hover_text(hint),
+                        None => link,
+                    }
+                    .clicked()
                 }
                 None => self.actions[at].action().show(ui).clicked(),
             },

@@ -777,10 +777,6 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
 
 /// A result: its number and words, `Clear` at the line's end, and an offer for each encounter
 /// or group that it links.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Option<Act> {
     let planned = view.planned;
     let c = colors();
@@ -795,50 +791,64 @@ fn result(ui: &mut egui::Ui, label: &str, check: &Check, view: &View<'_>) -> Opt
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
             ui.set_width(width);
-            ui.add_space((Density::Read.control() - Type::Body.size()) / 2.0 - design::XS);
-            ui.add(
-                egui::Label::new(
-                    Type::Body
-                        .rich(ui, crate::sessions::plain_links(&check.words))
-                        .color(c.text),
-                )
-                .wrap(),
-            );
-            let mut names = crate::sessions::linked_names(&check.words);
-            names.retain(|name| planned(name).is_some());
-            // Each name keeps one place, one control high: its offer, then `In the plan`. The
-            // offer's result and its Undo are in the plan's message footer (round 27 FE7).
-            for name in names.into_iter().take(MOST_OFFERS) {
-                let size = egui::vec2(ui.available_width(), Density::Read.control());
-                let top = egui::Layout::top_down(egui::Align::Min);
-                ui.allocate_ui_with_layout(size, top, |ui| {
-                    ui.set_min_size(size);
-                    if planned(&name) == Some(true) {
-                        let line = egui::vec2(ui.available_width(), Density::Read.control());
-                        let left = egui::Layout::left_to_right(egui::Align::Center);
-                        ui.allocate_ui_with_layout(line, left, |ui| {
-                            design::status(
-                                ui,
-                                Status {
-                                    icon: icons::OK,
-                                    word: "In the plan",
-                                    color: c.document.saved,
-                                },
-                            );
+            // Layout 11c (M0547): the words' first line is centred on the row's line, as the
+            // label and Clear are: the column is placed by its rect, half the room the line
+            // leaves around the words' measured row below the row's top.
+            let font = Type::Body.font(ui);
+            let row = ui.fonts_mut(|fonts| fonts.row_height(&font));
+            let mut column = ui.available_rect_before_wrap();
+            column.min.y += ((Density::Read.control() - row) / 2.0).max(0.0);
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(column)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Body
+                                .rich(ui, crate::sessions::plain_links(&check.words))
+                                .color(c.text),
+                        )
+                        .wrap(),
+                    );
+                    let mut names = crate::sessions::linked_names(&check.words);
+                    names.retain(|name| planned(name).is_some());
+                    // Each name keeps one place, one control high: its offer, then `In the plan`. The
+                    // offer's result and its Undo are in the plan's message footer (round 27 FE7).
+                    for name in names.into_iter().take(MOST_OFFERS) {
+                        let size = egui::vec2(ui.available_width(), Density::Read.control());
+                        let top = egui::Layout::top_down(egui::Align::Min);
+                        ui.allocate_ui_with_layout(size, top, |ui| {
+                            ui.set_min_size(size);
+                            if planned(&name) == Some(true) {
+                                let line =
+                                    egui::vec2(ui.available_width(), Density::Read.control());
+                                let left = egui::Layout::left_to_right(egui::Align::Center);
+                                ui.allocate_ui_with_layout(line, left, |ui| {
+                                    design::status(
+                                        ui,
+                                        Status {
+                                            icon: icons::OK,
+                                            word: "In the plan",
+                                            color: c.document.saved,
+                                        },
+                                    );
+                                });
+                            } else if Action::quiet(&format!("Plan “{name}”"))
+                                .line_start()
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                            {
+                                act = Some(Act::Plan(Planned {
+                                    name: name.clone(),
+                                    check: (check.label.clone(), check.words.clone()),
+                                }));
+                            }
                         });
-                    } else if Action::quiet(&format!("Plan “{name}”"))
-                        .line_start()
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        act = Some(Act::Plan(Planned {
-                            name: name.clone(),
-                            check: (check.label.clone(), check.words.clone()),
-                        }));
                     }
-                });
-            }
+                },
+            );
         },
     );
     if clear.show(ui).clicked() {

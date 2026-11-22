@@ -124,6 +124,8 @@ use super::{layout::ScrollColumn, tokens::S};
 
 /// Composite columns and their edges, resolved before the pane paints (layout step 7).
 mod columns;
+/// A block laid out before paint by a design recipe (layout 11c).
+mod laid;
 /// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
 mod plan;
 /// The scroll region of an owned list body over its plan (layout step 3b).
@@ -132,7 +134,8 @@ mod region;
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
-pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Row};
+pub use laid::{Laid, LaidUi};
+pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Measured, Row};
 pub use region::{BlockRegion, Navigation, RegionState};
 
 /// What a pane's body is, for the footer's place.
@@ -1017,9 +1020,6 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     let before = ui
         .ctx()
         .data(|data| data.get_temp::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen));
-    if before == Some((focused, room, place)) {
-        return;
-    }
     let pointer = ui.input(|input| {
         let pointer = &input.pointer;
         pointer.any_down() || pointer.any_pressed() || pointer.any_released()
@@ -1031,11 +1031,24 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     // than the view (an editor's text) is never pulled to its top by a click.
     let cut = block
         .is_some_and(|block| !visible.contains_rect(block) && block.height() <= visible.height());
-    if pointer && cut {
+    let key = (focused, room, place);
+    // The pointer on the focused control itself: a click on it, also again on a field that
+    // already had the focus (layout PR 10c), whose caption the DM's wheel took out of view.
+    // The waiting reveal forgets the seen state, so the release reveals the block even with the
+    // same focus, room and place; a drag of the scroll bar elsewhere is not a click on it.
+    let on_it = own.is_some_and(|own| {
+        ui.input(|input| input.pointer.latest_pos())
+            .is_some_and(|at| own.contains(at))
+    });
+    if pointer && cut && (on_it || before != Some(key)) {
+        ui.ctx()
+            .data_mut(|data| data.remove::<(Option<Id>, Rect, Option<[i32; 2]>)>(seen));
         return;
     }
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(seen, (focused, room, place)));
+    if before == Some(key) {
+        return;
+    }
+    ui.ctx().data_mut(|data| data.insert_temp(seen, key));
     // The same control, a new room or a changed field: scroll only when it is not whole in view.
     // A field taller than the view that changed in the same room (an editor that grows as the DM
     // types) keeps its own caret follow: its top is not pulled into view.
@@ -1571,15 +1584,26 @@ pub(crate) fn hang_limit(ui: &Ui, span: Rect) -> f32 {
 
 /// The top of the lowest registered row that the viewport's bottom edge cuts (its top above the
 /// edge, its bottom below), unless that row starts at the viewport's top (one row taller than the
-/// room keeps the plain cut). Prose and notes are not rows: they keep a line cut.
+/// room keeps the plain cut). Prose and notes are not rows: they keep a line cut. Rows side by
+/// side (a sheet's two columns) overlap in height, so a cut moved up for one row can cross a row
+/// of the other column: the cut moves again, until no row crosses it (layout step 11a, Astra's
+/// P1 on PR 700). Each move goes up by more than half a pixel, so it ends.
 fn whole_row_cut(rows: &[Rect], viewport: Rect) -> Option<f32> {
-    let edge = viewport.bottom();
-    rows.iter()
-        .filter(|row| {
-            row.top() < edge - 0.5 && row.bottom() > edge + 0.5 && row.top() > viewport.top() + 0.5
-        })
-        .map(|row| row.top())
-        .reduce(f32::min)
+    let crossing = |edge: f32| {
+        rows.iter()
+            .filter(|row| {
+                row.top() < edge - 0.5
+                    && row.bottom() > edge + 0.5
+                    && row.top() > viewport.top() + 0.5
+            })
+            .map(|row| row.top())
+            .reduce(f32::min)
+    };
+    let mut cut = None;
+    while let Some(top) = crossing(cut.unwrap_or(viewport.bottom())) {
+        cut = Some(top);
+    }
+    cut
 }
 
 /// The registered rows that a `Fills` body's scroll column already cut, in this pass: a column
@@ -2050,8 +2074,9 @@ impl Footer<'_> {
         };
         let body_from = paint_at(ui);
         let widgets_from = widget_count(ui);
-        // An edge (the footer, the session banner) ends the body: no registered row is cut.
-        let edge = held || banner_below(ui.ctx());
+        // An edge (the footer, the session banner, or the body's own bottom where the pane asks
+        // for it, `Messages::rows_end_whole`) ends the body: no registered row is cut.
+        let edge = held || banner_below(ui.ctx()) || self.whole_rows;
         // What a layer opened from the body may use: the body's room, inside the clip.
         let usable = visible.intersect(body_room);
         let mut hold_facts = None;
@@ -2658,6 +2683,37 @@ mod hold_tests {
             "i9-click: after a click on the field, its caption {caption:?} is whole in the view \
              {viewport:?}"
         );
+        // Layout PR 10c: the same field, focused all along. The DM's wheel takes its caption out
+        // of view again (no reveal: the wheel is never pulled back); a second click on the field
+        // brings its whole field into view, with the same focus, room and place as before.
+        let focused = h.ctx.memory(|memory| memory.focused());
+        let up = caption.bottom() - viewport.top() + 2.0;
+        h.hover_at(viewport.center());
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -up),
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(4);
+        let cut = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Clip caption")
+            .rect();
+        assert!(
+            cut.top() < viewport.top() - 0.5 && h.ctx.memory(|memory| memory.focused()) == focused,
+            "i9-again-setup: the wheel cut the caption {cut:?} at the view's top {viewport:?}, \
+             the field kept its focus"
+        );
+        h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Clip caption")
+            .click();
+        h.run_steps(4);
+        let caption = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Clip caption")
+            .rect();
+        assert!(
+            caption.top() >= viewport.top() - 0.5,
+            "i9-again: a second click on the focused field brings its caption {caption:?} into \
+             the view {viewport:?}"
+        );
     }
 
     /// The DM's own wheel ends a waiting hold, and so does `from_top`: the change that comes
@@ -2801,14 +2857,18 @@ mod row_cut_tests {
     /// cut; and with no footer, the rows keep the plain cut of the scroll column. Rung 1 for a
     /// caller (the clip is the pane's; no caller sets one), this test for the part. Round 28, P2:
     /// the same in a `Body::Fills` pane for the rows of its scroll columns, two side by side with
-    /// rows of different heights: each column cuts at its own last whole row.
+    /// rows of different heights: each column cuts at its own last whole row. Layout step 11a
+    /// (SM5, AM16): with no footer line, a pane whose messages ask for it (`rows_end_whole`) cuts
+    /// at its own bottom as at a footer.
     #[test]
     fn a_footer_never_cuts_through_a_registered_row() {
         use crate::design::layout::ScrollColumn;
-        let mut hidden_by_the_cut = 0;
+        let (mut hidden_by_the_cut, mut hidden_when_asked) = (0, 0);
         let (mut columns_apart, mut plain_fills_cut) = (0, 0);
         for fills in [false, true] {
-            for message in [true, false] {
+            for (message, whole) in [(true, false), (false, false), (false, true)] {
+                // A whole-row cut: at the footer, or at the body's own bottom when asked.
+                let cuts = message || whole;
                 for height in (300..=360).step_by(7) {
                     let mut harness = egui_kittest::Harness::builder()
                         .with_size(vec2(600.0, height as f32))
@@ -2823,6 +2883,9 @@ mod row_cut_tests {
                                 messages.outcome(Outcome::Refused(crate::sentence!(
                                     "Save the draft first."
                                 )));
+                            }
+                            if whole {
+                                messages.rows_end_whole();
                             }
                             let rows = |ui: &mut Ui, name: &str, height: f32| {
                                 for at in 0..30 {
@@ -2921,19 +2984,23 @@ mod row_cut_tests {
                             pos2(view.right(), body_bottom),
                         ));
                         // With no footer the column keeps its plain cut (a row may show in part).
-                        for row in side.iter().filter(|_| message) {
+                        for row in side.iter().filter(|_| cuts) {
                             assert!(
                                 row.bottom() <= clip + 0.5 || row.top() >= clip - 0.5,
-                                "n12-cut: fills {fills}, message {message}, height {height}: row {row:?} cut at {clip}"
+                                "n12-cut: fills {fills}, message {message}, whole {whole}, height {height}: row {row:?} cut at {clip}"
                             );
                         }
-                        if message {
-                            hidden_by_the_cut += side
+                        if cuts {
+                            let hidden = side
                                 .iter()
                                 .filter(|row| {
                                     row.top() >= clip - 0.5 && row.top() < viewport.bottom()
                                 })
                                 .count();
+                            hidden_by_the_cut += hidden;
+                            if whole {
+                                hidden_when_asked += hidden;
+                            }
                             let hairline = output.shapes.iter().any(|clipped| {
                                 matches!(&clipped.shape, egui::Shape::LineSegment { points, .. }
                                     if (points[0].y - clip).abs() <= 1.0 && points[0].y == points[1].y
@@ -2941,7 +3008,7 @@ mod row_cut_tests {
                             });
                             assert!(
                                 hairline || clip >= viewport.bottom() - 0.5,
-                                "n12-hairline: fills {fills}, height {height}, cut {clip}"
+                                "n12-hairline: fills {fills}, whole {whole}, height {height}, cut {clip}"
                             );
                         } else if fills {
                             plain_fills_cut += side
@@ -2962,6 +3029,24 @@ mod row_cut_tests {
             }
         }
         assert!(hidden_by_the_cut > 0, "n12-reached: some height cut a row");
+        // Astra's P1 on PR 700, at 1920x1080: a wrapped Armor fact (1032..1068) in one column and
+        // Darkvision (1056..1074) in the other, the edge at 1072. Darkvision moves the cut to 1056,
+        // which crosses Armor: the cut moves again, to Armor's top. Both rows stay whole.
+        let view = Rect::from_min_max(pos2(0.0, 40.0), pos2(1200.0, 1072.0));
+        let (armor, darkvision) = (
+            Rect::from_min_max(pos2(0.0, 1032.0), pos2(600.0, 1068.0)),
+            Rect::from_min_max(pos2(600.0, 1056.0), pos2(1200.0, 1074.0)),
+        );
+        let cut = whole_row_cut(&[armor, darkvision], view);
+        assert_eq!(
+            cut,
+            Some(1032.0),
+            "n12-columns-fixed-point: a cut that moves for one column leaves the other whole"
+        );
+        assert!(
+            hidden_when_asked > 0,
+            "n12-rows-end-whole: with no footer line, `rows_end_whole` cut a row at the body's bottom"
+        );
         assert!(
             columns_apart > 0,
             "n12-columns: each column cuts at its own last whole row"

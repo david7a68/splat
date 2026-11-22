@@ -225,6 +225,9 @@ pub struct ProcessingSettings {
     /// A recording is live, so a new input cannot apply to it.
     pub recording_now: bool,
     pub focus_input: bool,
+    /// The Input took the focus from `focus_input`: while it keeps it, the Recording heading
+    /// belongs to its field's reveal. Ends when the Input loses the focus.
+    input_heading: bool,
     pub focus_speech_key: bool,
     started: bool,
     load_error: Option<String>,
@@ -253,6 +256,7 @@ impl Default for ProcessingSettings {
             config: Config::default(),
             recording_now: false,
             focus_input: false,
+            input_heading: false,
             focus_speech_key: false,
             started: false,
             load_error: None,
@@ -603,9 +607,6 @@ impl ProcessingSettings {
                 count: 0,
             },
         );
-        if self.focus_input {
-            heading.scroll_to_me(Some(egui::Align::TOP));
-        }
         match &self.probe {
             None => {
                 design::help(ui, "Looking for a recorder…");
@@ -632,6 +633,7 @@ impl ProcessingSettings {
                         .clone()
                         .filter(|name| !inputs.iter().any(|input| input.name == *name));
                     let mut changed = false;
+                    let mut focused = None;
                     design::small_field(ui, "Input", None, None, |ui| {
                         let shown =
                             design::Dropdown::new(INPUT, "Recording input")
@@ -647,8 +649,22 @@ impl ProcessingSettings {
                         changed = shown.changed;
                         if std::mem::take(&mut self.focus_input) {
                             shown.response.request_focus();
+                            self.input_heading = true;
                         }
+                        focused = Some(shown.response.has_focus());
                     });
+                    // Opened from elsewhere (a session's "Choose input"): the input takes the
+                    // focus, and the pane's one focus arbiter brings it into view with its
+                    // field and the Recording heading above it (layout PR 10c), no scroll of its
+                    // own. The heading stays part of the field's reveal in every pass while the
+                    // Input keeps that focus (a click that opened the tab makes the reveal wait
+                    // for its release).
+                    if focused == Some(false) {
+                        self.input_heading = false;
+                    }
+                    if self.input_heading {
+                        design::pane::reveal_with_focus(ui, heading.rect);
+                    }
                     if changed {
                         self.persist();
                     }
@@ -660,9 +676,10 @@ impl ProcessingSettings {
     }
 
     /// A one-line setting with its label above it. A value that blocks processing says so
-    /// directly below its own field in the field's help form (round 26 FM6), before the field's
-    /// own help; the field part then keeps `L` before the next label (N3), so the reason reads
-    /// as its own field's (round 27 FI7). The first reason's place is kept for the reveal.
+    /// directly below its own field as the field's warning (round 31 SR4/AR4: a missing value is
+    /// never drawn as help), before the field's own help; the field part then keeps `L` before
+    /// the next label (N3), so the reason reads as its own field's (round 27 FI7). The first
+    /// reason's place is kept for the reveal.
     fn setting_field(
         &mut self,
         ui: &mut egui::Ui,
@@ -679,27 +696,19 @@ impl ProcessingSettings {
             Text::LlmModel => &mut self.config.llm_model,
         };
         let blocks = value.trim().is_empty();
-        // With no help of its own, the reason is the field's help; else it comes first.
-        let (help, first) = match help {
-            None => (blocks.then_some(reason), None),
-            Some(help) => (Some(help), blocks.then_some(reason)),
-        };
-        let response = design::small_field(ui, label, help, None, |ui| {
-            let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
-            let response = id.single_line(ui, value, |edit| {
-                edit.desired_width(width)
-                    .min_size(egui::vec2(0.0, Density::Read.control()))
-                    .margin(egui::vec2(design::S, 5.0))
+        let response =
+            design::small_field_needing(ui, label, blocks.then_some(reason), help, |ui| {
+                let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
+                id.single_line(ui, value, |edit| {
+                    edit.desired_width(width)
+                        .min_size(egui::vec2(0.0, Density::Read.control()))
+                        .margin(egui::vec2(design::S, 5.0))
+                })
             });
-            if let Some(reason) = first {
-                design::help(ui, reason);
-            }
-            response
-        });
         design::named(ui, &response, name);
         if blocks {
             // The reason is the first line below the field.
-            let font = Type::Small.font(ui);
+            let font = Type::Body.font(ui);
             let line = ui.fonts_mut(|fonts| fonts.row_height(&font));
             let below = egui::Rect::from_min_size(
                 response.rect.left_bottom(),

@@ -332,8 +332,7 @@
     ["N4/quiet-action-line-start","25-marked-transcript","1920x1080","Button \"Earlier part\"",1],
     ["N4/quiet-action-line-start","25-marked-transcript","960x640","Button \"Earlier part\"",1],
     ["N4/quiet-action-line-start","27-recording-part-open","1200x800","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","27-recording-part-open","960x640","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","38-input-during-recording","960x640","Button \"Remove speech key (OpenAI): Speech API key\"",1]
+    ["N4/quiet-action-line-start","27-recording-part-open","960x640","Button \"Earlier part\"",1]
   ],
   "settings": [
     ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],
@@ -344,11 +343,12 @@
     ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Add\"",1]
   ],
   "travel-checks": [
-    ["G1b/pressed-control-moved","06-travel-checks-timeline","960x640","Button \"Travel · 1 day · Session 1\"",1],
-    ["G1b/pressed-control-moved","10-travel-checks-road-fight","960x640","Button \"Shrine of Cinders · Fight · Round 1 · Session 1 · Day 2 of Travel\"",1],
-    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Journey B\"",1],
-    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Travel\"",1],
-    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1]
+    ["G1b/pressed-control-moved","07-travel-checks-timeline","960x640","Button \"Travel · 1 day · Session 1\"",1],
+    ["G1b/pressed-control-moved","11-travel-checks-road-fight","960x640","Button \"Shrine of Cinders · Fight · Round 1 · Session 1 · Day 2 of Travel\"",1],
+    ["G3/far-action","06-travel-checks-table-menu","1920x1080","Button \"Add to notes: Travel\"",1],
+    ["G3/far-action","09-travel-checks-road-day","1920x1080","Button \"Add to notes: Journey B\"",1],
+    ["G3/far-action","09-travel-checks-road-day","1920x1080","Button \"Add to notes: Travel\"",1],
+    ["G3/far-action","09-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1]
   ],
   "travel-checks-plan": [
     ["G3/far-action","04-plan-answer-in-session-plan","1920x1080","Button \"Add to notes: Ford crossing\"",1],

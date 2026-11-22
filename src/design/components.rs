@@ -1762,7 +1762,21 @@ pub fn field<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    field_label(ui, label, Type::Small, help, error, add)
+    field_label(ui, label, Type::Small, (None, help, error), add)
+}
+
+/// A form field whose value something needs now (layout PR 10c, round 31 SR4/AR4): `needs`, when
+/// given, is what the DM must enter, drawn directly below the control as a warning (its icon in
+/// the warning colour, then the words), before the field's own `help`. Advice stays help; a
+/// missing value is never drawn as help. The field block (`field_label`) holds the warning too.
+pub fn small_field_needing<R>(
+    ui: &mut Ui,
+    label: &str,
+    needs: Option<&str>,
+    help: Option<&str>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    field_label(ui, label, Type::Small, (needs, help, None), add)
 }
 
 /// A form field with the same sentence-case label as `field`.
@@ -1773,7 +1787,7 @@ pub fn small_field<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    field_label(ui, label, Type::Small, help, error, add)
+    field_label(ui, label, Type::Small, (None, help, error), add)
 }
 
 /// A field block (layout PR 10): its caption, its control, its help and its error. A focused
@@ -1783,8 +1797,7 @@ fn field_label<R>(
     ui: &mut Ui,
     label: &str,
     role: Type,
-    help: Option<&str>,
-    error: Option<&str>,
+    (warning, help, error): (Option<&str>, Option<&str>, Option<&str>),
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
     let top = ui.cursor().top();
@@ -1795,6 +1808,7 @@ fn field_label<R>(
     };
     let first = count(ui);
     field_caption(ui, label, role);
+    let controls = count(ui);
     // The block's top while its control draws (`field_top`); the field around it, if any, after.
     let pass = ui.ctx().cumulative_pass_nr();
     let outer = ui.ctx().data_mut(|data| {
@@ -1808,7 +1822,26 @@ fn field_label<R>(
     ui.ctx()
         .data_mut(|data| data.insert_temp(Id::new(FIELD_TOP), outer));
     let last = count(ui);
-    let bottom = field_feedback(ui, help, error);
+    let bottom = field_feedback(ui, warning, help, error);
+    // A warning is the field's own: its controls carry it as their accessible description, so a
+    // screen reader says it when the empty field takes the focus (layout PR 10d). Only while a
+    // warning shows: no work for a field without one.
+    if let Some(warning) = warning {
+        let ids: Vec<Id> = ui.ctx().viewport(|viewport| {
+            viewport
+                .this_pass
+                .widgets
+                .get_layer(layer)
+                .skip(controls)
+                .take(last.saturating_sub(controls))
+                .map(|widget| widget.id)
+                .collect()
+        });
+        for id in ids {
+            ui.ctx()
+                .accesskit_node_builder(id, |node| node.set_description(warning));
+        }
+    }
     // Only a focused control of this block, or the control whose list is open: one or two
     // lookups, nothing that grows with the form.
     let inside = |id: Id| {
@@ -1851,8 +1884,16 @@ fn field_caption(ui: &mut Ui, label: &str, role: Type) {
 /// caller adds no space after a field.
 ///
 /// Returns the block's bottom: its last line of help or error, else its control's.
-fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) -> f32 {
+fn field_feedback(
+    ui: &mut Ui,
+    warning: Option<&str>,
+    help: Option<&str>,
+    error: Option<&str>,
+) -> f32 {
     let mut last = None;
+    if let Some(warning) = warning {
+        last = Some(tone_message(ui, Tone::Warning, warning).rect.bottom());
+    }
     if let Some(text) = help {
         last = Some(self::help(ui, text).rect.bottom());
     }
@@ -1895,7 +1936,7 @@ fn text_field_label(
     help: Option<&str>,
     error: Option<&str>,
 ) -> Response {
-    field_label(ui, label, role, help, error, |ui| {
+    field_label(ui, label, role, (None, help, error), |ui| {
         let width = ui.available_width().min(FORM_WIDTH) - 2.0 * S;
         let response = ui.add(
             egui::TextEdit::singleline(text)
@@ -2596,7 +2637,7 @@ fn keys_field<T>(
 
 /// A state as an icon, a word and a colour. Colour is never the only signal. A status whose
 /// icon and word differ in colour is a `KindStatus` (`design::status`).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Status<'a> {
     pub icon: &'a str,
     pub word: &'a str,
@@ -3910,6 +3951,9 @@ pub struct Footer<'a> {
     /// A typed footer's lines (`outcome::Messages`): data, drawn in the order of the footer's
     /// retained plan (layout PR 2b).
     typed: Option<Box<dyn FooterLines + 'a>>,
+    /// The body's own bottom is an edge as the footer is: its scroll column ends at its last
+    /// whole registered row there too, with the hairline (`outcome::Messages::rows_end_whole`).
+    pub(super) whole_rows: bool,
 }
 
 /// A typed footer's lines, as the pane places and draws them (`outcome::Messages`).
@@ -3944,6 +3988,7 @@ impl<'a> Footer<'a> {
             width,
             messages: Vec::new(),
             typed: None,
+            whole_rows: false,
         }
     }
 
@@ -3954,6 +3999,7 @@ impl<'a> Footer<'a> {
             width,
             messages: Vec::new(),
             typed: Some(lines),
+            whole_rows: false,
         }
     }
 
@@ -4847,6 +4893,35 @@ impl<H: std::hash::Hash> Section<H> {
         let response = header.show(ui, add);
         with_expanded(ui, response)
     }
+}
+
+/// A section whose header is a row the caller draws, not a title: a list whose rows open in
+/// place (a sheet's spells, each a fixed row with its name and its facts). `header` draws the row
+/// for its state (`open`, for its caret) and gives back its response. The row says whether it is
+/// open to a screen reader, a click on it opens or closes it, and the body opens under it, at
+/// the row's left edge. It starts closed; its state is kept under `id`. The body's value, while
+/// it is open. Review of PR 730: the one other way to open a section; `clippy.toml` refuses
+/// egui's `CollapsingState` drawing and `Ui::collapsing` outside the design system.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+pub fn section_row<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    header: impl FnOnce(&mut Ui, bool) -> Response,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> Option<R> {
+    let id = ui.make_persistent_id(id);
+    let mut state =
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+    let row = header(ui, state.is_open());
+    ui.ctx()
+        .accesskit_node_builder(row.id, |node| node.set_expanded(state.is_open()));
+    if row.clicked() {
+        state.toggle(ui);
+    }
+    state.show_body_unindented(ui, add).map(|body| body.inner)
 }
 
 /// A collapsing section ([`Section`]) under its title.
@@ -6477,11 +6552,13 @@ mod tests {
     /// and the state follows a click on its own header only.
     #[test]
     fn a_section_says_whether_it_is_open() {
+        let notes = std::rc::Rc::new(std::cell::Cell::new("3 notes"));
+        let title = notes.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 300.0))
-            .build_ui(|ui| {
+            .build_ui(move |ui| {
                 let _ = section(ui, "Details", |ui| ui.label("Inside details"));
-                let _ = section_with_id(ui, "notes", "3 notes", |ui| ui.label("Inside notes"));
+                let _ = section_with_id(ui, "notes", title.get(), |ui| ui.label("Inside notes"));
                 let _ = quiet_section(ui, "Technical", |ui| ui.label("Inside technical"));
                 // A section its owner opens (a History run read from a link).
                 let _ = section_opened(ui, "runs", "2 runs", Some(true), |ui| {
@@ -6535,6 +6612,22 @@ mod tests {
             expanded(&harness)[4],
             Some(false),
             "m-p0-section-default-open: the DM closes a section open by default, and it stays closed"
+        );
+        // Review of PR 730: a section with an id keeps its state when its count changes (a
+        // repair in Campaign content's issues).
+        notes.set("2 notes");
+        harness.run_steps(3);
+        assert_eq!(
+            {
+                use egui_kittest::kittest::{NodeT, Queryable};
+                harness
+                    .get_by_label("2 notes")
+                    .accesskit_node()
+                    .data()
+                    .is_expanded()
+            },
+            Some(true),
+            "m-p0-section-id: the open section stays open under its new count"
         );
         assert!(
             {
@@ -6654,6 +6747,14 @@ mod tests {
                             ui.label("second control")
                         });
                         field(ui, "Last label", None, None, |ui| ui.label("third control"));
+                        // Layout PR 10d: a field's warning is its control's description.
+                        small_field_needing(
+                            ui,
+                            "Needed label",
+                            Some("Enter the address."),
+                            None,
+                            |ui| ui.button("Needed control"),
+                        );
                     } else {
                         help(ui, HELP);
                     }
@@ -6691,6 +6792,17 @@ mod tests {
                 assert!(
                     (gap - L).abs() <= 0.5,
                     "n3-error: {gap} from error to label"
+                );
+                use egui_kittest::kittest::{NodeT, Queryable};
+                let description = harness
+                    .get_by_label("Needed control")
+                    .accesskit_node()
+                    .description()
+                    .map(|words| words.to_string());
+                assert_eq!(
+                    description.as_deref(),
+                    Some("Enter the address."),
+                    "warning-described: the control says its field's warning"
                 );
             }
         }
