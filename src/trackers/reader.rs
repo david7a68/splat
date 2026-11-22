@@ -12,21 +12,23 @@ impl crate::world::TrackerUi for Reader<'_> {
         history::show(ui, self.0, note);
     }
 
-    fn history_footer(
+    fn history_footer<'f>(
         &self,
         note: Uuid,
-        messages: &mut crate::design::outcome::Messages<'_, crate::world::FooterAct>,
+        frame: &'f crate::design::outcome::PaneFrame,
+        messages: &mut crate::design::outcome::Messages<'f, crate::world::FooterAct>,
     ) {
         history::footer(
             self.0,
             note,
+            frame,
             messages,
             crate::world::said,
             crate::world::FooterAct::Trackers,
         );
     }
 
-    fn undo_remove(&mut self) {
-        self.0.undo_remove();
+    fn undo_remove(&mut self, ticket: Option<crate::design::results::Ticket>) {
+        self.0.undo_remove(ticket);
     }
 }
