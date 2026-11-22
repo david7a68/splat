@@ -235,6 +235,40 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
             format!("At {size:?}, COMBAT LOG is L below the last Final state row: {gap:?}"),
         );
     }
+    // M0194: in a window too short for the run below its row, Open moves the list's column
+    // (`reveal::bring_into_view`): the run's row and its Read-only line come whole into view.
+    let whole = d.aside(|d| {
+        d.act_at_size((960.0, 420.0), |d| {
+            let close = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Close the run of "))?
+                .name;
+            d.click(&close);
+            d.click(&close.replacen("Close", "Open", 1));
+            d.expect("Read-only");
+            let row = d.nodes().into_iter().find(|node| node.name == close)?;
+            let mut read_only = None;
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text.ends_with("Read-only") {
+                    let painted = text.visual_bounding_rect();
+                    read_only = Some(
+                        clip.top() <= painted.top() + 0.5
+                            && painted.bottom() <= clip.bottom() + 0.5,
+                    );
+                }
+            });
+            Some((
+                row.in_view() && (row.shown.height() - row.rect.height()).abs() < 1.0,
+                read_only,
+            ))
+        })
+    });
+    d.observe(
+        "M0194-history-opened-run-whole",
+        whole == Some((true, Some(true))),
+        format!("At 960x420, (the row whole, the Read-only line whole): {whole:?}"),
+    );
     // The steps after this see the run as opened at the scenario's own size.
     d.aside(|d| {
         if let Some(close) = d

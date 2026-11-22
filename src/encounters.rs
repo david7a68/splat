@@ -6814,16 +6814,19 @@ impl Encounters {
             ledger.history,
             &mut action,
         );
-        // R2 (FJ2): when a run opens in History, the list scrolls once, by the least distance
-        // that brings the run's row, its Read-only line and its whole Final state into view
-        // (egui's least scroll); a run already whole in view moves nothing, and only a run
-        // taller than the view goes to its top. The row's gap is where the list paints
-        // `clip_rect_margin` above its top, so no letter of the line above shows cut (X37).
+        // R2 (FJ2): when a run opens in History, the list's column moves once, by the least
+        // distance that brings the run's row, its Read-only line and its whole Final state into
+        // view (`reveal::bring_into_view`, M0194): a run already whole in view moves nothing, and
+        // only a run taller than the view goes to its top. The open can come from another page
+        // (a saved run opened from the Timeline or a session), so it is the column's own move,
+        // not a press's reveal. The row's gap is where the list paints `clip_rect_margin` above
+        // its top, so no letter of the line above shows cut (X37).
         if reveal && let Some(span) = opened {
             let top = span.min + ui.visuals().clip_rect_margin;
-            ui.scroll_to_rect(
+            design::reveal::bring_into_view(
+                ui,
                 egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=span.max.max(top)),
-                None,
+                design::reveal::JumpTo::ListedRow,
             );
         }
         action

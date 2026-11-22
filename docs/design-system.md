@@ -172,18 +172,24 @@ request lands after a reveal ended. The DM's own wheel and drag scroll as before
 that hosts reveals (R34, R44, R46); the Settings pane's column (the import form) is the one today.
 A column that moves by itself with no press in it does so only through a typed jump, `reveal::jump(ui, top,
 JumpTo::…)` (ruling M18, layout PR 10c), from a closed list: `LinkedHeading` (a reader opened at a linked section,
-its heading at the view's top; the World and Lookup reader and the Library reader). The column writes the jump as its
+its heading at the view's top; the World and Lookup reader and the Library reader) and `ListedRow` (a list's row
+the page opened at, with the row before it at the view's top; the Timeline's list, M0556). The column writes the jump as its
 own offset at its next pass, where it writes a reveal's; the DM's own input in between drops it, and so does the DM's scroll that is still going on (a drag of the column, the wheel's smooth rest, a fling after a drag). No raw
 `scroll_to_cursor` or `scroll_to_rect` does this.
 Its least-scroll form, `reveal::bring_into_view(ui, rect, JumpTo::…)` (M-P0.25), keeps a whole control in view with
 no press: nothing when it is whole in view; else its nearer edge at the view's edge, and its top at the view's top
 when it is taller than the view. `OpenMenuControl` is a list row's `⋯` whose menu is open when its pane shrinks
 (the Encounters lists, M0259): the button comes back, so the menu does not hang from a control the DM cannot see.
+`ListedRow` here is History's opened run (M0194): its row, its Read-only line and its Final state come whole into
+view, also when the run was opened from another page.
 `CheckResult` is a journey's check whose result an act just wrote (a roll, an entered number; the Timeline
 detail, M0546): its line comes whole into view. The Timeline detail's form scrolls in its own pane's column, its
 header drawn before the pane (M0559): wide, a pane with no footer (its results stay in the list's footer); narrow,
-the pane that holds the open event's footer. Another event, a link or a changed filter opens the form at its top
-(`ContentScroll::from_top`, M0560).
+the pane that holds the open event's footer. Another event, a link or the page opened again opens the form at
+its top (`ContentScroll::from_top`, M0560); a filter or a search changes only the list, so the form keeps its place.
+While the header leaves the form less than one control row, the header scrolls with the form. A request for the
+keyboard from another page needs no reveal of its own: the Settings sign-in field takes the focus when it draws, and
+its pane's focus arbiter brings it whole into view by the least scroll (M0541).
 A retry that would move a column by itself ends on any scroll of the DM's in it (`reveal::dm_scrolls`: a wheel over it,
 a press or drag that started on its content or its bar, a scroll key), so the column stays where the DM leaves it (the
 row menu's bring-back, review of PR 770).
