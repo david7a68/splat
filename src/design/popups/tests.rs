@@ -1410,6 +1410,11 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
         let ctx = context();
         let picked = Cell::new(None::<&str>);
         let placed = Cell::new(Rect::NOTHING);
+        let popup = Cell::new(None::<egui::Id>);
+        // Review of PR 759 (P1): a real wrapped-choice submenu, as the Filter's Challenge.
+        const RATINGS: [&str; 12] = [
+            "0", "1/8", "1/4", "1/2", "1", "2", "3", "4", "5", "10", "20", "30",
+        ];
         let draw = |events| {
             frame(&ctx, size, events, |ui| {
                 let column = Rect::from_min_size(
@@ -1423,6 +1428,7 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
                         .layout(Layout::top_down(Align::Min)),
                 );
                 let filter = child.button("Filter creatures");
+                popup.set(Some(egui::Popup::default_response_id(&filter)));
                 crate::design::menu_popup(&child, &filter)
                     .within(column)
                     .show_submenus(|ui, submenus| {
@@ -1430,8 +1436,21 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
                             ui,
                             "facts",
                             120.0,
-                            &["Habitat", "Type", "Size"],
+                            &["Habitat", "Type", "Size", "Challenge"],
                             |ui, at| {
+                                if at == 3 {
+                                    ui.horizontal_wrapped(|ui| {
+                                        for rating in RATINGS {
+                                            let choice = crate::design::choice_wrapped(
+                                                ui, false, rating, None,
+                                            );
+                                            if choice.clicked() {
+                                                picked.set(Some(rating));
+                                            }
+                                        }
+                                    });
+                                    return;
+                                }
                                 let kinds: &[&'static str] = match at {
                                     0 => &["Underdark", "Forest"],
                                     1 => &["Aberration", "Beast", "Celestial"],
@@ -1509,6 +1528,119 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
             picked.get(),
             Some("Huge"),
             "m0051-submenus: the choice at {width}"
+        );
+        // Review of PR 759 (P1): the Challenge submenu's wrapped choices widen the menu to the
+        // submenus' block, not to one rating: every rating lies across the menu's width (the
+        // menu scrolls the lower ones), and the rightmost one in view is pressed.
+        let challenge = bounds(&draw(Vec::new()), "Challenge").expect("the Challenge row");
+        draw(click(challenge.center()));
+        let rated = draw(Vec::new());
+        let menu = ctx
+            .memory(|memory| popup.get().and_then(|id| memory.area_rect(id)))
+            .expect("the menu's area");
+        let ratings: Vec<(&str, Rect)> = RATINGS
+            .iter()
+            .map(|rating| {
+                (
+                    *rating,
+                    bounds(&rated, rating).expect("each rating is drawn"),
+                )
+            })
+            .collect();
+        assert!(
+            menu.width() >= 120.0
+                && ratings.iter().all(|(_, rect)| {
+                    rect.left() >= menu.left() - 0.5 && rect.right() <= menu.right() + 0.5
+                }),
+            "m0051-submenus-block: at {width}, the menu {menu:?} is as wide as every rating: \
+             {ratings:?}"
+        );
+        let (rightmost, at) = ratings
+            .iter()
+            .filter(|(_, rect)| rect.bottom() <= menu.bottom())
+            .max_by(|a, b| a.1.right().total_cmp(&b.1.right()))
+            .copied()
+            .expect("a rating in view");
+        draw(click(at.center()));
+        draw(Vec::new());
+        assert_eq!(
+            picked.get(),
+            Some(rightmost),
+            "m0051-submenus-block: the rightmost rating in view at {width}"
+        );
+        // Review of PR 759 (P2): with the keyboard on a row, Right opens it and Left closes it;
+        // Escape closes the innermost open submenu (the one with the keyboard, else the last
+        // opened) and leaves the menu open, and closes the menu only when none is open.
+        let key = |key: egui::Key| Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let shown = draw(Vec::new());
+        let habitat = shown
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("Habitat"))
+            .map(|(id, _)| *id)
+            .expect("the Habitat row's node");
+        draw(vec![Event::AccessKitActionRequest(
+            egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Focus,
+                target: habitat,
+                data: None,
+            },
+        )]);
+        draw(vec![key(egui::Key::ArrowRight)]);
+        let right = draw(Vec::new());
+        assert_eq!(
+            expanded(&right, "Habitat"),
+            Some(true),
+            "m0051-submenus-keys: at {width}, Right opens the row with the keyboard"
+        );
+        draw(vec![key(egui::Key::ArrowLeft)]);
+        let left = draw(Vec::new());
+        assert_eq!(
+            expanded(&left, "Habitat"),
+            Some(false),
+            "m0051-submenus-keys: at {width}, Left closes it"
+        );
+        draw(vec![key(egui::Key::ArrowRight)]);
+        draw(Vec::new());
+        draw(vec![key(egui::Key::Escape)]);
+        let escaped = draw(Vec::new());
+        assert_eq!(
+            [
+                expanded(&escaped, "Habitat"),
+                expanded(&escaped, "Type"),
+                expanded(&escaped, "Size"),
+                expanded(&escaped, "Challenge")
+            ],
+            [Some(false), Some(true), Some(true), Some(true)],
+            "m0051-submenus-keys: at {width}, Escape closes the submenu with the keyboard, and \
+             the menu stays open"
+        );
+        for _ in 0..3 {
+            draw(vec![key(egui::Key::Escape)]);
+            draw(Vec::new());
+        }
+        let none_open = draw(Vec::new());
+        assert!(
+            ["Type", "Size", "Challenge"]
+                .iter()
+                .all(|row| expanded(&none_open, row) == Some(false)),
+            "m0051-submenus-keys: at {width}, each Escape closed one more submenu"
+        );
+        draw(vec![key(egui::Key::Escape)]);
+        let closed = draw(Vec::new());
+        assert!(
+            bounds(&closed, "Habitat").is_none(),
+            "m0051-submenus-keys: at {width}, with none open, Escape closes the menu"
         );
     }
 }

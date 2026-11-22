@@ -5160,8 +5160,30 @@ pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
     mut contents: impl FnMut(&mut Ui, usize),
 ) {
     let key = ui.make_persistent_id(id);
-    let mut open: std::collections::BTreeSet<usize> =
-        ui.data(|data| data.get_temp(key)).unwrap_or_default();
+    let mut state: SubmenuState = ui.data(|data| data.get_temp(key)).unwrap_or_default();
+    // Review of PR 759: Escape closes the innermost open submenu first (the one that held the
+    // keyboard in the last frame, else the last opened) and gives the keyboard to its row; the
+    // menu closes on an Escape only when no submenu is open. egui drops the focus on an Escape
+    // before the menu draws, so the last frame's focus says where the keyboard was.
+    if !state.open.is_empty() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+        let held = state.focus.and_then(|focus| {
+            state.open.iter().rev().copied().find(|at| {
+                state.rows.get(at) == Some(&focus)
+                    || state.blocks.get(at).is_some_and(|block| {
+                        ui.ctx()
+                            .read_response(focus)
+                            .is_some_and(|response| block.contains_rect(response.rect))
+                    })
+            })
+        });
+        if let Some(at) = held.or_else(|| state.open.last().copied()) {
+            state.open.retain(|open| *open != at);
+            ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+            if let Some(row) = state.rows.get(&at) {
+                ui.memory_mut(|memory| memory.request_focus(*row));
+            }
+        }
+    }
     // A row: its padding, its word and its caret, as `menu_submenu`'s.
     let font = Type::Strong.font(ui);
     let rows = words
@@ -5170,56 +5192,95 @@ pub(in crate::design) fn menu_submenus<W: AsRef<str>>(
             S + number_width(ui, word.as_ref(), &font) + ui.spacing().item_spacing.x + L + S
         })
         .fold(0.0, f32::max);
-    ui.set_width((width + S).max(rows) + super::layout::lane_width());
+    let full = (width + S).max(rows) + super::layout::lane_width();
+    ui.set_width(full);
     let room = ui.ctx().content_rect().height() * 0.6;
-    super::layout::ScrollColumn::new(key)
-        .max_height(room)
-        .fit_height()
-        .show(ui, |ui| {
-            for (at, word) in words.iter().enumerate() {
-                submenu_row(ui, &mut open, at, word.as_ref(), &mut contents);
-            }
-        });
-    ui.data_mut(|data| data.insert_temp(key, open));
+    // Review of PR 759 (P1): the rows and the open submenus are one block of the menu, `full`
+    // wide (wrapped choices and the scroll lane included): the choices in it note no width of
+    // their own, so the menu is as wide as the block, not as its widest single choice.
+    super::layout::menu_block(ui, full, |ui| {
+        super::layout::ScrollColumn::new(key)
+            .max_height(room)
+            .fit_height()
+            .show(ui, |ui| {
+                for (at, word) in words.iter().enumerate() {
+                    submenu_row(ui, &mut state, at, word.as_ref(), &mut contents);
+                }
+            });
+    });
+    state.focus = ui.memory(|memory| memory.focused());
+    ui.data_mut(|data| data.insert_temp(key, state));
 }
 
-/// One row of `menu_submenus` and, while it is open, its choices under it.
+/// What `menu_submenus` keeps between frames: the open submenus in the order they opened, and,
+/// from the last frame, each row's id, each open submenu's block and the focused widget.
+#[derive(Clone, Default)]
+struct SubmenuState {
+    open: Vec<usize>,
+    rows: std::collections::HashMap<usize, Id>,
+    blocks: std::collections::HashMap<usize, Rect>,
+    focus: Option<Id>,
+}
+
+/// One row of `menu_submenus` and, while it is open, its choices under it. A click, Space or
+/// Enter opens or closes it; with the keyboard on it, Right opens it and Left closes it.
 fn submenu_row(
     ui: &mut Ui,
-    open: &mut std::collections::BTreeSet<usize>,
+    state: &mut SubmenuState,
     at: usize,
     word: &str,
     contents: &mut impl FnMut(&mut Ui, usize),
 ) {
-    {
-        let here = open.contains(&at);
-        let row = ui
-            .scope(|ui| {
-                ui.spacing_mut().button_padding = vec2(S, XS);
-                ui.spacing_mut().interact_size.y = Density::Read.control();
-                if here {
-                    ui.style_mut().visuals.widgets.inactive = ui.style().visuals.widgets.open;
-                }
-                let caret = if here { icons::DOWN } else { icons::NEXT };
-                ui.add(
-                    egui::Button::new(Type::Strong.rich(ui, word))
-                        .right_text(Type::Body.rich(ui, caret).color(colors().muted)),
-                )
-            })
-            .inner;
-        // Its name is its word, without the caret; its state is open or closed.
-        named(ui, &row, word);
-        ui.ctx()
-            .accesskit_node_builder(row.id, |node| node.set_expanded(here));
-        if row.clicked() && !open.remove(&at) {
-            open.insert(at);
+    let here = state.open.contains(&at);
+    let row = ui
+        .scope(|ui| {
+            ui.spacing_mut().button_padding = vec2(S, XS);
+            ui.spacing_mut().interact_size.y = Density::Read.control();
+            if here {
+                ui.style_mut().visuals.widgets.inactive = ui.style().visuals.widgets.open;
+            }
+            let caret = if here { icons::DOWN } else { icons::NEXT };
+            ui.add(
+                egui::Button::new(Type::Strong.rich(ui, word))
+                    .right_text(Type::Body.rich(ui, caret).color(colors().muted)),
+            )
+        })
+        .inner;
+    // Its name is its word, without the caret; its state is open or closed.
+    named(ui, &row, word);
+    ui.ctx()
+        .accesskit_node_builder(row.id, |node| node.set_expanded(here));
+    state.rows.insert(at, row.id);
+    // An arrow the row takes is its own: egui read it as a focus move before the menu drew, so
+    // the row cancels that move and keeps the keyboard.
+    let key = |key| {
+        let taken = ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, key));
+        if taken {
+            ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
         }
-        if open.contains(&at) {
-            ui.horizontal_top(|ui| {
+        taken
+    };
+    let toggle = row.clicked()
+        || (row.has_focus() && !here && key(egui::Key::ArrowRight))
+        || (row.has_focus() && here && key(egui::Key::ArrowLeft));
+    if toggle {
+        if here {
+            state.open.retain(|open| *open != at);
+        } else {
+            state.open.push(at);
+        }
+    }
+    if state.open.contains(&at) {
+        let block = ui
+            .horizontal_top(|ui| {
                 space(ui, S);
                 ui.vertical(|ui| contents(ui, at));
-            });
-        }
+            })
+            .response
+            .rect;
+        state.blocks.insert(at, block);
+    } else {
+        state.blocks.remove(&at);
     }
 }
 

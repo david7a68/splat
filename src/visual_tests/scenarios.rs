@@ -2256,7 +2256,9 @@ pub mod creature_filter {
         d.click("Filter Habitat: Underdark");
         d.click_starting("Type");
         d.click("Filter Type: Aberration");
-        d.press(Key::Escape);
+        // Filter again closes the menu in one act (review of PR 759: Escape now closes the open
+        // facts first, one per press, and the menu only when none is open).
+        d.click(FILTER);
         d.expect(UNDERDARK);
         d.expect(ABERRATION);
         d.expect("MATCHES 9");

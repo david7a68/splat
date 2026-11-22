@@ -4570,6 +4570,20 @@ fn menu_measure_id() -> Id {
     Id::new("splat_menu_measure")
 }
 
+/// Draw `add` as one block of the menu being drawn, `width` wide (a menu's submenus, with their
+/// wrapped choices and their scroll lane, M0051): the choices in it note no width of their own,
+/// and the block notes its whole width, so the menu is as wide as the block (review of PR 759).
+pub(super) fn menu_block<R>(ui: &mut Ui, width: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let outer = ui.data_mut(|data| data.remove_temp::<MenuMeasure>(menu_measure_id()));
+    let inner = add(ui);
+    if let Some(mut outer) = outer {
+        outer.widest = outer.widest.max(width);
+        outer.any = true;
+        ui.data_mut(|data| data.insert_temp(menu_measure_id(), outer));
+    }
+    inner
+}
+
 /// A choice notes its words' width (`natural`) for the menu it is drawn in, if any.
 pub(super) fn note_choice_width(ui: &Ui, natural: f32) {
     ui.data_mut(|data| {
