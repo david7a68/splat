@@ -349,142 +349,157 @@ impl<'s> BlockRegion<'s> {
             let (top, end) = plan.span(at);
             Rect::from_min_size(rect.min + vec2(0.0, top), vec2(width, end - top))
         };
-        if !plan.measured() {
-            let mut drawn = 0..0;
-            for at in 0..plan.len() {
+        // Every block drawn whole is registered as a row (the pane's whole-row cut, and the
+        // gate's row checks), in both bodies: a measured body's too (layout 11c A2c-3).
+        let mut registered = Vec::new();
+        let drawn = 'body: {
+            if !plan.measured() {
+                let mut drawn = 0..0;
+                for at in 0..plan.len() {
+                    let block_rect = place(plan, at);
+                    if !ui.is_rect_visible(block_rect) {
+                        continue;
+                    }
+                    if drawn.is_empty() {
+                        drawn = at..at;
+                    }
+                    drawn.end = at + 1;
+                    let mut child =
+                        ui.new_child(UiBuilder::new().id_salt(("block", at)).max_rect(block_rect));
+                    block(&mut child, at);
+                    registered.push(block_rect);
+                }
+                break 'body drawn;
+            }
+            // The room the pane shows this pass (its column's view inside the body's clip, after this
+            // pass's input), in the content's terms: the mask is decided before any block draws.
+            let clip = ui.clip_rect();
+            let (offset, view) = (clip.top() - rect.top(), clip.height().max(0.0));
+            let held = cancel_in_place(
+                ui,
+                (&mut state.pending, &mut state.asked, &mut state.focus_to),
+            );
+            let plan = state.plan.plan(content, env);
+            route_keys(
+                ui,
+                Keys {
+                    stand: &mut state.stand,
+                    arrow: &mut state.arrow,
+                    tab_after: &mut state.tab_after,
+                    focus_to: &mut state.focus_to,
+                    pending: &mut state.pending,
+                },
+                plan,
+            );
+            resolve_in_place(
+                ui,
+                (&mut state.pending, &mut state.asked),
+                plan,
+                held,
+                (offset, view),
+            );
+            let mask = state.plan.mask(content, env, offset, view);
+            let plan = state.plan.plan(content, env);
+            let (ctx, layer) = (ui.ctx().clone(), ui.layer_id());
+            // Each block drawn as parts: its parts' span and its widgets in this pass; and every
+            // drawn block's widgets.
+            let mut parts = Vec::new();
+            let mut ranges = Vec::new();
+            for (at, part) in drawn_blocks(&mask) {
                 let block_rect = place(plan, at);
-                if !ui.is_rect_visible(block_rect) {
-                    continue;
+                // A block's `Ui` (and so its controls' ids and their focus) is its own, by its key:
+                // the same whatever other blocks draw before it in this pass (review item 1).
+                // A keyed block's `Ui` is its key's own (`laid::block_scope`), the same as where its
+                // host draws it in place (`draw_laid`), so a switch between the two keeps its
+                // controls' ids and their focus (review of PR 869).
+                let scope = plan
+                    .key(at)
+                    .map_or_else(|| ui.id().with(("block", id, at)), super::laid::block_scope);
+                let mut child = ui.new_child(
+                    UiBuilder::new()
+                        .id_salt(scope)
+                        .global_scope(true)
+                        .max_rect(block_rect),
+                );
+                if let Some((top, end)) = part {
+                    clip_to_part(&mut child, rect.top() + top..=rect.top() + end);
                 }
-                if drawn.is_empty() {
-                    drawn = at..at;
-                }
-                drawn.end = at + 1;
-                let mut child =
-                    ui.new_child(UiBuilder::new().id_salt(("block", at)).max_rect(block_rect));
+                let from = widget_count(&ctx, layer);
                 block(&mut child, at);
-                super::super::components::register_row(ui, block_rect);
+                let range = from..widget_count(&ctx, layer);
+                if let Some(span) = part {
+                    parts.push((at, span, range.clone()));
+                }
+                ranges.push((at, range));
             }
-            return drawn;
-        }
-        // The room the pane shows this pass (its column's view inside the body's clip, after this
-        // pass's input), in the content's terms: the mask is decided before any block draws.
-        let clip = ui.clip_rect();
-        let (offset, view) = (clip.top() - rect.top(), clip.height().max(0.0));
-        let held = cancel_in_place(
-            ui,
-            (&mut state.pending, &mut state.asked, &mut state.focus_to),
-        );
-        let plan = state.plan.plan(content, env);
-        route_keys(
-            ui,
-            Keys {
-                stand: &mut state.stand,
-                arrow: &mut state.arrow,
-                tab_after: &mut state.tab_after,
-                focus_to: &mut state.focus_to,
-                pending: &mut state.pending,
-            },
-            plan,
-        );
-        resolve_in_place(
-            ui,
-            (&mut state.pending, &mut state.asked),
-            plan,
-            held,
-            (offset, view),
-        );
-        let mask = state.plan.mask(content, env, offset, view);
-        let plan = state.plan.plan(content, env);
-        let (ctx, layer) = (ui.ctx().clone(), ui.layer_id());
-        // Each block drawn as parts: its parts' span and its widgets in this pass; and every
-        // drawn block's widgets.
-        let mut parts = Vec::new();
-        let mut ranges = Vec::new();
-        for (at, part) in drawn_blocks(&mask) {
-            let block_rect = place(plan, at);
-            // A block's `Ui` (and so its controls' ids and their focus) is its own, by its key:
-            // the same whatever other blocks draw before it in this pass (review item 1).
-            let scope = ui.id().with(("block", id, plan.key(at).ok_or(at)));
-            let mut child = ui.new_child(
-                UiBuilder::new()
-                    .id_salt(scope)
-                    .global_scope(true)
-                    .max_rect(block_rect),
+            keyboard_after_draw(
+                &ctx,
+                layer,
+                (
+                    &mut state.focus_to,
+                    &mut state.stand,
+                    &mut state.tab_after,
+                    &mut state.pending,
+                ),
+                plan,
+                &ranges,
+                &mask.whole,
             );
-            if let Some((top, end)) = part {
-                clip_to_part(&mut child, rect.top() + top..=rect.top() + end);
-            }
-            let from = widget_count(&ctx, layer);
-            block(&mut child, at);
-            let range = from..widget_count(&ctx, layer);
-            if let Some(span) = part {
-                parts.push((at, span, range.clone()));
-            }
-            ranges.push((at, range));
-        }
-        keyboard_after_draw(
-            &ctx,
-            layer,
-            (
-                &mut state.focus_to,
-                &mut state.stand,
-                &mut state.tab_after,
-                &mut state.pending,
-            ),
-            plan,
-            &ranges,
-            &mask.whole,
-        );
-        // Review of PR 757 (P1): a control of a block drawn as parts that its part's clip hides
-        // can take the focus by Tab. When it gains it, the unit that holds it (L6: the head, or
-        // the rest) comes whole into view (a queued request), so the control shows and keeps it.
-        let focused = ctx.memory(|memory| memory.focused());
-        let gained = focused.filter(|id| Some(*id) != state.focused_id);
-        state.focused_id = focused;
-        if let Some(id) = gained
-            && let Some((at, (from, to), control)) = ctx.viewport(|viewport| {
-                let widgets = &viewport.this_pass.widgets;
-                let (at_layer, index) = widgets.order(id)?;
-                let rect = widgets.get(id)?.rect;
-                parts
-                    .iter()
-                    .find(|(_, _, range)| at_layer == layer && range.contains(&index))
-                    .map(|(at, span, _)| (*at, *span, rect))
-            })
-        {
-            let (top, bottom) = (control.top() - rect.top(), control.bottom() - rect.top());
-            if top < from - 0.5 || bottom > to + 0.5 {
-                let (start, end) = plan.span(at);
-                let unit = match plan.head(at) {
-                    Some(head) if top >= start + head - 0.5 => (start + head, end),
-                    Some(head) => (start, start + head),
-                    None => (start, end),
-                };
-                let target = least_move(unit, offset, view);
-                if (target - offset).abs() > 0.5 {
-                    crate::design::reveal::queue(ui, target - offset);
+            // Review of PR 757 (P1): a control of a block drawn as parts that its part's clip hides
+            // can take the focus by Tab. When it gains it, the unit that holds it (L6: the head, or
+            // the rest) comes whole into view (a queued request), so the control shows and keeps it.
+            let focused = ctx.memory(|memory| memory.focused());
+            let gained = focused.filter(|id| Some(*id) != state.focused_id);
+            state.focused_id = focused;
+            if let Some(id) = gained
+                && let Some((at, (from, to), control)) = ctx.viewport(|viewport| {
+                    let widgets = &viewport.this_pass.widgets;
+                    let (at_layer, index) = widgets.order(id)?;
+                    let rect = widgets.get(id)?.rect;
+                    parts
+                        .iter()
+                        .find(|(_, _, range)| at_layer == layer && range.contains(&index))
+                        .map(|(at, span, _)| (*at, *span, rect))
+                })
+            {
+                let (top, bottom) = (control.top() - rect.top(), control.bottom() - rect.top());
+                if top < from - 0.5 || bottom > to + 0.5 {
+                    let (start, end) = plan.span(at);
+                    let unit = match plan.head(at) {
+                        Some(head) if top >= start + head - 0.5 => (start + head, end),
+                        Some(head) => (start, start + head),
+                        None => (start, end),
+                    };
+                    let target = least_move(unit, offset, view);
+                    if (target - offset).abs() > 0.5 {
+                        crate::design::reveal::queue(ui, target - offset);
+                    }
                 }
             }
-        }
-        // A hairline marks each cut edge: content goes on beyond it.
-        let hairline = |y: f32| {
-            ui.painter().hline(
-                rect.left()..=rect.right(),
-                y,
-                egui::Stroke::new(tokens::HAIRLINE_WIDTH, tokens::colors().hairline),
-            );
+            // A hairline marks each cut edge: content goes on beyond it.
+            let hairline = |y: f32| {
+                ui.painter().hline(
+                    rect.left()..=rect.right(),
+                    y,
+                    egui::Stroke::new(tokens::HAIRLINE_WIDTH, tokens::colors().hairline),
+                );
+            };
+            let extent = plan.extent();
+            if let Some((from, to)) = mask.eligible {
+                if from > offset.max(0.0) + 0.5 {
+                    hairline(clip.top() + tokens::HAIRLINE_WIDTH / 2.0);
+                }
+                if to < (offset + view).min(extent) - 0.5 {
+                    hairline(clip.bottom() - tokens::HAIRLINE_WIDTH / 2.0);
+                }
+            }
+            registered.extend(mask.whole.clone().map(|at| place(plan, at)));
+            mask.whole
         };
-        let extent = plan.extent();
-        if let Some((from, to)) = mask.eligible {
-            if from > offset.max(0.0) + 0.5 {
-                hairline(clip.top() + tokens::HAIRLINE_WIDTH / 2.0);
-            }
-            if to < (offset + view).min(extent) - 0.5 {
-                hairline(clip.bottom() - tokens::HAIRLINE_WIDTH / 2.0);
-            }
+        for rect in registered {
+            super::super::components::register_row(ui, rect);
         }
-        mask.whole
+        drawn
     }
 
     fn region(

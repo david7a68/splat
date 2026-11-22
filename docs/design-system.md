@@ -1515,7 +1515,11 @@ Wolf rows was deleted. Choose replacements for the 2 Cinder Wolf rows first.` (a
 entry, not a row's changed name; two files that claim the creature, a warning: `… Two files claim the creature Cinder
 Wolf. Fix Cinder Wolf in Library first.`; a creature whose package is not loaded, a warning, never "deleted": `… The
 package Ashen Marches of Cinder Wolf was not found. Add the Ashen Marches package in Campaign → Packages first.`;
-issue #530). It shows while the draft is the one
+issue #530). Every other fault that Start's check finds is answered in the same form, each with its own typed
+cause in the editor's words and its step (`… The encounter has no name. Enter an encounter name first.`, `… The
+starting HP of the Cinder Wolf row must be a whole number, 0 or more. Change the starting values of the Cinder Wolf row
+in the roster first.`, `… A hostile side is missing. Repair this encounter in Campaign → Campaign entries first.`;
+issue #530, item 4). It shows while the draft is the one
 Start checked and the check holds: an edit hides it, an Undo back to that draft shows it again, and a Save, another
 Start, a reload or another campaign ends it. Creatures of several unreadable files keep the check's sentence. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
 on and retains names and starting values, with one Undo. In a group's editor, Use says `Replaced Unknown creature
