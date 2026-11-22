@@ -68,7 +68,6 @@ fills	src/encounters.rs	Encounters::creature_pane	1	Encounters	the creature's Ma
 fills	src/encounters.rs	Encounters::editor_view	1	Encounters
 fills	src/encounters/groups.rs	Encounters::group_editor_view	1	Encounters
 fills	src/party.rs	Party::show	1	Party
-fills	src/campaign_content.rs	CampaignContent::show	1	Campaign	only while a repair editor, the changes to review or the issue list scrolls above the package columns (`inner_scrolls`); steps 9 and 10
 fills	src/sessions/page.rs	Sessions::notes_panel	1	Sessions
 fills	src/sessions/page.rs	Sessions::session_body_kind	3	Sessions
 fills	src/sessions/page.rs	Sessions::session_pane	1	Sessions
@@ -88,11 +87,13 @@ virtual-rows	src/design/layout.rs	ScrollColumn::show_in_region	1	design	design i
 virtual-rows	src/design/layout.rs	ScrollColumn::show_rows	1	design	design implementation boundary
 virtual-rows	src/design/layout.rs	ScrollColumn::show_viewport	1	design	design implementation boundary
 row-register	src/campaign_content.rs	CampaignContent::packages_content	1	Campaign
+row-register	src/campaign_content.rs	whole_row	1	Campaign
 row-register	src/design/components.rs	row	1	design	design implementation boundary
 row-register	src/dndbeyond.rs	DndBeyond::show_import	1	Settings
 row-register	src/encounter_run/view.rs	Run::group_list	1	Run
 row-register	src/encounters/list.rs	list_row	1	Encounters
 row-register	src/loot_editor.rs	line_row	1	Encounters
+row-register	src/party_support/sheets.rs	sheet_rect	1	Party	a sheet row (a tile, a fact line, a line of columns) with the heading above it is one block for the pane's whole-row cut (layout 11a; raised)
 row-register	src/sessions/page.rs	Sessions::markers	1	Sessions
 row-register	src/sessions/page.rs	Sessions::recordings_tab	1	Sessions
 row-register	src/sessions/plan.rs	plan_row_with	1	Sessions
@@ -131,12 +132,8 @@ scroll-area	src/encounter_run/view.rs	Run::groups_tab	1	Run
 scroll-area	src/encounter_run/view.rs	Run::roster	1	Run
 scroll-area	src/encounter_run/view.rs	Run::setup_body	1	Run
 scroll-area	src/encounters/groups.rs	members_pane	1	Encounters
-scroll-area	src/markdown_view.rs	reader_table	1	Reader
 scroll-area	src/sessions/page.rs	Sessions::note_editor	1	Sessions
 scroll-area	src/timeline/page.rs	TimelinePage::detail	1	Timeline
-scroll-request	src/campaign_content.rs	CampaignContent::repair_section_content	1	Campaign
-scroll-request	src/campaign_content.rs	CampaignContent::scroll_to_focus	1	Campaign
-scroll-request	src/campaigns.rs	Campaigns::show_form_if_editing	1	Settings
 scroll-request	src/design/components.rs	reveal_least	1	design	design implementation boundary
 scroll-request	src/design/components.rs	scroll_part	2	design	design implementation boundary
 scroll-request	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
@@ -151,10 +148,7 @@ scroll-request	src/encounters/groups.rs	overrides_form	1	Encounters
 scroll-request	src/encounters/groups.rs	unread_member	1	Encounters
 scroll-request	src/encounters/list.rs	row_menu	1	Encounters
 scroll-request	src/lib.rs	Splat::page	1	App
-scroll-request	src/library/reader.rs	show	1	Library
 scroll-request	src/lookup.rs	Lookup::panel	1	Lookup
-scroll-request	src/markdown_view.rs	show_with_density	1	Reader
-scroll-request	src/processing/settings.rs	ProcessingSettings::input_section	1	Processing
 scroll-request	src/processing/settings.rs	ProcessingSettings::key_row	1	Processing	named follow-selection exception (PR 403)
 scroll-request	src/sessions/page.rs	Sessions::banner	1	Sessions
 scroll-request	src/sessions/page.rs	Sessions::note_editor	2	Sessions
@@ -165,14 +159,12 @@ scroll-request	src/sessions/plan.rs	reveal_opened_played	3	Sessions
 scroll-request	src/settings.rs	Settings::show_account	1	Settings
 scroll-request	src/timeline/checks.rs	lines	1	Timeline
 scroll-request	src/timeline/page.rs	TimelinePage::list	1	Timeline
-scroll-request	src/world/repair.rs	editor_events	1	World
 scroll-offset	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area_in	1	design	design implementation boundary
 scroll-offset	src/design/pane.rs	EditorRegion::editor	1	design	design implementation boundary
 scroll-offset	src/design/pane.rs	Footer::place	2	design	design implementation boundary
 scroll-offset	src/design/popups.rs	Dropdown::list	1	design	design implementation boundary
-scroll-offset	src/markdown_view.rs	reader_table	1	Reader
 scroll-offset	src/sessions/page.rs	Sessions::note_editor	2	Sessions
 scroll-offset	src/timeline/page.rs	TimelinePage::detail	1	Timeline
 virtual-rows	src/design/pane/region.rs	BlockRegion::region	1	design	the region of an owned list body (layout 3b; raised)

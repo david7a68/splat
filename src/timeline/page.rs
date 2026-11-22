@@ -1200,13 +1200,11 @@ impl TimelinePage {
         if let Some(shown) = book.results.removal.get(&book.file()) {
             // The removal keeps its own count, so a campaign switch and back keeps the warning.
             let mentions = shown.value().mentions();
-            let words = as_sentence(&timeline_removal_words(
-                book,
-                shown.value().label(),
-                mentions,
-            ));
+            let label = shown.value().label().to_owned();
+            let words = as_sentence(&timeline_removal_words(book, &label, mentions));
             messages.kept(shown.outcome(frame, |_| {
-                let undo = UndoStep::verb(Verb::Remove).pressed_as(ListAct::UndoRemove);
+                // M-N1.7: the Undo names the event, as the Session plan's line of it does.
+                let undo = UndoStep::of(Verb::Remove, label).pressed_as(ListAct::UndoRemove);
                 // A finished change has the success tone; links left to it make it a warning.
                 if mentions > 0 {
                     KeptOutcome::Fault(FaultMessage::new(&FileFault::Linked(words)), undo)
@@ -2816,6 +2814,14 @@ mod tests {
             state.1.save();
         }
         harness.run_steps(3);
+        // B shows no Undo of A's removal (review of PR 720: a wrong owner's label fails).
+        assert!(
+            harness
+                .query_all_by_label_contains("Undo remove ")
+                .next()
+                .is_none(),
+            "campaign B shows no Undo of A's removal"
+        );
         let b_bytes = std::fs::read(b.path().join(super::super::FILE)).unwrap();
         // Back to A: the removal and its warning are still A's.
         {
@@ -2826,7 +2832,8 @@ mod tests {
         }
         harness.run_steps(3);
         assert!(warned(&harness), "A's warning came back with A's removal");
-        harness.get_by_label("Undo remove").click();
+        // The Undo names A's event, exactly.
+        harness.get_by_label("Undo remove Toll gate").click();
         harness.run_steps(3);
         assert!(
             harness.state().1.events.iter().any(|event| event.id == id),

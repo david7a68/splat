@@ -81,12 +81,65 @@ impl Row {
 }
 
 /// One block of a body, in content order: a row, or a list group's heading bound to its first
-/// row (or its `None yet.` row), which are one block while they fit the view together.
+/// row (or its `None yet.` row), which are one block while they fit the view together; or a
+/// block a recipe laid out before paint ([`Measured`], layout 11c).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Block {
     Row(Row),
     Section(Row),
+    Measured(Measured),
 }
+
+/// A block of varying height, laid out before paint by a design recipe (layout 11c): its height,
+/// the height of its head (its semantic boundary, ruling L6), its stable key (a request names
+/// the block by it, never by its place), and the revision of the layout it came from, which
+/// binds the plan's geometry to that layout. Only [`super::laid::Laid::block`] makes one.
+#[derive(Clone, Copy, Debug)]
+pub struct Measured {
+    height: f32,
+    head: Option<f32>,
+    key: egui::Id,
+    layout: Revision,
+}
+
+impl Measured {
+    pub(in crate::design) fn new(
+        height: f32,
+        head: Option<f32>,
+        key: egui::Id,
+        layout: Revision,
+    ) -> Self {
+        Self {
+            height,
+            head,
+            key,
+            layout,
+        }
+    }
+
+    /// The block's stable key.
+    pub fn key(&self) -> egui::Id {
+        self.key
+    }
+
+    /// The revision of the layout the block was measured from.
+    pub fn layout(&self) -> Revision {
+        self.layout
+    }
+}
+
+/// Two measured blocks are the same when every geometry input is: a new layout revision, a new
+/// key or a new height is a new block list (a reorder of equal heights too, by its keys).
+impl PartialEq for Measured {
+    fn eq(&self, other: &Self) -> bool {
+        self.height.to_bits() == other.height.to_bits()
+            && self.head.map(f32::to_bits) == other.head.map(f32::to_bits)
+            && self.key == other.key
+            && self.layout == other.layout
+    }
+}
+
+impl Eq for Measured {}
 
 /// A list group's heading: the space above it, its line and the space under it.
 fn heading() -> f32 {
@@ -115,6 +168,9 @@ pub(in crate::design) struct BlockPlan {
     tallest: f32,
     /// Physical pixels per point: its comparisons are made on that grid.
     scale: f32,
+    /// A block a recipe laid out is in it: the body is a measured one (layout 11c), drawn from
+    /// the mask before paint.
+    measured: bool,
 }
 
 /// Where each block starts and where a section may split. Read one entry at a time through
@@ -300,6 +356,7 @@ impl BlockPlan {
             let (height, head) = match *block {
                 Block::Row(row) => (row.height(), None),
                 Block::Section(row) => (heading() + row.height(), Some(heading())),
+                Block::Measured(measured) => (measured.height, measured.head),
             };
             heads.push(head);
             top += height;
@@ -309,6 +366,9 @@ impl BlockPlan {
             .windows(2)
             .map(|pair| pair[1] - pair[0])
             .fold(0.0, f32::max);
+        let measured = blocks
+            .iter()
+            .any(|block| matches!(block, Block::Measured(_)));
         work.builds += 1;
         work.blocks_measured += blocks.len();
         work.bytes_indexed +=
@@ -317,6 +377,7 @@ impl BlockPlan {
             index: Index { tops, heads },
             tallest,
             scale: env.scale,
+            measured,
         }
     }
 
@@ -335,6 +396,7 @@ impl BlockPlan {
                 heads: blocks.iter().map(|(_, head)| *head).collect(),
             },
             scale,
+            measured: false,
         }
     }
 
@@ -345,6 +407,11 @@ impl BlockPlan {
     /// The tallest block: the least room in which every block can be whole (ruling L3).
     pub(in crate::design) fn tallest(&self) -> f32 {
         self.tallest
+    }
+
+    /// Whether a recipe laid out one of its blocks (layout 11c): a measured body.
+    pub(in crate::design) fn measured(&self) -> bool {
+        self.measured
     }
 
     /// The scale the plan was measured at: its comparisons are on that physical pixel grid.

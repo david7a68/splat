@@ -259,6 +259,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     const OPEN: Word = crate::word!("Open in Lookup");
     // M-Y0.2: a link action is measured and kept as the others are.
     const CONNECT: Word = crate::word!("Connect to refresh");
+    const CONNECT_HINT: &str = "Sign in to D&D Beyond to read the sheets again";
     const WORDS: [&str; 5] = [
         "Edit",
         "Add to Log",
@@ -278,7 +279,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             .action(TitleAction::quiet(LOG))
             .action(TitleAction::quiet(START))
             .action(TitleAction::secondary(OPEN))
-            .action(TitleAction::link(CONNECT))
+            .action(TitleAction::link(CONNECT).hint(CONNECT_HINT))
     };
     let mut need = 0.0;
     let mut row = 0.0;
@@ -448,6 +449,23 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     // its menu, and a close icon at the right end of the title's line. Wide, all on one line;
     // narrow, the actions go under the title and the close icon stays on the title's line.
     // The status link opens its menu; the close icon's press comes back as `closed`.
+    // Review of PR 730 (P2): a link action keeps its hint, as the other forms do.
+    ctx.all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+    let draw_line = |events: Vec<egui::Event>| {
+        frame_with(&ctx, vec2(1600.0, 300.0), events, |ui| {
+            let _ = line().show(ui);
+        })
+    };
+    let (nodes, _) = draw_line(Vec::new());
+    let connect = bounds(&nodes, "Connect to refresh");
+    draw_line(vec![egui::Event::PointerMoved(connect.center())]);
+    draw_line(Vec::new());
+    let (_, painted) = draw_line(Vec::new());
+    assert!(
+        painted.iter().any(|text| text.text == CONNECT_HINT),
+        "m-p0-title-hint-link: the link's hover shows its hint"
+    );
+    draw_line(vec![egui::Event::PointerGone]);
     // M-L0.10 (ruling M21): a menu action (`Packages`) opens its menu, and a blocked one does
     // not; the status menu keeps inside the room the caller gives from the link's rect (the
     // column under it, issue #504), one lane clear of its edges.
@@ -455,6 +473,8 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     const PACKAGES: Word = crate::word!("Packages");
     const KEY: KeyName = crate::key!("N");
     const MENU_LINE: &str = "Rules/Watch.md: 2 broken links";
+    const NEW_HINT: &str = "Make an entry in this campaign";
+    const PACKAGES_HINT: &str = "Reload or change the packages";
     fn header<'a>(
         opened: &'a std::cell::Cell<bool>,
         packages: &'a std::cell::Cell<bool>,
@@ -462,9 +482,11 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         room: Rect,
     ) -> TitleLine<'a> {
         TitleLine::new("Library")
-            .action(TitleAction::secondary(NEW_ENTRY).key(KEY))
+            .action(TitleAction::secondary(NEW_ENTRY).key(KEY).hint(NEW_HINT))
             .menu(
-                TitleAction::quiet(PACKAGES).blocked(blocked.then_some("Wait for the Library.")),
+                TitleAction::quiet(PACKAGES)
+                    .hint(PACKAGES_HINT)
+                    .blocked(blocked.then_some("Wait for the Library.")),
                 move |ui| {
                     packages.set(true);
                     let _ = ui.label("Reload from disk");
@@ -675,6 +697,26 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 },
             ]
         };
+        // M-P0 (for M0280): an action's hint shows on hover, as an `Action`'s does, a menu
+        // action's too; a blocked one shows its reason, not its hint.
+        ctx.all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+        for (name, hint, shown) in [
+            ("New entry", NEW_HINT, true),
+            ("Packages", PACKAGES_HINT, !blocked),
+            ("Packages", "Wait for the Library.", blocked),
+        ] {
+            draw(vec![egui::Event::PointerMoved(
+                bounds(&nodes, name).center(),
+            )]);
+            draw(Vec::new());
+            let (_, painted) = draw(Vec::new());
+            assert_eq!(
+                painted.iter().any(|text| text.text == hint),
+                shown,
+                "m-p0-title-hint: {width}: {name}'s hover shows {hint:?} exactly when it should"
+            );
+        }
+        draw(vec![egui::Event::PointerGone]);
         draw(click(status.center()));
         let (_, painted) = draw(Vec::new());
         assert!(opened.get(), "{width}: the status link opens its menu");

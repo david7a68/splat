@@ -1176,11 +1176,9 @@ thread_local! {
     pub static DEPENDENT_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// The link index a scan used, and each listed entry's position and broken link count.
-type BrokenLinks = (
-    std::sync::Arc<crate::lookup::ContentIndex>,
-    Vec<(usize, usize)>,
-);
+/// The load of the link index a scan used (`ContentIndex::generation`, never its address),
+/// and each listed entry's position and broken link count.
+type BrokenLinks = (u64, Vec<(usize, usize)>);
 
 /// A problem the Library header counts, and the file it belongs to.
 pub struct Diagnostic {
@@ -1265,7 +1263,7 @@ impl Loaded {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some((known, notes)) = cache.as_ref()
-            && std::sync::Arc::ptr_eq(known, index)
+            && *known == index.generation()
         {
             return notes.clone();
         }
@@ -1280,7 +1278,7 @@ impl Loaded {
                 (count > 0).then_some((at, count))
             })
             .collect();
-        *cache = Some((index.clone(), notes.clone()));
+        *cache = Some((index.generation(), notes.clone()));
         notes
     }
 

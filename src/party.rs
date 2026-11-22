@@ -6,7 +6,8 @@ use splat_character::character::{self, EntitySnapshot};
 use splat_content::content;
 use splat_party::party::{
     LiveValues, Party as PartyState, SHEET_PAGES, SHEET_PORTRAIT, SyncStopped, calendar_time,
-    record_age, sheet_conditions, sheet_entries, sheet_labels, sheet_page, spell_dc, text, val,
+    record_age, sheet_conditions, sheet_entries, sheet_labels, sheet_page, sheet_row, spell_dc,
+    text, val,
 };
 use std::time::Duration;
 
@@ -455,9 +456,8 @@ impl Party<'_> {
             format!("{} Combat sync · On", icons::ONLINE).into()
         };
         // One id for every state, so the panel stays open when the DM ticks its box.
-        egui::CollapsingHeader::new(state)
-            .id_salt("combat_sync_header")
-            .icon(design::section_icon)
+        design::Section::new(state)
+            .id("combat_sync_header")
             .open(std::mem::take(&mut self.party.wants_combat_sync).then_some(true))
             .show(ui, |_| ())
             .body_returned
@@ -502,11 +502,7 @@ impl Party<'_> {
                     );
                     crate::art::portrait(ui, rect, Some(path), &record.definition.splat_name, None);
                 }
-                ui.label(
-                    Type::Display
-                        .rich(ui, &record.definition.splat_name)
-                        .color(c.text),
-                );
+                design::heading(ui, design::Heading::Name(&record.definition.splat_name));
             });
             // Round 27 FI12: the sheet's link follows its kind line, `L` after the words, so it
             // stays with the sheet it opens at any width (it was at the pane's far edge).
@@ -618,7 +614,7 @@ impl Party<'_> {
                 sheet_page(ui, record, self.view.page, &self.view.search, live.as_ref());
                 if self.view.page == 0 {
                     design::gap(ui, design::Gap::M);
-                    design::quiet_section(ui, "Technical details", |ui| {
+                    let details = design::quiet_section(ui, "Technical details", |ui| {
                         source_and_parity(
                             ui,
                             record,
@@ -628,6 +624,8 @@ impl Party<'_> {
                             self.party.reader.local_scope(),
                         );
                     });
+                    // Its heading is a row of the sheet: the footer never cuts it through.
+                    sheet_row(ui, details.header_response.rect);
                 }
             },
         );
