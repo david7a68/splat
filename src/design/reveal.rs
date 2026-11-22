@@ -492,15 +492,97 @@ fn dm_input(facts: &Facts, run: &Run) -> bool {
     false
 }
 
-/// A `ScrollColumn`: its persistent key, and whether it may host a reveal (R46,
-/// `ScrollColumn::hosts_reveals`).
+/// A `ScrollColumn`: its persistent key, whether it may host a reveal (R46,
+/// `ScrollColumn::hosts_reveals`), and the offset a region's request queued for it that this
+/// pass applies (`take_queued`), which `settle_queued` keeps from egui's own scroll targets.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Column {
     pub key: Id,
     pub hosts: bool,
     /// The egui scroll area's own id: its state says whether it still moves from the DM's drag.
     pub area: Id,
+    pub applied: Option<f32>,
 }
+
+/// An offset a measured region's request queued for its column (layout 11c, A1b), and the frame
+/// it was queued in.
+#[derive(Clone, Copy, Debug)]
+struct Queued {
+    offset: f32,
+    /// The frame it was queued in, and the last frame it waited in.
+    made: u64,
+    frame: u64,
+}
+
+fn queued_id(column: Id) -> Id {
+    column.with("design_region_queued")
+}
+
+/// Queue a move of `by` points for the column `ui` is drawn in (a region's resolved request,
+/// layout 11c): the column applies it at the start of its next pass (`take_queued`), drawn in
+/// another pass of this frame. A newer request replaces it. Outside a `ScrollColumn`, nothing.
+pub(in crate::design) fn queue(ui: &Ui, by: f32) {
+    let Some((_, region)) = owning_region(ui) else {
+        return;
+    };
+    let frame = ui.ctx().cumulative_frame_nr();
+    let queued = Queued {
+        offset: (region.offset + by).max(0.0),
+        made: frame,
+        frame,
+    };
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(queued_id(region.key), queued));
+    ui.ctx()
+        .request_discard("a region's request moves its column");
+}
+
+/// The offset queued for the column `key`, taken at the start of its pass. It is applied only
+/// in its own frame or the next one, and never in a pass with the DM's own input (a wheel, a
+/// drag, a press, a key, text: it is cancelled; a release ends a held press and is not one);
+/// while a press is held it waits, up to `QUEUED_FRAMES`.
+pub(super) fn take_queued(ui: &Ui, key: Id) -> Option<f32> {
+    let id = queued_id(key);
+    let mut queued = ui.ctx().data(|data| data.get_temp::<Queued>(id))?;
+    let frame = ui.ctx().cumulative_frame_nr();
+    if ui.input(|input| input.pointer.any_down()) && frame <= queued.made + QUEUED_FRAMES {
+        // A held press: the request waits, up to its bound.
+        queued.frame = frame;
+        ui.ctx().data_mut(|data| data.insert_temp(id, queued));
+        return None;
+    }
+    ui.ctx().data_mut(|data| data.remove::<Queued>(id));
+    let facts = facts(ui);
+    let input = facts.moved
+        || facts.events.iter().any(|event| {
+            matches!(
+                event,
+                egui::Event::Text(_)
+                    | egui::Event::Paste(_)
+                    | egui::Event::MouseWheel { .. }
+                    | egui::Event::PointerButton { pressed: true, .. }
+                    | egui::Event::Key { pressed: true, .. }
+            )
+        });
+    (frame <= queued.frame + 1 && !input).then_some(queued.offset)
+}
+
+/// After a column's content, in a pass that queued a region's request or applied one: a raw
+/// `scroll_to_rect` of that content (egui keeps it as a target that lands at the start of the
+/// next pass, after the queued offset) is replaced by a target already in view, so no egui target
+/// writes the offset after the request. The DM's own wheel is not a target.
+fn settle_queued(ui: &mut Ui, column: Column, view: Rect) {
+    let queued = ui
+        .ctx()
+        .data(|data| data.get_temp::<Queued>(queued_id(column.key)))
+        .is_some_and(|queued| queued.frame == ui.ctx().cumulative_frame_nr());
+    if (queued || column.applied.is_some()) && view.height() > 2.0 {
+        ui.scroll_to_rect(view.shrink(1.0), None);
+    }
+}
+
+/// The frames a queued request may wait for a held press to end.
+const QUEUED_FRAMES: u64 = 8;
 
 /// A `ScrollColumn`'s facts in one pass, recorded where its content starts.
 #[derive(Clone, Copy, Debug)]
@@ -664,11 +746,14 @@ pub(super) fn region<R>(
         .data_mut(|data| data.insert_temp(region_id(content), region));
     if !column.hosts {
         // No request can bind here: no input copy and no registry read.
-        return add(ui);
+        let inner = add(ui);
+        settle_queued(ui, column, view);
+        return inner;
     }
     // The DM's input, read before any child can consume a key.
     let facts = facts(ui);
     let inner = add(ui);
+    settle_queued(ui, column, view);
     // The request that runs in this column now (one asked by this content's act replaced any
     // older one), judged by the input of this pass.
     let run = running(ui.ctx())

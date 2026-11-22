@@ -39,6 +39,20 @@ pub enum Navigation {
     Reset,
     /// A kept offset, held to the native range (never snapped to a block).
     Restore(f32),
+    /// The least move that shows the measured block with this stable key whole (layout 11c): the
+    /// request follows its block when blocks move, and ends when the block leaves the plan. A
+    /// block taller than the view shows its head at the view's top.
+    Show(Id),
+}
+
+/// The frames a request may wait (a held press) before it ends.
+const REQUEST_FRAMES: u64 = 8;
+
+/// What the highest request wants shown.
+enum Want {
+    Block(usize),
+    Origin,
+    Kept(f32),
 }
 
 /// The requests a region holds until it resolves them (the held press and the user scroll are
@@ -51,27 +65,58 @@ struct Pending {
 }
 
 impl Pending {
-    /// The highest request, as an offset from `current` (the others it outranks go).
-    fn resolve(&mut self, plan: &BlockPlan, view: f32, current: f32) -> Option<f32> {
-        let showing = |block: usize| {
-            (block < plan.len())
-                .then(|| plan.offset_showing(block, view, current))
-                .flatten()
-        };
+    /// The highest request (the others it outranks go): a block that is no longer in the plan
+    /// ends its request.
+    fn take(&mut self, plan: &BlockPlan) -> Option<Want> {
+        let block = |at: usize| (at < plan.len()).then_some(Want::Block(at));
         if let Some(navigation) = self.navigation.take() {
             *self = Self::default();
             return match navigation {
-                Navigation::Jump { block } => showing(block),
-                Navigation::Reset => Some(0.0),
-                Navigation::Restore(offset) => Some(plan.clamp(offset, view)),
+                Navigation::Jump { block: at } => block(at),
+                Navigation::Show(key) => plan.find(key).map(Want::Block),
+                Navigation::Reset => Some(Want::Origin),
+                Navigation::Restore(offset) => Some(Want::Kept(offset)),
             };
         }
-        if let Some(block) = self.open.take() {
+        if let Some(at) = self.open.take() {
             self.clearance = None;
-            return showing(block);
+            return block(at);
         }
-        self.clearance.take().and_then(showing)
+        self.clearance.take().and_then(block)
     }
+
+    /// The highest request, as an offset of the region's own column from `current`.
+    fn resolve(&mut self, plan: &BlockPlan, view: f32, current: f32) -> Option<f32> {
+        match self.take(plan)? {
+            Want::Block(at) => plan.offset_showing(at, view, current),
+            Want::Origin => Some(0.0),
+            Want::Kept(offset) => Some(plan.clamp(offset, view)),
+        }
+    }
+}
+
+/// A block an edge cuts, drawn in `child` (its own `Ui`): its paint and presses end at its parts'
+/// span `y` (L6), so its cut part shows nothing and takes no press.
+fn clip_to_part(child: &mut Ui, y: std::ops::RangeInclusive<f32>) {
+    let part = Rect::from_x_y_ranges(child.max_rect().x_range(), y);
+    child.set_clip_rect(child.clip_rect().intersect(part));
+}
+
+/// The blocks a mask draws, in order: each whole block, and each block an edge cuts, clipped to
+/// its parts (an eligible unit of a split section, a `TooTall` unit; ruling L6). Every block
+/// that meets the view takes one of these paths or, with no part to draw, none (ruling L7).
+fn drawn_blocks(mask: &super::plan::Mask) -> Vec<(usize, Option<(f32, f32)>)> {
+    let mut out: Vec<(usize, Option<(f32, f32)>)> =
+        mask.whole.clone().map(|at| (at, None)).collect();
+    for &(at, from, to) in &mask.parts {
+        match out.iter_mut().find(|(block, _)| *block == at) {
+            Some((_, Some(span))) => *span = (span.0.min(from), span.1.max(to)),
+            Some((_, None)) => {}
+            None => out.push((at, Some((from, to)))),
+        }
+    }
+    out.sort_by_key(|(at, _)| *at);
+    out
 }
 
 /// A region's own state, kept by its owner (one per list and view): its plan, its pending
@@ -103,6 +148,8 @@ pub struct RegionState {
     small_rooms: usize,
     /// Blocks refused because they were drawn from a stale layout (release builds; layout 11c).
     refused: usize,
+    /// The frame a pending request was first seen in, for its end after `REQUEST_FRAMES`.
+    asked: Option<u64>,
 }
 
 impl RegionState {
@@ -124,6 +171,7 @@ impl RegionState {
             small: false,
             small_rooms: 0,
             refused: 0,
+            asked: None,
         }
     }
 
@@ -270,7 +318,9 @@ impl<'s> BlockRegion<'s> {
             fonts: crate::design::theme::font_generation(ui.ctx()),
             scale: ui.ctx().pixels_per_point(),
         };
-        let Self { state, content, .. } = self;
+        let Self {
+            id, state, content, ..
+        } = self;
         let plan = state.plan.plan(content, env);
         let (rect, _) = ui.allocate_exact_size(vec2(width, plan.extent()), egui::Sense::hover());
         let place = |plan: &BlockPlan, at: usize| {
@@ -299,22 +349,63 @@ impl<'s> BlockRegion<'s> {
         // pass's input), in the content's terms: the mask is decided before any block draws.
         let clip = ui.clip_rect();
         let (offset, view) = (clip.top() - rect.top(), clip.height().max(0.0));
+        let plan = state.plan.plan(content, env);
+        let queued = resolve_in_place(
+            ui,
+            (&mut state.pending, &mut state.asked),
+            plan,
+            clip,
+            (offset, view),
+        );
         let mask = state.plan.mask(content, env, offset, view);
         let plan = state.plan.plan(content, env);
-        let mut tall: Vec<usize> = mask
-            .too_tall
-            .iter()
-            .map(|tall| tall.block)
-            .filter(|at| !mask.whole.contains(at))
-            .collect();
-        tall.dedup();
-        for at in mask.whole.clone().chain(tall) {
+        let (ctx, layer) = (ui.ctx().clone(), ui.layer_id());
+        let widgets_from = widget_count(&ctx, layer);
+        for (at, part) in drawn_blocks(&mask) {
+            let block_rect = place(plan, at);
+            // A block's `Ui` (and so its controls' ids and their focus) is its own, by its key:
+            // the same whatever other blocks draw before it in this pass (review item 1).
+            let scope = ui.id().with(("block", id, plan.key(at).ok_or(at)));
             let mut child = ui.new_child(
                 UiBuilder::new()
-                    .id_salt(("block", at))
-                    .max_rect(place(plan, at)),
+                    .id_salt(scope)
+                    .global_scope(true)
+                    .max_rect(block_rect),
             );
+            if let Some((top, end)) = part {
+                clip_to_part(&mut child, rect.top() + top..=rect.top() + end);
+            }
             block(&mut child, at);
+        }
+        // Focus clearance (priority 5): a control of a drawn block that gained the keyboard focus
+        // in this pass and is not whole in the room (a block taller than the room, entered by Tab)
+        // comes whole into view in the next pass, unless a request moved the column already.
+        // egui drops a focus whose control stays out of view, and the pane's own focus scroll
+        // would land a frame later; this one is the column's request, so no egui target moves
+        // it afterwards. The DM's own wheel never gains a focus, so it is never pulled back.
+        let focused = ctx.memory(|memory| memory.focused());
+        let gained = focused.filter(|id| Some(*id) != state.focused_id);
+        state.focused_id = focused;
+        if !queued
+            && let Some(id) = gained
+            && let Some(own) = ctx.viewport(|viewport| {
+                let widgets = &viewport.this_pass.widgets;
+                widgets
+                    .order(id)
+                    .filter(|(at_layer, at)| *at_layer == layer && *at >= widgets_from)
+                    .and_then(|_| widgets.get(id).map(|widget| widget.rect))
+            })
+        {
+            let target = crate::design::components::reveal_rect(&ctx, id, own);
+            let whole = target.top() >= clip.top() - 0.5 && target.bottom() <= clip.bottom() + 0.5;
+            if !whole {
+                let by = if target.height() > view || target.top() < clip.top() {
+                    target.top() - clip.top()
+                } else {
+                    target.bottom() - clip.bottom()
+                };
+                crate::design::reveal::queue(ui, by);
+            }
         }
         // A hairline marks each cut edge: content goes on beyond it.
         let hairline = |y: f32| {
@@ -447,13 +538,15 @@ impl<'s> BlockRegion<'s> {
                 node.set_role(egui::accesskit::Role::ListBox);
                 node.set_label(name);
             });
-            let tall = mask.too_tall.iter().map(|tall| tall.block);
-            for at in mask.whole.clone().chain(tall) {
+            for (at, part) in drawn_blocks(&mask) {
                 let (top, end) = plan.span(at);
                 let rect = Rect::from_min_size(origin + vec2(0.0, top), vec2(width, end - top));
                 let from = widget_count(&ctx, layer);
                 let mut child =
                     list.new_child(UiBuilder::new().id_salt(("block", at)).max_rect(rect));
+                if let Some((top, end)) = part {
+                    clip_to_part(&mut child, origin.y + top..=origin.y + end);
+                }
                 block(&mut child, at);
                 drawn.push((at, from..widget_count(&ctx, layer)));
             }
@@ -587,6 +680,68 @@ impl<'s> BlockRegion<'s> {
         }
         whole
     }
+}
+
+/// The resolver of a measured body in a `Body::Content` pane (layout 11c, A1b), whose column is
+/// the pane's: run once per pass after that pass's input, before any block draws. In order: the
+/// DM's movement over the column in this pass (a wheel turn, a drag begun in it, Page Up or Page
+/// Down) cancels every older request; a press held in the column makes the requests wait, up to
+/// `REQUEST_FRAMES`; then the highest request (`Pending::take`) becomes the least move of the
+/// column that shows its block whole (a block taller than the view: its head at the view's
+/// top), queued for the column's next pass (`reveal::queue`), which another pass of this frame
+/// draws. A request whose block left the plan ends.
+fn resolve_in_place(
+    ui: &Ui,
+    (pending, asked): (&mut Pending, &mut Option<u64>),
+    plan: &BlockPlan,
+    clip: Rect,
+    (offset, view): (f32, f32),
+) -> bool {
+    let frame = ui.ctx().cumulative_frame_nr();
+    let (moved, held) = ui.input(|input| {
+        let pointer = &input.pointer;
+        let in_column = |pos: Option<egui::Pos2>| pos.is_some_and(|pos| clip.contains(pos));
+        let wheel = input.raw_scroll_delta.y != 0.0 || input.smooth_scroll_delta.y != 0.0;
+        (
+            (in_column(pointer.hover_pos()) && wheel)
+                || (pointer.is_decidedly_dragging() && in_column(pointer.press_origin()))
+                || input.key_pressed(Key::PageUp)
+                || input.key_pressed(Key::PageDown),
+            pointer.any_down() && in_column(pointer.press_origin()),
+        )
+    });
+    if moved || asked.is_some_and(|asked| frame > asked + REQUEST_FRAMES) {
+        *pending = Pending::default();
+    }
+    if *pending == Pending::default() {
+        *asked = None;
+        return false;
+    }
+    asked.get_or_insert(frame);
+    if held {
+        return false;
+    }
+    *asked = None;
+    let target = match pending.take(plan) {
+        Some(Want::Block(at)) => {
+            let (top, end) = plan.span(at);
+            if end - top > view || top < offset {
+                top
+            } else if end > offset + view {
+                end - view
+            } else {
+                offset
+            }
+        }
+        Some(Want::Origin) => 0.0,
+        Some(Want::Kept(kept)) => kept,
+        None => return false,
+    };
+    if (target - offset).abs() > 0.5 {
+        crate::design::reveal::queue(ui, target - offset);
+        return true;
+    }
+    false
 }
 
 /// The widgets on `layer` so far in this pass.

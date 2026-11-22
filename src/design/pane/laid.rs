@@ -100,6 +100,11 @@ pub struct LaidUi<'u> {
 }
 
 impl LaidUi<'_> {
+    /// How many control slots the layout has.
+    pub fn slots(&self) -> usize {
+        self.laid.slots.len()
+    }
+
     /// Slot `at`'s rect, on the screen.
     pub fn slot(&self, at: usize) -> Rect {
         self.laid.slots[at].translate(self.ui.max_rect().min.to_vec2())
@@ -155,59 +160,135 @@ pub(in crate::design) fn render(
     true
 }
 
-/// Where a block's paint and widgets start on its layer, to check them after it draws.
+/// Where a block's paint and widgets start on every layer it may paint to, to check them after
+/// it draws (debug and test builds).
 struct Bounds {
-    layer: egui::LayerId,
-    shapes: usize,
-    widgets: usize,
+    starts: Vec<(egui::LayerId, usize, usize)>,
 }
 
 impl Bounds {
-    fn start(ui: &Ui) -> Self {
-        let layer = ui.layer_id();
-        Self {
-            layer,
-            shapes: ui
-                .ctx()
+    /// The layers a block's renderer may paint to: its own, and every layer egui knows in this
+    /// pass (each `Area`; outside `src/design/` a layer comes only from a design part, as Clippy
+    /// bans `Ui::with_layer_id` and `Painter::new`), except a popup's (`Foreground`, `Tooltip`,
+    /// `Debug`: a menu, a tooltip or a drag ghost is a design part that leaves its block by rule).
+    fn layers(ui: &Ui) -> Vec<egui::LayerId> {
+        let mut layers: Vec<egui::LayerId> = ui.ctx().memory(|memory| memory.layer_ids().collect());
+        if !layers.contains(&ui.layer_id()) {
+            layers.push(ui.layer_id());
+        }
+        layers.retain(|layer| {
+            !matches!(
+                layer.order,
+                egui::Order::Foreground | egui::Order::Tooltip | egui::Order::Debug
+            )
+        });
+        layers
+    }
+
+    fn counts(ui: &Ui, layer: egui::LayerId) -> (usize, usize) {
+        (
+            ui.ctx()
                 .graphics(|graphics| graphics.get(layer).map_or(0, |list| list.next_idx().0)),
-            widgets: ui
-                .ctx()
+            ui.ctx()
                 .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count()),
+        )
+    }
+
+    fn start(ui: &Ui) -> Self {
+        if !cfg!(debug_assertions) {
+            return Self { starts: Vec::new() };
+        }
+        Self {
+            starts: Self::layers(ui)
+                .into_iter()
+                .map(|layer| {
+                    let (shapes, widgets) = Self::counts(ui, layer);
+                    (layer, shapes, widgets)
+                })
+                .collect(),
         }
     }
 
-    /// Debug and test builds: every shape painted since `start` (its visual bounds) and every
-    /// widget added lies in `rect`, to one physical pixel.
+    /// Debug and test builds: every shape painted since `start` on any of those layers (its
+    /// visual bounds) and every widget added lies in `rect`, to one physical pixel.
     fn check(self, ui: &Ui, rect: Rect) {
         if !cfg!(debug_assertions) {
             return;
         }
         let room = rect.expand(1.0 / ui.ctx().pixels_per_point() + 0.01);
-        let painted = ui.ctx().graphics(|graphics| {
-            graphics.get(self.layer).map_or(Vec::new(), |list| {
-                list.all_entries()
-                    .skip(self.shapes)
-                    .map(|clipped| clipped.shape.visual_bounding_rect())
-                    .filter(|bounds| bounds.is_positive())
+        for layer in Self::layers(ui) {
+            let (shapes, widgets) = self
+                .starts
+                .iter()
+                .find(|(kept, ..)| *kept == layer)
+                .map_or((0, 0), |(_, shapes, widgets)| (*shapes, *widgets));
+            let painted: Vec<Rect> = ui.ctx().graphics(|graphics| {
+                graphics.get(layer).map_or(Vec::new(), |list| {
+                    list.all_entries()
+                        .skip(shapes)
+                        .map(|clipped| clipped.shape.visual_bounding_rect())
+                        .filter(|bounds| bounds.is_positive())
+                        .collect()
+                })
+            });
+            let placed: Vec<Rect> = ui.ctx().viewport(|viewport| {
+                viewport
+                    .this_pass
+                    .widgets
+                    .get_layer(layer)
+                    .skip(widgets)
+                    .map(|widget| widget.rect)
                     .collect()
-            })
-        });
-        let widgets: Vec<Rect> = ui.ctx().viewport(|viewport| {
-            viewport
-                .this_pass
-                .widgets
-                .get_layer(self.layer)
-                .skip(self.widgets)
-                .map(|widget| widget.rect)
-                .collect()
-        });
-        for bounds in painted.iter().chain(&widgets) {
-            assert!(
-                room.contains_rect(*bounds),
-                "a laid block paints or places {bounds:?} outside its rect {rect:?}"
-            );
+            });
+            for bounds in painted.iter().chain(&placed) {
+                assert!(
+                    room.contains_rect(*bounds),
+                    "a laid block paints or places {bounds:?} on {layer:?} outside its rect {rect:?}"
+                );
+            }
         }
     }
+}
+
+/// A test recipe of fixed geometry: `texts` (each wrapped beside the control column) at their
+/// tops, a block of `size` with its `head`, and a control slot of `control` px at the right edge
+/// at each of `slots`' tops.
+#[cfg(test)]
+pub(in crate::design) fn test_block(
+    ui: &Ui,
+    key: impl std::hash::Hash,
+    texts: &[(&str, f32)],
+    (size, head): (Vec2, Option<f32>),
+    slots: &[f32],
+    control: f32,
+) -> Laid {
+    let font = crate::design::tokens::Type::Body.font(ui);
+    let wrap = size.x - control - crate::design::tokens::S;
+    let texts = texts
+        .iter()
+        .map(|(text, top)| LaidText {
+            at: egui::pos2(0.0, *top),
+            galley: ui.fonts_mut(|fonts| {
+                fonts.layout((*text).to_owned(), font.clone(), egui::Color32::GRAY, wrap)
+            }),
+        })
+        .collect();
+    let height = crate::design::theme::INTERACT_HEIGHT;
+    Laid::new(
+        Id::new(key),
+        size,
+        head,
+        texts,
+        slots
+            .iter()
+            .map(|top| {
+                Rect::from_min_size(
+                    egui::pos2(size.x - control, *top),
+                    egui::vec2(control, height),
+                )
+            })
+            .collect(),
+    )
 }
 
 /// A test recipe: a block of `lines` lines of `text` at `width`, with one control slot of
@@ -252,7 +333,7 @@ mod tests {
     use crate::design::{
         memo::Revised,
         outcome::{Messages, NoPress, PaneFrame},
-        pane::{BlockRegion, Body, RegionState},
+        pane::{BlockRegion, Body, Navigation, RegionState},
     };
     use egui_kittest::{Harness, kittest::Queryable};
 
@@ -270,6 +351,14 @@ mod tests {
         overflow: Option<usize>,
         /// Lay out the blocks again, without giving the plan the new layouts.
         stale: bool,
+        /// A section 300 px tall with a 150 px head (`Head k` over `Body k`, a control on each).
+        split: Option<usize>,
+        /// A block of this many controls, 80 px apart.
+        controls: Option<(usize, usize)>,
+        /// A control paints outside its block on a layer of its own.
+        stray: Option<usize>,
+        /// Every block drawn asks egui to scroll to the region's top (a raw `scroll_to_rect`).
+        pull: bool,
     }
 
     impl Page {
@@ -284,6 +373,10 @@ mod tests {
                 clicked: Vec::new(),
                 overflow: None,
                 stale: false,
+                split: None,
+                controls: None,
+                stray: None,
+                pull: false,
             }
         }
     }
@@ -296,8 +389,30 @@ mod tests {
                 let _ = messages.pane(ui, Body::Content, |ui| {
                     let width = ui.available_width();
                     if page.laid.is_empty() || std::mem::take(&mut page.stale) {
+                        let (split, controls) = (page.split, page.controls);
                         page.laid = (0..page.texts.len())
-                            .map(|at| test_recipe(ui, at, &page.texts[at], width, 80.0))
+                            .map(|at| match (split, controls) {
+                                (Some(split), _) if split == at => test_block(
+                                    ui,
+                                    at,
+                                    &[
+                                        (&format!("Head {at} "), 0.0),
+                                        (&format!("Body {at} "), 150.0),
+                                    ],
+                                    (egui::vec2(width, 300.0), Some(150.0)),
+                                    &[0.0, 150.0],
+                                    80.0,
+                                ),
+                                (_, Some((block, count))) if block == at => test_block(
+                                    ui,
+                                    at,
+                                    &[(&format!("Row {at} "), 0.0)],
+                                    (egui::vec2(width, 80.0 * count as f32), None),
+                                    &(0..count).map(|i| 80.0 * i as f32).collect::<Vec<_>>(),
+                                    80.0,
+                                ),
+                                _ => test_recipe(ui, at, &page.texts[at], width, 80.0),
+                            })
                             .collect();
                         if page.rows.is_empty() {
                             page.rows.set(page.laid.iter().map(Laid::block).collect());
@@ -305,12 +420,14 @@ mod tests {
                     }
                     page.top = ui.cursor().top();
                     page.clip = ui.clip_rect();
+                    let (top, pull) = (page.top, page.pull);
                     let Page {
                         laid,
                         rows,
                         region,
                         clicked,
                         overflow,
+                        stray,
                         ..
                     } = page;
                     BlockRegion::new("laid_test", region, rows).show_laid(
@@ -319,6 +436,24 @@ mod tests {
                         |ui, at| {
                             if ui.put(0, egui::Button::new(format!("Act {at}"))).clicked() {
                                 clicked.push(at);
+                            }
+                            for slot in 1..ui.slots() {
+                                let _ = ui.put(slot, egui::Button::new(format!("Act {at}.{slot}")));
+                            }
+                            if *stray == Some(at) {
+                                let slot = ui.slot(0);
+                                ui.in_slot(0, |ui| stray_mark(ui, slot));
+                            }
+                            if pull {
+                                ui.in_slot(0, |ui| {
+                                    ui.scroll_to_rect(
+                                        Rect::from_min_size(
+                                            egui::pos2(slot_left(ui), top),
+                                            egui::vec2(1.0, 1.0),
+                                        ),
+                                        None,
+                                    );
+                                });
                             }
                             if *overflow == Some(at) {
                                 let slot = ui.slot(0);
@@ -344,18 +479,47 @@ mod tests {
         harness
     }
 
-    /// The texts painted in the last frame.
+    fn slot_left(ui: &Ui) -> f32 {
+        ui.max_rect().left()
+    }
+
+    /// A mark painted 300 px below `slot`, on an `Area` of its own at the middle order (a layer
+    /// other than the block's).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    fn stray_mark(ui: &Ui, slot: Rect) {
+        egui::Area::new(Id::new("laid_test_stray"))
+            .order(egui::Order::Middle)
+            .fixed_pos(slot.min + egui::vec2(0.0, 300.0))
+            .show(ui.ctx(), |ui| {
+                ui.painter().rect_filled(
+                    Rect::from_min_size(ui.max_rect().min, slot.size()),
+                    0.0,
+                    egui::Color32::RED,
+                );
+            });
+    }
+
+    /// The texts painted in the last frame where their clip shows them (a shape that lies wholly
+    /// outside its clip shows nothing).
     fn painted(harness: &Harness<'_, Page>) -> Vec<String> {
-        fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+        fn walk(shape: &egui::Shape, clip: Rect, out: &mut Vec<String>) {
             match shape {
-                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
-                egui::Shape::Text(text) => out.push(text.galley.text().to_owned()),
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, clip, out)),
+                egui::Shape::Text(text) => {
+                    let shown = clip.intersect(shape.visual_bounding_rect());
+                    if shown.height() > 0.5 && shown.width() > 0.5 {
+                        out.push(text.galley.text().to_owned());
+                    }
+                }
                 _ => {}
             }
         }
         let mut out = Vec::new();
         for shape in &harness.output().shapes {
-            walk(&shape.shape, &mut out);
+            walk(&shape.shape, shape.clip_rect, &mut out);
         }
         out
     }
@@ -546,6 +710,192 @@ mod tests {
             harness.state().region.work().builds,
             builds + 1,
             "a reorder plans again"
+        );
+    }
+
+    /// Whether block `at` is drawn whole in the pane's room.
+    fn shown(harness: &Harness<'_, Page>, at: usize) -> bool {
+        let page = harness.state();
+        harness.query_by_label(&format!("Act {at}")).is_some()
+            && page.clip.expand(0.5).contains_rect(block_rect(page, at))
+    }
+
+    fn key_press(harness: &mut Harness<'_, Page>, key: egui::Key, modifiers: egui::Modifiers) {
+        for pressed in [true, false] {
+            harness.input_mut().events.push(egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers,
+            });
+        }
+        harness.run_steps(3);
+    }
+
+    /// Review of PR 743 (P2): a section taller than the pane splits at its head (L6). A 300 px
+    /// block with a 150 px head, shown from its top in a room between the two: its head is whole
+    /// and draws (its words and its control); its cut body does not paint. Red: draw only the
+    /// whole and the `TooTall` blocks.
+    #[test]
+    fn a_split_section_draws_its_whole_head() {
+        let mut page = Page::new(texts(8));
+        page.split = Some(3);
+        let mut harness = harness(page, egui::vec2(960.0, 260.0));
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(3usize)));
+        harness.run_steps(3);
+        let page = harness.state();
+        let rect = block_rect(page, 3);
+        assert!(
+            page.clip.height() > 150.0 && page.clip.height() < 300.0,
+            "the room {:?} is between the head and the section",
+            page.clip
+        );
+        assert!(
+            (rect.top() - page.clip.top()).abs() < 1.0,
+            "a section taller than the room shows its head at the room's top: {rect:?} in {:?}",
+            page.clip
+        );
+        let texts = painted(&harness);
+        assert!(
+            texts.iter().any(|text| text.starts_with("Head 3 "))
+                && harness.query_by_label("Act 3").is_some(),
+            "the whole head draws, with its control"
+        );
+        assert!(
+            !texts.iter().any(|text| text.starts_with("Body 3 ")),
+            "the cut body does not paint"
+        );
+    }
+
+    /// Review of PR 743 (P2): a renderer that paints outside its block on a layer of its own
+    /// (an `Area`) fails the bounds check too.
+    #[test]
+    #[should_panic(expected = "outside its rect")]
+    fn paint_on_another_layer_fails_the_bounds_check() {
+        let mut page = Page::new(texts(6));
+        page.stray = Some(1);
+        let _ = harness(page, egui::vec2(960.0, 420.0));
+    }
+
+    /// Review of PR 743 (P3): Tab goes into and through a block taller than the pane, and focus
+    /// clearance brings each of its controls whole into view.
+    #[test]
+    fn tab_reaches_each_control_of_a_block_taller_than_the_pane() {
+        let mut page = Page::new(texts(6));
+        page.controls = Some((2, 8));
+        let mut harness = harness(page, egui::vec2(960.0, 300.0));
+        harness.get_by_label("Act 1").focus();
+        harness.run_steps(3);
+        for slot in 0..8 {
+            key_press(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+            let label = if slot == 0 {
+                "Act 2".to_owned()
+            } else {
+                format!("Act 2.{slot}")
+            };
+            let node = harness.get_by_label(&label);
+            assert!(node.is_focused(), "Tab {slot} focuses {label}");
+            let clip = harness.state().clip;
+            assert!(
+                clip.expand(0.5).contains_rect(node.rect()),
+                "{label} {:?} is whole in the room {clip:?}",
+                node.rect()
+            );
+        }
+        assert!(
+            harness.state().region.work().too_tall > 0,
+            "the block is counted"
+        );
+    }
+
+    /// Layout 11c, A1b (the v2 review's item 2): the resolver of a measured body in a Content
+    /// pane. A request names its block by key and shows it whole, in the next frame with one pass
+    /// a frame and in the asking frame with two; a key no longer in the plan ends its request;
+    /// the DM's wheel in the same pass cancels it; a held press makes it wait, and it lands after
+    /// the release; and a raw `scroll_to_rect` in the passes that queue and apply it does not
+    /// move the view afterwards.
+    #[test]
+    fn a_request_shows_its_block_by_key_in_the_order_of_the_resolver() {
+        let mut harness = harness(Page::new(texts(40)), egui::vec2(960.0, 420.0));
+        let show = |harness: &mut Harness<'_, Page>, at: usize| {
+            harness
+                .state_mut()
+                .region
+                .navigate(Navigation::Show(Id::new(at)));
+        };
+        show(&mut harness, 30);
+        harness.step();
+        assert!(!shown(&harness, 30), "one pass a frame: not yet");
+        harness.step();
+        assert!(shown(&harness, 30), "one pass a frame: the next frame");
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(2).unwrap());
+        show(&mut harness, 5);
+        harness.step();
+        assert!(shown(&harness, 5), "two passes: the asking frame");
+        let top = block_rect(harness.state(), 5).top();
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new("gone")));
+        harness.run_steps(3);
+        assert_eq!(
+            block_rect(harness.state(), 5).top(),
+            top,
+            "a key not in the plan moves nothing"
+        );
+        // The DM's wheel in the same pass cancels it.
+        show(&mut harness, 35);
+        let at = harness.state().clip.center();
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.run_steps(4);
+        assert!(!shown(&harness, 35), "the wheel cancels the request");
+        // A held press makes it wait; it lands after the release.
+        let at = harness.state().clip.center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(at));
+        harness.input_mut().events.push(button(true));
+        harness.step();
+        show(&mut harness, 25);
+        harness.run_steps(2);
+        assert!(
+            !shown(&harness, 25),
+            "the request waits while the press is held"
+        );
+        harness.input_mut().events.push(button(false));
+        harness.run_steps(3);
+        assert!(shown(&harness, 25), "it lands after the release");
+        // egui's own target, asked in the passes that queue and apply the request, does not
+        // write the offset after it.
+        harness.state_mut().pull = true;
+        show(&mut harness, 12);
+        harness.step();
+        harness.state_mut().pull = false;
+        harness.run_steps(3);
+        assert!(
+            shown(&harness, 12),
+            "a raw scroll_to_rect does not move the view after it"
         );
     }
 }
