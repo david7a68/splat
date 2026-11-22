@@ -186,7 +186,7 @@ fn font_generation_id() -> egui::Id {
 /// The generation of the fonts that `install` put in this context: it changes at every
 /// installation, so a kept galley whose key holds it is laid out again when the font data
 /// changes under the same `FontId` (M5's kept heading). 0 before any installation.
-pub(crate) fn font_generation(ctx: &egui::Context) -> u64 {
+pub fn font_generation(ctx: &egui::Context) -> u64 {
     ctx.data(|data| data.get_temp::<u64>(font_generation_id()))
         .unwrap_or_default()
 }
@@ -215,7 +215,7 @@ fn atlas_probe_id() -> egui::Id {
 /// compared. A pass that does not ask (no document editor drawn) lets the cache drop it too: the
 /// next ask is a new epoch, which only lays out once more. One small layout lookup per pass,
 /// whatever the documents.
-pub(crate) fn atlas_epoch(ctx: &egui::Context) -> u64 {
+pub fn atlas_epoch(ctx: &egui::Context) -> u64 {
     let pass = ctx.cumulative_pass_nr();
     let kept = ctx.data(|data| data.get_temp::<AtlasProbe>(atlas_probe_id()));
     if let Some(kept) = kept.as_ref().filter(|kept| kept.pass == pass) {

@@ -3972,6 +3972,7 @@ dependencies = [
  "splat-campaign",
  "splat-character",
  "splat-content",
+ "splat-content-ui",
  "splat-design",
  "splat-execution",
  "splat-trackers",

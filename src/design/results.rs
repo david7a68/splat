@@ -1524,6 +1524,18 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "stock_text_edit",
             &[Ban::Layout(1)],
         ),
+        // Layout PR 9b-R1a: the quiet-reader harness's bare screen and its stock reference,
+        // egui's own label, whose cost the Reader's host is measured against.
+        (
+            "src/content_ui/tests/quiet_reader.rs",
+            "root",
+            &[Ban::Layout(1)],
+        ),
+        (
+            "src/content_ui/tests/quiet_reader.rs",
+            "stock_labels",
+            &[Ban::Layout(2)],
+        ),
         ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
         ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),

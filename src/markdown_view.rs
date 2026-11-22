@@ -52,9 +52,39 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
     show_with_density(ui, markdown, false, ShortLinks::Prose, None);
 }
 
-/// The Reader's Markdown.
+/// The Reader's Markdown, prepared again in every frame: short words that no document owns
+/// (layout PR 9b, Q4: unkeyed and counted). A document's text is [`show_document`]'s.
 pub fn show_reader(ui: &mut egui::Ui, markdown: &str) {
     ui.scope(|ui| show_with_density(ui, markdown, false, ShortLinks::Prose, None));
+}
+
+/// Which document a reader shows (layout PR 9b-R1a): with its revision, what its prepared
+/// blocks are kept for.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum DocumentId {
+    /// A World entry's note body, in World's reader or in Lookup's.
+    Entry(uuid::Uuid),
+    /// A section of a Library entry: the entry's key and the section's place in it.
+    Section(String, usize),
+    /// A session's recording text: its folder's key, the part shown, and the slice around the
+    /// DM's reading mark (before the mark, its line, after it).
+    Recording(String, usize, usize),
+}
+
+/// A document's text as a reader shows it: whose text it is, and its revision (a reload of its
+/// source gives a new one). The reader keeps the text's prepared blocks while the document, its
+/// revision and what the preparation read stay the same (the links' index, the art, the fonts
+/// and their atlas, the theme, the width and the scale), so a quiet frame parses, resolves and
+/// lays out nothing.
+pub struct ReaderSource<'a> {
+    pub doc: DocumentId,
+    pub revision: u64,
+    pub text: &'a str,
+}
+
+/// The Reader's Markdown of a document, kept prepared for its [`ReaderSource`].
+pub fn show_document(ui: &mut egui::Ui, source: ReaderSource<'_>) {
+    ui.scope(|ui| show_kept(ui, source));
 }
 
 /// A plan row's words, such as a scene's line: the plan row title's type (`Body`) at every
@@ -156,6 +186,13 @@ fn linked_markdown(
     })
 }
 
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many times a reader parsed its Markdown (layout PR 9b-R1a's quiet-frame proof).
+    pub static MARKDOWN_PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Markdown prepared and drawn in this frame (a reader with no document).
 fn show_with_density(
     ui: &mut egui::Ui,
     markdown: &str,
@@ -163,6 +200,478 @@ fn show_with_density(
     short_links: ShortLinks,
     row: Option<RowWords>,
 ) {
+    let from = reader_document(ui);
+    let mut ops = prepare(ui, markdown, dense, row, from);
+    draw(ui, &mut ops, from, short_links, row.is_some());
+}
+
+/// The link index a reader resolves its links in, when its host gave one.
+fn link_index(ctx: &egui::Context) -> Option<Arc<crate::lookup::ContentIndex>> {
+    ctx.data(|data| {
+        data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
+    })
+}
+
+/// Everything a document's prepared blocks were made from (layout PR 9b-R1a; note 9b §5, §10).
+#[derive(Clone, Debug, PartialEq)]
+struct PreparedKey {
+    doc: DocumentId,
+    revision: u64,
+    /// The document the reader shows, for its links' resolution and their ids.
+    from: Option<uuid::Uuid>,
+    /// The load of the link index (`ContentIndex::generation`).
+    index: Option<u64>,
+    /// The art index (`ArtIndex::generation`): which links are figures.
+    art: Option<u64>,
+    /// The fonts' generation, which the theme's installation also raises.
+    fonts: u64,
+    /// The font atlas's epoch: a kept galley holds places in it.
+    atlas: u64,
+    dark: bool,
+    /// The scale and the width, in thousandths of a point.
+    scale: i64,
+    width: i64,
+}
+
+impl PreparedKey {
+    fn of(ui: &egui::Ui, source: &ReaderSource<'_>, from: Option<uuid::Uuid>) -> Self {
+        let ctx = ui.ctx();
+        let thousandths = |value: f32| (f64::from(value) * 1000.0).round() as i64;
+        Self {
+            doc: source.doc.clone(),
+            revision: source.revision,
+            from,
+            index: link_index(ctx).map(|index| index.generation()),
+            art: crate::art::generation(ctx),
+            fonts: design::theme::font_generation(ctx),
+            atlas: design::theme::atlas_epoch(ctx),
+            dark: ui.visuals().dark_mode,
+            scale: thousandths(ctx.pixels_per_point()),
+            width: thousandths(ui.available_width()),
+        }
+    }
+}
+
+/// A document's prepared blocks, for their key.
+struct Kept {
+    key: PreparedKey,
+    ops: Vec<Op>,
+}
+
+/// Each reader's kept blocks, with the frame it last drew them in. A reader not drawn in the
+/// last frame loses them, so a document no reader shows keeps nothing.
+#[derive(Clone, Default)]
+struct KeptReaders(Arc<std::sync::Mutex<KeptMap>>);
+
+type KeptMap = std::collections::HashMap<egui::Id, (u64, Arc<std::sync::Mutex<Option<Kept>>>)>;
+
+fn show_kept(ui: &mut egui::Ui, source: ReaderSource<'_>) {
+    let from = reader_document(ui);
+    let key = PreparedKey::of(ui, &source, from);
+    let frame = ui.ctx().cumulative_frame_nr();
+    let readers = ui.ctx().data_mut(|data| {
+        data.get_temp_mut_or_default::<KeptReaders>(egui::Id::new("markdown_kept_readers"))
+            .clone()
+    });
+    let kept = {
+        let mut readers = readers
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        readers.retain(|_, (drawn, _)| *drawn + 1 >= frame);
+        let entry = readers.entry(ui.id()).or_default();
+        entry.0 = frame;
+        entry.1.clone()
+    };
+    let mut kept = kept
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if kept.as_ref().is_none_or(|kept| kept.key != key) {
+        let ops = prepare(ui, source.text, false, None, from);
+        *kept = Some(Kept { key, ops });
+    }
+    if let Some(kept) = kept.as_mut() {
+        draw(ui, &mut kept.ops, from, ShortLinks::Prose, false);
+    }
+}
+
+/// The galleys of every document a reader keeps prepared, in drawing order (layout PR 9b-R1a's
+/// harness: its stock reference draws egui's own label costs over the same galleys).
+#[cfg(any(test, feature = "test-support"))]
+pub fn kept_galleys(ctx: &egui::Context) -> Vec<Arc<egui::Galley>> {
+    let readers = ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<KeptReaders>(egui::Id::new("markdown_kept_readers"))
+            .clone()
+    });
+    let readers = readers
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut galleys = Vec::new();
+    for (_, kept) in readers.values() {
+        let kept = kept
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for op in kept.iter().flat_map(|kept| &kept.ops) {
+            if let Op::Paragraph(paragraph) = op {
+                match &paragraph.laid {
+                    Some(Laid::Plain(galley)) => galleys.push(galley.clone()),
+                    Some(Laid::Linked(laid)) => galleys.push(laid.galley.clone()),
+                    None => {}
+                }
+            }
+        }
+    }
+    galleys
+}
+
+/// One block of prepared Markdown, as [`draw`] draws it.
+enum Op {
+    Gap(design::Gap),
+    Rule,
+    /// A heading's words: a typed jump to this heading lands here (ruling M18).
+    Jump(String),
+    /// Images before the words of their block, which are their caption.
+    Figures(Vec<std::path::PathBuf>, String),
+    Paragraph(Box<Paragraph>),
+    QuoteStart,
+    QuoteEnd,
+    Table(Box<TableBlock>),
+    /// A compact reader's `Field`/`Value` table, as field rows.
+    Fields(Vec<Vec<String>>),
+}
+
+/// A paragraph's words, styled; laid out the first time they are drawn, at the width they get.
+struct Paragraph {
+    job: Option<LayoutJob>,
+    laid: Option<Laid>,
+    links: Vec<(std::ops::Range<usize>, LinkTarget)>,
+    task: Option<(bool, f32, Type)>,
+    /// A plan row's leading icon, in its own column: its words, then their galley.
+    lead: Option<Lead>,
+}
+
+/// A leading icon's words until they are laid out, then their galley.
+enum Lead {
+    Words(LayoutJob),
+    Laid(Arc<egui::Galley>),
+}
+
+/// A paragraph laid out.
+enum Laid {
+    /// An egui label over its galley: the DM can select its words.
+    Plain(Arc<egui::Galley>),
+    Linked(Box<LaidLinks>),
+}
+
+/// A paragraph with links, laid out: its words (its accessible name), its galley, and each link
+/// with its spare width, its underline and its words' parts at the galley's origin.
+struct LaidLinks {
+    text: String,
+    galley: Arc<egui::Galley>,
+    links: Vec<(std::ops::Range<usize>, LinkTarget)>,
+    spare: Vec<Spare>,
+    underlines: Vec<egui::Stroke>,
+    words: Vec<Vec<LinkPart>>,
+}
+
+/// A table's cells, its shown columns, and its roll marker.
+struct TableBlock {
+    rows: Vec<Vec<String>>,
+    columns: Vec<usize>,
+    /// An inventory table, shown by its item, quantity, equipment and attunement.
+    compact: bool,
+    rolls: Option<Result<crate::roll_table::Marker, String>>,
+}
+
+/// The open quotes while blocks draw: each one's top, and the bottom of the last words drawn in
+/// one, where its bar stops.
+#[derive(Default)]
+struct Quotes {
+    tops: Vec<f32>,
+    bottom: f32,
+}
+
+/// Draw prepared blocks. A paragraph's link ids come from the reader and the block's place,
+/// never from its words: stable while the document's preparation stands.
+fn draw(
+    ui: &mut egui::Ui,
+    ops: &mut [Op],
+    from: Option<uuid::Uuid>,
+    short_links: ShortLinks,
+    row: bool,
+) {
+    let reader = egui::Id::new(("markdown_reader", from));
+    let mut quotes = Quotes::default();
+    for (block, op) in ops.iter_mut().enumerate() {
+        match op {
+            Op::Gap(gap) => design::gap(ui, *gap),
+            Op::Rule => design::rule(ui),
+            Op::Jump(words) => {
+                if wanted_heading(ui.ctx(), words) {
+                    design::reveal::jump(
+                        ui,
+                        ui.cursor().top(),
+                        design::reveal::JumpTo::LinkedHeading,
+                    );
+                }
+            }
+            Op::Figures(figures, caption) => {
+                for figure in figures.iter() {
+                    crate::art::figure(ui, figure, caption);
+                }
+            }
+            Op::Paragraph(paragraph) => {
+                let links = reader.with(("markdown_block", block));
+                draw_paragraph(ui, paragraph, links, short_links, row, &mut quotes);
+            }
+            Op::QuoteStart => quotes.tops.push(ui.cursor().top()),
+            Op::QuoteEnd => {
+                if let Some(top) = quotes.tops.pop() {
+                    let x = ui.max_rect().left()
+                        + QUOTE_INDENT * quotes.tops.len() as f32
+                        + QUOTE_BAR_WIDTH / 2.0;
+                    ui.painter().vline(
+                        x,
+                        top..=quotes.bottom.max(top),
+                        egui::Stroke::new(QUOTE_BAR_WIDTH, colors().rule),
+                    );
+                }
+            }
+            Op::Table(table) => draw_table_block(ui, table),
+            Op::Fields(rows) => show_fields(ui, rows),
+        }
+    }
+}
+
+/// The words waiting to be drawn become a paragraph block.
+fn paragraph(ops: &mut Vec<Op>, job: &mut LayoutJob, target: &mut Targets) {
+    if job.is_empty() {
+        return;
+    }
+    let mut links = std::mem::take(&mut target.links);
+    let task = target.task.take();
+    let mut job = std::mem::take(job);
+    let lead = target.lead.take().map(|cut| {
+        // The icon in its own column; the words wrap at their own left edge.
+        let (icon, words) = split_job(std::mem::take(&mut job), cut);
+        for (range, _) in &mut links {
+            *range = range.start - cut..range.end - cut;
+        }
+        job = words;
+        Lead::Words(icon)
+    });
+    ops.push(Op::Paragraph(Box::new(Paragraph {
+        job: Some(job),
+        laid: None,
+        links,
+        task,
+        lead,
+    })));
+}
+
+/// The images found in a block, before its words.
+fn figures_op(ops: &mut Vec<Op>, figures: &mut Vec<std::path::PathBuf>, caption: &LayoutJob) {
+    if !figures.is_empty() {
+        ops.push(Op::Figures(std::mem::take(figures), caption.text.clone()));
+    }
+}
+
+/// `job` laid out as an egui label lays it out in `ui` (`Label::layout_in_ui` in a layout that
+/// does not wrap horizontally): wrapped at the room it gets, or on one line.
+fn lay_out(ui: &egui::Ui, mut job: LayoutJob, wrap: bool) -> Arc<egui::Galley> {
+    job.wrap.max_width = if wrap {
+        ui.available_width()
+    } else {
+        f32::INFINITY
+    };
+    job.halign = ui.layout().horizontal_placement();
+    job.justify = ui.layout().horizontal_justify();
+    ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
+/// A paragraph's words, laid out once, in the `Ui` that first draws them.
+fn laid<'a>(ui: &egui::Ui, paragraph: &'a mut Paragraph, short_links: ShortLinks) -> &'a Laid {
+    paragraph.laid.get_or_insert_with(|| {
+        let job = paragraph.job.take().unwrap_or_default();
+        let links = std::mem::take(&mut paragraph.links);
+        if links.is_empty() {
+            Laid::Plain(lay_out(ui, job, true))
+        } else {
+            Laid::Linked(Box::new(lay_out_links(ui, job, links, short_links)))
+        }
+    })
+}
+
+/// One paragraph: its words, its links, a task's box, inside the quotes it is in.
+fn draw_paragraph(
+    ui: &mut egui::Ui,
+    paragraph: &mut Paragraph,
+    links: egui::Id,
+    short_links: ShortLinks,
+    row: bool,
+    quotes: &mut Quotes,
+) {
+    if let Some(lead) = paragraph.lead.take() {
+        // The icon in its own column; the words wrap at their own left edge.
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            let icon = match lead {
+                Lead::Words(job) => lay_out(ui, job, false),
+                Lead::Laid(galley) => galley,
+            };
+            ui.add(egui::Label::new(icon.clone()));
+            paragraph.lead = Some(Lead::Laid(icon));
+            ui.vertical(|ui| match laid(ui, paragraph, short_links) {
+                Laid::Plain(galley) => {
+                    ui.add(egui::Label::new(galley.clone()));
+                }
+                Laid::Linked(laid) => {
+                    draw_laid_links(ui, laid, links);
+                }
+            });
+        });
+        return;
+    }
+    let task = paragraph.task;
+    let mut draw = |ui: &mut egui::Ui| {
+        let rect = match laid(ui, paragraph, short_links) {
+            Laid::Plain(galley) => ui.add(egui::Label::new(galley.clone())).rect,
+            Laid::Linked(laid) => draw_laid_links(ui, laid, links),
+        };
+        if let Some((done, indent, role)) = task {
+            let icon_rect = egui::Rect::from_min_size(
+                rect.min + egui::vec2(indent, 0.0),
+                egui::vec2(role.size(), role.line()),
+            );
+            ui.interact(
+                icon_rect,
+                ui.next_auto_id().with("task-marker"),
+                egui::Sense::hover(),
+            )
+            .widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Label,
+                    true,
+                    if done { "Done" } else { "Open" },
+                )
+            });
+        }
+    };
+    if quotes.tops.is_empty() {
+        draw(ui);
+    } else {
+        let rect = design::quote(ui, quotes.tops.len(), draw).response.rect;
+        quotes.bottom = rect.bottom();
+    }
+    if !row {
+        design::gap(ui, design::Gap::S);
+    }
+}
+
+/// A table, drawn from its cells.
+fn draw_table_block(ui: &mut egui::Ui, table: &TableBlock) {
+    let TableBlock {
+        rows,
+        columns,
+        compact,
+        rolls,
+    } = table;
+    let compact = *compact;
+    let display = |cell: &'_ str| -> String {
+        if compact {
+            match cell {
+                "Link" => "Item",
+                "true" => "Yes",
+                "false" => "—",
+                other => other,
+            }
+            .to_owned()
+        } else {
+            cell.to_owned()
+        }
+    };
+    // A reader may give its tables the pane beyond the prose measure.
+    let room = table_room(ui).filter(|width| *width > ui.available_width());
+    // The reader's own id: the table's roll state and its field belong to this reader, so the
+    // same table in World and in Lookup never shares them.
+    let reader = ui.id();
+    let draw_table = |ui: &mut egui::Ui| {
+        let mut widths = column_widths(ui, rows, columns, &display);
+        // A rollable table keeps a slot for the roll mark before every row's range, so the
+        // rolled row's range stays at the x of the others. The first column is sized with the
+        // slot.
+        let mark = (rolls.is_some() && !widths.is_empty()).then(|| {
+            ui.painter()
+                .layout_no_wrap(
+                    format!("{} ", design::icons::DICE),
+                    Type::Stat.font(ui),
+                    colors().text,
+                )
+                .size()
+                .x
+                .ceil()
+        });
+        if let Some(slot) = mark {
+            for (at, row) in rows.iter().enumerate() {
+                let label = display(row.get(columns[0]).map(String::as_str).unwrap_or(""));
+                let role = if at == 0 { Type::StatLabel } else { Type::Stat };
+                let width = ui
+                    .painter()
+                    .layout_no_wrap(label, role.font(ui), colors().text)
+                    .size()
+                    .x
+                    .ceil()
+                    + slot
+                    + design::XS;
+                widths[0] = widths[0].max(width);
+            }
+        }
+        let matched = rolls
+            .as_ref()
+            .and_then(|marker| crate::roll_table::matched_row(ui, reader, marker, rows));
+        reader_table(ui, rows, columns, &widths, &display, matched, mark);
+    };
+    match room {
+        Some(width) => {
+            // The table draws past the measure, but the reader's column keeps it: the rules and
+            // prose after the table keep their width.
+            let mut area = ui.available_rect_before_wrap();
+            area.set_width(width);
+            let mut wide = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(area)
+                    .layout(egui::Layout::top_down(egui::Align::Min)),
+            );
+            draw_table(&mut wide);
+            let height = wide.min_rect().height();
+            ui.allocate_exact_size(
+                egui::vec2(ui.available_width(), height),
+                egui::Sense::hover(),
+            );
+        }
+        None => draw_table(ui),
+    }
+    if let Some(marker) = rolls {
+        crate::roll_table::roll_control(ui, reader, marker, rows);
+    }
+    design::gap(ui, design::Gap::S);
+}
+
+/// The blocks of `markdown` as the Reader draws them: the Markdown parsed, its links resolved,
+/// its figures found, each paragraph's words styled (layout PR 9b-R1a). Nothing is drawn here:
+/// [`draw`] draws the blocks, and lays out each paragraph the first time it draws it.
+fn prepare(
+    ui: &egui::Ui,
+    markdown: &str,
+    dense: bool,
+    row: Option<RowWords>,
+    from: Option<uuid::Uuid>,
+) -> Vec<Op> {
+    #[cfg(any(test, feature = "test-support"))]
+    MARKDOWN_PARSES.with(|parses| parses.set(parses.get() + 1));
+    let mut ops = Vec::new();
+    let mut quote_depth = 0_usize;
     let prose = if dense {
         Type::Stat
     } else if row.is_some() {
@@ -185,7 +694,6 @@ fn show_with_density(
     let mut heading = None;
     let mut inventory_table = false;
     let mut target = Targets {
-        short_links,
         row: row.is_some(),
         ..Targets::default()
     };
@@ -202,15 +710,7 @@ fn show_with_density(
     let mut figures: Vec<std::path::PathBuf> = Vec::new();
     let mut in_figure = false;
     let ctx = ui.ctx().clone();
-    let index = ui.ctx().data(|data| {
-        data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
-            "reader_link_index",
-        ))
-    });
-    let from = reader_document(ui);
-    // Each reader's links have their own ids, so another reader with the same words cannot
-    // take a link's focus.
-    target.reader = from;
+    let index = link_index(&ctx);
     let linked: Arc<str> = index.as_ref().map_or_else(
         || markdown.into(),
         |index| linked_markdown(&ctx, index, markdown, from),
@@ -287,7 +787,7 @@ fn show_with_density(
                 }
             }
             Event::Start(Tag::Table(_)) => {
-                flush(ui, &mut job, &mut target);
+                paragraph(&mut ops, &mut job, &mut target);
                 table = Some(Vec::new());
             }
             Event::Start(Tag::TableHead | Tag::TableRow) => {
@@ -303,7 +803,8 @@ fn show_with_density(
             Event::End(TagEnd::Table) => {
                 if let Some(mut rows) = table.take() {
                     if dense && rows.first().is_some_and(|row| row == &["Field", "Value"]) {
-                        show_fields(ui, &rows[1..]);
+                        rows.remove(0);
+                        ops.push(Op::Fields(rows));
                         inventory_table = false;
                         continue;
                     }
@@ -326,19 +827,6 @@ fn show_with_density(
                     } else {
                         (0..rows.first().map_or(0, Vec::len)).collect()
                     };
-                    let display = |cell: &'_ str| -> String {
-                        if compact {
-                            match cell {
-                                "Link" => "Item",
-                                "true" => "Yes",
-                                "false" => "—",
-                                other => other,
-                            }
-                            .to_owned()
-                        } else {
-                            cell.to_owned()
-                        }
-                    };
                     if let Some(Ok(crate::roll_table::Marker { dice, .. })) = &rolls
                         && let Some(header) = rows.first_mut().and_then(|row| row.first_mut())
                         && header.trim().is_empty()
@@ -349,72 +837,12 @@ fn show_with_density(
                             .unwrap_or(dice)
                             .to_owned();
                     }
-                    // A reader may give its tables the pane beyond the prose measure.
-                    let room = table_room(ui).filter(|width| *width > ui.available_width());
-                    // The reader's own id: the table's roll state and its field belong to this
-                    // reader, so the same table in World and in Lookup never shares them.
-                    let reader = ui.id();
-                    let draw_table = |ui: &mut egui::Ui| {
-                        let mut widths = column_widths(ui, &rows, &columns, &display);
-                        // A rollable table keeps a slot for the roll mark before every row's
-                        // range, so the rolled row's range stays at the x of the others. The
-                        // first column is sized with the slot.
-                        let mark = (rolls.is_some() && !widths.is_empty()).then(|| {
-                            ui.painter()
-                                .layout_no_wrap(
-                                    format!("{} ", design::icons::DICE),
-                                    Type::Stat.font(ui),
-                                    colors().text,
-                                )
-                                .size()
-                                .x
-                                .ceil()
-                        });
-                        if let Some(slot) = mark {
-                            for (at, row) in rows.iter().enumerate() {
-                                let label =
-                                    display(row.get(columns[0]).map(String::as_str).unwrap_or(""));
-                                let role = if at == 0 { Type::StatLabel } else { Type::Stat };
-                                let width = ui
-                                    .painter()
-                                    .layout_no_wrap(label, role.font(ui), colors().text)
-                                    .size()
-                                    .x
-                                    .ceil()
-                                    + slot
-                                    + design::XS;
-                                widths[0] = widths[0].max(width);
-                            }
-                        }
-                        let matched = rolls.as_ref().and_then(|marker| {
-                            crate::roll_table::matched_row(ui, reader, marker, &rows)
-                        });
-                        reader_table(ui, &rows, &columns, &widths, &display, matched, mark);
-                    };
-                    match room {
-                        Some(width) => {
-                            // The table draws past the measure, but the reader's column keeps
-                            // it: the rules and prose after the table keep their width.
-                            let mut area = ui.available_rect_before_wrap();
-                            area.set_width(width);
-                            let mut wide = ui.new_child(
-                                egui::UiBuilder::new()
-                                    .max_rect(area)
-                                    .layout(egui::Layout::top_down(egui::Align::Min)),
-                            );
-                            draw_table(&mut wide);
-                            let height = wide.min_rect().height();
-                            ui.allocate_exact_size(
-                                egui::vec2(ui.available_width(), height),
-                                egui::Sense::hover(),
-                            );
-                        }
-                        None => draw_table(ui),
-                    }
-                    if let Some(marker) = rolls.take() {
-                        crate::roll_table::roll_control(ui, reader, &marker, &rows);
-                    }
-                    design::gap(ui, design::Gap::S);
+                    ops.push(Op::Table(Box::new(TableBlock {
+                        rows,
+                        columns,
+                        compact,
+                        rolls: rolls.take(),
+                    })));
                 }
                 inventory_table = false;
             }
@@ -428,47 +856,38 @@ fn show_with_density(
                 }
             }
             Event::Start(Tag::Heading { level, .. }) => {
-                flush(ui, &mut job, &mut target);
-                design::gap(
-                    ui,
-                    if dense {
-                        design::Gap::S
-                    } else {
-                        match level {
-                            pulldown_cmark::HeadingLevel::H1 => design::Gap::S,
-                            pulldown_cmark::HeadingLevel::H2 => design::Gap::L,
-                            _ => design::Gap::M,
-                        }
-                    },
-                );
+                paragraph(&mut ops, &mut job, &mut target);
+                ops.push(Op::Gap(if dense {
+                    design::Gap::S
+                } else {
+                    match level {
+                        pulldown_cmark::HeadingLevel::H1 => design::Gap::S,
+                        pulldown_cmark::HeadingLevel::H2 => design::Gap::L,
+                        _ => design::Gap::M,
+                    }
+                }));
                 heading = Some(level);
             }
             Event::End(TagEnd::Heading(level)) => {
                 // A linked section opens with its heading at the column's top: a typed jump
                 // that the column writes as its own offset (ruling M18).
-                if wanted_heading(ui.ctx(), &job.text) {
-                    design::reveal::jump(
-                        ui,
-                        ui.cursor().top(),
-                        design::reveal::JumpTo::LinkedHeading,
-                    );
-                }
-                draw_figures(ui, &mut figures, &job);
-                flush(ui, &mut job, &mut target);
+                ops.push(Op::Jump(job.text.clone()));
+                figures_op(&mut ops, &mut figures, &job);
+                paragraph(&mut ops, &mut job, &mut target);
                 if level == pulldown_cmark::HeadingLevel::H2
                     || (!dense && level == pulldown_cmark::HeadingLevel::H3)
                 {
-                    design::rule(ui);
-                    design::gap(ui, design::Gap::XS);
+                    ops.push(Op::Rule);
+                    ops.push(Op::Gap(design::Gap::XS));
                 }
                 heading = None;
             }
             Event::Start(Tag::CodeBlock(_)) => {
-                flush(ui, &mut job, &mut target);
+                paragraph(&mut ops, &mut job, &mut target);
                 code = true;
             }
             Event::End(TagEnd::CodeBlock) => {
-                flush(ui, &mut job, &mut target);
+                paragraph(&mut ops, &mut job, &mut target);
                 code = false;
             }
             Event::Start(Tag::Strong) => {
@@ -515,29 +934,22 @@ fn show_with_density(
             Event::Start(Tag::Strikethrough) => struck = true,
             Event::End(TagEnd::Strikethrough) => struck = false,
             Event::Start(Tag::BlockQuote(_)) => {
-                flush(ui, &mut job, &mut target);
-                target.quotes.push(ui.cursor().top());
+                paragraph(&mut ops, &mut job, &mut target);
+                ops.push(Op::QuoteStart);
+                quote_depth += 1;
             }
             Event::End(TagEnd::BlockQuote(_)) => {
-                draw_figures(ui, &mut figures, &job);
-                flush(ui, &mut job, &mut target);
-                if let Some(top) = target.quotes.pop() {
-                    let x = ui.max_rect().left()
-                        + QUOTE_INDENT * target.quotes.len() as f32
-                        + QUOTE_BAR_WIDTH / 2.0;
-                    ui.painter().vline(
-                        x,
-                        top..=target.quote_bottom.max(top),
-                        egui::Stroke::new(QUOTE_BAR_WIDTH, colors().rule),
-                    );
-                }
+                figures_op(&mut ops, &mut figures, &job);
+                paragraph(&mut ops, &mut job, &mut target);
+                ops.push(Op::QuoteEnd);
+                quote_depth = quote_depth.saturating_sub(1);
             }
             Event::Start(Tag::List(start)) => lists.push(start),
             Event::End(TagEnd::List(_)) => {
                 lists.pop();
             }
             Event::Start(Tag::Item) => {
-                flush(ui, &mut job, &mut target);
+                paragraph(&mut ops, &mut job, &mut target);
                 let indent = "  ".repeat(lists.len().saturating_sub(1));
                 let marker = match lists.last_mut() {
                     Some(Some(number)) => {
@@ -609,8 +1021,8 @@ fn show_with_density(
                 ));
             }
             Event::End(TagEnd::Paragraph | TagEnd::Item) => {
-                draw_figures(ui, &mut figures, &job);
-                flush(ui, &mut job, &mut target);
+                figures_op(&mut ops, &mut figures, &job);
+                paragraph(&mut ops, &mut job, &mut target);
             }
             Event::HardBreak if table.is_none() => job.append(
                 "\n",
@@ -662,7 +1074,7 @@ fn show_with_density(
                     } else {
                         Type::ProseStrong
                     }
-                } else if (italic || !target.quotes.is_empty()) && !dense && row.is_none() {
+                } else if (italic || quote_depth > 0) && !dense && row.is_none() {
                     Type::ProseItalic
                 } else {
                     prose
@@ -709,21 +1121,15 @@ fn show_with_density(
                 );
             }
             Event::Rule => {
-                flush(ui, &mut job, &mut target);
-                design::rule(ui);
+                paragraph(&mut ops, &mut job, &mut target);
+                ops.push(Op::Rule);
             }
             _ => {}
         }
     }
-    draw_figures(ui, &mut figures, &job);
-    flush(ui, &mut job, &mut target);
-}
-
-/// Images come before the words of their block, which are their caption.
-fn draw_figures(ui: &mut egui::Ui, figures: &mut Vec<std::path::PathBuf>, caption: &LayoutJob) {
-    for figure in figures.drain(..) {
-        crate::art::figure(ui, &figure, &caption.text);
-    }
+    figures_op(&mut ops, &mut figures, &job);
+    paragraph(&mut ops, &mut job, &mut target);
+    ops
 }
 
 /// Notes write a captioned image as `*caption* ([image](url))`. Where the image will show in
@@ -1220,18 +1626,11 @@ fn display_field_value(value: &str) -> String {
 const QUOTE_INDENT: f32 = design::QUOTE_INDENT;
 const QUOTE_BAR_WIDTH: f32 = 2.0;
 
-/// What the words waiting to be drawn link to, and the quotes they are in.
+/// What the words waiting to become a paragraph link to.
 #[derive(Default)]
 struct Targets {
-    /// The document the reader shows, when it shows one.
-    reader: Option<uuid::Uuid>,
     links: Vec<(std::ops::Range<usize>, LinkTarget)>,
     task: Option<(bool, f32, Type)>,
-    /// The top of each open quote, outermost first.
-    quotes: Vec<f32>,
-    /// The bottom of the last words drawn in a quote, where its bar stops.
-    quote_bottom: f32,
-    short_links: ShortLinks,
     /// A plan row's words: no space follows them.
     row: bool,
     /// In a plan row's words, the bytes of a missing link's icon that starts the words: it takes
@@ -1269,16 +1668,16 @@ impl LinkTarget {
 /// A link's underline, or a missing link's dots, sit this far below the words' baseline.
 const UNDERLINE_BELOW_BASELINE: f32 = design::HAIRLINE_WIDTH * 2.0;
 
-/// A paragraph stays one paragraph. Each link in it is its own control: Tab reaches the
-/// links in reading order, Enter or Space follows the focused one, and the pointer presses
-/// only a link's own target.
-fn draw_with_links(
-    ui: &mut egui::Ui,
+/// A paragraph with links, laid out once: each short link's spare width reserved, rows with
+/// links lifted to a full target, and each link's underline taken out of the words, to be drawn
+/// by the paragraph 2 px below the baseline (so a taller row never moves it down to the bottom
+/// of the target, near the next line).
+fn lay_out_links(
+    ui: &egui::Ui,
     mut job: LayoutJob,
     mut links: Vec<(std::ops::Range<usize>, LinkTarget)>,
-    reader: egui::Id,
     short_links: ShortLinks,
-) -> egui::Rect {
+) -> LaidLinks {
     // The paragraph's own words, before any display space is added.
     let text = job.text.clone();
     let spare = reserve_short_links(ui, &mut job, &mut links, short_links);
@@ -1289,8 +1688,6 @@ fn draw_with_links(
     // has them (an uneven pitch, and a larger gap above the paragraph).
     // After the lift every row is at least `XL`, so this is only a floor.
     job.first_row_min_height = job.first_row_min_height.max(design::XL);
-    // The paragraph draws each link's underline itself, 2 px below the words' baseline, so a
-    // taller row never moves it down to the bottom of the target, near the next line.
     let mut underlines: Vec<egui::Stroke> = vec![egui::Stroke::NONE; links.len()];
     for section in &mut job.sections {
         if section.format.underline == egui::Stroke::NONE {
@@ -1305,24 +1702,69 @@ fn draw_with_links(
             section.format.underline = egui::Stroke::NONE;
         }
     }
-    let (position, galley, response) = egui::Label::new(job)
-        .wrap()
+    let galley = lay_out(ui, job, true);
+    let words = link_words(&galley, egui::Pos2::ZERO, &links);
+    LaidLinks {
+        text,
+        galley,
+        links,
+        spare,
+        underlines,
+        words,
+    }
+}
+
+/// A paragraph stays one paragraph. Each link in it is its own control: Tab reaches the
+/// links in reading order, Enter or Space follows the focused one, and the pointer presses
+/// only a link's own target. `links_id` is the paragraph's block in its reader.
+fn draw_laid_links(ui: &mut egui::Ui, laid: &LaidLinks, links_id: egui::Id) -> egui::Rect {
+    let LaidLinks {
+        text,
+        galley,
+        links,
+        spare,
+        underlines,
+        words,
+    } = laid;
+    let (position, galley, response) = egui::Label::new(galley.clone())
         .sense(egui::Sense::hover())
         .layout_in_ui(ui);
-    ui.painter().galley(position, galley.clone(), colors().text);
     // The paragraph reads as plain text, as an unlinked one does. Its links follow as controls.
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &text));
-    egui::text_selection::accesskit_text::update_accesskit_for_text_widget(
-        ui.ctx(),
-        response.id,
-        None,
-        egui::accesskit::Role::Label,
-        egui::emath::TSTransform::from_translation(position.to_vec2()),
-        &galley,
-    );
-    let words = link_words(&galley, position, &links);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    // Its words, their underlines and their text runs only where they can be seen, as an egui
+    // label paints and reads out its own (layout PR 9b-R1a: an unseen paragraph costs nothing
+    // that grows with its words). Its links stay controls wherever they are, so Tab reaches them.
+    let shown = ui.is_rect_visible(response.rect);
+    if shown {
+        ui.painter().galley(position, galley.clone(), colors().text);
+        egui::text_selection::accesskit_text::update_accesskit_for_text_widget(
+            ui.ctx(),
+            response.id,
+            None,
+            egui::accesskit::Role::Label,
+            egui::emath::TSTransform::from_translation(position.to_vec2()),
+            &galley,
+        );
+    }
+    let at = position.to_vec2();
+    let words: Vec<Vec<LinkPart>> = words
+        .iter()
+        .map(|parts| {
+            parts
+                .iter()
+                .map(|part| LinkPart {
+                    left: part.left + at.x,
+                    right: part.right + at.x,
+                    y: part.y + at.y,
+                    rect: part.rect.translate(at),
+                    row_start: part.row_start,
+                    entry_left: part.entry_left.map(|left| left + at.x),
+                })
+                .collect()
+        })
+        .collect();
     for (stroke, parts) in underlines.iter().zip(&words) {
-        if *stroke == egui::Stroke::NONE {
+        if *stroke == egui::Stroke::NONE || !shown {
             continue;
         }
         for part in parts {
@@ -1333,7 +1775,7 @@ fn draw_with_links(
         }
     }
     for ((_, destination), parts) in links.iter().zip(&words) {
-        if matches!(destination, LinkTarget::Missing) {
+        if shown && matches!(destination, LinkTarget::Missing) {
             for part in parts {
                 let y = part.y + UNDERLINE_BELOW_BASELINE;
                 let mut dot = part.left;
@@ -1348,8 +1790,7 @@ fn draw_with_links(
             }
         }
     }
-    let targets = link_targets(&words, &spare, response.rect);
-    let links_id = paragraph_id(ui.ctx(), reader, &text);
+    let targets = link_targets(&words, spare, response.rect);
     for (index, ((range, destination), rects)) in links.iter().zip(&targets).enumerate() {
         let words_text = &galley.job.text[range.clone()];
         let id = links_id.with(index);
@@ -1805,33 +2246,6 @@ fn reader_document(ui: &egui::Ui) -> Option<uuid::Uuid> {
     })
 }
 
-/// The paragraph's links keep their ids, and so keyboard focus, when the layout around them
-/// changes: at a breakpoint, or when a pane opens beside the reader. The id comes from the
-/// reader and the paragraph's words, so another reader with the same words, drawn earlier,
-/// does not move it. The same words twice in one reader count up in drawing order.
-fn paragraph_id(ctx: &egui::Context, reader: egui::Id, text: &str) -> egui::Id {
-    #[derive(Clone, Default)]
-    struct Seen {
-        pass: u64,
-        count: std::collections::HashMap<egui::Id, u32>,
-    }
-    let words = reader.with(("markdown_paragraph_links", text));
-    let pass = ctx.cumulative_pass_nr();
-    let nth = ctx.data_mut(|data| {
-        let seen = data.get_temp_mut_or_default::<Seen>(egui::Id::new("markdown_paragraph_seen"));
-        if seen.pass != pass {
-            *seen = Seen {
-                pass,
-                ..Default::default()
-            };
-        }
-        let nth = seen.count.entry(words).or_default();
-        *nth += 1;
-        *nth
-    });
-    words.with(nth)
-}
-
 /// One row's part of a link's words, on the screen.
 #[derive(Clone, Copy, Debug)]
 struct LinkPart {
@@ -2077,70 +2491,6 @@ fn split_job(job: LayoutJob, cut: usize) -> (LayoutJob, LayoutJob) {
         ..job.clone()
     };
     (part(0..cut), part(cut..job.text.len()))
-}
-
-fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
-    if job.is_empty() {
-        return;
-    }
-    let mut links = std::mem::take(&mut target.links);
-    let task = target.task.take();
-    let reader = egui::Id::new(("markdown_reader", target.reader));
-    let short_links = target.short_links;
-    let job = std::mem::take(job);
-    if let Some(cut) = target.lead.take() {
-        // The icon in its own column; the words wrap at their own left edge.
-        let (icon, words) = split_job(job, cut);
-        for (range, _) in &mut links {
-            *range = range.start - cut..range.end - cut;
-        }
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            ui.add(egui::Label::new(icon).extend());
-            ui.vertical(|ui| {
-                if links.is_empty() {
-                    ui.add(egui::Label::new(words).wrap());
-                } else {
-                    draw_with_links(ui, words, links, reader, short_links);
-                }
-            });
-        });
-        return;
-    }
-    let draw = |ui: &mut egui::Ui| {
-        let rect = if links.is_empty() {
-            ui.add(egui::Label::new(job).wrap()).rect
-        } else {
-            draw_with_links(ui, job, links, reader, short_links)
-        };
-        if let Some((done, indent, role)) = task {
-            let icon_rect = egui::Rect::from_min_size(
-                rect.min + egui::vec2(indent, 0.0),
-                egui::vec2(role.size(), role.line()),
-            );
-            ui.interact(
-                icon_rect,
-                ui.next_auto_id().with("task-marker"),
-                egui::Sense::hover(),
-            )
-            .widget_info(|| {
-                egui::WidgetInfo::labeled(
-                    egui::WidgetType::Label,
-                    true,
-                    if done { "Done" } else { "Open" },
-                )
-            });
-        }
-    };
-    if target.quotes.is_empty() {
-        draw(ui);
-    } else {
-        let rect = design::quote(ui, target.quotes.len(), draw).response.rect;
-        target.quote_bottom = rect.bottom();
-    }
-    if !target.row {
-        design::gap(ui, design::Gap::S);
-    }
 }
 
 #[cfg(test)]
@@ -2893,6 +3243,31 @@ mod tests {
             take_note_link(&harness.ctx).as_deref(),
             Some("Oskar"),
             "AD1-space"
+        );
+        // Layout PR 9b-R1a: a linked paragraph far below the view keeps its link as a control
+        // (Tab reaches it), and reads out no text runs for its unseen words, as an egui label
+        // below the view does not.
+        let far: &'static str = Box::leak(
+            format!(
+                "{}Ask [Wren](splat-note:Wren) at the end of the night.",
+                "A line of the watch.\n\n".repeat(60)
+            )
+            .into_boxed_str(),
+        );
+        let harness = reader(far);
+        use egui_kittest::kittest::NodeT;
+        let unseen: Vec<_> = harness
+            .root()
+            .children_recursive()
+            .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::TextRun)
+            .map(|node| node.rect())
+            .filter(|rect| rect.top() > 320.0)
+            .collect();
+        assert!(
+            unseen.is_empty() && link_names(&harness) == ["Wren (opens Wren)"],
+            "9b-R1a-unseen: no text runs below the view {unseen:?}, the link stays a control \
+             {:?}",
+            link_names(&harness)
         );
     }
 

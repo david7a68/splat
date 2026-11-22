@@ -2413,6 +2413,9 @@ pub struct Reader {
     pub form_shown_elsewhere: Option<Uuid>,
     /// The note whose edit form this reader drew, and the pass it drew it in.
     form_drawn: Option<(Uuid, u64)>,
+    /// Whether the entry on show has prose, for the entry and the index's load: its body is
+    /// parsed for it once, not in every frame (layout PR 9b-R1a).
+    prose: Option<(Uuid, u64, bool)>,
     /// The open Status field as this pass drew it, for its Log room's reveal at the end of the
     /// draw (layout step 11b). Taken there, so nothing of it is kept after its pass.
     status_field: Option<egui::Response>,
@@ -3445,9 +3448,18 @@ impl Reader {
         if item.entry.kind == "world" && index.duplicate_world.contains_key(&item.entry.path) {
             go = go.or(self.duplicate_values(ui, item, index));
         }
-        let has_prose =
-            !crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
+        let has_prose = match self.prose {
+            Some((id, load, prose)) if id == item.entry.id && load == index.generation() => prose,
+            _ => {
+                let prose = !crate::library::presentation::reading_sections(
+                    &item.entry.body,
+                    &item.entry.name,
+                )
                 .is_empty();
+                self.prose = Some((item.entry.id, index.generation(), prose));
+                prose
+            }
+        };
         if (item.entry.kind == "world" || item.is_world_note()) && !has_prose {
             // These words stand where the note's first paragraph would: the reader's gap before
             // prose (`L`) sets them apart from the values or the action above (FF4).
@@ -3472,7 +3484,16 @@ impl Reader {
                 design::gap(ui, design::Gap::L);
             }
             let followed = style::measure(ui, |ui| {
-                style::markdown(ui, &item.entry.body);
+                // Layout PR 9b-R1a: the note's prepared blocks are kept for the entry and the
+                // index's load, so a quiet frame parses and lays out nothing.
+                crate::markdown_view::show_document(
+                    ui,
+                    crate::markdown_view::ReaderSource {
+                        doc: crate::markdown_view::DocumentId::Entry(item.entry.id),
+                        revision: index.generation(),
+                        text: &item.entry.body,
+                    },
+                );
                 if log_room_open {
                     room_at = Some(design::pane::keep_room(ui, design::pane::Room::LogEntry));
                 }
