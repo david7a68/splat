@@ -156,7 +156,6 @@ scroll-request	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 scroll-request	src/sessions/plan.rs	reveal_opened_played	3	Sessions
 scroll-request	src/settings.rs	Settings::show_account	1	Settings
 scroll-request	src/timeline/checks.rs	lines	1	Timeline
-scroll-request	src/timeline/page.rs	TimelinePage::list	1	Timeline
 scroll-offset	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area_in	1	design	design implementation boundary

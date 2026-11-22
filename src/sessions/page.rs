@@ -706,6 +706,8 @@ pub struct Sessions {
     rewards: plan::Rewards,
     /// The note's plan as rows, built when the note, the content or the encounters change.
     plan_model: plan::PlanModelCache,
+    /// What the plan's closed rows read from their data, kept by its inputs' revisions.
+    plan_projection: plan::ProjectionCache,
     /// The fight behind the open event, read once.
     /// The open played fight's summary, kept with the run's file as last found (or why not):
     /// a different answer from the folder reads it again (R41, round 30 review F2).
@@ -733,6 +735,8 @@ pub struct Sessions {
     templates: Vec<Template>,
     template: Option<String>,
     template_draft: Option<Draft>,
+    /// The kept answer of the open note's compare with a move result's words (layout PR 9b-C).
+    same_moved: design::text_draft::KeptCompare,
     /// The shown built-in template's name and its words as a document (layout PR 9b).
     builtin_text: Option<(String, design::text_draft::TextDraft)>,
     new_template: Option<String>,
@@ -1825,12 +1829,17 @@ impl Sessions {
         match self.removal_note.as_mut().filter(|_| same_removal) {
             Some(seen) => {
                 match (&seen.words, words) {
-                    (Some(before), Some(draft)) if *before != draft.body.as_str() => {
+                    (Some(before), Some(draft))
+                        if !draft.body.same_as(before.revision(), before, &seen.same) =>
+                    {
                         book.forget_removed();
                         self.removal_note = None;
                         return;
                     }
-                    (None, Some(draft)) => seen.words = Some(draft.body.as_str().to_owned()),
+                    (None, Some(draft)) => {
+                        seen.words =
+                            Some(design::memo::Revised::new(draft.body.as_str().to_owned()));
+                    }
                     _ => {}
                 }
                 seen.revision = revision;
@@ -1839,7 +1848,9 @@ impl Sessions {
                 self.removal_note = Some(RemovalNote {
                     id,
                     revision,
-                    words: words.map(|draft| draft.body.as_str().to_owned()),
+                    words: words
+                        .map(|draft| design::memo::Revised::new(draft.body.as_str().to_owned())),
+                    same: design::text_draft::KeptCompare::default(),
                 });
             }
         }
@@ -3382,7 +3393,7 @@ impl Sessions {
                         Recovery::First(Step::Check(File::SessionNote)),
                     ))
                 }
-                Some(draft) if !same_file(&draft) || draft.body.as_str() != write.after => {
+                Some(draft) if !same_file(&draft) || !draft.body.same_words(&write.after) => {
                     let within = write.within();
                     Some((
                         Cause::EditedSince(within.clone()),
@@ -4576,10 +4587,11 @@ impl Sessions {
             session,
             before,
             open_run,
-            body: self
-                .draft
-                .as_ref()
-                .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
+            body: design::memo::Revised::new(
+                self.draft
+                    .as_ref()
+                    .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
+            ),
             events: book.events.clone(),
             name,
             number,
@@ -4595,10 +4607,11 @@ impl Sessions {
         let changed = self.moves.get(&page).is_some_and(|shown| {
             let moved = shown.value();
             moved.events != book.events
-                || self
-                    .draft
-                    .as_ref()
-                    .is_none_or(|draft| draft.body.as_str() != moved.body)
+                || self.draft.as_ref().is_none_or(|draft| {
+                    !draft
+                        .body
+                        .same_as(moved.body.revision(), &moved.body, &self.same_moved)
+                })
         });
         if changed {
             self.moves.owner_changed(&page);
@@ -7755,24 +7768,29 @@ impl Sessions {
     )]
     fn template_editor(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        let Some(template) = self
+        let Some(index) = self
             .template
             .as_ref()
-            .and_then(|name| self.templates.iter().find(|t| &t.name == name))
-            .cloned()
+            .and_then(|name| self.templates.iter().position(|t| &t.name == name))
         else {
             return;
         };
+        // Its name and place only (layout PR 9b-C): its words stay in `self.templates`, read
+        // there by the event that needs them, so a frame copies none of them.
+        let (name, path) = (
+            self.templates[index].name.clone(),
+            self.templates[index].path.clone(),
+        );
         // M0493: the template's title line, the shared part: `More` (its menu: Delete, or Go
         // back to built-in) and the draft's state for a template file; `Customize` and
         // `Read-only` for a built-in one.
         let mut delete = false;
-        let more_name = format!("More actions for {}", template.name);
-        let mut line = design::TitleLine::new(&template.name).role(design::TitleType::Section);
-        if template.path.is_some() {
+        let more_name = format!("More actions for {}", name);
+        let mut line = design::TitleLine::new(&name).role(design::TitleType::Section);
+        if path.is_some() {
             let built_in = super::BUILT_IN_TEMPLATES
                 .iter()
-                .any(|(name, _)| *name == template.name);
+                .any(|(other, _)| *other == name);
             let delete = &mut delete;
             line = line.menu(
                 design::TitleAction::quiet(MORE).name(&more_name),
@@ -7813,7 +7831,7 @@ impl Sessions {
         }
         let customize = line.show(ui).clicked(CUSTOMIZE);
         if customize && let Some(folder) = &self.folder {
-            match create_template(folder, &template.name, &template.body) {
+            match create_template(folder, &name, &self.templates[index].body) {
                 Ok(created) => {
                     self.refresh();
                     self.select_template(&created.name);
@@ -7822,18 +7840,18 @@ impl Sessions {
             }
             return;
         }
-        if delete && let Some(path) = &template.path {
+        if delete && let Some(path) = &path {
             match super::remove_file(path) {
                 Ok(()) => {
                     let body = self.template_draft.take().map_or_else(
-                        || template.body.as_str().to_owned(),
+                        || self.templates[index].body.as_str().to_owned(),
                         |draft| draft.body.into_string(),
                     );
                     self.deleted_templates.record(kept::DeletedTemplate {
                         page: kept::Page {
                             root: self.folder.clone().unwrap_or_default(),
                         },
-                        name: template.name.clone(),
+                        name: name.clone(),
                         body,
                     });
                     self.template = None;
@@ -7852,10 +7870,8 @@ impl Sessions {
         // The template's text field is its file's (M0495, M0496). A template has no typed owner
         // key yet: its path is the key (`TextKey::from_data`, counted).
         let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
-            template
-                .path
-                .as_deref()
-                .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
+            path.as_deref()
+                .map_or_else(|| name.clone(), |path| path.display().to_string()),
         ));
         if let Some(draft) = &mut self.template_draft {
             // One closed editor viewport (layout PR 9): its fixed frame fills the pane's body
@@ -7886,15 +7902,15 @@ impl Sessions {
             if self
                 .builtin_text
                 .as_ref()
-                .is_none_or(|(name, _)| *name != template.name)
+                .is_none_or(|(other, _)| *other != name)
             {
                 self.builtin_text = Some((
-                    template.name.clone(),
-                    design::text_draft::TextDraft::new(template.body.as_str()),
+                    name.clone(),
+                    design::text_draft::TextDraft::new(self.templates[index].body.as_str()),
                 ));
             }
             let body = &mut self.builtin_text.as_mut().expect("kept above").1;
-            design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
+            design::ScrollColumn::new(("template_editor", &name)).show(ui, |ui| {
                 let (width, height) = (ui.available_width(), ui.available_height());
                 let font = design::reader::prose_type(ui).font(ui);
                 let output = field.editor(ui, body, markdown_face(font.clone()), |edit| {
@@ -8547,7 +8563,10 @@ struct RemovalNote {
     /// The removed event.
     id: String,
     revision: Option<u64>,
-    words: Option<String>,
+    /// The note's words when the result began, with their revision (layout PR 9b-C), and the
+    /// kept answer of the draft's compare with them: a quiet frame compares two revisions.
+    words: Option<design::memo::Revised<String>>,
+    same: design::text_draft::KeptCompare,
 }
 
 /// Keep the note and group editor under stable IDs across the side-by-side breakpoint.
@@ -9599,10 +9618,10 @@ mod tests {
         harness.get_by_label("Template text").focus();
         harness.run_steps(2);
         // Layout PR 9b: the focused template's quiet frames lay out and hash none of its text.
-        assert_eq!(
-            design::pane::text_work(|| harness.run_steps(4)),
-            (0, 0),
-            "9b-quiet: the template editor's quiet frames"
+        let work = design::pane::text_work(|| harness.run_steps(4));
+        assert!(
+            work.is_quiet(4),
+            "9b-quiet: the template editor's quiet frames: {work:?}"
         );
         harness.get_by_label("Template text").type_text("Dusk");
         harness.run_steps(16);
@@ -9689,10 +9708,10 @@ mod tests {
         harness.get_by_label("Note text").focus();
         harness.run_steps(2);
         // Layout PR 9b: the focused note's quiet frames lay out and hash none of its text.
-        assert_eq!(
-            design::pane::text_work(|| harness.run_steps(4)),
-            (0, 0),
-            "9b-quiet: the note editor's quiet frames"
+        let work = design::pane::text_work(|| harness.run_steps(4));
+        assert!(
+            work.is_quiet(4),
+            "9b-quiet: the note editor's quiet frames: {work:?}"
         );
         harness.get_by_label("Note text").type_text("Lost words");
         harness.run_steps(8);

@@ -56,8 +56,12 @@ impl Snapshot {
 /// an unchanged frame neither hashes nor parses the text.
 pub struct Repair {
     path: String,
-    baseline: String,
+    /// The text on disk, with its revision (layout PR 9b-C): `dirty` compares two revisions on
+    /// a quiet frame.
+    baseline: crate::design::memo::Revised<String>,
     draft: crate::design::text_draft::TextDraft,
+    /// The last answer of `dirty`'s compare.
+    same: crate::design::text_draft::KeptCompare,
     /// Why Save would refuse `draft`: Save's own check without writing, shared with World.
     refusal: Option<String>,
     /// The line of `draft` to mark.
@@ -70,8 +74,9 @@ impl Repair {
     fn new(path: String, text: String, campaign: &Campaign) -> Self {
         let mut repair = Self {
             path,
-            baseline: text.clone(),
+            baseline: crate::design::memo::Revised::new(text.clone()),
             draft: crate::design::text_draft::TextDraft::new(text),
+            same: crate::design::text_draft::KeptCompare::default(),
             refusal: None,
             error_line: None,
             failure: None,
@@ -91,7 +96,9 @@ impl Repair {
         self.failure = None;
     }
     fn dirty(&self) -> bool {
-        self.draft.as_str() != self.baseline
+        !self
+            .draft
+            .same_as(self.baseline.revision(), &self.baseline, &self.same)
     }
     /// Save's check of the draft as the save row's typed diagnosis: the one value that gives
     /// the save row's `Invalid` and the footer's message of the same fault their tone (R41).
@@ -118,7 +125,7 @@ impl Repair {
             &self.draft,
         ) {
             Ok(_) => {
-                self.baseline = self.draft.as_str().to_owned();
+                self.baseline = crate::design::memo::Revised::new(self.draft.as_str().to_owned());
                 self.failure = None;
                 true
             }
@@ -1996,7 +2003,7 @@ impl CampaignContent {
                                 text: repair.draft.as_str().to_owned(),
                             }
                         );
-                        let _ = repair.draft.replace(repair.baseline.clone());
+                        let _ = repair.draft.replace(repair.baseline.as_str());
                         repair.draft_changed(active, checks);
                     }
                     if repair.dirty() {

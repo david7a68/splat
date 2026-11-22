@@ -1290,11 +1290,16 @@ impl TimelinePage {
                 egui::vec2(width, ROW),
             )
         };
-        // The row before the target comes to the top, as the list opened before.
+        // The row before the target comes to the top, as the list opened before: the list's
+        // column writes it as its own offset at its next pass (M0556, `reveal::jump`).
         if let Some(target) = self.scroll_to.take()
             && let Some(row) = rows.iter().position(|&index| index == target)
         {
-            ui.scroll_to_rect(place(row.saturating_sub(1)), Some(egui::Align::Min));
+            design::reveal::jump(
+                ui,
+                place(row.saturating_sub(1)).top(),
+                design::reveal::JumpTo::ListedRow,
+            );
         }
         let shown = ui.clip_rect();
         let first = ((shown.top() - column.top()) / step).floor().max(0.0) as usize;
@@ -2211,6 +2216,75 @@ mod tests {
             !on_disk(&harness).contains("Moved camp"),
             "under a modal, Ctrl+S saves nothing on the campaign change's frame"
         );
+    }
+
+    /// M0556: the list opens at its last event: the list's column writes the jump
+    /// (`reveal::jump`), so the last event is painted whole inside the column's clip and the
+    /// first one is not drawn (only the rows in view draw). At a wide window (two columns' width)
+    /// and at a small one. The theme is the app's before the page's first frame: the harness draws
+    /// until the page settles before the test's own code runs, and a jump measured at egui's
+    /// default sizes is clamped short of the end once the theme's sizes apply.
+    #[test]
+    fn the_list_opens_at_its_last_event() {
+        use egui_kittest::kittest::Queryable;
+        for size in [egui::vec2(1200.0, 600.0), egui::vec2(960.0, 640.0)] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut book = Book::default();
+            book.open(Some(dir.path()));
+            for at in 0..60 {
+                book.add(Kind::Event, None);
+                book.events.last_mut().unwrap().title = format!("Stop {at:02}");
+            }
+            book.save();
+            type State = (TimelinePage, Book, crate::sessions::page::Sessions, bool);
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(size)
+                .build_state(
+                    |ctx, (page, book, notes, themed): &mut State| {
+                        // New fonts apply from the next frame: the page draws from then on.
+                        if !std::mem::replace(themed, true) {
+                            design::theme::install(ctx);
+                            ctx.request_repaint();
+                            return;
+                        }
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
+                        });
+                    },
+                    (
+                        TimelinePage::default(),
+                        book,
+                        crate::sessions::page::Sessions::default(),
+                        false,
+                    ),
+                );
+            harness.run_steps(6);
+            // The column's clip ends at the panel's content edge (the list has no footer).
+            let bottom = size.y
+                - f32::from(
+                    egui::Frame::central_panel(&harness.ctx.style())
+                        .inner_margin
+                        .bottom,
+                );
+            let rect = |words: &str| {
+                harness
+                    .query_all_by_label_contains(words)
+                    .next()
+                    .map(|node| node.rect())
+            };
+            let last =
+                rect("Stop 59").unwrap_or_else(|| panic!("{size:?}: the last event is drawn"));
+            let before =
+                rect("Stop 58").unwrap_or_else(|| panic!("{size:?}: the event before it is drawn"));
+            assert!(
+                last.bottom() <= bottom + 0.5 && last.top() > before.bottom(),
+                "{size:?}: the last event {last:?} is whole above the clip's end {bottom}"
+            );
+            assert!(
+                rect("Stop 00").is_none(),
+                "{size:?}: the list moved: the first event is out of view"
+            );
+        }
     }
 
     /// Round 30 B7d, ruling L9: the Add result ends in the page's owner update

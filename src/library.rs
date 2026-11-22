@@ -234,6 +234,11 @@ pub struct Library {
     pending: Option<mpsc::Receiver<Result<Loaded, String>>>,
     selected: Option<usize>,
     draft: crate::design::text_draft::TextDraft,
+    /// The last answers of the draft's compares (layout PR 9b-C): with its note's saved text, and
+    /// with the heading and stat fixes' words. Each by the two revisions it compared.
+    same_saved: crate::design::text_draft::KeptCompare,
+    same_heading: crate::design::text_draft::KeptCompare,
+    same_vital: crate::design::text_draft::KeptCompare,
     search: String,
     matches: Option<(Section, String, Vec<usize>)>,
     /// Chosen creature facts. They apply in Creatures and to search results.
@@ -687,7 +692,7 @@ impl Library {
                 kept.set_vital((
                     file,
                     draft.as_str().to_owned(),
-                    after.clone(),
+                    crate::design::memo::Revised::new(after.clone()),
                     crate::sentence!("The stat block now says {} {}.", label, value),
                 ));
                 let _ = draft.replace(after);
@@ -704,7 +709,11 @@ impl Library {
         self.kept
             .vital()
             .filter(|(at, _, after, _)| {
-                at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
+                at.0 == file.0
+                    && at.1 == file.1
+                    && self
+                        .draft
+                        .same_as(after.revision(), after, &self.same_vital)
             })
             .map(|(_, _, _, result)| result.clone())
     }
@@ -714,7 +723,11 @@ impl Library {
     /// replaced).
     fn stat_undo_applies(&self, file: &FileId) -> bool {
         self.kept.vital().is_some_and(|(at, _, after, _)| {
-            at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
+            at.0 == file.0
+                && at.1 == file.1
+                && self
+                    .draft
+                    .same_as(after.revision(), after, &self.same_vital)
         })
     }
 
@@ -722,7 +735,11 @@ impl Library {
     /// heading fix.
     fn heading_undo_applies(&self, file: &FileId) -> bool {
         self.kept.heading().is_some_and(|(at, _, after)| {
-            at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
+            at.0 == file.0
+                && at.1 == file.1
+                && self
+                    .draft
+                    .same_as(after.revision(), after, &self.same_heading)
         })
     }
 
@@ -1099,7 +1116,7 @@ impl Library {
                 .entry
                 .clone()
                 .ok_or("The linked entry cannot be read.")?,
-            text: source.text.clone(),
+            text: source.text.to_string(),
             root: source.owner.root().map(Path::to_path_buf),
             campaign: None,
         };
@@ -1125,7 +1142,7 @@ impl Library {
         kept.push_copy(DependencyUndo {
             root: package.path.clone(),
             path: note.path.clone(),
-            before: note.text.clone(),
+            before: note.text.to_string(),
             after,
             copied_path: plan.relative.clone(),
             copied_text: plan.text.clone(),
@@ -1144,7 +1161,7 @@ impl Library {
             .root()
             .ok_or("Built-in entries are read only.")?
             .to_path_buf();
-        let before = note.text.clone();
+        let before = note.text.to_string();
         let id = crate::hermetic::new_uuid();
         let after = crate::content_workspace::new_note_identity(&before, &note.path, id)?;
         let updated = write_note(&root, &note.path, Some(&before), &after)?;
@@ -1156,7 +1173,7 @@ impl Library {
         });
         let loaded = self.loaded.as_mut().unwrap();
         loaded.notes[index].entry = Some(updated);
-        loaded.notes[index].text = after.clone();
+        loaded.notes[index].text = crate::design::memo::Revised::new(after.clone());
         loaded.invalidate();
         loaded.refresh_diagnostics();
         let _ = self.draft.replace(after);
@@ -1175,9 +1192,9 @@ impl Library {
         if let Some(index) = self.selected {
             let note = &mut self.loaded.as_mut().unwrap().notes[index];
             if note.path == undo.path && note.owner.root() == Some(undo.root.as_path()) {
-                note.text = undo.before.clone();
+                note.text = crate::design::memo::Revised::new(undo.before.clone());
                 note.entry = Entry::parse(&note.path, &note.text).ok();
-                let _ = self.draft.replace(note.text.clone());
+                let _ = self.draft.replace(note.text.as_str());
                 // The draft changed: a failed Save of the old words no longer owns it.
                 self.draft_revision += 1;
             }
@@ -1250,7 +1267,7 @@ impl Library {
             note.entry = None;
             note.error = Some(fault.cause().to_owned());
             note.fault = Some(fault);
-            note.text = String::new();
+            note.text = crate::design::memo::Revised::default();
             self.stale = true;
             if let Some(loaded) = &mut self.loaded {
                 loaded.invalidate();
@@ -1272,7 +1289,7 @@ impl Library {
                         note.error = Some(error);
                     }
                 }
-                note.text = text.clone();
+                note.text = crate::design::memo::Revised::new(text.clone());
                 let _ = self.draft.replace(text);
             }
             None => {
@@ -1290,7 +1307,7 @@ impl Library {
                     chosen,
                     campaign: None,
                 });
-                let _ = self.draft.replace(note.text.clone());
+                let _ = self.draft.replace(note.text.as_str());
                 self.stale = true;
                 self.selected = None;
             }
@@ -1319,7 +1336,7 @@ impl Library {
                 .set_scope_notice((note.name().to_owned(), Scope::All));
         }
         self.selected = Some(index);
-        let _ = self.draft.replace(note.text.clone());
+        let _ = self.draft.replace(note.text.as_str());
         self.disk_change = None;
         self.section = if note.is_manifest() {
             Section::All
@@ -1338,7 +1355,7 @@ impl Library {
             .loaded
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .filter(|n| n.text != self.draft.as_str())?;
+            .filter(|n| !self.saved_is_draft(n))?;
         Some((
             note.name().to_owned(),
             match &note.owner {
@@ -1348,11 +1365,18 @@ impl Library {
             },
         ))
     }
+    /// Whether the open draft's words are note `note`'s saved text: compared once per pair of
+    /// revisions (layout PR 9b-C).
+    fn saved_is_draft(&self, note: &Note) -> bool {
+        self.draft
+            .same_as(note.text.revision(), &note.text, &self.same_saved)
+    }
+
     pub fn dirty(&self) -> bool {
         self.loaded
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .is_some_and(|n| n.text != self.draft.as_str())
+            .is_some_and(|n| !self.saved_is_draft(n))
     }
     pub fn form_open(&self) -> bool {
         self.form || self.new_form || self.confirm_unregister.is_some()
@@ -1414,7 +1438,7 @@ impl Library {
         self.selected = Some(index);
         let _ = self
             .draft
-            .replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
+            .replace(self.loaded.as_ref().unwrap().notes[index].text.as_str());
         true
     }
     pub fn edit_copy(&mut self, entry: Entry) {
@@ -1794,7 +1818,7 @@ impl Library {
                                 .as_ref()
                                 .and_then(|(owner, path)| file_at(&l.notes, (*owner, path)));
                             if let Some(i) = self.selected {
-                                let _ = self.draft.replace(l.notes[i].text.clone());
+                                let _ = self.draft.replace(l.notes[i].text.as_str());
                                 // The draft changed: a failed Save of the old words no longer owns it.
                                 self.draft_revision += 1;
                             }
@@ -2209,7 +2233,7 @@ impl Library {
                         ));
                     }
                     self.selected = Some(index);
-                    let _ = self.draft.replace(note.text.clone());
+                    let _ = self.draft.replace(note.text.as_str());
                     self.section = Section::All;
                     self.unreadable_kind = None;
                     self.source = false;
@@ -2483,7 +2507,7 @@ impl Library {
                         ));
                     }
                     self.selected = Some(index);
-                    let _ = self.draft.replace(note.text.clone());
+                    let _ = self.draft.replace(note.text.as_str());
                     self.section = Section::All;
                     self.unreadable_kind = None;
                     self.source = false;
@@ -2677,7 +2701,7 @@ impl Library {
             self.selected = Some(i);
             let _ = self
                 .draft
-                .replace(self.loaded.as_ref().unwrap().notes[i].text.clone());
+                .replace(self.loaded.as_ref().unwrap().notes[i].text.as_str());
             self.error = None;
             self.source = false;
         }
@@ -2780,7 +2804,7 @@ impl Library {
                             (
                                 root.to_path_buf(),
                                 note.path.clone(),
-                                note.text.clone(),
+                                note.text.to_string(),
                                 after,
                             )
                         })
@@ -3764,7 +3788,7 @@ impl Library {
                                 let created_owner = owner.key();
                                 l.notes.push(Note {
                                     path,
-                                    text: text.clone(),
+                                    text: crate::design::memo::Revised::new(text.clone()),
                                     entry: Some(entry),
                                     error: None,
                                     fault: None,
@@ -3833,7 +3857,7 @@ impl Library {
         self.reveal_row = true;
         let _ = self
             .draft
-            .replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
+            .replace(self.loaded.as_ref().unwrap().notes[index].text.as_str());
         self.disk_change = None;
         let _ = self.kept.take_scope_notice();
         self.scope = target.scope;
@@ -3909,7 +3933,7 @@ impl Library {
                     let note = &mut self.loaded.as_mut().unwrap().notes[i];
                     note.path = path;
                     note.owner = owner;
-                    if note.text != text {
+                    if *note.text != text {
                         self.disk_change = Some(DiskChange {
                             text: Some(text),
                             moved_to: Some(note.path.clone()),
@@ -4049,7 +4073,7 @@ impl Library {
                     .as_ref()
                     .is_none_or(|old| old.id != entry.id);
                 l.notes[i].entry = Some(entry);
-                l.notes[i].text = self.draft.as_str().to_owned();
+                l.notes[i].text = crate::design::memo::Revised::new(self.draft.as_str().to_owned());
                 l.notes[i].error = None;
                 // A manifest written from its draft is on disk again.
                 l.notes[i].manifest_gone = false;
@@ -4290,7 +4314,10 @@ impl Library {
                 self.stale = true;
             }
             match change.text {
-                Some(text) => self.loaded.as_mut().unwrap().notes[i].text = text,
+                Some(text) => {
+                    self.loaded.as_mut().unwrap().notes[i].text =
+                        crate::design::memo::Revised::new(text)
+                }
                 None => file_gone = true,
             }
             self.loaded.as_mut().unwrap().invalidate();
@@ -4329,7 +4356,7 @@ impl Library {
                 .and_then(|entry| entry.fields.get("splat_spell"))
                 .and_then(spell_kind),
         );
-        let dirty = self.draft.as_str() != note.text;
+        let dirty = !self.saved_is_draft(note);
         let editable = note.owner.editable();
         // A file the system will not read has no text to edit: the reader names its fault.
         let fault = note.fault.clone();
@@ -4803,6 +4830,7 @@ impl Library {
             &self.draft,
             self.kept.heading(),
             &(note.owner.key(), note.path.clone()),
+            &self.same_heading,
         );
         // Read's messages for the pane's message footer: a package entry's links to entries in
         // this campaign only, each with its copy action, and the copy's result.
@@ -4947,7 +4975,7 @@ impl Library {
         if copy_clicked {
             self.copy = Some(crate::content_workspace::CopySource {
                 entry: note.entry.as_ref().unwrap().clone(),
-                text: note.text.clone(),
+                text: note.text.to_string(),
                 root: note.owner.root().map(Path::to_path_buf),
                 campaign: match &note.owner {
                     Owner::Campaign(campaign) => Some(campaign.clone()),
@@ -4967,7 +4995,7 @@ impl Library {
             }
         }
         // Live, because Discard in this same frame changed the draft.
-        if self.draft.as_str() != note.text {
+        if !self.saved_is_draft(note) {
             let _ = self.kept.take_discarded();
         }
         // The pane's footer, typed (M-L0.4b): Edit Markdown's (with a save row), Read's, or a
@@ -5449,7 +5477,7 @@ impl Library {
         // still the text its action left, else it does nothing and its entry stays (its line
         // comes back with its own draft). Typed text is never replaced.
         if discard_undo
-            && self.draft.as_str() == note.text
+            && self.saved_is_draft(note)
             && let Some((_, _, text)) = self.kept.take_discarded()
         {
             let _ = self.draft.replace(text);
@@ -5462,8 +5490,13 @@ impl Library {
             .filter(|_| editable && !conflict);
         // The open file, whole (owner kind, owner id, path): a fix's Undo acts only on it.
         let file: FileId = (note.owner.key(), note.path.clone());
-        let heading_now =
-            HeadingChoice::new(current.as_ref(), &self.draft, self.kept.heading(), &file);
+        let heading_now = HeadingChoice::new(
+            current.as_ref(),
+            &self.draft,
+            self.kept.heading(),
+            &file,
+            &self.same_heading,
+        );
         let pressed_heading = (
             heading_fix && heading_now.fix.is_some(),
             heading_undo && self.heading_undo_applies(&file),
@@ -5504,7 +5537,7 @@ impl Library {
             self.draft_revision += 1;
         }
         // Live, as above: a press that changed the draft ends Discard's Undo.
-        if self.draft.as_str() != note.text {
+        if !self.saved_is_draft(note) {
             let _ = self.kept.take_discarded();
         }
         if self.draft_revision != draft_before {
@@ -5733,7 +5766,7 @@ mod tests {
             entry.key = key.map(str::to_owned);
             loaded.notes.push(Note {
                 path: format!("{}.md", loaded.notes.len()),
-                text: String::new(),
+                text: crate::design::memo::Revised::default(),
                 entry: Some(entry),
                 error: None,
                 fault: None,
@@ -5743,7 +5776,7 @@ mod tests {
         }
         loaded.notes.push(Note {
             path: "Broken.md".into(),
-            text: String::new(),
+            text: crate::design::memo::Revised::default(),
             entry: None,
             error: Some("Invalid YAML".into()),
             fault: None,
@@ -6186,7 +6219,7 @@ mod tests {
                         "Rule.md".into()
                     },
                     entry: Some(Entry::parse("Rule.md", &text).unwrap()),
-                    text,
+                    text: crate::design::memo::Revised::new(text),
                     error: None,
                     fault: None,
                     manifest_gone: false,
@@ -6290,7 +6323,7 @@ mod tests {
         library.loaded.as_mut().unwrap().notes[0] = Note {
             path: "Package.md".into(),
             entry: Some(Entry::parse("Package.md", &text).unwrap()),
-            text,
+            text: crate::design::memo::Revised::new(text),
             error: None,
             fault: None,
             manifest_gone: false,
@@ -6366,7 +6399,10 @@ mod tests {
             .iter()
             .position(|note| note.owner.root().is_some())
             .expect("fixture: a note in a folder");
-        loaded.notes[linker].text.push_str("\nSee [[Watch]].\n");
+        loaded.notes[linker].text.revise(|text| {
+            text.push_str("\nSee [[Watch]].\n");
+            crate::design::memo::Changed::Yes
+        });
         loaded.invalidate();
         assert_eq!(loaded.rename_link_count("Watch", "Ward"), before + 1);
         assert_eq!(scans(), start + 2, "an edited note is counted again");
@@ -7383,7 +7419,7 @@ mod tests {
     fn list_metadata_is_refreshed_after_content_changes() {
         let mut loaded = Loaded::fixture(vec![Note {
             path: "first.md".into(),
-            text: String::new(),
+            text: crate::design::memo::Revised::default(),
             entry: None,
             error: None,
             fault: None,
@@ -7394,7 +7430,7 @@ mod tests {
         assert_eq!(loaded.subtitles().len(), 1);
         loaded.notes.push(Note {
             path: "second.md".into(),
-            text: String::new(),
+            text: crate::design::memo::Revised::default(),
             entry: None,
             error: None,
             fault: None,
@@ -7636,7 +7672,7 @@ mod tests {
             let mut library = Library {
                 loaded: Some(Loaded::fixture(vec![Note {
                     path: entry.path.clone(),
-                    text: text.clone(),
+                    text: crate::design::memo::Revised::new(text.clone()),
                     entry: Some(entry),
                     error: None,
                     fault: None,
@@ -7697,7 +7733,7 @@ mod tests {
             Note {
                 entry: Some(Entry::parse(&path, source).unwrap()),
                 path,
-                text: source.into(),
+                text: crate::design::memo::Revised::new(source.into()),
                 error: None,
                 fault: None,
                 manifest_gone: false,
@@ -7708,11 +7744,11 @@ mod tests {
         .collect();
         // The Druid's list lines end with `\`, and here it also casts a spell no note has.
         let druid = notes.last_mut().unwrap();
-        druid.text = druid.text.replacen(
+        druid.text = crate::design::memo::Revised::new(druid.text.replacen(
             "\n\nSpellcasting. The druid",
             "\n\nDread Word. The druid casts Vellora's Storm, using the same spellcasting ability as Spellcasting.\n\nSpellcasting. The druid",
             1,
-        );
+        ));
         druid.entry = Some(Entry::parse(&druid.path, &druid.text).unwrap());
         let loaded = Loaded::fixture(notes);
         let references = creature::spell_references(loaded.notes[0].entry.as_ref().unwrap());
@@ -7747,7 +7783,7 @@ mod tests {
         );
 
         let mut library = Library {
-            draft: (loaded.notes[0].text.clone()).into(),
+            draft: loaded.notes[0].text.as_str().into(),
             loaded: Some(loaded),
             selected: Some(0),
             section: Section::Creatures,
@@ -7885,7 +7921,7 @@ mod tests {
                     assert!(library.draft.ends_with("Unsaved note.\n"));
                     let _ = library
                         .draft
-                        .replace(library.loaded.as_ref().unwrap().notes[0].text.clone());
+                        .replace(library.loaded.as_ref().unwrap().notes[0].text.as_str());
                 } else {
                     let (place, title) = if read_by_menu {
                         (2, "# Guiding Bolt")
@@ -7973,7 +8009,7 @@ mod tests {
         let mut library = Library {
             loaded: Some(Loaded::fixture(vec![Note {
                 path: path.into(),
-                text: source.into(),
+                text: crate::design::memo::Revised::new(source.into()),
                 entry: Some(Entry::parse(path, source).unwrap()),
                 error: None,
                 fault: None,
@@ -8189,7 +8225,7 @@ mod tests {
             let note = Note {
                 path: "Cinder Wolf.md".into(),
                 entry: Some(Entry::parse("Cinder Wolf.md", &text).unwrap()),
-                text: text.clone(),
+                text: crate::design::memo::Revised::new(text.clone()),
                 error: None,
                 fault: None,
                 manifest_gone: false,
@@ -8268,7 +8304,7 @@ mod tests {
             let mut library = Library {
                 loaded: Some(Loaded::fixture(vec![Note {
                     path: "Long rule.md".into(),
-                    text: source.clone(),
+                    text: crate::design::memo::Revised::new(source.clone()),
                     entry: Some(Entry::parse("Long rule.md", &source).unwrap()),
                     error: None,
                     fault: None,
@@ -8535,7 +8571,7 @@ mod tests {
             let mut library = Library {
                 loaded: Some(Loaded::fixture(vec![Note {
                     path: path.into(),
-                    text: source.into(),
+                    text: crate::design::memo::Revised::new(source.into()),
                     entry: Some(entry.clone()),
                     error: None,
                     fault: None,
@@ -8740,7 +8776,7 @@ mod tests {
                 let loaded = load(Some(&module)).unwrap();
                 let note = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
                 assert_eq!(note.path, filename);
-                assert_eq!(note.text, bad);
+                assert_eq!(note.text.as_str(), bad);
                 assert!(note.error.is_some());
                 assert!(
                     crate::content_workspace::repair_problem(filename, bad)
@@ -8987,7 +9023,7 @@ mod tests {
         let second = create_module(&temp.path().join("second"), "Second", "second").unwrap();
         let note = |module: &Module, path: &str| Note {
             path: path.into(),
-            text: String::new(),
+            text: crate::design::memo::Revised::default(),
             entry: None,
             error: None,
             fault: None,
@@ -9029,7 +9065,7 @@ mod tests {
         let note = |owner: Owner| Note {
             path: "Rules/X.md".into(),
             entry: Entry::parse("Rules/X.md", text).ok(),
-            text: text.to_owned(),
+            text: crate::design::memo::Revised::new(text.to_owned()),
             error: None,
             fault: None,
             manifest_gone: false,
@@ -9098,12 +9134,16 @@ mod tests {
         let (text, entry, a, shared) = fix_fixture();
         let mut kept = LibraryKept::default();
         let mut after = crate::design::text_draft::TextDraft::new(text.clone());
-        assert!(HeadingChoice::new(Some(&entry), &text, None, &a).apply(
-            (true, false),
-            &a,
-            &mut after,
-            &mut kept
-        ));
+        assert!(
+            HeadingChoice::new(
+                Some(&entry),
+                &crate::design::text_draft::TextDraft::new(text.clone()),
+                None,
+                &a,
+                &crate::design::text_draft::KeptCompare::default()
+            )
+            .apply((true, false), &a, &mut after, &mut kept)
+        );
         let mut library = same_path_library(&after, shared, temp.path(), kept);
         let after_entry = Entry::parse("Rules/X.md", &after).unwrap();
         let shows = |library: &Library, file: &FileId| {
@@ -9112,6 +9152,7 @@ mod tests {
                 &library.draft,
                 library.kept.heading(),
                 file,
+                &crate::design::text_draft::KeptCompare::default(),
             )
             .undo
             .is_some()
@@ -9209,12 +9250,14 @@ mod tests {
         let stat_after = library.draft.as_str().to_owned();
         let stat_entry = Entry::parse("Rules/X.md", &stat_after).unwrap();
         let mut heading_after = crate::design::text_draft::TextDraft::new(stat_after.clone());
-        HeadingChoice::new(Some(&stat_entry), &stat_after, None, &a).apply(
-            (true, false),
+        HeadingChoice::new(
+            Some(&stat_entry),
+            &crate::design::text_draft::TextDraft::new(stat_after.clone()),
+            None,
             &a,
-            &mut heading_after,
-            &mut library.kept,
-        );
+            &crate::design::text_draft::KeptCompare::default(),
+        )
+        .apply((true, false), &a, &mut heading_after, &mut library.kept);
         assert_ne!(
             stat_after,
             heading_after.as_str(),
@@ -9426,7 +9469,7 @@ mod tests {
             replaced(&library, KeptKind::Discarded, before);
             assert_eq!(
                 library.draft.as_str(),
-                note.text,
+                note.text.as_str(),
                 "Discard: the file's words"
             );
         }
@@ -9449,12 +9492,14 @@ mod tests {
         for _ in 0..2 {
             let before = library.kept.order_of(KeptKind::Heading);
             let mut draft = crate::design::text_draft::TextDraft::new(text.clone());
-            HeadingChoice::new(Some(&entry), &text, None, &file).apply(
-                (true, false),
+            HeadingChoice::new(
+                Some(&entry),
+                &crate::design::text_draft::TextDraft::new(text.clone()),
+                None,
                 &file,
-                &mut draft,
-                &mut library.kept,
-            );
+                &crate::design::text_draft::KeptCompare::default(),
+            )
+            .apply((true, false), &file, &mut draft, &mut library.kept);
             replaced(&library, KeptKind::Heading, before);
         }
         let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
@@ -9628,7 +9673,7 @@ mod tests {
         let note = |path: &str, text: String, owner: &Owner| Note {
             path: path.into(),
             entry: Entry::parse(path, &text).ok(),
-            text,
+            text: crate::design::memo::Revised::new(text),
             error: None,
             fault: None,
             manifest_gone: false,
@@ -9961,7 +10006,7 @@ mod tests {
         };
         let _ = library
             .draft
-            .replace(library.loaded.as_ref().unwrap().notes[0].text.clone());
+            .replace(library.loaded.as_ref().unwrap().notes[0].text.as_str());
         library.draft.push_str("Unsaved description");
         let expected = library.draft.as_str().to_owned();
         library.search = "no matching entry".into();
@@ -10272,7 +10317,10 @@ mod tests {
                 });
             }
         });
-        assert_eq!(work, (0, 0), "9b-quiet: the Library editor's quiet frames");
+        assert!(
+            work.is_quiet(3),
+            "9b-quiet: the Library editor's quiet frames: {work:?}"
+        );
     }
 
     /// Row 125: the owner line's status that ends with `words`, after two frames: its icon, the
@@ -10327,7 +10375,7 @@ mod tests {
         Library {
             loaded: Some(loaded),
             selected: Some(selected),
-            draft: draft.into(),
+            draft: draft.as_str().into(),
             ..Default::default()
         }
     }
@@ -10409,7 +10457,11 @@ mod tests {
                 "iter21-E-FD2-yaml-line, iter-24-L-AE1: {path}: {}",
                 loaded.subtitles()[at]
             );
-            assert_eq!(broken.text, yaml, "a YAML fault keeps its text for repair");
+            assert_eq!(
+                broken.text.as_str(),
+                yaml,
+                "a YAML fault keeps its text for repair"
+            );
             assert!(
                 broken
                     .error
@@ -11220,11 +11272,13 @@ impl HeadingChoice {
     /// `entry` is `None` when the file cannot take the fix (read only, unparsed or in a conflict).
     /// The fix's Undo shows only for its own file (owner kind, owner id and path: `FileId`)
     /// while the draft is the text the fix wrote (M-L0.4a).
+    /// `same`: the kept answer of the draft's compare with the fix's words (layout PR 9b-C).
     pub fn new(
         entry: Option<&Entry>,
-        draft: &str,
+        draft: &crate::design::text_draft::TextDraft,
         undo: Option<&kept::HeadingFix>,
         file: &FileId,
+        same: &crate::design::text_draft::KeptCompare,
     ) -> Self {
         let Some(entry) = entry else {
             return Self {
@@ -11245,7 +11299,9 @@ impl HeadingChoice {
                 )
             }),
             undo: undo
-                .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && after == draft)
+                .is_some_and(|(at, _, after)| {
+                    at.0 == file.0 && at.1 == file.1 && draft.same_as(after.revision(), after, same)
+                })
                 .then(|| crate::sentence!("The first heading now says {}.", entry.name)),
         }
     }
@@ -11261,7 +11317,11 @@ impl HeadingChoice {
     ) -> bool {
         let mut changed = false;
         if fix && let Some((_, _, after)) = &self.fix {
-            kept.set_heading((file.clone(), draft.as_str().to_owned(), after.clone()));
+            kept.set_heading((
+                file.clone(),
+                draft.as_str().to_owned(),
+                crate::design::memo::Revised::new(after.clone()),
+            ));
             let _ = draft.replace(after.as_str());
             changed = true;
         }

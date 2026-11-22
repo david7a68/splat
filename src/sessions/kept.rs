@@ -223,7 +223,8 @@ pub(super) struct Moved {
     pub session: Uuid,
     pub before: crate::timeline::Event,
     pub open_run: Option<(String, Uuid)>,
-    pub body: String,
+    /// The note's words when the run moved, with their revision (layout PR 9b-C).
+    pub body: crate::design::memo::Revised<String>,
     pub events: Vec<crate::timeline::Event>,
     /// The fight's name and the session's number, for `<fight> moved to Session <n>.`
     pub name: String,

@@ -1690,48 +1690,26 @@ impl Splat {
                     .inner_margin(egui::Margin::symmetric(design::M as i8, design::XS as i8)),
             )
             .show(ctx, |ui| {
-                ui.horizontal_centered(|ui| {
-                    if strip.running {
-                        design::heading(
-                            ui,
-                            design::Heading::Panel(&format!("Round {}", strip.round)),
-                        );
-                        ui.add(
-                            egui::Label::new(
-                                Type::Name
-                                    .rich(
-                                        ui,
-                                        format!(
-                                            "{}’s turn",
-                                            strip.current.as_deref().unwrap_or("?")
-                                        ),
-                                    )
-                                    .color(c.turn.current),
-                            )
-                            .truncate(),
-                        );
-                        if let Some(next) = &strip.next {
-                            ui.add(
-                                egui::Label::new(
-                                    Type::Small
-                                        .rich(ui, format!("Next: {next}"))
-                                        .color(c.turn.next),
-                                )
-                                .truncate(),
-                            );
-                        }
-                    } else {
-                        let state = self
-                            .encounters
-                            .run()
-                            .map(|run| run.state_words(false))
-                            .unwrap_or_default();
-                        design::heading(
-                            ui,
-                            design::Heading::Panel(&format!("{state} · {}", strip.name)),
-                        );
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // M0274, M0275 (M-P0.29): the line is the shared run strip part, which fits it as
+                // one candidate: the title, the turn, the next, then this end.
+                let title = if strip.running {
+                    format!("Round {}", strip.round)
+                } else {
+                    let state = self
+                        .encounters
+                        .run()
+                        .map(|run| run.state_words(false))
+                        .unwrap_or_default();
+                    format!("{state} · {}", strip.name)
+                };
+                design::TurnStrip::new(&title)
+                    .turn(
+                        strip
+                            .running
+                            .then(|| strip.current.as_deref().unwrap_or("?")),
+                    )
+                    .next(strip.next.as_deref().filter(|_| strip.running))
+                    .show(ui, |ui| {
                         if strip.running
                             && Action::primary("Next turn")
                                 .icon(icons::NEXT)
@@ -1804,7 +1782,6 @@ impl Splat {
                             }
                         }
                     });
-                });
             });
     }
 
@@ -2114,11 +2091,12 @@ impl Splat {
             }
             Page::Sessions => {
                 if let Some(campaign) = &active {
-                    let fights = self.encounters.plan_fights();
+                    // Layout 11c A2a: the plan's lists, shared and kept by the snapshot's revision.
+                    let kept = self.encounters.plan_kept();
+                    let (fights, groups) = (&kept.fights, &kept.groups);
                     let fights_revision = self.encounters.plan_fights_revision();
                     let saved_runs = self.encounters.saved_runs();
                     let saved_runs_revision = self.encounters.saved_runs_revision();
-                    let groups = self.encounters.plan_groups();
                     let blocked = self.encounters.plan_blocked();
                     let group_blocked = self.encounters.plan_group_blocked();
                     let group_open = self.encounters.group_open_in_plan();
@@ -2148,11 +2126,11 @@ impl Splat {
                     let plan = sessions::page::Plan {
                         party: &party,
                         tables: sources.as_ref().map_or(&[], |sources| &sources.tables),
-                        fights: &fights,
+                        fights,
                         fights_revision,
                         saved_runs: &saved_runs,
                         saved_runs_revision,
-                        groups: &groups,
+                        groups,
                         group_blocked,
                         group_open,
                         group_discard,

@@ -1013,7 +1013,7 @@ mod tests {
             notes: vec![super::super::Note {
                 entry: Some(Entry::parse("Vellora.md", &source).unwrap()),
                 path: "Vellora.md".into(),
-                text: source.clone(),
+                text: crate::design::memo::Revised::new(source.clone()),
                 error: None,
                 fault: None,
                 manifest_gone: false,

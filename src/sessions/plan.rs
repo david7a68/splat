@@ -1602,6 +1602,14 @@ pub(super) struct PlanModel {
 }
 
 impl PlanModel {
+    /// The scene on model line `line` (a line a projection listed as a scene).
+    fn scene(&self, line: usize) -> &Scene {
+        match &self.lines[line] {
+            ModelLine::Scene(scene) => scene,
+            ModelLine::Fights(_) => unreachable!("a projection lists only scene lines as scenes"),
+        }
+    }
+
     /// The work that the cache keeps off quiet frames: the note's plan read line by line, and
     /// each scene's link resolved.
     pub(super) fn build(
@@ -1685,7 +1693,7 @@ impl PlanModel {
 /// campaign's encounters and groups.
 #[derive(Default)]
 pub(super) struct PlanModelCache {
-    key: Option<(Option<Uuid>, u64, Option<u64>, u64)>,
+    key: Option<(Option<Uuid>, u64, Option<u64>, design::memo::Revision)>,
     model: Option<Arc<PlanModel>>,
     /// How often a frame asked for the model, and how often it was built.
     pub(super) reached: usize,
@@ -1693,6 +1701,153 @@ pub(super) struct PlanModelCache {
     /// Per linked name, whether its entry had a second line when last found
     /// (`PlanModel::place_not_found`).
     seen: std::collections::HashMap<String, bool>,
+}
+
+/// What a plan projection is worked out from: revisions and ids only, so a quiet frame compares
+/// a few words and hashes no name (layout 11c A2a).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ProjectionInputs {
+    session: Option<Uuid>,
+    draft: u64,
+    book: design::memo::Revision,
+    /// The campaign's fights and groups: both come from the Encounters snapshot, whose revision
+    /// `Plan::fights_revision` is.
+    fights: design::memo::Revision,
+    saved: design::memo::Revision,
+    index: Option<u64>,
+}
+
+/// The plan's projection, kept by its inputs' revision.
+#[derive(Default)]
+pub(super) struct ProjectionCache {
+    inputs: Option<design::memo::Revised<ProjectionInputs>>,
+    kept: design::memo::Memo<design::memo::Revision, Arc<PlanProjection>>,
+    /// How often a frame asked for the projection, and how often one was built (the
+    /// quiet-frame proof counts both).
+    pub(super) reached: usize,
+    pub(super) builds: usize,
+}
+
+/// What the plan's closed rows read from their data (layout 11c A2a, the v2 review's item 5),
+/// worked out once per change of the note, the Timeline, the fights and groups, the saved runs,
+/// the content index or the session: the scenes and fights at their places, the groups the note
+/// links, the heading's count, the Timeline's days, which events the note links, and each planned
+/// fight's removal facts. A quiet frame reads it and copies nothing.
+pub(super) struct PlanProjection {
+    model: Arc<PlanModel>,
+    /// The planned fights still to come, by their place in `Plan::fights`.
+    planned: Vec<usize>,
+    /// Each scene's line among the model's lines, at each place (before each planned fight and
+    /// after the last).
+    scenes: Vec<Vec<usize>>,
+    /// The place a row stands at before each model line, and after the last.
+    line_place: Vec<(usize, usize)>,
+    scene_count: usize,
+    /// The groups the note links that are not fights, by their place in `Plan::groups`.
+    planned_groups: Vec<usize>,
+    /// The Timeline's events in this session.
+    events_here: usize,
+    /// The ids of the events the note links (`^id`).
+    linked: std::collections::HashSet<String>,
+    days: Vec<u32>,
+    /// Each planned fight's name, and whether its saved run ended.
+    planned_results: Vec<(String, bool)>,
+}
+
+impl PlanProjection {
+    fn build(
+        model: Arc<PlanModel>,
+        body: &str,
+        book: &Book,
+        session: Option<Uuid>,
+        plan: &Plan<'_>,
+    ) -> Self {
+        let mut played: BTreeMap<String, usize> = BTreeMap::new();
+        for event in &book.events {
+            if event.is_in(session) && event.run.is_some() {
+                *played.entry(event.title.to_lowercase()).or_default() += 1;
+            }
+        }
+        let mut planned = Vec::new();
+        let mut scenes: Vec<Vec<usize>> = vec![Vec::new()];
+        let mut line_place = Vec::with_capacity(model.lines.len() + 1);
+        let place_now =
+            |scenes: &Vec<Vec<usize>>| (scenes.len() - 1, scenes.last().map_or(0, Vec::len));
+        for (at, line) in model.lines.iter().enumerate() {
+            line_place.push(place_now(&scenes));
+            match line {
+                ModelLine::Scene(_) => scenes
+                    .last_mut()
+                    .expect("one list of scenes for each place")
+                    .push(at),
+                ModelLine::Fights(names) => {
+                    for name in names {
+                        let Some(found) = plan.fights.iter().position(|fight| fight.name == *name)
+                        else {
+                            continue;
+                        };
+                        let done = played
+                            .entry(plan.fights[found].name.to_lowercase())
+                            .or_default();
+                        let waiting = *done == 0;
+                        *done = done.saturating_sub(1);
+                        if waiting {
+                            planned.push(found);
+                            scenes.push(Vec::new());
+                        }
+                    }
+                }
+            }
+        }
+        line_place.push(place_now(&scenes));
+        let planned_groups = linked_names(body)
+            .iter()
+            .filter(|name| {
+                !plan
+                    .fights
+                    .iter()
+                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
+            })
+            .filter_map(|name| {
+                plan.groups
+                    .iter()
+                    .position(|group| group.name.eq_ignore_ascii_case(name))
+            })
+            .collect();
+        let planned_results = planned
+            .iter()
+            .map(|&at| {
+                let fight = &plan.fights[at];
+                (
+                    fight.name.clone(),
+                    planned_saved_run(fight, plan.fights, plan.saved_runs).is_some_and(|saved| {
+                        saved.standing == crate::encounter_run::Standing::Ended
+                    }),
+                )
+            })
+            .collect();
+        Self {
+            scene_count: scenes.iter().map(Vec::len).sum(),
+            events_here: book
+                .events
+                .iter()
+                .filter(|event| event.is_in(session))
+                .count(),
+            linked: book
+                .events
+                .iter()
+                .filter(|event| body.contains(&format!("^{}", event.id)))
+                .map(|event| event.id.clone())
+                .collect(),
+            days: timeline::day_numbers(&book.events),
+            model,
+            planned,
+            scenes,
+            line_place,
+            planned_groups,
+            planned_results,
+        }
+    }
 }
 
 /// Where a scene act's words show: under the scene's row, under the Scene field, or in the
@@ -1934,7 +2089,7 @@ impl Scenes {
     fn end_what_changed(&mut self, draft: Option<&crate::sessions::Draft>) {
         if self.fault.as_ref().is_some_and(|fault| {
             draft.is_none_or(|draft| {
-                draft.body.as_str() != fault.met || (fault.waits && !draft.unsaved())
+                !draft.body.same_words(&fault.met) || (fault.waits && !draft.unsaved())
             })
         }) {
             self.fault = None;
@@ -3473,7 +3628,7 @@ impl Sessions {
         book: &Book,
         session: Option<Uuid>,
         plan: &Plan<'_>,
-        planned: &[&PlanFight],
+        planned: &[usize],
     ) -> Arc<PlannedDays> {
         let Some(draft) = &self.draft else {
             return Arc::default();
@@ -3490,8 +3645,9 @@ impl Sessions {
             return Arc::clone(days);
         }
         let road = road_days(&draft.body, &book.events, session, plan.fights);
+        let planned: Vec<&PlanFight> = planned.iter().map(|&at| &plan.fights[at]).collect();
         let days = Arc::new(PlannedDays {
-            at: days_by_place(&road, planned),
+            at: days_by_place(&road, &planned),
         });
         self.travel.days = Some((key, Arc::clone(&days)));
         let seen: Vec<_> = planned
@@ -4397,66 +4553,29 @@ impl Sessions {
                     && self
                         .draft
                         .as_ref()
-                        .is_none_or(|draft| draft.body.as_str() != *after)
+                        .is_none_or(|draft| !draft.body.same_words(after))
             })
         {
             self.removed_group = None;
         }
-        let body = self
-            .draft
-            .as_ref()
-            .map_or_else(String::new, |draft| draft.body.as_str().to_owned());
-        let mut played: BTreeMap<String, usize> = BTreeMap::new();
-        for event in &book.events {
-            if event.is_in(session) && event.run.is_some() {
-                *played.entry(event.title.to_lowercase()).or_default() += 1;
-            }
-        }
-        // The plan's lines in the note's order: the fights still to come, and the scenes
-        // before each of them and after the last.
+        // Layout 11c A2a (the v2 review's item 5): what the closed rows read from the note, the
+        // Timeline, the fights and groups, the saved runs and the content index, worked out once
+        // per change of them (`PlanProjection`), never on a quiet frame.
         let index = ui
             .ctx()
             .data(|data| data.get_temp::<Arc<ContentIndex>>(egui::Id::new("reader_link_index")));
-        let model = self.plan_model(index.as_deref(), plan);
-        let mut planned: Vec<&PlanFight> = Vec::new();
-        // Each scene with its line's place among the plan's lines.
-        let mut scenes: Vec<Vec<(usize, &Scene)>> = vec![Vec::new()];
+        let projection = self.plan_projection(book, session, plan, index.as_deref());
+        // Each scene's line among the plan's lines, at each place.
+        let scenes = &projection.scenes;
         // Where a removed scene's row stood: before the line that now follows it.
-        let removed_line = self.scenes.removed.as_ref().map(|(line, ..)| *line);
-        let mut removed_slot = None;
-        let place_now = |scenes: &Vec<Vec<(usize, &Scene)>>| {
-            (scenes.len() - 1, scenes.last().map_or(0, Vec::len))
-        };
-        for (at, line) in model.lines.iter().enumerate() {
-            if removed_line == Some(at) {
-                removed_slot = Some(place_now(&scenes));
-            }
-            match line {
-                ModelLine::Scene(scene) => scenes
-                    .last_mut()
-                    .expect("one list of scenes for each place")
-                    .push((at, scene)),
-                ModelLine::Fights(names) => {
-                    for name in names {
-                        let Some(fight) = plan.fights.iter().find(|fight| fight.name == *name)
-                        else {
-                            continue;
-                        };
-                        let done = played.entry(fight.name.to_lowercase()).or_default();
-                        let waiting = *done == 0;
-                        *done = done.saturating_sub(1);
-                        if waiting {
-                            planned.push(fight);
-                            scenes.push(Vec::new());
-                        }
-                    }
-                }
-            }
-        }
-        if removed_line == Some(model.lines.len()) {
-            removed_slot = Some(place_now(&scenes));
-        }
-        let scene_count = scenes.iter().map(Vec::len).sum::<usize>();
+        let removed_slot = self
+            .scenes
+            .removed
+            .as_ref()
+            .and_then(|(line, ..)| projection.line_place.get(*line).copied());
+        let scene_count = projection.scene_count;
+        let planned_fights = || projection.planned.iter().map(|&at| &plan.fights[at]);
+        let planned_groups = || projection.planned_groups.iter().map(|&at| &plan.groups[at]);
         // While the DM types a scene, the fold holds.
         let hold =
             self.scenes.typing || self.scenes.field.as_ref().is_some_and(|field| field.focus);
@@ -4487,26 +4606,11 @@ impl Sessions {
         // The next fight's place, and the opened rows' details above it, for the fold.
         let mut details_above = 0.0;
         let mut next = None;
-        let planned_groups: Vec<_> = linked_names(&body)
-            .iter()
-            .filter(|name| {
-                !plan
-                    .fights
-                    .iter()
-                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
-            })
-            .filter_map(|name| {
-                plan.groups
-                    .iter()
-                    .find(|group| group.name.eq_ignore_ascii_case(name))
-                    .cloned()
-            })
-            .collect();
         // B4b N2: a refusal ends when its group is no longer among this plan's groups (removed,
         // renamed away, or its file now holds another group), read here with the groups.
         if let Some((refused_in, id)) = self.plan_group_refused
             && refused_in == session
-            && !planned_groups.iter().any(|group| group.id == id)
+            && !planned_groups().any(|group| group.id == id)
         {
             self.plan_group_refused = None;
         }
@@ -4519,12 +4623,9 @@ impl Sessions {
             } else {
                 "This session"
             },
-            book.events
-                .iter()
-                .filter(|event| event.is_in(session))
-                .count()
-                + planned.len()
-                + planned_groups.len()
+            projection.events_here
+                + projection.planned.len()
+                + projection.planned_groups.len()
                 + scene_count,
         );
         let heading = ui.label(heading);
@@ -4550,17 +4651,7 @@ impl Sessions {
         };
         // Planned fights not yet played, and whether each has an ended run: a removal notice
         // says when one with the same name stays.
-        let planned_results: Vec<(String, bool)> = planned
-            .iter()
-            .map(|fight| {
-                (
-                    fight.name.clone(),
-                    planned_saved_run(fight, plan.fights, plan.saved_runs).is_some_and(|saved| {
-                        saved.standing == crate::encounter_run::Standing::Ended
-                    }),
-                )
-            })
-            .collect();
+        let planned_results = &projection.planned_results;
         // Round 26 FL1, round 28: the plan's results, reasons and notices sit in its pane's
         // message footer, which the part places `S` below the rows (pinned only when the rows
         // fill the pane), so a result never moves a row or the Add strip. On the session page
@@ -4607,7 +4698,7 @@ impl Sessions {
         file_messages(&frame, &mut messages, book, |act| {
             pressed(FooterAct::File(act))
         });
-        self.plan_messages(&frame, &mut messages, book, session, plan, &planned_results);
+        self.plan_messages(&frame, &mut messages, book, session, plan, planned_results);
         self.scene_messages(&frame, &mut messages, shown);
         self.removed_group_message(&frame, &mut messages, session);
         // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
@@ -4641,7 +4732,15 @@ impl Sessions {
             self.added.record_timed(added, ui.ctx());
             self.open_event = None;
         }
-        let days = timeline::day_numbers(&book.events);
+        // An Add in this frame changed the Timeline after the projection read it: its days are
+        // worked out again for this frame only.
+        let fresh_days;
+        let days: &[u32] = if added.is_some() {
+            fresh_days = timeline::day_numbers(&book.events);
+            &fresh_days
+        } else {
+            &projection.days
+        };
         let mut insert = None;
         let mut remove = None;
         let mut remove_group = None;
@@ -4674,10 +4773,9 @@ impl Sessions {
                     .iter()
                     .map(|fight| fight.name.as_str())
                     .chain(plan.groups.iter().map(|group| group.name.as_str())),
-                planned
-                    .iter()
+                planned_fights()
                     .map(|fight| fight.name.as_str())
-                    .chain(planned_groups.iter().map(|group| group.name.as_str())),
+                    .chain(planned_groups().map(|group| group.name.as_str())),
             )
         };
         // Review of PR 274: the DM's own scroll or navigation, or a draw the plan missed (the
@@ -4822,7 +4920,7 @@ impl Sessions {
                                     }
                                 }
                                 if !running && event.run.is_none() {
-                                    let linked = body.contains(&format!("^{}", event.id));
+                                    let linked = projection.linked.contains(&event.id);
                                     if linked {
                                         design::gap(ui, design::Gap::S);
                                         design::status(ui, Status { icon: icons::OK, word: "In notes", color: c.document.saved });
@@ -4872,13 +4970,13 @@ impl Sessions {
                     }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
-                let days = self.planned_days(book, session, plan, &planned);
+                let days = self.planned_days(book, session, plan, &projection.planned);
                 let plan_days = self.plan_lines_seen.revision();
-                for (position, fight) in planned.iter().enumerate() {
+                for (position, fight) in planned_fights().enumerate() {
                     let day = days.at.get(position).cloned().flatten();
                     self.removed_fight_message(ui, session, position);
                     if !folded {
-                        closed_scenes += self.scene_rows(ui, width, &scenes[position], position, shown, plan, &mut scene_act);
+                        closed_scenes += self.scene_rows(ui, width, (&scenes[position], &projection.model), position, shown, plan, &mut scene_act);
                     }
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
@@ -4956,12 +5054,12 @@ impl Sessions {
                     });
                     reveal.after(ui, None, fight_row.response.rect);
                 }
-                self.removed_fight_message(ui, session, planned.len());
+                self.removed_fight_message(ui, session, projection.planned.len());
                 if !folded {
-                    closed_scenes += self.scene_rows(ui, width, &scenes[planned.len()], planned.len(), shown, plan, &mut scene_act);
+                    closed_scenes += self.scene_rows(ui, width, (&scenes[projection.planned.len()], &projection.model), projection.planned.len(), shown, plan, &mut scene_act);
                 }
                 any |= scenes.iter().any(|scenes| !scenes.is_empty());
-                for (position, group) in planned_groups.iter().enumerate() {
+                for (position, group) in planned_groups().enumerate() {
                     any = true;
                     let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
@@ -5155,9 +5253,9 @@ impl Sessions {
                         && event.title.eq_ignore_ascii_case(&name)
                 })
                 .count()
-                + planned[..position]
+                + projection.planned[..position]
                     .iter()
-                    .filter(|fight| fight.name.eq_ignore_ascii_case(&name))
+                    .filter(|&&at| plan.fights[at].name.eq_ignore_ascii_case(&name))
                     .count();
             // A fight that is not in the words changes nothing, and says nothing, as before.
             if let Ok(undo) = draft.apply(note, Apply::WithTyping, |words| {
@@ -5253,14 +5351,15 @@ impl Sessions {
         &mut self,
         ui: &mut egui::Ui,
         width: f32,
-        scenes: &[(usize, &Scene)],
+        (scenes, model): (&[usize], &PlanModel),
         position: usize,
         shown: Shown,
         plan: &Plan<'_>,
         act: &mut Option<SceneAct>,
     ) -> f32 {
         let mut height = 0.0;
-        for (at, (line, scene)) in scenes.iter().enumerate() {
+        for (at, line) in scenes.iter().enumerate() {
+            let scene = model.scene(*line);
             let place = Place::Row((position, at));
             if shown.removed == Some(place) {
                 self.removed_scene_message(ui, place, act);
@@ -5281,7 +5380,7 @@ impl Sessions {
     /// that place is drawn (the open Scene field, or a row's place among the shown scenes), else
     /// in the plan's footer. Words never go to a place that is not drawn. `rows` are the scenes
     /// at each place, or `None` while they fold.
-    fn shown_at(&self, place: Place, rows: Option<&[Vec<(usize, &Scene)>]>) -> Place {
+    fn shown_at(&self, place: Place, rows: Option<&[Vec<usize>]>) -> Place {
         let drawn = match place {
             Place::Field => self.scenes.field.is_some(),
             Place::Row((position, at)) => {
@@ -5356,27 +5455,60 @@ impl Sessions {
     }
 
     /// The plan model for the selected note, built again only when what it reads changed.
+    /// The plan's projection (`PlanProjection`), kept while its inputs' revisions stay.
+    pub(super) fn plan_projection(
+        &mut self,
+        book: &Book,
+        session: Option<Uuid>,
+        plan: &Plan<'_>,
+        index: Option<&ContentIndex>,
+    ) -> Arc<PlanProjection> {
+        let model = self.plan_model(index, plan);
+        let inputs = ProjectionInputs {
+            session,
+            draft: self
+                .draft
+                .as_ref()
+                .map_or(0, crate::sessions::Draft::revision),
+            book: book.revision(),
+            fights: plan.fights_revision,
+            saved: plan.saved_runs_revision,
+            index: index.map(ContentIndex::generation),
+        };
+        let cache = &mut self.plan_projection;
+        cache.reached += 1;
+        let revision = match &mut cache.inputs {
+            Some(kept) => {
+                kept.set(inputs);
+                kept.revision()
+            }
+            None => cache
+                .inputs
+                .insert(design::memo::Revised::new(inputs))
+                .revision(),
+        };
+        let body = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
+        let builds = &mut cache.builds;
+        Arc::clone(cache.kept.get_or(revision, || {
+            *builds += 1;
+            Arc::new(PlanProjection::build(model, body, book, session, plan))
+        }))
+    }
+
     pub(super) fn plan_model(
         &mut self,
         index: Option<&ContentIndex>,
         plan: &Plan<'_>,
     ) -> Arc<PlanModel> {
-        use std::hash::{Hash, Hasher};
-        let mut names = std::collections::hash_map::DefaultHasher::new();
-        for fight in plan.fights {
-            fight.name.hash(&mut names);
-        }
-        0u8.hash(&mut names);
-        for group in plan.groups {
-            group.name.hash(&mut names);
-        }
+        // The fights' and groups' names come from the Encounters snapshot: its revision
+        // (`Plan::fights_revision`) keys them, so a quiet frame hashes no name (layout 11c A2a).
         let key = (
             self.selected,
             self.draft
                 .as_ref()
                 .map_or(0, crate::sessions::Draft::revision),
             index.map(ContentIndex::generation),
-            names.finish(),
+            plan.fights_revision,
         );
         let cache = &mut self.plan_model;
         cache.reached += 1;
@@ -5722,7 +5854,7 @@ impl Sessions {
             && (self
                 .draft
                 .as_ref()
-                .is_none_or(|draft| draft.body.as_str() != *body)
+                .is_none_or(|draft| !draft.body.same_words(body))
                 || book.events != *events)
         {
             self.deleted_run = None;
@@ -6773,7 +6905,16 @@ mod tests {
                     tables: &[],
                 };
                 let names: Vec<String> = planned.iter().map(|fight| fight.name.clone()).collect();
-                let days = sessions.planned_days(&book, Some(session), &plan, &planned);
+                let places: Vec<usize> = planned
+                    .iter()
+                    .map(|fight| {
+                        fights
+                            .iter()
+                            .position(|kept| std::ptr::eq(kept, *fight))
+                            .expect("a planned fight is one of the fights")
+                    })
+                    .collect();
+                let days = sessions.planned_days(&book, Some(session), &plan, &places);
                 names
                     .into_iter()
                     .zip(days.at.iter().cloned())
@@ -8833,6 +8974,35 @@ mod tests {
                 shown(harness, "Open: Captain Varra")
             })
             .expect("scene-model-steady");
+        // Layout 11c A2a: the plan's projection (what its closed rows read from the note, the
+        // Timeline, the fights and groups, the saved runs and the index) is built when one of
+        // them changes, never on a quiet frame or a resize, counted from the plan's entry.
+        let projection = crate::test_support::CachedWork::start(
+            "Plan projection",
+            &mut harness,
+            |harness: &mut egui_kittest::Harness<'_, (Sessions, Book)>| {
+                let cache = &harness.state().0.plan_projection;
+                crate::test_support::Counts {
+                    reached: cache.reached,
+                    work: cache.builds,
+                }
+            },
+        );
+        harness.run_steps(2);
+        let warm = shown(&harness, "Open: Captain Varra");
+        projection
+            .warm(&mut harness, warm, 0)
+            .expect("plan-projection-warm");
+        projection
+            .steady(&mut harness, |harness| {
+                harness.run_steps(3);
+                harness.set_size(egui::vec2(design::FORM_WIDTH + 200.0, 800.0));
+                harness.run_steps(3);
+                harness.set_size(egui::vec2(design::FORM_WIDTH, 800.0));
+                harness.run_steps(3);
+                shown(harness, "Open: Captain Varra")
+            })
+            .expect("plan-projection-steady");
         // Review of PR 703: the planned fights' days are worked out once for each change of
         // the note, the Timeline or the fights, never on a quiet frame or a resize.
         let days = || DAYS_BY_PLACE.with(std::cell::Cell::get);
