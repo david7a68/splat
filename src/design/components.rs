@@ -974,6 +974,8 @@ pub struct Action<'a> {
     /// Its words wrap onto more lines in the room it has, and it grows taller, in place of an
     /// ellipsis (a choice whose fixed words must all show).
     wraps: bool,
+    /// Its words as its caller laid them before paint (`Action::laid`): paint lays out none.
+    laid: Option<Arc<egui::Galley>>,
 }
 
 /// How far a quiet `line_start` action hangs left of the text edge: its padding.
@@ -1001,6 +1003,7 @@ impl<'a> Action<'a> {
             column: false,
             min_width: None,
             wraps: false,
+            laid: None,
         }
     }
 
@@ -1166,6 +1169,32 @@ impl<'a> Action<'a> {
         }
     }
 
+    /// Its words as laid before paint by a caller that keeps its layout (a measured list's line,
+    /// layout 11c): paint draws them and lays out no words. Lay them with [`Self::laid_words`]
+    /// in the room the action has, and lay them again when that room, the fonts, the scale or
+    /// the theme change. Not for an action whose words wrap.
+    pub fn laid(mut self, words: Arc<egui::Galley>) -> Self {
+        debug_assert!(!self.wraps, "a wrapping action lays out its own words");
+        self.laid = Some(words);
+        self
+    }
+
+    /// Its words laid as paint lays them in a place `width` wide: one line, cut at its room, in
+    /// its kind's colour (an enabled action's), for [`Self::laid`].
+    pub fn laid_words(&self, ui: &Ui, width: f32) -> Arc<egui::Galley> {
+        let key_room = self
+            .key
+            .map_or(0.0, |key| number_width(ui, key, &Type::Small.font(ui)) + S);
+        let room = width - 2.0 * self.padding() - self.icon_width() - key_room;
+        let c = colors();
+        let foreground = match self.kind {
+            Kind::Primary => c.on_accent,
+            Kind::Secondary | Kind::Quiet => c.text,
+            Kind::Destructive => c.destructive,
+        };
+        one_line(ui, self.label, self.font().font(ui), foreground, room)
+    }
+
     fn icon_width(&self) -> f32 {
         self.icon.map_or(0.0, |_| ICON_SLOT)
     }
@@ -1216,7 +1245,13 @@ impl<'a> Action<'a> {
             Kind::Secondary | Kind::Quiet => c.text,
             Kind::Destructive => c.destructive,
         };
-        let galley = if self.wraps {
+        #[cfg(any(test, feature = "test-support"))]
+        if self.laid.is_none() {
+            ACTION_WORDS_LAID.with(|laid| laid.set(laid.get() + 1));
+        }
+        let galley = if let Some(laid) = &self.laid {
+            Arc::clone(laid)
+        } else if self.wraps {
             let mut job = LayoutJob::simple(
                 self.label.replace(['\n', '\r'], " "),
                 font,
@@ -10131,4 +10166,11 @@ thread_local! {
 #[cfg(any(test, feature = "test-support"))]
 pub fn text_measured() {
     TEXT_MEASURES.with(|measures| measures.set(measures.get() + 1));
+}
+
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many times an action laid out its own words to paint them (`Action::laid` lays none):
+    /// a host that keeps its layout counts it from its entry through its paint.
+    pub static ACTION_WORDS_LAID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
