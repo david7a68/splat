@@ -566,6 +566,17 @@ pub fn editor_view(
     .editor(ui, field, text, face, style)
 }
 
+/// An editor region's focused caret in the last pass, in its content (rows), with that pass's
+/// view (its height and width) and offset.
+#[derive(Clone, Copy, Debug)]
+struct KeptCaret {
+    top: f32,
+    bottom: f32,
+    view: f32,
+    width: f32,
+    offset: f32,
+}
+
 /// A named request to an editor viewport's one offset writer ([`jump_editor_view`]).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EditorJump {
@@ -733,28 +744,30 @@ impl EditorRegion<'_> {
         let max = (self.max - inset.sum().y).max(0.0);
         let least = self.host == Host::Pane && self.max <= REGION_LEAST + FRAME_HEIGHT + 0.5;
         let top = ui.cursor().top();
-        // The focused caret of the last pass, in the region's content (left, top, bottom), with
-        // that pass's view height and offset. The region is the one writer of its offset, and
-        // it writes at most once per pass, before the pass lays out, from the view's height NOW
-        // (no animation: the first frame shown has the caret in view):
-        // - the view's height changed under a caret that was in view (the footer gained or lost
-        //   a line, the window changed): the least scroll that keeps the caret in view; a caret
+        // The focused caret of the last pass (`KeptCaret`). The region is the one writer of its
+        // offset, and it writes at most once per pass, before the pass lays out, from the view's
+        // height NOW (no animation: the first frame shown has the caret in view):
+        // - a named jump (`jump_editor_view`);
+        // - a caret that was in view, did not move in the text, and lies outside the view after
+        //   the last pass laid out again at another width or height (the footer gained or lost
+        //   a line, the window or the column got narrower or shorter), in a pass that applied no
+        //   jump: the least scroll that keeps it in view, measured in that new layout; a caret
         //   the DM scrolled away from stays away (their wheel is never pulled back);
         // - a reveal is pending (the caret moved outside the view in the last pass): the caret
         //   centred in the view as tall as it is now.
         // Otherwise nothing, so the DM's own wheel is never pulled back.
         /// The editor region's one offset for a pass: `caret` (content rows) was seen at `offset` in
         /// the last pass; `view` is the region's height NOW. A pending `reveal` centres the caret;
-        /// else a changed height gives the least scroll that keeps the caret in view. `None`:
-        /// leave the offset as it is.
+        /// else `keep` gives the least scroll that keeps the caret in view. `None`: leave the
+        /// offset as it is.
         fn follow_caret(
             caret: std::ops::Range<f32>,
             offset: f32,
             view: f32,
             reveal: bool,
-            height_changed: bool,
+            keep: bool,
         ) -> Option<f32> {
-            if !(reveal || height_changed) {
+            if !(reveal || keep) {
                 return None;
             }
             let at = if reveal {
@@ -771,13 +784,20 @@ impl EditorRegion<'_> {
         }
         let caret_key = key.with("caret");
         let reveal_key = key.with("reveal");
-        let kept = ui
-            .ctx()
-            .data(|data| data.get_temp::<(f32, f32, f32, f32, f32)>(caret_key));
+        let kept = ui.ctx().data(|data| data.get_temp::<KeptCaret>(caret_key));
         let reveal = ui
             .ctx()
             .data_mut(|data| data.remove_temp::<bool>(reveal_key))
             .unwrap_or(false);
+        let keep_key = key.with("keep");
+        let keep = ui
+            .ctx()
+            .data_mut(|data| data.remove_temp::<bool>(keep_key))
+            .unwrap_or(false);
+        // The caret was in view in the pass before (by that pass's offset and view).
+        let was_in_view = kept.is_some_and(|kept| {
+            kept.top >= kept.offset - 0.5 && kept.bottom <= kept.offset + kept.view + 0.5
+        });
         // A named jump (`jump_editor_view`) is this pass's one offset write; a pending reveal
         // gives way to it.
         let jump = ui.ctx().data_mut(|data| {
@@ -796,15 +816,8 @@ impl EditorRegion<'_> {
         let at = match jump {
             Some(EditorJump::Top) => Some(0.0),
             Some(EditorJump::Show { top, bottom }) => Some(((top + bottom - max) / 2.0).max(0.0)),
-            None => kept.and_then(|(_, caret_top, caret_bottom, view, offset)| {
-                let was_in_view = caret_top >= offset - 0.5 && caret_bottom <= offset + view + 0.5;
-                follow_caret(
-                    caret_top..caret_bottom,
-                    offset,
-                    max,
-                    reveal,
-                    was_in_view && (view - max).abs() > 0.5,
-                )
+            None => kept.and_then(|kept| {
+                follow_caret(kept.top..kept.bottom, kept.offset, max, reveal, keep)
             }),
         };
         if let Some(at) = at {
@@ -916,6 +929,11 @@ impl EditorRegion<'_> {
             .then_some(())
             .and(editor.cursor_range.map(|range| range.primary.index));
         let index_before = ui.ctx().data(|data| data.get_temp::<usize>(index_key));
+        // The region was laid out at another width or height than in the pass before (the
+        // footer gained or lost a line, the window or the column changed size).
+        let relaid = kept.is_some_and(|kept| {
+            (kept.view - max).abs() > 0.5 || (kept.width - view.width()).abs() > 0.5
+        });
         if let Some(caret) = caret {
             let (caret_top, caret_bottom) = (caret.top() - origin, caret.bottom() - origin);
             let moved = !drawn_before
@@ -923,10 +941,20 @@ impl EditorRegion<'_> {
                 || kept.is_none()
                 || index_before != index;
             let offset = output.state.offset.y;
-            if moved && (caret_top < offset - 0.5 || caret_bottom > offset + max + 0.5) {
+            let outside = caret_top < offset - 0.5 || caret_bottom > offset + max + 0.5;
+            if moved && outside {
                 ui.ctx().data_mut(|data| data.insert_temp(reveal_key, true));
                 ui.ctx()
                     .request_discard("an editor region reveals a caret outside its view");
+                ui.ctx().request_repaint();
+            } else if was_in_view && outside && relaid && jump.is_none() {
+                // Laid out again (narrower, shorter), the caret that was in view fell out of it:
+                // keep it, by the least scroll, in the next pass, drawn again at once. Only for a
+                // new layout: the DM's wheel that takes the caret out of view, and a named jump,
+                // are this pass's place, and stay (review of PR 825).
+                ui.ctx().data_mut(|data| data.insert_temp(keep_key, true));
+                ui.ctx()
+                    .request_discard("an editor region keeps its caret in view");
                 ui.ctx().request_repaint();
             }
         }
@@ -934,16 +962,16 @@ impl EditorRegion<'_> {
             Some(caret) => {
                 data.insert_temp(
                     caret_key,
-                    (
-                        caret.left(),
-                        caret.top() - origin,
-                        caret.bottom() - origin,
-                        max,
-                        output.state.offset.y,
-                    ),
+                    KeptCaret {
+                        top: caret.top() - origin,
+                        bottom: caret.bottom() - origin,
+                        view: max,
+                        width: view.width(),
+                        offset: output.state.offset.y,
+                    },
                 );
             }
-            None => data.remove::<(f32, f32, f32, f32, f32)>(caret_key),
+            None => data.remove::<KeptCaret>(caret_key),
         });
         ui.ctx().data_mut(|data| match index {
             Some(index) => data.insert_temp(index_key, index),
@@ -5599,6 +5627,86 @@ mod editor_region_tests {
         long.state_mut().messages = 0;
         long.run_steps(4);
         whole(&long, "footer-emptied");
+        // Review of PR 799 (P2): narrower, the caret's line wraps below the view. A caret that was
+        // in view stays in view, measured in the new layout, in the first frame shown.
+        long.event(egui::Event::Text(
+            " and then the party walked on along the old road".into(),
+        ));
+        long.run_steps(4);
+        whole(&long, "long-line");
+        for width in [300.0, 200.0] {
+            long.set_size(vec2(width, 300.0));
+            long.run_steps(1);
+            whole(&long, &format!("narrower-{width}-first-frame"));
+        }
+        // Review of PR 825 (P2): only a new layout keeps the caret. The DM's wheel takes a caret
+        // that was in view out of it, with no change of layout: nothing pulls it back.
+        let caret_out = |harness: &egui_kittest::Harness<'_, State>| {
+            let caret = harness.state().caret.expect("the editor has its caret");
+            let view = region_view(harness);
+            (!view.expand(0.5).contains_rect(caret), caret, view)
+        };
+        let view = region_view(&long);
+        // A touchpad's small steps apply in their own frame (a long wheel step is spread over
+        // frames): one frame takes the caret out of view, and nothing moves after it.
+        long.input_mut()
+            .events
+            .push(egui::Event::PointerMoved(view.center()));
+        for _ in 0..60 {
+            long.input_mut().events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: vec2(0.0, 7.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        long.run_steps(4);
+        let (out, caret, view) = caret_out(&long);
+        assert!(
+            out,
+            "p2-wheel: the wheel took the caret {caret:?} out of the view {view:?}, and it stays out"
+        );
+        // A named jump is its pass's one offset, with the caret in view before it, also when the
+        // footer changes in the same frame (a new layout): the passes after it keep the jump's
+        // place, Top and then Show.
+        let jump_pane = pane_record(&long.ctx, Id::new(LOCAL))
+            .expect("a record")
+            .id();
+        long.event(egui::Event::Text("?".into()));
+        long.run_steps(4);
+        whole(&long, "typed-before-jump");
+        long.ctx.data_mut(|data| {
+            data.insert_temp(editor_jump_id(jump_pane), EditorJump::Top);
+        });
+        long.state_mut().messages = 2;
+        long.run_steps(4);
+        let (out, caret, view) = caret_out(&long);
+        let offset = painted_offset(&long);
+        assert!(
+            offset.abs() <= 2.0 && out,
+            "p2-jump-top: the Top jump stays at offset {offset}, the caret {caret:?} out of the \
+             view {view:?}"
+        );
+        long.event(egui::Event::Text("?".into()));
+        long.run_steps(4);
+        whole(&long, "typed-before-show");
+        long.ctx.data_mut(|data| {
+            data.insert_temp(
+                editor_jump_id(jump_pane),
+                EditorJump::Show {
+                    top: 900.0,
+                    bottom: 918.0,
+                },
+            );
+        });
+        long.state_mut().messages = 1;
+        long.run_steps(4);
+        let (out, caret, view) = caret_out(&long);
+        let offset = painted_offset(&long);
+        assert!(
+            offset <= 909.0 && 909.0 <= offset + view.height() && out,
+            "p2-jump-show: the Show jump keeps its place in view at offset {offset}, the caret \
+             {caret:?} out of the view {view:?}"
+        );
 
         // The first frame shown on open: the save row whole above the footer.
         let open = harness_after(
