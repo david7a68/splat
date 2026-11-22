@@ -5824,14 +5824,24 @@ impl Sessions {
                     }
                 });
                 if self.show_fight_log {
-                    design::ScrollColumn::new(("fight_log", run))
-                        .max_height(design::READER_MEASURE / 3.0)
-                        .fit_height()
-                        .show(ui, |ui| {
-                            for line in &summary.log {
-                                wrapped_words(ui, Type::Small, line, colors().muted);
-                            }
-                        });
+                    // A capped block, not a scroll column of its own: the plan's pane is the
+                    // scroll column (`Body::Content`). The newest lines that fit a third of the
+                    // reader's measure show; the earlier ones are in Whole run, and it says so.
+                    let cap = (design::READER_MEASURE / 3.0 / Type::Small.line())
+                        .floor()
+                        .max(1.0) as usize;
+                    let earlier = summary.log.len().saturating_sub(cap);
+                    if earlier > 0 {
+                        let words = if earlier == 1 {
+                            "1 earlier line is in Whole run.".to_owned()
+                        } else {
+                            format!("{earlier} earlier lines are in Whole run.")
+                        };
+                        ui.label(Type::Small.rich(ui, words).color(colors().muted));
+                    }
+                    for line in &summary.log[earlier..] {
+                        wrapped_words(ui, Type::Small, line, colors().muted);
+                    }
                 }
             }
         }
@@ -9418,6 +9428,21 @@ mod tests {
         harness.run_steps(2);
         assert!(read().contains(&format!("- [[Timeline#^{a}|{long}]]\n  - XP 200")));
         assert!(shown(&harness, "In notes"));
+        // Review of PR 645 (P1): Log opens the played fight's log in place, in the plan's own
+        // pane, which scrolls it. No scroll column of its own nests in that pane (a debug build
+        // refuses one), and the log's newest line shows.
+        harness.get_by_label("Log").click();
+        harness.run_steps(2);
+        let path = crate::encounter_run::find_run(&runs, campaign, bridge.id).unwrap();
+        let log = crate::encounter_run::fight_summary(&path, campaign)
+            .unwrap()
+            .log;
+        assert!(
+            log.last().is_some_and(|line| shown(&harness, line)),
+            "the fight's log shows in place: {log:?}"
+        );
+        harness.get_by_label("Log").click();
+        harness.run_steps(2);
 
         // Too narrow for the link after Timeline: no line is added, and the action is the last
         // line of the row's menu. With one blank at each `·` (round 27 FH4), the links fit at
@@ -9568,6 +9593,15 @@ mod tests {
         assert!(
             sessions.plan_marks.get(&owner).is_none(),
             "the entry ends with its data"
+        );
+        // Review of PR 629 (P2): a campaign switch ends the old campaign's entries, whatever
+        // folder the new campaign has.
+        delete(&mut sessions, &book, Some(run));
+        assert!(!sessions.plan_marks.is_empty());
+        sessions.open_campaign(None);
+        assert!(
+            sessions.plan_marks.is_empty(),
+            "the old campaign's plan results end with the switch"
         );
     }
 }

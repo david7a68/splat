@@ -2562,6 +2562,8 @@ impl Sessions {
         self.removed_fight = None;
         self.scenes = plan::Scenes::default();
         self.rewards = plan::Rewards::default();
+        // Their marks are the old campaign's: they end with its results (review of PR 629, P2).
+        self.plan_marks = design::Results::new();
         // Row 123: a journey's acts, results and plan line are the campaign's: the change ends
         // them here, as it happens.
         self.travel = plan::Travel::default();
