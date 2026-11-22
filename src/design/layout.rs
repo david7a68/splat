@@ -724,7 +724,7 @@ impl Words<'_> {
     fn bound(self) -> BoundText {
         match self {
             Self::Plain(text) => BoundText::of(text),
-            Self::Draft(draft) => BoundText::of(draft.as_str()),
+            Self::Draft(draft) => BoundText::of_draft(draft),
         }
     }
 
@@ -749,6 +749,14 @@ impl BoundText {
             hash: egui::util::hash(text),
         }
     }
+
+    /// [`of`](Self::of) a document's words, counted apart: a short field keeps its hash (ruling
+    /// Q3), a document's quiet frame hashes none.
+    fn of_draft(draft: &super::text_draft::TextDraft) -> Self {
+        #[cfg(any(test, feature = "test-support"))]
+        DRAFT_TEXT_BYTES.with(|count| count.set(count.get() + draft.len()));
+        Self::of(draft)
+    }
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -757,6 +765,8 @@ thread_local! {
     pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many bytes of text the field parts hashed (layout PR 9b's quiet-frame proof).
     pub static BOUND_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many of those bytes were a document's words (`text_draft::TextDraft`).
+    pub static DRAFT_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many fields keep a record. The oldest record goes first, and egui's Undo history for
@@ -919,9 +929,9 @@ pub fn edit_in_place(
     text: &mut super::text_draft::TextDraft,
     edit: impl FnOnce(&mut String),
 ) {
-    let before = BoundText::of(text);
+    let before = BoundText::of_draft(text);
     text.edit(edit);
-    move_bound(ctx, id, before, BoundText::of(text), Some(text.key()));
+    move_bound(ctx, id, before, BoundText::of_draft(text), Some(text.key()));
 }
 
 /// [`edit_in_place`] for a field of a plain `String` (a single-line field).

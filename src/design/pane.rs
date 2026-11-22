@@ -344,14 +344,14 @@ thread_local! {
 }
 
 /// The text work of the document editors while `frames` runs: how many layouts the kept
-/// layouter made, and how many bytes the field guard hashed (layout PR 9b: a host's quiet
-/// frames do neither).
+/// layouter made, and how many bytes of documents the field guard hashed (layout PR 9b: a
+/// host's quiet frames do neither; a short `String` field keeps its own hash, ruling Q3).
 #[cfg(any(test, feature = "test-support"))]
 pub fn text_work(frames: impl FnOnce()) -> (usize, usize) {
     let read = || {
         (
             KEPT_LAYOUTS_MADE.with(std::cell::Cell::get),
-            super::layout::BOUND_TEXT_BYTES.with(std::cell::Cell::get),
+            super::layout::DRAFT_TEXT_BYTES.with(std::cell::Cell::get),
         )
     };
     let before = read();
