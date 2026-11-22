@@ -1524,7 +1524,7 @@ impl ScrollColumn {
                 Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(f32::INFINITY, f32::INFINITY));
             return self.inline(ui, |ui| add(ui, all));
         }
-        Self::styled(ui, |ui, width| {
+        let output = Self::styled(ui, |ui, width| {
             let (full, id) = (self.full_width, self.id);
             let (area, column) = self.area_in(ui);
             area.show_viewport(ui, |ui, viewport| {
@@ -1536,7 +1536,11 @@ impl ScrollColumn {
                     super::pane::whole_rows(ui, id, |ui| add(ui, viewport))
                 })
             })
-        })
+        });
+        // As `show` and `show_rows`: a column in a child of composite columns adds what it hides
+        // to the child's height (a `BlockRegion` draws through here; note C0-parts Part A).
+        super::pane::hidden_height(ui, &output);
+        output
     }
 
     /// Inside a `Body::Content` pane, which is a scroll column already, a release build draws the
