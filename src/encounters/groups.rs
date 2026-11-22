@@ -4,6 +4,7 @@
 use super::{
     ADD_PANE_MAX_WIDTH, Creature, Draft, EditorPane, Encounters, ROSTER_MAX_WIDTH, Snapshot,
 };
+use crate::design::text_draft::TextDraft;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
@@ -163,7 +164,8 @@ pub(super) struct GroupDraft {
     member_lines: Vec<usize>,
     name: String,
     setup: GroupSetup,
-    notes: String,
+    /// The group's notes, a document of its own (layout PR 9b).
+    notes: TextDraft,
     saved_name: String,
     saved_setup: GroupSetup,
     saved_notes: String,
@@ -547,7 +549,7 @@ impl GroupDraft {
             saved_name: name,
             setup: setup.clone(),
             saved_setup: setup,
-            notes: String::new(),
+            notes: TextDraft::default(),
             saved_notes: String::new(),
             flags: Vec::new(),
             repair: None,
@@ -600,7 +602,7 @@ impl GroupDraft {
             saved_setup: setup.clone(),
             setup,
             saved_notes: notes.clone(),
-            notes,
+            notes: TextDraft::new(notes),
         })
     }
     pub(super) fn name(&self) -> String {
@@ -726,7 +728,7 @@ impl GroupDraft {
         self.baseline.is_none()
             || self.name != self.saved_name
             || self.setup != self.saved_setup
-            || self.notes != self.saved_notes
+            || self.notes.as_str() != self.saved_notes
             || self.baseline.as_deref() != Some(self.source.as_str())
     }
     fn text(&self) -> Result<String, String> {
@@ -736,7 +738,7 @@ impl GroupDraft {
             .as_ref()
             .and_then(|change| change.text.as_deref())
             .unwrap_or(&self.source);
-        let source = if self.notes == self.saved_notes {
+        let source = if self.notes.as_str() == self.saved_notes {
             disk_source.to_owned()
         } else {
             splat::content::list_formats::with_prose(disk_source, &self.notes)?
@@ -1182,8 +1184,11 @@ impl GroupDraft {
         self.origin = design::save_row::DraftOrigin::Saved;
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
-        self.notes = self.notes.trim().to_owned();
-        self.saved_notes = self.notes.clone();
+        let trimmed = self.notes.trim().to_owned();
+        if trimmed != self.notes.as_str() {
+            let _ = self.notes.replace(trimmed);
+        }
+        self.saved_notes = self.notes.as_str().to_owned();
     }
 }
 
@@ -3662,11 +3667,12 @@ fn group_fields(
                 design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
             let rows = if open.is_some() { 2 } else { 4 };
             // Keyed by the group draft, so two groups never share its text or its Undo.
-            let output = GROUP_NOTES
-                .of(draft.id())
-                .editor(ui, &mut draft.notes, |edit| {
-                    super::notes_style(edit, rows).hint_text(hint)
-                });
+            let output = GROUP_NOTES.of(draft.id()).editor(
+                ui,
+                &mut draft.notes,
+                super::plain_face(ui),
+                |edit| super::notes_style(edit, rows).hint_text(hint),
+            );
             design::named(
                 ui,
                 &output.response,
@@ -4896,7 +4902,11 @@ mod tests {
         harness.get_by_label("Remove").click();
         harness.run_steps(2);
         assert_eq!(harness.state().0.setup.members.len(), 1);
-        harness.state_mut().0.notes = "A new note after removal".into();
+        harness
+            .state_mut()
+            .0
+            .notes
+            .replace("A new note after removal");
         harness.state_mut().0.setup.members[0].count = 7;
         // Review of PR 347: A (Scout) is in the footer, and its Undo is pressed; the body then
         // removes B (Wolf) before that press is applied. A comes back from its own data, kept
@@ -4941,7 +4951,7 @@ mod tests {
                 && members.iter().any(|other| other.count == 7),
             "both are back, Wolf with its count of 7"
         );
-        assert_eq!(harness.state().0.notes, "A new note after removal");
+        assert_eq!(harness.state().0.notes.as_str(), "A new note after removal");
 
         // A member's Other effect draft is its own, with its own cursor and text Undo: type in A
         // (twice, with time between, so A has two undo states), open B, Ctrl+Z in B's field.
@@ -5379,7 +5389,7 @@ mod tests {
         assert!(error.contains("Another group"), "{error}");
         assert!(!dir.path().join(&second.path).exists());
         // A group keeps its own name through an edit.
-        first.notes = "New words.".into();
+        first.notes.replace("New words.");
         first.save(&campaign, &[]).unwrap();
         write_note(
             dir.path(),
@@ -5693,7 +5703,7 @@ mod tests {
         let mut draft = GroupDraft::new();
         draft.name = "Rival team".into();
         draft.setup.side = "rivals".into();
-        draft.notes = "They hold the east gate.".into();
+        draft.notes.replace("They hold the east gate.");
         draft.add(scout);
         draft.add(scout);
         draft.add(guard);
@@ -5706,7 +5716,7 @@ mod tests {
         assert!(!draft.dirty());
         let reopened = GroupDraft::open(dir.path(), &draft.path).unwrap();
         assert_eq!(reopened.setup, draft.setup);
-        assert_eq!(reopened.notes, "They hold the east gate.");
+        assert_eq!(reopened.notes.as_str(), "They hold the east gate.");
         assert_eq!(reopened.name, "Rival team");
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let group = &snapshot.groups[0];
@@ -5722,7 +5732,7 @@ mod tests {
         let campaign = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
         let mut draft = GroupDraft::new();
-        draft.notes = "First words.".into();
+        draft.notes.replace("First words.");
         draft.add(scout);
         draft.save(&campaign, &[]).unwrap();
         let path = dir.path().join(&draft.path);
@@ -5734,7 +5744,7 @@ mod tests {
         draft.save(&campaign, &[]).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         assert!(text.contains("## Kept\nBy hand."), "{text}");
-        draft.notes = "Other words.".into();
+        draft.notes.replace("Other words.");
         draft.save(&campaign, &[]).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         assert!(
@@ -6619,7 +6629,7 @@ mod tests {
         let copy = dir.path().join("Copied group.md");
         fs::copy(dir.path().join(group.path()), &copy).unwrap();
         let bytes = fs::read(&copy).unwrap();
-        group.notes = "My plan".into();
+        group.notes.replace("My plan");
         assert!(group.save(&campaign, &[]).is_err());
         assert!(
             group

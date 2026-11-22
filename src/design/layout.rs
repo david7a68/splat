@@ -508,22 +508,31 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, &|| BoundText::of(text.as_str()));
+        let guard = TextGuard::before(ui, id, Words::Plain(text.as_str()));
         let response = ui.add(style(TextEdit::singleline(text).id(id)));
-        guard.after(ui, &|| BoundText::of(text.as_str()), &response);
+        guard.after(ui, Words::Plain(text.as_str()), &response);
         record_field(ui, &response);
         response
     }
 
-    /// A multi-line editor with this id, for a caller that reads where the text was laid out
-    /// (the galley, its place, the cursor, the clip rect): a Markdown source, a repair editor.
-    /// It guards the text history as [`single_line`](Self::single_line) does.
+    /// A multi-line editor of a document with this id, for a caller that reads where the text
+    /// was laid out (the galley, its place, the cursor, the clip rect): a Markdown source, a
+    /// repair editor, a note. It guards the text history as [`single_line`](Self::single_line)
+    /// does, by the draft's key: a quiet frame hashes no text (layout PR 9b).
+    ///
+    /// The part lays the text out in `face` and keeps the laid-out text by its whole key (the
+    /// draft's identity and revision, the measure, the font atlas's epoch, the visuals, the
+    /// face, and the caret for a face that folds): a quiet frame lays out, hashes and copies
+    /// none of it in the app. egui's own per-frame text copies stay, counted (ruling M25).
+    /// `style` sets the rest of the text edit; a layouter it sets is replaced by the part's.
     ///
     /// ```
-    /// fn f(ui: &mut egui::Ui, note: &mut String) {
+    /// use splat_design::{pane::Face, text_draft::TextDraft};
+    /// fn f(ui: &mut egui::Ui, note: &mut TextDraft) {
     ///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_note");
     ///     let id = NOTE.once(splat_design::layout::Once::Example);
-    ///     let editor = id.editor(ui, note, |edit| edit.desired_rows(4));
+    ///     let face = Face::Font(egui::TextStyle::Body.resolve(ui.style()));
+    ///     let editor = id.editor(ui, note, face, |edit| edit.desired_rows(4));
     ///     let _ = (editor.response, editor.galley, editor.galley_pos, editor.text_clip_rect);
     ///     let _ = editor.cursor_range;
     /// }
@@ -532,25 +541,27 @@ impl FieldId {
         clippy::disallowed_methods,
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
     )]
-    pub fn editor<T: GuardedText>(
+    pub fn editor(
         self,
         ui: &mut Ui,
-        text: &mut T,
+        text: &mut super::text_draft::TextDraft,
+        face: super::pane::Face,
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Editor {
         let id = self.id();
-        // A document lent by `pane::EditorRegion::document` brings its kept layout (layout PR 9b).
-        let mut kept = text
-            .kept()
-            .map(|(face, live)| super::pane::kept_layouter(id, face, live));
-        let guard = TextGuard::before(ui, id, &|| text.bound().0);
-        let edit = style(TextEdit::multiline(text).id(id));
-        let edit = match kept.as_mut() {
-            Some(layouter) => edit.layouter(layouter),
-            None => edit,
+        let guard = TextGuard::before(ui, id, Words::Draft(text));
+        // The draft is lent to egui for this draw: each change reaches `live`, which the kept
+        // layouter reads on every call.
+        let live = std::cell::Cell::new(text.key());
+        let mut layouter = super::pane::kept_layouter(id, face, &live);
+        let mut lent = super::text_draft::Lent {
+            draft: text,
+            live: &live,
         };
-        let output = edit.show(ui);
-        guard.after(ui, &|| text.bound().0, &output.response);
+        let output = style(TextEdit::multiline(&mut lent).id(id))
+            .layouter(&mut layouter)
+            .show(ui);
+        guard.after(ui, Words::Draft(lent.draft), &output.response);
         record_field(ui, &output.response);
         Editor {
             frame: output.response.rect,
@@ -604,9 +615,9 @@ impl FieldId {
         let id = self.named(name).id();
         // Clear's place, kept inside the frame's right end whether or not Clear shows.
         let place = search_clear().natural_width(ui);
-        let guard = TextGuard::before(ui, id, &|| BoundText::of(text));
+        let guard = TextGuard::before(ui, id, Words::Plain(text));
         let field = super::components::search_box(ui, id, name, text, hint, width, place);
-        guard.after(ui, &|| BoundText::of(text), &field);
+        guard.after(ui, Words::Plain(text), &field);
         record_field(ui, &field);
         if !text.is_empty() {
             let frame = field.rect;
@@ -642,9 +653,9 @@ impl FieldId {
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
         let id = self.id();
-        let guard = TextGuard::before(ui, id, &|| BoundText::of(text.as_str()));
+        let guard = TextGuard::before(ui, id, Words::Plain(text.as_str()));
         let response = ui.add(style(TextEdit::multiline(text).id(id)));
-        guard.after(ui, &|| BoundText::of(text.as_str()), &response);
+        guard.after(ui, Words::Plain(text.as_str()), &response);
         record_field(ui, &response);
         response
     }
@@ -683,13 +694,45 @@ pub struct Editor {
     pub view: Rect,
 }
 
-/// What the bound text was when the field last drew with focus: its length and a hash, or the
-/// key of a document (`text_draft::TextDraft`, layout PR 9b), which needs no hash: another
-/// draft has another identity, and the program's replacement is always a new revision.
+/// What the bound text was when the field last drew with focus: its length and a hash.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum BoundText {
-    Hash { len: usize, hash: u64 },
-    Draft(super::text_draft::DraftKey),
+struct BoundText {
+    len: usize,
+    hash: u64,
+}
+
+/// A field's words, as the guard reads them: a plain text, or a document
+/// (`text_draft::TextDraft`), whose key says when its words last changed. The guard compares
+/// words in both (another object's text with equal words keeps its history, as a plain text
+/// did), but hashes a document's words only when its key changed since its record (layout PR
+/// 9b: a quiet frame of a document hashes nothing).
+#[derive(Clone, Copy)]
+enum Words<'a> {
+    Plain(&'a str),
+    Draft(&'a super::text_draft::TextDraft),
+}
+
+impl Words<'_> {
+    fn key(self) -> Option<super::text_draft::DraftKey> {
+        match self {
+            Self::Plain(_) => None,
+            Self::Draft(draft) => Some(draft.key()),
+        }
+    }
+
+    /// One hash of the words.
+    fn bound(self) -> BoundText {
+        match self {
+            Self::Plain(text) => BoundText::of(text),
+            Self::Draft(draft) => BoundText::of_draft(draft),
+        }
+    }
+
+    /// Whether a record of `bound` read at `key` holds these words. A document whose key is
+    /// the record's has the record's words: no hash.
+    fn held_by(self, bound: BoundText, key: Option<super::text_draft::DraftKey>) -> bool {
+        (key.is_some() && key == self.key()) || bound == self.bound()
+    }
 }
 
 impl BoundText {
@@ -701,66 +744,18 @@ impl BoundText {
             BOUND_TEXT_HASHES.with(|count| count.set(count.get() + 1));
             BOUND_TEXT_BYTES.with(|count| count.set(count.get() + text.len()));
         }
-        Self::Hash {
+        Self {
             len: text.len(),
             hash: egui::util::hash(text),
         }
     }
-}
 
-/// A field's text, as the guard knows it: a plain text by its hash, a revised document by its
-/// revision (layout PR 9b: a quiet frame of a document field hashes nothing). Sealed.
-pub trait GuardedText: TextBuffer + guarded::Sealed {
-    #[doc(hidden)]
-    fn bound(&self) -> Bound;
-
-    /// The face and the live key of a document lent for one draw, whose layout the part keeps.
-    #[doc(hidden)]
-    fn kept(
-        &self,
-    ) -> Option<(
-        super::pane::Face,
-        std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
-    )> {
-        None
-    }
-}
-
-/// What a [`GuardedText`] is to the guard. Opaque.
-#[doc(hidden)]
-pub struct Bound(BoundText);
-
-mod guarded {
-    pub trait Sealed {}
-    impl Sealed for String {}
-    impl Sealed for super::super::text_draft::TextDraft {}
-    impl Sealed for super::super::text_draft::Lent<'_> {}
-}
-
-impl GuardedText for String {
-    fn bound(&self) -> Bound {
-        Bound(BoundText::of(self))
-    }
-}
-
-impl GuardedText for super::text_draft::TextDraft {
-    fn bound(&self) -> Bound {
-        Bound(BoundText::Draft(self.key()))
-    }
-}
-
-impl GuardedText for super::text_draft::Lent<'_> {
-    fn bound(&self) -> Bound {
-        Bound(BoundText::Draft(self.draft.key()))
-    }
-
-    fn kept(
-        &self,
-    ) -> Option<(
-        super::pane::Face,
-        std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
-    )> {
-        Some((self.face.clone(), self.live.clone()))
+    /// [`of`](Self::of) a document's words, counted apart: a short field keeps its hash (ruling
+    /// Q3), a document's quiet frame hashes none.
+    fn of_draft(draft: &super::text_draft::TextDraft) -> Self {
+        #[cfg(any(test, feature = "test-support"))]
+        DRAFT_TEXT_BYTES.with(|count| count.set(count.get() + draft.len()));
+        Self::of(draft)
     }
 }
 
@@ -770,15 +765,18 @@ thread_local! {
     pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// How many bytes of text the field parts hashed (layout PR 9b's quiet-frame proof).
     pub static BOUND_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many of those bytes were a document's words (`text_draft::TextDraft`).
+    pub static DRAFT_TEXT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many fields keep a record. The oldest record goes first, and egui's Undo history for
 /// its field goes with it, so a field with no record never has old history.
 pub(crate) const BOUND_TEXTS: usize = 32;
 
-/// The records, newest last. At most [`BOUND_TEXTS`].
+/// The records, newest last: each field's words, and for a document the key they were read at.
+/// At most [`BOUND_TEXTS`].
 #[derive(Clone, Default)]
-struct BoundTexts(Vec<(Id, BoundText)>);
+struct BoundTexts(Vec<(Id, BoundText, Option<super::text_draft::DraftKey>)>);
 
 fn bound_texts_id() -> Id {
     Id::new("splat_bound_texts")
@@ -817,7 +815,7 @@ struct TextGuard {
 }
 
 impl TextGuard {
-    fn before(ui: &Ui, id: Id, text: &dyn Fn() -> BoundText) -> Self {
+    fn before(ui: &Ui, id: Id, text: Words<'_>) -> Self {
         let focused_before = ui.memory(|memory| memory.has_focus(id));
         let check = focused_before
             || ui.input(|input| {
@@ -836,7 +834,7 @@ impl TextGuard {
         Self { id, focused_before }
     }
 
-    fn after(self, ui: &Ui, text: &dyn Fn() -> BoundText, response: &Response) {
+    fn after(self, ui: &Ui, text: Words<'_>, response: &Response) {
         if !response.has_focus() {
             return;
         }
@@ -845,14 +843,25 @@ impl TextGuard {
         if !self.focused_before && Self::stale(ui, self.id, text) {
             Self::drop_history(ui.ctx(), self.id);
         }
-        let bound = text();
+        // A document whose key is its record's keeps the record's words, with no hash.
         let ctx = ui.ctx();
+        let kept = ctx.data(|data| {
+            data.get_temp::<BoundTexts>(bound_texts_id())
+                .and_then(|records| {
+                    records
+                        .0
+                        .iter()
+                        .find(|(id, _, key)| *id == self.id && key.is_some() && *key == text.key())
+                        .map(|(_, bound, _)| *bound)
+                })
+        });
+        let bound = kept.unwrap_or_else(|| text.bound());
         let oldest = ctx.data_mut(|data| {
             let records = &mut data
                 .get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
                 .0;
-            records.retain(|(id, _)| *id != self.id);
-            records.push((self.id, bound));
+            records.retain(|(id, _, _)| *id != self.id);
+            records.push((self.id, bound, text.key()));
             (records.len() > BOUND_TEXTS).then(|| records.remove(0).0)
         });
         if let Some(oldest) = oldest {
@@ -861,27 +870,27 @@ impl TextGuard {
     }
 
     /// Whether the field last had focus with another text.
-    fn stale(ui: &Ui, id: Id, text: &dyn Fn() -> BoundText) -> bool {
-        let Some(bound) = ui.ctx().data(|data| {
+    fn stale(ui: &Ui, id: Id, text: Words<'_>) -> bool {
+        let Some((bound, key)) = ui.ctx().data(|data| {
             data.get_temp::<BoundTexts>(bound_texts_id())
                 .and_then(|records| {
                     records
                         .0
                         .iter()
-                        .find(|(record, _)| *record == id)
-                        .map(|(_, bound)| *bound)
+                        .find(|(record, _, _)| *record == id)
+                        .map(|(_, bound, key)| (*bound, *key))
                 })
         }) else {
             return false;
         };
-        bound != text()
+        !text.held_by(bound, key)
     }
 
     fn forget(ctx: &egui::Context, id: Id) {
         ctx.data_mut(|data| {
             data.get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
                 .0
-                .retain(|(record, _)| *record != id);
+                .retain(|(record, _, _)| *record != id);
         });
     }
 
@@ -901,9 +910,9 @@ pub(super) fn guarded_field(
     text: &mut String,
     draw: impl FnOnce(&mut Ui, &mut String) -> Response,
 ) -> Response {
-    let guard = TextGuard::before(ui, id, &|| BoundText::of(text));
+    let guard = TextGuard::before(ui, id, Words::Plain(text));
     let response = draw(ui, text);
-    guard.after(ui, &|| BoundText::of(text), &response);
+    guard.after(ui, Words::Plain(text), &response);
     response
 }
 
@@ -917,20 +926,42 @@ pub(super) fn guarded_field(
 pub fn edit_in_place(
     ctx: &egui::Context,
     id: Id,
+    text: &mut super::text_draft::TextDraft,
+    edit: impl FnOnce(&mut String),
+) {
+    let before = BoundText::of_draft(text);
+    text.edit(edit);
+    move_bound(ctx, id, before, BoundText::of_draft(text), Some(text.key()));
+}
+
+/// [`edit_in_place`] for a field of a plain `String` (a single-line field).
+pub fn edit_line_in_place(
+    ctx: &egui::Context,
+    id: Id,
     text: &mut String,
     edit: impl FnOnce(&mut String),
 ) {
     let before = BoundText::of(text);
     edit(text);
-    let after = BoundText::of(text);
+    move_bound(ctx, id, before, BoundText::of(text), None);
+}
+
+/// The guard's record of field `id` moves from `before` to `after`, when it holds `before`.
+fn move_bound(
+    ctx: &egui::Context,
+    id: Id,
+    before: BoundText,
+    after: BoundText,
+    key: Option<super::text_draft::DraftKey>,
+) {
     ctx.data_mut(|data| {
         if let Some(record) = data
             .get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
             .0
             .iter_mut()
-            .find(|(record, bound)| *record == id && *bound == before)
+            .find(|(record, bound, _)| *record == id && *bound == before)
         {
-            record.1 = after;
+            (record.1, record.2) = (after, key);
         }
     });
 }
@@ -2382,12 +2413,14 @@ impl<'a> TitleLine<'a> {
         let placement = if metrics.widths.is_empty() && metrics.beside() > room - end {
             TitlePlacement::Under(Vec::new())
         } else {
+            // At the end, rows under the title end before the status and the `⋯` too, so they
+            // wrap within that room (review of PR 780).
             title_placement(
                 metrics.beside(),
                 metrics.lead_in,
                 &metrics.widths,
                 room - end,
-                room,
+                if self.at_end { room - end } else { room },
             )
         };
         let closed;
@@ -4515,11 +4548,50 @@ pub fn menu_popup<'a, P: MenuPane + ?Sized>(pane: &P, response: &'a Response) ->
     let (align, room) = menu_side(pane, response.rect);
     MenuPopup {
         id: egui::Popup::default_response_id(response),
-        popup: menu_popup_raw(response).align(align).width(room),
+        popup: menu_popup_raw(MenuAnchor::Control(response))
+            .align(align)
+            .width(room),
         room,
         pane,
         control: response.rect,
     }
+}
+
+/// A menu that opens at `anchor`, a place in `ui`'s pane that is not a control (Sessions' `/`
+/// menu opens at the note's text cursor, M0536), named by `id`. Its room, side, width, keys and
+/// close rules are [`menu_popup`]'s: it stays inside `ui`'s pane, one scroll lane clear of the
+/// pane's edges, so it lies over neither a splitter nor a scroll bar, and it opens above the
+/// anchor when there is no room below. No click opens it: the caller opens it with
+/// [`MenuPopup::open_memory`] or [`MenuPopup::open`], and closes it with
+/// `egui::Popup::close_id(ctx, id)` as egui's own menus close.
+pub fn menu_popup_at(ui: &Ui, id: Id, anchor: Rect) -> MenuPopup<'static> {
+    let pane = ui.pane();
+    let (align, room) = menu_side(pane, anchor);
+    MenuPopup {
+        id,
+        popup: menu_popup_raw(MenuAnchor::At {
+            id,
+            ctx: ui.ctx().clone(),
+            rect: anchor,
+            layer: ui.layer_id(),
+        })
+        .align(align)
+        .width(room),
+        room,
+        pane,
+        control: anchor,
+    }
+}
+
+/// What a menu opens beside: a control (it toggles the menu when pressed), or a place.
+enum MenuAnchor<'a> {
+    Control(&'a Response),
+    At {
+        id: Id,
+        ctx: egui::Context,
+        rect: Rect,
+        layer: egui::LayerId,
+    },
 }
 
 /// Where a menu's room comes from: the `Ui` its control is drawn in (that pane's clip), or,
@@ -4576,8 +4648,21 @@ fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-fn menu_popup_raw(response: &Response) -> egui::Popup<'_> {
-    egui::Popup::menu(response)
+fn menu_popup_raw(anchor: MenuAnchor<'_>) -> egui::Popup<'_> {
+    match anchor {
+        MenuAnchor::Control(response) => egui::Popup::menu(response),
+        // `Popup::menu`'s form without its toggle: a menu's kind, layout, style and no gap.
+        MenuAnchor::At {
+            id,
+            ctx,
+            rect,
+            layer,
+        } => egui::Popup::new(id, ctx, rect, layer)
+            .kind(egui::PopupKind::Menu)
+            .layout(egui::Layout::top_down_justified(egui::Align::Min))
+            .style(egui::containers::menu::menu_style)
+            .gap(0.0),
+    }
 }
 
 /// The submenus of a menu that a click inside does not close ([`MenuPopup::show_submenus`]).

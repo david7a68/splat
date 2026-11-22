@@ -1,6 +1,6 @@
 //! Layout PR 9b (rulings L8 and M25): the text cost of a quiet frame, measured.
 //!
-//! A document editor (`pane::document_view` over a `TextDraft`) may cost, per quiet frame,
+//! A document editor (`pane::editor_view` over a `TextDraft`) may cost, per quiet frame,
 //! what egui's own text edit costs over the same text, and nothing else that grows with the
 //! text. egui's stock costs stay (M25) and are COUNTED here: its `prev_text` copy, its undo
 //! copies while focused, its AccessKit text runs while AccessKit is on. The allowance is
@@ -35,7 +35,7 @@ use counting::{Allocated, measured};
 /// Which editor a case draws.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Side {
-    /// `pane::document_view` over a `TextDraft`: the part under test.
+    /// `pane::editor_view` over a `TextDraft`: the part under test.
     Document,
     /// egui's `TextEdit` over a `String` at this wrap width, with a galley made once.
     Stock { wrap: f32 },
@@ -113,12 +113,12 @@ impl Editor {
     fn draw(&mut self, ui: &mut egui::Ui) -> Option<Arc<egui::Galley>> {
         match self.side {
             Side::Document => {
-                let editor = pane::document_view(
+                let editor = pane::editor_view(
                     ui,
                     pane::ViewHeight::Fills,
                     FIELD,
                     &mut self.draft,
-                    pane::Face::Font(egui::TextStyle::Body),
+                    pane::Face::Font(egui::TextStyle::Body.resolve(ui.style())),
                     |edit| edit,
                 );
                 Some(editor.galley)

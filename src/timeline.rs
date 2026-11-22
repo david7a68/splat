@@ -125,6 +125,8 @@ pub struct BookResults {
     pub reloaded: crate::design::Results<TimelineFile, Reloaded>,
     pub removal: crate::design::Results<TimelineFile, Removal>,
     pub ruling: crate::design::Results<TimelineFile, Ruling>,
+    /// The book's hold on the removal it recorded, which follows the run's updates (M0543).
+    pub removal_hold: Option<crate::design::results::Hold>,
 }
 
 /// One removed event, until its session changes or Undo puts it back.
@@ -1153,7 +1155,7 @@ impl Book {
                 label,
                 mentions,
             };
-            self.results.removal.record(removal);
+            self.results.removal_hold = Some(self.results.removal.record_held(removal));
         }
     }
 
@@ -1277,21 +1279,20 @@ impl Book {
             return;
         }
         // The run's own changes are the session's new state, not an edit after it.
-        self.removal_follows_run(&file, session);
+        self.removal_follows_run(session);
     }
 
     /// The kept removal takes its session's events after a run's update as the state an edit
-    /// is told from. It holds no ticket here (the run's update is no press): by owner, counted.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: the update of a run revises the one kept removal by its owner (design::results::STAGED_ALLOWS)"
-    )]
-    fn removal_follows_run(&mut self, file: &TimelineFile, session: Option<Uuid>) {
+    /// is told from. The run's update is no press: the book revises the removal it recorded by
+    /// its hold (M0543), so a newer removal is never changed by it.
+    fn removal_follows_run(&mut self, session: Option<Uuid>) {
         let owned = self.owned_events(session);
-        let _ = self
-            .results
-            .removal
-            .revise(file, |removal| removal.owned = owned);
+        if let Some(hold) = &self.results.removal_hold {
+            let _ = self
+                .results
+                .removal
+                .revise_held(hold, |removal| removal.owned = owned);
+        }
     }
 
     /// The removal's result and Undo end: its session's note was edited after it.
@@ -2986,6 +2987,25 @@ mod tests {
         book.remove(&rest);
         book.add(Kind::Travel, one);
         assert!(book.removed().is_none(), "A's edit ends it");
+        // M0543 (M-P0.28): a run's update in the removal's own session is that session's new
+        // state, not an edit: the removal follows it (by its hold), so a later edit in another
+        // session keeps the Undo.
+        let mut book = Book::default();
+        book.add(Kind::Travel, one);
+        book.record_change(None, &fact(RunState::Running), one, None);
+        let rest = book.add(Kind::LongRest, one);
+        book.remove(&rest);
+        let later = RunFact {
+            round: 5,
+            ..fact(RunState::Running)
+        };
+        book.record_change(Some(&fact(RunState::Running)), &later, one, None);
+        book.add(Kind::Day, two);
+        assert_eq!(
+            book.removed(),
+            Some("Long rest"),
+            "m-p0-hold-follows: the run's round in A's session is no edit; B's edit keeps A's Undo"
+        );
     }
 
     #[test]

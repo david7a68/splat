@@ -4476,13 +4476,18 @@ pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
     undo_message_capped(ui, tone, text, action, None)
 }
 
-/// A kept line for an act's result and its Undo: one control high whether or not a result
-/// shows, so the result moves nothing below it. Words that do not fit beside Undo end in `…`,
-/// and their hover keeps them whole. Capped at `LIST_MEASURE` like every notice.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool {
+/// A kept line for an act's result and its action, which `outcome::PlacedResult::show_line`
+/// draws its typed result with (M0561; the old `undo_line`, whose last callers moved onto it):
+/// one `Read` control high whether or not a result shows. `result` is the words, the action's
+/// whole words and its short words. The words come first: the action shows its whole words only
+/// while the result's words still fit whole beside them, else its short words; the words that
+/// still do not fit are cut by whole words (the whole words on hover and as their name). The
+/// action's accessible name is always its whole words.
+pub(in crate::design) fn result_line(
+    ui: &mut Ui,
+    tone: Tone,
+    result: Option<(&str, &str, &str)>,
+) -> bool {
     let size = vec2(
         ui.available_width().min(LIST_MEASURE),
         Density::Read.control(),
@@ -4490,13 +4495,16 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
     let mut pressed = false;
     ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
         ui.set_min_size(size);
-        let Some((text, action)) = result else {
+        let Some((text, whole, short)) = result else {
             return;
         };
         let (icon, color) = tone.parts();
-        let button = Action::quiet(action)
-            .icon(icons::UNDO)
-            .density(Density::Read);
+        fn action<'w>(words: &'w str, name: &'w str) -> Action<'w> {
+            Action::quiet(words)
+                .icon(icons::UNDO)
+                .density(Density::Read)
+                .name(name)
+        }
         let gap = ui.spacing().item_spacing.x;
         let left = ui.cursor().left();
         ui.spacing_mut().item_spacing.x = 0.0;
@@ -4504,7 +4512,12 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
         ui.label(Type::Body.rich(ui, icon).color(color));
         space(ui, XS);
         let font = Type::Body.font(ui);
-        let room = ui.available_width() - gap - button.natural_width(ui);
+        let needed = number_width(ui, text, &font);
+        let fits =
+            |words: &str| ui.available_width() - gap - action(words, whole).natural_width(ui);
+        let shown = if needed <= fits(whole) { whole } else { short };
+        let button = action(shown, whole);
+        let room = fits(shown);
         // App round 2: the words shorten by whole words, never inside one.
         let fitted = words_that_fit(ui, text, &font, room);
         let cut = fitted != text;

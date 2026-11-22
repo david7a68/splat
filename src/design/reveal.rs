@@ -606,8 +606,8 @@ pub(in crate::design) fn column_input(
     let fling = area
         .and_then(|area| egui::scroll_area::State::load(ui.ctx(), area))
         .is_some_and(|state| state.velocity() != Vec2::ZERO);
-    let keys = keys_in(ui, key);
-    let pointer = pointer_in(ui, key);
+    let keys = keys_in(ui, key, view);
+    let pointer = pointer_in(ui, key, view);
     // The content's view and the scroll bar's lane right of it: a press on the bar is the DM's.
     let reach = Rect::from_min_max(
         view.min,
@@ -681,6 +681,8 @@ struct KeyOwner {
     focused: Option<Id>,
     focus: Option<Id>,
     pointer: Option<Id>,
+    /// Where the pointer was when `pointer` was recorded.
+    at: Option<egui::Pos2>,
 }
 
 fn key_owner_id() -> Id {
@@ -718,6 +720,7 @@ fn record_keys(
             .hover_pos()
             .is_some_and(|pos| reach.contains(pos))
     });
+    let at = ui.input(|input| input.pointer.hover_pos());
     ctx.data_mut(|data| {
         let owners = data.get_temp_mut_or_default::<[KeyOwner; 2]>(key_owner_id());
         if owners[1].pass != pass {
@@ -729,8 +732,18 @@ fn record_keys(
             };
         }
         let now = &mut owners[1];
+        // Review of PR 787 (P2): the focus can move in a later column of the pass; the owner is
+        // the innermost column of the focused control as it is now.
+        if now.focused != focused {
+            now.focused = focused;
+            now.focus = None;
+        }
         if holds && now.focus.is_none() {
             now.focus = Some(key);
+        }
+        if now.at != at {
+            now.at = at;
+            now.pointer = None;
         }
         if under && now.pointer.is_none() {
             now.pointer = Some(key);
@@ -740,7 +753,7 @@ fn record_keys(
 
 /// Whether this pass's keys go to the column `key` (`KeyOwner`). A focus not yet recorded (it
 /// moved in this frame) goes to no column. A key never belongs to two columns.
-pub(in crate::design) fn keys_in(ui: &Ui, key: Id) -> bool {
+pub(in crate::design) fn keys_in(ui: &Ui, key: Id, view: Rect) -> bool {
     let focused = ui.ctx().memory(|memory| memory.focused());
     match focused {
         Some(_) => {
@@ -748,14 +761,30 @@ pub(in crate::design) fn keys_in(ui: &Ui, key: Id) -> bool {
                 (owner.focused == focused).then_some(owner.focus?)
             }) == Some(key)
         }
-        None => pointer_in(ui, key),
+        None => pointer_in(ui, key, view),
     }
 }
 
 /// Whether the column `key` is the innermost one under the pointer (`KeyOwner`): a wheel there
 /// scrolls it, not the column around it.
-fn pointer_in(ui: &Ui, key: Id) -> bool {
-    newest_owner(ui, |owner| owner.pointer) == Some(key)
+fn pointer_in(ui: &Ui, key: Id, view: Rect) -> bool {
+    let hover = ui.input(|input| input.pointer.hover_pos());
+    let owners = ui
+        .ctx()
+        .data(|data| data.get_temp::<[KeyOwner; 2]>(key_owner_id()))
+        .unwrap_or_default();
+    // Review of PR 787 (P2): a record made with the pointer elsewhere says nothing of where it is
+    // now (the DM moved from an inner column to its outer one in this frame): then the column's
+    // own view decides.
+    match owners
+        .iter()
+        .rev()
+        .filter(|owner| owner.pass != 0 && owner.at == hover)
+        .find_map(|owner| owner.pointer)
+    {
+        Some(owner) => owner == key,
+        None => hover.is_some_and(|at| view.contains(at)),
+    }
 }
 
 /// The newest recorded owner that `pick` finds.
@@ -831,6 +860,9 @@ pub enum JumpTo {
     /// the least scroll that shows it whole ([`bring_into_view`]), so the menu does not hang
     /// from a control the DM cannot see.
     OpenMenuControl,
+    /// A list's row brought to the top because the page opened at it, a link revealed it, or
+    /// it moved there (the Timeline's events, M0556): the row before it at the view's top.
+    ListedRow,
 }
 
 /// The `ScrollColumn` that holds `ui` moves, at its next pass, so that the screen y `top` of

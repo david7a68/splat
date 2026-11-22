@@ -732,6 +732,8 @@ pub struct Sessions {
     templates: Vec<Template>,
     template: Option<String>,
     template_draft: Option<Draft>,
+    /// The shown built-in template's name and its words as a document (layout PR 9b).
+    builtin_text: Option<(String, design::text_draft::TextDraft)>,
     new_template: Option<String>,
     template_error: Option<String>,
     /// A deleted template's words, for its `Undo delete`.
@@ -1151,6 +1153,16 @@ fn note_frame_width(ctx: &egui::Context) -> f32 {
 }
 
 /// A note's words as a reader sees them: links as words, and no empty headings.
+/// A Markdown note's face: styled by `markdown_source::layouter` in the prose `font`, with its
+/// folds opened at the caret, laid out once per change (layout PR 9b).
+fn markdown_face(font: egui::FontId) -> design::pane::Face {
+    design::pane::Face::Laid {
+        layout: crate::markdown_source::layouter,
+        font,
+        folds: true,
+    }
+}
+
 fn words_to_read(body: &str, book: &Book) -> String {
     let _ = book;
     without_empty_sections(&crate::world::with_links(body, &Default::default()))
@@ -1789,12 +1801,12 @@ impl Sessions {
         match self.removal_note.as_mut().filter(|_| same_removal) {
             Some(seen) => {
                 match (&seen.words, words) {
-                    (Some(before), Some(draft)) if *before != draft.body => {
+                    (Some(before), Some(draft)) if *before != draft.body.as_str() => {
                         book.forget_removed();
                         self.removal_note = None;
                         return;
                     }
-                    (None, Some(draft)) => seen.words = Some(draft.body.clone()),
+                    (None, Some(draft)) => seen.words = Some(draft.body.as_str().to_owned()),
                     _ => {}
                 }
                 seen.revision = revision;
@@ -1803,7 +1815,7 @@ impl Sessions {
                 self.removal_note = Some(RemovalNote {
                     id,
                     revision,
-                    words: words.map(|draft| draft.body.clone()),
+                    words: words.map(|draft| draft.body.as_str().to_owned()),
                 });
             }
         }
@@ -3137,7 +3149,7 @@ impl Sessions {
                     .draft
                     .as_ref()
                     .filter(|draft| draft.path == note.path)
-                    .map(|draft| draft.body.clone())
+                    .map(|draft| draft.body.as_str().to_owned())
                     .or_else(|| {
                         fs::read_to_string(&note.path)
                             .ok()
@@ -3212,7 +3224,7 @@ impl Sessions {
         let mut failed = None;
         for (before, body) in changes {
             let mut next = before.clone();
-            next.body = body;
+            let _ = next.body.replace(body);
             next.edited();
             next.save();
             if next.unsaved() {
@@ -3233,7 +3245,7 @@ impl Sessions {
             written.push(LinkWrite {
                 id: super::note_identity(&next.path, &bytes),
                 before,
-                after: next.body.clone(),
+                after: next.body.as_str().to_owned(),
                 bytes,
             });
             if self
@@ -3346,7 +3358,7 @@ impl Sessions {
                         Recovery::First(Step::Check(File::SessionNote)),
                     ))
                 }
-                Some(draft) if !same_file(&draft) || draft.body != write.after => {
+                Some(draft) if !same_file(&draft) || draft.body.as_str() != write.after => {
                     let within = write.within();
                     Some((
                         Cause::EditedSince(within.clone()),
@@ -3354,7 +3366,7 @@ impl Sessions {
                     ))
                 }
                 Some(mut current) => {
-                    current.body = write.before.body.clone();
+                    let _ = current.body.replace(write.before.body.as_str());
                     current.edited();
                     current.save();
                     // A save that did not finish says why in the draft's state.
@@ -3784,7 +3796,7 @@ impl Sessions {
             if self.selected == Some(session) {
                 self.draft
                     .as_ref()
-                    .map_or_else(String::new, |draft| draft.body.clone())
+                    .map_or_else(String::new, |draft| draft.body.as_str().to_owned())
             } else {
                 self.notes
                     .iter()
@@ -4543,7 +4555,7 @@ impl Sessions {
             body: self
                 .draft
                 .as_ref()
-                .map_or_else(String::new, |draft| draft.body.clone()),
+                .map_or_else(String::new, |draft| draft.body.as_str().to_owned()),
             events: book.events.clone(),
             name,
             number,
@@ -4562,7 +4574,7 @@ impl Sessions {
                 || self
                     .draft
                     .as_ref()
-                    .is_none_or(|draft| draft.body != moved.body)
+                    .is_none_or(|draft| draft.body.as_str() != moved.body)
         });
         if changed {
             self.moves.owner_changed(&page);
@@ -4969,21 +4981,26 @@ impl Sessions {
                                 ui.available_width()
                             };
                             let font = design::reader::prose_type(ui).font(ui);
+                            let face = markdown_face(font.clone());
                             let output =
-                                field.of(self.selected).editor(ui, &mut draft.body, |edit| {
-                                    // The layouter is a function item: leaking its box
-                                    // allocates nothing.
-                                    edit.lock_focus(in_panel)
-                                        .frame(false)
-                                        .font(font)
-                                        .layouter(Box::leak(Box::new(
-                                            crate::markdown_source::layouter,
-                                        )))
-                                        .margin(egui::Vec2::ZERO)
-                                        .desired_width(width)
-                                        .min_size(egui::vec2(0.0, visible_height + heading_offset))
-                                });
-                            crate::markdown_source::paint_section_rules(ui, &output);
+                                field
+                                    .of(self.selected)
+                                    .editor(ui, &mut draft.body, face, |edit| {
+                                        edit.lock_focus(in_panel)
+                                            .frame(false)
+                                            .font(font)
+                                            .margin(egui::Vec2::ZERO)
+                                            .desired_width(width)
+                                            .min_size(egui::vec2(
+                                                0.0,
+                                                visible_height + heading_offset,
+                                            ))
+                                    });
+                            crate::markdown_source::paint_section_rules(
+                                ui,
+                                &output,
+                                Some(draft.body.key()),
+                            );
                             pressed_link =
                                 crate::markdown_source::pressed_note_link(ui, &output, None);
                             let place = super::slash::Place {
@@ -5076,7 +5093,7 @@ impl Sessions {
                             }
                             if focus {
                                 response.request_focus();
-                                let (caret, changed) = fresh_line_in_note(&mut draft.body);
+                                let (caret, changed) = draft.body.edit(fresh_line_in_note);
                                 if changed {
                                     draft.edited();
                                 }
@@ -5151,7 +5168,7 @@ impl Sessions {
             Some(id) => {
                 design::edit_in_place(ctx, id, &mut draft.body, |body| insert_in_note(body, words));
             }
-            None => insert_in_note(&mut draft.body, words),
+            None => draft.body.edit(|body| insert_in_note(body, words)),
         }
         draft.edited();
         true
@@ -5329,7 +5346,7 @@ impl Sessions {
             .selected
             .and_then(|id| self.notes.iter().find(|note| note.id == id));
         note.map_or_else(
-            || draft.body.clone(),
+            || draft.body.as_str().to_owned(),
             |note| without_own_heading(&draft.body, note),
         )
     }
@@ -5505,7 +5522,7 @@ impl Sessions {
             }
         }
         if let (Some(draft), Some(session)) = (&mut self.draft, self.selected)
-            && rename_links(&mut draft.body, old, new)
+            && draft.body.edit(|body| rename_links(body, old, new))
         {
             draft.edited();
             self.mentions
@@ -5556,7 +5573,9 @@ impl Sessions {
             .iter()
             .filter_map(|note| {
                 let body = if self.selected == Some(note.id) {
-                    self.draft.as_ref().map(|draft| draft.body.clone())
+                    self.draft
+                        .as_ref()
+                        .map(|draft| draft.body.as_str().to_owned())
                 } else {
                     fs::read_to_string(&note.path)
                         .ok()
@@ -5722,21 +5741,14 @@ impl Sessions {
                             .job
                             .as_ref()
                             .is_some_and(|(job, _)| job.recording == recording.path);
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        delete = Action::quiet("Delete…")
-                            .name(&format!("Delete recording: {}", recording.name))
-                            .density(Density::Read)
-                            .blocked_if(busy, "This recording is in use.")
-                            .show(ui)
-                            .clicked();
-                        if busy {
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, "This recording is in use.")
-                                    .color(c.muted),
-                            );
-                        }
-                    });
+                    delete = Action::quiet("Delete…")
+                        .name(&format!("Delete recording: {}", recording.name))
+                        .density(Density::Read)
+                        .blocked_if(busy, "This recording is in use.")
+                        .show(ui)
+                        .clicked();
+                    // A note under its choice, at its words, as every menu's (M-P0.27).
+                    design::choice_note(ui, false, busy.then_some("This recording is in use."));
                     if delete {
                         ui.close();
                     }
@@ -7853,10 +7865,10 @@ impl Sessions {
         if delete && let Some(path) = &template.path {
             match super::remove_file(path) {
                 Ok(()) => {
-                    let body = self
-                        .template_draft
-                        .take()
-                        .map_or_else(|| template.body.clone(), |draft| draft.body);
+                    let body = self.template_draft.take().map_or_else(
+                        || template.body.as_str().to_owned(),
+                        |draft| draft.body.into_string(),
+                    );
                     self.deleted_templates.record(kept::DeletedTemplate {
                         page: kept::Page {
                             root: self.folder.clone().unwrap_or_default(),
@@ -7894,13 +7906,10 @@ impl Sessions {
                 design::pane::ViewHeight::Fills,
                 field,
                 &mut draft.body,
-                |edit| {
-                    // The layouter is a function item: leaking its box allocates nothing.
-                    edit.font(font)
-                        .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
-                },
+                markdown_face(font.clone()),
+                |edit| edit.font(font),
             );
-            crate::markdown_source::paint_section_rules(ui, &output);
+            crate::markdown_source::paint_section_rules(ui, &output, Some(draft.body.key()));
             pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
             let response = output.response;
             design::named(ui, &response, "Template text");
@@ -7912,21 +7921,31 @@ impl Sessions {
             }
         } else {
             // A built-in template reads in the pane's scroll column: it is not an editor.
+            // Its words are a document kept while it shows (layout PR 9b): a built-in template
+            // never changes, so it is made again only for another template.
+            if self
+                .builtin_text
+                .as_ref()
+                .is_none_or(|(name, _)| *name != template.name)
+            {
+                self.builtin_text = Some((
+                    template.name.clone(),
+                    design::text_draft::TextDraft::new(template.body.as_str()),
+                ));
+            }
+            let body = &mut self.builtin_text.as_mut().expect("kept above").1;
             design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
-                let mut body = template.body.clone();
                 let (width, height) = (ui.available_width(), ui.available_height());
                 let font = design::reader::prose_type(ui).font(ui);
-                let output = field.editor(ui, &mut body, |edit| {
-                    // The layouter is a function item: leaking its box allocates nothing.
+                let output = field.editor(ui, body, markdown_face(font.clone()), |edit| {
                     edit.font(font)
-                        .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
                         .desired_width(width)
                         .min_size(egui::vec2(0.0, height))
                         .frame(false)
                         .interactive(false)
                 });
                 design::named(ui, &output.response, "Built-in template text");
-                crate::markdown_source::paint_section_rules(ui, &output);
+                crate::markdown_source::paint_section_rules(ui, &output, Some(body.key()));
             });
         }
         if save && let Some(draft) = &mut self.template_draft {
@@ -9053,14 +9072,14 @@ mod tests {
         };
         sessions.rename_links("Ash Pack", "Cinder Pack");
         assert_eq!(
-            sessions.draft.as_ref().unwrap().body,
+            sessions.draft.as_ref().unwrap().body.as_str(),
             "[[Ash Pack#Members]]\n"
         );
         assert!(sessions.rename_problem.is_some());
         fs::remove_file(dir.path().join("Ash Pack.md")).unwrap();
         sessions.rename_links("Ash Pack", "Cinder Pack");
         assert_eq!(
-            sessions.draft.as_ref().unwrap().body,
+            sessions.draft.as_ref().unwrap().body.as_str(),
             "[[Cinder Pack#Members]]\n"
         );
     }
@@ -9619,6 +9638,12 @@ mod tests {
         harness.run_steps(2);
         harness.get_by_label("Template text").focus();
         harness.run_steps(2);
+        // Layout PR 9b: the focused template's quiet frames lay out and hash none of its text.
+        assert_eq!(
+            design::pane::text_work(|| harness.run_steps(4)),
+            (0, 0),
+            "9b-quiet: the template editor's quiet frames"
+        );
         harness.get_by_label("Template text").type_text("Dusk");
         harness.run_steps(16);
         harness.get_by_label("Template text").type_text("!");
@@ -9632,7 +9657,7 @@ mod tests {
                 .state()
                 .template_draft
                 .as_ref()
-                .map(|draft| draft.body.clone())
+                .map(|draft| draft.body.as_str().to_owned())
         };
         assert_eq!(body(&harness).as_deref(), Some("## Plan\n"));
         harness.state_mut().select_template(&b.name);
@@ -9696,13 +9721,19 @@ mod tests {
                 .0
                 .draft
                 .as_ref()
-                .map(|draft| draft.body.clone())
+                .map(|draft| draft.body.as_str().to_owned())
                 .unwrap_or_default()
         };
         harness.run_steps(2);
         let left = body(&harness);
         harness.get_by_label("Note text").focus();
         harness.run_steps(2);
+        // Layout PR 9b: the focused note's quiet frames lay out and hash none of its text.
+        assert_eq!(
+            design::pane::text_work(|| harness.run_steps(4)),
+            (0, 0),
+            "9b-quiet: the note editor's quiet frames"
+        );
         harness.get_by_label("Note text").type_text("Lost words");
         harness.run_steps(8);
         for _ in 0.."Lost words".len() {

@@ -5153,6 +5153,14 @@ pub mod campaign_content {
         let unchanged = d.app_mut().campaign_content.repair_checks();
         d.replace_text_in(&b_editor, &format!("{second}\nB edit.\n"));
         let edited = d.app_mut().campaign_content.repair_checks();
+        // Layout PR 9b: once settled, the repair editors' frames lay out and hash no text.
+        d.settle();
+        let work = crate::design::pane::text_work(|| d.settle());
+        d.observe(
+            "9b-quiet-campaign-repair",
+            work == (0, 0),
+            format!("Layouts made and bytes hashed on settled frames: {work:?}"),
+        );
         d.observe(
             "iter-23-C-check-once",
             unchanged == checks && edited > unchanged,
@@ -15270,6 +15278,49 @@ pub mod session_notes {
         {
             d.outcome.look_review.push("Known Sessions fault, assigned to package C by the lead: crossing the note/plan breakpoint keeps the draft but loses focus and the wide view's scroll. Package A does not change the editor parent or IDs; see focused-2.log.".into());
         }
+        // M-P0.S1 (M0536): the `/` menu opens at the note's text cursor as the shared menu at
+        // a place: at 960, 1200 and 1920 its frame stays in the window and clear of every
+        // splitter and scroll bar (the gate's state checks show no menu here).
+        d.type_into_editor("\n/");
+        d.wait_for_text("Generate NPC");
+        let margin = egui::Frame::menu(&d.app_style()).total_margin();
+        let mut placed = Vec::new();
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            placed.push(d.at_size(size, |d| {
+                let nodes = d.nodes();
+                let npc = nodes
+                    .iter()
+                    .find(|node| node.name == "Generate NPC" && node.in_view())
+                    .map(|node| node.rect);
+                let frame = npc.map(|npc| {
+                    nodes
+                        .iter()
+                        .filter(|node| {
+                            node.name == "Search"
+                                && node.in_view()
+                                && (node.rect.center().y - npc.center().y).abs()
+                                    < 3.0 * crate::design::XL
+                        })
+                        .fold(npc, |frame, node| frame.union(node.rect))
+                        + margin
+                });
+                let window = d.window_size();
+                let clear = frame.is_some_and(|frame| {
+                    frame.left() >= 0.0
+                        && frame.top() >= 0.0
+                        && frame.right() <= window.0
+                        && frame.bottom() <= window.1
+                        && d.chrome_lanes().iter().all(|lane| !lane.intersects(frame))
+                });
+                (size, clear, frame)
+            }));
+        }
+        d.observe(
+            "M-P0.S1",
+            placed.iter().all(|(_, clear, _)| *clear),
+            format!("The / menu stays in its pane, clear of splitters and scroll bars: {placed:?}"),
+        );
+        d.press(Key::Escape);
         d.replace_editor_text(&draft);
         d.press_ctrl(Key::S);
         d.expect("Notes saved");
@@ -21697,6 +21748,14 @@ pub mod encounter_groups {
         // An unrelated edit keeps the result; Undo puts back only the creature, and its words
         // go with it.
         d.type_into(&format!("Group notes for {GROUP_LOST}"), " Arrive at dusk.");
+        // Layout PR 9b: once settled, the group notes' frames lay out and hash no text.
+        d.settle();
+        let work = crate::design::pane::text_work(|| d.settle());
+        d.observe(
+            "9b-quiet-group-notes",
+            work == (0, 0),
+            format!("Layouts made and bytes hashed on settled frames: {work:?}"),
+        );
         let typed = d.visible_text("Arrive at dusk.");
         d.click("Undo replace member");
         d.expect("Replace Unknown creature");

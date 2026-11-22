@@ -615,7 +615,7 @@ pub fn markdown(ui: &mut egui::Ui) {
             .layouter(&mut layouter)
             .desired_width(f32::INFINITY)
             .show(&mut columns[0]);
-        crate::markdown_source::paint_section_rules(&columns[0], &output);
+        crate::markdown_source::paint_section_rules(&columns[0], &output, None);
         named(&columns[0], &output.response, "Sample note");
         design_group(&mut columns[1], "Read");
         // The Reader gets a reference as its words, from the timeline.

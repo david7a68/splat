@@ -6704,11 +6704,17 @@ mod tests {
             // Review of f29ef2c0: unchanged passes copy no Log keys again; a field that opens
             // or closes in one reader is the only thing that makes the other copy them.
             let shares = LOG_KEY_SHARES.with(std::cell::Cell::get);
-            harness.run_steps(3);
+            // Layout PR 9b: the open form's note text is laid out and hashed on no unchanged pass.
+            let work = crate::design::pane::text_work(|| harness.run_steps(3));
             assert_eq!(
                 LOG_KEY_SHARES.with(std::cell::Cell::get),
                 shares,
                 "no copy of the Log keys on an unchanged pass"
+            );
+            assert_eq!(
+                work,
+                (0, 0),
+                "9b-quiet: the World edit form's unchanged passes"
             );
             let rows = harness.query_all_by_label(LOG_WAITS_FOR_CANCEL).count();
             let (world, lookup) = harness.state();

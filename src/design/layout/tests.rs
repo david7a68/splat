@@ -519,6 +519,32 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         "m-p0-title-kind: the kind {kind:?} before the title {title_ink:?}, Copy link {copy:?} at \
          the line's end for both titles, the menu {more:?} at the title line's right end"
     );
+    // Review of PR 780: with three actions at the end in a narrow pane, the rows under the
+    // title wrap within the room before the status and the `⋯`: no action starts left of the
+    // line or ends under the menu.
+    const PRINT: Word = crate::word!("Print");
+    const EXPORT: Word = crate::word!("Export as PDF");
+    let (narrow, _) = frame_with(&ctx, vec2(340.0, 300.0), Vec::new(), |ui| {
+        let _ = TitleLine::new("Harvest Eve")
+            .role(TitleType::Panel)
+            .kind("\u{25c6}", "Day")
+            .actions_at_end()
+            .action(TitleAction::secondary(COPY).icon(crate::design::icons::COPY))
+            .action(TitleAction::quiet(PRINT))
+            .action(TitleAction::quiet(EXPORT))
+            .state(saving[0], &saving)
+            .more("More actions for the event", |_| {})
+            .show(ui);
+    });
+    let menu_left = bounds(&narrow, "More actions for the event").left();
+    let three = ["Copy link", "Print", "Export as PDF"].map(|name| bounds(&narrow, name));
+    assert!(
+        three
+            .iter()
+            .all(|rect| rect.left() >= -0.5 && rect.right() <= menu_left + 0.5),
+        "m-p0-title-at-end-wrap: the three actions {three:?} stay inside the line, left of the \
+         menu at {menu_left}"
+    );
     form_header(
         vec![egui::Event::PointerMoved(kind.center())],
         "Harvest Eve",
@@ -2482,7 +2508,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     assert_eq!(other, "Brine", "k3-own: Ctrl+Z undoes the DM's own typing");
     // The field edits its own text (a command takes its words out, words go in at the caret):
     // the history stays, and Ctrl+Z goes back through the edit to what came before.
-    super::edit_in_place(&ctx, second_id, &mut other, |text| text.push_str(" sea"));
+    super::edit_line_in_place(&ctx, second_id, &mut other, |text| text.push_str(" sea"));
     edit(&mut other, Vec::new());
     edit(&mut other, vec![ctrl_z()]);
     assert_eq!(
@@ -2491,7 +2517,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     );
     // Another object's text came first: the edit after it does not hide it, and the history goes.
     other = String::from("Kelp");
-    super::edit_in_place(&ctx, second_id, &mut other, |text| text.push('s'));
+    super::edit_line_in_place(&ctx, second_id, &mut other, |text| text.push('s'));
     edit(&mut other, Vec::new());
     edit(&mut other, vec![ctrl_z()]);
     assert_eq!(

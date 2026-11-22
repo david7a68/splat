@@ -540,7 +540,10 @@ pub fn iter14_e_changed_files_end_every_undo_result(
                         note.owner.id() == Some(original.id) && note.path == *original_path
                     })
                     .unwrap();
-                library.draft = format!("{}\nUnsaved words.\n", loaded.notes[unrelated].text);
+                let _ = library.draft.replace(format!(
+                    "{}\nUnsaved words.\n",
+                    loaded.notes[unrelated].text
+                ));
                 library.loaded = Some(loaded);
                 library.selected = Some(unrelated);
                 assert!(library.dirty(), "fixture: an unrelated draft is unsaved");

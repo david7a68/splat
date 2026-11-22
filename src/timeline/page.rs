@@ -5,7 +5,7 @@ use super::{
     reference,
 };
 use crate::design::{
-    self, Action, Density, Status, Tone, Type, colors, icons,
+    self, Action, Density, Status, Type, colors, icons,
     outcome::{
         BodyMessage, Choice, Fault, FaultMessage, FileLine, KeptOutcome, MessageChoice, Messages,
         Notice, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
@@ -1290,11 +1290,16 @@ impl TimelinePage {
                 egui::vec2(width, ROW),
             )
         };
-        // The row before the target comes to the top, as the list opened before.
+        // The row before the target comes to the top, as the list opened before: the list's
+        // column writes it as its own offset at its next pass (M0556, `reveal::jump`).
         if let Some(target) = self.scroll_to.take()
             && let Some(row) = rows.iter().position(|&index| index == target)
         {
-            ui.scroll_to_rect(place(row.saturating_sub(1)), Some(egui::Align::Min));
+            design::reveal::jump(
+                ui,
+                place(row.saturating_sub(1)).top(),
+                design::reveal::JumpTo::ListedRow,
+            );
         }
         let shown = ui.clip_rect();
         let first = ((shown.top() - column.top()) / step).floor().max(0.0) as usize;
@@ -1640,9 +1645,14 @@ impl TimelinePage {
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.
-                let done = self.checks_done.get(&id);
-                let result = done.map(|done| (done.words.as_str(), done.undo));
-                undo_checks |= design::undo_line(ui, Tone::Success, result);
+                // M0561 (M-P0.27): a typed result line that keeps its room.
+                let result = self.checks_done.get(&id).map(|done| {
+                    design::outcome::PlacedResult::new(
+                        done.words.clone(),
+                        done.undo.clone().pressed_as(()),
+                    )
+                });
+                undo_checks |= design::outcome::PlacedResult::show_line(result, ui).is_some();
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
             }
             design::gap(ui, design::Gap::M);
@@ -2205,6 +2215,46 @@ mod tests {
         assert!(
             !on_disk(&harness).contains("Moved camp"),
             "under a modal, Ctrl+S saves nothing on the campaign change's frame"
+        );
+    }
+
+    /// M0556: the list opens at its last event: the list's column writes the jump
+    /// (`reveal::jump`), so the rows near the last event are drawn in view and the first one is
+    /// not (only the rows in view draw). The same rows as `scroll_to_rect` showed.
+    #[test]
+    fn the_list_opens_at_its_last_event() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        for at in 0..60 {
+            book.add(Kind::Event, None);
+            book.events.last_mut().unwrap().title = format!("Stop {at:02}");
+        }
+        book.save();
+        type State = (TimelinePage, Book, crate::sessions::page::Sessions);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 600.0))
+            .build_state(
+                |ctx, (page, book, notes): &mut State| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
+                    });
+                },
+                (
+                    TimelinePage::default(),
+                    book,
+                    crate::sessions::page::Sessions::default(),
+                ),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(6);
+        let drawn = |words: &str| harness.query_all_by_label_contains(words).next().is_some();
+        // The column stops at its content's end: the rows near the last event are in view.
+        assert!(drawn("Stop 57"), "the rows near the last event are in view");
+        assert!(
+            !drawn("Stop 00"),
+            "the list moved: the first event is out of view"
         );
     }
 

@@ -1974,31 +1974,28 @@ mod iter_2_c_tests {
             .get_by_label("More actions for Bridge Ambush")
             .click();
         harness.run_steps(4);
-        fn find(shape: &egui::Shape, words: &str) -> Option<std::sync::Arc<egui::Galley>> {
+        // Where each text is painted: its galley and its origin, also inside shape lists.
+        fn find(
+            shape: &egui::Shape,
+            words: &str,
+        ) -> Option<(egui::Pos2, std::sync::Arc<egui::Galley>)> {
             match shape {
                 egui::Shape::Text(text) if text.galley.job.text == words => {
-                    Some(text.galley.clone())
+                    Some((text.pos, text.galley.clone()))
                 }
                 egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| find(shape, words)),
                 _ => None,
             }
         }
         let output = harness.output();
-        let (galley, at) = output
-            .shapes
-            .iter()
-            .find_map(|clipped| match &clipped.shape {
-                egui::Shape::Text(text) if text.galley.job.text == REASON => {
-                    Some((text.galley.clone(), text.pos))
-                }
-                shape => find(shape, REASON).map(|galley| (galley, egui::Pos2::ZERO)),
-            })
-            .expect("the reason is painted");
-        let line = output
-            .shapes
-            .iter()
-            .find_map(|clipped| find(&clipped.shape, MENU_LINE))
-            .expect("the reason line in the menu is painted");
+        let painted = |words: &str| {
+            output
+                .shapes
+                .iter()
+                .find_map(|clipped| find(&clipped.shape, words))
+                .unwrap_or_else(|| panic!("{words:?} is painted"))
+        };
+        let (_, line) = painted(MENU_LINE);
         assert!(
             line.rows.len() >= 2 && !line.job.justify,
             "m-p0-blocked-reason: a wrapped reason line in a justified menu is not justified \
@@ -2006,20 +2003,23 @@ mod iter_2_c_tests {
             line.rows.len(),
             line.job.justify
         );
-        let choice = harness.get_by_label("Delete the saved run").rect();
+        // Review of PR 780: the note's first letter against the choice's own painted words, as
+        // both are painted (an independent reference, not the part's inset again).
+        let (at, galley) = painted(REASON);
+        let (choice_at, choice) = painted("Delete the saved run");
+        let note_x = at.x + galley.rows[0].rect().left();
+        let words_x = choice_at.x + choice.rows[0].rect().left();
         let menu_right = harness.get_by_label("Edit encounter").rect().right();
         assert!(
             galley.rows.len() >= 2
                 && !galley.job.justify
-                && (at.x - (choice.left() + design::S + design::ICON_SLOT)).abs() <= 1.0
+                && (note_x - words_x).abs() <= 1.0
                 && at.x + galley.size().x <= menu_right - design::S + 0.5,
-            "m-p0-choice-note: at 960 the reason wraps ({} rows), unjustified ({}), at the \
-             words of the choice {} (it starts at {}), ending S before the edge of the menu {menu_right} \
-             ({})",
+            "m-p0-choice-note: at 960 the reason wraps ({} rows), unjustified ({}), its words at \
+             the painted words of the choice {words_x} (they start at {note_x}), ending S before \
+             the edge of the menu {menu_right} ({})",
             galley.rows.len(),
             !galley.job.justify,
-            choice.left() + design::S + design::ICON_SLOT,
-            at.x,
             at.x + galley.size().x
         );
     }
