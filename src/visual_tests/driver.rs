@@ -574,6 +574,32 @@ impl<'a> Driver<'a> {
 
     /// Every horizontal line segment painted across an area, whatever its colour, such as an
     /// underline that a link paints apart from its text.
+    /// Each painted vertical line segment that meets `area` (a splitter's rule), as a rect.
+    pub fn vertical_lines_in(&self, area: egui::Rect) -> Vec<egui::Rect> {
+        fn visit(shape: &egui::Shape, area: egui::Rect, found: &mut Vec<egui::Rect>) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().for_each(|shape| visit(shape, area, found));
+                }
+                egui::Shape::LineSegment { points, .. }
+                    if (points[0].x - points[1].x).abs() < 0.5 =>
+                {
+                    let rect = egui::Rect::from_two_pos(points[0], points[1])
+                        .expand2(egui::vec2(0.5, 0.0));
+                    if area.intersects(rect) {
+                        found.push(rect);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for shape in &self.harness.output().shapes {
+            visit(&shape.shape, area, &mut found);
+        }
+        found
+    }
+
     pub fn line_segments_in(&self, area: egui::Rect) -> Vec<egui::Rect> {
         fn visit(shape: &egui::Shape, area: egui::Rect, found: &mut Vec<egui::Rect>) {
             match shape {
@@ -1145,6 +1171,43 @@ impl<'a> Driver<'a> {
     /// offset), its footer's rect and its placement.
     pub fn pane_records(&self) -> Vec<crate::design::pane::PaneRecord> {
         crate::design::pane::pane_records(&self.harness.ctx)
+    }
+
+    /// Layout PR 9 (I10): the editor viewport that holds the editor named `editor` (its fixed
+    /// frame, in points, against the node's pixels). True when all four outside edges are in
+    /// view, it is not held at its least height, and (with `save`) the frame's outside right
+    /// edge is the right edge of the button named `save`, within a pixel. With what was found.
+    pub fn editor_frame_whole(&self, editor: &str, save: Option<&str>) -> (bool, String) {
+        let scale = self.pixels_per_point();
+        let nodes = self.nodes();
+        let text = nodes
+            .iter()
+            .find(|node| node.name == editor)
+            .map(|node| egui::Rect::from_min_max(node.rect.min / scale, node.rect.max / scale));
+        let save = save.and_then(|save| {
+            nodes
+                .iter()
+                .find(|node| node.name == save && node.role == Role::Button)
+                .map(|node| node.rect.right() / scale)
+        });
+        let frame = text.and_then(|text| {
+            crate::design::pane::editor_frames(&self.harness.ctx)
+                .into_iter()
+                .find(|record| record.frame().intersects(text))
+        });
+        let whole = frame.is_some_and(|frame| frame.whole() && !frame.least())
+            && save.is_none_or(|save| {
+                frame.is_some_and(|frame| (frame.frame().right() - save).abs() <= 1.0 / scale)
+            });
+        (
+            whole,
+            format!(
+                "editor {text:?}, frame {:?} in clip {:?} (least {:?}), Save's right edge {save:?}",
+                frame.map(|frame| frame.frame()),
+                frame.map(|frame| frame.clip()),
+                frame.map(|frame| frame.least()),
+            ),
+        )
     }
 
     /// Each row of actions drawn under a title in the last completed pass (package K's registry,
@@ -3059,6 +3122,14 @@ impl<'a> Driver<'a> {
     /// The app's style, for sizes that egui derives from it.
     pub fn app_style(&self) -> egui::Style {
         (*self.harness.ctx.style()).clone()
+    }
+
+    /// The centre of a `Column`'s splitter (its edge), if that column draws in this frame.
+    pub fn column_edge_if_shown(&self, name: &str) -> Option<f32> {
+        self.harness
+            .ctx
+            .read_response(egui::Id::new(name).with("__resize"))
+            .map(|response| response.rect.center().x)
     }
 
     pub fn column_edge(&self, name: &str) -> f32 {

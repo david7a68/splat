@@ -15,13 +15,6 @@ pub fn menu_button(ui: &mut Ui, word: &str, selected: bool) -> Response {
     draw_menu_button(ui, word, selected, false, None, Density::Scan)
 }
 
-/// A title line's menu action (`TitleLine::menu`): [`menu_button`] at the `Read` height of the
-/// line's other actions; while `blocked`, it is disabled with the reason on hover and as its
-/// accessible description.
-pub(super) fn title_menu_button(ui: &mut Ui, word: &str, blocked: Option<&str>) -> Response {
-    draw_menu_button(ui, word, false, false, blocked, Density::Read)
-}
-
 /// A menu button whose word starts at the text edge of its own row.
 pub fn menu_button_at_line_start(ui: &mut Ui, word: &str, selected: bool) -> Response {
     draw_menu_button(ui, word, selected, true, None, Density::Scan)
@@ -1442,6 +1435,25 @@ pub fn signed_stepper(
     )
 }
 
+/// A stepper whose value is a count that can reach the thousands (a group's member count): it
+/// shows `1,000` with its digits grouped, as every count in the app reads (`count`), and reads
+/// back what the DM types with or without the commas (`1,000`, `1000`). The same − and + and
+/// limits as [`stepper`].
+pub fn grouped_stepper(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+) -> bool {
+    stepper_as(
+        ui,
+        name,
+        value,
+        (range, Density::Read, None, None),
+        Shown::Grouped,
+    )
+}
+
 /// How a stepper's value reads.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Shown {
@@ -1449,6 +1461,29 @@ enum Shown {
     Plain,
     /// `+3`, `−1`: a modifier.
     Signed,
+    /// `1,000`: a count with its digits grouped.
+    Grouped,
+}
+
+/// A count with its digits grouped (`1,000`), a negative one with a true minus.
+fn grouped_value(value: i64) -> String {
+    let digits = grouped_number(value.unsigned_abs() as usize);
+    if value < 0 {
+        format!("\u{2212}{digits}")
+    } else {
+        digits
+    }
+}
+
+/// A count as the DM may type it: `1,000`, `1000`, `1 000`, `−3`.
+fn parse_grouped(text: &str) -> Option<f64> {
+    text.trim()
+        .replace('\u{2212}', "-")
+        .chars()
+        .filter(|c| *c != ',' && !c.is_whitespace())
+        .collect::<String>()
+        .parse()
+        .ok()
 }
 
 /// A modifier as the DM may type it: `−3`, `-3`, `+2`, `2`.
@@ -1547,10 +1582,18 @@ fn stepper_as(
                 widgets.inactive.bg_stroke = Stroke::new(HAIRLINE_WIDTH, c.field_border);
                 ui.spacing_mut().interact_size.y = density.control();
                 let mut field = egui::DragValue::new(value).range(low..=high).speed(0.1);
-                if shown == Shown::Signed {
-                    field = field
-                        .custom_formatter(|value, _| signed(value as i64))
-                        .custom_parser(parse_signed);
+                match shown {
+                    Shown::Plain => {}
+                    Shown::Signed => {
+                        field = field
+                            .custom_formatter(|value, _| signed(value as i64))
+                            .custom_parser(parse_signed);
+                    }
+                    Shown::Grouped => {
+                        field = field
+                            .custom_formatter(|value, _| grouped_value(value as i64))
+                            .custom_parser(parse_grouped);
+                    }
                 }
                 ui.add(field)
             })
@@ -5734,6 +5777,120 @@ mod tests {
         for (typed, read) in [("\u{2212}3", -3.0), ("-3", -3.0), ("+2", 2.0), ("2", 2.0)] {
             assert_eq!(parse_signed(typed), Some(read), "{typed}");
         }
+        // The grouped stepper (M-P0 item 8, the group editor's member count): a count shows its
+        // digits grouped, `1,000` stays `1,000`, and reads back with or without the commas.
+        for (value, shown) in [(1_000, "1,000"), (12_345, "12,345"), (999, "999"), (1, "1")] {
+            let ctx = egui::Context::default();
+            super::super::theme::install(&ctx);
+            ctx.enable_accesskit();
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mut value = value;
+                    grouped_stepper(ui, "How many", &mut value, 1..=99_999);
+                });
+            });
+            let painted: Vec<String> = output
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                painted.iter().any(|text| text == shown),
+                "{value} shows {shown}: {painted:?}"
+            );
+            let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+            let decrease = nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Decrease How many"))
+                .map(|(_, node)| node.is_disabled());
+            assert_eq!(decrease, Some(value == 1), "{value}: − at its limit only");
+        }
+        for (typed, read) in [
+            ("1,000", 1_000.0),
+            ("1000", 1_000.0),
+            ("12 345", 12_345.0),
+            (" 7 ", 7.0),
+        ] {
+            assert_eq!(parse_grouped(typed), Some(read), "{typed}");
+        }
+        // Review of PR 626 (P2): typed, not only painted and parsed. The DM clicks the count,
+        // types `1,000` over it and leaves: the value is 1000. While typing, the field keeps
+        // exactly the typed words (the caret stays at their end), and Undo gives back fewer of
+        // them, not a reformatted number.
+        use egui_kittest::kittest::Queryable;
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(400.0, 120.0))
+            .build_ui_state(
+                |ui, value: &mut i64| {
+                    grouped_stepper(ui, "How many", value, 1..=99_999);
+                },
+                7_i64,
+            );
+        super::super::theme::install(&h.ctx);
+        h.run_steps(2);
+        // A pointer click on the count opens it for typing.
+        let at = h.get_by_label("How many").rect().center();
+        h.hover_at(at);
+        h.run_steps(1);
+        for pressed in [true, false] {
+            h.event(egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.run_steps(1);
+        }
+        h.run_steps(1);
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        h.run_steps(1);
+        // While it is open for typing, the count keeps its typed words under its id (egui's
+        // drag value), and its text edit state holds the caret.
+        let id = h
+            .ctx
+            .memory(|memory| memory.focused())
+            .expect("the count has the keyboard");
+        let field = |h: &egui_kittest::Harness<'_, i64>| {
+            h.ctx
+                .data(|data| data.get_temp::<String>(id))
+                .unwrap_or_default()
+        };
+        let caret = |h: &egui_kittest::Harness<'_, i64>| {
+            egui::text_edit::TextEditState::load(&h.ctx, id)
+                .and_then(|state| state.cursor.char_range())
+                .map(|range| range.primary.index)
+        };
+        let mut typed = String::new();
+        for letter in "1,000".chars() {
+            h.event(egui::Event::Text(letter.to_string()));
+            h.run_steps(1);
+            typed.push(letter);
+            assert_eq!(
+                (field(&h), caret(&h)),
+                (typed.clone(), Some(typed.chars().count())),
+                "the field keeps the typed words while typing, the caret at their end"
+            );
+        }
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        h.run_steps(1);
+        assert_eq!(
+            field(&h),
+            "7",
+            "Undo gives back the words from before the typing, not a reformatted number"
+        );
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        h.run_steps(1);
+        for letter in typed.chars() {
+            h.event(egui::Event::Text(letter.to_string()));
+            h.run_steps(1);
+        }
+        assert_eq!(field(&h), "1,000", "typed again");
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(*h.state(), 1_000, "typed `1,000`, the value is 1000");
     }
 
     #[test]
@@ -7554,6 +7711,10 @@ mod tests {
             SideColumn,
             Nested,
             Editor,
+            /// Two unequal columns of one task (`PaneColumns::shared_task`, layout step 7): a
+            /// resizable column of `count` rows that scrolls on its own, and a column of four
+            /// rows and the last action.
+            Composite,
         }
         const REASON: &str = "Line 1 opens a list.";
         let rows = |ui: &mut Ui, count: usize| {
@@ -7603,6 +7764,7 @@ mod tests {
                 Shape::SideColumn,
                 Shape::Nested,
                 Shape::Editor,
+                Shape::Composite,
             ] {
                 for count in [2, 200] {
                     let pressed = Rc::new(Cell::new(None::<&'static str>));
@@ -7698,6 +7860,36 @@ mod tests {
                                             press(ui, "Last action");
                                         });
                                     }
+                                    Shape::Composite => {
+                                        super::super::pane::PaneColumns::shared_task(
+                                            "shape_columns",
+                                        )
+                                        .resizable(
+                                            0.0,
+                                            super::super::Column::left(
+                                                "shape_left",
+                                                200.0,
+                                                150.0..=300.0,
+                                            ),
+                                        )
+                                        .rest(S)
+                                        .edges(ui)
+                                        .show_children(
+                                            ui,
+                                            |ui, index| {
+                                                if index == 0 {
+                                                    ScrollColumn::new("shape_left_rows")
+                                                        .fit_height()
+                                                        .show(ui, |ui| rows(ui, count));
+                                                } else {
+                                                    for line in 0..4 {
+                                                        ui.label(format!("Line R{line}"));
+                                                    }
+                                                    press(ui, "Last action");
+                                                }
+                                            },
+                                        );
+                                    }
                                     Shape::Editor => {
                                         let mut text = (0..count)
                                             .map(|line| format!("Line {line}"))
@@ -7776,8 +7968,13 @@ mod tests {
                         }
                     }
                     assert!(words_seen > 0, "{case}: body words are painted");
+                    // The composite follows its taller column (the four rows and the last
+                    // action) while its 2 rows are shorter.
                     let follows = count == 2
-                        && matches!(shape, Shape::Rows | Shape::InScope | Shape::InFrame);
+                        && matches!(
+                            shape,
+                            Shape::Rows | Shape::InScope | Shape::InFrame | Shape::Composite
+                        );
                     if follows {
                         // The frame's 4 px margin is under its last rect.
                         let margin = if shape == Shape::InFrame { 4.0 } else { 0.0 };
@@ -7805,11 +8002,51 @@ mod tests {
                             room.bottom()
                         );
                     }
+                    // Layout step 7: the composite is as tall as its taller column, measured by
+                    // its content, not by the room its columns were given. With 2 rows the
+                    // footer starts `S` below the last action of the taller column, and the
+                    // splitter's rule ends at that action; with 200 the left column scrolls in
+                    // the whole room and the rule ends above the footer.
+                    if shape == Shape::Composite {
+                        let last = nodes
+                            .iter()
+                            .find(|(label, _)| label == "Last action")
+                            .map(|(_, rect)| *rect)
+                            .unwrap_or_else(|| panic!("{case}: Last action shows"));
+                        let rule = harness
+                            .output()
+                            .shapes
+                            .iter()
+                            .filter_map(|shape| match &shape.shape {
+                                egui::Shape::LineSegment { points, .. }
+                                    if (points[0].x - points[1].x).abs() < 0.5
+                                        && points[0].x > room.left() + 100.0
+                                        && points[0].x < room.left() + 400.0 =>
+                                {
+                                    Some(points[0].y.max(points[1].y))
+                                }
+                                _ => None,
+                            })
+                            .reduce(f32::max);
+                        let ends = if count == 2 {
+                            (footer.top() - (last.bottom() + S)).abs() <= 1.0
+                                && rule.is_some_and(|rule| (rule - last.bottom()).abs() <= 1.0)
+                        } else {
+                            rule.is_some_and(|rule| {
+                                rule <= footer.top() - S + 1.0 && rule > last.bottom()
+                            })
+                        };
+                        assert!(
+                            ends,
+                            "{case}: the footer {footer:?} follows the taller column's Last action {last:?} by `S` (2 rows), and the splitter's rule ends at it: {rule:?}"
+                        );
+                    }
                     // The body control next to the footer takes its press.
                     let target = match shape {
                         Shape::TallColumn => Some("Tall action"),
                         Shape::SideColumn => Some("Left action"),
                         Shape::Editor => None,
+                        Shape::Composite => Some("Last action"),
                         _ if count == 2 => Some("Last action"),
                         _ => None,
                     };

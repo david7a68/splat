@@ -916,27 +916,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "selection_bar_content",
             &[Ban::Results],
         ),
-        ("src/campaigns.rs", "at", &[Ban::Results]),
-        ("src/campaigns.rs", "default", &[Ban::Results]),
         (
             "src/campaigns.rs",
             "footer_messages",
-            // Layout PR 2b: typed lines (`outcome_at` keeps the staged orders; `Footer::result`
-            // went); the page's lock words are app-owned `&str`.
-            &[Ban::Order, Ban::Words],
+            // Layout PR 2b: typed lines; the page's lock words are app-owned `&str`.
+            &[Ban::Words],
         ),
         ("src/campaigns.rs", "form", &[Ban::Results]),
-        (
-            "src/campaigns.rs",
-            "one_to_one_links_replace_and_unlink_without_changing_other_campaigns",
-            &[Ban::Results],
-        ),
-        (
-            "src/campaigns.rs",
-            "register_campaign_copy",
-            &[Ban::Results],
-        ),
-        ("src/campaigns.rs", "save_form", &[Ban::Results]),
+        // M20: the first campaign's form has no footer; its error is a typed body fault in
+        // place of `design::message` (`draw_error`, gone).
+        ("src/campaigns.rs", "form_error_inline", &[Ban::Body]),
         // The design system's pane tests with closure lines (the `#[cfg(test)]` `Footer::result`,
         // `legacy_reason`) and a footer placed by hand (migration-32 L2c: no app code can).
         (
@@ -960,21 +949,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(4)],
         ),
         ("src/design/results.rs", "act_order", &[Ban::Results]),
-        // Layout PR 2b: the link's result keeps its staged order through `outcome_at`.
-        ("src/dndbeyond.rs", "footer_messages", &[Ban::Order]),
         // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
-        ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c).
         (
             "src/encounter_run/view.rs",
             "groups_tab",
             &[Ban::Layout(1), Ban::Pane(1)],
-        ),
-        (
-            "src/encounters/groups.rs",
-            "discard_group_draft",
-            &[Ban::Results],
         ),
         (
             "src/encounters/groups.rs",
@@ -1038,6 +1019,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "show_form", &[Ban::Body]),
         ("src/sessions/page.rs", "notes_panel", &[Ban::Body]),
         ("src/sessions/page.rs", "show", &[Ban::Body]),
+        // M-N0.10: the record line's warning (M0453).
+        ("src/sessions/page.rs", "record_line_body", &[Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
@@ -1050,32 +1033,40 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "markers",
             &[Ban::Results, Ban::Extras(1)],
         ),
-        ("src/sessions/page.rs", "new_notice", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "reading_view",
             &[Ban::Results, Ban::Body],
         ),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
+        // M-N0.4: the template's text field is keyed by its file (`TextKey::from_data`): a
+        // template has no typed owner key yet.
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::RowKey(1)],
         ),
         (
             "src/sessions/plan.rs",
             "plan_pane",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Results, Ban::ByOwner(1)],
+            &[Ban::ByOwner(1)],
         ),
-        (
-            "src/sessions/plan.rs",
-            "record_deleted_run",
-            &[Ban::Results],
-        ),
-        ("src/sessions/plan.rs", "scene_act", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
+        // M-N1.1 (ruling M20): a result with the note's Undo at its own place
+        // (`PlacedResult`), replacing three `undo_message` calls.
+        (
+            "src/sessions/plan.rs",
+            "removed_scene_message",
+            &[Ban::Body],
+        ),
+        ("src/sessions/plan.rs", "field_result", &[Ban::Body]),
+        (
+            "src/sessions/plan.rs",
+            "removed_fight_message",
+            &[Ban::Body],
+        ),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),
         ("src/trackers/history.rs", "footer", &[Ban::Order]),
         (
@@ -1083,16 +1074,23 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "edit_form",
             &[Ban::Results, Ban::Extras(1)],
         ),
-        ("src/world/page.rs", "creation_body", &[Ban::Extras(1)]),
+        // M20 (M-W0.4): the creation error in place of the page's body (was
+        // `message_with_actions`).
+        (
+            "src/world/page.rs",
+            "creation_body",
+            &[Ban::Extras(1), Ban::Body],
+        ),
         // Package K: raw egui calls that a layout part replaces.
         (
             "src/campaigns.rs",
             "selector",
             &[Ban::Layout(1), Ban::Extras(2)],
         ),
-        ("src/copy_dialog.rs", "show", &[Ban::Layout(2)]),
-        ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
-        ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
+        // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
+        // `FaultMessage`) in place of an untyped `design::message`.
+        ("src/copy_dialog.rs", "show", &[Ban::Body]),
+        ("src/creature_filter.rs", "menu", &[Ban::Layout(1)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
@@ -1161,15 +1159,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        ("src/sessions/page.rs", "banner", &[Ban::Extras(2)]),
+        ("src/sessions/page.rs", "banner", &[Ban::Body]),
         (
             "src/sessions/page.rs",
             "note_editor",
-            &[Ban::Layout(2), Ban::Body],
+            &[Ban::Layout(1), Ban::Body],
         ),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
-        ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         (
             "src/timeline/page.rs",
@@ -1253,6 +1250,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_body_fault_gives_its_repairs_back_by_id",
             &[Ban::Body],
         ),
+        (
+            "src/design/outcome.rs",
+            "a_placed_result_shows_its_undo_whole_where_it_fits",
+            &[Ban::Body],
+        ),
         // N0 (ruling M21): a message holds at most one primary choice.
         (
             "src/design/outcome.rs",
@@ -1261,6 +1263,20 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/processing/settings.rs", "cause", &[Ban::Words]),
         ("src/processing/settings.rs", "key_fault", &[Ban::Body]),
+        // M-U0.1 (rulings M17, M20): the account's warning, in the keyring's words when it is not
+        // the unsaved sign-in; it replaces `message_with_action` and `message` in `show_account`.
+        (
+            "src/settings.rs",
+            "account_warning",
+            &[Ban::Body, Ban::Words],
+        ),
+        // M-U0.1 (rulings M17, M20): a table marker's warning, in its parser's words, under the
+        // table in the reader's body; it replaces two `design::message` calls in `roll_control`.
+        (
+            "src/roll_table.rs",
+            "table_warning",
+            &[Ban::Body, Ban::Words],
+        ),
         ("src/timeline/checks.rs", "cause", &[Ban::Words]),
         ("src/timeline/page.rs", "as_sentence", &[Ban::Words]),
         ("src/sessions/plan.rs", "as_sentence", &[Ban::Words]),
@@ -1362,15 +1378,22 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        // Ruling M20 (M0178): the reader's duplicate repair (`Ban::Body`); it replaces an
-        // untyped `design::message_with_actions`.
+        // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
+        // warning with its two repairs and the duplicate repair, in the reader's body (were
+        // `message`, `message_with_actions`).
         ("src/world.rs", "draw", &[Ban::Extras(3), Ban::Body]),
+        // M20 (M-W0.4): an unread value's warning (was `message`).
+        ("src/world.rs", "unread_warning", &[Ban::Body]),
         ("src/world.rs", "log_room_space", &[Ban::Extras(1)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
-        ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
+        // M20 (M-W0.5): an unread value's warning with its repair, `Edit in Obsidian` (was
+        // `message` and a link).
+        ("src/world.rs", "unread_groups_message", &[Ban::Body]),
         ("src/world.rs", "value_row", &[Ban::Extras(1)]),
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
+        // M20 (M-W0.5): a note that cannot be read, in place of its page (was
+        // `message_with_actions`).
+        ("src/world/page.rs", "unread_pane", &[Ban::Body]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
@@ -1620,13 +1643,8 @@ pub(crate) const STAGED: &[Staged] = &[
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[
-            ("src/campaigns.rs", 9),
             ("src/design/components.rs", 15),
-            ("src/dndbeyond.rs", 1),
-            ("src/encounters/groups.rs", 1),
             ("src/sessions/carry.rs", 1),
-            ("src/sessions/page.rs", 1),
-            ("src/sessions/plan.rs", 4),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],
@@ -1682,11 +1700,9 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/encounters.rs", 4),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 6),
-            ("src/sessions/plan.rs", 4),
+            ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 3),
             ("src/timeline/test_support.rs", 2),
-            ("src/trackers/history.rs", 1),
-            ("src/trackers/view.rs", 2),
             ("src/world.rs", 1),
             ("src/world/repair.rs", 1),
         ],

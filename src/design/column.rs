@@ -53,6 +53,7 @@ pub fn column_dragged(ctx: &Context, id: &str) -> bool {
     })
 }
 
+#[derive(Clone)]
 pub struct Column {
     id: &'static str,
     side: Side,
