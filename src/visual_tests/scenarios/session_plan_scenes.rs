@@ -666,7 +666,8 @@ pub fn run(d: &mut Driver<'_>) {
         kept,
         format!("At 960x520, the DM's wheel scroll stays with the Scene field open: {detail}"),
     );
-    d.click("Undo remove");
+    // M-N1.1: the removal's Undo names the scene it puts back (`UndoStep::of`).
+    d.click(&format!("Undo remove {MILLER}"));
     d.expect(&format!("Done: {MILLER}"));
     d.observe(
         "T12.10",
@@ -1282,7 +1283,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
                     && reason.center().y <= discard.bottom() + 0.5 + crate::design::L * 2.0
             })
             && !d.visible_text("Save or discard your edit to add a Log line.")
-            && !d.visible_text("Save or discard to switch campaign."),
+            && no_switch_reason(d),
         format!("Discard stays at {discard:?} → {waiting:?}; the one reason {reason:?} is at the save row"),
     );
     d.state("log-field-blocked-by-edit", Sizes::Default);

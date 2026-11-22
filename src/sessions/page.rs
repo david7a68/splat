@@ -379,6 +379,10 @@ enum Tab {
     Recordings,
 }
 
+/// The Encounters store's line of a plan group's discard, for one frame's footer.
+pub type GroupDiscardLine<'a> = dyn for<'f> Fn(&'f design::outcome::PaneFrame) -> Option<design::outcome::KeptLine<'f, ()>>
+    + 'a;
+
 /// What the rest of the app tells this page about fights.
 pub struct Plan<'a> {
     pub fights: &'a [PlanFight],
@@ -391,11 +395,10 @@ pub struct Plan<'a> {
     pub group_blocked: Option<&'a str>,
     /// A group being assembled takes the plan's place, beside the note.
     pub group_open: bool,
-    /// A new group started in the plan was discarded there.
-    pub group_discarded: bool,
-    pub group_discarded_name: String,
-    /// When that discard was made, for the plan footer's newest-first order.
-    pub group_discarded_order: Option<design::ResultOrder>,
+    /// A new group started in the plan was discarded there: the Encounters store's own line
+    /// of that discard for this frame's footer (`Encounters::group_discard_line`), with the
+    /// store's words, order and ticket.
+    pub group_discard: &'a GroupDiscardLine<'a>,
     /// A fight is open that something can still join.
     pub arrivals_open: bool,
     pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
@@ -652,10 +655,9 @@ pub struct Sessions {
     /// When the link update's result was made.
     /// The link update's result, with its Undo.
     link_updates: design::Results<kept::Page, kept::LinkUpdate>,
-    /// When the group removal in `removed_group` was done.
-    pub(super) removed_group_order: design::ResultOrder,
-    /// When the run deletion in `deleted_run` was done.
-    pub(super) deleted_run_order: design::ResultOrder,
+    /// The plan's results whose data its own fields hold (a scene act, the removed group, the
+    /// deleted run), by kind: their footer order and press tickets (`kept::PlanMark`).
+    plan_marks: design::Results<kept::PlanOwner, kept::PlanMark>,
     folder_text: String,
     view: View,
     tab: Tab,
@@ -817,7 +819,9 @@ pub struct Sessions {
     pub wants_runs_refresh: bool,
     pub wants_new_fight: bool,
     pub wants_new_group: bool,
-    pub wants_group_undo: bool,
+    /// The plan footer's `Undo discard` of a plan group, by its line's ticket
+    /// (`Encounters::undo_group_discard_in_plan`).
+    pub wants_group_undo: Option<design::results::Ticket>,
     /// The session whose plan a group is being assembled in. It is the one that gets the link.
     group_session: Option<Uuid>,
     /// B4 review F1: the plan's group whose name the DM pressed while an unsaved draft refuses
@@ -6937,7 +6941,7 @@ impl Sessions {
                 )),
             );
         }
-        self.carry_in_messages(&mut messages);
+        self.carry_in_messages(frame, &mut messages);
         messages
     }
 
@@ -7093,7 +7097,7 @@ impl Sessions {
             SessionAct::PlayThisOne => self.play_this_one(),
             SessionAct::Open(session) => self.select(session),
             SessionAct::OpenSettings => self.wants_processing_settings = true,
-            SessionAct::UndoCarry(session) => self.undo_carry(session),
+            SessionAct::UndoCarry(session) => self.undo_carry(session, press.ticket),
             SessionAct::UndoDrop => {
                 if let (Some(draft), Some(ticket)) = (&mut self.draft, press.ticket) {
                     let _ = self.dropped.undo_by(ticket, |_| {
@@ -7849,37 +7853,42 @@ impl Sessions {
             && !self.modal
             && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
         let mut pressed_link = None;
-        design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
-            // The template's text field is its file's (M0495, M0496). A template has no typed
-            // owner key yet: its path is the key (`TextKey::from_data`, counted).
-            let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
-                template
-                    .path
-                    .as_deref()
-                    .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
-            ));
-            if let Some(draft) = &mut self.template_draft {
-                let (width, height) = (ui.available_width(), ui.available_height());
-                let font = design::reader::prose_type(ui).font(ui);
-                let output = field.editor(ui, &mut draft.body, |edit| {
+        // The template's text field is its file's (M0495, M0496). A template has no typed owner
+        // key yet: its path is the key (`TextKey::from_data`, counted).
+        let field = TEMPLATE_TEXT.of(design::TextKey::from_data(
+            template
+                .path
+                .as_deref()
+                .map_or_else(|| template.name.clone(), |path| path.display().to_string()),
+        ));
+        if let Some(draft) = &mut self.template_draft {
+            // One closed editor viewport (layout PR 9): its fixed frame fills the pane's body
+            // and keeps all four edges in view; the text and its lane scroll inside it.
+            let font = design::reader::prose_type(ui).font(ui);
+            let output = design::pane::editor_view(
+                ui,
+                design::pane::ViewHeight::Fills,
+                field,
+                &mut draft.body,
+                |edit| {
                     // The layouter is a function item: leaking its box allocates nothing.
                     edit.font(font)
                         .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
-                        .margin(egui::vec2(design::S, design::S))
-                        .desired_width(width)
-                        .min_size(egui::vec2(0.0, height))
+                },
+            );
+            crate::markdown_source::paint_section_rules(ui, &output);
+            pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
+            let response = output.response;
+            design::named(ui, &response, "Template text");
+            if response.changed() {
+                draft.edited();
+                self.deleted_templates.owner_changed(&kept::Page {
+                    root: self.folder.clone().unwrap_or_default(),
                 });
-                crate::markdown_source::paint_section_rules(ui, &output);
-                pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
-                let response = output.response;
-                design::named(ui, &response, "Template text");
-                if response.changed() {
-                    draft.edited();
-                    self.deleted_templates.owner_changed(&kept::Page {
-                        root: self.folder.clone().unwrap_or_default(),
-                    });
-                }
-            } else {
+            }
+        } else {
+            // A built-in template reads in the pane's scroll column: it is not an editor.
+            design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
                 let mut body = template.body.clone();
                 let (width, height) = (ui.available_width(), ui.available_height());
                 let font = design::reader::prose_type(ui).font(ui);
@@ -7894,8 +7903,8 @@ impl Sessions {
                 });
                 design::named(ui, &output.response, "Built-in template text");
                 crate::markdown_source::paint_section_rules(ui, &output);
-            }
-        });
+            });
+        }
         if save && let Some(draft) = &mut self.template_draft {
             draft.save();
         }
