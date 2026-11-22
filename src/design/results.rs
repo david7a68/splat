@@ -1116,21 +1116,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "ended_view",
-            &[Ban::Layout(2), Ban::Extras(1), Ban::Pane(1)],
+            &[Ban::Layout(2), Ban::Pane(1)],
         ),
-        ("src/encounter_run/view.rs", "group_row", &[Ban::Extras(2)]),
-        (
-            "src/encounter_run/view.rs",
-            "record_tab",
-            &[Ban::Extras(1), Ban::RowKey(1)],
-        ),
+        ("src/encounter_run/view.rs", "record_tab", &[Ban::RowKey(1)]),
         ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(1), Ban::Pane(1), Ban::Body],
+            &[Ban::Layout(1), Ban::Pane(1), Ban::Body],
         ),
-        ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(7)]),
+        ("src/encounter_run/view.rs", "setup_row", &[Ban::Extras(1)]),
         // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
         // with its file line since migration-32 L2c.
         ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
@@ -1320,21 +1315,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "live_header",
             &[Ban::Extras(2)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "correction_reason",
-            &[Ban::Extras(1)],
-        ),
         ("src/encounter_run/view.rs", "live_view", &[Ban::Pane(1)]),
         // M-P0 item 7: the run's notices in the compact typed form, where they stand.
         ("src/encounter_run/view.rs", "live_notice", &[Ban::Body]),
         ("src/encounter_run/notice.rs", "header_notice", &[Ban::Body]),
         ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
-        (
-            "src/encounter_run/view.rs",
-            "setup_tie_controls",
-            &[Ban::Extras(1)],
-        ),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),

@@ -4048,10 +4048,6 @@ impl Run {
     }
 
     /// Returns true when the DM chooses to add this group.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn group_row(
         &mut self,
         ui: &mut egui::Ui,
@@ -4385,7 +4381,8 @@ impl Run {
                     ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
                 design::named(ui, &response, &summary_name);
             });
-            ui.add_space((right - controls - ui.cursor().left()).max(0.0));
+            // The summary's cell is `beside` wide, so Initiative starts `controls` before the
+            // block's right edge.
             let field = format!("Initiative total for {name}");
             ui.label(Type::Small.rich(ui, "Initiative").color(c.muted));
             let text = self.group_totals.entry(group.id).or_default();
@@ -4422,9 +4419,10 @@ impl Run {
             // R35, M1: the one value that locks Add, its drop and Enter, and gives the words
             // that the footer or the group's fault rows paint.
             let blocked = self.add_waits(group).map(AddWaits::words);
-            ui.add_space((right - add_width - ui.cursor().left()).max(0.0));
-            add = ui
-                .allocate_ui_with_layout(
+            // Add's column ends at the block's right edge in every group, whatever the field's
+            // margins draw.
+            add = in_column(ui, right - add_width, |ui| {
+                ui.allocate_ui_with_layout(
                     vec2(add_width, Density::Read.control()),
                     Layout::left_to_right(Align::Center),
                     |ui| {
@@ -4439,7 +4437,7 @@ impl Run {
                     },
                 )
                 .inner
-                || (enter && blocked.is_none());
+            }) || (enter && blocked.is_none());
         });
         // FI5: the total's reason is in the footer below the list (`groups_tab`), so it moves
         // no row when it comes or goes.
@@ -5017,16 +5015,17 @@ impl Run {
                     });
                 });
                 ui.horizontal(|ui| {
-                    ui.add_space(correction_label_width(ui) + ui.spacing().item_spacing.x);
-                    if Action::secondary("Add note")
-                        .name("Add note")
-                        .density(Density::Read)
-                        .blocked_if(empty, "Type a note first.")
-                        .show(ui)
-                        .clicked()
-                    {
-                        command = Some(Command::Note(index, self.note.clone()));
-                    }
+                    at_field_column(ui, |ui| {
+                        if Action::secondary("Add note")
+                            .name("Add note")
+                            .density(Density::Read)
+                            .blocked_if(empty, "Type a note first.")
+                            .show(ui)
+                            .clicked()
+                        {
+                            command = Some(Command::Note(index, self.note.clone()));
+                        }
+                    });
                 });
                 correction_reason(ui, "Type a note first.", empty);
                 if !p.notes.is_empty() {
@@ -5382,16 +5381,21 @@ impl Run {
                                                 ui.spacing_mut().item_spacing.y = 0.0;
                                                 let (_, right) = self.setup_slots(ui, false);
                                                 let number = design::L * 3.0;
+                                                // Over the rows' Initiative column, which
+                                                // starts `right` and `number` before the
+                                                // rows' right edge.
                                                 ui.horizontal(|ui| {
-                                                    ui.add_space(
-                                                        (ui.available_width() - right - number)
-                                                            .max(0.0),
-                                                    );
-                                                    ui.label(
-                                                        Type::Label
-                                                            .rich(ui, "INITIATIVE")
-                                                            .color(colors().muted),
-                                                    );
+                                                    let edge =
+                                                        ui.available_rect_before_wrap().right()
+                                                            - right
+                                                            - number;
+                                                    in_column(ui, edge, |ui| {
+                                                        ui.label(
+                                                            Type::Label
+                                                                .rich(ui, "INITIATIVE")
+                                                                .color(colors().muted),
+                                                        );
+                                                    });
                                                 });
                                                 // Roster order. Rows hold still while the DM types (T4.3).
                                                 for index in 0..self.state.participants.len() {
@@ -5692,7 +5696,11 @@ impl Run {
             );
             let row = first_line + detail.size().y + design::XS;
             let padding = (row - first_line - detail.size().y) / 2.0;
-            let control_top = padding + (first_line - Density::Scan.control()) / 2.0;
+            // The row's first line, from the row's top: each control stands on it, centred.
+            let line = FirstLine {
+                top: padding,
+                height: first_line,
+            };
             if selected {
                 ui.painter().rect_filled(
                     Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), row)),
@@ -5721,12 +5729,12 @@ impl Run {
                 self.return_focus = self.lookup_open;
             }
             if npc {
-                ui.allocate_ui_with_layout(
+                line.slot(
+                    ui,
                     vec2(roll_slot, Density::Scan.control()),
-                    Layout::top_down(Align::LEFT),
+                    Density::Scan.control(),
                     |ui| {
                         ui.set_width(roll_slot);
-                        ui.add_space(control_top);
                         if Action::quiet("Roll")
                             .plain()
                             .icon(icons::DICE)
@@ -5753,128 +5761,110 @@ impl Run {
                 self.for_note = Some(typed);
                 self.return_focus = true;
             }
-            ui.allocate_ui_with_layout(
-                vec2(number_slot, row),
-                Layout::top_down(Align::LEFT),
-                |ui| {
-                    ui.set_width(number_slot);
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    ui.add_space(control_top);
-                    let text = self
-                        .setup_inputs
-                        .entry(index)
-                        .or_insert_with(|| initiative.map_or_else(String::new, |n| n.to_string()));
-                    let response = design::number_field_with_id(
-                        ui,
-                        in_field,
-                        &field_name,
-                        text,
-                        "",
-                        number_slot,
-                        Density::Scan.control(),
-                    );
-                    let parsed = design::parse_signed(text);
-                    if response.changed() {
-                        if parsed != initiative {
-                            command = Some(Command::Initiative(index, parsed));
-                        }
-                    } else if !response.has_focus() && parsed != initiative {
-                        *text = initiative.map_or_else(String::new, |n| n.to_string());
-                    }
-                    enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                    if self.focus_field == Some(index) {
-                        self.focus_field = None;
-                        response.request_focus();
-                    }
-                },
-            );
-            if tie_slot > 0.0 {
-                ui.allocate_ui_with_layout(
-                    vec2(tie_slot, row),
-                    Layout::top_down(Align::LEFT),
-                    |ui| {
-                        ui.set_width(tie_slot);
-                        ui.add_space(control_top);
-                        if let Some(picked) = self.setup_tie_controls(ui, index) {
-                            command = Some(picked);
-                        }
-                    },
+            line.slot(ui, vec2(number_slot, row), Density::Scan.control(), |ui| {
+                ui.set_width(number_slot);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                let text = self
+                    .setup_inputs
+                    .entry(index)
+                    .or_insert_with(|| initiative.map_or_else(String::new, |n| n.to_string()));
+                let response = design::number_field_with_id(
+                    ui,
+                    in_field,
+                    &field_name,
+                    text,
+                    "",
+                    number_slot,
+                    Density::Scan.control(),
                 );
+                let parsed = design::parse_signed(text);
+                if response.changed() {
+                    if parsed != initiative {
+                        command = Some(Command::Initiative(index, parsed));
+                    }
+                } else if !response.has_focus() && parsed != initiative {
+                    *text = initiative.map_or_else(String::new, |n| n.to_string());
+                }
+                enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                if self.focus_field == Some(index) {
+                    self.focus_field = None;
+                    response.request_focus();
+                }
+            });
+            if tie_slot > 0.0 {
+                line.slot(ui, vec2(tie_slot, row), Density::Scan.control(), |ui| {
+                    ui.set_width(tie_slot);
+                    if let Some(picked) = self.setup_tie_controls(ui, index) {
+                        command = Some(picked);
+                    }
+                });
             }
             if place_slot > 0.0 {
-                ui.allocate_ui_with_layout(
-                    vec2(place_slot, row),
-                    Layout::top_down(Align::LEFT),
-                    |ui| {
-                        ui.add_space(control_top);
-                        let place = (present
-                            && self
-                                .state
-                                .participants
-                                .iter()
-                                .all(|p| !p.present || p.initiative.is_some()))
-                        .then(|| {
-                            initiative
-                                .and_then(|_| self.state.order.iter().position(|i| *i == index))
-                        })
-                        .flatten()
-                        .map(|place| ordinal(place + 1))
-                        .unwrap_or_default();
-                        let response = ui.add_sized(
-                            vec2(place_slot, Density::Scan.control()),
-                            egui::Label::new(Type::Small.rich(ui, &place).color(colors().muted)),
-                        );
-                        design::named(ui, &response, &format!("Place for {name}: {place}"));
-                    },
-                );
+                line.slot(ui, vec2(place_slot, row), Density::Scan.control(), |ui| {
+                    let place = (present
+                        && self
+                            .state
+                            .participants
+                            .iter()
+                            .all(|p| !p.present || p.initiative.is_some()))
+                    .then(|| {
+                        initiative.and_then(|_| self.state.order.iter().position(|i| *i == index))
+                    })
+                    .flatten()
+                    .map(|place| ordinal(place + 1))
+                    .unwrap_or_default();
+                    let response = ui.add_sized(
+                        vec2(place_slot, Density::Scan.control()),
+                        egui::Label::new(Type::Small.rich(ui, &place).color(colors().muted)),
+                    );
+                    design::named(ui, &response, &format!("Place for {name}: {place}"));
+                });
             }
             design::gap(ui, design::Gap::S);
             let (word, hint) = presence_action(present);
             let accessible = format!("{word}: {name}");
-            let pressed = ui
-                .allocate_ui_with_layout(
-                    vec2(presence_slot, Density::Scan.control()),
-                    Layout::top_down(Align::LEFT),
-                    |ui| {
-                        ui.set_width(presence_slot);
-                        ui.add_space(control_top);
-                        let button = egui::Button::new(
-                            Type::Body
-                                .rich(ui, format!("{} {word}", icons::ABSENT))
-                                .color(if present {
-                                    colors().muted
-                                } else {
-                                    colors().text
-                                }),
-                        )
-                        .wrap_mode(egui::TextWrapMode::Extend)
-                        .selected(!present)
-                        .min_size(vec2(presence_slot, Density::Scan.control()));
-                        // FN1: as the shared `toggle`, the off state keeps the frame and its
-                        // padding with nothing painted, so the icon and word keep one x when the
-                        // DM marks a participant absent. Off words stay muted (setup's rule).
-                        let button = if present {
-                            button
-                                .frame(true)
-                                .fill(egui::Color32::TRANSPARENT)
-                                .stroke(egui::Stroke::NONE)
-                        } else {
-                            button.frame(true).fill(colors().selected)
-                        };
-                        let response = ui.add(button).on_hover_text(hint);
-                        design::named(ui, &response, &accessible);
-                        response.clicked()
-                    },
-                )
-                .inner;
+            let pressed = line.slot(
+                ui,
+                vec2(presence_slot, Density::Scan.control()),
+                Density::Scan.control(),
+                |ui| {
+                    ui.set_width(presence_slot);
+                    let button = egui::Button::new(
+                        Type::Body
+                            .rich(ui, format!("{} {word}", icons::ABSENT))
+                            .color(if present {
+                                colors().muted
+                            } else {
+                                colors().text
+                            }),
+                    )
+                    .wrap_mode(egui::TextWrapMode::Extend)
+                    .selected(!present)
+                    .min_size(vec2(presence_slot, Density::Scan.control()));
+                    // FN1: as the shared `toggle`, the off state keeps the frame and its
+                    // padding with nothing painted, so the icon and word keep one x when the
+                    // DM marks a participant absent. Off words stay muted (setup's rule).
+                    let button = if present {
+                        button
+                            .frame(true)
+                            .fill(egui::Color32::TRANSPARENT)
+                            .stroke(egui::Stroke::NONE)
+                    } else {
+                        button.frame(true).fill(colors().selected)
+                    };
+                    let response = ui.add(button).on_hover_text(hint);
+                    design::named(ui, &response, &accessible);
+                    response.clicked()
+                },
+            );
             if pressed {
                 command = Some(Command::Presence(index, !present));
             }
-            ui.allocate_ui_with_layout(
+            line.slot(
+                ui,
                 vec2(Density::Read.control(), row),
-                Layout::top_down(Align::LEFT),
+                Density::Read.control(),
                 |ui| {
-                    ui.add_space(padding + (first_line - Density::Read.control()) / 2.0);
                     design::row_menu(ui, &name, |ui| {
                         if Action::quiet("Correct…").show(ui).clicked() {
                             self.selected = index;
@@ -6040,31 +6030,31 @@ impl Run {
     }
 
     /// Tied rows alone have two fixed arrow slots under Init.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn setup_tie_controls(&self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let (position, up, down) = self.setup_tie_directions(index)?;
         let p = &self.state.participants[index];
         let mut command = None;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
+            // Each arrow has its own slot, the size of an icon button, empty while the row is not
+            // tied that way.
+            let slot = vec2(Density::Read.control(), Density::Read.control());
             for (allowed, icon, destination, relation) in [
                 (up, icons::MOVE_UP, position.saturating_sub(1), "before"),
                 (down, icons::MOVE_DOWN, position + 1, "after"),
             ] {
-                if allowed {
-                    let name = format!(
-                        "Move {} {relation} {}",
-                        p.name, self.state.participants[self.state.order[destination]].name
-                    );
-                    if design::icon_button(ui, icon, &name).clicked() {
-                        command = Some(Command::Move(position, destination));
+                ui.allocate_ui(slot, |ui| {
+                    ui.set_min_size(slot);
+                    if allowed {
+                        let name = format!(
+                            "Move {} {relation} {}",
+                            p.name, self.state.participants[self.state.order[destination]].name
+                        );
+                        if design::icon_button(ui, icon, &name).clicked() {
+                            command = Some(Command::Move(position, destination));
+                        }
                     }
-                } else {
-                    ui.allocate_space(vec2(Density::Read.control(), Density::Read.control()));
-                }
+                });
             }
         });
         command
@@ -6312,8 +6302,8 @@ impl Run {
                                 Some(whole) => align.min((room - whole).max(0.0)),
                                 None => align,
                             };
-                            ui.add_space(align);
-                            self.ended_undo(ui, room - align);
+                            let edge = ui.available_rect_before_wrap().right() - align;
+                            in_column(ui, edge, |ui| self.ended_undo(ui, room - align));
                         }
                         self.save_status(ui);
                         ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
@@ -9531,6 +9521,58 @@ fn paint_row(
     );
 }
 
+/// What `add` draws on the rest of this line from the column edge `edge` on, towards the line's
+/// end (rightwards in a left-to-right line, leftwards in a right-to-left one). The edge is a
+/// measured column of the same pane, such as a field's column or a block's right edge, and `add`
+/// is placed by its rect there: no space before it is guessed.
+fn in_column<R>(ui: &mut egui::Ui, edge: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let mut room = ui.available_rect_before_wrap();
+    if ui.layout().main_dir() == egui::Direction::RightToLeft {
+        room.max.x = room.max.x.min(edge);
+    } else {
+        room.min.x = room.min.x.max(edge);
+    }
+    ui.scope_builder(
+        egui::UiBuilder::new().max_rect(room).layout(*ui.layout()),
+        add,
+    )
+    .inner
+}
+
+/// The first line of a setup row, from the row's top (`Run::setup_row`). Every control of the
+/// row stands on it, its centre on the line's centre, as the name's first line is.
+#[derive(Clone, Copy)]
+struct FirstLine {
+    top: f32,
+    height: f32,
+}
+
+impl FirstLine {
+    /// A slot of the row (`size`, from the row's top) holding one control `control` high. The
+    /// control is placed by its rect on the line, so a slot taller than its control never moves
+    /// it.
+    fn slot<R>(
+        self,
+        ui: &mut egui::Ui,
+        size: egui::Vec2,
+        control: f32,
+        add: impl FnOnce(&mut egui::Ui) -> R,
+    ) -> R {
+        ui.allocate_ui_with_layout(size, Layout::top_down(Align::LEFT), |ui| {
+            let mut on_line = ui.available_rect_before_wrap();
+            on_line.min.y += self.top + (self.height - control) / 2.0;
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(on_line)
+                    .layout(Layout::top_down(Align::LEFT)),
+                add,
+            )
+            .inner
+        })
+        .inner
+    }
+}
+
 /// A number that can be unknown. `Clear` empties it, away from the value,
 /// so that a click meant for the number cannot lose it.
 fn correction_label(ui: &mut egui::Ui, label: &str) {
@@ -9543,28 +9585,34 @@ fn correction_label(ui: &mut egui::Ui, label: &str) {
 
 /// A Correct reason on its own line below its field, starting at the field. The line stays
 /// while the reason is gone, so nothing below moves as the DM types.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn correction_reason(ui: &mut egui::Ui, reason: &str, shown: bool) {
     ui.horizontal(|ui| {
-        ui.add_space(correction_label_width(ui) + ui.spacing().item_spacing.x);
-        let words = Type::Small.rich(ui, reason).color(colors().muted);
-        if shown {
-            ui.add(egui::Label::new(words).wrap());
-        } else {
-            let size = egui::WidgetText::from(words)
-                .into_galley(
-                    ui,
-                    Some(egui::TextWrapMode::Wrap),
-                    ui.available_width(),
-                    egui::TextStyle::Body,
-                )
-                .size();
-            ui.allocate_exact_size(size, egui::Sense::hover());
-        }
+        at_field_column(ui, |ui| {
+            let words = Type::Small.rich(ui, reason).color(colors().muted);
+            if shown {
+                ui.add(egui::Label::new(words).wrap());
+            } else {
+                let size = egui::WidgetText::from(words)
+                    .into_galley(
+                        ui,
+                        Some(egui::TextWrapMode::Wrap),
+                        ui.available_width(),
+                        egui::TextStyle::Body,
+                    )
+                    .size();
+                ui.allocate_exact_size(size, egui::Sense::hover());
+            }
+        });
     });
+}
+
+/// What `add` draws on this line of the Correct tab, at its fields' column: after the label
+/// column (`correction_label`) and the line's item gap, as a field after its label.
+fn at_field_column<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let edge = ui.available_rect_before_wrap().left()
+        + correction_label_width(ui)
+        + ui.spacing().item_spacing.x;
+    in_column(ui, edge, add)
 }
 
 /// Every label the Correct tab has, so they share one column as wide as the widest.
