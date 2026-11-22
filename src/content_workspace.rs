@@ -947,9 +947,47 @@ pub struct MissingDependency {
     pub message: String,
     names: BTreeSet<String>,
     creature: bool,
+    /// The note line of the row that links the missing member in its first owner, as the
+    /// reader reads that row (`row_linking`).
+    line: Option<u32>,
+    /// The owner, when one entry needs it: its name heads the fault (M0044).
+    owner: Option<String>,
+}
+
+/// A missing dependency as a typed fault's parts (M0044): with one owner, its name and the
+/// line of the missing link in it, then what it needs and why that cannot be had.
+pub struct MissingFault<'a> {
+    pub place: Option<(&'a str, Option<u32>)>,
+    pub cause: String,
 }
 
 impl MissingDependency {
+    /// The fault's parts: `Lost Patrol · line 13: Needs a creature that is not in this
+    /// campaign’s packages.`, or with several owners the whole sentence and no place.
+    pub fn fault(&self) -> MissingFault<'_> {
+        let Some(owner) = &self.owner else {
+            return MissingFault {
+                place: None,
+                cause: self.message.clone(),
+            };
+        };
+        let cause = if self.names.is_empty() {
+            let kind = if self.creature {
+                "a creature"
+            } else {
+                "an entry"
+            };
+            format!("Needs {kind} that is not in this campaign’s packages.")
+        } else {
+            let was = if self.names.len() == 1 { "was" } else { "were" };
+            format!("Needs {}, which {was} deleted.", needed_by(&self.names))
+        };
+        MissingFault {
+            place: Some((owner.as_str(), self.line)),
+            cause,
+        }
+    }
+
     /// FJ6: the raw reference for Technical details, with a label that says what it is
     /// (`Missing creature id: c5d429dd-…`), so the DM knows what to search for.
     pub fn technical(&self) -> String {
@@ -1274,7 +1312,7 @@ impl Catalogue {
         fn same(a: &Folders, b: &Folders) -> bool {
             a.len() == b.len()
                 && a.iter().zip(b).all(|(a, b)| match (a, b) {
-                    (Ok(a), Ok(b)) => Arc::ptr_eq(a, b),
+                    (Ok(a), Ok(b)) => a.generation() == b.generation(),
                     (Err(a), Err(b)) => a == b,
                     _ => false,
                 })
@@ -1691,6 +1729,13 @@ impl Catalogue {
                                         missing_entries.entry(reference.to_string()).or_default();
                                     issue.owners.insert(id);
                                     issue.target.get_or_insert_with(|| reference.clone());
+                                    if issue.line.is_none() {
+                                        issue.line = content::list_formats::row_linking(
+                                            &entry.entry,
+                                            &reference,
+                                        )
+                                        .and_then(|line| u32::try_from(line).ok());
+                                    }
                                     if let Some((name, creature)) =
                                         entry.entry.fields.values().find_map(|value| {
                                             missing_reference_context(value, &reference)
@@ -1739,6 +1784,12 @@ impl Catalogue {
                 };
                 format!("{owners} {needs} {names}, which {was} deleted.")
             };
+            if let [only] = issue.owners.iter().collect::<Vec<_>>()[..] {
+                issue.owner = Some(self.entries[only].entry.name.clone());
+            } else {
+                // The line is only one owner's.
+                issue.line = None;
+            }
             issue.reference = reference;
             result.errors.push(issue.message.clone());
             result.missing_dependencies.push(issue);
@@ -2614,6 +2665,13 @@ mod tests {
         let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
         assert!(catalogue.entries.contains_key(&wolf_id));
         assert!(catalogue.manifest_problems[&module.id].contains("another identity"));
+        // M0043: a note changed on disk is a new reading of its folder, so the catalogue is
+        // built again and never handed back from the last build of the same folders.
+        let renamed = patch_fields(&wolf, &[("splat_name", Some("Dire Wolf".into()))]).unwrap();
+        fs::write(temp.path().join("Wolf.md"), &renamed).unwrap();
+        let again = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+        assert_eq!(again.entries[&wolf_id].entry.name, "Dire Wolf");
+        fs::write(temp.path().join("Wolf.md"), &wolf).unwrap();
         let repair = ManifestWrite::write(&module).unwrap();
         assert_eq!(
             crate::library::local_module(temp.path()).unwrap().id,
@@ -3575,6 +3633,17 @@ mod tests {
                 )]
             );
             assert!(!closure.errors.join(" ").contains(&missing.to_string()));
+            // M0044: the typed fault's parts: the one owner heads the words (no row in its
+            // notes links the member here, so no line), then what it needs and why.
+            let fault = closure.missing_dependencies[0].fault();
+            assert_eq!(fault.place, Some(("Lost Patrol", None)));
+            assert_eq!(
+                fault.cause,
+                name.map_or_else(
+                    || "Needs a creature that is not in this campaign’s packages.".to_owned(),
+                    |name| format!("Needs {name}, which was deleted.")
+                )
+            );
             // iter-24-B FJ6: Technical details labels the raw id with what it is.
             assert_eq!(
                 closure

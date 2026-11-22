@@ -1152,6 +1152,21 @@ impl<'a> Driver<'a> {
             .unwrap_or_default()
     }
 
+    /// The whole name of a Timeline event's Undo on screen (M-N1.7: `Undo remove <label>`, on
+    /// the plan as on Timeline; `Undo add` for an added event), never a scene's `Undo add scene`.
+    pub fn event_undo(&self, verb: &str) -> Option<String> {
+        let start = format!("Undo {verb} ");
+        self.nodes()
+            .into_iter()
+            .find(|node| {
+                // An added event's Undo keeps no object yet (M0529 waits for layout 11c).
+                (node.name.starts_with(&start) || (verb == "add" && node.name == "Undo add"))
+                    && node.name != "Undo add scene"
+                    && Self::is_control(node)
+            })
+            .map(|node| node.name)
+    }
+
     pub fn has_containing(&self, name: &str) -> bool {
         self.nodes().iter().any(|node| node.name.contains(name))
     }
@@ -2371,6 +2386,82 @@ impl<'a> Driver<'a> {
             follows,
             format!(
                 "the widest facts end at {widest:.1}; rows (facts start, facts end, action start, wrapped): {rows:?}"
+            ),
+        )
+    }
+
+    /// Layout PR 5a-2 (I6): the Session plan's rows. Each row's actions start at the column; in
+    /// the far-edge layout its summary lines may reach under them (every line is measured).
+    pub fn plan_columns_hold(&self) -> (bool, bool, String) {
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == "plan")
+            .collect();
+        plan_rows_hold(&records)
+    }
+
+    /// Layout PR 5a-2 and 5b (I6): the rows of a list measured in its last pass (`owner`), from
+    /// their records. In column mode the column starts exactly `L` after the widest facts, and
+    /// no action starts before it. With `aligned_end`, every row's actions end at one edge and
+    /// the widest starts at the column; else each row's actions start at the column (up to `L`
+    /// in, for a narrower alternate). Otherwise (too narrow for the column) each row keeps its
+    /// actions at the far edge, `far_gap` or more after its facts where they share its line.
+    /// Returns whether it holds, whether the list is in column mode, and the rows.
+    pub fn kept_columns_hold(
+        &self,
+        owner: &str,
+        aligned_end: bool,
+        far_gap: Option<f32>,
+    ) -> (bool, bool, String) {
+        const L: f32 = crate::design::L;
+        let records: Vec<_> = crate::design::action_rows::row_records(&self.harness.ctx)
+            .into_iter()
+            .filter(|record| record.owner == owner)
+            .collect();
+        let column = records.iter().all(|record| !record.wrapped);
+        let widest = records
+            .iter()
+            .map(|record| record.facts.right())
+            .fold(f32::MIN, f32::max);
+        let start = records
+            .iter()
+            .map(|record| record.action.left())
+            .fold(f32::MAX, f32::min);
+        let end = records.first().map_or(0.0, |record| record.action.right());
+        let holds = !records.is_empty()
+            && records.iter().all(|record| record.wrapped != column)
+            && (!column || !aligned_end || (start - (widest + L)).abs() <= 0.5)
+            && records.iter().all(|record| {
+                if column {
+                    (record.column - (widest + L)).abs() <= 0.5
+                        && record.action.left() >= record.column - 0.5
+                        && if aligned_end {
+                            (record.action.right() - end).abs() <= 0.5
+                        } else {
+                            record.action.left() <= record.column + L
+                        }
+                } else {
+                    far_gap
+                        .is_none_or(|gap| record.action.left() >= record.facts.right() + gap - 0.5)
+                }
+            });
+        let rows: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.facts.right().round(),
+                    record.column.round(),
+                    record.action.left().round(),
+                    record.action.right().round(),
+                    record.wrapped,
+                )
+            })
+            .collect();
+        (
+            holds,
+            column,
+            format!(
+                "{owner}: the widest facts end at {widest:.1}; rows (facts end, column, actions start, actions end, far edge): {rows:?}"
             ),
         )
     }
@@ -4020,6 +4111,54 @@ fn save_png(image: &image::RgbaImage, path: &Path) -> image::ImageResult<()> {
 
 const FILTER: image::codecs::png::FilterType = image::codecs::png::FilterType::Paeth;
 
+/// The rule of `Driver::plan_columns_hold`, over the plan's row records (layout PR 5a-2).
+pub(super) fn plan_rows_hold(
+    records: &[crate::design::action_rows::RowRecord],
+) -> (bool, bool, String) {
+    const L: f32 = crate::design::L;
+    let column = records.iter().all(|record| !record.wrapped);
+    let widest = records
+        .iter()
+        .map(|record| record.facts.right())
+        .fold(f32::MIN, f32::max);
+    let holds = !records.is_empty()
+        && records.iter().all(|record| record.wrapped != column)
+        && records.iter().all(|record| {
+            if column {
+                (record.column - (widest + L)).abs() <= 0.5
+                    && record.action.left() >= record.column - 0.5
+                    && record.action.left() <= record.column + L
+            } else {
+                // The far edge, as on main (PR 605 review, P1): each row's actions end at the
+                // row's own far edge, recorded apart from them, and start `S` or more after the
+                // title on their line. Only the summary lines below may reach under them; no
+                // control lies over text on its own line.
+                (record.action.right() - record.edge).abs() <= 0.5
+                    && record.action.left() >= record.line.right() + crate::design::S - 0.5
+            }
+        });
+    let rows: Vec<_> = records
+        .iter()
+        .map(|record| {
+            (
+                record.line.right().round(),
+                record.facts.right().round(),
+                record.column.round(),
+                record.action.left().round(),
+                record.action.right().round(),
+                record.wrapped,
+            )
+        })
+        .collect();
+    (
+        holds,
+        column,
+        format!(
+            "the widest facts end at {widest:.1}; rows (title end, facts end, column, actions start, actions end, far edge): {rows:?}"
+        ),
+    )
+}
+
 #[cfg(test)]
 mod driver_tests {
     use eframe::egui::{self, accesskit};
@@ -4031,6 +4170,47 @@ mod driver_tests {
         /// The field's text in the pass where the button was clicked.
         seen_at_click: Option<String>,
         passes: usize,
+    }
+
+    /// PR 605 review (P1): in the far-edge layout, a plan row's summary may reach under its
+    /// actions, but an action over the title on its own line fails the plan's check.
+    #[test]
+    fn the_far_edge_plan_check_fails_an_action_over_its_title() {
+        use crate::design::action_rows::RowRecord;
+        let rect = |left: f32, top: f32, right: f32, bottom: f32| {
+            egui::Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom))
+        };
+        let row = |title: f32, action: (f32, f32)| RowRecord {
+            owner: "plan",
+            row: 0,
+            // The summary below reaches under the actions.
+            facts: rect(0.0, 0.0, 380.0, 44.0),
+            line: rect(0.0, 0.0, title, 24.0),
+            action: rect(action.0, 0.0, action.1, 28.0),
+            column: action.0,
+            // The row's own far edge, recorded apart from its actions.
+            edge: 400.0,
+            wrapped: true,
+        };
+        let clear = [row(200.0, (300.0, 400.0)), row(150.0, (320.0, 400.0))];
+        assert!(super::plan_rows_hold(&clear).0, "clear rows hold");
+        let over = [row(200.0, (300.0, 400.0)), row(350.0, (320.0, 400.0))];
+        assert!(
+            !super::plan_rows_hold(&over).0,
+            "an action over its title fails"
+        );
+        let off_edge = [row(200.0, (300.0, 400.0)), row(150.0, (260.0, 360.0))];
+        assert!(
+            !super::plan_rows_hold(&off_edge).0,
+            "an action off the far edge fails"
+        );
+        // PR 605 re-check (P1): both rows' actions 24 px in from the far edge still share one
+        // edge, but not the rows' own; the check reads the recorded edge, so it fails.
+        let shifted = [row(200.0, (276.0, 376.0)), row(150.0, (296.0, 376.0))];
+        assert!(
+            !super::plan_rows_hold(&shifted).0,
+            "actions shifted together off the far edge fail"
+        );
     }
 
     /// The input path of `Driver::type_and_reader_click`: `Event::Text` and an AccessKit Click

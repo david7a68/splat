@@ -176,6 +176,13 @@ type ArrivalKey = (
     crate::design::memo::Revision,
     crate::design::memo::Revision,
 );
+/// What an Arrivals line says comes from the run's steps, the groups' read and the scale's read
+/// (ruling M6: the owner's revisions, never a hash of the line's parts).
+type ArrivalLineKey = (
+    crate::design::memo::Revision,
+    crate::design::memo::Revision,
+    crate::design::memo::Revision,
+);
 /// The typed totals' revision, the groups' revision, the run's encounter, the count of steps
 /// kept or taken back and the grouping rule, for the Arrivals reasons (a step or the rule can
 /// give a side the initiative that a group without a bonus joins).
@@ -327,8 +334,8 @@ pub struct Run {
     /// not one, and neither is opening a run to read it. Never saved.
     dm_steps: usize,
     /// Counts every kept step and every Undo, so a result can name the step it belongs to.
-    /// Never saved.
-    revision: u64,
+    /// Its revision keys Arrivals' kept lines (`arrival_lines`). Never saved.
+    revision: crate::design::memo::Revised<u64>,
     /// `Loot copied.`: the copy action, at the `revision` it was made. Undo and any new step
     /// (a roll among them) end it. Never saved.
     loot_copied: Option<u64>,
@@ -337,7 +344,7 @@ pub struct Run {
     arrival_words: Option<(ArrivalKey, ArrivalWords)>,
     /// Arrivals' difficulty lines, fitted and kept by group (point 1 of the round 29 review):
     /// this run's own, so they die with it and no other run reads them.
-    arrival_lines: crate::difficulty::Kept<Uuid>,
+    arrival_lines: crate::difficulty::Kept<Uuid, Option<crate::difficulty::Fitted>, ArrivalLineKey>,
     /// The turn heading's one kept candidate (M5): this run's own, so it ends with the run.
     /// The part chooses again when the heading's data or metrics change.
     turn_heading: crate::design::KeptTurnHeading,
@@ -441,10 +448,11 @@ pub struct Run {
     /// work it out again (`unend`). Never saved.
     pub continue_blocked: Option<&'static str>,
     /// The answer to the DM's last refused Continue fight or Undo of the ending (issue #507),
-    /// with the reason it answered. It belongs to that attempt: Dismiss, the next attempt, and
-    /// the Timeline's next change that works out another reason (`answer_still_stands`) end it.
-    /// Never saved.
-    pub unend_refused: Option<(&'static str, crate::design::results::Refusal)>,
+    /// with the reason it answered and whether the fight's encounter existed then (its words
+    /// say so). It belongs to that attempt: Dismiss, the next attempt, the app's next working-out
+    /// with another reason, and the encounter deleted or restored (`answer_still_stands`) end
+    /// it. Never saved.
+    pub unend_refused: Option<(&'static str, bool, crate::design::results::Refusal)>,
     /// An act that makes this ended fight live again waits for the app, which has the Timeline.
     pub wants_unend: Option<Unend>,
     /// Lookup is open. Letters are then the next word of a search, never a command.
@@ -860,7 +868,7 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
-            revision: 0,
+            revision: crate::design::memo::Revised::new(0),
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
@@ -1061,7 +1069,7 @@ impl Run {
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
         self.history_targets.push(target);
-        self.revision += 1;
+        self.count_step();
     }
     /// Keep a step that the DM took, which counts as play.
     fn keep_own_step(&mut self, before: State, named: Named, from_sheet: bool) {
@@ -1587,9 +1595,10 @@ impl Run {
         } else {
             Some(CONTINUE_DISK_CHANGED)
         };
+        let exists = self.encounter_exists();
         self.unend_refused = self
             .continue_blocked
-            .map(|reason| (reason, self.unend_refusal(act, reason)));
+            .map(|reason| (reason, exists, self.unend_refusal(act, reason)));
         if self.continue_blocked.is_some() {
             return;
         }
@@ -1629,17 +1638,26 @@ impl Run {
             _ => Refusal::run_rule(act, RunRule::LaterPlayed, self.encounter_exists()),
         }
     }
-    /// After the app works the rule out again (the Timeline or the run changed): the last
-    /// refused act's answer ends unless the rule still gives the reason it answered.
+    /// Each frame, and after the app works the rule out again: the last refused act's answer
+    /// ends unless the rule still gives the reason it answered and the fight's encounter is
+    /// still as it was (deleted or there), so a restored encounter's answer never says it was
+    /// deleted (review of PR 666).
     pub fn answer_still_stands(&mut self) {
+        let exists = self.encounter_exists();
         if self
             .unend_refused
             .as_ref()
-            .is_some_and(|(reason, _)| self.continue_blocked != Some(*reason))
+            .is_some_and(|(reason, existed, _)| {
+                self.continue_blocked != Some(*reason) || *existed != exists
+            })
         {
             self.unend_refused = None;
         }
     }
+
+    /// The rule's answer while Timeline.md changed on disk under an edit that waits for its
+    /// save: Splat cannot be sure which fight was played last, as `unend` finds it.
+    pub(crate) const UNSETTLED: &'static str = CONTINUE_DISK_CHANGED;
     /// The outcome of the ending that the newest Continue fight took away, for the next
     /// ending to start from. It is read from the Undo steps, which the run file keeps, so it
     /// is the same after a close and a restart. None when that ending gave no outcome.
@@ -2228,7 +2246,7 @@ impl Run {
     }
     fn take_back(&mut self) {
         if let Some(previous) = self.history.pop() {
-            self.revision += 1;
+            self.count_step();
             self.saved_steps = self.saved_steps.min(self.history.len());
             self.notice = None;
             self.dm_steps += 1;
@@ -3637,6 +3655,14 @@ impl Run {
         self.set_scale(Arc::clone(scale));
     }
     /// A new read of the groups: a new revision.
+    /// A kept step or an Undo: the count, and so its revision, moves on.
+    fn count_step(&mut self) {
+        self.revision.revise(|steps| {
+            *steps += 1;
+            crate::design::memo::Changed::Yes
+        });
+    }
+
     fn set_groups(&mut self, groups: Arc<Vec<Arc<RunGroup>>>) {
         self.groups = Some(groups);
         self.groups_read
@@ -3961,7 +3987,7 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
-            revision: 0,
+            revision: crate::design::memo::Revised::new(0),
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
@@ -4347,7 +4373,7 @@ impl Run {
             .expect("participant in this run");
         participant.name = to.to_owned();
         // A rename in play is a step, which counts in `revision`.
-        self.revision += 1;
+        self.count_step();
     }
     /// A read of this sheet with the damage it had at the last match, plus `more_damage`. Test
     /// builds have no live sheet, so this goes through the same comparison that a live read does.
@@ -8613,7 +8639,7 @@ mod tests {
             );
             run.unend_refused
                 .as_ref()
-                .map(|(_, refusal)| (refusal.words().as_str().to_owned(), refusal.tone()))
+                .map(|(_, _, refusal)| (refusal.words().as_str().to_owned(), refusal.tone()))
         };
         let later = |act: &str| {
             Some((
@@ -8705,6 +8731,34 @@ mod tests {
             Some(CONTINUE_LATER),
             "the view says why"
         );
+        // Review of PR 666 (P2): the answer says the encounter was deleted only while it is. An
+        // empty content index has no encounter for A's source; with none, it is there again.
+        older.source = Some(Uuid::new_v4());
+        older.content = Some(Arc::new(
+            crate::lookup::ContentIndex::load(&[], None).unwrap(),
+        ));
+        older.unend(Unend::Continue, &mut book);
+        assert_eq!(
+            answer(&older),
+            Some((
+                "A did not go on. A later fight or rest was played, and its encounter was deleted."
+                    .to_owned(),
+                crate::design::Tone::Warning,
+            ))
+        );
+        older.answer_still_stands();
+        assert!(
+            answer(&older).is_some(),
+            "while it is deleted, the answer stands"
+        );
+        older.content = None;
+        older.answer_still_stands();
+        assert_eq!(
+            answer(&older),
+            None,
+            "a restored encounter ends the deleted answer"
+        );
+        older.source = None;
         b_is_last(&book, &b, "Won, round 1", "Won · Ended · Round 1", false);
         // A long rest is later than B, whatever it restored: the DM can change that ruling.
         let rest = book.add_long_rest(session);
@@ -10122,7 +10176,7 @@ mod tests {
         run.set_reads(Uuid::new_v4(), &groups, &scale);
         // A step that marks a character or a creature absent changes the budgets and the XP.
         let weigh = |run: &mut Run| {
-            run.revision += 1;
+            run.count_step();
             run.arrival_words().unwrap().get(&group.id).cloned()
         };
         run.state.participants[0].present = false;
@@ -10188,7 +10242,7 @@ mod tests {
         );
         run.set_groups(Arc::new(vec![group.clone(), allies.clone()]));
         let word = |run: &mut Run, id| {
-            run.revision += 1;
+            run.count_step();
             run.arrival_words().unwrap()[&id]
                 .0
                 .rating
@@ -10213,7 +10267,7 @@ mod tests {
             .unwrap(),
         );
         let missing = |run: &mut Run, id| {
-            run.revision += 1;
+            run.count_step();
             let (fight, _) = &run.arrival_words().unwrap()[&id];
             (
                 fight.rating.is_some(),

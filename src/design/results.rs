@@ -1155,11 +1155,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "add_row",
             &[Ban::Extras(1), Ban::RowKey(1)],
         ),
-        (
-            "src/loot_editor.rs",
-            "line_row",
-            &[Ban::Extras(1), Ban::RowKey(1)],
-        ),
+        ("src/loot_editor.rs", "line_row", &[Ban::RowKey(1)]),
         (
             "src/markdown_view.rs",
             "reader_table",
@@ -1377,7 +1373,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
-        ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Body]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),
@@ -1486,6 +1481,9 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "menu_submenu",
             &[Ban::Layout(1)],
         ),
+        // M0412: the one collapsing section (`Section::show`); `CollapsingHeader::new` is
+        // banned outside it.
+        ("src/design/components.rs", "show", &[Ban::Layout(1)]),
         (
             "src/design/components.rs",
             "number_field_with_id",
@@ -1670,14 +1668,10 @@ pub(crate) const STAGED: &[Staged] = &[
         "ptr_eq(",
         "Key the cache by a `Revision` in a `design::memo::Memo`; a pointer address is not a change.",
         &[
-            ("src/content_workspace.rs", 1),
             ("src/design/comparison.rs", 1),
             ("crates/campaign/src/encounter_run/undo.rs", 2),
-            ("src/library.rs", 1),
-            ("src/library/catalogue.rs", 1),
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
-            ("src/trackers.rs", 1),
         ],
     ),
     (
@@ -1705,8 +1699,8 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/outcome.rs", 7),
             ("src/encounters.rs", 4),
-            ("src/sessions/plan.rs", 2),
-            ("src/timeline/page.rs", 3),
+            ("src/sessions/plan.rs", 1),
+            ("src/timeline/page.rs", 2),
             ("src/timeline/test_support.rs", 2),
             ("src/world.rs", 1),
             ("src/world/repair.rs", 1),

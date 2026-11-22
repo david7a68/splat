@@ -627,15 +627,36 @@ fn plan_row_with(
                 egui::vec2(title_width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    ui.set_width(title_width);
+                    ui.set_max_width(title_width);
                     ui.spacing_mut().item_spacing.y = 0.0;
                     words(ui);
                 },
             );
-            let action_rect = egui::Rect::from_min_size(
-                egui::pos2(ui.max_rect().right() - widths[1], left.y),
-                egui::vec2(widths[1], Density::Read.control()),
-            );
+            // Layout PR 5a-2 (I6): each row's actions start `L` after the plan's widest title, in
+            // its own recipe's width (with its alternates); the spare width lies after them. The
+            // column fits beside the plan's widest recipe. Each title keeps the room and the lines
+            // it had, so where the column does not fit the actions keep the far edge.
+            let words_width = title.response.rect.width();
+            let (kept, actions) = plan_columns(ui);
+            // Until a pass has measured the plan (or a row's own recipe grew), the far edge.
+            let facts = kept.max(words_width);
+            // The row's far edge: where its actions end when the plan keeps the far edge.
+            let far_edge = ui.max_rect().right();
+            let room = far_edge - left.x;
+            let column = kept > 0.0
+                && actions >= widths[1] - 0.5
+                && facts + design::L + actions <= room + 0.5;
+            let action_rect = if column {
+                egui::Rect::from_min_size(
+                    egui::pos2(left.x + facts + design::L, left.y),
+                    egui::vec2(widths[1], Density::Read.control()),
+                )
+            } else {
+                egui::Rect::from_min_size(
+                    egui::pos2(far_edge - widths[1], left.y),
+                    egui::vec2(widths[1], Density::Read.control()),
+                )
+            };
             let mut action_ui = ui.new_child(
                 egui::UiBuilder::new()
                     .max_rect(action_rect)
@@ -651,20 +672,61 @@ fn plan_row_with(
                     .union(action_ui.min_rect()),
             );
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.allocate_ui_with_layout(
-                egui::vec2(
-                    (ui.available_width() - Density::Read.control() - design::S).max(design::XL),
-                    0.0,
-                ),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    summary(ui);
-                },
-            );
+            let summary_rect = ui
+                .allocate_ui_with_layout(
+                    egui::vec2(
+                        (ui.available_width() - Density::Read.control() - design::S)
+                            .max(design::XL),
+                        0.0,
+                    ),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        summary(ui);
+                    },
+                )
+                .response
+                .rect;
             ui.expand_to_include_rect(action_rect.union(action_ui.min_rect()));
+            // The row's facts are every line it drew: its title and its summary (PR 605 review,
+            // P1: a short title over a long summary set the column inside the summary).
+            let facts_width = words_width.max(summary_rect.right() - left.x);
+            plan_measured(ui, facts_width, widths[1]);
+            #[cfg(any(test, feature = "test-support"))]
+            if action_ui.min_rect().is_positive() {
+                design::action_rows::keep(
+                    ui,
+                    design::action_rows::RowRecord {
+                        owner: "plan",
+                        row: 0,
+                        facts: egui::Rect::from_min_max(
+                            left,
+                            egui::pos2(
+                                left.x + facts_width,
+                                summary_rect.bottom().max(title.response.rect.bottom()),
+                            ),
+                        ),
+                        line: title.response.rect,
+                        action: action_ui.min_rect(),
+                        column: action_rect.left(),
+                        edge: far_edge,
+                        wrapped: !column,
+                    },
+                );
+            }
         });
     });
     design::register_row(ui, row.response.rect);
+}
+
+/// The plan's columns (`design::action_rows::columns`): its widest facts (each row's title and
+/// summary lines) and its widest action recipe, from its last pass.
+fn plan_columns(ui: &egui::Ui) -> (f32, f32) {
+    design::action_rows::columns(ui, egui::Id::new("plan_row_columns"))
+}
+
+/// Add a drawn row's facts (every line) and its action recipe to this pass's columns.
+fn plan_measured(ui: &egui::Ui, facts: f32, actions: f32) {
+    design::action_rows::measured(ui, egui::Id::new("plan_row_columns"), facts, actions);
 }
 
 /// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words
@@ -836,7 +898,13 @@ thread_local! {
 
 /// The plan's kept lines: one per planned fight, by the session, the fight's place in the plan
 /// and its note. The Sessions page owns them (`Sessions::plan_lines`).
-pub(super) type PlanLines = crate::difficulty::Kept<(Option<Uuid>, usize, Uuid), KeptPlanLine>;
+pub(super) type PlanLines = crate::difficulty::Kept<
+    PlanLineId,
+    KeptPlanLine,
+    (design::memo::Revision, design::memo::Revision),
+>;
+/// A planned fight's line: its session, its place in the plan and its encounter.
+pub(super) type PlanLineId = (Option<Uuid>, usize, Uuid);
 
 /// `planned_summary` with a journey's day after the summary (`road_day`), not kept (tests).
 #[cfg(test)]
@@ -850,18 +918,21 @@ fn planned_summary_on_road(
     show_plan_line(ui, &line);
 }
 
-/// A kept plan line: fitted again only when its fight's roster key, its day, its room, its
-/// font or the display scale changes.
+/// A kept plan line: fitted again only when its fight's roster, the plan's days (`days`: the
+/// revision of the planned fights with their days), its room, its font, the font generation or
+/// the display scale changes.
 fn kept_plan_line(
     ui: &mut egui::Ui,
     kept: &mut PlanLines,
-    id: (Option<Uuid>, usize, Uuid),
+    id: PlanLineId,
     fight: &PlanFight,
     day: Option<&str>,
+    days: design::memo::Revision,
 ) {
     let font = Type::Small.font(ui);
     let room = ui.available_width();
-    let line = kept.answer(ui, &id, (fight.key, day), room, &font, || {
+    let content = (fight.revision.unwrap_or(days), days);
+    let line = kept.answer(ui, &id, content, room, &font, || {
         let words = fight.summary.text();
         let day = road_day(ui, &words, day);
         prepare_plan_line(ui, &fight.summary, day.as_deref(), Some(&fight.difficulty))
@@ -2533,7 +2604,7 @@ fn plan_fight_stubs(names: &[String]) -> Vec<PlanFight> {
             name: name.clone(),
             path: String::new(),
             summary: Default::default(),
-            key: 0,
+            revision: None,
             difficulty: Default::default(),
         })
         .collect()
@@ -2667,7 +2738,7 @@ pub(super) struct Travel {
     planned: design::Results<PlanLineOwner, PlannedLine>,
     /// The fights still to come with their days on the road, while the note, the Timeline and
     /// the campaign's fights are as they were.
-    days: Option<(RoadKey, Arc<RoadDays>)>,
+    days: Option<(RoadKey, Arc<PlannedDays>)>,
     /// Row 123: the plan that Timeline's open journey offers to, while its session, its note,
     /// the Timeline and the campaign's names are as they were.
     journey_plan: Option<(JourneyKey, Arc<JourneyPlan>)>,
@@ -2733,27 +2804,45 @@ type JourneyKey = (
 );
 
 /// What the plan's days on the road are read from: the session, the note's revision, the
-/// Timeline's count of changes, and the count of the campaign's fights.
-type RoadKey = (Option<Uuid>, u64, u64, usize);
+/// Timeline's count of changes, and the revision of the campaign's fights (a fight renamed on
+/// disk changes which rows are planned, though their count stays; review of PR 717).
+type RoadKey = (Option<Uuid>, u64, u64, design::memo::Revision);
 
 /// Each fight still to come, by its name, with its day on the road when it has one.
 type RoadDays = Vec<(String, Option<String>)>;
 
-/// The day of the planned fight at this place: that fight's own turn among the rows to come.
-fn planned_day(
-    days: &[(String, Option<String>)],
-    planned: &[&PlanFight],
-    position: usize,
-) -> Option<String> {
-    let name = planned[position].name.to_lowercase();
-    let turn = planned[..position]
+/// The planned fights' days, worked out once for each key of the road's days (`planned_days`):
+/// the day of each planned fight by its place in the plan (`None` with no day).
+#[derive(Default)]
+struct PlannedDays {
+    at: Vec<Option<String>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How often the planned fights' days were worked out (`days_by_place`).
+    static DAYS_BY_PLACE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The day of each planned fight, by its place: that fight's own turn among the rows to come.
+/// One pass: each name's days are taken in order as its rows come.
+fn days_by_place(days: &[(String, Option<String>)], planned: &[&PlanFight]) -> Vec<Option<String>> {
+    #[cfg(test)]
+    DAYS_BY_PLACE.with(|count| count.set(count.get() + 1));
+    let mut by_name: std::collections::HashMap<&str, std::collections::VecDeque<&Option<String>>> =
+        std::collections::HashMap::new();
+    for (name, day) in days {
+        by_name.entry(name.as_str()).or_default().push_back(day);
+    }
+    planned
         .iter()
-        .filter(|fight| fight.name.eq_ignore_ascii_case(&name))
-        .count();
-    days.iter()
-        .filter(|(known, _)| *known == name)
-        .nth(turn)
-        .and_then(|(_, day)| day.clone())
+        .map(|fight| {
+            by_name
+                .get_mut(fight.name.to_lowercase().as_str())
+                .and_then(std::collections::VecDeque::pop_front)
+                .and_then(Clone::clone)
+        })
+        .collect()
 }
 
 /// F7's action and its words.
@@ -3403,23 +3492,45 @@ impl Sessions {
 
     /// The days on the road of the fights still to come, read again only when what they are
     /// read from changed.
+    /// The planned fights' days, worked out again only when the session, its draft, the
+    /// Timeline or the campaign's fights change; each new answer also ends the plan lines of
+    /// fights no longer planned and gives the kept lines a new days' revision
+    /// (`forget_plan_lines`). An unchanged frame does neither.
     fn planned_days(
         &mut self,
         book: &Book,
         session: Option<Uuid>,
         plan: &Plan<'_>,
-    ) -> Arc<RoadDays> {
+        planned: &[&PlanFight],
+    ) -> Arc<PlannedDays> {
         let Some(draft) = &self.draft else {
             return Arc::default();
         };
-        let key = (session, draft.revision(), book.changes(), plan.fights.len());
+        let key = (
+            session,
+            draft.revision(),
+            book.changes(),
+            plan.fights_revision,
+        );
         if let Some((known, days)) = &self.travel.days
             && *known == key
         {
             return Arc::clone(days);
         }
-        let days = Arc::new(road_days(&draft.body, &book.events, session, plan.fights));
+        let road = road_days(&draft.body, &book.events, session, plan.fights);
+        let days = Arc::new(PlannedDays {
+            at: days_by_place(&road, planned),
+        });
         self.travel.days = Some((key, Arc::clone(&days)));
+        let seen: Vec<_> = planned
+            .iter()
+            .zip(&days.at)
+            .enumerate()
+            .map(|(at, (fight, day))| ((session, at, fight.id), day.clone()))
+            .collect();
+        if seen != *self.plan_lines_seen {
+            self.forget_plan_lines(seen);
+        }
         days
     }
 
@@ -4241,9 +4352,10 @@ impl Sessions {
     /// G118: the one end of the plan's kept lines. Only the lines of the planned fights in
     /// `ids` stay (none at a campaign switch); a fight removed or replaced, another session or
     /// another campaign ends its line.
-    pub(super) fn forget_plan_lines(&mut self, ids: &[(Option<Uuid>, usize, Uuid)]) {
-        self.plan_lines.retain(|id| ids.contains(id));
-        self.plan_lines_seen = ids.to_vec();
+    pub(super) fn forget_plan_lines(&mut self, seen: Vec<(PlanLineId, Option<String>)>) {
+        self.plan_lines
+            .retain(|id| seen.iter().any(|(planned, _)| planned == id));
+        self.plan_lines_seen.set(seen);
     }
 
     /// The session as a list, top to bottom: what happened, then what is still to come. It
@@ -4783,11 +4895,10 @@ impl Sessions {
                     }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
-                let days = self.planned_days(book, session, plan);
-                let ids: Vec<_> = planned.iter().enumerate().map(|(at, fight)| (session, at, fight.id)).collect();
-                if ids != self.plan_lines_seen { self.forget_plan_lines(&ids); }
+                let days = self.planned_days(book, session, plan, &planned);
+                let plan_days = self.plan_lines_seen.revision();
                 for (position, fight) in planned.iter().enumerate() {
-                    let day = planned_day(&days, &planned, position);
+                    let day = days.at.get(position).cloned().flatten();
                     self.removed_fight_message(ui, session, position);
                     if !folded {
                         closed_scenes += self.scene_rows(ui, width, &scenes[position], position, shown, plan, &mut scene_act);
@@ -4811,7 +4922,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { kept_plan_line(ui, &mut self.plan_lines, (session, position, fight.id), fight, day.as_deref()); }
+                            } else { kept_plan_line(ui, &mut self.plan_lines, (session, position, fight.id), fight, day.as_deref(), plan_days); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -5732,6 +5843,8 @@ impl Sessions {
                 .any(|event| event.id == just.id && event.restores)
                 .then(|| timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs));
             let words = as_sentence(&added_message(&just.label, just.to.as_deref(), restores));
+            // M0529 waits for layout 11c: an Add Undo that names its event moves under its words
+            // and makes the footer a line taller, which shifts the plan under the DM.
             Said::new(words)
                 .undo(UndoStep::verb(Verb::Add).pressed_as(pressed(FooterAct::UndoAdd)))
                 .into()
@@ -5742,16 +5855,15 @@ impl Sessions {
             && let Some(shown) = book.results.removal.get(&book.file())
         {
             let days = timeline::day_numbers(&book.events);
-            let words = as_sentence(&removed_event_words(
-                book,
-                session,
-                &days,
-                shown.value().label(),
-                planned,
-            ));
+            let label = shown.value().label().to_owned();
+            let words = as_sentence(&removed_event_words(book, session, &days, &label, planned));
+            // M-N1.7: the Undo names the event, as Timeline's line of the same removal does.
             messages.kept(shown.outcome(frame, |_| {
                 Said::new(words)
-                    .undo(UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::UndoRemove)))
+                    .undo(
+                        UndoStep::of(Verb::Remove, label)
+                            .pressed_as(pressed(FooterAct::UndoRemove)),
+                    )
                     .into()
             }));
         }
@@ -6122,7 +6234,7 @@ mod tests {
             name: name.into(),
             path: path.into(),
             summary: Default::default(),
-            key: 0,
+            revision: None,
             difficulty: Default::default(),
         }
     }
@@ -6621,6 +6733,84 @@ mod tests {
             ]
         );
         assert_eq!(unlink_planned_fight(&marked, "Wolf Pack", 1), body);
+        // Review of PR 717 (P1): the planned fights' days are kept by the fights' revision, not
+        // their count. Wolf Pack renamed on disk leaves the note and the count as they were;
+        // Bridge Ambush, now the first planned fight, shows no day of Wolf Pack's.
+        {
+            use crate::sessions::{Draft, NewNote, create_note};
+            let dir = tempfile::tempdir().unwrap();
+            let note = create_note(
+                dir.path(),
+                &NewNote {
+                    number: 1,
+                    title: "The Crossing",
+                    date: "2026-11-12",
+                    campaign: "Marches",
+                    template: &marked[marked.find("## Plan").unwrap()..],
+                },
+            )
+            .unwrap();
+            let mut sessions = Sessions {
+                draft: Some(Draft::open(&note.path).unwrap()),
+                ..Sessions::default()
+            };
+            let renamed = [
+                planned_fight("Grey Wolves", "Encounters/Grey Wolves.md"),
+                planned_fight("Bridge Ambush", "Encounters/Bridge Ambush.md"),
+            ];
+            let mut days_of = |fights: &[PlanFight], fights_revision| {
+                let body = sessions.draft.as_ref().unwrap().body.clone();
+                let planned: Vec<&PlanFight> =
+                    plan_links(&body, &book.events, Some(session), fights)
+                        .into_iter()
+                        .filter(|(_, _, waiting)| *waiting)
+                        .map(|(_, fight, _)| fight)
+                        .collect();
+                let mut group = |_: &mut egui::Ui| {};
+                let plan = Plan {
+                    fights,
+                    fights_revision,
+                    saved_runs: &[],
+                    saved_runs_revision: fights_revision,
+                    groups: &[],
+                    group_blocked: None,
+                    group_open: false,
+                    group_discard: &|_| None,
+                    arrivals_open: false,
+                    group_editor: std::cell::RefCell::new(&mut group),
+                    blocked: None,
+                    run_directory: None,
+                    open_run: None,
+                    open_state: String::new(),
+                    open_encounter: None,
+                    party: &[],
+                    tables: &[],
+                };
+                let names: Vec<String> = planned.iter().map(|fight| fight.name.clone()).collect();
+                let days = sessions.planned_days(&book, Some(session), &plan, &planned);
+                names
+                    .into_iter()
+                    .zip(days.at.iter().cloned())
+                    .collect::<Vec<_>>()
+            };
+            let read = crate::design::memo::Revised::new(()).revision();
+            assert_eq!(
+                days_of(&fights, read),
+                [
+                    (
+                        "Wolf Pack".to_owned(),
+                        Some("Day 2 of Road to the ford".to_owned())
+                    ),
+                    ("Bridge Ambush".to_owned(), None)
+                ]
+            );
+            let read_again = crate::design::memo::Revised::new(()).revision();
+            assert_eq!(
+                days_of(&renamed, read_again),
+                [("Bridge Ambush".to_owned(), None)],
+                "a renamed fight's day stays with it, never on the row after it"
+            );
+        }
         // A fight planned the ordinary way carries nothing.
         assert_eq!(
             road_days(body, &book.events, Some(session), &fights)[0].1,
@@ -7536,6 +7726,7 @@ mod tests {
                         fights: &[],
                         saved_runs: runs,
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8049,39 +8240,51 @@ mod tests {
         // G118 (re-check of PR 390): the plan keeps each fitted line. An unchanged redraw fits
         // none; a new width or a new roster fits again; a removed fight's line goes.
         let mut sessions = super::super::Sessions::default();
-        let fight = |key: u64, summary: &crate::difficulty::Summary| PlanFight {
+        let fight = |summary: &crate::difficulty::Summary| PlanFight {
             saved: None,
             id: Uuid::from_u128(1),
             name: "Mill Road".into(),
             path: "Encounters/Mill Road.md".into(),
             summary: summary.clone(),
-            key,
+            revision: Some(crate::design::memo::Revised::new(()).revision()),
             difficulty: unknown(Unknown::Xp),
         };
         let id = (None, 0, Uuid::from_u128(1));
         let fitted = || PLAN_FITS.with(std::cell::Cell::get);
-        let mut draw = |fight: &PlanFight, width: f32| {
+        let draw = |sessions: &mut super::super::Sessions, fight: &PlanFight, width: f32| {
             let _ = ctx.run(Default::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.scope(|ui| {
                         ui.set_width(width);
-                        kept_plan_line(ui, &mut sessions.plan_lines, id, fight, None);
+                        let days = sessions.plan_lines_seen.revision();
+                        kept_plan_line(ui, &mut sessions.plan_lines, id, fight, None, days);
                     });
                 });
             });
         };
-        let first = fight(1, &mixed);
-        draw(&first, 400.0);
+        let first = fight(&mixed);
+        draw(&mut sessions, &first, 400.0);
         let before = fitted();
-        draw(&first, 400.0);
-        draw(&first, 400.0);
+        draw(&mut sessions, &first, 400.0);
+        draw(&mut sessions, &first, 400.0);
         assert_eq!(fitted(), before, "an unchanged redraw fits no line");
-        draw(&first, 300.0);
+        draw(&mut sessions, &first, 300.0);
         assert_eq!(fitted(), before + 1, "a new width fits again");
-        draw(&fight(2, &two), 300.0);
+        let second = fight(&two);
+        draw(&mut sessions, &second, 300.0);
         assert_eq!(fitted(), before + 2, "a new roster fits again");
+        // A new day for a planned fight fits its line again (ruling M6: the plan's revision).
+        sessions.forget_plan_lines(vec![(id, Some("Day 3".into()))]);
+        draw(&mut sessions, &second, 300.0);
+        assert_eq!(fitted(), before + 3, "a new day fits again");
+        draw(&mut sessions, &second, 300.0);
+        assert_eq!(
+            fitted(),
+            before + 3,
+            "an unchanged redraw after it fits none"
+        );
         assert!(sessions.plan_lines.holds(&id));
-        sessions.forget_plan_lines(&[(None, 0, Uuid::from_u128(2))]);
+        sessions.forget_plan_lines(vec![((None, 0, Uuid::from_u128(2)), None)]);
         assert!(
             !sessions.plan_lines.holds(&id),
             "a removed fight's line goes"
@@ -8129,6 +8332,7 @@ mod tests {
                         fights: &[],
                         saved_runs: runs,
                         saved_runs_revision: runs.revision(),
+                        fights_revision: runs.revision(),
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8247,6 +8451,97 @@ mod tests {
                 }
             });
         });
+        // PR 605 review (P1): a short name over a summary of three lines. The plan's column is
+        // measured from every line its rows draw, so it never starts inside the summary: the
+        // row keeps the far edge here, where the column does not fit beside the summary.
+        let long = "Rivals · 3 members · XP 600 · Changed · 1 × Ember Cultist · 2 × Goblin \
+                    Warrior · 4 × Wolf · 1 × Cinder Tyrant · 3 × Bandit · 2 × Scout · 1 × \
+                    Veteran · 5 × Guard · 2 × Thug · 1 × Spy";
+        // A narrow window, so the summary takes three lines.
+        let narrow = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(480.0, 400.0),
+            )),
+            ..Default::default()
+        };
+        for _ in 0..3 {
+            let _ = ctx.run(narrow(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    plan_row(
+                        ui,
+                        &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
+                        icons::GROUP,
+                        |ui| {
+                            ui.label(Type::Body.rich(ui, "Ox"));
+                        },
+                        |ui| {
+                            ui.add(egui::Label::new(Type::Small.rich(ui, long)).wrap());
+                        },
+                        |ui| {
+                            let _ = Action::quiet("Edit").density(Density::Read).show(ui);
+                        },
+                    );
+                });
+            });
+        }
+        let records: Vec<_> = design::action_rows::row_records(&ctx)
+            .into_iter()
+            .filter(|record| record.owner == "plan")
+            .collect();
+        // Layout PR 5a-2 (I6): a short title over a short summary, in a wide window: the column
+        // fits, and it starts exactly `L` after the widest facts line.
+        let wide = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1200.0, 400.0),
+            )),
+            ..Default::default()
+        };
+        for _ in 0..3 {
+            let _ = ctx.run(wide(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    plan_row(
+                        ui,
+                        &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
+                        icons::RUN,
+                        |ui| {
+                            ui.label(Type::Body.rich(ui, "Bridge Ambush"));
+                        },
+                        |ui| {
+                            ui.label(Type::Small.rich(ui, "5 party · 2 × Cinder Wolf"));
+                        },
+                        |ui| {
+                            let _ = Action::secondary("Start fight")
+                                .density(Density::Read)
+                                .show(ui);
+                        },
+                    );
+                });
+            });
+        }
+        let fitting: Vec<_> = design::action_rows::row_records(&ctx)
+            .into_iter()
+            .filter(|record| record.owner == "plan")
+            .collect();
+        assert!(
+            fitting.len() == 1
+                && fitting.iter().all(|record| {
+                    !record.wrapped
+                        && (record.column - (record.facts.right() + design::L)).abs() <= 0.5
+                        && record.action.left() >= record.column - 0.5
+                }),
+            "the column fits and starts L after the widest facts line: {fitting:?}"
+        );
+        assert!(
+            records.len() == 1
+                && records.iter().all(|record| {
+                    record.facts.height() > 3.0 * Type::Small.line() - 0.5
+                        && (record.wrapped
+                            || record.column >= record.facts.right() + design::L - 0.5)
+                }),
+            "the column starts after every line of the facts, or keeps the far edge: {records:?}"
+        );
     }
 
     #[test]
@@ -8379,6 +8674,7 @@ mod tests {
                         fights: &[],
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8460,6 +8756,7 @@ mod tests {
                         fights: &fights,
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,
@@ -8514,6 +8811,14 @@ mod tests {
                 shown(harness, "Open: Captain Varra")
             })
             .expect("scene-model-steady");
+        // Review of PR 703: the planned fights' days are worked out once for each change of
+        // the note, the Timeline or the fights, never on a quiet frame or a resize.
+        let days = || DAYS_BY_PLACE.with(std::cell::Cell::get);
+        let before = days();
+        harness.run_steps(3);
+        harness.set_size(egui::vec2(design::FORM_WIDTH + 200.0, 800.0));
+        harness.run_steps(3);
+        assert_eq!(days(), before, "quiet frames work out no planned day");
         // Two scenes, each with its box; the plain list line has no row. Round 28 FD3: the
         // heading counts every row under it, a done scene too (it said 2 for these 3 rows).
         assert!(harness.query_by_label("Open: Captain Varra").is_some());
@@ -9284,6 +9589,7 @@ mod tests {
                         fights: &[],
                         saved_runs: &[],
                         saved_runs_revision: no_runs,
+                        fights_revision: no_runs,
                         groups: &[],
                         group_blocked: None,
                         group_open: false,

@@ -16,9 +16,7 @@ use super::{
     Action, Density, Status,
     tokens::{L, Type},
 };
-#[cfg(any(test, feature = "test-support"))]
-use egui::Id;
-use egui::{self, Rect, Ui, UiBuilder, pos2, vec2};
+use egui::{self, Id, Rect, Ui, UiBuilder, pos2, vec2};
 
 /// The largest gap between a row's facts and its action that is not a residual (ruling L2).
 #[cfg(any(test, feature = "test-support"))]
@@ -144,9 +142,15 @@ pub struct RowRecord {
     pub owner: &'static str,
     pub row: usize,
     pub facts: Rect,
+    /// The facts on the actions' own line (a plan row's title above its summary); the same as
+    /// `facts` where all the facts share that line.
+    pub line: Rect,
     pub action: Rect,
     /// Where the action column starts, as planned: `L` after the widest facts.
     pub column: f32,
+    /// The far edge the row's actions end at when its list keeps the far edge: the row's own
+    /// right edge as the row used it (PR 605 review: proven apart from the actions).
+    pub edge: f32,
     pub wrapped: bool,
 }
 
@@ -237,12 +241,66 @@ pub fn action_row<R>(
             owner,
             row,
             facts: Rect::from_min_size(facts_rect.min, vec2(facts_width, facts_rect.height())),
+            line: Rect::from_min_size(facts_rect.min, vec2(facts_width, facts_rect.height())),
             action: drawn,
             column: action_rect.left(),
+            edge: rect.right(),
             wrapped: columns.wrapped,
         },
     );
     (out, pressed)
+}
+
+/// A list whose facts are laid out in their own room (they wrap or give way there): its columns
+/// from its last pass, its widest drawn facts and its widest drawn actions (layout PR 5a-2, 5b).
+/// `columns` gives them before a row is drawn; `measured` adds the row's own after. When they
+/// change, the list is drawn once more, so its actions settle in their column on the next frame.
+#[derive(Clone, Copy, Default)]
+struct KeptColumns {
+    pass: u64,
+    last: (f32, f32),
+    next: (f32, f32),
+}
+
+fn kept_columns<R>(ui: &Ui, list: Id, update: impl FnOnce(&mut KeptColumns) -> R) -> R {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let (out, changed) = ui.ctx().data_mut(|data| {
+        let kept = data.get_temp_mut_or_default::<KeptColumns>(list);
+        let mut changed = false;
+        if kept.pass != pass {
+            if kept.pass + 1 == pass {
+                changed = kept.next != kept.last;
+                kept.last = kept.next;
+            }
+            kept.next = (0.0, 0.0);
+            kept.pass = pass;
+        }
+        (update(kept), changed)
+    });
+    if changed {
+        ui.ctx().request_repaint();
+    }
+    out
+}
+
+/// The list's columns from its last pass: (widest facts, widest actions); zero until measured.
+pub fn columns(ui: &Ui, list: Id) -> (f32, f32) {
+    kept_columns(ui, list, |kept| kept.last)
+}
+
+/// Add a drawn row's facts and actions widths to this pass's columns.
+/// A row wider than the kept column means this pass placed rows with a stale column: the pass
+/// is discarded and drawn again with the new one, so the stale positions never reach the screen
+/// (PR 641 review, P2). A column that only shrinks follows on the next frame; it never puts an
+/// action over facts.
+pub fn measured(ui: &Ui, list: Id, facts: f32, actions: f32) {
+    let grew = kept_columns(ui, list, |kept| {
+        kept.next = (kept.next.0.max(facts), kept.next.1.max(actions));
+        facts > kept.last.0 + 0.5 || actions > kept.last.1 + 0.5
+    });
+    if grew {
+        ui.ctx().request_discard("a list's measured column grew");
+    }
 }
 
 /// The height a row needs: `base` (its facts), and an action line when the columns wrap.

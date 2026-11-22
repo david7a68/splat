@@ -1869,38 +1869,47 @@ fn line_start_actions(ui: &mut egui::Ui, actions: &[(&str, ArmedAction)]) -> Opt
 /// crosshair stays on the first line when the words wrap, centred on it. The words keep the
 /// lines that `reserve` would take at this width, so what follows does not move when the
 /// roll mode or the action changes the words (FK4).
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn armed_hint(ui: &mut egui::Ui, status: &str, reserve: &str) {
     let icon_row = ui.fonts_mut(|fonts| fonts.row_height(&Type::Body.font(ui)));
     let text_row = ui.fonts_mut(|fonts| fonts.row_height(&Type::Small.font(ui)));
     // Each starts lower by half of what the other's first line is taller.
     let icon_drop = ((text_row - icon_row) / 2.0).max(0.0);
     let text_drop = ((icon_row - text_row) / 2.0).max(0.0);
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = design::XS;
-        ui.vertical(|ui| {
-            ui.add_space(icon_drop);
+    let icon_width = design::number_width(ui, design::icons::ARMED, &Type::Body.font(ui));
+    let room = ui.available_rect_before_wrap();
+    let column = egui::Layout::top_down(egui::Align::Min);
+    // The icon and the words are two columns placed by their rects, each starting lower by its
+    // drop; the whole row is the two columns together.
+    ui.scope_builder(egui::UiBuilder::new().max_rect(room).layout(column), |ui| {
+        let icon = egui::Rect::from_min_size(
+            room.min + egui::vec2(0.0, icon_drop),
+            egui::vec2(icon_width, icon_row),
+        );
+        ui.scope_builder(egui::UiBuilder::new().max_rect(icon).layout(column), |ui| {
             ui.label(
                 Type::Body
                     .rich(ui, design::icons::ARMED)
                     .color(colors().accent),
             );
         });
-        ui.vertical(|ui| {
-            let job = egui::text::LayoutJob::simple(
-                reserve.to_owned(),
-                Type::Small.font(ui),
-                colors().text,
-                ui.available_width(),
-            );
-            let reserved = ui.fonts_mut(|fonts| fonts.layout_job(job)).size().y;
-            ui.set_min_height(text_drop + reserved);
-            ui.add_space(text_drop);
-            ui.add(egui::Label::new(Type::Small.rich(ui, status).color(colors().text)).wrap());
-        });
+        let words = egui::Rect::from_min_max(
+            room.min + egui::vec2(icon_width + design::XS, text_drop),
+            room.max,
+        );
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(words).layout(column),
+            |ui| {
+                let job = egui::text::LayoutJob::simple(
+                    reserve.to_owned(),
+                    Type::Small.font(ui),
+                    colors().text,
+                    ui.available_width(),
+                );
+                let reserved = ui.fonts_mut(|fonts| fonts.layout_job(job)).size().y;
+                ui.set_min_height(reserved);
+                ui.add(egui::Label::new(Type::Small.rich(ui, status).color(colors().text)).wrap());
+            },
+        );
     });
 }
 
