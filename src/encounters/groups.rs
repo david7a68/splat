@@ -1738,102 +1738,86 @@ pub(super) fn of_encounter(
                 .inner_margin(design::S + design::FOCUS_WIDTH - stroke.width)
                 .show(ui, |ui| {
                     let mut name_right = f32::INFINITY;
-                    whole_row(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    super::row_menu(ui, &group.name.clone(), |ui| {
-                                        design::menu_submenu(ui, "Move to", inside, |ui| {
-                                            for (id, name) in snapshot
-                                                .encounter_choices()
-                                                .filter(|(id, _)| *id != this.0)
-                                            {
-                                                if super::menu_action(ui, name, None) {
-                                                    group.setup.encounter = Some(EntryRef::id(id));
-                                                    // N1: who owns the group is checked by Save.
-                                                    group.touch();
-                                                }
-                                            }
-                                        });
-                                        if super::menu_action(
-                                            ui,
-                                            "Make available to any encounter",
-                                            None,
-                                        ) {
-                                            discard = Some((index, false));
-                                        }
-                                        if super::menu_action(ui, "Delete group", None) {
-                                            discard = Some((index, true));
-                                        }
-                                    });
-                                    // The slot keeps the wider word's width, so every frame's name
-                                    // field ends at one edge and does not move with the Add target.
-                                    let slot = Action::quiet("Adding here")
-                                        .icon(icons::OK)
-                                        .density(Density::Read)
-                                        .natural_width(ui);
-                                    if Action::quiet(if adding {
-                                        "Adding here"
-                                    } else {
-                                        "Add here"
-                                    })
-                                    .icon(if adding { icons::OK } else { icons::ADD })
-                                    .density(Density::Read)
-                                    .min_width(slot)
-                                    .name(&format!("Add creatures to {}", group.name))
-                                    .selected(adding)
-                                    .show(ui)
-                                    .clicked()
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            super::row_menu(ui, &group.name.clone(), |ui| {
+                                design::menu_submenu(ui, "Move to", inside, |ui| {
+                                    for (id, name) in
+                                        snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
                                     {
-                                        if adding {
-                                            *add_to = None;
-                                        } else {
-                                            *add_to = Some(path.clone());
-                                            *focus_search = true;
-                                            go_to_search = true;
+                                        if super::menu_action(ui, name, None) {
+                                            group.setup.encounter = Some(EntryRef::id(id));
+                                            // N1: who owns the group is checked by Save.
+                                            group.touch();
                                         }
                                     }
-                                    // The name starts at the frame's left edge, as the fields below do,
-                                    // and ends at FORM_WIDTH or before the actions.
-                                    ui.with_layout(
-                                        egui::Layout::left_to_right(egui::Align::Center),
-                                        |ui| {
-                                            let width = (ui.available_width() - 2.0 * design::S)
-                                                .min(design::FORM_WIDTH);
-                                            let font = Type::Heading.font(ui);
-                                            let response = ENCOUNTER_GROUP_NAME
-                                                .of(group.id)
-                                                .single_line(ui, &mut group.name, |edit| {
-                                                    edit.desired_width(width)
-                                                        .margin(egui::vec2(design::S, 4.0))
-                                                        .font(font)
-                                                });
-                                            design::named(
-                                                ui,
-                                                &response,
-                                                &format!("Group name: {}", group.name),
-                                            );
-                                            // F1: a name edit is an edit of the group: its revision
-                                            // keys Save's checks, as in the group's own editor.
-                                            if response.changed() {
-                                                group.touch();
-                                            }
-                                            name_right = response.rect.right();
-                                            if focus_group.as_deref() == Some(path.as_str()) {
-                                                *focus_group = None;
-                                                design::focus_and_select(
-                                                    ui,
-                                                    response.id,
-                                                    &group.name,
-                                                );
-                                                response.scroll_to_me(Some(egui::Align::Center));
-                                            }
+                                });
+                                if super::menu_action(ui, "Make available to any encounter", None) {
+                                    discard = Some((index, false));
+                                }
+                                if super::menu_action(ui, "Delete group", None) {
+                                    discard = Some((index, true));
+                                }
+                            });
+                            // The slot keeps the wider word's width, so every frame's name
+                            // field ends at one edge and does not move with the Add target.
+                            let slot = Action::quiet("Adding here")
+                                .icon(icons::OK)
+                                .density(Density::Read)
+                                .natural_width(ui);
+                            if Action::quiet(if adding { "Adding here" } else { "Add here" })
+                                .icon(if adding { icons::OK } else { icons::ADD })
+                                .density(Density::Read)
+                                .min_width(slot)
+                                .name(&format!("Add creatures to {}", group.name))
+                                .selected(adding)
+                                .show(ui)
+                                .clicked()
+                            {
+                                if adding {
+                                    *add_to = None;
+                                } else {
+                                    *add_to = Some(path.clone());
+                                    *focus_search = true;
+                                    go_to_search = true;
+                                }
+                            }
+                            // The name starts at the frame's left edge, as the fields below do,
+                            // and ends at FORM_WIDTH or before the actions.
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    let width = (ui.available_width() - 2.0 * design::S)
+                                        .min(design::FORM_WIDTH);
+                                    let font = Type::Heading.font(ui);
+                                    let response = ENCOUNTER_GROUP_NAME.of(group.id).single_line(
+                                        ui,
+                                        &mut group.name,
+                                        |edit| {
+                                            edit.desired_width(width)
+                                                .margin(egui::vec2(design::S, 4.0))
+                                                .font(font)
                                         },
                                     );
+                                    design::named(
+                                        ui,
+                                        &response,
+                                        &format!("Group name: {}", group.name),
+                                    );
+                                    // F1: a name edit is an edit of the group: its revision
+                                    // keys Save's checks, as in the group's own editor.
+                                    if response.changed() {
+                                        group.touch();
+                                    }
+                                    name_right = response.rect.right();
+                                    if focus_group.as_deref() == Some(path.as_str()) {
+                                        *focus_group = None;
+                                        design::focus_and_select(ui, response.id, &group.name);
+                                        response.scroll_to_me(Some(egui::Align::Center));
+                                    }
                                 },
                             );
-                        })
+                        });
                     });
                     group_fields(
                         ui,
