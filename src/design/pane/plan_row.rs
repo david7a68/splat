@@ -15,13 +15,15 @@
 //! - **The summary**, under the title and the action place, in `width − x0 − Read.control − S`:
 //!   words that wrap (in at most so many rows), and parts the row draws itself in slots of their
 //!   own measured height (a status, a run link, a message).
-//! - **The rule** after the row (`S`, then the hairline), part of the block.
+//! - **The rule** after the row (the line gap, `S`, the hairline, the line gap), part of the
+//!   block.
 //!
 //! The row's facts (its title and its summary lines) and its action recipe make the shared
 //! column; a change of either lays every row out again (each row's layout revision changes).
 use egui::{Id, Pos2, Rect, Ui, pos2, vec2};
 
 use super::laid::{Laid, LaidText};
+use crate::design::theme::LINE_GAP;
 use crate::design::tokens::{Density, L, S, Type, XL, colors};
 
 /// One part of a closed row's summary, under its title.
@@ -126,6 +128,25 @@ impl PlanRow<'_> {
 
     fn summary_width(width: f32) -> f32 {
         (width - Self::x0() - Density::Read.control() - S).max(XL)
+    }
+
+    /// The summary's room in a row `width` wide: a part laid out before the row (a kept plan
+    /// line, a group's members) is fitted to it.
+    pub fn summary_room(width: f32) -> f32 {
+        Self::summary_width(width)
+    }
+
+    /// The row's actions stand in the plan's shared column (`columns`, which holds this row's
+    /// facts), `L` after its widest facts; else at the row's far edge (layout PR 5a-2, I6).
+    pub fn in_column(&self, ui: &Ui, width: f32, columns: PlanColumns) -> bool {
+        self.column(self.title(ui, width).size().x, width, columns)
+    }
+
+    fn column(&self, title_width: f32, width: f32, columns: PlanColumns) -> bool {
+        let facts = columns.facts.max(title_width);
+        columns.facts > 0.0
+            && columns.actions >= self.actions - 0.5
+            && facts + L + columns.actions <= width - Self::x0() + 0.5
     }
 
     /// The title's words: an empty title shows `Untitled` (review of PR 820), so the link is
@@ -239,13 +260,8 @@ impl PlanRow<'_> {
         let title_width = title.size().x;
         // The action place: `L` after the plan's widest facts where the shared column fits, else
         // at the row's far edge (layout PR 5a-2, I6).
-        let facts = columns.facts.max(title_width);
-        let room = width - x0;
-        let column = columns.facts > 0.0
-            && columns.actions >= self.actions - 0.5
-            && facts + L + columns.actions <= room + 0.5;
-        let action_x = if column {
-            x0 + facts + L
+        let action_x = if self.column(title_width, width, columns) {
+            x0 + columns.facts.max(title_width) + L
         } else {
             width - self.actions
         };
@@ -254,12 +270,16 @@ impl PlanRow<'_> {
         let summary_top = title_height.max(actions.bottom());
         let summary = self.summary(ui, (x0, summary_top, Self::summary_width(width)));
         let row = (summary_top + summary.height).max(actions.bottom());
-        // The rule after the row: `S`, then the hairline.
+        // After the row, the plan column's line gap (`LINE_GAP`, egui's item gap there); then,
+        // for a closed row, `S`, the hairline and the line gap again, as `plan_rule` draws them
+        // after an opened row's details (layout 11c A2c: the same height in place and in the
+        // region).
         let rule = if self.rule {
-            Rect::from_min_size(pos2(0.0, row + S), vec2(width, 1.0))
+            Rect::from_min_size(pos2(0.0, row + LINE_GAP + S), vec2(width, 1.0))
         } else {
-            Rect::from_min_size(pos2(0.0, row), vec2(width, 0.0))
+            Rect::from_min_size(pos2(0.0, row + LINE_GAP), vec2(width, 0.0))
         };
+        let height = rule.bottom() + if self.rule { LINE_GAP } else { 0.0 };
         let mut texts = vec![LaidText {
             at: Pos2::new(lead_at.x, lead_at.y),
             galley: lead,
@@ -269,7 +289,7 @@ impl PlanRow<'_> {
         slots.extend(summary.parts);
         let mut slot_texts = vec![None, None, None];
         slot_texts.extend(summary.part_texts);
-        Laid::new(self.key, vec2(width, rule.bottom()), None, texts, slots)
+        Laid::new(self.key, vec2(width, height), None, texts, slots)
             .with_slot_texts(slot_texts)
             .with_links(vec![(
                 LaidText {
@@ -338,7 +358,8 @@ mod tests {
     }
 
     /// The row's height by a separate layout (the test's own): the title (at least 24 px) beside
-    /// the actions, the summary under the taller, then `S` and the rule (review of PR 820).
+    /// the actions, the summary under the taller, then the line gap, `S`, the rule and the line gap (review of
+    /// PR 820).
     fn expected_height(ui: &Ui, title: &str, width: f32, stacked: bool) -> f32 {
         let x0 = Type::Body.size() + S;
         let title = egui::WidgetText::from(Type::Body.rich(
@@ -371,7 +392,12 @@ mod tests {
         job.wrap.max_width = (width - x0 - Density::Read.control() - S).max(XL);
         job.wrap.max_rows = max_rows;
         let summary = ui.fonts_mut(|fonts| fonts.layout_job(job)).size().y;
-        title.size().y.max(24.0).max(actions_height(stacked)) + summary + S + 1.0
+        title.size().y.max(24.0).max(actions_height(stacked))
+            + summary
+            + LINE_GAP
+            + S
+            + 1.0
+            + LINE_GAP
     }
 
     fn harness(titles: &[&str], size: Vec2, scale: f32) -> Harness<'static, Rows> {

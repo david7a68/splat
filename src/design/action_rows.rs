@@ -316,6 +316,8 @@ fn measured(ui: &Ui, list: Id, facts: f32, actions: f32) {
 pub struct MeasuredColumn {
     list: Id,
     at: ColumnAt,
+    /// A column the list's rows measured before paint in this pass (`MeasuredColumn::over`).
+    floor: (f32, f32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -331,6 +333,7 @@ impl MeasuredColumn {
         Self {
             list: Id::new(list),
             at: ColumnAt::End,
+            floor: (0.0, 0.0),
         }
     }
 
@@ -342,7 +345,20 @@ impl MeasuredColumn {
         Self {
             list: Id::new(list),
             at: ColumnAt::Start { recipe, facts },
+            floor: (0.0, 0.0),
         }
+    }
+
+    /// The column at least `floor` (widest facts, widest actions): what the list's other rows
+    /// measured before paint in this pass (layout 11c A2c: the Session plan's closed rows laid by
+    /// their recipe, beside its scenes still measured by their last pass).
+    pub fn over(self, floor: (f32, f32)) -> Self {
+        Self { floor, ..self }
+    }
+
+    /// The column `list`'s rows measured in its last pass: (widest facts, widest actions).
+    pub fn kept(ui: &Ui, list: impl std::hash::Hash) -> (f32, f32) {
+        columns(ui, Id::new(list))
     }
 
     /// The slot of one row's actions. `line` is the actions' line: its top and bottom, its left
@@ -351,6 +367,8 @@ impl MeasuredColumn {
     #[must_use = "a slot's row is measured and recorded only by `ActionSlot::done`"]
     pub fn slot(self, ui: &Ui, line: Rect, left: f32) -> ActionSlot {
         let (kept_facts, kept_actions) = columns(ui, self.list);
+        let (kept_facts, kept_actions) =
+            (kept_facts.max(self.floor.0), kept_actions.max(self.floor.1));
         let far_edge = line.right();
         let room = far_edge - left;
         let (column, start, rect) = match self.at {

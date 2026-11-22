@@ -283,6 +283,7 @@ fn plan_event_summary_job(
     (!job.text.is_empty()).then_some(job)
 }
 
+#[cfg(test)]
 fn plan_event_summary(
     ui: &mut egui::Ui,
     summary: &str,
@@ -302,13 +303,13 @@ const ADD_TO_FIGHT: &str = "Add to fight…";
 
 /// A plan group's summary that wraps between members, never inside a member's
 /// `N × name (as base)`, as Arrivals does.
-fn plan_summary_text(ui: &egui::Ui, group: &crate::encounter_run::RunGroup) -> String {
+fn plan_summary_text(ui: &egui::Ui, group: &crate::encounter_run::RunGroup, room: f32) -> String {
     let summary = group.summary();
     let members = group.member_summary();
     match summary.strip_suffix(&members) {
         Some(head) if !members.is_empty() => format!(
             "{head}{}",
-            group.member_summary_wrapped(ui, &Type::Small.font(ui), ui.available_width())
+            group.member_summary_wrapped(ui, &Type::Small.font(ui), room)
         ),
         _ => summary,
     }
@@ -461,16 +462,26 @@ fn fight_summary_text(summary: &str) -> String {
 /// `·`, and a line that would start at a separator starts with the next fact (FI7). A flagged
 /// group keeps every fact (`max_rows` of `usize::MAX`).
 fn plan_group_summary(ui: &mut egui::Ui, summary: &str, max_rows: usize) {
+    let part = plan_group_part(ui, summary, max_rows, ui.available_width());
+    let response = ui.add(egui::Label::new(part.job).wrap());
+    design::named(ui, &response, &part.name);
+    let _ = plan_hover(ui, response, &part.hover);
+}
+
+/// A group's summary laid out in `room`, in at most `max_rows` rows (`plan_group_summary`).
+fn plan_group_part(ui: &egui::Ui, summary: &str, max_rows: usize, room: f32) -> RowPart {
     let font = Type::Small.font(ui);
-    let width = ui.available_width();
-    let text = without_loose_separators(ui, summary.replace(" · ", FACT_SEPARATOR), &font, width);
-    let mut job = egui::text::LayoutJob::simple(text, font, colors().muted, width);
+    let text = without_loose_separators(ui, summary.replace(" · ", FACT_SEPARATOR), &font, room);
+    let mut job = egui::text::LayoutJob::simple(text, font, colors().muted, room);
     job.wrap.max_rows = max_rows;
-    let plain = summary.replace('\u{a0}', " ");
-    let response = ui.add(egui::Label::new(job).wrap());
     // The no-break spaces only steer the wrap; the name keeps plain spaces.
-    design::named(ui, &response, &plain);
-    response.on_hover_text(plain);
+    let plain = summary.replace('\u{a0}', " ");
+    RowPart {
+        job,
+        link: false,
+        name: plain.clone(),
+        hover: PlanHover::Text(plain),
+    }
 }
 
 /// A body link whose word starts at the cursor, as the text above it does, and whose underline
@@ -584,7 +595,7 @@ fn unlink_planned_fight(body: &str, name: &str, occurrence: usize) -> String {
 /// One plan row: an icon, a compact text column, and actions centred beside both lines.
 fn plan_row(
     ui: &mut egui::Ui,
-    widths: &[f32],
+    (widths, columns): (&[f32], design::PlanColumns),
     icon: &str,
     words: impl FnMut(&mut egui::Ui),
     summary: impl FnMut(&mut egui::Ui),
@@ -592,7 +603,7 @@ fn plan_row(
 ) {
     plan_row_with(
         ui,
-        widths,
+        (widths, columns),
         |ui| {
             ui.label(Type::Body.rich(ui, icon).color(colors().muted));
         },
@@ -603,14 +614,17 @@ fn plan_row(
 }
 
 /// A plan row whose start is `lead`: a fight's caret, or a scene's box. Every row has the one
-/// leading slot, so every row's words start at one column.
+/// leading slot, so every row's words start at one column. Its actions take the plan's shared
+/// column (`columns`: the closed rows laid by their recipe, measured before paint) with what the
+/// rows drawn here measured in their last pass (layout 11c A2c: the scenes and a group with
+/// warnings, until scope B).
 #[allow(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
 fn plan_row_with(
     ui: &mut egui::Ui,
-    widths: &[f32],
+    (widths, columns): (&[f32], design::PlanColumns),
     lead: impl FnOnce(&mut egui::Ui),
     mut words: impl FnMut(&mut egui::Ui),
     mut summary: impl FnMut(&mut egui::Ui),
@@ -649,19 +663,17 @@ fn plan_row_with(
             // lines it had, so where the column does not fit the actions keep the row's far edge
             // (`MeasuredColumn`).
             let words_width = title.response.rect.width();
-            let slot = design::action_rows::MeasuredColumn::start(
-                "plan_row_columns",
-                widths[1],
-                words_width,
-            )
-            .slot(
-                ui,
-                egui::Rect::from_min_max(
-                    left,
-                    egui::pos2(ui.max_rect().right(), left.y + Density::Read.control()),
-                ),
-                left.x,
-            );
+            let slot =
+                design::action_rows::MeasuredColumn::start(PLAN_COLUMNS, widths[1], words_width)
+                    .over((columns.facts, columns.actions))
+                    .slot(
+                        ui,
+                        egui::Rect::from_min_max(
+                            left,
+                            egui::pos2(ui.max_rect().right(), left.y + Density::Read.control()),
+                        ),
+                        left.x,
+                    );
             let action_rect = slot.rect();
             let mut action_ui = slot.child(ui);
             action(&mut action_ui);
@@ -711,6 +723,200 @@ fn plan_row_with(
     design::register_row(ui, row.response.rect);
 }
 
+/// The list the plan's rows drawn by `plan_row_with` measure their column in.
+const PLAN_COLUMNS: &str = "plan_row_columns";
+
+/// A closed plan row's words, laid out before any row draws (layout 11c A2c): its lead, its
+/// title, its summary as one laid part, and its action place. The plan's shared column comes
+/// from every such row's facts before the first row paints.
+struct RowWords {
+    lead: &'static str,
+    title: String,
+    summary: Option<RowPart>,
+    /// The action place's width: the row's widest action recipe.
+    actions: f32,
+}
+
+/// A closed row's summary, laid out in the summary's room: its words, its accessible name and
+/// what hover shows.
+struct RowPart {
+    job: egui::text::LayoutJob,
+    link: bool,
+    name: String,
+    hover: PlanHover,
+}
+
+impl RowPart {
+    /// The open fight's state as a link, its run icon before the words (`plan_run_link`).
+    fn run_link(ui: &egui::Ui, word: &str) -> Self {
+        Self {
+            job: glyph_link_job(ui, icons::RUN, colors().accent, Type::Small, word),
+            link: true,
+            name: word.to_owned(),
+            hover: PlanHover::None,
+        }
+    }
+
+    /// A paused run's state (`plan_saved_status`), on one line, whole on hover.
+    fn saved(ui: &egui::Ui, saved: &crate::encounter_run::SavedRunInfo) -> Self {
+        let word = plan_saved_status(saved);
+        let mut job = design::status_job(
+            ui,
+            Status {
+                icon: icons::RUN,
+                word: &word,
+                color: colors().muted,
+            },
+        );
+        job.wrap.max_rows = 1;
+        job.wrap.break_anywhere = true;
+        Self {
+            name: job.text.clone(),
+            job,
+            link: false,
+            hover: PlanHover::Text(word),
+        }
+    }
+
+    /// Words that wrap whole, named by their text.
+    fn words(job: egui::text::LayoutJob, hover: PlanHover) -> Self {
+        Self {
+            name: job.text.clone(),
+            job,
+            link: false,
+            hover,
+        }
+    }
+}
+
+impl RowWords {
+    fn part(&self) -> Option<design::SummaryPart<'_>> {
+        self.summary.as_ref().map(|part| design::SummaryPart::Job {
+            job: &part.job,
+            max_rows: part.job.wrap.max_rows,
+            link: part.link,
+        })
+    }
+
+    fn row<'a>(
+        &'a self,
+        key: egui::Id,
+        summary: &'a [design::SummaryPart<'a>],
+        rule: bool,
+    ) -> design::PlanRow<'a> {
+        design::PlanRow {
+            key,
+            lead: self.lead,
+            title: &self.title,
+            summary,
+            actions: self.actions,
+            actions_height: Density::Read.control(),
+            rule,
+        }
+    }
+
+    /// The row's facts and action recipe at `width`, for the plan's shared column.
+    fn facts(&self, ui: &egui::Ui, width: f32) -> (f32, f32) {
+        let part = self.part();
+        self.row(egui::Id::NULL, part.as_slice(), true)
+            .facts(ui, width)
+    }
+}
+
+/// A closed plan row as drawn: its title link, its summary part, its block, and the height of
+/// the rule its block holds (zero for an opened row, whose rule follows its details).
+struct DrawnRow {
+    title: egui::Response,
+    summary: Option<egui::Response>,
+    rect: egui::Rect,
+    rule: f32,
+}
+
+/// Draw a closed plan row by its recipe at the rows' cursor (layout 11c A2c): its lead, its title
+/// link (`open`: whether its details show, for a screen reader), its summary part with its hover,
+/// and `actions` in its action place. Its block holds the rule after it when `rule` (a closed
+/// row; an opened row's rule follows its details).
+/// In test builds it records the row for the gate's plan check, as `plan_row_with` does.
+fn draw_plan_row(
+    ui: &mut egui::Ui,
+    words: &RowWords,
+    (key, width, columns): (egui::Id, f32, design::PlanColumns),
+    (open, rule): (Option<bool>, bool),
+    actions: impl FnOnce(&mut egui::Ui),
+) -> DrawnRow {
+    let part = words.part();
+    let row = words.row(key, part.as_slice(), rule);
+    let laid = row.lay(ui, width, columns);
+    let mut title = None;
+    let mut summary = None;
+    let mut drawn = (
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+    );
+    let rect = design::draw_laid(ui, &laid, |l| {
+        let link = l.link(0, &words.title);
+        if let Some(open) = open {
+            link.ctx
+                .accesskit_node_builder(link.id, |node| node.set_expanded(open));
+        }
+        if let Some(part) = &words.summary {
+            summary = Some(l.part(design::plan_slot::FIRST_PART, &part.name, part.link));
+        }
+        let shown = l.actions(design::plan_slot::ACTIONS, |ui| {
+            actions(ui);
+            ui.min_rect()
+        });
+        drawn = (
+            l.slot(design::plan_slot::ACTIONS),
+            shown,
+            l.slot(design::plan_slot::RULE),
+        );
+        title = Some(link);
+        if rule {
+            design::plan_rule(l);
+        }
+    });
+    let title = title.expect("a laid row draws its title");
+    let summary = summary
+        .zip(words.summary.as_ref())
+        .map(|(response, part)| plan_hover(ui, response, &part.hover));
+    let (slot, shown, rule_slot) = drawn;
+    let rule = if rule {
+        rect.bottom() - rule_slot.top() + design::S
+    } else {
+        0.0
+    };
+    #[cfg(any(test, feature = "test-support"))]
+    {
+        let left = rect.left() + lead_width() + design::S;
+        design::action_rows::keep(
+            ui,
+            design::action_rows::RowRecord {
+                owner: "plan",
+                row: 0,
+                facts: egui::Rect::from_min_max(
+                    egui::pos2(left, rect.top()),
+                    egui::pos2(left + row.facts(ui, width).0, rect.bottom() - rule),
+                ),
+                line: title.rect,
+                action: shown,
+                column: slot.left(),
+                edge: rect.right(),
+                wrapped: !row.in_column(ui, width, columns),
+            },
+        );
+    }
+    #[cfg(not(any(test, feature = "test-support")))]
+    let _ = (slot, shown);
+    DrawnRow {
+        title,
+        summary,
+        rect,
+        rule,
+    }
+}
+
 /// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words
 /// and tone), or another cause in words.
 #[derive(Debug)]
@@ -745,23 +951,6 @@ fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
     crate::encounters::run_state_word(saved, true)
 }
 
-fn plan_link(ui: &mut egui::Ui, label: &str, open: bool) -> egui::Response {
-    let response = design::wrapped_link(ui, label);
-    design::named(ui, &response, label);
-    ui.ctx()
-        .accesskit_node_builder(response.id, |node| node.set_expanded(open));
-    response
-}
-
-/// The open fight's state on its plan row. The run icon is its own glyph before the link words,
-/// so the underline covers only the words, as in `status_link`. The press target covers both, at
-/// least 24 px, and the accessible name is the words.
-fn plan_run_link(ui: &mut egui::Ui, word: &str) -> egui::Response {
-    glyph_link(ui, icons::RUN, colors().accent, Type::Small, word)
-}
-
-/// Link words with a glyph of their own before them, in `glyph_color`. The underline covers only
-/// the words; the press target covers both, at least 24 px, and the accessible name is the words.
 /// The words of a link with a glyph of its own before them (`glyph_link`), as one job.
 fn glyph_link_job(
     ui: &egui::Ui,
@@ -799,6 +988,8 @@ fn glyph_link_job(
     job
 }
 
+/// Link words with a glyph of their own before them, in `glyph_color`. The underline covers only
+/// the words; the press target covers both, at least 24 px, and the accessible name is the words.
 fn glyph_link(
     ui: &mut egui::Ui,
     glyph: &str,
@@ -917,22 +1108,38 @@ fn planned_summary_on_road(
 /// revision of the planned fights with their days), its room, its font, the font generation or
 /// the display scale changes.
 fn kept_plan_line(
-    ui: &mut egui::Ui,
-    kept: &mut PlanLines,
+    ui: &egui::Ui,
+    (kept, room): (&mut PlanLines, f32),
     id: PlanLineId,
     fight: &PlanFight,
     day: Option<&str>,
     days: design::memo::Revision,
-) {
+) -> KeptPlanLine {
     let font = Type::Small.font(ui);
-    let room = ui.available_width();
     let content = (fight.revision.unwrap_or(days), days);
-    let line = kept.answer(ui, &id, content, room, &font, || {
+    kept.answer(ui, &id, content, room, &font, || {
         let words = fight.summary.text();
         let day = road_day(ui, &words, day);
         prepare_plan_line(ui, &fight.summary, day.as_deref(), Some(&fight.difficulty))
-    });
-    show_plan_line(ui, &line);
+    })
+}
+
+impl KeptPlanLine {
+    /// The line as a plan row's summary part, laid out in `room` (layout 11c A2c).
+    fn part(self, ui: &egui::Ui, room: f32) -> RowPart {
+        let job = match self.text {
+            PlanText::Alone(alone) => {
+                egui::text::LayoutJob::simple(alone, Type::Small.font(ui), colors().muted, room)
+            }
+            PlanText::Form(job) => job,
+        };
+        RowPart {
+            job,
+            link: false,
+            name: self.name,
+            hover: self.hover,
+        }
+    }
 }
 
 fn show_plan_line(ui: &mut egui::Ui, line: &KeptPlanLine) {
@@ -943,17 +1150,20 @@ fn show_plan_line(ui: &mut egui::Ui, line: &KeptPlanLine) {
         PlanText::Form(job) => ui.add(egui::Label::new(job.clone()).wrap()),
     };
     design::named(ui, &response, &line.name);
-    match &line.hover {
-        PlanHover::None => {}
-        PlanHover::Text(hover) => {
-            response.on_hover_text(hover);
-        }
+    plan_hover(ui, response, &line.hover);
+}
+
+/// A plan row summary's hover: its whole words, or a fight's budget line (also its description).
+fn plan_hover(ui: &egui::Ui, response: egui::Response, hover: &PlanHover) -> egui::Response {
+    match hover {
+        PlanHover::None => response,
+        PlanHover::Text(hover) => response.on_hover_text(hover),
         PlanHover::Rating(rating, cut) => {
             let response = match cut {
                 Some(summary) => response.on_hover_text(summary),
                 None => response,
             };
-            crate::difficulty::describe(ui, response, rating);
+            crate::difficulty::describe(ui, response, rating)
         }
     }
 }
@@ -2170,7 +2380,7 @@ pub(super) enum SceneAct {
 /// measures it.
 fn scene_row(
     ui: &mut egui::Ui,
-    width: f32,
+    (width, columns): (f32, design::PlanColumns),
     scene: &Scene,
     (slot, line): (Slot, usize),
     plan: &Plan<'_>,
@@ -2209,7 +2419,7 @@ fn scene_row(
     ui.push_id(("scene", task.at, &task.line), |ui| {
         plan_row_with(
             ui,
-            &widths,
+            (&widths, columns),
             |ui| {
                 let mut done = task.done;
                 let response = scene_box(ui, &mut done);
@@ -4844,59 +5054,121 @@ impl Sessions {
                 let widths = [width - action_width - design::S, action_width];
                 let rewards_width = Action::quiet(ADD_REWARDS).density(Density::Read).natural_width(ui)
                     + Density::Read.control() + design::S;
-                let mut any = false;
-                let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
-                // The opened played row, on the frame the DM opened it, and the next fight's action.
-                let mut opened_played = None;
-                let mut next_action = None;
-                for (at, event) in book.events.iter_mut().enumerate() {
+                // Layout 11c A2c: every closed row's words are laid out before any row draws, so
+                // the plan's shared column is known first, with no measure kept from the last
+                // pass (the scenes and a group with warnings keep theirs until scope B).
+                let row_width = ui.available_width();
+                let room = design::PlanRow::summary_room(row_width);
+                let mut event_rows = Vec::new();
+                for (at, event) in book.events.iter().enumerate() {
                     if !event.is_in(session) { continue; }
-                    any = true;
-                    let day = days.get(at).copied().unwrap_or(0);
-                    let label = event.label(day);
+                    let label = event.label(days.get(at).copied().unwrap_or(0));
                     let is_open = open_event.as_ref() == Some(&event.id);
                     let running = event.run.is_some() && event.run == plan.open_run;
-                    let saved_fight = plan.fights.iter().find(|fight| fight.saved.as_ref()
-                        .is_some_and(|saved| saved.id == event.run && event.run.is_some()));
                     let saved = plan.saved_runs.iter().find(|saved| {
                         saved.standing == crate::encounter_run::Standing::Unfinished
                             && saved.id.is_some()
                             && saved.id == event.run
                             && !running
                     });
-                    let summary = if event.run.is_some() {
-                        timeline::played_fight_summary(event, running)
+                    // A fight that ended: its rewards (F7), on the row when the title keeps its lines.
+                    let ended = event.run.filter(|_| !running && saved.is_none());
+                    let lead = if is_open { icons::DOWN } else { icons::NEXT };
+                    let place = self.rewards.fits(ui, &label, lead, row_width, rewards_width);
+                    let actions = if ended.is_some() && place == RewardsAt::Row {
+                        rewards_width
+                    } else if event.run.is_some() && (running || saved.is_none()) {
+                        Density::Read.control()
+                    } else { widths[1] };
+                    let summary = if running {
+                        Some(RowPart::run_link(ui, &plan.open_state))
+                    } else if let Some(saved) = saved {
+                        Some(RowPart::saved(ui, saved))
+                    } else if !(is_open && event.kind == Kind::LongRest) {
+                        let summary = if event.run.is_some() {
+                            timeline::played_fight_summary(event, running)
+                        } else {
+                            event.summary(None)
+                        };
+                        let warning = event.time_warning().filter(|_| event.run.is_none());
+                        plan_event_summary_job(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores), warning.as_deref())
+                            .map(|job| RowPart::words(job, match warning {
+                                Some(_) => PlanHover::Text(timeline::TIME_REPAIR.to_owned()),
+                                None => PlanHover::None,
+                            }))
+                    } else { None };
+                    event_rows.push((RowWords { lead, title: label, summary, actions }, saved, ended, place));
+                }
+                let fight_days = self.planned_days(book, session, plan, &projection.planned);
+                let plan_days = self.plan_lines_seen.revision();
+                let mut fight_rows = Vec::new();
+                for (position, fight) in planned_fights().enumerate() {
+                    let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
+                    let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
+                    let open = self.open_planned.as_ref() == Some(&fight.path);
+                    let summary = if running {
+                        RowPart::run_link(ui, &plan.open_state)
+                    } else if let Some(saved) = saved {
+                        RowPart::saved(ui, saved)
                     } else {
-                        event.summary(None)
+                        let day = fight_days.at.get(position).cloned().flatten();
+                        kept_plan_line(ui, (&mut self.plan_lines, room), (session, position, fight.id), fight, day.as_deref(), plan_days)
+                            .part(ui, room)
                     };
+                    let actions = if running { Density::Read.control() } else { widths[1] };
+                    fight_rows.push((RowWords {
+                        lead: if open { icons::DOWN } else { icons::NEXT },
+                        title: fight.name.clone(),
+                        summary: Some(summary),
+                        actions,
+                    }, saved));
+                }
+                let mut group_rows = Vec::new();
+                for group in planned_groups() {
+                    let edit_word = if group.warnings.is_empty() { "Edit" } else { "Edit group" };
+                    // With a fight open, the run's words and plus icon: the group joins it through Arrivals.
+                    // A group none of whose members can join has only its repair to offer.
+                    let joins_fight = plan.arrivals_open && !group.members.is_empty();
+                    let group_action = if joins_fight { Action::quiet(ADD_TO_FIGHT).icon(icons::ADD) } else { Action::quiet(edit_word) };
+                    let actions = group_action.density(Density::Read).natural_width(ui) + Density::Read.control() + design::S;
+                    // A group with a fault names it in messages measured by their own part, so
+                    // it keeps today's row until scope B.
+                    let words = group.warnings.is_empty().then(|| RowWords {
+                        lead: icons::GROUP,
+                        title: group.name.clone(),
+                        summary: Some(plan_group_part(ui, &plan_summary_text(ui, group, room), 3, room)),
+                        actions,
+                    });
+                    group_rows.push((words, actions, edit_word, joins_fight));
+                }
+                let columns = design::PlanColumns::of(
+                    event_rows.iter().map(|row| &row.0)
+                        .chain(fight_rows.iter().map(|row| &row.0))
+                        .chain(group_rows.iter().filter_map(|row| row.0.as_ref()))
+                        .map(|words| words.facts(ui, row_width))
+                        .chain([design::action_rows::MeasuredColumn::kept(ui, PLAN_COLUMNS)]),
+                );
+                let mut any = false;
+                let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
+                // The opened played row, on the frame the DM opened it, and the next fight's action.
+                let mut opened_played = None;
+                let mut next_action = None;
+                let mut event_rows = event_rows.into_iter();
+                for (at, event) in book.events.iter_mut().enumerate() {
+                    if !event.is_in(session) { continue; }
+                    let Some((words, saved, ended, place)) = event_rows.next() else { break };
+                    any = true;
+                    let day = days.get(at).copied().unwrap_or(0);
+                    let label = words.title.as_str();
+                    let is_open = open_event.as_ref() == Some(&event.id);
+                    let running = event.run.is_some() && event.run == plan.open_run;
+                    let saved_fight = plan.fights.iter().find(|fight| fight.saved.as_ref()
+                        .is_some_and(|saved| saved.id == event.run && event.run.is_some()));
                     let row = ui.push_id(event.id.clone(), |ui| {
-                        // A fight that ended: its rewards (F7), on the row when the title keeps its lines.
-                        let ended = event.run.filter(|_| !running && saved.is_none());
-                        let lead = if is_open { icons::DOWN } else { icons::NEXT };
                         let listed = self.rewards.listed(&event.id);
-                        let place = self.rewards.fits(ui, &label, lead, ui.available_width(), rewards_width);
                         let on_row = ended.is_some() && place == RewardsAt::Row;
-                        let row_widths = if on_row {
-                            [width - rewards_width - design::S, rewards_width]
-                        } else if event.run.is_some() && (running || saved.is_none()) {
-                            [width - Density::Read.control() - design::S, Density::Read.control()]
-                        } else { widths };
-                        let top = ui.cursor().top();
-                        plan_row(ui, &row_widths, lead, |ui| {
-                            if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
-                        }, |ui| {
-                            if running {
-                                if plan_run_link(ui, &plan.open_state).clicked() {
-                                    self.wants_back_to_run = true;
-                                }
-                            } else if let Some(saved) = saved {
-                                design::status(ui, Status { icon: icons::RUN,
-                                    word: &plan_saved_status(saved), color: c.muted });
-                            } else if !(is_open && event.kind == Kind::LongRest) {
-                                plan_event_summary(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores),
-                                    event.time_warning().filter(|_| event.run.is_none()).as_deref());
-                            }
-                        }, |ui| {
+                        let key = egui::Id::new(("plan_event", &event.id));
+                        let drawn = draw_plan_row(ui, &words, (key, row_width, columns), (Some(is_open), !is_open), |ui| {
                             if let Some(saved) = saved {
                                 design::row_menu(ui, &label, |ui| {
                                     if let Some(fight) = saved_fight
@@ -4956,7 +5228,11 @@ impl Sessions {
                                 }
                             }
                         });
-                        closed += ui.cursor().top() - top;
+                        if drawn.title.clicked() { toggle = Some(event.id.clone()); }
+                        if running && drawn.summary.as_ref().is_some_and(egui::Response::clicked) {
+                            self.wants_back_to_run = true;
+                        }
+                        closed += drawn.rect.height() - drawn.rule;
                         let details_top = ui.cursor().top();
                         if is_open {
                             plan_details(ui, |ui| {
@@ -4987,7 +5263,7 @@ impl Sessions {
                             });
                         }
                         details_above += ui.cursor().top() - details_top;
-                        closed += plan_rule(ui);
+                        closed += if is_open { plan_rule(ui) } else { drawn.rule };
                     });
                     // The opened row and the next row stay in reach.
                     if is_open && std::mem::take(&mut self.reveal_event) {
@@ -4996,35 +5272,19 @@ impl Sessions {
                     }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
-                let days = self.planned_days(book, session, plan, &projection.planned);
-                let plan_days = self.plan_lines_seen.revision();
+                let mut fight_rows = fight_rows.into_iter();
                 for (position, fight) in planned_fights().enumerate() {
-                    let day = days.at.get(position).cloned().flatten();
+                    let Some((words, saved)) = fight_rows.next() else { break };
                     self.removed_fight_message(ui, session, position);
                     if !folded {
-                        closed_scenes += self.scene_rows(ui, width, (&scenes[position], &projection.model), position, shown, plan, &mut scene_act);
+                        closed_scenes += self.scene_rows(ui, (width, columns), (&scenes[position], &projection.model), position, shown, plan, &mut scene_act);
                     }
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
-                    let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
+                    let open = self.open_planned.as_ref() == Some(&fight.path);
                     let fight_row = ui.push_id((&fight.path, position), |ui| {
-                        let row_widths = if running {
-                            [width - Density::Read.control() - design::S, Density::Read.control()]
-                        } else { widths };
-                        let top = ui.cursor().top();
-                        plan_row(ui, &row_widths, if self.open_planned.as_ref() == Some(&fight.path) { icons::DOWN } else { icons::NEXT }, |ui| {
-                            if plan_link(ui, &fight.name, self.open_planned.as_ref() == Some(&fight.path)).clicked() {
-                                self.open_planned = (self.open_planned.as_ref() != Some(&fight.path)).then(|| fight.path.clone());
-                            }
-                        }, |ui| {
-                            if running {
-                                if plan_run_link(ui, &plan.open_state).clicked() {
-                                    self.wants_back_to_run = true;
-                                }
-                            } else if let Some(saved) = saved {
-                                design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { kept_plan_line(ui, &mut self.plan_lines, (session, position, fight.id), fight, day.as_deref(), plan_days); }
-                        }, |ui| {
+                        let key = egui::Id::new(("plan_fight", &fight.path, position));
+                        let drawn = draw_plan_row(ui, &words, (key, row_width, columns), (Some(open), !open), |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
                                     remove_fight = Some((position, fight.name.clone())); ui.close();
@@ -5061,9 +5321,15 @@ impl Sessions {
                                 }
                             }
                         });
-                        closed += ui.cursor().top() - top;
+                        if drawn.title.clicked() {
+                            self.open_planned = (!open).then(|| fight.path.clone());
+                        }
+                        if running && drawn.summary.as_ref().is_some_and(egui::Response::clicked) {
+                            self.wants_back_to_run = true;
+                        }
+                        closed += drawn.rect.height() - drawn.rule;
                         let details_top = ui.cursor().top();
-                        if self.open_planned.as_ref() == Some(&fight.path) {
+                        if open {
                             plan_details(ui, |ui| {
                                 if read_encounter(ui).clicked() { self.wants_lookup = Some(fight.name.clone()); }
                             });
@@ -5076,46 +5342,22 @@ impl Sessions {
                                 scenes: closed_scenes,
                             });
                         }
-                        closed += plan_rule(ui);
+                        closed += if open { plan_rule(ui) } else { drawn.rule };
                     });
                     reveal.after(ui, None, fight_row.response.rect);
                 }
                 self.removed_fight_message(ui, session, projection.planned.len());
                 if !folded {
-                    closed_scenes += self.scene_rows(ui, width, (&scenes[projection.planned.len()], &projection.model), projection.planned.len(), shown, plan, &mut scene_act);
+                    closed_scenes += self.scene_rows(ui, (width, columns), (&scenes[projection.planned.len()], &projection.model), projection.planned.len(), shown, plan, &mut scene_act);
                 }
                 any |= scenes.iter().any(|scenes| !scenes.is_empty());
+                let mut group_rows = group_rows.into_iter();
                 for (position, group) in planned_groups().enumerate() {
+                    let Some((words, action_width, edit_word, joins_fight)) = group_rows.next() else { break };
                     any = true;
                     let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
-                        let edit_word = if group.warnings.is_empty() { "Edit" } else { "Edit group" };
-                        // With a fight open, the run's words and plus icon: the group joins it through Arrivals.
-                        // A group none of whose members can join has only its repair to offer.
-                        let joins_fight = plan.arrivals_open && !group.members.is_empty();
-                        let group_action = if joins_fight { Action::quiet(ADD_TO_FIGHT).icon(icons::ADD) } else { Action::quiet(edit_word) };
-                        let action_width = group_action.density(Density::Read).natural_width(ui) + Density::Read.control() + design::S;
-                        let group_widths = [width - action_width - design::S, action_width];
-                        let top = ui.cursor().top();
-                        plan_row(ui, &group_widths, icons::GROUP, |ui| {
-                            if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
-                        }, |ui| {
-                            let summary = plan_summary_text(ui, group);
-                            // Members stay whole, so a long member list can take a third line
-                            // before it shortens. A flagged group shows every fact.
-                            plan_group_summary(ui, &summary, if group.warnings.is_empty() { 3 } else { usize::MAX });
-                            // Name each member left out, its base and its line, beside Edit group, each
-                            // in its own fault's tone; then the group's own reason, as a warning.
-                            for warning in &group.warnings {
-                                design::gap(ui, design::Gap::XS);
-                                let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(warning)).compact().show(ui);
-                            }
-                            for reason in group.own_problems() {
-                                design::gap(ui, design::Gap::XS);
-                                let fault = PlanFault::Check(as_sentence(reason));
-                                let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).compact().show(ui);
-                            }
-                        }, |ui| {
+                        let actions = |ui: &mut egui::Ui| {
                             design::row_menu(ui, &group.name, |ui| {
                                 if Action::quiet("Remove from tonight").name(&format!("Remove group {} from the plan", group.name))
                                     .blocked(plan.group_blocked).show(ui).clicked() {
@@ -5137,13 +5379,48 @@ impl Sessions {
                                 .density(Density::Read).blocked(plan.group_blocked).show(ui).clicked() {
                                 self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
                             }
-                        });
+                        };
+                        // B4 review F1: the refusal shows under the row, before its rule.
+                        let refused = plan.group_blocked.is_some() && self.plan_group_refused == Some((self.selected, group.id));
+                        let top = ui.cursor().top();
+                        // The rule the row's block holds; zero when it follows the row.
+                        let mut in_block = 0.0;
+                        if let Some(words) = &words {
+                            let key = egui::Id::new(("plan_group", group.id));
+                            let drawn = draw_plan_row(ui, words, (key, row_width, columns), (None, !refused), actions);
+                            read_group = drawn.title.clicked();
+                            in_block = drawn.rule;
+                        } else {
+                            let group_widths = [width - action_width - design::S, action_width];
+                            plan_row(ui, (&group_widths, columns), icons::GROUP, |ui| {
+                                if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
+                            }, |ui| {
+                                let summary = plan_summary_text(ui, group, ui.available_width());
+                                // A flagged group shows every fact.
+                                plan_group_summary(ui, &summary, usize::MAX);
+                                // Name each member left out, its base and its line, beside Edit group, each
+                                // in its own fault's tone; then the group's own reason, as a warning.
+                                for warning in &group.warnings {
+                                    design::gap(ui, design::Gap::XS);
+                                    let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(warning)).compact().show(ui);
+                                }
+                                for reason in group.own_problems() {
+                                    design::gap(ui, design::Gap::XS);
+                                    let fault = PlanFault::Check(as_sentence(reason));
+                                    let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).compact().show(ui);
+                                }
+                            }, actions);
+                        }
                         // B4 review F1: an unsaved draft refuses the open (the same value as the
                         // owner's guard reads); the press paints why under this line and leaves
                         // the draft's host where it is.
                         if read_group {
                             if plan.group_blocked.is_some() {
                                 self.plan_group_refused = Some((self.selected, group.id));
+                                if in_block > 0.0 {
+                                    // The row's block holds its rule; the reason goes before it.
+                                    ui.ctx().request_discard("the refusal of a plan group shows before its rule");
+                                }
                             } else {
                                 self.plan_group_refused = None;
                                 self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
@@ -5155,7 +5432,9 @@ impl Sessions {
                             design::blocked_reason(ui, Some(reason));
                         }
                         closed += ui.cursor().top() - top;
-                        closed += plan_rule(ui);
+                        if in_block == 0.0 {
+                            closed += plan_rule(ui);
+                        }
                     });
                     if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }
                     reveal.after(ui, None, row.response.rect);
@@ -5376,7 +5655,7 @@ impl Sessions {
     fn scene_rows(
         &mut self,
         ui: &mut egui::Ui,
-        width: f32,
+        width: (f32, design::PlanColumns),
         (scenes, model): (&[usize], &PlanModel),
         position: usize,
         shown: Shown,
@@ -8414,7 +8693,15 @@ mod tests {
                     ui.scope(|ui| {
                         ui.set_width(width);
                         let days = sessions.plan_lines_seen.revision();
-                        kept_plan_line(ui, &mut sessions.plan_lines, id, fight, None, days);
+                        let room = ui.available_width();
+                        let _ = kept_plan_line(
+                            ui,
+                            (&mut sessions.plan_lines, room),
+                            id,
+                            fight,
+                            None,
+                            days,
+                        );
                     });
                 });
             });
@@ -8578,7 +8865,10 @@ mod tests {
                     let mut summary = egui::Rect::NOTHING;
                     plan_row(
                         ui,
-                        &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
+                        (
+                            &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
+                            design::PlanColumns::default(),
+                        ),
                         icons::RUN,
                         |ui| {
                             title = ui
@@ -8627,7 +8917,10 @@ mod tests {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     plan_row(
                         ui,
-                        &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
+                        (
+                            &[design::FORM_WIDTH, design::FORM_WIDTH / 3.0],
+                            design::PlanColumns::default(),
+                        ),
                         icons::GROUP,
                         |ui| {
                             ui.label(Type::Body.rich(ui, "Ox"));
@@ -8684,7 +8977,7 @@ mod tests {
                             let own = action().natural_width(ui);
                             plan_row(
                                 ui,
-                                &[design::FORM_WIDTH, own],
+                                (&[design::FORM_WIDTH, own], design::PlanColumns::default()),
                                 icons::RUN,
                                 |ui| {
                                     ui.label(Type::Body.rich(ui, title));
@@ -8897,7 +9190,14 @@ mod tests {
                     };
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.set_width(330.0);
-                        state.1 = scene_row(ui, 330.0, &scene, ((0, 0), 0), &plan, &mut None);
+                        state.1 = scene_row(
+                            ui,
+                            (330.0, design::PlanColumns::default()),
+                            &scene,
+                            ((0, 0), 0),
+                            &plan,
+                            &mut None,
+                        );
                     });
                 },
                 (false, 0.0),

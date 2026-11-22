@@ -159,4 +159,5 @@ scroll-offset	src/design/pane.rs	Footer::place	2	design	design implementation bo
 scroll-offset	src/design/popups.rs	Dropdown::list	1	design	design implementation boundary
 virtual-rows	src/design/pane/region.rs	BlockRegion::region	1	design	the region of an owned list body (layout 3b; raised)
 scroll-offset	src/design/pane/region.rs	BlockRegion::region	1	design	the region's one offset writer (L10; raised)
+row-register	src/design/pane/laid.rs	draw_laid	1	design	a laid block drawn in place (the Session plan's closed rows while its body is not yet a region, layout 11c A2c) registers its rect for the pane's whole-row cut, as BlockRegion::in_place does (raised)
 row-register	src/design/pane/region.rs	BlockRegion::in_place	1	design	a region inside a Content pane registers its rows for the pane's whole-row cut (layout 4; raised)

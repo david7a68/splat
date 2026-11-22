@@ -217,6 +217,20 @@ impl LaidUi<'_> {
         self.ui.put(rect, widget)
     }
 
+    /// `add`'s actions in slot `at`: right to left and centred on their line, `S` apart, as a
+    /// list's action place draws them (`action_rows::ActionSlot::child`).
+    pub fn actions<R>(&mut self, at: usize, add: impl FnOnce(&mut Ui) -> R) -> R {
+        let rect = self.slot(at);
+        let mut child = self.ui.new_child(
+            UiBuilder::new()
+                .id_salt(("slot", at))
+                .max_rect(rect)
+                .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        );
+        child.spacing_mut().item_spacing.x = crate::design::tokens::S;
+        add(&mut child)
+    }
+
     /// `add` in a `Ui` that is slot `at`'s rect, with no item spacing.
     pub fn in_slot<R>(&mut self, at: usize, add: impl FnOnce(&mut Ui) -> R) -> R {
         let rect = self.slot(at);
@@ -264,11 +278,18 @@ pub(in crate::design) fn render(
 /// Draw `laid` in place in `ui`, outside a region: its laid size at the cursor, its texts, and
 /// `draw`'s controls in its slots (layout 11c A2c). A host whose rows are not yet a region (the
 /// Session plan while a row is open) draws its closed rows through the same recipe, so they keep
-/// their height and place in both of its modes.
-pub fn draw_laid(ui: &mut Ui, laid: &Laid, draw: impl FnOnce(&mut LaidUi<'_>)) {
+/// their height and place in both of its modes. The block registers its whole rect as a row
+/// (`register_row`: a footer never cuts through it) and returns it.
+pub fn draw_laid(ui: &mut Ui, laid: &Laid, draw: impl FnOnce(&mut LaidUi<'_>)) -> Rect {
+    // The block owns its gaps (`theme::LINE_GAP`): the column adds none after it.
+    let gap = ui.spacing().item_spacing.y;
+    ui.spacing_mut().item_spacing.y = 0.0;
     let (rect, _) = ui.allocate_exact_size(laid.size, egui::Sense::hover());
+    ui.spacing_mut().item_spacing.y = gap;
     let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
     let _ = render(&mut child, laid, laid.revision, draw);
+    crate::design::register_row(ui, rect);
+    rect
 }
 
 /// Where a block's paint and widgets start on every layer it may paint to, to check them after
