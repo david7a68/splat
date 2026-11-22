@@ -10106,7 +10106,7 @@ mod tests {
         book: Book,
     ) -> egui_kittest::Harness<'static, (Sessions, Book)> {
         use crate::design::test_harness::Themed as _;
-        let harness = egui_kittest::Harness::builder()
+        egui_kittest::Harness::builder()
             .with_size(egui::vec2(800.0, 300.0))
             .themed_state(
                 |ctx, (page, book): &mut (Sessions, Book)| {
@@ -10121,8 +10121,7 @@ mod tests {
                     });
                 },
                 (sessions, book),
-            );
-        harness
+            )
     }
 
     #[test]

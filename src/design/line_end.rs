@@ -73,7 +73,7 @@ fn actions_line(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui)) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::design::{Action, Density, theme};
+    use crate::design::{Action, Density};
     use egui_kittest::{Harness, kittest::Queryable};
 
     const WORDS: &str = "Old Guard: the second seal is taken, and the gate of the cistern opens \
