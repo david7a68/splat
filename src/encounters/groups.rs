@@ -3934,16 +3934,22 @@ fn members(
             let (member_row, facts) = (facts.inner, facts.response.rect);
             let count_line = ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
-                let count = ui.add(
-                    egui::DragValue::new(&mut member.count)
-                        .range(1..=MAX_COUNT)
-                        .custom_formatter(|value, _| super::grouped(value as u64))
-                        .custom_parser(|text| text.replace(',', "").parse().ok()),
-                );
-                design::named(ui, &count, &format!("How many of {name}"));
-                if count.changed() {
+                // M0249: the shared stepper for a count, with − and + and typing, up to
+                // `MAX_COUNT`.
+                let mut value = i64::try_from(member.count).unwrap_or(i64::MAX);
+                let count = ui.scope(|ui| {
+                    design::grouped_stepper(
+                        ui,
+                        &format!("How many of {name}"),
+                        &mut value,
+                        1..=i64::try_from(MAX_COUNT).unwrap_or(i64::MAX),
+                    )
+                });
+                if count.inner {
+                    member.count = u64::try_from(value).unwrap_or(1);
                     edited = true;
                 }
+                let count = count.response;
                 // Layout PR 5b (I6), L5c: Edit and the menu end at the members' column, `L` after
                 // their widest facts (the name, its detail, the count); where it does not fit,
                 // the line's far edge, as before (`MeasuredColumn`). The line keeps its height.
@@ -5044,6 +5050,49 @@ mod tests {
             vec![b.clone()],
             "an Undo whose member left in its pass is refused; B stays"
         );
+        // M0249: the count is the shared stepper (`grouped_stepper`, as every count that a DM
+        // types; a member's count stops at `MAX_COUNT`, 100): it shows the member's count, and a
+        // typed count reaches the member.
+        harness.state_mut().0.setup.members[0].count = 42;
+        harness.run_steps(2);
+        let shown = |harness: &egui_kittest::Harness<'_, _>| {
+            harness
+                .query_all_by_label("How many of Wolf")
+                .find_map(|node| node.value())
+        };
+        assert_eq!(shown(&harness).as_deref(), Some("42"));
+        // A pointer click on the count opens it for typing, as on the shared stepper's own test.
+        let at = harness
+            .query_all_by_label("How many of Wolf")
+            .find(|node| node.value().is_some())
+            .expect("the count's field")
+            .rect()
+            .center();
+        harness.hover_at(at);
+        harness.run_steps(1);
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(1);
+        }
+        harness.run_steps(1);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        harness.run_steps(1);
+        for letter in "57".chars() {
+            harness.event(egui::Event::Text(letter.to_string()));
+            harness.run_steps(1);
+        }
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(2);
+        assert_eq!(harness.state().0.setup.members[0].count, 57);
+        // Its + is the shared part's: one more of the member.
+        harness.get_by_label("Increase How many of Wolf").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().0.setup.members[0].count, 58);
     }
 
     #[test]
