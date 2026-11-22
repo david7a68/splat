@@ -1357,9 +1357,29 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
 
 /// An `icon_button` whose tooltip says more than its name, such as its keyboard command.
 pub fn icon_button_with_hint(ui: &mut Ui, icon: &str, name: &str, hint: &str) -> Response {
+    hinted_icon_button(ui, icon, name, hint, None)
+}
+
+/// A view toggle (`TitleLine::toggle`): an `icon_button_with_hint` that also tells assistive
+/// tools whether it is on, as a toggle button's pressed state, so they need not read it from the
+/// name.
+pub(crate) fn icon_toggle(ui: &mut Ui, icon: &str, name: &str, hint: &str, on: bool) -> Response {
+    hinted_icon_button(ui, icon, name, hint, Some(on))
+}
+
+fn hinted_icon_button(
+    ui: &mut Ui,
+    icon: &str,
+    name: &str,
+    hint: &str,
+    pressed: Option<bool>,
+) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::splat(Density::Read.control()), Sense::click());
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
+    response.widget_info(|| match pressed {
+        Some(on) => WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), on, name),
+        None => WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name),
+    });
     locked_control(ui, &response);
     if ui.is_rect_visible(rect) {
         let c = colors();
@@ -4586,19 +4606,6 @@ const RETURN_HOOK: &str = "dialog_focus_return_hook";
 /// The width of a panel beside a page: Lookup, or the run's side panel.
 pub fn side_panel_width(available: f32) -> f32 {
     (available * 0.36).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
-}
-
-/// A panel's title row with its close control.
-pub fn panel_header(ui: &mut Ui, title: &str, close: &str) -> bool {
-    let mut closed = false;
-    // The control first, and the title in what is left. A long title wraps.
-    ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-        closed = icon_button(ui, icons::CLOSE, close).clicked();
-        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
-            ui.add(egui::Label::new(Type::Heading.rich(ui, title).color(colors().text)).wrap());
-        });
-    });
-    closed
 }
 
 fn phosphor_icon(ui: &Ui, rect: Rect, icon: &str, color: Color32) {

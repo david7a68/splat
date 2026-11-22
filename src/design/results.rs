@@ -1290,7 +1290,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers/view.rs", "body", &[Ban::Body]),
         // Package T (PR 328 review): a repeated amount field's problem stands at its line.
         ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
-        ("src/trackers/view.rs", "messages", &[Ban::Words]),
         (
             "src/content_ui/src/session_notes.rs",
             "notice_sentence",
@@ -1629,8 +1628,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/pane.rs", 5),
             ("src/sessions/plan.rs", 1),
             ("src/timeline/page.rs", 1),
-            ("src/trackers/history.rs", 1),
-            ("src/trackers/view.rs", 1),
             ("src/world.rs", 1),
         ],
     ),
@@ -1703,7 +1700,11 @@ pub(crate) const STAGED: &[Staged] = &[
     (
         "Refusal::at_limit(",
         "A refusal ends at its cause only at a limit the DM cannot change: a tracker's `min`, every name rolled (M13), or the run rule after the fight's encounter was deleted (M15). A fault in the tracker rules, and every other cause, gets its next step: `Refusal::new`.",
-        &[("src/design/results/refusal.rs", 5)],
+        &[
+            ("src/design/results/refusal.rs", 5),
+            // M-S0.3: a tracker's `min` and every name rolled (M13), in `trackers::refusal`.
+            ("src/trackers.rs", 2),
+        ],
     ),
 ];
 
