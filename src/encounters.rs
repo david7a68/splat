@@ -10880,13 +10880,6 @@ mod tests {
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
-        // Layout PR 9b: the creature text's quiet frames lay out and hash none of it.
-        harness.get_by_label("Creature text");
-        assert_eq!(
-            design::pane::text_work(|| harness.run_steps(3)),
-            (0, 0),
-            "9b-quiet: the creature text's quiet frames"
-        );
         harness.get_by_label("Done with this creature");
         let save = harness.get_by_label("Save creature");
         assert!(save.accesskit_node().is_disabled());

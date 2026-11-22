@@ -29032,6 +29032,14 @@ pub mod session_plan {
             d.has("Save creature") && d.has_containing("Hit points"),
             "A creature that names itself copies, swaps in and opens beside the roster",
         );
+        // Layout PR 9b: once settled, the creature text's frames lay out and hash none of it.
+        d.settle();
+        let work = crate::design::pane::text_work(|| d.settle());
+        d.observe(
+            "9b-quiet-creature-text",
+            d.has("Creature text") && work == (0, 0),
+            format!("Creature text shown; layouts made and bytes hashed on settled frames: {work:?}"),
+        );
         // Review of PR 499 (P1): the page's Ctrl+S saves the creature after its fields took the
         // frame's input. The last digit and Ctrl+S in ONE input frame (one pass): the creature
         // saves with the digit and closes; the next frame shows the roster with HP 90.
