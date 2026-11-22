@@ -1107,7 +1107,7 @@ fn planned_summary_on_road(
     day: Option<&str>,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) {
-    let line = prepare_plan_line(ui, typed, day, difficulty);
+    let line = prepare_plan_line(ui, (typed, ui.available_width()), day, difficulty);
     show_plan_line(ui, &line);
 }
 
@@ -1124,10 +1124,16 @@ fn kept_plan_line(
 ) -> KeptPlanLine {
     let font = Type::Small.font(ui);
     let content = (fight.revision.unwrap_or(days), days);
+    // Fitted in its room: the plan row's summary room (layout 11c A2c), not the row's width.
     kept.answer(ui, &id, content, room, &font, || {
         let words = fight.summary.text();
-        let day = road_day(ui, &words, day);
-        prepare_plan_line(ui, &fight.summary, day.as_deref(), Some(&fight.difficulty))
+        let day = road_day_in(ui, (&words, room), day);
+        prepare_plan_line(
+            ui,
+            (&fight.summary, room),
+            day.as_deref(),
+            Some(&fight.difficulty),
+        )
     })
 }
 
@@ -1178,7 +1184,7 @@ fn plan_hover(ui: &egui::Ui, response: egui::Response, hover: &PlanHover) -> egu
 
 fn prepare_plan_line(
     ui: &egui::Ui,
-    typed: &crate::difficulty::Summary,
+    (typed, width): (&crate::difficulty::Summary, f32),
     day: Option<&str>,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) -> KeptPlanLine {
@@ -1195,7 +1201,6 @@ fn prepare_plan_line(
     let summary = with_day.as_str();
     let c = colors();
     let font = Type::Small.font(ui);
-    let width = ui.available_width();
     let laid = |text: String| without_loose_separators(ui, text, &font, width);
     let rows = |text: &str| {
         ui.fonts_mut(|fonts| {
@@ -3048,9 +3053,13 @@ fn road_days(
 /// cut order (`planned_summary_on_road`).
 /// `planned_summary_on_road` draws it after the summary.
 fn road_day(ui: &egui::Ui, summary: &str, day: Option<&str>) -> Option<String> {
+    road_day_in(ui, (summary, ui.available_width()), day)
+}
+
+/// `road_day` for a summary laid out in `width` (a plan row's summary room).
+fn road_day_in(ui: &egui::Ui, (summary, width): (&str, f32), day: Option<&str>) -> Option<String> {
     let day = day?;
     let font = Type::Small.font(ui);
-    let width = ui.available_width();
     let rows = |text: &str| {
         let laid = without_loose_separators(ui, fight_summary_text(text), &font, width);
         ui.fonts_mut(|fonts| {
@@ -8741,6 +8750,35 @@ mod tests {
         assert!(
             !sessions.plan_lines.holds(&id),
             "a removed fight's line goes"
+        );
+        // Layout 11c A2c: a plan row lays the line out in its summary's room, before the row
+        // draws; the line is fitted in that room, not in the width of the `Ui` it is asked in.
+        let line_in = |width: f32, room: f32| {
+            let mut lines = super::super::Sessions::default().plan_lines;
+            let mut text = String::new();
+            let _ = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.set_width(width);
+                    let line = kept_plan_line(
+                        ui,
+                        (&mut lines, room),
+                        id,
+                        &first,
+                        Some("Day 2 of Road to the ford"),
+                        crate::design::memo::Revised::new(()).revision(),
+                    );
+                    text = match line.text {
+                        PlanText::Alone(alone) => alone,
+                        PlanText::Form(job) => job.text,
+                    };
+                });
+            });
+            text
+        };
+        let (narrow, in_wide) = (line_in(160.0, 160.0), line_in(400.0, 160.0));
+        assert!(
+            narrow == in_wide && narrow != line_in(400.0, 400.0),
+            "the line fits its room: {narrow:?} in its own Ui, {in_wide:?} in a wider one"
         );
     }
 
