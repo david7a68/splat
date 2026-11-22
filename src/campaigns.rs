@@ -2375,7 +2375,20 @@ mod tests {
         // Unrelated B: A's link changes (a result of its own). Undo of A then puts A's draft
         // back, and B's change and its result stay.
         pick(&mut harness, "Not linked");
-        assert!(shows(&harness, SAVED));
+        assert!(
+            shows(&harness, SAVED),
+            "DBG link {:?} error {:?} labels {:?}",
+            harness
+                .state()
+                .0
+                .active_campaign()
+                .map(|c| c.dndbeyond_campaign_id),
+            harness.state().1.error_for_test(),
+            harness
+                .query_all_by_label_contains("link")
+                .map(|n| format!("{n:?}").chars().take(120).collect::<String>())
+                .collect::<Vec<_>>()
+        );
         harness.get_by_label(UNDO).click();
         harness.run_steps(3);
         assert_eq!(
