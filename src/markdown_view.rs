@@ -688,11 +688,22 @@ fn draw(
     }
 }
 
-/// Draw a block's widgets: under their own ids (`own`, global) or the reader's.
+/// Draw a block's widgets: under their own ids (`own`, global) or the reader's. Under its own
+/// ids the block draws in a child, and the reader goes on where the child's cursor stopped, as
+/// if the block drew in the reader: a block that ends in space adds no item space after it.
 fn in_block(ui: &mut egui::Ui, own: Option<egui::Id>, draw: impl FnOnce(&mut egui::Ui)) {
     match own {
         Some(id) => {
-            let _ = ui.scope_builder(egui::UiBuilder::new().id_salt(id).global_scope(true), draw);
+            let mut child = ui.new_child(egui::UiBuilder::new().id_salt(id).global_scope(true));
+            draw(&mut child);
+            let used = child.min_rect();
+            let next = child.cursor().top();
+            drop(child);
+            let spacing = ui.spacing().item_spacing.y;
+            let _ = ui.advance_cursor_after_rect(egui::Rect::from_min_max(
+                used.min,
+                egui::pos2(used.max.x, (next - spacing).max(used.min.y)),
+            ));
         }
         None => draw(ui),
     }
@@ -4071,6 +4082,46 @@ mod tests {
             "9b-R2-room: after a resize that reflows a wide table out of view, the kept tops \
              are a first layout's at the new width (the table moved them: {})",
             !same(&before, &first)
+        );
+        // 9b-R2: a kept document draws each block in a child under its own ids, and lays out as
+        // the reader that keeps nothing: a table whose warning ends its block, a heading, a quote
+        // and a list, each painted text at the same place.
+        let mixed = "<!-- splat:rolls key=gap dice=1d4 -->\n\n\
+                     | d4 | Gap |\n| --- | --- |\n| 1 | One |\n| 3-4 | Later |\n\n\
+                     <!-- splat:rolls key=next dice=1d4 -->\n\n\
+                     | d4 | Next |\n| --- | --- |\n| 1-4 | All |\n\n## After the tables\n\n\
+                     Words after the tables.\n\n> A quoted line.\n\n- An item\n- Another\n";
+        let unkept = reader_at(mixed, 480.0, false);
+        let mut kept = {
+            use crate::design::test_harness::ThemedPage as _;
+            egui_kittest::Harness::builder()
+                .with_size(egui::vec2(480.0, 480.0))
+                .themed_ui(move |ui| {
+                    show_document(
+                        ui,
+                        ReaderSource {
+                            doc: DocumentId::Entry(uuid::Uuid::from_u128(12)),
+                            revision: 1,
+                            text: mixed,
+                        },
+                    );
+                })
+        };
+        kept.run_ok();
+        let texts = |harness: &egui_kittest::Harness<'_>| {
+            galleys_in(harness)
+                .into_iter()
+                .map(|(pos, galley)| (pos, galley.job.text.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            texts(&unkept)
+                .iter()
+                .any(|(_, text)| text.contains("needs a row"))
+                && texts(&kept) == texts(&unkept),
+            "9b-R2-layout: the kept document's texts {:?} are the unkept reader's {:?}",
+            texts(&kept),
+            texts(&unkept)
         );
     }
 
