@@ -57,7 +57,7 @@ impl Act<'_> {
         today: &Today,
         session: Option<Uuid>,
         new_id: fn() -> Uuid,
-    ) -> Result<Op, String> {
+    ) -> Result<Op, Refused> {
         let state = &replay(rules, ledger, today);
         let record = Record {
             rules,
@@ -75,18 +75,18 @@ impl Act<'_> {
             Act::Roll { drawn, table } => {
                 let notice = &drawn.id;
                 let open = open_as_drawn(state, drawn)?;
-                let mark = mark_of(rules, open).ok_or("That mark changed in its note.")?;
+                let mark = mark_of(rules, open).ok_or(Refused::Changed(Part::Mark))?;
                 let names = mark
                     .tables
                     .iter()
                     .find(|t| t.key() == table)
-                    .ok_or("That table changed in its note. Nothing was rolled.")?
+                    .ok_or(Refused::Changed(Part::Table))?
                     .names();
                 let rolled = open.rolls.iter().filter(|roll| roll.table == table).count();
                 let name = if names.is_empty() {
                     None
                 } else {
-                    Some(names.get(rolled).ok_or("Each name has its roll.")?.clone())
+                    Some(names.get(rolled).ok_or(Refused::EveryNameRolled)?.clone())
                 };
                 let (_, value, row) = roll_table(rules, table, new_id)?;
                 Ok(stamp(
@@ -107,9 +107,9 @@ impl Act<'_> {
             Act::Done { drawn, ticked } => {
                 let notice = &drawn.id;
                 let open = open_as_drawn(state, drawn)?;
-                let mark = mark_of(rules, open).ok_or("That mark changed in its note.")?;
+                let mark = mark_of(rules, open).ok_or(Refused::Changed(Part::Mark))?;
                 if mark.changes.len() != ticked.len() {
-                    return Err("That mark changed in its note. Nothing was recorded.".into());
+                    return Err(Refused::Changed(Part::Mark));
                 }
                 // The label of the notice's end, as `label` names it.
                 let why = format!("{} done", open.name(rules));
@@ -146,10 +146,10 @@ impl Act<'_> {
             Act::DismissAll { drawn } => {
                 let open = open_as_drawn(state, drawn)?;
                 let NoticeRef::Day { mark, .. } = &open.id else {
-                    return Err("Only a day mark’s row has Dismiss all.".into());
+                    return Err(Refused::Changed(Part::Notice));
                 };
                 if open.days != drawn.days {
-                    return Err("The day count changed. Nothing was recorded.".into());
+                    return Err(Refused::Changed(Part::DayCount));
                 }
                 let ends = open.days.iter().map(|day| Entry {
                     notice: Some(NoticeRef::Day {
@@ -165,10 +165,11 @@ impl Act<'_> {
     }
 }
 
-fn roll_dice(dice: &str, new_id: fn() -> Uuid) -> Result<(i64, Vec<i64>), String> {
+/// The total and faces of `dice`; `None` when Splat cannot roll them.
+fn roll_dice(dice: &str, new_id: fn() -> Uuid) -> Option<(i64, Vec<i64>)> {
     let mut random = Random::seeded(new_id().as_u128() as u64);
-    let roll = Dice::parse(dice)?.roll(&mut random, false)?;
-    Ok((roll.total, roll.dice))
+    let roll = Dice::parse(dice).ok()?.roll(&mut random, false).ok()?;
+    Some((roll.total, roll.dice))
 }
 
 fn faces_text(dice: &str, faces: &[i64]) -> String {
@@ -181,22 +182,26 @@ fn roll_table(
     rules: &Rules,
     key: &str,
     new_id: fn() -> Uuid,
-) -> Result<(String, i64, String), String> {
+) -> Result<(String, i64, String), Refused> {
     let table = rules
         .tables
         .as_ref()
         .and_then(|tables| tables.table(key))
-        .ok_or_else(|| format!("No roll table has the key “{key}”."))?;
-    if let Some(fault) = table.fault() {
-        return Err(fault);
+        .ok_or_else(|| Refused::UnknownTable(key.to_owned()))?;
+    if table.fault().is_some() {
+        return Err(Refused::TableCannotRoll(key.to_owned()));
     }
-    let (total, faces) = roll_dice(&table.dice, new_id)?;
+    let (total, faces) =
+        roll_dice(&table.dice, new_id).ok_or_else(|| Refused::TableCannotRoll(key.to_owned()))?;
     let row = table
         .rows
         .iter()
         .find(|row| (row.min..=row.max).contains(&total))
         .map(|row| row.text.clone())
-        .ok_or_else(|| format!("{} rolled {total}, and no row has it.", table.dice))?;
+        .ok_or_else(|| Refused::NoRow {
+            table: key.to_owned(),
+            total,
+        })?;
     Ok((faces_text(&table.dice, &faces), total, row))
 }
 
@@ -212,7 +217,7 @@ fn change_entry(
     instance: Option<&str>,
     change: &Change,
     asked: Option<i64>,
-) -> Result<Entry, String> {
+) -> Result<Entry, Refused> {
     let Record {
         rules,
         state,
@@ -221,14 +226,13 @@ fn change_entry(
     } = record;
     let target = rules
         .def(key)
-        .ok_or_else(|| format!("No tracker in play has the key “{key}”."))?;
+        .ok_or_else(|| Refused::UnknownTracker(key.to_owned()))?;
     let instance = instance.filter(|_| !target.per.is_empty());
     if !target.has_line(instance) {
-        return Err(format!(
-            "{} has no line for {}. Nothing was recorded.",
-            target.name,
-            instance.unwrap_or("this action")
-        ));
+        return Err(Refused::NoLine {
+            tracker: target.name.clone(),
+            line: instance.map(str::to_owned),
+        });
     }
     let place = (key.to_owned(), instance.map(str::to_owned));
     let before = values
@@ -242,7 +246,12 @@ fn change_entry(
     };
     let after = match (
         change.set,
-        change.add.as_ref().map(Amount::read).transpose()?,
+        change
+            .add
+            .as_ref()
+            .map(Amount::read)
+            .transpose()
+            .map_err(|_| Refused::BadAmount(target.name.clone()))?,
     ) {
         (Some(set), _) => {
             entry.set = Some(set);
@@ -254,24 +263,28 @@ fn change_entry(
             before + n
         }
         (None, Some(Add::Dice(dice))) => {
-            let (total, faces) = roll_dice(&dice, new_id)?;
+            let (total, faces) =
+                roll_dice(&dice, new_id).ok_or_else(|| Refused::BadAmount(target.name.clone()))?;
             entry.add = Some(total);
             entry.roll = Some(Roll::Dice(faces_text(&dice, &faces)));
             before + total
         }
         (None, Some(Add::Ask { minus })) => {
-            let typed = asked.ok_or("Type a number, then press Enter.")?;
+            let typed = asked.ok_or(Refused::NoNumber)?;
             let n = if minus { -typed } else { typed };
             entry.add = Some(n);
             before + n
         }
-        (None, None) => return Err("A change has add or set.".into()),
+        (None, None) => return Err(Refused::NoAmount(target.name.clone())),
     };
     if let Some(min) = target.min
         && after < min
         && after < before
     {
-        return Err(format!("{} cannot go below {min}.", target.name));
+        return Err(Refused::BelowMin {
+            tracker: target.name.clone(),
+            min,
+        });
     }
     values.insert(place, after);
     Ok(entry)
@@ -295,7 +308,7 @@ fn press_op(
     instance: Option<&str>,
     action: QuickRef<'_>,
     asked: Option<i64>,
-) -> Result<Op, String> {
+) -> Result<Op, Refused> {
     let Record {
         rules,
         session,
@@ -303,15 +316,17 @@ fn press_op(
         ..
     } = context;
     let QuickRef { label, at } = action;
-    let def = rules.def(key).ok_or("That tracker is no longer in play.")?;
+    let def = rules
+        .def(key)
+        .ok_or_else(|| Refused::UnknownTracker(key.to_owned()))?;
     if instance.is_some_and(|name| !def.per.iter().any(|word| word == name)) {
-        return Err("That name changed in its note. Nothing was recorded.".into());
+        return Err(Refused::Changed(Part::Name));
     }
     let quick = match at {
         Some(at) => def.quick.get(at).filter(|quick| quick.label == label),
         None => def.quick.iter().find(|quick| quick.label == label),
     }
-    .ok_or("That action changed in its note. Nothing was recorded.")?;
+    .ok_or(Refused::Changed(Part::Action))?;
     let changes = if quick.changes.is_empty() {
         vec![Change {
             tracker: None,

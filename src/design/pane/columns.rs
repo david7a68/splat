@@ -67,6 +67,9 @@ enum Width {
     Fixed(f32),
     Resizable(Box<Column>),
     Rest,
+    /// A last child at the room's right, after the rest, whose left edge the DM drags
+    /// (`Column::right`).
+    Trailing(Box<Column>),
 }
 
 #[derive(Clone)]
@@ -110,8 +113,24 @@ impl PaneColumns {
             !self
                 .children
                 .last()
-                .is_some_and(|child| matches!(child.width, Width::Rest)),
-            "the rest of the room is the last child"
+                .is_some_and(|child| matches!(child.width, Width::Trailing(_))),
+            "a trailing column is the last child"
+        );
+        debug_assert!(
+            !self
+                .children
+                .last()
+                .is_some_and(|child| matches!(child.width, Width::Rest))
+                || matches!(width, Width::Trailing(_)),
+            "the rest of the room is the last child, or only a trailing column follows it"
+        );
+        debug_assert!(
+            !matches!(width, Width::Trailing(_))
+                || self
+                    .children
+                    .last()
+                    .is_some_and(|child| matches!(child.width, Width::Rest)),
+            "a trailing column follows the rest of the room"
         );
         debug_assert!(
             !self
@@ -135,9 +154,16 @@ impl PaneColumns {
         self.push(before, Width::Resizable(Box::new(column)))
     }
 
-    /// A last child with the rest of the room, `before` after the previous one.
+    /// A child with the rest of the room, `before` after the previous one: the last child, or
+    /// the one before a trailing column.
     pub fn rest(self, before: f32) -> Self {
         self.push(before, Width::Rest)
+    }
+
+    /// A last child at the room's right, after the rest of the room and `before` from it, whose
+    /// left edge the DM drags (`Column::right`, a page's side panel such as Add participants).
+    pub fn trailing(self, before: f32, column: Column) -> Self {
+        self.push(before, Width::Trailing(Box::new(column)))
     }
 
     /// A shared composite in a `Content` pane keeps at least this height while its content is
@@ -150,11 +176,34 @@ impl PaneColumns {
     /// Each child's edges in `room`, from this pass's widths and pending drags.
     fn resolve(&self, ctx: &egui::Context, room: Rect) -> Vec<Rangef> {
         let mut x = room.left();
+        // A trailing column's width, from the room its side panel has: from the rest's left to the
+        // room's right.
+        let mut trailing = None;
         self.children
             .iter()
-            .map(|child| {
+            .enumerate()
+            .map(|(at, child)| {
                 let left = (x + child.before).min(room.right());
                 let right = match &child.width {
+                    Width::Rest => match self.children.get(at + 1) {
+                        Some(Child {
+                            before,
+                            width: Width::Trailing(column),
+                        }) => {
+                            let width = column.width_within(
+                                ctx,
+                                Rect::from_x_y_ranges(left..=room.right(), room.y_range()),
+                            );
+                            trailing = Some(width);
+                            (room.right() - width - before).max(left)
+                        }
+                        _ => room.right(),
+                    },
+                    Width::Trailing(_) => {
+                        let width = trailing.unwrap_or(0.0);
+                        x = room.right();
+                        return Rangef::new(room.right() - width, room.right());
+                    }
                     Width::Fixed(width) => left + width.min(room.right() - left).max(0.0),
                     Width::Resizable(column) => {
                         left + column.width_within(
@@ -162,7 +211,6 @@ impl PaneColumns {
                             Rect::from_x_y_ranges(left..=room.right(), room.y_range()),
                         )
                     }
-                    Width::Rest => room.right(),
                 };
                 x = right;
                 Rangef::new(left, right)
@@ -174,6 +222,19 @@ impl PaneColumns {
     /// pass's splitter drag or key. Give the result to the header and to the body.
     pub fn edges(self, ui: &Ui) -> PaneEdges {
         let room = ui.available_rect_before_wrap();
+        self.edges_at(ui, room)
+    }
+
+    /// `edges` for a composite `width` wide at the start of `ui`'s room (panes that keep to the
+    /// left of a wider page), resolved before the header paints. The body draws the children in a
+    /// `Ui` of that width (`show_children` checks it), and the header reads a child's edges with
+    /// [`PaneEdges::child_within`] and the same width.
+    pub fn edges_in(self, ui: &Ui, width: f32) -> PaneEdges {
+        let room = narrowed(ui, width);
+        self.edges_at(ui, room)
+    }
+
+    fn edges_at(self, ui: &Ui, room: Rect) -> PaneEdges {
         PaneEdges {
             children: self.resolve(ui.ctx(), room),
             pass: ui.ctx().cumulative_pass_nr(),
@@ -222,6 +283,12 @@ fn outer(children: &[Rangef], room: Rangef) -> Rangef {
     }
 }
 
+/// `ui`'s room, `width` wide from its left.
+fn narrowed(ui: &Ui, width: f32) -> Rect {
+    let room = ui.available_rect_before_wrap();
+    room.with_max_x((room.left() + width).min(room.right()))
+}
+
 /// Draw `add` with its right edge at `right`.
 fn bounded<R>(ui: &mut Ui, right: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.scope(|ui| {
@@ -235,7 +302,10 @@ fn bounded<R>(ui: &mut Ui, right: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
 impl PaneEdges {
     /// The edges for `ui`'s pass and room: these, or resolved again when they are stale.
     fn current(&self, ui: &Ui) -> std::borrow::Cow<'_, [Rangef]> {
-        let room = ui.available_rect_before_wrap();
+        self.current_in(ui, ui.available_rect_before_wrap())
+    }
+
+    fn current_in(&self, ui: &Ui, room: Rect) -> std::borrow::Cow<'_, [Rangef]> {
         let same = |a: f32, b: f32| (a - b).abs() <= 0.5;
         if self.pass == ui.ctx().cumulative_pass_nr()
             && same(self.room.min, room.left())
@@ -247,6 +317,12 @@ impl PaneEdges {
             *data.get_temp_mut_or_default::<u64>(rejected_id()) += 1;
         });
         std::borrow::Cow::Owned(self.spec.resolve(ui.ctx(), room))
+    }
+
+    /// Child `index`'s edges for a composite `width` wide at the start of `ui`'s room
+    /// (`PaneColumns::edges_in`); kept edges are resolved again.
+    pub fn child_within(&self, ui: &Ui, width: f32, index: usize) -> Rangef {
+        self.current_in(ui, narrowed(ui, width))[index]
     }
 
     /// The composite's outer edges in `ui`'s pass and room: from its first child's left to its
@@ -344,8 +420,40 @@ impl PaneEdges {
             let column = rect
                 .with_min_x(edges[index].min)
                 .with_max_x(edges[index].max);
-            match &spec.children[index].width {
-                Width::Fixed(_) | Width::Rest => {
+            let trailing = match spec.children.get(index + 1) {
+                Some(Child {
+                    before,
+                    width: Width::Trailing(trailing),
+                }) if matches!(spec.children[index].width, Width::Rest) => {
+                    Some((*before, trailing))
+                }
+                _ => None,
+            };
+            match (&spec.children[index].width, trailing) {
+                (Width::Rest, Some((before, trailing))) => {
+                    // The trailing column's splitter is its own (a side panel at the right of a
+                    // room from the rest's left), drawn first; the rest takes what it leaves.
+                    let mut beside = ui.new_child(
+                        egui::UiBuilder::new()
+                            .id_salt(spec.id.with(("column", index)))
+                            .max_rect(rect.with_min_x(edges[index].min))
+                            .layout(layout),
+                    );
+                    (**trailing)
+                        .clone()
+                        .show_inside(&mut beside, |ui| child(ui, index + 1));
+                    let left = beside.available_rect_before_wrap();
+                    let mut ui = beside.new_child(
+                        egui::UiBuilder::new()
+                            .id_salt(spec.id.with(("column", index + 1)))
+                            .max_rect(left.with_max_x((left.right() - before).max(left.left())))
+                            .layout(layout),
+                    );
+                    child(&mut ui, index);
+                    index += 1;
+                }
+                (Width::Trailing(_), _) => {}
+                (Width::Fixed(_) | Width::Rest, _) => {
                     let mut ui = ui.new_child(
                         egui::UiBuilder::new()
                             .id_salt(spec.id.with(("column", index)))
@@ -354,7 +462,7 @@ impl PaneEdges {
                     );
                     child(&mut ui, index);
                 }
-                Width::Resizable(resizable) => {
+                (Width::Resizable(resizable), _) => {
                     // The splitter is the column's own (a side panel), in a room from its left to
                     // the room's right; the rest of the room follows it there.
                     let mut beside = ui.new_child(
@@ -535,5 +643,77 @@ mod tests {
             rejected_edges(&harness.ctx) > rejected,
             "the kept edges were refused"
         );
+        // Layout step 6b: the rest of the room and a trailing column at its right (the encounter
+        // editor's roster and Add participants), in panes narrower than the page
+        // (`edges_in`). The rest's edge read before the body (`child_within`) is where the rest
+        // really ends, and the trailing column starts there, at 960 and 1920 and through a drag
+        // of its splitter.
+        let mut trailing = Harness::builder()
+            .with_size(vec2(1920.0, 640.0))
+            .build_ui(move |ui| {
+                let width = (ui.available_width() - 100.0).min(1200.0);
+                let spec = || {
+                    PaneColumns::shared_task("trailing_test")
+                        .rest(0.0)
+                        .trailing(0.0, Column::right("trailing_add", 400.0, 300.0..=600.0))
+                };
+                let edges = spec().edges_in(ui, width);
+                let rest = edges.child_within(ui, width, 0);
+                ui.horizontal(|ui| {
+                    let _ = ui.add_sized([rest.span(), 20.0], egui::Button::new("Head"));
+                });
+                ui.allocate_ui_with_layout(
+                    vec2(width, ui.available_height()),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_width(width);
+                        edges.show_children(ui, |ui, index| {
+                            let width = ui.available_width();
+                            let _ = ui.add_sized(
+                                [width, 20.0],
+                                egui::Button::new(format!("Part {index}")),
+                            );
+                        });
+                    },
+                );
+            });
+        crate::design::theme::install(&trailing.ctx);
+        let check = |harness: &Harness<'_>, case: &str| {
+            let head = right_of(harness, "Head");
+            let rest = right_of(harness, "Part 0");
+            let add = edges_of(harness, "Part 1");
+            assert!(
+                (head - rest).abs() <= 1.0 && add.0 >= rest - 0.5 && add.1 > add.0,
+                "{case}: the head says the rest ends at {head}, it ends at {rest}, Add is {add:?}"
+            );
+        };
+        trailing.run_steps(3);
+        check(&trailing, "1920");
+        let handle = trailing
+            .ctx
+            .read_response(Id::new("trailing_add").with("__resize"))
+            .expect("the trailing splitter shows")
+            .rect
+            .center();
+        trailing.hover_at(handle);
+        trailing.step();
+        for (pos, pressed) in [
+            (handle, true),
+            (handle - vec2(60.0, 0.0), true),
+            (handle - vec2(60.0, 0.0), false),
+        ] {
+            trailing.hover_at(pos);
+            trailing.event(Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+            trailing.step();
+            check(&trailing, &format!("dragging at {pos:?}"));
+        }
+        trailing.set_size(vec2(960.0, 640.0));
+        trailing.run_steps(3);
+        check(&trailing, "960");
     }
 }

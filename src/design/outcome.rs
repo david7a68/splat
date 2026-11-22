@@ -1631,6 +1631,7 @@ pub struct FaultMessage<A> {
     choices: Vec<Choice<A>>,
     file: Option<FileLine>,
     hover: Option<String>,
+    help: Vec<Sentence>,
 }
 
 impl<A> FaultMessage<A> {
@@ -1641,6 +1642,7 @@ impl<A> FaultMessage<A> {
             choices: Vec::new(),
             file: None,
             hover: None,
+            help: Vec::new(),
         }
     }
 
@@ -1654,6 +1656,14 @@ impl<A> FaultMessage<A> {
     /// instructions to the DM (N0, ruling M21).
     pub fn hover(mut self, said: String) -> Self {
         self.hover = Some(said);
+        self
+    }
+
+    /// What the DM can do about it, in a help line under its words (before its file line and
+    /// choices), as a [`Choice`]'s help says what the choice does: painted, never only on hover.
+    /// Each call is a line of its own, in order (the help, then what the fault blocks).
+    pub fn help(mut self, help: Sentence) -> Self {
+        self.help.push(help);
         self
     }
 
@@ -2085,6 +2095,8 @@ struct Body {
     file: Option<FileLine>,
     /// What the system itself said, on hover over the words (`FaultMessage::hover`).
     words_hover: Option<String>,
+    /// What the DM can do, in help lines under the words (`FaultMessage::help`).
+    help: Vec<Sentence>,
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
     /// paints `UndoStep::alone` for its room, else `UndoStep::fit`.
     undo_alone: bool,
@@ -2178,6 +2190,7 @@ impl<A> Typed<A> {
                 helps,
                 file: None,
                 words_hover: None,
+                help: Vec::new(),
                 undo_alone: false,
             },
             undo: undo_id,
@@ -2203,6 +2216,11 @@ impl<A> Typed<A> {
     /// With what the system itself said, on hover over the words.
     fn with_hover(mut self, hover: Option<String>) -> Self {
         self.body.words_hover = hover;
+        self
+    }
+
+    fn with_help(mut self, help: Vec<Sentence>) -> Self {
+        self.body.help = help;
         self
     }
 
@@ -2232,7 +2250,8 @@ impl<A> Outcome<A> {
                 FooterRank::Reason,
                 Typed::new(fault.tone, fault.words, None, fault.choices)
                     .with_file(fault.file)
-                    .with_hover(fault.hover),
+                    .with_hover(fault.hover)
+                    .with_help(fault.help),
             ),
         }
     }
@@ -2272,6 +2291,7 @@ impl<A> KeptOutcome<A> {
                 Typed::new(fault.tone, fault.words, Some(undo), fault.choices)
                     .with_file(fault.file)
                     .with_hover(fault.hover)
+                    .with_help(fault.help)
             }
         }
     }
@@ -3967,6 +3987,14 @@ impl Body {
             }
             message.rect.left()
         });
+        // The help under the row, at the words (`FaultMessage::help`), a line each.
+        for help in &self.help {
+            let inset = row.inner - ui.cursor().left();
+            ui.horizontal_top(|ui| {
+                space(ui, inset);
+                super::components::help(ui, help.as_str());
+            });
+        }
         if beside.is_none()
             && let Some(file) = &self.file
         {
@@ -4138,6 +4166,12 @@ impl Body {
 
     /// The file line under the words, from their first letter (`FileLine::draw`).
     fn file_line(&self, ui: &mut Ui) {
+        // The help first, under the words (`FaultMessage::help`), then the file line.
+        for help in &self.help {
+            message_choice_row(ui, self.tone, |ui| {
+                super::components::help(ui, help.as_str());
+            });
+        }
         if let Some(file) = &self.file {
             message_choice_row(ui, self.tone, |ui| {
                 ui.vertical(|ui| file.draw(ui));
@@ -4999,6 +5033,7 @@ impl<'o> FormOpener<'o> {
                 words,
                 repairs: vec![repair],
                 whole: None,
+                help: None,
             }
             .draw_repairs(ui);
             let opened = pressed.is_some();
@@ -5015,6 +5050,7 @@ impl<'o> FormOpener<'o> {
             words,
             repairs: Vec::new(),
             whole: None,
+            help: None,
         }
         .draw(ui);
         if let Some(title) = title {
@@ -5046,6 +5082,7 @@ pub struct BodyFault<A> {
     repairs: Vec<Repair<A>>,
     /// The whole sentence when the words quote a value cut around `…` (`whole`).
     whole: Option<String>,
+    help: Option<Sentence>,
 }
 
 impl<A> BodyFault<A> {
@@ -5055,6 +5092,7 @@ impl<A> BodyFault<A> {
             words: fault_words(fault),
             repairs: Vec::new(),
             whole: None,
+            help: None,
         }
     }
 
@@ -5063,6 +5101,13 @@ impl<A> BodyFault<A> {
     /// and the pointer reach the value whole.
     pub fn whole(mut self, whole: impl Into<String>) -> Self {
         self.whole = Some(whole.into());
+        self
+    }
+
+    /// What the DM can do about it, in a help line under its words, before its repairs (the
+    /// group editor's missing member), as a [`Choice`]'s help says what the choice does.
+    pub fn help(mut self, help: Sentence) -> Self {
+        self.help = Some(help);
         self
     }
 
@@ -5089,6 +5134,7 @@ impl<A> BodyFault<A> {
             words,
             repairs,
             whole,
+            help,
         } = self;
         let mut pressed = None;
         let response = ui
@@ -5101,6 +5147,11 @@ impl<A> BodyFault<A> {
                         node.set_description(whole.clone())
                     });
                     let _ = message.on_hover_text(whole);
+                }
+                if let Some(help) = &help {
+                    message_choice_row(ui, tone, |ui| {
+                        super::components::help(ui, help.as_str());
+                    });
                 }
                 for (at, repair) in repairs.iter().enumerate() {
                     let lock = holding(&repair.lock);
@@ -6440,6 +6491,7 @@ mod tests {
                         |ui| {
                             state.right = ui.max_rect().right();
                             let pressed = BodyFault::new(&fault)
+                                .help(crate::sentence!("Check the packages it uses."))
                                 .repair(Repair::new("Open in Library", Fix::Open))
                                 .repair(
                                     Repair::new(
@@ -6481,6 +6533,12 @@ mod tests {
                             )
                             .show(ui);
                             state.pressed.extend(pressed);
+                            // A typed fault with its help line (M-P0 item 9).
+                            let _ = BodyMessage::<Fix>::from(
+                                FaultMessage::new(&Hp(Severity::CannotRead, Some(3)))
+                                    .help(crate::sentence!("Read the row again after you fix it.")),
+                            )
+                            .show(ui);
                         },
                     );
                 },
@@ -6488,6 +6546,31 @@ mod tests {
             );
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
+        // M-P0 item 9: a typed body fault's help line, under its words and before its repairs, at
+        // their column; a typed fault message's, under its words, at them.
+        let label = |h: &Harness<'_, State>, words: &str| {
+            h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                .rect()
+        };
+        let (words, help, open) = (
+            label(&h, "Cinder Wolf: The HP is missing."),
+            label(&h, "Check the packages it uses."),
+            h.get_by_label("Open in Library").rect(),
+        );
+        assert!(
+            help.top() >= words.bottom() - 1.0
+                && help.bottom() <= open.top() + 1.0
+                && (help.left() - open.left()).abs() < 1.0,
+            "the fault's help under its words, before its repairs: {words:?} {help:?} {open:?}"
+        );
+        let (words, help) = (
+            label(&h, "Cinder Wolf · line 3: The HP is missing."),
+            label(&h, "Read the row again after you fix it."),
+        );
+        assert!(
+            help.top() >= words.bottom() - 1.0 && (help.left() - words.left()).abs() < 1.0,
+            "the fault message's help under its words, at them: {words:?} {help:?}"
+        );
         let name = format!("Replace with a basic {PATH}");
         let replace = h.get_by_label(&name).rect();
         assert!(
@@ -6636,6 +6719,7 @@ mod tests {
                                 pressed.extend(notice);
                                 let fault = BodyMessage::<Fix>::from(
                                     FaultMessage::new(&Hp(Severity::CannotRead, Some(20)))
+                                        .help(crate::sentence!("Set the HP in the file."))
                                         .file(FileLine::new("/vault", "Encounters/Shrine.md")),
                                 )
                                 .compact()
@@ -6684,6 +6768,14 @@ mod tests {
                     "Cinder Wolf · line 20: The HP is missing.",
                 )
                 .rect();
+            // M-P0 item 9: the compact fault's help under its row, at its words.
+            let help = h
+                .get_by_role_and_label(egui::accesskit::Role::Label, "Set the HP in the file.")
+                .rect();
+            assert!(
+                help.top() >= cause.bottom() - 1.0 && (help.left() - cause.left()).abs() < 1.0,
+                "{width}: the compact fault's help under its words, at them: {cause:?} {help:?}"
+            );
             // The path's node by the name the part gave it (`named`).
             let path = h
                 .query_all(

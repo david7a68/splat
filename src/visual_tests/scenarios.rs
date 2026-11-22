@@ -523,6 +523,72 @@ fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
     );
 }
 
+/// Layout step 6 (I8; SL4, AL9): the tops of a group editor's head and first fields, each by the
+/// start of its accessible name, while in view: the name, `Default side`, `Belongs to`, the
+/// creature search (not on the Members tab at 960) and the first member's menu. `None` where it
+/// is not shown.
+fn group_head_tops(d: &Driver<'_>) -> Vec<(&'static str, Option<f32>)> {
+    field_tops(
+        d,
+        &[
+            "Group name: ",
+            "Default side",
+            "Belongs to",
+            "Find a creature or party member",
+            "More actions for ",
+        ],
+    )
+}
+
+/// The top of the first control in view whose accessible name starts with each prefix.
+fn field_tops(d: &Driver<'_>, prefixes: &[&'static str]) -> Vec<(&'static str, Option<f32>)> {
+    let nodes = d.nodes();
+    prefixes
+        .iter()
+        .copied()
+        .map(|prefix| {
+            let top = nodes
+                .iter()
+                .find(|node| node.name.starts_with(prefix) && node.in_view())
+                .map(|node| node.rect.top());
+            (prefix, top)
+        })
+        .collect()
+}
+
+/// Whether the save row shows the campaign-switch reason: its full words, or (where they do not
+/// fit beside the widest word and Discard) its short form, painted, with the full reason in its
+/// accessible description (ruling M24).
+fn switch_reason_shown(d: &Driver<'_>) -> bool {
+    const FULL: &str = "Save or discard to switch campaign.";
+    d.visible_text(FULL)
+        || (d.visible_text(crate::design::save_row::SAVE_OR_DISCARD_SHORT)
+            && d.has_containing(FULL))
+}
+
+/// Whether neither form of the campaign-switch reason is painted.
+fn no_switch_reason(d: &Driver<'_>) -> bool {
+    !d.visible_text("Save or discard to switch campaign.")
+        && !d.visible_text(crate::design::save_row::SAVE_OR_DISCARD_SHORT)
+}
+
+/// Whether two `group_head_tops` readings agree: every field shown in `clean` (the name,
+/// `Default side` and `Belongs to` always) is at the same top (±0.5 px) in `changed`.
+fn group_head_still(
+    clean: &[(&'static str, Option<f32>)],
+    changed: &[(&'static str, Option<f32>)],
+) -> bool {
+    let required = ["Group name: ", "Default side", "Belongs to"];
+    clean
+        .iter()
+        .zip(changed)
+        .all(|((name, before), (_, after))| match (before, after) {
+            (Some(before), Some(after)) => (before - after).abs() <= 0.5,
+            (None, None) => !required.contains(name),
+            _ => false,
+        })
+}
+
 /// Layout step 7 (`session-header-measure`: SH11, AH8, AP4, SO9, AO10, SQ6, AQ4, SR6, AR5): the
 /// session's title line and its toolbar end at the session's content edge, never at the window's.
 /// That edge, read from the frame and not from the part: beside the plan, the note column's
@@ -3730,6 +3796,20 @@ pub mod campaign_content {
             "Reload from disk stays, blocked, while a repair draft has changes",
             |d| d.has_containing(RELOAD) && d.is_disabled(RELOAD),
         );
+        // Layout PR 9 (SA7, AA6): the repair's frame holds its lane and ends at Save, at each size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (whole, detail) = d.at_size(size, |d| {
+                d.editor_frame_whole(
+                    &crate::world::repair::editor_name("Notes/Broken.md"),
+                    Some("Save repaired note"),
+                )
+            });
+            d.observe(
+                "layout-9-SA7-campaign-repair-frame",
+                whole,
+                format!("At {size:?}, the repair's frame is whole and ends at Save: {detail}"),
+            );
+        }
         d.state("repair-dirty", Sizes::All);
         // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
         // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
@@ -5668,6 +5748,46 @@ pub mod encounter_build {
                 "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
             ),
         );
+        // Layout step 6b (I8): the encounter's first edit brings Unsaved, Discard and the
+        // campaign-switch reason (beside Resume's paused run at the row's end); each reason has
+        // its planned place, so the name, the creature search and the first roster row keep their
+        // tops at 960, 1200 and 1920. Discard puts the encounter back.
+        let still = d.aside(|d| {
+            let fields = |d: &Driver<'_>| {
+                field_tops(
+                    d,
+                    &[
+                        "Encounter name: ",
+                        "Find a creature or party member",
+                        "More actions for ",
+                    ],
+                )
+            };
+            let sizes = [SMALL, DEFAULT, LARGE];
+            let clean = sizes.map(|size| d.at_size(size, fields));
+            d.type_into(&d.name_starting("Encounter name: "), " 2");
+            let dirty = sizes.map(|size| d.at_size(size, fields));
+            let switch = d.has_containing("to switch campaign.");
+            d.click("Discard");
+            (
+                switch
+                    && clean
+                        .iter()
+                        .all(|tops| tops[0].1.is_some() && tops[2].1.is_some())
+                    && clean.iter().zip(&dirty).all(|(clean, dirty)| {
+                        clean
+                            .iter()
+                            .zip(dirty)
+                            .all(|((_, a), (_, b))| match (a, b) {
+                                (Some(a), Some(b)) => (a - b).abs() <= 0.5,
+                                (None, None) => true,
+                                _ => false,
+                            })
+                    }),
+                format!("Switch reason shown {switch}; clean {clean:?}, dirty {dirty:?}"),
+            )
+        });
+        d.observe("l6b-encounter-head-still", still.0, still.1);
         // iter-26-B FB5: the run state keeps its x in the save row when the first edit brings
         // `Unsaved`, Discard and the campaign-switch reason, at 960, 1200 and 1920.
         let run_state_x = |d: &mut Driver<'_>| {
@@ -15243,6 +15363,15 @@ pub mod session_notes {
                 .is_some_and(|(result, row)| result.top() > row.bottom() + crate::design::XL),
             format!("The delete result {result:?} is in the footer, below the list {last_row:?}"),
         );
+        // Layout PR 9 (SP7): a template editor in view keeps all four frame edges above the
+        // pane's footer.
+        let template = d.place_of("Template text").is_some();
+        let (whole, detail) = d.editor_frame_whole("Template text", None);
+        d.observe(
+            "layout-9-SP7-template-frame",
+            template && whole,
+            format!("A template editor beside the delete result keeps its frame whole: {detail}"),
+        );
         d.state("templates-deleted", Sizes::Default);
         d.click("Undo delete");
         d.expect("Downtime");
@@ -18341,9 +18470,47 @@ pub mod session_recording {
                         .all(|reason| saves.iter().any(|save| reason.top() >= save.bottom())),
                 format!("Save key {saves:?} ends at {edge:?}; reasons {reasons:?} sit below"),
             );
+            // Layout PR 10 (SR2/AR3): the focused Service field comes whole above the tab's
+            // footer after the choice: its caption, and the control with its value and border.
+            let service = nodes
+                .iter()
+                .find(|node| node.name.starts_with("Transcript and summary service: "))
+                .map(|node| node.rect);
+            let caption = service.and_then(|service| {
+                nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name == "Service" && node.rect.bottom() <= service.top() + 1.0
+                    })
+                    .map(|node| node.rect)
+                    .reduce(|a, b| if a.bottom() > b.bottom() { a } else { b })
+            });
+            let scale = d.pixels_per_point();
+            let pane = service.and_then(|service| {
+                d.pane_records()
+                    .into_iter()
+                    .find(|record| record.room().contains(service.center() / scale))
+            });
+            let limit = pane.map(|record| {
+                let room = record.viewport().unwrap_or(record.room());
+                let bottom = record.footer().map_or(room.bottom(), |footer| footer.top());
+                (room.top() * scale, bottom * scale)
+            });
+            d.observe(
+                "layout-10-SR2-service-whole",
+                service.zip(caption).zip(limit).is_some_and(
+                    |((service, caption), (top, bottom))| {
+                        caption.top() >= top - 1.0 && service.bottom() <= bottom + 1.0
+                    },
+                ),
+                format!(
+                    "The focused Service field (caption {caption:?}, control {service:?}) is whole \
+                     in the body above the footer {limit:?}"
+                ),
+            );
         });
-        // At 960 px the Service control is cut by the tab's footer after the choice
-        // (`processing-settings-anthropic` at 960), so the DM scrolls once to reach it. The
+        // The DM scrolls once here (the Service field is whole above the tab's footer after the
+        // choice since layout PR 10; the scroll stays so the task's acts do not change). The
         // state's window resizes can leave the page at another place (the drop-down keeps focus
         // on its control), so the step scrolls whatever that place is: the task's cost does not
         // depend on the capture's resizes. Then the page goes back to where it was, so the later
@@ -19858,6 +20025,9 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
+        // Layout step 6 (SL4, AL9): the clean editor's head and first fields, for the dirty
+        // editor of `group-member-removed-with-undo`.
+        let clean_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
         // Lane E2's pressure caller (round 31 SD11, chosen-value-weight): the side picker's closed
         // value is the `Dropdown` part's, in regular `Body` weight, at 960 and at 1920.
         for size in [SMALL, LARGE] {
@@ -20370,7 +20540,7 @@ pub mod encounter_groups {
         d.observe_both(
             "iter-18-B-ST1",
             "A dirty group opened in Encounters says why the campaign cannot change",
-            |d| d.visible_text("Unsaved") && d.visible_text("Save or discard to switch campaign."),
+            |d| d.visible_text("Unsaved") && switch_reason_shown(d),
         );
         // FD4 family: the group notes field ends at the members' right edge, as the encounter
         // editor's notes field ends at the roster's.
@@ -20390,10 +20560,9 @@ pub mod encounter_groups {
             );
         }
         // iter-27-B FB7: Save group is on the title line, after the name, as Save encounter is;
-        // the save row below keeps Unsaved and Discard. iter-28-B FB7 (closure): it ends at the
-        // editor's right edge, above the Add creatures column, as Save encounter does: the
-        // search field's right edge. (iter-24-B AK1 put it at the members column's edge; the
-        // round 27 contract, one place in both editors, replaces that.)
+        // the save row below keeps Unsaved and Discard. Layout step 6 (I7, the shared draft
+        // head) replaces round 28's far-edge place: Save follows the name field `L` after it, in
+        // both editors.
         for size in [SMALL, DEFAULT, LARGE] {
             let (save, edge, name, unsaved) = d.at_size(size, |d| {
                 let save = d.place_of(SAVE_GROUP);
@@ -20417,16 +20586,18 @@ pub mod encounter_groups {
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
-            // At the editor's content edge, within 0.5 px, as Save encounter ends there; and
-            // that edge is the page's (the window less its `M` margin), so a Save that pushes
-            // the editor wider fails too.
-            let page = size.0 - crate::design::M;
+            // Layout step 6 (I7; SL3, AL5): Save group starts `L` after the name field (±1 px),
+            // never at the editor's far edge above the Add creatures column; at 1920 it ends
+            // well before that edge.
             d.observe(
                 "iter-28-B-FB7",
-                save.zip(edge).is_some_and(|(save, edge)| {
-                    (save.right() - edge).abs() <= 0.5 && (edge - page).abs() <= 0.5
+                save.zip(name).zip(edge).is_some_and(|((save, name), edge)| {
+                    (save.left() - (name.right() + crate::design::L)).abs() <= 1.0
+                        && (size.0 < 1900.0 || save.right() < edge - crate::design::XXL)
                 }),
-                format!("At {size:?}: Save group {save:?}, the editor's content edge {edge:?}"),
+                format!(
+                    "At {size:?}: Save group {save:?}, the name field {name:?}, the editor's content edge {edge:?}"
+                ),
             );
             d.observe(
                 "iter-27-B-FB7",
@@ -20439,6 +20610,19 @@ pub mod encounter_groups {
                 format!("At {size:?}: Save group {save:?} on the name's line {name:?}, above Unsaved {unsaved:?}"),
             );
         }
+        // Layout step 6 (SL4, AL9): the dirty state (Discard, the switch reason) moves no field
+        // of the head: the name, Default side, Belongs to and the search keep their tops at 960,
+        // 1200 and 1920 (the first member is the removed one, so it is not compared).
+        let dirty_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
+        let without_member = |tops: &[(&'static str, Option<f32>)]| tops[..4].to_vec();
+        d.observe(
+            "l6-SL4-AL9",
+            switch_reason_shown(d)
+                && clean_head.iter().zip(&dirty_head).all(|(clean, dirty)| {
+                    group_head_still(&without_member(clean), &without_member(dirty))
+                }),
+            format!("Clean {clean_head:?}, dirty {dirty_head:?}"),
+        );
         d.state("group-member-removed-with-undo", Sizes::All);
         d.click("Undo remove member");
         d.expect(CHANGES);
@@ -20449,7 +20633,7 @@ pub mod encounter_groups {
         );
         d.observe(
             "iter-18-B-ST1-clean",
-            !d.visible_text("Save or discard to switch campaign."),
+            no_switch_reason(d),
             "A group with nothing to save gives no switch reason",
         );
         d.expect_same("Undo restores the complete group editor with the changed member.");
@@ -21975,8 +22159,9 @@ pub mod encounter_owned_groups {
                     d.window_size()
                 ),
             );
-            // Lead, round 29 (the band at 960): the cause's place is on the save row, so the
-            // gap from the save row's word to the first field is main's at every size.
+            // Lead, round 29 (the band at 960), and ruling M24 for the shared draft head: the
+            // cause's place is on the save row, so the gap from the save row's word to the first
+            // field is main's at every size.
             let band = d
                 .painted_rect_in("Invalid", egui::Rect::EVERYTHING)
                 .zip(
@@ -22038,11 +22223,24 @@ pub mod encounter_owned_groups {
         // mouse and the keyboard (Encounters page).
         // The same for a member whose creature is gone: the group goes to Any encounter, and
         // its Cinder Wolf's package entry is deleted, then put back; Discard ends the edit.
-        let (once, detail, member, member_detail) = d.aside(|d| {
+        // Layout step 6: the gone encounter's cause takes the planned place of the switch reason,
+        // so it adds no band (`iter-29-BC5-G122-no-band` above holds main's distance, ruling M24),
+        // and no state change moves a field either: the clean, refused group, the same group with an edit (Unsaved,
+        // Discard, the switch reason or the cause in its place) and that edited group once the
+        // refusal ends (Any encounter) keep the name, Default side, Belongs to, the search and
+        // the first member at one top, at 960, 1200 and 1920, so a band that only the refusal
+        // brings fails (Astra's P1 on PR 643; `l6-G122-no-band-plan` follows one group before,
+        // during and after its refusal). The cause is said once (`iter-29-BC5-G122`,
+        // `-off-screen`).
+        let refused_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
+        let (once, detail, member, member_detail, edited_head, cleared_head) = d.aside(|d| {
             d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
+            let edited_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
             let (once, detail) = gone_encounter_said_once(d);
             d.click("Belongs to: Deleted encounter");
             d.click("Any encounter");
+            // The same edited group with the refusal ended: nothing of the head moves.
+            let cleared_head = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, group_head_tops));
             let wolf = d
                 .root
                 .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
@@ -22066,8 +22264,32 @@ pub mod encounter_owned_groups {
             d.focus_window(true);
             d.click("Discard");
             d.expect("Deleted encounter");
-            (once, detail, member, member_detail)
+            (
+                once,
+                detail,
+                member,
+                member_detail,
+                edited_head,
+                cleared_head,
+            )
         });
+        d.observe(
+            "l6-G122-owned-head-still",
+            refused_head.iter().all(|tops| tops[1].1.is_some())
+                && refused_head
+                    .iter()
+                    .zip(&edited_head)
+                    .zip(&cleared_head)
+                    .all(|((refused, edited), cleared)| {
+                        // The head's fields (the first member is below the cause's own words
+                        // under Belongs to, which a refusal adds in their place).
+                        group_head_still(&refused[..4], &edited[..4])
+                            && group_head_still(&edited[..4], &cleared[..4])
+                    }),
+            format!(
+                "The head's tops, refused {refused_head:?}, edited {edited_head:?}, the refusal ended {cleared_head:?}"
+            ),
+        );
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
         d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
         // s30 B11 F3 (R41, lead ruling): a member whose creature file is there and cannot be
@@ -24663,22 +24885,20 @@ pub mod session_plan_groups {
         // moves. A proof aside: Discard puts the clean group back.
         d.aside(|d| {
             let sizes = [SMALL, DEFAULT, LARGE];
-            // The first member's menu: in the members column, or on the Members tab at 960.
-            let member = |d: &Driver<'_>| {
-                d.nodes()
-                    .into_iter()
-                    .find(|node| node.name.starts_with("More actions for ") && node.in_view())
-                    .map(|node| node.rect.top())
-            };
-            let clean = sizes.map(|size| d.at_size(size, member));
+            // Layout step 6 (I8): the name, Default side, Belongs to, the search and the first
+            // member's menu (in the members column, or on the Members tab at 960) keep their tops.
+            let clean = sizes.map(|size| d.at_size(size, group_head_tops));
             d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
-            let changed = sizes.map(|size| d.at_size(size, member));
+            let changed = sizes.map(|size| d.at_size(size, group_head_tops));
             d.observe(
                 "iter-25-B-FK1",
                 d.has_containing("Save or discard to switch campaign.")
-                    && clean.iter().all(Option::is_some)
-                    && clean == changed,
-                format!("First member menu top, clean {clean:?}, changed {changed:?}"),
+                    && clean.iter().all(|tops| tops[4].1.is_some())
+                    && clean
+                        .iter()
+                        .zip(&changed)
+                        .all(|(clean, changed)| group_head_still(clean, changed)),
+                format!("Head and first fields' tops, clean {clean:?}, changed {changed:?}"),
             );
             d.click("Discard");
             d.expect(&format!("Group name: {GROUP_RIVALS}"));
@@ -24686,7 +24906,11 @@ pub mod session_plan_groups {
         // iter-29 G122 on the Sessions page: the plan's group comes to belong to an encounter
         // that is then deleted. With Belongs to off screen, the save row says the cause once,
         // by the mouse and the keyboard. The file and the group are put back after.
-        let (once, detail) = d.aside(|d| {
+        // Layout step 6 (Astra's P1 on PR 643): the same group before the refusal (its encounter
+        // chosen), during it (the encounter deleted) and after it (the file back) keeps its head's
+        // tops at 960, 1200 and 1920: a refusal adds no band, here or anywhere in the head.
+        let ((once, detail), (before, during, after)) = d.aside(|d| {
+            let sizes = [SMALL, DEFAULT, LARGE];
             let arena = d.root.join(format!(
                 "campaigns/emberfall/Encounters/{}.md",
                 crate::visual_tests::fixture::RUN_ARENA
@@ -24694,19 +24918,41 @@ pub mod session_plan_groups {
             let text = std::fs::read_to_string(&arena).unwrap();
             d.click("Belongs to: Any encounter");
             d.click(crate::visual_tests::fixture::RUN_ARENA);
+            let before = sizes.map(|size| d.at_size(size, group_head_tops));
             std::fs::remove_file(&arena).unwrap();
             d.focus_window(false);
             d.focus_window(true);
             d.wait_for_text("Deleted encounter");
+            let during = sizes.map(|size| d.at_size(size, group_head_tops));
             let once = gone_encounter_said_once(d);
             std::fs::write(&arena, text).unwrap();
             d.focus_window(false);
             d.focus_window(true);
+            d.wait_for_control(&format!(
+                "Belongs to: {}",
+                crate::visual_tests::fixture::RUN_ARENA
+            ));
+            let after = sizes.map(|size| d.at_size(size, group_head_tops));
             d.click("Discard");
             d.expect("Belongs to: Any encounter");
-            once
+            (once, (before, during, after))
         });
         d.observe("iter-29-BC5-G122-off-screen-plan", once, detail);
+        d.observe(
+            "l6-G122-no-band-plan",
+            before.iter().all(|tops| tops[1].1.is_some())
+                && before
+                    .iter()
+                    .zip(&during)
+                    .zip(&after)
+                    .all(|((before, during), after)| {
+                        // The head's fields; the first member is below the cause's own words
+                        // under Belongs to, which the refusal adds in their place.
+                        group_head_still(&before[..4], &during[..4])
+                            && group_head_still(&during[..4], &after[..4])
+                    }),
+            format!("The head's tops before the refusal {before:?}, during it {during:?}, after it {after:?}"),
+        );
         let (member, member_detail) = d.aside(|d| {
             // A member whose creature is gone, with a changed name: its Cinder Wolf's package
             // entry is deleted, then put back.
@@ -27621,9 +27867,11 @@ pub mod session_plan {
                 format!("At {size:?}: Name {name:?}, Save creature {save:?}"),
             );
         }
-        // iter-26-B FA9, FI9: in a wide window the encounter's name field ends at the roster
-        // column's edge (where its rows' rules end), and the header's last action at the Add
-        // column's edge, where Save creature ends; at 960 the panes are tabs.
+        // iter-26-B FA9, FI9: in a wide window the encounter's name field ends no further than the
+        // roster column's edge (where its rows' rules end); at 960 the panes are tabs. Layout
+        // step 6 (I7, the shared draft head) replaces the old far-edge place of the actions: the
+        // name is no wider than `FORM_WIDTH` (it ends at the roster's edge when that is within
+        // `XL`), and Save encounter starts `L` after it.
         for size in [DEFAULT, LARGE] {
             let (name, rule, start, creature) = d.at_size(size, |d| {
                 let name = d
@@ -27645,19 +27893,24 @@ pub mod session_plan {
                 (
                     name,
                     rule,
-                    d.place_of("Start fight"),
+                    d.place_of("Save encounter"),
                     d.place_of("Save creature"),
                 )
             });
+            // Layout step 6b: exactly the shared rule's width for the room to the roster rule's
+            // end, so a name bounded by any other edge (one a lane wider) fails.
+            let margins = 2.0 * crate::design::S;
             d.observe(
                 "iter-26-B-FA9",
-                name.zip(rule)
-                    .is_some_and(|(name, rule)| (name.right() - rule).abs() <= 1.0)
-                    && start.zip(creature).is_some_and(|(start, creature)| {
-                        (start.right() - creature.right()).abs() <= 1.0
-                    }),
+                name.zip(rule).is_some_and(|(name, rule)| {
+                    let column = rule - name.left() - margins;
+                    let wanted = crate::design::save_row::name_width(column) + margins;
+                    (name.width() - wanted).abs() <= 1.0
+                }) && start.zip(name).is_some_and(|(save, name)| {
+                    (save.left() - (name.right() + crate::design::L)).abs() <= 1.5
+                }) && creature.is_some(),
                 format!(
-                    "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Start fight {start:?}, Save creature {creature:?}"
+                    "At {size:?}: name field {name:?}, roster rule ends at {rule:?}; Save encounter {start:?}, Save creature {creature:?}"
                 ),
             );
         }
@@ -28190,8 +28443,32 @@ pub mod share_to_package {
 
 pub mod remove_package_in_use {
     use super::*;
+    /// An item of the package the steps remove that the campaign chooses and no other entry
+    /// needs: Lookup's loot search holds it only while the package is chosen.
+    const ITEM: &str = "Veilglass Lantern";
+    /// A creature of that package. Every chosen creature of it is needed by an encounter, so
+    /// Encounters lists it whether or not the package is chosen.
+    const CREATURE: &str = "Cinder Wolf";
+
+    /// What the two readers give back: whether Lookup's loot search holds `ITEM`, and whether
+    /// Encounters' creature search lists `CREATURE`.
+    fn readers(d: &Driver<'_>) -> (bool, bool) {
+        let item = d.app().lookup.index().is_some_and(|index| {
+            index
+                .loot_sources()
+                .items
+                .iter()
+                .any(|item| item.name == ITEM)
+        });
+        (item, d.app().encounters.searchable_creature(CREATURE))
+    }
+
     pub fn run(d: &mut Driver<'_>) {
-        let package = d.app_mut().campaigns.modules()[0].id;
+        let module = d.app_mut().campaigns.modules()[0].clone();
+        let package = module.id;
+        // P2 of the review of PR 623: the search results before any change, for the Undo of
+        // the removal at the end.
+        let searched = readers(d);
         go_library(d);
         d.click("Packages");
         d.click("Manage packages…");
@@ -28424,6 +28701,29 @@ pub mod remove_package_in_use {
             "A package removal does not say its creature file was deleted",
         );
         d.state("paused-run-after-package-removal", Sizes::All);
+        // P2 of the review of PR 623 (issue #509): the package comes back (registered again,
+        // which Lookup reads at once) while the campaign does not choose it: Lookup's loot search
+        // loses its item. Undo of the removal chooses it again: Lookup gives the item back, and
+        // Encounters reads the campaign again and lists what it listed before the removal.
+        d.app_mut().campaigns.register_module(module).unwrap();
+        go_campaign(d);
+        d.settle();
+        let removed = readers(d);
+        let read = d.app().encounters.snapshot_revision();
+        d.click("Undo remove Ashen Marches");
+        d.settle();
+        let undone = readers(d);
+        d.observe(
+            "m32-C0-509-removal-undo-readers",
+            searched == (true, true)
+                && !removed.0
+                && undone == searched
+                && d.app().encounters.snapshot_revision() != read,
+            format!(
+                "{ITEM} in Lookup's loot search, {CREATURE} listed by Encounters: before {searched:?}, removed and registered again {removed:?}, after Undo {undone:?}; Encounters read again {}",
+                d.app().encounters.snapshot_revision() != read
+            ),
+        );
     }
 }
 
