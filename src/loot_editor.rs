@@ -216,10 +216,6 @@ fn add_field(owner: impl design::RowKey) -> design::FieldId {
 
 /// One line. Returns its place when the DM removes it.
 #[allow(clippy::too_many_arguments)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn line_row(
     ui: &mut egui::Ui,
     owner: &impl design::RowKey,
