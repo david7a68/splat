@@ -93,6 +93,7 @@ row-register	src/dndbeyond.rs	DndBeyond::show_import	1	Settings
 row-register	src/encounter_run/view.rs	Run::group_list	1	Run
 row-register	src/encounters/list.rs	list_row	1	Encounters
 row-register	src/loot_editor.rs	line_row	1	Encounters
+row-register	src/party_support/sheets.rs	sheet_rect	1	Party	a sheet row (a tile, a fact line, a line of columns) with the heading above it is one block for the pane's whole-row cut (layout 11a; raised)
 row-register	src/sessions/page.rs	Sessions::markers	1	Sessions
 row-register	src/sessions/page.rs	Sessions::recordings_tab	1	Sessions
 row-register	src/sessions/plan.rs	plan_row_with	1	Sessions

@@ -6,7 +6,8 @@ use splat_character::character::{self, EntitySnapshot};
 use splat_content::content;
 use splat_party::party::{
     LiveValues, Party as PartyState, SHEET_PAGES, SHEET_PORTRAIT, SyncStopped, calendar_time,
-    record_age, sheet_conditions, sheet_entries, sheet_labels, sheet_page, spell_dc, text, val,
+    record_age, sheet_conditions, sheet_entries, sheet_labels, sheet_page, sheet_row, spell_dc,
+    text, val,
 };
 use std::time::Duration;
 
@@ -613,7 +614,7 @@ impl Party<'_> {
                 sheet_page(ui, record, self.view.page, &self.view.search, live.as_ref());
                 if self.view.page == 0 {
                     design::gap(ui, design::Gap::M);
-                    design::quiet_section(ui, "Technical details", |ui| {
+                    let details = design::quiet_section(ui, "Technical details", |ui| {
                         source_and_parity(
                             ui,
                             record,
@@ -623,6 +624,8 @@ impl Party<'_> {
                             self.party.reader.local_scope(),
                         );
                     });
+                    // Its heading is a row of the sheet: the footer never cuts it through.
+                    sheet_row(ui, details.header_response.rect);
                 }
             },
         );

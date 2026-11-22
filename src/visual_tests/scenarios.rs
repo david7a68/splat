@@ -634,6 +634,186 @@ fn session_content_edge(d: &Driver<'_>) -> Option<f32> {
         .or(rules)
 }
 
+/// The left of a character sheet's column: the leftmost of its known words that shows (a tile
+/// label or a skill). `None` when no sheet shows.
+fn sheet_left(d: &Driver<'_>) -> Option<f32> {
+    // Every text that starts with one of the words: a word can show twice (the Perception tile
+    // and the Perception skill), and the column starts at the leftmost.
+    let words = [
+        "Hit points",
+        "Armor class",
+        "Proficiency",
+        "Acrobatics",
+        "Athletics",
+        "Perception",
+        "Stealth",
+    ];
+    let mut left: Option<f32> = None;
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if clip.intersects(bounds)
+            && (words
+                .iter()
+                .any(|word| text.galley.job.text.starts_with(word))
+                || tile_label(&text.galley.job.text))
+        {
+            left = Some(left.map_or(bounds.left(), |left| left.min(bounds.left())));
+        }
+    });
+    left.map(|left| left - crate::design::S)
+}
+
+/// A tile's label: its value stands under it (`tile`).
+fn tile_label(words: &str) -> bool {
+    [
+        "Hit points",
+        "Armor class",
+        "Temp HP",
+        "Proficiency",
+        "Initiative",
+        "Inspiration",
+        "Perception",
+        "Insight",
+        "Investigation",
+        "Walking",
+    ]
+    .contains(&words)
+        || ["Str: ", "Dex: ", "Con: ", "Int: ", "Wis: ", "Cha: "]
+            .iter()
+            .any(|ability| words.starts_with(ability))
+}
+
+/// Layout step 11a (SF4, SM5, AM16, AH6): a character sheet's rows are whole rows of their pane,
+/// so its edge (a footer, the session banner, the run sheet's own bottom) never cuts a label,
+/// value, skill or condition through. In the sheet's column: the texts that their clip cuts from
+/// below, and each tile label shown whole whose value does not show whole under it (Astra's P2
+/// on PR 700: a label can stand whole while its value is wholly hidden). The reference of each is
+/// independent of the sheet's rows: the clip that paints the text, and the tile's own label.
+/// `None` when no sheet shows.
+fn sheet_faults(d: &Driver<'_>) -> Option<(Vec<String>, Vec<String>)> {
+    Some(sheet_faults_in(d, sheet_left(d)?))
+}
+
+/// `sheet_faults` in the column that starts at `left`.
+fn sheet_faults_in(d: &Driver<'_>, left: f32) -> (Vec<String>, Vec<String>) {
+    let (width, height) = d.window_size();
+    let area = egui::Rect::from_min_max(egui::pos2(left, 0.0), egui::pos2(width, height));
+    // Each text in the column: its words, its bounds, whether it shows whole.
+    let mut texts: Vec<(String, egui::Rect, bool)> = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if area.intersects(bounds) && clip.intersects(bounds) {
+            texts.push((
+                text.galley.job.text.clone(),
+                bounds,
+                clip.expand(1.0).contains_rect(bounds),
+            ));
+        }
+    });
+    let cut = texts_cut_from_below(d, area);
+    let missing = texts
+        .iter()
+        .filter(|(words, label, whole)| {
+            // A label that follows a bonus on its line is a skill, not a tile.
+            *whole
+                && tile_label(words)
+                && !texts.iter().any(|(_, other, _)| {
+                    (other.center().y - label.center().y).abs() < 4.0
+                        && other.right() <= label.left()
+                        && other.right() > label.left() - 40.0
+                })
+        })
+        .filter(|(_, label, _)| {
+            !texts.iter().any(|(_, value, whole)| {
+                *whole
+                    && value.top() >= label.bottom() - 2.0
+                    && value.top() < label.bottom() + 24.0
+                    && (value.left() - label.left()).abs() < 8.0
+            })
+        })
+        .map(|(words, _, _)| words.clone())
+        .collect();
+    (cut, missing)
+}
+
+/// The painted texts in `area` that their clip cuts from below (an edge through them). Only a cut
+/// from below: a list scrolled down shows its top row part-way, as any scroll does.
+fn texts_cut_from_below(d: &Driver<'_>, area: egui::Rect) -> Vec<String> {
+    let mut cut = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let bounds = text.visual_bounding_rect();
+        if area.intersects(bounds)
+            && clip.intersects(bounds)
+            && bounds.bottom() > clip.bottom() + 1.0
+        {
+            cut.push(text.galley.job.text.clone());
+        }
+    });
+    cut
+}
+
+/// Whether the sheet shows with no fault (`sheet_faults`), and what it found.
+fn sheet_whole(d: &Driver<'_>) -> (bool, String) {
+    let size = d.window_size();
+    let found = sheet_faults(d);
+    (
+        found
+            .as_ref()
+            .is_some_and(|(cut, missing)| cut.is_empty() && missing.is_empty()),
+        format!(
+            "At {size:?}, sheet texts cut from below, and tile labels without their value: {found:?}"
+        ),
+    )
+}
+
+fn sheet_rows_whole(d: &mut Driver<'_>, id: &str) {
+    let (whole, found) = sheet_whole(d);
+    d.observe(id, whole, found);
+}
+
+/// Layout step 11a (Astra's P1 on PR 700): from the sheet's top to its end in 6-point steps, so
+/// the pane's edge meets every row of both wide columns, the sheet shows no fault at any step
+/// (`sheet_faults`). Returns the steps and each step's fault; it ends at the sheet's top.
+fn sheet_sweep(d: &mut Driver<'_>) -> (usize, Vec<String>) {
+    let Some(wheel) = d
+        .painted_rect_in("Hit points", egui::Rect::EVERYTHING)
+        .map(|rect| rect.center())
+    else {
+        return (0, vec!["no sheet".to_owned()]);
+    };
+    d.scroll_points_at(wheel, -4000.0);
+    let Some(left) = sheet_left(d) else {
+        return (0, vec!["no sheet column".to_owned()]);
+    };
+    let tops = |d: &Driver<'_>| {
+        let mut tops = Vec::new();
+        d.each_painted_text(|text, _| {
+            if text.pos.x >= left {
+                tops.push(text.pos.y);
+            }
+        });
+        tops
+    };
+    let (mut steps, mut faults) = (0, Vec::new());
+    for _ in 0..300 {
+        steps += 1;
+        // The column found at the top: the sheet's end shows none of its known words.
+        let (cut, missing) = sheet_faults_in(d, left);
+        if !cut.is_empty() || !missing.is_empty() {
+            faults.push(format!(
+                "step {steps}: cut from below {cut:?}, labels without their value {missing:?}"
+            ));
+        }
+        let before = tops(d);
+        d.scroll_points_at(wheel, 6.0);
+        if tops(d) == before {
+            break;
+        }
+    }
+    d.scroll_points_at(wheel, -4000.0);
+    (steps, faults)
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -5352,7 +5532,9 @@ pub mod party {
             .simulate(crate::settings::Account::Connected);
         d.settle();
         d.expect(FORCE_READ);
-        d.state("copy-has-local-edits", Sizes::All);
+        d.state_prepared("copy-has-local-edits", Sizes::All, |d| {
+            sheet_rows_whole(d, "l11a-SF4-sheet-rows");
+        });
         const LOCAL_EDITS: &str = "so Splat stopped updating it.";
         party_body_takes_presses(d, "iter-27-C-press-local-edits", LOCAL_EDITS);
         // Round 27 review: typing in a field outside the footer reaches that field, and the
@@ -5444,6 +5626,23 @@ pub mod party {
             },
         );
         d.state("force-read-replaced", Sizes::Default);
+        // Layout step 11a (Astra's P1 on PR 700): at 1920 the sheet's two wide columns end
+        // whole together under the footer at every scroll offset, from its top to its end. Proof
+        // steps that end at the sheet's top.
+        // At 1920x720 and 1920x480 too: the same wide columns with more to scroll, so the edge
+        // meets every row, the tiles at the top as well.
+        let sweeps = d.aside(|d| {
+            [LARGE, (1920.0, 720.0), (1920.0, 480.0)].map(|size| d.act_at_size(size, sheet_sweep))
+        });
+        d.observe(
+            "l11a-SF4-sheet-sweep",
+            sweeps[1].0 >= 40
+                && sweeps[2].0 > sweeps[1].0
+                && sweeps.iter().all(|(_, faults)| faults.is_empty()),
+            format!(
+                "At 1920x1080, 1920x720 and 1920x480, steps of 6 points and faults: {sweeps:?}"
+            ),
+        );
         let with_result = list_tops(d, REPLACED);
         let archive = note.with_extension("md.splat-archive");
         d.observe(
@@ -7450,6 +7649,7 @@ pub mod settings {
         );
         party_body_takes_presses(d, "iter-27-C-press-stopped", STOPPED);
         d.state_prepared("sync-stopped-recovery", Sizes::All, |d| {
+            sheet_rows_whole(d, "l11a-AH6-sheet-rows");
             // s30 B11 (R41): the rail's `Sync stopped` and the Party footer's notice of it take
             // one tone, a warning.
             let (rail, footer) = (
@@ -9369,7 +9569,24 @@ pub mod prep_to_table {
         d.click(BEGIN);
         d.expect(ROUND);
         d.expect(CURRENT_TURN);
-        d.state("first-turn", Sizes::Standard);
+        d.state_prepared("first-turn", Sizes::Standard, |d| {
+            sheet_rows_whole(d, "l11a-SM5-AM16-sheet-rows");
+        });
+        // Astra's P2 on PR 700: the run's sheet at 1920 too. At 1920x1080 it fits whole; at
+        // 1920x720 and 1920x480 (the same wide sheet) it scrolls, and at every offset to its end
+        // its bottom ends at a whole row (proof steps that end at the sheet's top, where it is).
+        let (whole, found) = d.at_size(LARGE, sheet_whole);
+        let sweeps = d.aside(|d| {
+            [(1920.0, 720.0), (1920.0, 480.0)].map(|size| d.act_at_size(size, sheet_sweep))
+        });
+        d.observe(
+            "l11a-SM5-AM16-sheet-rows",
+            whole
+                && sweeps[1].0 > sweeps[0].0
+                && sweeps[0].0 >= 10
+                && sweeps.iter().all(|(_, faults)| faults.is_empty()),
+            format!("{found}; at 1920x720 and 1920x480, steps of 6 points and faults {sweeps:?}"),
+        );
         d.observe(
             "P1",
             current_participant(d).as_deref() == Some(first.as_str()),

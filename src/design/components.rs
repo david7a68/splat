@@ -3951,6 +3951,9 @@ pub struct Footer<'a> {
     /// A typed footer's lines (`outcome::Messages`): data, drawn in the order of the footer's
     /// retained plan (layout PR 2b).
     typed: Option<Box<dyn FooterLines + 'a>>,
+    /// The body's own bottom is an edge as the footer is: its scroll column ends at its last
+    /// whole registered row there too, with the hairline (`outcome::Messages::rows_end_whole`).
+    pub(super) whole_rows: bool,
 }
 
 /// A typed footer's lines, as the pane places and draws them (`outcome::Messages`).
@@ -3985,6 +3988,7 @@ impl<'a> Footer<'a> {
             width,
             messages: Vec::new(),
             typed: None,
+            whole_rows: false,
         }
     }
 
@@ -3995,6 +3999,7 @@ impl<'a> Footer<'a> {
             width,
             messages: Vec::new(),
             typed: Some(lines),
+            whole_rows: false,
         }
     }
 
