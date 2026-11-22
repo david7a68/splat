@@ -20538,24 +20538,6 @@ pub mod encounter_groups {
                 format!("At {size:?}, the default side's closed value is painted in {families:?}, want {body}"),
             );
         }
-        // Layout 11c (M0246): `Default side` and `Belongs to` stand after their labels' one
-        // column, so both controls start at one x, at every size.
-        for size in [SMALL, DEFAULT, LARGE] {
-            let lefts = d.at_size(size, |d| {
-                let nodes = d.nodes();
-                ["Default side", "Belongs to"].map(|prefix| {
-                    nodes
-                        .iter()
-                        .find(|node| node.name.starts_with(prefix) && node.in_view())
-                        .map(|node| node.rect.left())
-                })
-            });
-            d.observe(
-                "m32-L11c-group-choices-column",
-                matches!(lefts, [Some(a), Some(b)] if (a - b).abs() <= 0.5),
-                format!("At {size:?}, Default side and Belongs to start at {lefts:?}"),
-            );
-        }
         // R38 (structural B4): the back line, its word whole at the text edge, the name below.
         let faults = back_line_faults(d, "Encounters", "Back to encounters", "Group name", None);
         d.observe(
@@ -20891,15 +20873,28 @@ pub mod encounter_groups {
                         preview = text.galley.job.sections.last().map(|s| s.format.color);
                     }
                 });
+                // Layout 11c (M0233): the fault's typed row message starts at the field's own
+                // left edge (±1 px), as its rect is placed at the field's measured left.
+                let row = faults.first().and_then(|words| {
+                    d.typed_messages()
+                        .into_iter()
+                        .filter(|(rect, place, _)| {
+                            *place == crate::design::outcome::MessagePlace::Row
+                                && rect.contains(words.center())
+                        })
+                        .map(|(rect, ..)| rect)
+                        .next()
+                });
                 let placed = field.is_some_and(|field| {
                     faults.len() == 1
                         && faults[0].top() >= field.bottom() - 0.5
                         && faults[0].top() < field.bottom() + crate::design::XL
                         && faults[0].left() >= field.left() - 0.5
+                        && row.is_some_and(|row| (row.left() - field.left()).abs() <= 1.0)
                 }) && preview == Some(crate::design::colors().result.error);
                 (
                     placed,
-                    format!("field {field:?}, faults {faults:?}, preview {preview:?}"),
+                    format!("field {field:?}, faults {faults:?}, row {row:?}, preview {preview:?}"),
                 )
             });
             d.observe(
