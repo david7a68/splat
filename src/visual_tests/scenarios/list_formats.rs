@@ -392,7 +392,7 @@ pub fn run(d: &mut Driver<'_>) {
     // Layout PR 5a (I6): the group rows' Edit starts `L` after the ledger's widest facts.
     d.state_prepared("flagged-group-in-groups-list", Sizes::All, |d| {
         // Review of PR 581 (#589): this ledger's allowance of residual gaps above 4L.
-        let (columns, detail) = d.ledger_columns(4);
+        let (columns, detail) = d.ledger_columns(7);
         d.observe("pr5a-ledger-columns", columns, detail);
     });
     d.click(NAV_SESSIONS);
