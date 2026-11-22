@@ -512,6 +512,11 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         // Toggle before any row measurement. A closed control draws only its chosen words.
         if response.clicked() {
             egui::Popup::toggle_id(ui.ctx(), list);
+            // The control holds the focus while its list is open, so the pane's focus arbiter
+            // brings its whole field into view at the click's release (layout PR 10b).
+            if egui::Popup::is_id_open(ui.ctx(), list) {
+                response.request_focus();
+            }
         }
         let requested_open = egui::Popup::is_id_open(ui.ctx(), list);
         let drawn = requested_open
@@ -692,7 +697,13 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let width = metrics.menu_width;
         let inner = (width - 2.0 * stroke).max(1.0);
         let left = rect.left().clamp(bounds.left(), bounds.right() - width);
-        let anchor = Rect::from_min_max(pos2(left, rect.top()), pos2(left + width, rect.bottom()));
+        // The list's context: the control's whole field block from its caption (layout PR 10b).
+        // A list above the control ends above the caption, so it never covers the words that
+        // say what is chosen.
+        let context = super::components::field_top(ui)
+            .filter(|top| *top <= rect.top())
+            .unwrap_or(rect.top());
+        let anchor = Rect::from_min_max(pos2(left, context), pos2(left + width, rect.bottom()));
         let places = &metrics.places;
         let top = metrics.top;
         let natural = top + 2.0 * stroke;
@@ -700,7 +711,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         // An explicit room narrows the placement; it does not remove this height cap.
         let natural = natural.min(ui.style().spacing.combo_height);
         let below = bounds.bottom() - rect.bottom() - XS;
-        let above = rect.top() - bounds.top() - XS;
+        let above = context - bounds.top() - XS;
         let reveal_index = list.with("reveal_index");
         let pending = ui
             .ctx()

@@ -1788,7 +1788,18 @@ fn field_label<R>(
     };
     let first = count(ui);
     field_caption(ui, label, role);
+    // The block's top while its control draws (`field_top`); the field around it, if any, after.
+    let pass = ui.ctx().cumulative_pass_nr();
+    let outer = ui.ctx().data_mut(|data| {
+        let outer = data
+            .get_temp::<Option<(u64, egui::LayerId, f32)>>(Id::new(FIELD_TOP))
+            .flatten();
+        data.insert_temp(Id::new(FIELD_TOP), Some((pass, layer, top)));
+        outer
+    });
     let inner = add(ui);
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(Id::new(FIELD_TOP), outer));
     let last = count(ui);
     let bottom = field_feedback(ui, help, error);
     // Only a focused control of this block: one lookup, nothing that grows with the form.
@@ -3706,26 +3717,58 @@ const REVEAL_WITH: &str = "reveal_with";
 /// show the control with its words cut off below. Set it in each pass the control is drawn,
 /// after its words; a rect from an earlier pass is not used.
 pub(super) fn reveal_with(ui: &Ui, control: Id, rect: Rect) {
+    set_reveal(ui, control, rect, false);
+}
+
+/// The control's whole shape in place of its own rect: an editor viewport's fixed frame, whose
+/// text edit is as tall as all its text (layout PR 10b). Words set with `reveal_with` join it.
+pub(super) fn reveal_as(ui: &Ui, control: Id, rect: Rect) {
+    set_reveal(ui, control, rect, true);
+}
+
+fn set_reveal(ui: &Ui, control: Id, rect: Rect, replaces: bool) {
     let pass = ui.ctx().cumulative_pass_nr();
     // Words set for the control earlier in this pass (its field's caption and help) stay: the
-    // rect is their union.
+    // rect is their union, and a shape set in place of the control stays in place of it.
     ui.ctx().data_mut(|data| {
         let key = control.with(REVEAL_WITH);
-        let rect = match data.get_temp::<(u64, Rect)>(key) {
-            Some((set, before)) if set == pass => before.union(rect),
-            _ => rect,
+        let (rect, replaces) = match data.get_temp::<(u64, Rect, bool)>(key) {
+            Some((set, before, was)) if set == pass => (before.union(rect), was || replaces),
+            _ => (rect, replaces),
         };
-        data.insert_temp(key, (pass, rect));
+        data.insert_temp(key, (pass, rect, replaces));
     });
 }
 
 /// What to bring into view for the focused control `id`, whose own rect is `own`: with the
-/// words `reveal_with` set for it in this pass, else only itself.
+/// words `reveal_with` set for it in this pass, else only itself; a shape `reveal_as` set
+/// stands in place of `own`.
 pub(super) fn reveal_rect(ctx: &egui::Context, id: Id, own: Rect) -> Rect {
     let pass = ctx.cumulative_pass_nr();
-    ctx.data(|data| data.get_temp::<(u64, Rect)>(id.with(REVEAL_WITH)))
-        .filter(|(set, _)| *set == pass)
-        .map_or(own, |(_, rect)| rect.union(own))
+    ctx.data(|data| data.get_temp::<(u64, Rect, bool)>(id.with(REVEAL_WITH)))
+        .filter(|(set, _, _)| *set == pass)
+        .map_or(
+            own,
+            |(_, rect, replaces)| {
+                if replaces { rect } else { rect.union(own) }
+            },
+        )
+}
+
+/// The key of the field block being drawn, for a list that opens from a control in it.
+const FIELD_TOP: &str = "design_field_top";
+
+/// The top (its caption's top) of the field block whose control is being drawn now on `ui`'s
+/// layer, while `field_label` draws it: a list that opens from the control never covers its
+/// own field's caption (layout PR 10b).
+pub(super) fn field_top(ui: &Ui) -> Option<f32> {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let layer = ui.layer_id();
+    ui.ctx()
+        .data(|data| data.get_temp::<Option<(u64, egui::LayerId, f32)>>(Id::new(FIELD_TOP)))
+        .flatten()
+        .filter(|(set, at, _)| *set == pass && *at == layer)
+        .map(|(_, _, top)| top)
 }
 
 /// Where a footer message stands in the footer's one order.
