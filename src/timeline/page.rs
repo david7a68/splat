@@ -1117,13 +1117,15 @@ impl TimelinePage {
     /// book's, the session page's, this page's) and a press acts on the entry its ticket names;
     /// the footer only places them. Round 28 (AL1, FL1, AM1): the column is one pane, so the
     /// footer comes `S` below the last row, pinned only when the rows fill the column. `body`
-    /// draws the rows, the empty state, or (narrow) the open event's form, as the pane's content.
+    /// draws the rows, the empty state, or (narrow) the open event's form, as the pane's content;
+    /// its column behaves as `scroll` says (the open event's form opens at its top: M0560).
     fn list_pane<R>(
         &mut self,
         ui: &mut egui::Ui,
         book: &mut Book,
         notes: &mut crate::sessions::page::Sessions,
-        open: Option<&str>,
+        footer: PaneFooter<'_>,
+        scroll: design::pane::ContentScroll,
         body: impl FnOnce(
             &mut Self,
             &mut egui::Ui,
@@ -1131,11 +1133,22 @@ impl TimelinePage {
             &mut crate::sessions::page::Sessions,
         ) -> R,
     ) -> R {
+        let open = match footer {
+            PaneFooter::Page(open) => open,
+            PaneFooter::Empty => None,
+        };
         let open = open.filter(|id| book.events.iter().any(|event| event.id == *id));
         let offer = open.and_then(|id| notes.event_link_offer(book, id));
         let frame = PaneFrame::new(ui);
-        let messages = self.list_messages(&frame, ui, book, notes, open, offer.as_ref());
-        let paned = messages.pane(ui, design::Body::Content, |ui| body(self, ui, book, notes));
+        let messages = match footer {
+            PaneFooter::Page(_) => {
+                self.list_messages(&frame, ui, book, notes, open, offer.as_ref())
+            }
+            PaneFooter::Empty => {
+                Messages::new(&frame, "timeline_detail_footer", ui.available_width())
+            }
+        };
+        let paned = messages.pane_content(ui, scroll, |ui| body(self, ui, book, notes));
         if let Some(press) = paned.pressed {
             match press.id {
                 ListAct::UndoLinks => {
@@ -1355,6 +1368,7 @@ impl TimelinePage {
         book: &mut Book,
         sessions: &[SessionLink],
         notes: &mut crate::sessions::page::Sessions,
+        narrow: bool,
     ) {
         let c = colors();
         let index = self
@@ -1363,18 +1377,32 @@ impl TimelinePage {
             .and_then(|id| book.events.iter().position(|event| event.id == *id));
         checks::settle_length(book, index);
         let Some(index) = index else {
-            design::heading(ui, design::Heading::Panel("An event"));
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(
-                            ui,
-                            "Select an event to name it, place it or note what it means. Each event has its own link, for a session note or an Obsidian note.",
-                        )
-                        .color(c.muted),
-                )
-                .wrap(),
-            );
+            let empty = |ui: &mut egui::Ui| {
+                design::heading(ui, design::Heading::Panel("An event"));
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(
+                                ui,
+                                "Select an event to name it, place it or note what it means. Each event has its own link, for a session note or an Obsidian note.",
+                            )
+                            .color(c.muted),
+                    )
+                    .wrap(),
+                );
+            };
+            if narrow {
+                self.list_pane(
+                    ui,
+                    book,
+                    notes,
+                    PaneFooter::Page(None),
+                    design::pane::ContentScroll::default(),
+                    |_, ui, _, _| empty(ui),
+                );
+            } else {
+                empty(ui);
+            }
             return;
         };
         let id = book.events[index].id.clone();
@@ -1543,13 +1571,8 @@ impl TimelinePage {
         design::gap(ui, design::Gap::S);
         design::rule(ui);
         let mut ruling = None;
-        let mut area = egui::ScrollArea::vertical()
-            .id_salt(("timeline_detail", &id))
-            .auto_shrink([false, false]);
-        if std::mem::take(&mut self.reset_detail) {
-            area = area.vertical_scroll_offset(0.0);
-        }
-        let clip = ui.available_rect_before_wrap().intersect(ui.clip_rect());
+        // M0560 (M-P0.30): another event, a link or a changed filter opens the form at its top.
+        let from_top = std::mem::take(&mut self.reset_detail);
         // Round 27 FL1: the form leaves the scroll bar's lane free whether or not the bar shows,
         // so its fields and the header's `⋯` end at one x for every event.
         let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
@@ -1562,8 +1585,10 @@ impl TimelinePage {
         // Row 123: a check result's offer asks the plan of the journey's session.
         let journey_plan = checks::shown(&book.events[index])
             .then(|| notes.journey_plan(book, &id, &self.plan_names));
-        area.show(ui, |ui| {
-            ui.set_clip_rect(ui.clip_rect().intersect(clip));
+        // M0559 (M-P0.30): the header above stays; the form under it scrolls in the detail's
+        // own column. Wide, that is the panel's `ScrollColumn`; narrow, the form is the content
+        // of the pane that holds the open event's footer, and the header is drawn before it.
+        let mut form = |page: &mut Self, ui: &mut egui::Ui, book: &mut Book| {
             let form_width = lane_width.min(ui.available_width()).min(design::FORM_WIDTH);
             ui.ctx()
                 .data_mut(|data| data.insert_temp(width_id, form_width));
@@ -1594,7 +1619,7 @@ impl TimelinePage {
                         Kind::ShortRest => "1 hour",
                         _ => "",
                     };
-                    let focus = std::mem::take(&mut self.focus_length);
+                    let focus = std::mem::take(&mut page.focus_length);
                     if checks::shown(event) {
                         let (words, taken) =
                             checks::length_input(ui, &mut book.length, event, hint, focus);
@@ -1654,23 +1679,23 @@ impl TimelinePage {
                     planned: &|name| journey_plan.as_ref().and_then(|plan| plan.get(name)),
                     reveal,
                 };
-                checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
+                checks_act = checks::header(ui, &view, &mut page.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.
                 // M0561 (M-P0.27): a typed result line that keeps its room.
-                let result = self.checks_done.get(&id).map(|done| {
+                let result = page.checks_done.get(&id).map(|done| {
                     design::outcome::PlacedResult::new(
                         done.words.clone(),
                         done.undo.clone().pressed_as(()),
                     )
                 });
                 undo_checks |= design::outcome::PlacedResult::show_line(result, ui).is_some();
-                checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
+                checks_act = checks::lines(ui, &view, &mut page.checks).or(checks_act.take());
             }
             design::gap(ui, design::Gap::M);
             let place = EVENT_PLACE.of(design::TextKey::of(&*event));
             changed |=
                 design::labelled_field(ui, place, "Where", &mut event.place, None, None).changed();
-            changed |= self.place_help(ui, event);
+            changed |= page.place_help(ui, event);
             design::gap(ui, design::Gap::M);
             let session_id = EVENT_SESSION.of(design::TextKey::of(&*event));
             design::field(ui, "Session", None, None, |ui| {
@@ -1689,7 +1714,7 @@ impl TimelinePage {
                 && sessions.iter().any(|known| known.id == session)
                 && design::link(ui, "Open this session").clicked()
             {
-                self.open_session = Some(session);
+                page.open_session = Some(session);
             }
             if !event.result.is_empty() {
                 design::gap(ui, design::Gap::M);
@@ -1700,7 +1725,7 @@ impl TimelinePage {
                                 ui,
                                 super::played_fight_summary(
                                     event,
-                                    event.run.is_some() && event.run == self.open_run,
+                                    event.run.is_some() && event.run == page.open_run,
                                 ),
                             )
                             .color(c.text),
@@ -1739,7 +1764,7 @@ impl TimelinePage {
                 design::field(ui, "Mentioned in", None, None, |ui| {
                     for session in mentions {
                         if design::link(ui, &session.label).clicked() {
-                            self.open_session = Some(session.id);
+                            page.open_session = Some(session.id);
                         }
                     }
                 });
@@ -1765,6 +1790,24 @@ impl TimelinePage {
                     placed = Some(after);
                 }
             });
+        };
+        // Narrow, the pane holds the open event's footer; wide, its results stay in the
+        // list's footer, so the detail's pane has none. Its own pane either way, so the
+        // list's column keeps its place for the way back.
+        let footer = if narrow {
+            PaneFooter::Page(Some(&id))
+        } else {
+            PaneFooter::Empty
+        };
+        ui.push_id("timeline_detail_pane", |ui| {
+            self.list_pane(
+                ui,
+                book,
+                notes,
+                footer,
+                design::pane::ContentScroll::default().from_top(from_top),
+                |page, ui, book, _| form(page, ui, book),
+            );
         });
         if changed {
             book.touch();
@@ -1930,7 +1973,7 @@ impl TimelinePage {
             design::gap(ui, design::Gap::XS);
             if book.events.is_empty() && book.unreadable.is_none() {
                 let open_run = self.open_run.is_some();
-                let first = self.list_pane(ui, book, notes, None, |_, ui, _, _| {
+                let first = self.list_pane(ui, book, notes, PaneFooter::Page(None), design::pane::ContentScroll::default(), |_, ui, _, _| {
                 let mut first = false;
                 design::empty_state(
                     ui,
@@ -2012,22 +2055,34 @@ impl TimelinePage {
                     // With the list hidden, the open event's results are in the form's own footer,
                     // so they move no field.
                     notes.expire_event_link_undo(true, book);
-                    let open = self.selected.clone();
-                    self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, notes| {
-                        page.detail(ui, book, sessions, notes);
-                    });
+                    // M0559 (M-P0.30): the form's header, then its pane.
+                    self.detail(ui, book, sessions, notes, true);
                 } else {
                     notes.expire_event_link_undo(true, book);
-                    self.list_pane(ui, book, notes, None, |page, ui, book, _| {
-                        page.list(ui, book, sessions);
-                    });
+                    self.list_pane(
+                        ui,
+                        book,
+                        notes,
+                        PaneFooter::Page(None),
+                        design::pane::ContentScroll::default(),
+                        |page, ui, book, _| {
+                            page.list(ui, book, sessions);
+                        },
+                    );
                 }
                 return;
             }
             if !event_open {
-                self.list_pane(ui, book, notes, None, |page, ui, book, _| {
-                    page.list(ui, book, sessions);
-                });
+                self.list_pane(
+                    ui,
+                    book,
+                    notes,
+                    PaneFooter::Page(None),
+                    design::pane::ContentScroll::default(),
+                    |page, ui, book, _| {
+                        page.list(ui, book, sessions);
+                    },
+                );
                 return;
             }
             let width = design::side_panel_width(ui.available_width());
@@ -2041,7 +2096,7 @@ impl TimelinePage {
                             left: design::S as i8,
                             ..Default::default()
                         }))
-                        .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
+                        .show_inside(ui, |ui| self.detail(ui, book, sessions, notes, false));
                     egui::CentralPanel::default()
                         // The panel's drag handle lies on this edge, so the rows stop short of it.
                         .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -2055,7 +2110,8 @@ impl TimelinePage {
                                 ui,
                                 book,
                                 notes,
-                                open.as_deref(),
+                                PaneFooter::Page(open.as_deref()),
+                                design::pane::ContentScroll::default(),
                                 |page, ui, book, _| {
                                     page.list(ui, book, sessions);
                                 },
@@ -2135,6 +2191,15 @@ fn second_line(
     job.wrap.max_rows = 1;
     job.wrap.break_anywhere = true;
     ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
+/// What a Timeline pane's footer holds (`TimelinePage::list_pane`).
+#[derive(Clone, Copy)]
+enum PaneFooter<'a> {
+    /// The page's messages, with the open event's (`list_messages`).
+    Page(Option<&'a str>),
+    /// None: the wide detail's form, whose results are in the list's footer (M0559).
+    Empty,
 }
 
 /// The Copy link action's words, before and after a copy (M0558).
@@ -2341,6 +2406,103 @@ mod tests {
             assert!(
                 rect("Stop 00").is_none(),
                 "{size:?}: the list moved: the first event is out of view"
+            );
+        }
+    }
+
+    /// M0559, M0560 (M-P0.30): the open event's form scrolls in the detail's own pane, under its
+    /// header, which stays; and an event opened again opens its form at the top. Wide (the
+    /// detail's panel), then narrow (the form is the pane's content, its header drawn before the
+    /// pane).
+    #[test]
+    fn the_detail_form_scrolls_under_its_header() {
+        use crate::design::test_harness::Themed as _;
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        for at in 0..60 {
+            book.add(Kind::Event, None);
+            book.events.last_mut().unwrap().title = format!("Stop {at:02}");
+        }
+        book.save();
+        type State = (TimelinePage, Book, crate::sessions::page::Sessions);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 600.0))
+            .themed_state(
+                |ctx, (page, book, notes): &mut State| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        page.show(ui, book, Uuid::from_u128(1), &[], None, notes);
+                    });
+                },
+                (
+                    TimelinePage::default(),
+                    book,
+                    crate::sessions::page::Sessions::default(),
+                ),
+            );
+        harness.run_steps(6);
+        // M0559, M0560 (M-P0.30, `m-p0-detail-scroll`): the open event's form scrolls in the
+        // detail's own column, under its header, which stays; and an event opened again opens
+        // its form at the top. Wide (the detail's panel), then narrow (the form is the pane's
+        // content, its header drawn before the pane).
+        let ids: Vec<String> = harness
+            .state()
+            .1
+            .events
+            .iter()
+            .map(|event| event.id.clone())
+            .collect();
+        let open = |harness: &mut egui_kittest::Harness<'_, State>, at: usize| {
+            let (page, book, _) = harness.state_mut();
+            page.reveal(&ids[at], book);
+            harness.run_steps(4);
+        };
+        let top = |harness: &egui_kittest::Harness<'_, State>, role, name: &str| {
+            harness.get_by_role_and_label(role, name).rect().top()
+        };
+        let title = |harness: &egui_kittest::Harness<'_, State>| {
+            top(harness, egui::accesskit::Role::TextInput, "Title")
+        };
+        let kind = |harness: &egui_kittest::Harness<'_, State>| {
+            harness
+                .query_by_label_contains("Kind of event: ")
+                .expect("the form's Kind")
+                .rect()
+        };
+        let wheel = |harness: &mut egui_kittest::Harness<'_, State>, at: egui::Pos2| {
+            harness.event(egui::Event::PointerMoved(at));
+            harness.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -200.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(4);
+        };
+        for (size, case) in [(1200.0, "wide"), (600.0, "narrow")] {
+            harness.set_size(egui::vec2(size, 600.0));
+            open(&mut harness, 57);
+            let (opened_title, opened) = (title(&harness), kind(&harness));
+            wheel(&mut harness, opened.center());
+            assert!(
+                (title(&harness) - opened_title).abs() < 0.5,
+                "m-p0-detail-scroll ({case}): the header stays ({opened_title} -> {})",
+                title(&harness)
+            );
+            assert!(
+                kind(&harness).top() < opened.top() - 50.0,
+                "m-p0-detail-scroll ({case}): the form scrolls under it ({} -> {})",
+                opened.top(),
+                kind(&harness).top()
+            );
+            // Another event, then this one again: each opens its form at the top.
+            open(&mut harness, 56);
+            open(&mut harness, 57);
+            assert!(
+                (kind(&harness).top() - opened.top()).abs() < 0.5,
+                "m-p0-detail-scroll ({case}): opened again, the form is at its top ({} -> {})",
+                opened.top(),
+                kind(&harness).top()
             );
         }
     }
