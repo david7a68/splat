@@ -175,8 +175,8 @@ impl Reading {
         self.frame_with(input)
     }
 
-    /// Tab until a link of the note has the keyboard (egui says so in its output, AccessKit on
-    /// or off), then warm frames.
+    /// Tab until the note's long link has the keyboard (egui says so in its output, AccessKit
+    /// on or off), then warm frames.
     fn focus_a_link(&mut self) {
         let tab = |pressed| egui::Event::Key {
             key: egui::Key::Tab,
@@ -189,9 +189,11 @@ impl Reading {
             let mut input = self.input();
             input.events = vec![tab(true), tab(false)];
             let output = self.frame_with(input);
+            // The note's long link, not one of the host's own links before the body.
             let link = output.platform_output.events.iter().any(|event| {
                 matches!(event, egui::output::OutputEvent::FocusGained(info)
-                    if info.typ == egui::WidgetType::Link)
+                    if info.typ == egui::WidgetType::Link
+                        && info.label.as_deref().is_some_and(|name| name.contains("cinder")))
             });
             if link {
                 for _ in 0..4 {
