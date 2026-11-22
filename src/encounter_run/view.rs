@@ -3347,11 +3347,14 @@ impl Run {
         // Add), so the frame of an act shows the reason or result it brought and never one it
         // ended (M-R0.1, P3: a valid total's frame painted the old reason while Add enabled).
         let frame = design::outcome::PaneFrame::new(ui);
-        let messages = design::outcome::Messages::<ArrivalPress>::new(
+        let mut messages = design::outcome::Messages::<ArrivalPress>::new(
             &frame,
             ("arrival_footer", self.id),
             ui.available_width(),
         );
+        // #511: with no footer line, the pane's own bottom ends the list at its last whole
+        // block too (SM5), so no group's Initiative or Add stands half under the window's edge.
+        messages.rows_end_whole();
         let this = &mut *self;
         // #511: the list is the pane's column (`Body::Content`). `group_list` splits each group at
         // its semantic boundaries (its head, then each fault with its repair; layout step 11a,

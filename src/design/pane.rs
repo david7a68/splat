@@ -3364,14 +3364,25 @@ mod row_cut_tests {
     /// the same in a `Body::Fills` pane for the rows of its scroll columns, two side by side with
     /// rows of different heights: each column cuts at its own last whole row. Layout step 11a
     /// (SM5, AM16): with no footer line, a pane whose messages ask for it (`rows_end_whole`) cuts
-    /// at its own bottom as at a footer.
+    /// at its own bottom as at a footer. #511: the same through `Messages::pane_then`, whose body
+    /// is placed before its lines are in.
     #[test]
     fn a_footer_never_cuts_through_a_registered_row() {
         use crate::design::layout::ScrollColumn;
         let (mut hidden_by_the_cut, mut hidden_when_asked) = (0, 0);
+        let mut hidden_when_asked_then = 0;
         let (mut columns_apart, mut plain_fills_cut) = (0, 0);
         for fills in [false, true] {
-            for (message, whole) in [(true, false), (false, false), (false, true)] {
+            for (message, whole, then) in [
+                (true, false, false),
+                (false, false, false),
+                (false, true, false),
+                (true, false, true),
+                (false, true, true),
+            ] {
+                if fills && then {
+                    continue;
+                }
                 // A whole-row cut: at the footer, or at the body's own bottom when asked.
                 let cuts = message || whole;
                 for height in (300..=360).step_by(7) {
@@ -3422,6 +3433,13 @@ mod row_cut_tests {
                                     column(ui, left, "rows_left", "Row", 44.0);
                                     column(ui, right, "rows_right", "Tall", 60.0);
                                 });
+                            } else if then {
+                                let _ = messages.pane_then(
+                                    ui,
+                                    Body::Content,
+                                    |ui| rows(ui, "Row", 44.0),
+                                    |(), _| (),
+                                );
                             } else {
                                 let _ =
                                     messages.pane(ui, Body::Content, |ui| rows(ui, "Row", 44.0));
@@ -3492,7 +3510,7 @@ mod row_cut_tests {
                         for row in side.iter().filter(|_| cuts) {
                             assert!(
                                 row.bottom() <= clip + 0.5 || row.top() >= clip - 0.5,
-                                "n12-cut: fills {fills}, message {message}, whole {whole}, height {height}: row {row:?} cut at {clip}"
+                                "n12-cut: fills {fills}, message {message}, whole {whole}, then {then}, height {height}: row {row:?} cut at {clip}"
                             );
                         }
                         if cuts {
@@ -3505,6 +3523,9 @@ mod row_cut_tests {
                             hidden_by_the_cut += hidden;
                             if whole {
                                 hidden_when_asked += hidden;
+                            }
+                            if whole && then {
+                                hidden_when_asked_then += hidden;
                             }
                             let hairline = output.shapes.iter().any(|clipped| {
                                 matches!(&clipped.shape, egui::Shape::LineSegment { points, .. }
@@ -3551,6 +3572,10 @@ mod row_cut_tests {
         assert!(
             hidden_when_asked > 0,
             "n12-rows-end-whole: with no footer line, `rows_end_whole` cut a row at the body's bottom"
+        );
+        assert!(
+            hidden_when_asked_then > 0,
+            "#511: `rows_end_whole` cuts at the body's bottom through `Messages::pane_then` too"
         );
         assert!(
             columns_apart > 0,
