@@ -22,6 +22,7 @@
 //! - **Small room (L3).** Below the tallest block, the list is laid out at that height in an
 //!   outer scroll of the room it has; each entry into that state is counted.
 
+use super::laid::{Laid, LaidUi};
 #[cfg(test)]
 use super::plan::Work;
 use super::plan::{Block, BlockPlan, MeasureEnv, PlanState};
@@ -100,6 +101,8 @@ pub struct RegionState {
     focus_next: Option<usize>,
     small: bool,
     small_rooms: usize,
+    /// Blocks refused because they were drawn from a stale layout (release builds; layout 11c).
+    refused: usize,
 }
 
 impl RegionState {
@@ -120,6 +123,7 @@ impl RegionState {
             focus_next: None,
             small: false,
             small_rooms: 0,
+            refused: 0,
         }
     }
 
@@ -136,6 +140,11 @@ impl RegionState {
     /// How many times the region entered the small-room policy (ruling L3).
     pub fn small_rooms(&self) -> usize {
         self.small_rooms
+    }
+
+    /// The blocks refused because they were drawn from a stale layout.
+    pub fn refused(&self) -> usize {
+        self.refused
     }
 
     /// The plan's work counters (I12) and diagnostics (L6, L7).
@@ -208,8 +217,48 @@ impl<'s> BlockRegion<'s> {
             .inner
     }
 
-    /// In a `Body::Content` pane, which scrolls: the whole extent in place, the blocks in the
-    /// visible clip drawn, each registered as a row, so the pane's whole-row cut (N12) applies.
+    /// Draw the measured blocks (layout 11c) in the room left in `ui`: `laid` gives block `at`'s
+    /// layout, and `draw` its controls in that layout's slots. A block drawn from a layout the
+    /// plan did not measure (a stale one) is refused and counted. Returns the blocks drawn whole.
+    pub fn show_laid<'l>(
+        self,
+        ui: &mut Ui,
+        laid: impl Fn(usize) -> &'l Laid,
+        mut draw: impl FnMut(&mut LaidUi<'_>, usize),
+    ) -> Range<usize> {
+        let Self {
+            id,
+            state,
+            content,
+            name,
+        } = self;
+        let mut refused = 0;
+        let whole = BlockRegion {
+            id,
+            state: &mut *state,
+            content,
+            name,
+        }
+        .show(ui, |ui, at| {
+            let Block::Measured(measured) = content[at] else {
+                debug_assert!(false, "`show_laid` draws measured blocks only");
+                return;
+            };
+            if !super::laid::render(ui, laid(at), measured.layout(), |ui| draw(ui, at)) {
+                refused += 1;
+            }
+        });
+        state.refused += refused;
+        whole
+    }
+
+    /// In a `Body::Content` pane, which scrolls: the whole extent in place. A measured body
+    /// (layout 11c) is drawn from its mask, decided before any block draws: only the blocks whole
+    /// in the pane's visible room draw (a block cut at either edge has no paint, no press area
+    /// and no accessible node; a hairline marks the cut), and a block taller than the room that
+    /// meets it keeps its clipped paint, counted (L6), so its controls stay reachable. Another
+    /// body draws the blocks in the visible clip, each registered as a row, so the pane's
+    /// whole-row cut (N12) applies after paint.
     fn in_place(
         self,
         ui: &mut Ui,
@@ -221,25 +270,70 @@ impl<'s> BlockRegion<'s> {
             fonts: crate::design::theme::font_generation(ui.ctx()),
             scale: ui.ctx().pixels_per_point(),
         };
-        let plan = self.state.plan.plan(self.content, env);
+        let Self { state, content, .. } = self;
+        let plan = state.plan.plan(content, env);
         let (rect, _) = ui.allocate_exact_size(vec2(width, plan.extent()), egui::Sense::hover());
-        let mut drawn = 0..0;
-        for at in 0..plan.len() {
+        let place = |plan: &BlockPlan, at: usize| {
             let (top, end) = plan.span(at);
-            let block_rect = Rect::from_min_size(rect.min + vec2(0.0, top), vec2(width, end - top));
-            if !ui.is_rect_visible(block_rect) {
-                continue;
+            Rect::from_min_size(rect.min + vec2(0.0, top), vec2(width, end - top))
+        };
+        if !plan.measured() {
+            let mut drawn = 0..0;
+            for at in 0..plan.len() {
+                let block_rect = place(plan, at);
+                if !ui.is_rect_visible(block_rect) {
+                    continue;
+                }
+                if drawn.is_empty() {
+                    drawn = at..at;
+                }
+                drawn.end = at + 1;
+                let mut child =
+                    ui.new_child(UiBuilder::new().id_salt(("block", at)).max_rect(block_rect));
+                block(&mut child, at);
+                super::super::components::register_row(ui, block_rect);
             }
-            if drawn.is_empty() {
-                drawn = at..at;
-            }
-            drawn.end = at + 1;
-            let mut child =
-                ui.new_child(UiBuilder::new().id_salt(("block", at)).max_rect(block_rect));
-            block(&mut child, at);
-            super::super::components::register_row(ui, block_rect);
+            return drawn;
         }
-        drawn
+        // The room the pane shows this pass (its column's view inside the body's clip, after this
+        // pass's input), in the content's terms: the mask is decided before any block draws.
+        let clip = ui.clip_rect();
+        let (offset, view) = (clip.top() - rect.top(), clip.height().max(0.0));
+        let mask = state.plan.mask(content, env, offset, view);
+        let plan = state.plan.plan(content, env);
+        let mut tall: Vec<usize> = mask
+            .too_tall
+            .iter()
+            .map(|tall| tall.block)
+            .filter(|at| !mask.whole.contains(at))
+            .collect();
+        tall.dedup();
+        for at in mask.whole.clone().chain(tall) {
+            let mut child = ui.new_child(
+                UiBuilder::new()
+                    .id_salt(("block", at))
+                    .max_rect(place(plan, at)),
+            );
+            block(&mut child, at);
+        }
+        // A hairline marks each cut edge: content goes on beyond it.
+        let hairline = |y: f32| {
+            ui.painter().hline(
+                rect.left()..=rect.right(),
+                y,
+                egui::Stroke::new(tokens::HAIRLINE_WIDTH, tokens::colors().hairline),
+            );
+        };
+        let extent = plan.extent();
+        if let Some((from, to)) = mask.eligible {
+            if from > offset.max(0.0) + 0.5 {
+                hairline(clip.top() + tokens::HAIRLINE_WIDTH / 2.0);
+            }
+            if to < (offset + view).min(extent) - 0.5 {
+                hairline(clip.bottom() - tokens::HAIRLINE_WIDTH / 2.0);
+            }
+        }
+        mask.whole
     }
 
     fn region(

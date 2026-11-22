@@ -1080,7 +1080,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/campaigns.rs",
             "selector",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         // M20: the copy dialog's error is a typed body message (`BodyMessage` of a
         // `FaultMessage`) in place of an untyped `design::message`.
@@ -1326,12 +1326,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "unread_member",
             &[Ban::Extras(1), Ban::Body],
         ),
-        ("src/encounters/list.rs", "choice_note", &[Ban::Extras(2)]),
-        (
-            "src/encounters/list.rs",
-            "history_summary",
-            &[Ban::Extras(2)],
-        ),
         // M20 (M-L0.6): a repair draft's fault in the reader's body, with its repair.
         ("src/library/catalogue.rs", "repair_notice", &[Ban::Body]),
         (
@@ -1354,7 +1348,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
-        ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
         // M20 (M-W0.4, M-W0.5, M0178): the index's warnings on this note, the renamed-file
         // warning with its two repairs and the duplicate repair, in the reader's body (were
         // `message`, `message_with_actions`).
@@ -1373,7 +1366,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world/page.rs", "unread_pane", &[Ban::Body]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "fills_body", &[Ban::Pane(1)]),
-        ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
     ]
 };
@@ -1451,6 +1443,8 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // M0412: the one collapsing section (`Section::show`); `CollapsingHeader::new` is
         // banned outside it.
         ("src/design/components.rs", "show", &[Ban::Layout(1)]),
+        // Review of PR 730: the section whose header is the caller's row (a sheet's spells).
+        ("src/design/components.rs", "section_row", &[Ban::Layout(1)]),
         (
             "src/design/components.rs",
             "number_field_with_id",

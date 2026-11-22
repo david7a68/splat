@@ -259,6 +259,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     const OPEN: Word = crate::word!("Open in Lookup");
     // M-Y0.2: a link action is measured and kept as the others are.
     const CONNECT: Word = crate::word!("Connect to refresh");
+    const CONNECT_HINT: &str = "Sign in to D&D Beyond to read the sheets again";
     const WORDS: [&str; 5] = [
         "Edit",
         "Add to Log",
@@ -278,7 +279,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             .action(TitleAction::quiet(LOG))
             .action(TitleAction::quiet(START))
             .action(TitleAction::secondary(OPEN))
-            .action(TitleAction::link(CONNECT))
+            .action(TitleAction::link(CONNECT).hint(CONNECT_HINT))
     };
     let mut need = 0.0;
     let mut row = 0.0;
@@ -448,6 +449,23 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     // its menu, and a close icon at the right end of the title's line. Wide, all on one line;
     // narrow, the actions go under the title and the close icon stays on the title's line.
     // The status link opens its menu; the close icon's press comes back as `closed`.
+    // Review of PR 730 (P2): a link action keeps its hint, as the other forms do.
+    ctx.all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+    let draw_line = |events: Vec<egui::Event>| {
+        frame_with(&ctx, vec2(1600.0, 300.0), events, |ui| {
+            let _ = line().show(ui);
+        })
+    };
+    let (nodes, _) = draw_line(Vec::new());
+    let connect = bounds(&nodes, "Connect to refresh");
+    draw_line(vec![egui::Event::PointerMoved(connect.center())]);
+    draw_line(Vec::new());
+    let (_, painted) = draw_line(Vec::new());
+    assert!(
+        painted.iter().any(|text| text.text == CONNECT_HINT),
+        "m-p0-title-hint-link: the link's hover shows its hint"
+    );
+    draw_line(vec![egui::Event::PointerGone]);
     // M-L0.10 (ruling M21): a menu action (`Packages`) opens its menu, and a blocked one does
     // not; the status menu keeps inside the room the caller gives from the link's rect (the
     // column under it, issue #504), one lane clear of its edges.
