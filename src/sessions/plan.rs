@@ -9590,6 +9590,7 @@ mod tests {
     /// a saved run that ends, a content index rebuild, and a switch to another session with the
     /// same revisions. Red runs: each input left out of `ProjectionInputs` once.
     fn projection_follows_each_input() {
+        use crate::design::test_harness::Themed;
         use crate::sessions::{NewNote, create_note};
         use egui_kittest::kittest::Queryable;
         let root = tempfile::tempdir().unwrap();
@@ -9638,7 +9639,7 @@ mod tests {
         book.touch();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(design::FORM_WIDTH, 900.0))
-            .build_state(
+            .themed_state(
                 move |ctx, (page, book): &mut (Sessions, Book)| {
                     let inputs = shared.borrow();
                     if let Some(index) = &inputs.index {
@@ -9673,7 +9674,6 @@ mod tests {
                 },
                 (page, book),
             );
-        design::theme::install(&harness.ctx);
         harness.run_steps(3);
         let starts = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>, name: &str| {
             harness

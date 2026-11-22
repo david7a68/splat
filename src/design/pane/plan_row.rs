@@ -242,6 +242,7 @@ pub fn rule(ui: &mut super::laid::LaidUi<'_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::design::test_harness::Themed;
     use crate::design::{
         memo::Revised,
         outcome::{Messages, NoPress, PaneFrame},
@@ -279,7 +280,7 @@ mod tests {
         let mut harness = Harness::builder()
             .with_size(size)
             .with_pixels_per_point(scale)
-            .build_ui_state(
+            .themed_ui_state(
                 |ui, rows: &mut Rows| {
                     let frame = PaneFrame::new(ui);
                     let messages =
@@ -331,7 +332,6 @@ mod tests {
                 },
                 rows,
             );
-        crate::design::theme::install(&harness.ctx);
         harness
             .ctx
             .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
