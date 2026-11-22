@@ -35,23 +35,39 @@ fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
 }
 
 /// The source editor itself: the note's text in the editor's face, named for its file, with the
-/// error line marked. In a pane's editor region (World) or where the caller puts it (Campaign,
-/// in a scroll of its own). Its two events (changed, gained focus) and its id.
+/// error line marked. One closed editor viewport in both places (layout PR 9): its fixed frame
+/// keeps all four edges in view, and the text and its lane scroll inside it. In a pane's editor
+/// region (World), or a viewport of its own up to `most` tall that the page's scroll holds
+/// (Campaign). Its two events (changed, gained focus), its outside frame and its id.
+/// Where the source editor's viewport is.
+enum Place<'r> {
+    /// World's repair pane: its editor region.
+    Region(EditorRegion<'r>),
+    /// A viewport of its own, up to this tall, in a page's scroll (Campaign).
+    AtMost(f32),
+}
+
 #[allow(
     clippy::disallowed_methods,
     reason = "staged: a path is a broken note’s only identity (design::results::STAGED_ALLOWS)"
 )]
 fn source_editor(
     ui: &mut egui::Ui,
-    region: Option<EditorRegion<'_>>,
+    place: Place<'_>,
     path: &str,
     draft: &mut String,
     error_line: Option<usize>,
-) -> ((bool, bool), egui::Id) {
+) -> ((bool, bool), egui::Rect, egui::Id) {
     let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
-    let output = match region {
-        Some(region) => region.editor(ui, field, draft, source_style),
-        None => field.editor(ui, draft, source_style),
+    let output = match place {
+        Place::Region(region) => region.editor(ui, field, draft, source_style),
+        Place::AtMost(most) => design::pane::editor_view(
+            ui,
+            design::pane::ViewHeight::AtMost(most),
+            field,
+            draft,
+            source_style,
+        ),
     };
     design::named(ui, &output.response, &editor_name(path));
     let active = (output.response.changed(), output.response.gained_focus());
@@ -65,20 +81,22 @@ fn source_editor(
             .galley
             .pos_from_cursor(egui::text::CCursor::new(position));
         let y = output.galley_pos.y + row.top();
-        let painter = ui.painter().with_clip_rect(output.text_clip_rect);
+        // The mark is in the frame's left margin, and only where the text is in view.
+        let shown = egui::Rect::from_x_y_ranges(output.frame.x_range(), output.view.y_range());
+        let painter = ui.painter().with_clip_rect(shown);
         painter.vline(
-            output.response.rect.left() + design::XS,
+            output.frame.left() + design::XS,
             y..=y + row.height(),
             egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
         );
     }
-    (active, output.response.id)
+    (active, output.frame, output.response.id)
 }
 
 /// The same source editor in its pane's editor region (World's repair pane): as tall as its
-/// text while the pane's content fits; when it does not, the region gives way and scrolls the
-/// editor, so the save row under it and the footer stay in view. Its two events: the DM changed
-/// the text, and focus moved into it.
+/// text while the pane's content fits; when it does not, the region gives way and its text
+/// scrolls inside the fixed frame, so the save row under it and the footer stay in view. Its
+/// two events: the DM changed the text, and focus moved into it.
 fn editor_in_pane(
     ui: &mut egui::Ui,
     region: EditorRegion<'_>,
@@ -86,12 +104,12 @@ fn editor_in_pane(
     draft: &mut String,
     error_line: Option<usize>,
 ) -> (bool, bool) {
-    source_editor(ui, Some(region), path, draft, error_line).0
+    source_editor(ui, Place::Region(region), path, draft, error_line).0
 }
 
 /// The source editor, with its two events apart: the DM changed the text, and focus moved into
 /// it. A caller that keeps a result for one draft ends it on a change, not on focus. Campaign's
-/// repair keeps it in a scroll of its own, up to six rows high.
+/// repair keeps it in a viewport of its own, up to six rows high, which the page scrolls whole.
 pub fn editor_events(
     ui: &mut egui::Ui,
     path: &str,
@@ -99,14 +117,10 @@ pub fn editor_events(
     error_line: Option<usize>,
 ) -> (bool, bool) {
     const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
-    let editor = design::ScrollColumn::new(("repair", path))
-        .max_height(MAX_HEIGHT)
-        .fit_height()
-        .show(ui, |ui| source_editor(ui, None, path, draft, error_line));
-    let (active, id) = editor.inner;
+    let (active, frame, id) = source_editor(ui, Place::AtMost(MAX_HEIGHT), path, draft, error_line);
     // The editor's own scroll area takes a scroll target set inside it, so a page that scrolls
     // around the editor never sees it. When the editor gains focus or a screen reader asks to
-    // show it, scroll the page to the editor's viewport.
+    // show it, scroll the page to the editor's whole fixed frame.
     let reveal = ui.input(|input| {
         input.events.iter().any(|event| {
             matches!(event, egui::Event::AccessKitActionRequest(request)
@@ -115,16 +129,8 @@ pub fn editor_events(
         })
     });
     if active.1 || reveal {
-        // The editor's viewport: its text, up to the editor's maximum height.
-        let viewport = egui::Rect::from_min_size(
-            editor.inner_rect.min,
-            egui::vec2(
-                editor.inner_rect.width(),
-                editor.content_size.y.min(MAX_HEIGHT),
-            ),
-        );
         // At once: an animation would be cut short by the editor's own scroll to its cursor.
-        ui.scroll_to_rect_animation(viewport, None, egui::style::ScrollAnimation::none());
+        ui.scroll_to_rect_animation(frame, None, egui::style::ScrollAnimation::none());
     }
     active
 }
