@@ -1274,7 +1274,7 @@ impl Catalogue {
         fn same(a: &Folders, b: &Folders) -> bool {
             a.len() == b.len()
                 && a.iter().zip(b).all(|(a, b)| match (a, b) {
-                    (Ok(a), Ok(b)) => Arc::ptr_eq(a, b),
+                    (Ok(a), Ok(b)) => a.generation() == b.generation(),
                     (Err(a), Err(b)) => a == b,
                     _ => false,
                 })

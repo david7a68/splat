@@ -141,15 +141,20 @@ impl Missing {
             0 => String::new(),
             more => format!(" and {more} more"),
         };
+        // The closed recipe, longest first: the first name kept to `kept` letters, then `…`
+        // and `and 2 more` whole. The shared selector takes the first that fits.
         let letters: Vec<char> = first.chars().collect();
-        (1..letters.len())
-            .rev()
-            .map(|kept| {
-                let name: String = letters[..kept].iter().collect();
-                format!("{}: {}…{more}", self.short(), name.trim_end())
-            })
-            .find(|words| fits(words))
-            .or_else(|| Some(self.short().to_owned()))
+        let words = |kept: usize| {
+            let name: String = letters[..kept].iter().collect();
+            format!("{}: {}…{more}", self.short(), name.trim_end())
+        };
+        crate::design::fitting::first_fit(
+            (1..letters.len()).rev(),
+            |_| true,
+            |kept| Some(words(kept)).filter(|words| fits(words)),
+        )
+        .map(|(_, words)| words)
+        .or_else(|| Some(self.short().to_owned()))
     }
 
     /// Ruling R31, for every line that shows a roster with this reason, decided by the
@@ -618,18 +623,21 @@ impl Fitted {
 /// when not one word does.
 fn cut_at_words(text: &str, fits: &impl Fn(&str) -> bool) -> String {
     let words: Vec<&str> = text.split(' ').collect();
-    (1..words.len())
-        .rev()
-        .map(|kept| {
-            words[..kept]
-                .join(" ")
-                .trim_end_matches(['·', ',', ' ', '…'])
-                .to_owned()
-        })
-        .filter(|kept| !kept.is_empty())
-        .map(|kept| format!("{kept}…"))
-        .find(|cut| fits(cut))
-        .unwrap_or_else(|| "…".to_owned())
+    // The closed recipe, longest first: the first `kept` words with no separator left at
+    // their end, then `…`. The shared selector takes the first that fits.
+    let cut = |kept: usize| {
+        let kept = words[..kept]
+            .join(" ")
+            .trim_end_matches(['·', ',', ' ', '…'])
+            .to_owned();
+        (!kept.is_empty()).then(|| format!("{kept}…"))
+    };
+    crate::design::fitting::first_fit(
+        (1..words.len()).rev(),
+        |_| true,
+        |kept| cut(kept).filter(|cut| fits(cut)),
+    )
+    .map_or_else(|| "…".to_owned(), |(_, cut)| cut)
 }
 
 #[cfg(any(test, feature = "test-support"))]

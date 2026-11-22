@@ -763,7 +763,7 @@ seal: Keyring +1`, `Bell is done.`, `End of month, Day 32 is done.`), cut with `
 the value it left as a right-aligned `Numeral` (`number`), and the row's menu (`row_menu`) with a quiet `Remove`.
 Every row has the menu, so two rows look alike and the values stand in one column; on an entry of the session being
 played, `Remove` is off and says `Use Undo in Trackers for a change of this session.`
-Only the rows inside the reader's clip are laid out and drawn. `Remove` takes the entry, the others of its press, and the entries of the notices
+Only the rows inside the reader's clip are laid out and drawn. A row's words that do not fit end at a whole word with `…` (`words_that_fit`), whole on hover and to assistive technology, fitted once for each change of the trackers and of the row's room. `Remove` takes the entry, the others of its press, and the entries of the notices
 it raised, and the reader's footer names the line and the change that went, so two rows with one label differ:
 `Removed Take seal: Keyring +1.` (a tracker without lines gives its name, a notice's press its label, `Removed End
 of month, Day 32 done: Crowd Favor +1.`), with `With it: …` for what went with it, and offers

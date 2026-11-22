@@ -32,6 +32,9 @@ pub(crate) struct ViewState {
     /// frame with no change neither measures nor shortens it. Its entries end when the columns
     /// are measured again (a settle or a new width).
     fitted: Memos<String, (Revision, Measure), String>,
+    /// The history rows' words as fitted (`history::history_row`), by entry. Its entries end
+    /// at each settle, which makes a new revision (`Trackers::settle`).
+    pub(super) history_fits: super::history::RowFits,
     /// How many times a name was shortened.
     #[cfg(test)]
     shortened: usize,
