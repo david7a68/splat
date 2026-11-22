@@ -1322,7 +1322,8 @@ mod tests {
     }
 
     /// The resolver's case table (Sol sweep 2-001; reviews of PRs 757 and 770): two columns, a
-    /// request queued for column A (the pane), and each input the cancel rule handles, aimed at
+    /// request queued for column A (the pane; for block 20, away from the blocks Home and End
+    /// route to), and each input the cancel rule handles, aimed at
     /// column B (the pointer over it, the focus in it) and then at A. A's request survives every
     /// input at B; every input at A ends it, except a shortcut that moves nothing (Ctrl+S). Each
     /// cancel branch of `take_queued` has a row. A retry's rule (`dm_scrolls`, the row menu's
@@ -1392,8 +1393,8 @@ mod tests {
         // Whether the view is near block 35 now (the request applied, even for one frame).
         let near = |harness: &Harness<'_, Page>| {
             let page = harness.state();
-            let target = block_rect(page, 35);
-            target.top() < page.clip.bottom() + 300.0 && target.bottom() > page.clip.top() - 300.0
+            let target = block_rect(page, 20);
+            target.top() < page.clip.bottom() + 100.0 && target.bottom() > page.clip.top() - 100.0
         };
         let mut wrong = Vec::new();
         for (name, input, cancels) in rows {
@@ -1426,7 +1427,7 @@ mod tests {
                 harness
                     .state_mut()
                     .region
-                    .navigate(Navigation::Show(Id::new(35usize)));
+                    .navigate(Navigation::Show(Id::new(20usize)));
                 harness.step();
                 // Whether A's request applied in any frame of the input, and whether a retry's rule
                 // (`dm_scrolls`) said the DM scrolls A in any frame.
@@ -1511,7 +1512,7 @@ mod tests {
                 // in any frame (a request that applied for one frame, then was scrolled past by the
                 // input, was not ended).
                 let expected = !(in_a && cancels);
-                let survived = if expected { shown(&harness, 35) } else { seen };
+                let survived = if expected { shown(&harness, 20) } else { seen };
                 if scrolls == expected {
                     wrong.push(format!(
                         "{name} at {}: dm_scrolls {scrolls}, expected {}",
@@ -1668,5 +1669,86 @@ mod tests {
             }
         }
         assert!(wrong.is_empty(), "nested columns: {wrong:#?}");
+    }
+
+    /// Layout 11c, A1c (the v2 review's item 3): keyboard routing across masked blocks. From the
+    /// last whole block, Tab and ArrowDown go to the next block, which is not drawn: it comes
+    /// whole into view and its control takes the focus. From the first whole block, Shift+Tab
+    /// and ArrowUp go to the block before it. End and Home go to the last and the first block.
+    /// An older request and a Tab in one pass: the Tab cancels the older one, and its own lands.
+    /// Reds: no routing; the key's own request cancelled with the older ones.
+    #[test]
+    fn keys_go_across_masked_blocks() {
+        use egui::{Key, Modifiers};
+        let mut harness = harness(Page::new(texts(40)), egui::vec2(960.0, 420.0));
+        let edge = |harness: &Harness<'_, Page>| {
+            let whole: Vec<usize> = (0..40).filter(|at| shown(harness, *at)).collect();
+            (whole[0], whole[whole.len() - 1])
+        };
+        let focused = |harness: &Harness<'_, Page>, at: usize| {
+            harness
+                .query_by_label(&format!("Act {at}"))
+                .is_some_and(|node| node.is_focused())
+        };
+        let press = |harness: &mut Harness<'_, Page>, key, modifiers| {
+            for pressed in [true, false] {
+                harness.input_mut().events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers,
+                });
+            }
+            harness.run_steps(6);
+        };
+        let mut wrong = Vec::new();
+        let mut check = |harness: &Harness<'_, Page>, name: &str, at: usize| {
+            if !(focused(harness, at) && shown(harness, at)) {
+                wrong.push(format!(
+                    "{name}: Act {at} focused {} and whole {}",
+                    focused(harness, at),
+                    shown(harness, at)
+                ));
+            }
+        };
+        // Down from the last whole block, by Tab and by ArrowDown.
+        for (name, key) in [("Tab", Key::Tab), ("ArrowDown", Key::ArrowDown)] {
+            let (_, last) = edge(&harness);
+            harness.get_by_label(&format!("Act {last}")).focus();
+            harness.run_steps(2);
+            press(&mut harness, key, Modifiers::NONE);
+            check(&harness, name, last + 1);
+        }
+        // Up from the first whole block, by Shift+Tab and by ArrowUp.
+        for (name, key, modifiers) in [
+            ("Shift+Tab", Key::Tab, Modifiers::SHIFT),
+            ("ArrowUp", Key::ArrowUp, Modifiers::NONE),
+        ] {
+            let (first, _) = edge(&harness);
+            harness.get_by_label(&format!("Act {first}")).focus();
+            harness.run_steps(2);
+            press(&mut harness, key, modifiers);
+            check(&harness, name, first - 1);
+        }
+        // End and Home.
+        press(&mut harness, Key::End, Modifiers::NONE);
+        check(&harness, "End", 39);
+        press(&mut harness, Key::Home, Modifiers::NONE);
+        check(&harness, "Home", 0);
+        // An older request and a Tab in one pass.
+        let (_, last) = edge(&harness);
+        harness.get_by_label(&format!("Act {last}")).focus();
+        harness.run_steps(2);
+        harness
+            .state_mut()
+            .region
+            .navigate(Navigation::Show(Id::new(30usize)));
+        press(&mut harness, Key::Tab, Modifiers::NONE);
+        check(&harness, "Tab over an older request", last + 1);
+        if shown(&harness, 30) {
+            wrong.push("the older request survived the Tab".to_owned());
+        }
+        assert!(wrong.is_empty(), "keyboard routing: {wrong:#?}");
     }
 }

@@ -585,19 +585,24 @@ pub(super) fn take_queued(ui: &Ui, key: Id, area: Id) -> Option<f32> {
 /// every request that moves a column by itself answers to (a region's request, a jump,
 /// `bring_into_view`, a retry).
 #[derive(Clone, Copy, Debug)]
-struct ColumnInput {
+pub(in crate::design) struct ColumnInput {
     /// The DM scrolls it: a wheel with the pointer over its view or its bar, a drag begun there, or (with
     /// its area's id) its own fling after a drag.
-    moved: bool,
+    pub moved: bool,
     /// A press that began in it is held.
-    held: bool,
+    pub held: bool,
     /// Another input to it: a press in it, or a key that moves a view or a caret
     /// (`moves_view`) that goes to it (`keys_in`).
-    other: bool,
+    pub other: bool,
 }
 
 /// The DM's input in this pass to the column whose view (screen points) is `view`.
-fn column_input(ui: &Ui, key: Id, view: Rect, area: Option<Id>) -> ColumnInput {
+pub(in crate::design) fn column_input(
+    ui: &Ui,
+    key: Id,
+    view: Rect,
+    area: Option<Id>,
+) -> ColumnInput {
     let fling = area
         .and_then(|area| egui::scroll_area::State::load(ui.ctx(), area))
         .is_some_and(|state| state.velocity() != Vec2::ZERO);
