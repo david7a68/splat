@@ -2223,7 +2223,8 @@ mod tests {
     fn wide_tables_keep_whole_words_and_can_scroll_to_the_last_column() {
         let markdown = "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
                         | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
-                        | 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n";
+                        | 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n\n\
+                        After the table.\n";
         for width in [280.0, 360.0, 488.0] {
             let context = egui::Context::default();
             design::theme::install(&context);
@@ -2295,6 +2296,32 @@ mod tests {
                         && shape.clip_rect.contains_rect(text.visual_bounding_rect()))
                 }),
                 "the last column must be readable after horizontal scrolling at {width}px: {last_column:?}"
+            );
+            // Layout PR 10c (M0406): the sideways scroll keeps its bar's lane below the last row
+            // (`Sideways::keeps_lane`), so the bar never covers the row's text.
+            let bottom = |words: &str| {
+                output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == words => {
+                        Some((text.pos.y, text.pos.y + text.galley.size().y))
+                    }
+                    _ => None,
+                })
+            };
+            let (row, after) = (
+                bottom("Memorize Spell").expect("the last row is painted").1,
+                bottom("After the table.")
+                    .expect("the paragraph after is painted")
+                    .0,
+            );
+            let lane = {
+                let scroll = design::theme::scroll_style();
+                scroll.bar_width + scroll.bar_outer_margin
+            };
+            assert!(
+                after - row >= lane + design::S - 0.5,
+                "lane at {width}px: {} from the last row's text to the next paragraph keeps the \
+                 bar's lane {lane}",
+                after - row
             );
         }
         // Round 27 FC3 (review repair): a cell that wraps taller than the reader, scrolled until
