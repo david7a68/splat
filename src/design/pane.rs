@@ -4069,7 +4069,8 @@ mod row_cut_tests {
         // means draws it, and the row takes no focus the wheel cancelled.
         {
             use egui_kittest::kittest::{NodeT, Queryable};
-            list.get_by_label("Row 0").focus();
+            let first = shown(&list)[0].0;
+            list.get_by_label(&format!("Row {first}")).focus();
             list.step();
             let (held, away) = (shown(&list)[1].1.center(), egui::pos2(395.0, 5.0));
             list.input_mut()
