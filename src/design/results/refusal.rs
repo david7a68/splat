@@ -317,6 +317,8 @@ pub enum File {
     RunFile,
     /// The house rule notes in play, which define the trackers.
     HouseRuleNote,
+    /// `Campaign.md`, which lists the house rule notes in play (M-S0.5).
+    CampaignNote,
 }
 
 impl File {
@@ -330,6 +332,7 @@ impl File {
             Self::Trackers => "Trackers.md",
             Self::RunFile => "The run file",
             Self::HouseRuleNote => "A house rule note",
+            Self::CampaignNote => "Campaign.md",
         }
     }
 
@@ -343,6 +346,7 @@ impl File {
             Self::Trackers => "Trackers.md",
             Self::RunFile => "the run file",
             Self::HouseRuleNote => "the house rule notes",
+            Self::CampaignNote => "Campaign.md",
         }
     }
 
@@ -356,6 +360,7 @@ impl File {
             Self::Trackers => "Trackers.md",
             Self::RunFile => "that session’s runs folder",
             Self::HouseRuleNote => "the house rule notes",
+            Self::CampaignNote => "Campaign.md",
         }
     }
 }
@@ -1561,6 +1566,19 @@ mod tests {
                 "Nothing was recorded for Rivals +1. A change of Rivals has no add or set. Check \
                  the house rule notes first.",
                 Tone::Warning,
+            ),
+            // M-S0.5 (PR 661 review): `Campaign.md` that cannot be read, named as itself.
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Take seal"),
+                    },
+                    Cause::Unreadable(File::CampaignNote),
+                    Recovery::First(Step::Check(File::CampaignNote)),
+                ),
+                "Nothing was recorded for Take seal. Splat cannot read Campaign.md. Check \
+                 Campaign.md first.",
+                Tone::Error,
             ),
             // M-S0.3 (ruling M21): the tracker causes that had only free words.
             (
