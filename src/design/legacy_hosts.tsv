@@ -60,7 +60,6 @@ pane-host	src/trackers/view.rs	show	2	Trackers
 pane-host	src/world/page.rs	WorldPage::creation_form	1	World
 pane-host	src/world/page.rs	WorldPage::show	3	World
 pane-host	src/world/repair.rs	Repair::show	1	World
-fills	src/encounter_run/view.rs	Run::groups_tab	1	Run	Arrivals' list with its own scroll under its typed footer (migration-32 L2c)
 fills	src/encounter_run/view.rs	Run::live_view	1	Run
 fills	src/encounter_run/view.rs	Run::setup_body	1	Run
 fills	src/encounters.rs	Encounters::creature_pane	1	Encounters	the creature's Markdown editor as tall as its room (migration-32 L2c), was under a hand footer

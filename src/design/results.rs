@@ -999,7 +999,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/campaigns.rs", "footer_words", &[Ban::Words]),
         // Arrivals' list keeps its own scroll under a `Fills` body (migration-32 L2c), a design
         // `ScrollColumn` since layout step 11a (no raw scroll area is left).
-        ("src/encounter_run/view.rs", "groups_tab", &[Ban::Pane(1)]),
         (
             "src/encounters/groups.rs",
             "group_editor_view",
