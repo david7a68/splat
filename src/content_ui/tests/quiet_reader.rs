@@ -172,6 +172,38 @@ impl Reading {
     /// over the note.
     fn frame(&mut self) -> egui::FullOutput {
         let input = self.input();
+        self.frame_with(input)
+    }
+
+    /// Tab until a link of the note has the keyboard (egui says so in its output, AccessKit on
+    /// or off), then warm frames.
+    fn focus_a_link(&mut self) {
+        let tab = |pressed| egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        for _ in 0..60 {
+            let mut input = self.input();
+            input.events = vec![tab(true), tab(false)];
+            let output = self.frame_with(input);
+            let link = output.platform_output.events.iter().any(|event| {
+                matches!(event, egui::output::OutputEvent::FocusGained(info)
+                    if info.typ == egui::WidgetType::Link)
+            });
+            if link {
+                for _ in 0..4 {
+                    let _ = self.frame();
+                }
+                return;
+            }
+        }
+        panic!("Tab reached no link of the note");
+    }
+
+    fn frame_with(&mut self, input: egui::RawInput) -> egui::FullOutput {
         let ctx = self.ctx.clone();
         ctx.run(input, |ctx| {
             ctx.data_mut(|data| {
@@ -208,6 +240,23 @@ impl Reading {
         drop(output);
         allocated
     }
+}
+
+/// The textured shapes (images) a frame painted.
+fn images(output: &egui::FullOutput) -> usize {
+    fn walk(shape: &egui::Shape) -> usize {
+        match shape {
+            egui::Shape::Vec(shapes) => shapes.iter().map(walk).sum(),
+            egui::Shape::Mesh(mesh) => usize::from(mesh.texture_id != egui::TextureId::default()),
+            egui::Shape::Rect(rect) => usize::from(rect.brush.is_some()),
+            _ => 0,
+        }
+    }
+    output
+        .shapes
+        .iter()
+        .map(|clipped| walk(&clipped.shape))
+        .sum()
 }
 
 /// The texts a frame painted.
@@ -276,17 +325,17 @@ fn both(
     bytes: usize,
     accesskit: bool,
     linked: bool,
-    standing: bool,
+    focused: bool,
 ) -> (Allocated, Allocated) {
     let what = format!(
-        "{host:?}, AccessKit {accesskit}, linked {linked}, a change standing {standing}, {bytes} B"
+        "{host:?}, AccessKit {accesskit}, linked {linked}, a link focused {focused}, {bytes} B"
     );
     // The linked rows see one screen of the note: a link out of view costs the same whatever its
     // words (its parts and targets are built only in view).
     let height = if linked { 800.0 } else { SCREEN_HEIGHT };
     let mut reading = Reading::with(host, bytes, accesskit, linked, height);
-    if standing {
-        stand_a_change(&mut reading);
+    if focused {
+        reading.focus_a_link();
     }
     let parses = MARKDOWN_PARSES.with(std::cell::Cell::get);
     let first = reading.quiet(&what);
@@ -302,10 +351,6 @@ fn both(
         parses,
         "{what}: the reader parsed nothing on its quiet frames"
     );
-    assert!(
-        !standing || reading.reader.change_result_stands(),
-        "{what}: the change's result stands through its quiet frames"
-    );
     let galleys = markdown_view::kept_galleys(&reading.ctx);
     assert!(
         galleys.len() >= 6,
@@ -313,24 +358,6 @@ fn both(
         galleys.len()
     );
     (first, stock_labels(&galleys, accesskit))
-}
-
-/// The DM changes the note's status through the reader's own act; the app loads the index
-/// again for the written file. The change's result now stands, and the reader keeps whether the
-/// file still holds what the change wrote (layout PR 9b-R1c).
-fn stand_a_change(reading: &mut Reading) {
-    let item = reading.index.items[reading.at].clone();
-    reading
-        .reader
-        .change_for_harness(&reading.campaign, &item, &reading.index, "status", "away");
-    reading.index = Arc::new(ContentIndex::load(&[], Some(&reading.campaign)).expect("reloaded"));
-    for _ in 0..4 {
-        let _ = reading.frame();
-    }
-    assert!(
-        reading.reader.change_result_stands(),
-        "the change's result stands after the act"
-    );
 }
 
 /// After `change`, the reader prepares again exactly `expected` times, then is quiet again.
@@ -363,13 +390,21 @@ fn prepares_again(
 struct Direct {
     ctx: egui::Context,
     time: f64,
+    /// The textured shapes (images) the last frame painted.
+    images: usize,
 }
 
 impl Direct {
     fn new() -> Self {
         let ctx = egui::Context::default();
         splat_design::design::theme::install(&ctx);
-        Self { ctx, time: 0.0 }
+        // The app's image loaders: a figure's local copy loads and paints.
+        egui_extras::install_image_loaders(&ctx);
+        Self {
+            ctx,
+            time: 0.0,
+            images: 0,
+        }
     }
 
     /// One frame of `text` as document `doc` at `revision`, resolving its links in `index`:
@@ -406,7 +441,25 @@ impl Direct {
                 },
             );
         });
+        self.images = images(&output);
         painted(&output).join(" | ")
+    }
+
+    /// The next quiet frame reuses what the reader prepared: no parse, the same words, the same
+    /// images (PR 861 review, P3).
+    fn reused(
+        &mut self,
+        doc: &markdown_view::DocumentId,
+        revision: u64,
+        text: &str,
+        index: Option<&Arc<ContentIndex>>,
+        after: &str,
+    ) -> bool {
+        let (parses, images) = (MARKDOWN_PARSES.with(std::cell::Cell::get), self.images);
+        let again = self.frame(doc, revision, text, index);
+        MARKDOWN_PARSES.with(std::cell::Cell::get) == parses
+            && again == after
+            && self.images == images
     }
 }
 
@@ -433,11 +486,12 @@ fn content_cases() -> Vec<String> {
         before = reader.frame(&a, 1, "Ash road at dusk.", None);
     }
     let after = reader.frame(&a, 2, "Ash road at dawn.", None);
+    let reused = reader.reused(&a, 2, "Ash road at dawn.", None, &after);
     check(
-        "a same-length edit (only the revision)",
+        "a same-length edit (only the revision), then reused",
         &before,
         &after,
-        after.contains("dawn") && !after.contains("dusk"),
+        after.contains("dawn") && !after.contains("dusk") && reused,
     );
     // Another document with the same revision.
     let mut reader = Direct::new();
@@ -445,11 +499,12 @@ fn content_cases() -> Vec<String> {
         before = reader.frame(&a, 1, "Words of Hob.", None);
     }
     let after = reader.frame(&b, 1, "Words of Wil.", None);
+    let reused = reader.reused(&b, 1, "Words of Wil.", None, &after);
     check(
-        "another document with the same revision (only the document)",
+        "another document with the same revision (only the document), then reused",
         &before,
         &after,
-        after.contains("Wil") && !after.contains("Hob"),
+        after.contains("Wil") && !after.contains("Hob") && reused,
     );
     // The link's target renamed, then deleted: only the link index's load changes.
     let warn = splat_design::design::icons::WARN;
@@ -488,11 +543,12 @@ fn content_cases() -> Vec<String> {
         }
         let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).expect("the index again"));
         let after = reader.frame(&a, 1, text, Some(&index));
+        let reused = reader.reused(&a, 1, text, Some(&index), &after);
         check(
-            &format!("the link’s target {change} (only the index’s load)"),
+            &format!("the link’s target {change} (only the index’s load), then reused"),
             &before,
             &after,
-            !before.contains(warn) && after.contains(warn),
+            !before.contains(warn) && after.contains(warn) && reused,
         );
     }
     // The image: a new art index has a local copy of the linked image, which shows in place.
@@ -517,12 +573,30 @@ fn content_cases() -> Vec<String> {
     reader
         .ctx
         .data_mut(|data| data.insert_temp(egui::Id::new("art_index"), art));
-    let after = reader.frame(&a, 1, text, None);
+    let shown_before = reader.images;
+    let mut after = reader.frame(&a, 1, text, None);
+    // The file loads on egui's loader thread: the figure paints once it has.
+    for _ in 0..100 {
+        if reader.images > 0 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        after = reader.frame(&a, 1, text, None);
+    }
+    let shown_after = reader.images;
+    let reused = reader.reused(&a, 1, text, None, &after);
     check(
-        "the image’s local copy (only the art index)",
+        &format!(
+            "the image’s local copy (only the art index), painted ({shown_before} images, then \
+             {shown_after}), then reused"
+        ),
         &before,
         &after,
-        before.contains("image") && !after.contains("image"),
+        before.contains("image")
+            && !after.contains("image")
+            && shown_before == 0
+            && shown_after > 0
+            && reused,
     );
     failures
 }
@@ -538,14 +612,14 @@ fn main() {
         // The links' own words grow (PR 813 review, P2), AccessKit off: what grows with them
         // is the app's, not egui's text runs.
         (Host::World, false, true, false),
-        // A change's result stands (layout PR 9b-R1c): the host reads no file on a quiet frame.
-        (Host::World, false, false, true),
+        // The same, with a long link focused (PR 861 review, P2): its ring on its rows in view.
+        (Host::World, false, true, true),
     ];
-    for (host, accesskit, linked, standing) in rows {
+    for (host, accesskit, linked, focused) in rows {
         {
             let frames: Vec<_> = sizes
                 .iter()
-                .map(|&bytes| both(host, bytes, accesskit, linked, standing))
+                .map(|&bytes| both(host, bytes, accesskit, linked, focused))
                 .collect();
             let (host_small, stock_small) = frames[0];
             for (&bytes, &(reader, stock)) in sizes.iter().zip(&frames).skip(1) {
@@ -632,28 +706,6 @@ fn main() {
         }));
     }
     failures.extend(content_cases());
-    // A change's result ends when an outside edit comes, at the index's next load (the reader
-    // reads the file then, not on its quiet frames).
-    let mut reading = Reading::new(Host::World, 10_000, false);
-    stand_a_change(&mut reading);
-    let path = reading
-        ._dir
-        .path()
-        .join(&reading.index.items[reading.at].entry.path);
-    let words = std::fs::read_to_string(&path).expect("the note");
-    std::fs::write(&path, words.replace("status: away", "status: gone")).expect("an outside edit");
-    let before = reading.reader.change_result_stands();
-    let _ = reading.frame();
-    let quiet = reading.reader.change_result_stands();
-    reading.index = Arc::new(ContentIndex::load(&[], Some(&reading.campaign)).expect("reloaded"));
-    let _ = reading.frame();
-    if !(before && quiet && !reading.reader.change_result_stands()) {
-        failures.push(format!(
-            "an outside edit ends a change's result at the index's next load: before {before}, \
-             a frame without a load {quiet}, after the load {}",
-            reading.reader.change_result_stands()
-        ));
-    }
     assert!(
         failures.is_empty(),
         "quiet_reader:\n{}",

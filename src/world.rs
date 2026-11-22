@@ -2313,6 +2313,13 @@ thread_local! {
     pub(crate) static LOG_KEY_SHARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    /// How many times a reader read a file on disk to check a result or a kept form (layout PR
+    /// 9b-R1c's proof: none on a quiet frame).
+    pub static READER_FILE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Lookup's and the World page's reader, and its controls for the item on show.
 /// What a reader holds for the DM that no reset of the reader may drop: the DM's typed words,
 /// and the results whose end events are their own (`Kept::ENDS`). Lookup's Clear and World's
@@ -3005,20 +3012,24 @@ impl Reader {
         // edit can have come (layout PR 9b-R1c: no file is read on a quiet frame).
         if self.disk_checked != Some(index.generation()) {
             self.disk_checked = Some(index.generation());
+            #[cfg(any(test, feature = "test-support"))]
+            let read = |path: std::path::PathBuf| {
+                READER_FILE_READS.with(|reads| reads.set(reads.get() + 1));
+                fs::read_to_string(path)
+            };
+            #[cfg(not(any(test, feature = "test-support")))]
+            let read = fs::read_to_string::<std::path::PathBuf>;
             // A change's result ends when its file no longer holds what the change wrote.
             if let Some(ReaderResult::Change(change)) = self.result(Slot::Change)
                 && campaign.is_none_or(|campaign| {
-                    fs::read_to_string(campaign.path.join(&change.path))
-                        .ok()
-                        .as_deref()
-                        != Some(&change.after)
+                    read(campaign.path.join(&change.path)).ok().as_deref() != Some(&change.after)
                 })
             {
                 self.end(Slot::Change);
             }
             if self.kept.as_ref().is_some_and(|(path, text)| {
                 campaign.is_none_or(|campaign| {
-                    fs::read_to_string(campaign.path.join(path)).ok().as_deref() != Some(text)
+                    read(campaign.path.join(path)).ok().as_deref() != Some(text)
                 })
             }) {
                 self.kept = None;
@@ -3690,26 +3701,6 @@ impl Reader {
             notices,
             entry,
         });
-    }
-
-    /// `change` for the quiet-frame harness (layout PR 9b-R1c): a value written through the
-    /// reader's own act, so its result stands as a DM's would.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn change_for_harness(
-        &mut self,
-        campaign: &Campaign,
-        item: &Item,
-        index: &ContentIndex,
-        key: &str,
-        value: &str,
-    ) {
-        let _ = self.change(campaign, item, index, key, value.into());
-    }
-
-    /// Whether a change's result stands (the quiet-frame harness's content case).
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn change_result_stands(&self) -> bool {
-        matches!(self.result(Slot::Change), Some(ReaderResult::Change(_)))
     }
 
     fn change(
@@ -6623,6 +6614,75 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Layout PR 9b-R1c: a change's result reads its file on disk only when the index's load
+    /// is new (the app loads the index again when a file changes), never on a quiet frame; an
+    /// outside edit then ends the result at that load.
+    #[test]
+    fn a_change_result_reads_its_file_only_at_a_new_index_load() {
+        use crate::design::test_harness::Themed;
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let hob = create_entry(&campaign, "Hob", "npc").unwrap();
+        let path = dir.path().join("NPCs/Hob.md");
+        let load = |campaign: &Campaign| {
+            std::sync::Arc::new(ContentIndex::load(&[], Some(campaign)).unwrap())
+        };
+        let stands =
+            |reader: &Reader| matches!(reader.result(Slot::Change), Some(ReaderResult::Change(_)));
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(520.0, 600.0))
+            .themed_ui_state(
+                move |ui,
+                      (reader, index, campaign): &mut (
+                    Reader,
+                    std::sync::Arc<ContentIndex>,
+                    Campaign,
+                )| {
+                    let at = index.position(hob).unwrap();
+                    let _ = reader.read_with(ui, &index.items[at], index, Some(campaign), None);
+                },
+                (
+                    Reader::default(),
+                    load(&campaign),
+                    sample_campaign(dir.path()),
+                ),
+            );
+        harness.run_steps(3);
+        // The DM changes the status while the reader shows the entry; the app then loads the
+        // index again for the written file.
+        {
+            let (reader, index, campaign) = harness.state_mut();
+            let at = index.position(hob).unwrap();
+            let _ = reader.change(campaign, &index.items[at], index, "status", "away".into());
+            assert!(stands(reader), "9b-R1c-setup: the change's result stands");
+        }
+        harness.state_mut().1 = load(&campaign);
+        harness.run_steps(3);
+        let reads = || READER_FILE_READS.with(std::cell::Cell::get);
+        let before = reads();
+        harness.run_steps(5);
+        assert!(
+            reads() == before && stands(&harness.state().0),
+            "9b-R1c-quiet: quiet frames read no file ({} reads), and the result stands",
+            reads() - before
+        );
+        // An outside edit: nothing reads it until the app loads the index again.
+        let words = fs::read_to_string(&path).unwrap();
+        fs::write(&path, format!("{words}\nOutside words.\n")).unwrap();
+        harness.run_steps(2);
+        assert!(
+            reads() == before && stands(&harness.state().0),
+            "9b-R1c-no-load: before the index's load, no read and the result stands"
+        );
+        harness.state_mut().1 = load(&sample_campaign(dir.path()));
+        harness.run_steps(2);
+        assert!(
+            reads() == before + 1 && !stands(&harness.state().0),
+            "9b-R1c-load: at the new load, one read ({}), and the result ends",
+            reads() - before
+        );
     }
 
     #[test]
