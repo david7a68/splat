@@ -2308,7 +2308,8 @@ mod tests {
                 })
             };
             let (row, after) = (
-                bottom("Memorize Spell").expect("the last row is painted").1,
+                // The last row's label, in the table's fixed first column (always painted).
+                bottom("5").expect("the last row is painted").1,
                 bottom("After the table.")
                     .expect("the paragraph after is painted")
                     .0,
