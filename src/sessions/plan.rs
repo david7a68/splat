@@ -1683,6 +1683,74 @@ pub(super) struct Fault {
     waits: bool,
 }
 
+/// The played fight's Log as laid out for one width: its newest entries first (the run's summary
+/// holds the log newest first), each on one line, cut by whole words with `…` and whole on hover,
+/// and, when an entry is left out or cut, a last line that says what Whole run has. Every row is
+/// one `Small` line, the notice included, so the block is never taller than a third of the
+/// reader's measure, whatever a DM's note holds.
+struct LogView {
+    rows: Vec<(Arc<egui::Galley>, String)>,
+    notice: Option<Arc<egui::Galley>>,
+}
+
+/// What a `LogView` was laid out from: the log's length and its newest entry's length, the width,
+/// the text size and the scale.
+type LogKey = (usize, usize, u32, u32, u32);
+
+/// The played fight's Log, laid out again only when its run, its log, the width or the text size
+/// changed: a quiet frame lays out and hashes nothing, however long the log or a note in it.
+fn log_view(ui: &egui::Ui, run: Uuid, log: &[String]) -> Arc<LogView> {
+    let width = ui.available_width();
+    let font = Type::Small.font(ui);
+    let key: LogKey = (
+        log.len(),
+        log.first().map_or(0, String::len),
+        width.to_bits(),
+        font.size.to_bits(),
+        ui.ctx().pixels_per_point().to_bits(),
+    );
+    let id = egui::Id::new(("plan_fight_log", run));
+    if let Some((seen, view)) = ui.data(|data| data.get_temp::<(LogKey, Arc<LogView>)>(id))
+        && seen == key
+    {
+        return view;
+    }
+    // One row: a `Small` line and the gap after it; the block holds as many as a third of the
+    // reader's measure does, and at least the newest entry and the notice.
+    let gap = ui.spacing().item_spacing.y;
+    let room = ((design::READER_MEASURE / 3.0 + gap) / (Type::Small.line() + gap))
+        .floor()
+        .max(2.0) as usize;
+    let line = |words: &str| {
+        let mut job = egui::text::LayoutJob::simple_singleline(
+            words.replace(['\n', '\r'], " "),
+            font.clone(),
+            colors().muted,
+        );
+        job.wrap.max_width = width.max(1.0);
+        job.wrap.max_rows = 1;
+        job.wrap.break_anywhere = false;
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    };
+    let mut rows: Vec<_> = log
+        .iter()
+        .take(room)
+        .map(|entry| (line(entry), entry.clone()))
+        .collect();
+    let notice = (log.len() > rows.len() || rows.iter().any(|(row, _)| row.elided)).then(|| {
+        rows.truncate(room - 1);
+        let words = match log.len() - rows.len() {
+            0 => "Whole run has every line whole.".to_owned(),
+            1 => "Whole run has 1 more line.".to_owned(),
+            more => format!("Whole run has {more} more lines."),
+        };
+        line(&words)
+    });
+    let view = Arc::new(LogView { rows, notice });
+    ui.data_mut(|data| data.insert_temp(id, (key, view.clone())));
+    view
+}
+
 /// What a scene act could not do.
 #[derive(Debug)]
 pub(super) enum SceneFault {
@@ -5825,22 +5893,16 @@ impl Sessions {
                 });
                 if self.show_fight_log {
                     // A capped block, not a scroll column of its own: the plan's pane is the
-                    // scroll column (`Body::Content`). The newest lines that fit a third of the
-                    // reader's measure show; the earlier ones are in Whole run, and it says so.
-                    let cap = (design::READER_MEASURE / 3.0 / Type::Small.line())
-                        .floor()
-                        .max(1.0) as usize;
-                    let earlier = summary.log.len().saturating_sub(cap);
-                    if earlier > 0 {
-                        let words = if earlier == 1 {
-                            "1 earlier line is in Whole run.".to_owned()
-                        } else {
-                            format!("{earlier} earlier lines are in Whole run.")
-                        };
-                        ui.label(Type::Small.rich(ui, words).color(colors().muted));
+                    // scroll column (`Body::Content`).
+                    let view = log_view(ui, run, &summary.log);
+                    for (row, whole) in &view.rows {
+                        let shown = ui.label(row.clone());
+                        if row.elided {
+                            shown.on_hover_text(whole);
+                        }
                     }
-                    for line in &summary.log[earlier..] {
-                        wrapped_words(ui, Type::Small, line, colors().muted);
+                    if let Some(notice) = &view.notice {
+                        ui.label(notice.clone());
                     }
                 }
             }
@@ -9055,6 +9117,22 @@ mod tests {
                 joined("wolf2", creature("Wolf", "1 (XP 200; PB +2)")),
             ],
         );
+        // Review of PR 645: Bridge's log is long, and its newest entry is a long DM note. The run
+        // file holds the log oldest first.
+        {
+            let path = crate::encounter_run::find_run(&runs, campaign, bridge.id).unwrap();
+            let mut saved: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            let mut log: Vec<String> = (1..=30)
+                .map(|round| format!("Round {round}: the Wolf bites for {round}."))
+                .collect();
+            log.push(format!(
+                "Note: {}",
+                "The bridge creaks under the weight of the whole party. ".repeat(12)
+            ));
+            saved["state"]["log"] = log.into();
+            fs::write(&path, saved.to_string()).unwrap();
+        }
         let shrine = ended(
             "Shrine",
             "# Shrine",
@@ -9428,18 +9506,35 @@ mod tests {
         harness.run_steps(2);
         assert!(read().contains(&format!("- [[Timeline#^{a}|{long}]]\n  - XP 200")));
         assert!(shown(&harness, "In notes"));
-        // Review of PR 645 (P1): Log opens the played fight's log in place, in the plan's own
-        // pane, which scrolls it. No scroll column of its own nests in that pane (a debug build
-        // refuses one), and the log's newest line shows.
+        // Review of PR 645 (P1s): Log opens the played fight's log in place, in the plan's own
+        // pane, which scrolls it: no scroll column of its own nests there (a debug build refuses
+        // one). Its newest entries show first (the summary holds the log newest first), the
+        // newest a long note cut to one line, and the oldest is left to Whole run, which a last
+        // line says. However long a note, the block is no taller than a third of the reader's
+        // measure.
         harness.get_by_label("Log").click();
         harness.run_steps(2);
         let path = crate::encounter_run::find_run(&runs, campaign, bridge.id).unwrap();
         let log = crate::encounter_run::fight_summary(&path, campaign)
             .unwrap()
             .log;
+        assert!(log[0].starts_with("Note: "), "the newest entry is the note");
+        let newest = harness
+            .query_by_label(&log[0])
+            .expect("the newest entry shows, whole in its name")
+            .rect();
         assert!(
-            log.last().is_some_and(|line| shown(&harness, line)),
-            "the fight's log shows in place: {log:?}"
+            harness.query_by_label(log.last().unwrap()).is_none(),
+            "the oldest entry is left to Whole run"
+        );
+        let notice = harness
+            .query_by_label_contains("Whole run has ")
+            .expect("a last line says what Whole run has")
+            .rect();
+        assert!(
+            notice.bottom() - newest.top() <= design::READER_MEASURE / 3.0 + 0.5,
+            "the log block is {} px, over a third of the reader's measure",
+            notice.bottom() - newest.top()
         );
         harness.get_by_label("Log").click();
         harness.run_steps(2);
