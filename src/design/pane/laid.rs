@@ -39,22 +39,28 @@ pub struct Laid {
     texts: Vec<LaidText>,
     slots: Vec<Rect>,
     /// Words drawn as links (`LaidUi::link`), each at its rect: its galley, and the press
-    /// target's height (at least 24 px, the galley centred in it).
-    links: Vec<(LaidText, f32)>,
+    /// target's size (at least 24 px each way, the galley centred in its height).
+    links: Vec<(LaidText, Vec2)>,
+    /// The laid words a slot draws (`LaidUi::part`), by the slot's place; `None` for a slot the
+    /// block fills itself.
+    slot_texts: Vec<Option<Arc<Galley>>>,
 }
 
 impl Laid {
+    /// This layout with the words its slots draw (`LaidUi::part`), by the slots' places.
+    pub(in crate::design) fn with_slot_texts(mut self, texts: Vec<Option<Arc<Galley>>>) -> Self {
+        self.slot_texts = texts;
+        self
+    }
+
     /// This layout with `links`, drawn by the block through `LaidUi::link`. Each must lie in the
     /// block.
-    pub(in crate::design) fn with_links(mut self, links: Vec<(LaidText, f32)>) -> Self {
+    pub(in crate::design) fn with_links(mut self, links: Vec<(LaidText, Vec2)>) -> Self {
         debug_assert!(
-            links.iter().all(|(text, height)| {
+            links.iter().all(|(text, size)| {
                 Rect::from_min_size(egui::Pos2::ZERO, self.size)
                     .expand(0.5)
-                    .contains_rect(Rect::from_min_size(
-                        text.at,
-                        egui::vec2(text.galley.size().x, *height),
-                    ))
+                    .contains_rect(Rect::from_min_size(text.at, *size))
             }),
             "a recipe lays out every link inside its block"
         );
@@ -91,6 +97,7 @@ impl Laid {
             texts,
             slots,
             links: Vec::new(),
+            slot_texts: Vec::new(),
         }
     }
 
@@ -133,12 +140,15 @@ impl LaidUi<'_> {
     /// Link `at` (`Laid::with_links`): its laid words at their rect, a press target as tall as the
     /// recipe made it, named `name` to a screen reader, as `design::wrapped_link` draws one.
     pub fn link(&mut self, at: usize, name: &str) -> Response {
-        let (text, height) = &self.laid.links[at];
+        // An empty title shows `Untitled`, and says it (review of PR 820).
+        let name = if name.trim().is_empty() {
+            "Untitled"
+        } else {
+            name
+        };
+        let (text, size) = &self.laid.links[at];
         let origin = self.ui.max_rect().min;
-        let rect = Rect::from_min_size(
-            origin + text.at.to_vec2(),
-            egui::vec2(text.galley.size().x, *height),
-        );
+        let rect = Rect::from_min_size(origin + text.at.to_vec2(), *size);
         let response = self.ui.interact(
             rect,
             self.ui.id().with(("laid_link", at)),
@@ -160,10 +170,65 @@ impl LaidUi<'_> {
         response.on_hover_cursor(egui::CursorIcon::PointingHand)
     }
 
+    /// Slot `at`'s laid words (`Laid::with_slot_texts`) at its rect: a label named `name` that
+    /// takes a hover, or a link (a press target at least `XL` each way, the words centred in its
+    /// height). The caller adds its hover text.
+    pub fn part(&mut self, at: usize, name: &str, link: bool) -> Response {
+        let rect = self.slot(at);
+        let galley = self.laid.slot_texts[at]
+            .clone()
+            .expect("a slot with laid words");
+        let sense = if link {
+            egui::Sense::click()
+        } else {
+            egui::Sense::hover()
+        };
+        let response = self
+            .ui
+            .interact(rect, self.ui.id().with(("laid_part", at)), sense);
+        let enabled = self.ui.is_enabled();
+        let kind = if link {
+            egui::WidgetType::Link
+        } else {
+            egui::WidgetType::Label
+        };
+        response.widget_info(|| egui::WidgetInfo::labeled(kind, enabled, name));
+        if self.ui.is_rect_visible(rect) {
+            let top = rect.center().y - galley.size().y / 2.0;
+            self.ui.painter().galley(
+                egui::pos2(rect.left(), top),
+                galley,
+                crate::design::tokens::colors().text,
+            );
+            if link && response.has_focus() {
+                crate::design::components::focus_ring(self.ui, rect);
+            }
+        }
+        if link {
+            response.on_hover_cursor(egui::CursorIcon::PointingHand)
+        } else {
+            response
+        }
+    }
+
     /// `widget` in slot `at`, at its rect.
     pub fn put(&mut self, at: usize, widget: impl Widget) -> Response {
         let rect = self.slot(at);
         self.ui.put(rect, widget)
+    }
+
+    /// `add`'s actions in slot `at`: right to left and centred on their line, `S` apart, as a
+    /// list's action place draws them (`action_rows::ActionSlot::child`).
+    pub fn actions<R>(&mut self, at: usize, add: impl FnOnce(&mut Ui) -> R) -> R {
+        let rect = self.slot(at);
+        let mut child = self.ui.new_child(
+            UiBuilder::new()
+                .id_salt(("slot", at))
+                .max_rect(rect)
+                .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        );
+        child.spacing_mut().item_spacing.x = crate::design::tokens::S;
+        add(&mut child)
     }
 
     /// `add` in a `Ui` that is slot `at`'s rect, with no item spacing.
@@ -208,6 +273,32 @@ pub(in crate::design) fn render(
     draw(&mut LaidUi { ui, laid });
     bounds.check(ui, rect);
     true
+}
+
+/// Draw `laid` in place in `ui`, outside a region: its laid size at the cursor, its texts, and
+/// `draw`'s controls in its slots (layout 11c A2c). A host whose rows are not yet a region (the
+/// Session plan while a row is open) draws its closed rows through the same recipe, so they keep
+/// their height and place in both of its modes. The block registers its whole rect as a row
+/// (`register_row`: a footer never cuts through it) and returns it.
+pub fn draw_laid(ui: &mut Ui, laid: &Laid, draw: impl FnOnce(&mut LaidUi<'_>)) -> Rect {
+    // The block's own gaps are laid out inside it (`theme::LINE_GAP`): the caller's scope leaves
+    // the column's gap after it.
+    let gap = ui.spacing().item_spacing.y;
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let (rect, _) = ui.allocate_exact_size(laid.size, egui::Sense::hover());
+    ui.spacing_mut().item_spacing.y = gap;
+    // The block's `Ui` (and so its controls' ids and their focus) is its own, by its key, as a
+    // region's block is: two rows under one parent never share an id, and a row keeps its ids
+    // whatever rows draw before it (review of PR 840).
+    let mut child = ui.new_child(
+        UiBuilder::new()
+            .id_salt(ui.id().with(("laid", laid.key)))
+            .global_scope(true)
+            .max_rect(rect),
+    );
+    let _ = render(&mut child, laid, laid.revision, draw);
+    crate::design::register_row(ui, rect);
+    rect
 }
 
 /// Where a block's paint and widgets start on every layer it may paint to, to check them after

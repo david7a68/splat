@@ -15,13 +15,15 @@
 //! - **The summary**, under the title and the action place, in `width − x0 − Read.control − S`:
 //!   words that wrap (in at most so many rows), and parts the row draws itself in slots of their
 //!   own measured height (a status, a run link, a message).
-//! - **The rule** after the row (`S`, then the hairline), part of the block.
+//! - **The rule** after the row (the line gap, `S`, the hairline), part of the block; the
+//!   column leaves its own gap after each block.
 //!
 //! The row's facts (its title and its summary lines) and its action recipe make the shared
 //! column; a change of either lays every row out again (each row's layout revision changes).
 use egui::{Id, Pos2, Rect, Ui, pos2, vec2};
 
 use super::laid::{Laid, LaidText};
+use crate::design::theme::LINE_GAP;
 use crate::design::tokens::{Density, L, S, Type, XL, colors};
 
 /// One part of a closed row's summary, under its title.
@@ -37,6 +39,14 @@ pub enum SummaryPart<'a> {
     /// A part the row draws itself (`LaidUi::in_slot`), measured by that part: its height, and
     /// the width its facts take.
     Part { height: f32, width: f32 },
+    /// Words of several colours laid out in the summary's width, in at most `max_rows` rows, and
+    /// drawn in their slot by `LaidUi::part` (with a hover, a name, or as a link: its press
+    /// target at least `XL` each way).
+    Job {
+        job: &'a egui::text::LayoutJob,
+        max_rows: usize,
+        link: bool,
+    },
 }
 
 /// A closed Session plan row (layout 11c A2b).
@@ -51,6 +61,13 @@ pub struct PlanRow<'a> {
     pub summary: &'a [SummaryPart<'a>],
     /// The row's own action place: its widest action recipe.
     pub actions: f32,
+    /// The action place's height, as the actions measure it (one line: `Density::Read.control()`;
+    /// more when they wrap): the summary starts under it and the block holds it (review of PR
+    /// 820).
+    pub actions_height: f32,
+    /// The rule after the row is part of the block (a closed row); an opened row draws its
+    /// details first, then the rule.
+    pub rule: bool,
 }
 
 /// The plan's shared column: its widest facts and its widest action recipe, from every closed
@@ -93,6 +110,8 @@ pub fn lead_width() -> f32 {
 struct Summary {
     texts: Vec<LaidText>,
     parts: Vec<Rect>,
+    /// Each part's laid words (a `Job`), in the parts' order.
+    part_texts: Vec<Option<std::sync::Arc<egui::Galley>>>,
     height: f32,
     /// The widest line, from the summary's left.
     width: f32,
@@ -111,9 +130,47 @@ impl PlanRow<'_> {
         (width - Self::x0() - Density::Read.control() - S).max(XL)
     }
 
+    /// The summary's room in a row `width` wide: a part laid out before the row (a kept plan
+    /// line, a group's members) is fitted to it.
+    pub fn summary_room(width: f32) -> f32 {
+        Self::summary_width(width)
+    }
+
+    /// The row's actions stand in the plan's shared column (`columns`, which holds this row's
+    /// facts), `L` after its widest facts; else at the row's far edge (layout PR 5a-2, I6).
+    pub fn in_column(&self, ui: &Ui, width: f32, columns: PlanColumns) -> bool {
+        self.column(
+            Self::target_width(self.title(ui, width).size().x),
+            width,
+            columns,
+        )
+    }
+
+    /// The title link's press target width: its words, at least 24 px (review of PR 820).
+    fn target_width(words: f32) -> f32 {
+        words.max(24.0)
+    }
+
+    fn column(&self, title_width: f32, width: f32, columns: PlanColumns) -> bool {
+        let facts = columns.facts.max(title_width);
+        columns.facts > 0.0
+            && columns.actions >= self.actions - 0.5
+            && facts + L + columns.actions <= width - Self::x0() + 0.5
+    }
+
+    /// The title's words: an empty title shows `Untitled` (review of PR 820), so the link is
+    /// never empty.
+    fn words(&self) -> &str {
+        if self.title.trim().is_empty() {
+            "Untitled"
+        } else {
+            self.title
+        }
+    }
+
     fn title(&self, ui: &Ui, width: f32) -> std::sync::Arc<egui::Galley> {
         let text = Type::Body
-            .rich(ui, self.title)
+            .rich(ui, self.words())
             .color(colors().accent)
             .underline();
         egui::WidgetText::from(text).into_galley(
@@ -129,6 +186,7 @@ impl PlanRow<'_> {
         let mut summary = Summary {
             texts: Vec::new(),
             parts: Vec::new(),
+            part_texts: Vec::new(),
             height: 0.0,
             width: 0.0,
         };
@@ -162,6 +220,26 @@ impl PlanRow<'_> {
                     summary
                         .parts
                         .push(Rect::from_min_size(pos2(left, y), vec2(room, height)));
+                    summary.part_texts.push(None);
+                }
+                SummaryPart::Job {
+                    job,
+                    max_rows,
+                    link,
+                } => {
+                    let mut job = job.clone();
+                    job.wrap.max_width = room;
+                    job.wrap.max_rows = max_rows;
+                    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+                    let size = if link {
+                        galley.size().max(vec2(XL, XL))
+                    } else {
+                        galley.size()
+                    };
+                    summary.width = summary.width.max(size.x);
+                    summary.height += size.y;
+                    summary.parts.push(Rect::from_min_size(pos2(left, y), size));
+                    summary.part_texts.push(Some(galley));
                 }
             }
         }
@@ -171,7 +249,9 @@ impl PlanRow<'_> {
     /// The row's facts (its title and every summary line, from its words' column) and its
     /// action recipe, at `width`: what the shared column is made of.
     pub fn facts(&self, ui: &Ui, width: f32) -> (f32, f32) {
-        let title = self.title(ui, width).size().x;
+        // The title's press target, at least 24 px wide (review of PR 840): a short title's
+        // target is its facts, so no action stands on it.
+        let title = Self::target_width(self.title(ui, width).size().x);
         let summary = self
             .summary(ui, (0.0, 0.0, Self::summary_width(width)))
             .width;
@@ -188,28 +268,28 @@ impl PlanRow<'_> {
         let lead_at = lead_slot.center() - lead.size() / 2.0;
         let title = self.title(ui, width);
         let title_height = title.size().y.max(24.0);
-        let title_width = title.size().x;
+        let title_width = Self::target_width(title.size().x);
         // The action place: `L` after the plan's widest facts where the shared column fits, else
         // at the row's far edge (layout PR 5a-2, I6).
-        let facts = columns.facts.max(title_width);
-        let room = width - x0;
-        let column = columns.facts > 0.0
-            && columns.actions >= self.actions - 0.5
-            && facts + L + columns.actions <= room + 0.5;
-        let action_x = if column {
-            x0 + facts + L
+        let action_x = if self.column(title_width, width, columns) {
+            x0 + columns.facts.max(title_width) + L
         } else {
             width - self.actions
         };
-        let actions = Rect::from_min_size(
-            pos2(action_x, 0.0),
-            vec2(self.actions, Density::Read.control()),
-        );
+        let actions =
+            Rect::from_min_size(pos2(action_x, 0.0), vec2(self.actions, self.actions_height));
         let summary_top = title_height.max(actions.bottom());
         let summary = self.summary(ui, (x0, summary_top, Self::summary_width(width)));
         let row = (summary_top + summary.height).max(actions.bottom());
-        // The rule after the row: `S`, then the hairline.
-        let rule = Rect::from_min_size(pos2(0.0, row + S), vec2(width, 1.0));
+        // After the row, the plan column's line gap (`LINE_GAP`, egui's item gap there); then,
+        // for a closed row, `S` and the hairline, as `plan_rule` draws them after an opened row's
+        // details. The block ends there: the column leaves its own gap after each block.
+        let rule = if self.rule {
+            Rect::from_min_size(pos2(0.0, row + LINE_GAP + S), vec2(width, 1.0))
+        } else {
+            Rect::from_min_size(pos2(0.0, row + LINE_GAP), vec2(width, 0.0))
+        };
+        let height = rule.bottom();
         let mut texts = vec![LaidText {
             at: Pos2::new(lead_at.x, lead_at.y),
             galley: lead,
@@ -217,13 +297,18 @@ impl PlanRow<'_> {
         texts.extend(summary.texts);
         let mut slots = vec![lead_slot, actions, rule];
         slots.extend(summary.parts);
-        Laid::new(self.key, vec2(width, rule.bottom()), None, texts, slots).with_links(vec![(
-            LaidText {
-                at: pos2(x0, 0.0),
-                galley: title,
-            },
-            title_height,
-        )])
+        let mut slot_texts = vec![None, None, None];
+        slot_texts.extend(summary.part_texts);
+        Laid::new(self.key, vec2(width, height), None, texts, slots)
+            .with_slot_texts(slot_texts)
+            .with_links(vec![(
+                LaidText {
+                    at: pos2(x0, 0.0),
+                    galley: title,
+                },
+                // A press target at least 24 px wide (review of PR 820).
+                vec2(title_width, title_height),
+            )])
     }
 }
 
@@ -260,6 +345,36 @@ mod tests {
         region: RegionState,
         /// Each drawn row's block rect, its title link's rect and its action's, as drawn.
         drawn: Vec<(usize, Rect, Rect, Rect)>,
+        /// The actions wrap to two lines (two buttons, one under the other), as they measure.
+        stacked: bool,
+        /// The actions are two of the app's actions in a place narrower than both: the width
+        /// wraps them, measured with the real fonts (review of PR 840).
+        wrap_by_width: bool,
+        /// The rows have no summary.
+        bare: bool,
+        /// Each row's height by the test's own separate layout, in this pass.
+        expected: Vec<f32>,
+    }
+
+    /// The two actions of `wrap_by_width`.
+    fn two_actions() -> [crate::design::components::Action<'static>; 2] {
+        [
+            crate::design::components::Action::secondary("Start fight").density(Density::Read),
+            crate::design::components::Action::quiet("Add to notes").density(Density::Read),
+        ]
+    }
+
+    /// The width and height of the actions' place, as the actions measure: two actions in a
+    /// place as wide as the wider one take two lines, `S` apart, when they do not fit on one.
+    fn wrapped_place(ui: &Ui) -> (f32, f32) {
+        let [first, second] = two_actions().map(|action| action.natural_width(ui));
+        let place = first.max(second);
+        let lines = if first + S + second <= place {
+            1.0
+        } else {
+            2.0
+        };
+        (place, lines * Density::Read.control() + (lines - 1.0) * S)
     }
 
     const SUMMARY: [SummaryPart<'static>; 1] = [SummaryPart::Words {
@@ -269,6 +384,61 @@ mod tests {
         max_rows: 3,
     }];
 
+    /// The actions' measured height: one line, or two with `S` between.
+    fn actions_height(stacked: bool) -> f32 {
+        if stacked {
+            2.0 * Density::Read.control() + S
+        } else {
+            Density::Read.control()
+        }
+    }
+
+    /// The row's height by a separate layout (the test's own): the title (at least 24 px) beside
+    /// the actions, the summary under the taller, then the line gap, `S` and the rule (review of PR 820).
+    fn expected_height(
+        ui: &Ui,
+        title: &str,
+        width: f32,
+        ((actions, actions_height), bare): ((f32, f32), bool),
+    ) -> f32 {
+        let x0 = Type::Body.size() + S;
+        let title = egui::WidgetText::from(Type::Body.rich(
+            ui,
+            if title.trim().is_empty() {
+                "Untitled"
+            } else {
+                title
+            },
+        ))
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Wrap),
+            (width - x0 - actions - S).max(XL),
+            egui::TextStyle::Body,
+        );
+        let SummaryPart::Words {
+            text,
+            role,
+            color,
+            max_rows,
+        } = SUMMARY[0]
+        else {
+            unreachable!("the test's summary is words")
+        };
+        let mut job = egui::text::LayoutJob::single_section(
+            text.to_owned(),
+            egui::TextFormat::simple(role.font(ui), color),
+        );
+        job.wrap.max_width = (width - x0 - Density::Read.control() - S).max(XL);
+        job.wrap.max_rows = max_rows;
+        let summary = if bare {
+            0.0
+        } else {
+            ui.fonts_mut(|fonts| fonts.layout_job(job)).size().y
+        };
+        title.size().y.max(24.0).max(actions_height) + summary + LINE_GAP + S + 1.0
+    }
+
     fn harness(titles: &[&str], size: Vec2, scale: f32) -> Harness<'static, Rows> {
         let rows = Rows {
             titles: titles.iter().map(|title| (*title).to_owned()).collect(),
@@ -276,6 +446,10 @@ mod tests {
             blocks: Revised::new(Vec::new()),
             region: RegionState::new("plan_row_test"),
             drawn: Vec::new(),
+            stacked: false,
+            wrap_by_width: false,
+            bare: false,
+            expected: Vec::new(),
         };
         let mut harness = Harness::builder()
             .with_size(size)
@@ -287,6 +461,19 @@ mod tests {
                         Messages::<NoPress>::new(&frame, "plan_row_test", ui.available_width());
                     let _ = messages.pane(ui, Body::Content, |ui| {
                         let width = ui.available_width();
+                        let (stacked, by_width, bare) =
+                            (rows.stacked, rows.wrap_by_width, rows.bare);
+                        let place = if by_width {
+                            wrapped_place(ui)
+                        } else {
+                            (120.0, actions_height(stacked))
+                        };
+                        let summary: &[SummaryPart<'_>] = if bare { &[] } else { &SUMMARY };
+                        rows.expected = rows
+                            .titles
+                            .iter()
+                            .map(|title| expected_height(ui, title, width, (place, bare)))
+                            .collect();
                         let specs: Vec<PlanRow<'_>> = rows
                             .titles
                             .iter()
@@ -295,8 +482,10 @@ mod tests {
                                 key: Id::new(("plan_row_test", at)),
                                 lead: ">",
                                 title,
-                                summary: &SUMMARY,
-                                actions: 120.0,
+                                summary,
+                                actions: place.0,
+                                actions_height: place.1,
+                                rule: true,
                             })
                             .collect();
                         // The shared column, from every row, before any row draws.
@@ -313,15 +502,45 @@ mod tests {
                             blocks,
                             region,
                             drawn,
+                            ..
                         } = rows;
                         BlockRegion::new("plan_row_test", region, blocks).show_laid(
                             ui,
                             |at| &laid[at],
                             |ui, at| {
                                 let link = ui.link(0, &titles[at]).rect;
-                                let action = ui
-                                    .put(slot::ACTIONS, egui::Button::new(format!("Act {at}")))
-                                    .rect;
+                                let action = if by_width {
+                                    ui.in_slot(slot::ACTIONS, |ui| {
+                                        ui.spacing_mut().item_spacing = vec2(S, S);
+                                        ui.horizontal_wrapped(|ui| {
+                                            let [first, second] = two_actions();
+                                            let first = first.show(ui).rect;
+                                            let second = second.show(ui).rect;
+                                            assert!(
+                                                second.top() >= first.bottom() + S - 0.5,
+                                                "the width wraps the actions: {first:?} {second:?}"
+                                            );
+                                            first.union(second)
+                                        })
+                                        .inner
+                                    })
+                                } else if stacked {
+                                    ui.in_slot(slot::ACTIONS, |ui| {
+                                        let first = ui.add_sized(
+                                            vec2(120.0, Density::Read.control()),
+                                            egui::Button::new(format!("Act {at}")),
+                                        );
+                                        crate::design::extras::space(ui, S);
+                                        let second = ui.add_sized(
+                                            vec2(120.0, Density::Read.control()),
+                                            egui::Button::new(format!("More {at}")),
+                                        );
+                                        first.rect.union(second.rect)
+                                    })
+                                } else {
+                                    ui.put(slot::ACTIONS, egui::Button::new(format!("Act {at}")))
+                                        .rect
+                                };
                                 rule(ui);
                                 let block =
                                     Rect::from_min_size(ui.slot(slot::LEAD).min, laid[at].size());
@@ -381,9 +600,12 @@ mod tests {
                         slot.top() >= block.top() - 0.5 && slot.bottom() <= block.bottom() + 0.5,
                         "{width}@{scale}: row {at}'s action {slot:?} inside its block"
                     );
+                    let _ = laid;
+                    let expected = rows.expected[at];
                     assert!(
-                        (block.height() - laid.size().y).abs() < 0.5,
-                        "{width}@{scale}: row {at} is as tall as laid"
+                        (block.height() - expected).abs() < 0.5,
+                        "{width}@{scale}: row {at} is {} tall, a separate layout says {expected}",
+                        block.height()
                     );
                 }
             }
@@ -424,6 +646,115 @@ mod tests {
                 .zip(&revisions)
                 .all(|(laid, was)| laid.revision() != *was),
             "every row was laid out again"
+        );
+    }
+
+    /// Review of PR 820: actions that wrap (two lines, as they measure) take their height in the
+    /// block: the block is as tall as a separate layout says, so the summary starts under them and
+    /// nothing goes past the block (the bounds check). Red: the actions' height left out.
+    #[test]
+    fn wrapped_actions_take_their_height() {
+        // Two buttons set one under the other; then two of the app's actions that the place's
+        // width wraps, measured with the real fonts (review of PR 840).
+        for by_width in [false, true] {
+            let mut harness = harness(&["Bridge Ambush", "Wolves"], vec2(520.0, 600.0), 1.0);
+            harness.state_mut().stacked = !by_width;
+            harness.state_mut().wrap_by_width = by_width;
+            harness.run_steps(2);
+            let rows = harness.state();
+            assert_eq!(rows.drawn.len(), 2);
+            for &(at, block, _, action) in &rows.drawn {
+                let expected = rows.expected[at];
+                assert!(
+                    (block.height() - expected).abs() < 0.5
+                        && action.bottom() <= block.bottom() + 0.5
+                        && action.height() > 2.0 * Density::Read.control(),
+                    "row {at} (by width: {by_width}): {} tall with its two lines of actions \
+                     {action:?}, a separate layout says {expected}",
+                    block.height()
+                );
+            }
+        }
+    }
+
+    /// Review of PR 820: a title link is a target at least 24 px wide, and an empty title shows
+    /// `Untitled`.
+    #[test]
+    fn a_short_or_empty_title_keeps_its_target() {
+        // Review of PR 840: with no summary, a one-letter title's facts are its target, so the
+        // shared column starts `L` after the target, never on it.
+        let mut bare = harness(&["i"], vec2(960.0, 600.0), 1.0);
+        bare.state_mut().bare = true;
+        bare.run_steps(2);
+        let (_, _, link, action) = bare.state().drawn[0];
+        assert!(
+            link.width() >= 24.0 - 0.01 && action.left() >= link.right() + L - 0.5,
+            "the actions {action:?} start L after the title's target {link:?}"
+        );
+        let harness = harness(&["A", ""], vec2(960.0, 600.0), 1.0);
+        let drawn = &harness.state().drawn;
+        assert!(
+            drawn[0].2.width() >= 24.0 - 0.01,
+            "a one-letter title's link: {:?}",
+            drawn[0].2
+        );
+        let painted = harness.output().shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == "Untitled")
+        });
+        assert!(
+            painted
+                && harness.query_by_label("Untitled").is_some()
+                && drawn[1].2.width() >= 24.0 - 0.01,
+            "an empty title shows and says `Untitled`, at least 24 px wide"
+        );
+    }
+
+    /// Review of PR 840 (P2): a laid row drawn in place (`draw_laid`) has its controls' ids by its
+    /// key. Two rows with one title under one parent keep their own ids, and a focused link stays
+    /// in its row when another row is drawn above it. Red: the block's `Ui` by its place.
+    #[test]
+    fn rows_drawn_in_place_keep_their_own_ids() {
+        let mut harness = Harness::builder()
+            .with_size(vec2(600.0, 400.0))
+            .themed_ui_state(
+                |ui, rows: &mut Vec<(u64, String)>| {
+                    let width = ui.available_width();
+                    for (key, title) in rows.iter() {
+                        let row = PlanRow {
+                            key: Id::new(("in_place", *key)),
+                            lead: ">",
+                            title,
+                            summary: &[],
+                            actions: 60.0,
+                            actions_height: Density::Read.control(),
+                            rule: true,
+                        };
+                        let laid = row.lay(ui, width, PlanColumns::default());
+                        let _ = crate::design::draw_laid(ui, &laid, |ui| {
+                            let _ = ui.link(0, title);
+                        });
+                    }
+                },
+                vec![(1, "Wolves".to_owned()), (2, "Wolves".to_owned())],
+            );
+        harness.run_steps(2);
+        // One accessible node per id: rows that shared their ids would show one link.
+        assert_eq!(
+            harness.query_all_by_label("Wolves").count(),
+            2,
+            "two rows with one title have their own ids"
+        );
+        *harness.state_mut() = vec![(1, "Alpha".to_owned())];
+        harness.run_steps(2);
+        harness.get_by_label("Alpha").focus();
+        harness.run_steps(2);
+        assert!(harness.get_by_label("Alpha").is_focused());
+        harness.state_mut().insert(0, (2, "Beta".to_owned()));
+        harness.run_steps(2);
+        assert!(
+            harness.get_by_label("Alpha").is_focused()
+                && !harness.get_by_label("Beta").is_focused(),
+            "the focused link stays in its row when a row is drawn above it"
         );
     }
 }

@@ -708,6 +708,8 @@ pub struct Sessions {
     plan_model: plan::PlanModelCache,
     /// What the plan's closed rows read from their data, kept by its inputs' revisions.
     plan_projection: plan::ProjectionCache,
+    /// The plan's closed rows as their recipe laid them, kept by their inputs (layout 11c A2c).
+    plan_rows: plan::PlanRowsCache,
     /// The fight behind the open event, read once.
     /// The open played fight's summary, kept with the run's file as last found (or why not):
     /// a different answer from the folder reads it again (R41, round 30 review F2).

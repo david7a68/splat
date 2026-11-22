@@ -136,7 +136,7 @@ mod region;
 pub use columns::rejected_edges;
 pub use columns::{PaneColumns, PaneEdges};
 use egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
-pub use laid::{Laid, LaidUi};
+pub use laid::{Laid, LaidUi, draw_laid};
 pub use plan::{ACTION_ROW, Block, ENTRY_ROW_HEIGHT, Measured, Row};
 pub use plan_row::{PlanColumns, PlanRow, SummaryPart, rule as plan_rule, slot as plan_slot};
 pub use region::{BlockRegion, Navigation, RegionState};

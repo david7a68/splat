@@ -2926,6 +2926,15 @@ pub fn rail_status_detail<'a>(
 }
 
 fn status_label(ui: &mut Ui, state: Tinted<'_>) -> Response {
+    let job = status_job(ui, state);
+    ui.add(egui::Label::new(job).truncate())
+        .on_hover_text(state.word)
+}
+
+/// A status's words as one job (its icon in the icon's colour, then its word), in `Small`: what
+/// `status` draws, for a part that lays its words out before paint (layout 11c).
+pub fn status_job<'a>(ui: &Ui, state: impl Into<Tinted<'a>>) -> LayoutJob {
+    let state = state.into();
     let mut job = LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
@@ -2942,8 +2951,7 @@ fn status_label(ui: &mut Ui, state: Tinted<'_>) -> Response {
     );
     job.append(" ", 0.0, format.clone());
     job.append(state.word, 0.0, format);
-    ui.add(egui::Label::new(job).truncate())
-        .on_hover_text(state.word)
+    job
 }
 
 /// A status that also leads to where the DM can act on it. The line wraps, because the
