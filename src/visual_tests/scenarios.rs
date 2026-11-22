@@ -7117,7 +7117,10 @@ pub mod settings {
                     !d.visible_text(DISCARDED),
                     d.visible_text(ACCOUNT_ERROR),
                 );
-                d.click("Discard");
+                // With no draft back there is nothing to discard again (A is still shown).
+                if d.in_view("Discard") {
+                    d.click("Discard");
+                }
                 undone
             })
         });
