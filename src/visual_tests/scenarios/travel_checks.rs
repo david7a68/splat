@@ -611,7 +611,22 @@ pub fn run(d: &mut Driver<'_>) {
         }
         d.settle();
         let size = d.window_size();
-        let faults = table_menu_faults(d);
+        let mut faults = table_menu_faults(d);
+        // M-T0.7: the reason under No checks starts at the choice's words and ends `S` before
+        // the menu (the shared check), and its words are not justified.
+        if let Err(fault) =
+            super::note_starts_at_choice_words(d, "No checks", "Clear the results first.")
+        {
+            faults.push(fault);
+        }
+        d.each_painted_text(|text, _| {
+            if text.galley.job.text.starts_with("Clear the results") && text.galley.job.justify {
+                faults.push(format!(
+                    "the reason's words are justified: {:?}",
+                    text.galley.rect
+                ));
+            }
+        });
         d.observe(
             "s654-table-menu-clear",
             faults.is_empty(),

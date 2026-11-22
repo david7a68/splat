@@ -550,7 +550,25 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
             ui.close();
         }
         if results {
-            design::blocked_reason(ui, Some("Clear the results first."));
+            // The reason is a note under its choice (M-T0.7): it starts at the choice's words,
+            // the quiet action's padding `S` in, and ends `S` before the menu's edge, in a column
+            // that does not justify its words as the menu's own layout does.
+            let room = ui.available_rect_before_wrap();
+            let column = egui::Rect::from_min_max(
+                egui::pos2(room.left() + design::S, room.top()),
+                egui::pos2(room.right() - design::S, room.bottom()),
+            );
+            let note = ui
+                .scope_builder(
+                    egui::UiBuilder::new()
+                        .max_rect(column)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                    |ui| design::blocked_reason(ui, Some("Clear the results first.")),
+                )
+                .response
+                .rect;
+            // The menu takes its width from what it holds: the note keeps the padding after it.
+            ui.expand_to_include_x(note.right() + design::S);
         }
     });
     let Some(table) = table else {
