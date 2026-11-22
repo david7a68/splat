@@ -3052,6 +3052,7 @@ fn road_days(
 /// lines (rule P): first the journey's name goes; the day itself gives way last, in the row's
 /// cut order (`planned_summary_on_road`).
 /// `planned_summary_on_road` draws it after the summary.
+#[cfg(test)]
 fn road_day(ui: &egui::Ui, summary: &str, day: Option<&str>) -> Option<String> {
     road_day_in(ui, (summary, ui.available_width()), day)
 }
@@ -5187,7 +5188,7 @@ impl Sessions {
                         let key = egui::Id::new(("plan_event", &event.id));
                         let drawn = draw_plan_row(ui, &words, (key, row_width, columns), (Some(is_open), !is_open), |ui| {
                             if let Some(saved) = saved {
-                                design::row_menu(ui, &label, |ui| {
+                                design::row_menu(ui, label, |ui| {
                                     if let Some(fight) = saved_fight
                                         && Action::quiet("Start a new run").blocked(plan.blocked).show(ui).clicked() {
                                         self.wants_fight = Some(fight.path.clone()); ui.close();
