@@ -3802,9 +3802,10 @@ pub struct Encounters {
     /// Why the fight read in History cannot go on (`continue_blocked`), when it cannot.
     history_blocked: Option<&'static str>,
     /// What the rule's answers were worked out from: the Timeline's count of changes, the
-    /// open run if it is ended, and the ID of the fight read in History. Not its path: another
+    /// open run if it is ended, the ID of the fight read in History, and whether an edit waits
+    /// over a file that changed on disk. Not the fight's path: another
     /// run can take the file at that path.
-    continue_key: Option<(u64, Option<uuid::Uuid>, Option<uuid::Uuid>)>,
+    continue_key: Option<(u64, Option<uuid::Uuid>, Option<uuid::Uuid>, bool)>,
     /// A run just opened, or the DM asked to go back to it from its row in the list, so the
     /// shell goes to the Run page.
     pub go_to_run: bool,
@@ -4486,10 +4487,21 @@ impl Encounters {
             let runs = &self.snapshot.as_ref()?.runs;
             runs.iter().find(|run| run.path == *path)?.id
         });
-        if self.continue_key == Some((timeline.changes(), ended, read)) {
+        // An edit that waits for its save over a file that changed on disk: the rule cannot say
+        // which fight was played last, as `Run::unend` finds (review of PR 666).
+        let unsettled = timeline.unsaved() && timeline.moved_under_edit.is_some();
+        let key = (timeline.changes(), ended, read, unsettled);
+        if self.continue_key == Some(key) {
+            // A restored or deleted encounter changes no key: the answer checks it each frame.
+            if let Some(run) = self.run.as_mut() {
+                run.answer_still_stands();
+            }
             return;
         }
         let rule = |id| {
+            if unsettled {
+                return Some(crate::encounter_run::Run::UNSETTLED);
+            }
             crate::encounter_run::continue_blocked(
                 &timeline.events,
                 timeline.unreadable.is_none(),
@@ -4501,7 +4513,7 @@ impl Encounters {
             run.answer_still_stands();
         }
         self.history_blocked = read.and_then(rule);
-        self.continue_key = Some((timeline.changes(), ended, read));
+        self.continue_key = Some(key);
     }
     /// The newest unfinished save is one click away from any page.
     pub fn paused_run(&self) -> Option<&crate::encounter_run::SavedRunInfo> {
@@ -13373,6 +13385,41 @@ mod tests {
         assert!(run.continue_blocked.is_some_and(|reason| {
             reason.starts_with("This fight cannot go on: it is not on the Timeline")
         }));
+        // Review of PR 666 (P1): with an edit that waits for its save over a Timeline.md that
+        // changed on disk, the refusal says so, and the app's next working-out (the new run
+        // changed its key) keeps it until the save settles the file.
+        let reason = |editor: &Encounters| {
+            editor
+                .run()
+                .unwrap()
+                .unend_refused
+                .as_ref()
+                .map(|(reason, _, _)| *reason)
+        };
+        let event = timeline.add(crate::timeline::Kind::Event, None);
+        timeline.save();
+        let mut other = crate::timeline::Book::default();
+        other.open(Some(dir.path()));
+        other.add(crate::timeline::Kind::Event, None);
+        other.save();
+        timeline.event_mut(&event).unwrap().notes = "Waiting to save".into();
+        timeline.touch();
+        editor.continue_saved_run(&path, &campaign);
+        answer(&mut editor, &mut timeline);
+        assert_eq!(reason(&editor), Some(crate::encounter_run::Run::UNSETTLED));
+        editor.follow_continue_rule(&timeline);
+        assert_eq!(
+            reason(&editor),
+            Some(crate::encounter_run::Run::UNSETTLED),
+            "the refresh keeps the refusal while the edit waits over the changed file"
+        );
+        timeline.save();
+        editor.follow_continue_rule(&timeline);
+        assert_eq!(
+            reason(&editor),
+            None,
+            "the save settles it, and the answer ends"
+        );
         // On the Timeline as the fight that was played last, it goes on, on the round it
         // ended in.
         let fact = editor.run().unwrap().timeline_fact();

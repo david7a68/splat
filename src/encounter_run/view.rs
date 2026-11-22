@@ -1127,7 +1127,7 @@ impl Run {
         }
         // Issue #507: a refused Continue fight or Undo of the ending says what did not happen,
         // why, in its diagnosis's tone (R41), and the next step, until its attempt ends.
-        if let Some((_, refusal)) = self.unend_refused.as_ref().filter(|_| !disk) {
+        if let Some((_, _, refusal)) = self.unend_refused.as_ref().filter(|_| !disk) {
             messages.outcome(
                 FaultMessage::new(&RunFault::Refused(refusal.clone())).choice(Choice::new(
                     MessageChoice::Dismiss(Lost::Nothing),
