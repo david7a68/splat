@@ -5441,10 +5441,9 @@ mod tests {
         // Layout 11c A2a: the plan's lists are kept by the snapshot's and the saved runs'
         // revisions: two frames with no change share one list, copied once.
         let kept = encounters.plan_kept();
-        let again = encounters.plan_kept();
-        assert!(
-            std::sync::Arc::ptr_eq(&kept.groups, &again.groups)
-                && std::sync::Arc::ptr_eq(&kept.fights, &again.fights),
+        let _ = encounters.plan_kept();
+        assert_eq!(
+            encounters.plan_kept_builds, 1,
             "a quiet frame copies no plan list"
         );
         assert_eq!(kept.groups.len(), 1, "the kept groups are the offered ones");

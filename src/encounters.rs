@@ -3751,6 +3751,8 @@ pub struct Encounters {
         (crate::design::memo::Revision, crate::design::memo::Revision),
         PlanKept,
     >,
+    /// How often the plan's lists were listed again (a test counts them).
+    plan_kept_builds: usize,
     /// G118: the Ready rows' difficulty lines, by template id, each under its `Roster::key`,
     /// room, font and scale. The page owns them; a new key replaces an entry, and a template
     /// that leaves the snapshot loses its entry at the next snapshot revision.
@@ -4426,6 +4428,7 @@ impl Encounters {
     pub fn plan_kept(&mut self) -> PlanKept {
         let revision = (self.plan_fights_revision(), self.saved_runs_revision());
         if self.plan_kept.get(revision).is_none() {
+            self.plan_kept_builds += 1;
             let built = PlanKept {
                 fights: self.plan_fights().into(),
                 groups: self.plan_groups().into(),
@@ -4434,7 +4437,7 @@ impl Encounters {
         }
         self.plan_kept
             .get(revision)
-            .expect("the plan's lists were just kept")
+            .expect("the plan lists were just kept")
             .clone()
     }
 
