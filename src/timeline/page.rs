@@ -189,6 +189,8 @@ pub struct TimelinePage {
     focus_title: bool,
     /// A modal is open over the app (the app's one test, `modal_open`): Ctrl+S waits for it.
     pub modal: bool,
+    /// The open event's form opens at its top in the next draw: another event, a link, the page
+    /// opened again. Never a filter or a search, which change only the list.
     reset_detail: bool,
     scroll_to: Option<usize>,
     /// An event just added with the buttons, with one step of undo.
@@ -809,7 +811,6 @@ impl TimelinePage {
         current: Option<Uuid>,
         room: egui::Rect,
     ) {
-        let before = (self.filter, self.search.clone(), self.session);
         let tabs = |ui: &mut egui::Ui, filter: &mut Filter| {
             design::segmented(
                 ui,
@@ -832,7 +833,9 @@ impl TimelinePage {
             if wide {
                 tabs(ui, &mut self.filter);
             }
-            // `Clear` changes `self.search`, which `before` below sees; nothing else to reset.
+            // `Clear` changes `self.search` only. A filter or a search changes the list, not the
+            // open event: its form keeps its place, also when the search hides its row (review
+            // of #817).
             let _ = TIMELINE_SEARCH.search(
                 ui,
                 "Search the timeline",
@@ -854,9 +857,6 @@ impl TimelinePage {
                 .show(ui, &mut self.session);
             self.new_events_line(ui, sessions, current, room);
         });
-        if before != (self.filter, self.search.clone(), self.session) {
-            self.reset_detail = true;
-        }
     }
 
     /// Tests: a reveal left pending by a roll in `journey` at `at`, as when the DM leaves that
@@ -1394,14 +1394,18 @@ impl TimelinePage {
                 );
             };
             if narrow {
-                self.list_pane(
-                    ui,
-                    book,
-                    notes,
-                    PaneFooter::Page(None),
-                    design::pane::ContentScroll::default(),
-                    |_, ui, _, _| empty(ui),
-                );
+                // The detail's own pane, never the list's: its short content would clamp the
+                // list's saved place (review of #817).
+                ui.push_id("timeline_detail_pane", |ui| {
+                    self.list_pane(
+                        ui,
+                        book,
+                        notes,
+                        PaneFooter::Page(None),
+                        design::pane::ContentScroll::default(),
+                        |_, ui, _, _| empty(ui),
+                    );
+                });
             } else {
                 empty(ui);
             }
@@ -1419,7 +1423,8 @@ impl TimelinePage {
                 Some("Changed on disk. Choose what to keep above.")
             } else {
                 None
-            });
+            })
+            .map(str::to_owned);
         let mut changed = false;
         let mut removed = false;
         let mut placed: Option<Option<String>> = None;
@@ -1507,71 +1512,6 @@ impl TimelinePage {
                 (ui.available_width() - ui.spacing().scroll.allocated_width())
                     .min(design::FORM_WIDTH)
             });
-        let mut copy_pressed = false;
-        ui.allocate_ui_with_layout(
-            egui::vec2(header_width, 0.0),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                let shown = design::TitleLine::new(&title)
-                    .role(design::TitleType::Panel)
-                    .kind(&kind, event.kind.word())
-                    .actions_at_end()
-                    .action(design::TitleAction::secondary(copy).icon(if copied {
-                        icons::OK
-                    } else {
-                        icons::COPY
-                    }))
-                    .state(now, &saving)
-                    .more(&more, |ui| {
-                        if checks::offered(event, tables)
-                            && Action::quiet("Roll for encounters").show(ui).clicked()
-                        {
-                            checks_act = Some(checks::Act::Start);
-                            ui.close();
-                        }
-                        let open_run = event.run.is_some() && event.run == self.open_run;
-                        removed = Action::quiet("Remove")
-                            .name("Remove this event")
-                            .blocked_if(open_run, "This run is open. Close it first.")
-                            .show(ui)
-                            .clicked();
-                        // A note under its choice, at its words (M-P0.26).
-                        design::choice_note(
-                            ui,
-                            false,
-                            open_run.then_some("This run is open. Close it first."),
-                        );
-                        if removed {
-                            ui.close();
-                        }
-                    })
-                    .show(ui);
-                copy_pressed = shown.clicked(copy);
-            },
-        );
-        if copy_pressed {
-            ui.ctx().copy_text(link.clone());
-            self.copied = Some((id.clone(), Instant::now()));
-        }
-        if let Some(reason) = blocked {
-            ui.label(Type::Small.rich(ui, reason).color(c.muted));
-        }
-        design::rule(ui);
-        ui.scope(|ui| {
-            ui.set_max_width(header_width);
-            let event = &mut book.events[index];
-            design::gap(ui, design::Gap::XS);
-            let hint = (event.kind == Kind::Day)
-                .then_some("Optional. Days number themselves, so a name is extra.");
-            let title = EVENT_TITLE.of(design::TextKey::of(&*event));
-            let title = design::labelled_field(ui, title, "Title", &mut event.title, hint, None);
-            changed |= title.changed();
-            if std::mem::take(&mut self.focus_title) {
-                title.request_focus();
-            }
-        });
-        design::gap(ui, design::Gap::S);
-        design::rule(ui);
         let mut ruling = None;
         // M0560 (M-P0.30): another event, a link or a changed filter opens the form at its top.
         let from_top = std::mem::take(&mut self.reset_detail);
@@ -1587,10 +1527,90 @@ impl TimelinePage {
         // Row 123: a check result's offer asks the plan of the journey's session.
         let journey_plan = checks::shown(&book.events[index])
             .then(|| notes.journey_plan(book, &id, &self.plan_names));
-        // M0559 (M-P0.30): the header above stays; the form under it scrolls in the detail's
-        // own column. Wide, that is the panel's `ScrollColumn`; narrow, the form is the content
-        // of the pane that holds the open event's footer, and the header is drawn before it.
-        let mut form = |page: &mut Self, ui: &mut egui::Ui, book: &mut Book| {
+        // Review of #817 (P3): the header stays above the form only while it leaves the form at
+        // least one control row; below that it scrolls with the form, so the form never has no
+        // room (the header's height is the last draw's, at this width).
+        let header_key = width_id.with("timeline_detail_header");
+        let header_scrolls = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(header_key))
+            .is_some_and(|header| ui.available_height() - header < design::Density::Read.control());
+        // M0559 (M-P0.30): the header, then the form, which scrolls in the detail's own pane.
+        let mut draw = |page: &mut Self, ui: &mut egui::Ui, book: &mut Book, part: DetailPart| {
+            if part == DetailPart::Header {
+                let top = ui.cursor().top();
+                let event = &book.events[index];
+                let mut copy_pressed = false;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(header_width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        let shown = design::TitleLine::new(&title)
+                            .role(design::TitleType::Panel)
+                            .kind(&kind, event.kind.word())
+                            .actions_at_end()
+                            .action(design::TitleAction::secondary(copy).icon(if copied {
+                                icons::OK
+                            } else {
+                                icons::COPY
+                            }))
+                            .state(now, &saving)
+                            .more(&more, |ui| {
+                                if checks::offered(event, tables)
+                                    && Action::quiet("Roll for encounters").show(ui).clicked()
+                                {
+                                    checks_act = Some(checks::Act::Start);
+                                    ui.close();
+                                }
+                                let open_run = event.run.is_some() && event.run == page.open_run;
+                                removed = Action::quiet("Remove")
+                                    .name("Remove this event")
+                                    .blocked_if(open_run, "This run is open. Close it first.")
+                                    .show(ui)
+                                    .clicked();
+                                // A note under its choice, at its words (M-P0.26).
+                                design::choice_note(
+                                    ui,
+                                    false,
+                                    open_run.then_some("This run is open. Close it first."),
+                                );
+                                if removed {
+                                    ui.close();
+                                }
+                            })
+                            .show(ui);
+                        copy_pressed = shown.clicked(copy);
+                    },
+                );
+                if copy_pressed {
+                    ui.ctx().copy_text(link.clone());
+                    page.copied = Some((id.clone(), Instant::now()));
+                }
+                if let Some(reason) = &blocked {
+                    ui.label(Type::Small.rich(ui, reason.as_str()).color(c.muted));
+                }
+                design::rule(ui);
+                ui.scope(|ui| {
+                    ui.set_max_width(header_width);
+                    let event = &mut book.events[index];
+                    design::gap(ui, design::Gap::XS);
+                    let hint = (event.kind == Kind::Day)
+                        .then_some("Optional. Days number themselves, so a name is extra.");
+                    let title = EVENT_TITLE.of(design::TextKey::of(&*event));
+                    let title =
+                        design::labelled_field(ui, title, "Title", &mut event.title, hint, None);
+                    changed |= title.changed();
+                    if std::mem::take(&mut page.focus_title) {
+                        title.request_focus();
+                    }
+                });
+                design::gap(ui, design::Gap::S);
+                design::rule(ui);
+                let height = ui.cursor().top() - top;
+                ui.ctx()
+                    .data_mut(|data| data.insert_temp(header_key, height));
+                return;
+            }
             let form_width = lane_width.min(ui.available_width()).min(design::FORM_WIDTH);
             ui.ctx()
                 .data_mut(|data| data.insert_temp(width_id, form_width));
@@ -1801,6 +1821,9 @@ impl TimelinePage {
         } else {
             PaneFooter::Empty
         };
+        if !header_scrolls {
+            draw(self, ui, book, DetailPart::Header);
+        }
         ui.push_id("timeline_detail_pane", |ui| {
             self.list_pane(
                 ui,
@@ -1808,7 +1831,12 @@ impl TimelinePage {
                 notes,
                 footer,
                 design::pane::ContentScroll::default().from_top(from_top),
-                |page, ui, book, _| form(page, ui, book),
+                |page, ui, book, _| {
+                    if header_scrolls {
+                        draw(page, ui, book, DetailPart::Header);
+                    }
+                    draw(page, ui, book, DetailPart::Form);
+                },
             );
         });
         if changed {
@@ -2052,7 +2080,12 @@ impl TimelinePage {
                         .show(ui)
                         .clicked()
                     {
+                        // Review of #817 (P2): the list comes in the next pass, at its place;
+                        // this pass draws no empty detail.
                         self.select(None);
+                        ui.ctx().request_discard("timeline: back to all events");
+                        ui.ctx().request_repaint();
+                        return;
                     }
                     // With the list hidden, the open event's results are in the form's own footer,
                     // so they move no field.
@@ -2193,6 +2226,14 @@ fn second_line(
     job.wrap.max_rows = 1;
     job.wrap.break_anywhere = true;
     ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
+/// A part of the open event's detail (`TimelinePage::detail`): its header (the title line and
+/// the Title field) or its form.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DetailPart {
+    Header,
+    Form,
 }
 
 /// What a Timeline pane's footer holds (`TimelinePage::list_pane`).
@@ -2419,7 +2460,7 @@ mod tests {
     #[test]
     fn the_detail_form_scrolls_under_its_header() {
         use crate::design::test_harness::Themed as _;
-        use egui_kittest::kittest::Queryable;
+        use egui_kittest::kittest::{NodeT, Queryable};
         let dir = tempfile::tempdir().unwrap();
         let mut book = Book::default();
         book.open(Some(dir.path()));
@@ -2497,6 +2538,26 @@ mod tests {
                 opened.top(),
                 kind(&harness).top()
             );
+            if case == "wide" {
+                // Review of #817 (P3, `m-p0-search-keeps-form`): a search that hides the open
+                // event's row changes the list only; its form keeps its place.
+                let scrolled = kind(&harness).top();
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::TextInput, "Search the timeline")
+                    .focus();
+                harness.run_steps(2);
+                harness
+                    .input_mut()
+                    .events
+                    .push(egui::Event::Text("Stop 1".into()));
+                harness.run_steps(4);
+                assert_eq!(harness.state().0.search, "Stop 1");
+                assert!(
+                    (kind(&harness).top() - scrolled).abs() < 0.5,
+                    "m-p0-search-keeps-form: the form keeps its place ({scrolled} -> {})",
+                    kind(&harness).top()
+                );
+            }
             // Another event, then this one again: each opens its form at the top.
             open(&mut harness, 56);
             open(&mut harness, 57);
@@ -2507,6 +2568,58 @@ mod tests {
                 kind(&harness).top()
             );
         }
+        // Review of #817 (P2, `m-p0-back-keeps-list`): narrow, an event opened from a row far
+        // down the list, then All events: the list is back at its place.
+        let row = |harness: &egui_kittest::Harness<'_, State>, name: &str| {
+            harness
+                .query_all_by_label_contains(name)
+                .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
+                .map(|node| node.rect())
+        };
+        harness.get_by_label("All events").click();
+        harness.run_steps(4);
+        let place = row(&harness, "Stop 55").expect("the row of Stop 55, in view");
+        harness
+            .query_all_by_label_contains("Stop 55")
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
+            .expect("the row of Stop 55")
+            .click();
+        harness.run_steps(4);
+        assert_eq!(harness.state().0.selected.as_ref(), Some(&ids[55]));
+        harness.get_by_label("All events").click();
+        harness.run_steps(4);
+        assert_eq!(
+            row(&harness, "Stop 55"),
+            Some(place),
+            "m-p0-back-keeps-list: the list is back at its place"
+        );
+        // Review of #817 (P3, `m-p0-short-detail`): a window so short that the header would
+        // leave the form no room. The header then scrolls with the form, so the form can be
+        // reached: a wheel over the detail brings its Kind into view.
+        let short = egui::vec2(1200.0, 300.0);
+        harness.set_size(short);
+        open(&mut harness, 57);
+        // Small wheel steps until the Kind is whole in the window, or 30 steps.
+        let inside = |rect: egui::Rect| rect.top() >= 0.0 && rect.bottom() <= short.y;
+        let mut steps = 0;
+        while !inside(kind(&harness)) && steps < 30 {
+            harness.event(egui::Event::PointerMoved(egui::pos2(
+                short.x - 150.0,
+                short.y - 40.0,
+            )));
+            harness.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -20.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(2);
+            steps += 1;
+        }
+        let reached = kind(&harness);
+        assert!(
+            inside(reached),
+            "m-p0-short-detail: the form's Kind comes into the {short:?} window: {reached:?}"
+        );
     }
 
     /// Round 30 B7d, ruling L9: the Add result ends in the page's owner update

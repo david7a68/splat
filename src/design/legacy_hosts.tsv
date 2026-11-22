@@ -139,7 +139,6 @@ scroll-request	src/design/reveal.rs	settle_queued	1	design	no egui target writes
 scroll-request	src/encounter_run/ad_hoc.rs	Run::add_creature_form	1	Run	named follow-selection exception (PR 403)
 scroll-request	src/encounter_run/view.rs	Run::group_row	1	Run
 scroll-request	src/encounter_run/view.rs	Run::roster	1	Run
-scroll-request	src/encounters.rs	Encounters::ledger_body	1	Encounters
 scroll-request	src/encounters/groups.rs	members	1	Encounters
 scroll-request	src/encounters/groups.rs	of_encounter	2	Encounters
 scroll-request	src/encounters/groups.rs	overrides_form	1	Encounters
@@ -152,7 +151,6 @@ scroll-request	src/sessions/page.rs	Sessions::reading_view	1	Sessions
 scroll-request	src/sessions/plan.rs	Reveal::show	1	Sessions
 scroll-request	src/sessions/plan.rs	Sessions::plan_pane	1	Sessions
 scroll-request	src/sessions/plan.rs	reveal_opened_played	3	Sessions
-scroll-request	src/settings.rs	Settings::show_account	1	Settings
 scroll-offset	src/design/components.rs	draft_comparison_labeled	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area	1	design	design implementation boundary
 scroll-offset	src/design/layout.rs	ScrollColumn::area_in	1	design	design implementation boundary
