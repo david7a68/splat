@@ -59,7 +59,12 @@ pub fn rules_on_disk(campaign: &Campaign, manifest: &str, index: &dyn RuleSource
                 ..Rules::default()
             };
         }
-        Err(error) => return Rules::cannot_read(format!("{manifest} cannot be read: {error}")),
+        Err(error) => {
+            return Rules::cannot_read(
+                RulesFile::Manifest,
+                format!("{manifest} cannot be read: {error}"),
+            );
+        }
     };
     if ids.is_empty() {
         return Rules::default();
@@ -88,12 +93,22 @@ pub fn rules_on_disk(campaign: &Campaign, manifest: &str, index: &dyn RuleSource
             Ok(text) => match Note::parse(path, &text) {
                 Ok(entry) if entry.id == id => notes.push(Ok(entry)),
                 Ok(_) => notes.push(Err((id, moved))),
-                Err(error) => return Rules::cannot_read(format!("{path} cannot be read: {error}")),
+                Err(error) => {
+                    return Rules::cannot_read(
+                        RulesFile::HouseRuleNote,
+                        format!("{path} cannot be read: {error}"),
+                    );
+                }
             },
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 notes.push(Err((id, moved)))
             }
-            Err(error) => return Rules::cannot_read(format!("{path} cannot be read: {error}.")),
+            Err(error) => {
+                return Rules::cannot_read(
+                    RulesFile::HouseRuleNote,
+                    format!("{path} cannot be read: {error}."),
+                );
+            }
         }
     }
     read_rules(index.loot_sources(), notes)
@@ -475,7 +490,14 @@ pub fn refusal(
         ),
         Refused::LedgerChanged => (Cause::Changed(File::Trackers), check(File::Trackers)),
         Refused::RulesChanged => (Cause::Changed(File::HouseRuleNote), rules()),
-        Refused::RulesUnreadable => (Cause::Unreadable(File::HouseRuleNote), rules()),
+        // The file that cannot be read, and the next step there (PR 661 review, P2).
+        Refused::RulesUnreadable(RulesFile::Manifest) => (
+            Cause::Unreadable(File::CampaignNote),
+            check(File::CampaignNote),
+        ),
+        Refused::RulesUnreadable(RulesFile::HouseRuleNote) => {
+            (Cause::Unreadable(File::HouseRuleNote), rules())
+        }
         Refused::TimelineUnreadable => (
             Cause::Unreadable(File::Timeline),
             Recovery::First(Step::FixTimeline),
@@ -550,7 +572,7 @@ pub struct Trackers {
     /// history.
     problems: Vec<(Option<Uuid>, String)>,
     /// The last `Remove` in a tracker's history, for its one Undo, by its entries' IDs.
-    removed: Option<history::Removed>,
+    removed: crate::design::Results<history::HistoryOwner, history::Removed>,
     /// Why the last `Remove` or its Undo wrote nothing, for the reader of that note.
     history_reason: Option<(Uuid, Unrecorded)>,
 }
@@ -780,9 +802,10 @@ impl Trackers {
             (Some(campaign), Some(Ok(manifest)), Some(index)) => {
                 rules_on_disk(campaign, manifest, index.as_ref())
             }
-            (_, Some(Err(error)), _) => {
-                Rules::cannot_read(format!("Campaign.md cannot be read: {error}"))
-            }
+            (_, Some(Err(error)), _) => Rules::cannot_read(
+                RulesFile::Manifest,
+                format!("Campaign.md cannot be read: {error}"),
+            ),
             _ => Rules::default(),
         }
     }
@@ -803,7 +826,9 @@ impl Trackers {
         let changed = !rules.same_definitions(&self.rules);
         let result = ledger::commit(&ledger::path(&campaign.path), |ledger| {
             if rules.unreadable.is_some() {
-                return Err(Refused::RulesUnreadable);
+                return Err(Refused::RulesUnreadable(
+                    rules.unreadable_file.unwrap_or(RulesFile::HouseRuleNote),
+                ));
             }
             if changed {
                 return Err(Refused::RulesChanged);
