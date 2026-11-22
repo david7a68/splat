@@ -287,7 +287,15 @@ pub fn draw_laid(ui: &mut Ui, laid: &Laid, draw: impl FnOnce(&mut LaidUi<'_>)) -
     ui.spacing_mut().item_spacing.y = 0.0;
     let (rect, _) = ui.allocate_exact_size(laid.size, egui::Sense::hover());
     ui.spacing_mut().item_spacing.y = gap;
-    let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
+    // The block's `Ui` (and so its controls' ids and their focus) is its own, by its key, as a
+    // region's block is: two rows under one parent never share an id, and a row keeps its ids
+    // whatever rows draw before it (review of PR 840).
+    let mut child = ui.new_child(
+        UiBuilder::new()
+            .id_salt(ui.id().with(("laid", laid.key)))
+            .global_scope(true)
+            .max_rect(rect),
+    );
     let _ = render(&mut child, laid, laid.revision, draw);
     crate::design::register_row(ui, rect);
     rect

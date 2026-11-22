@@ -834,6 +834,76 @@ struct DrawnRow {
     rule: f32,
 }
 
+/// A played event's unfinished saved run, unless it is the open run.
+fn planned_event_run<'a>(
+    event: &crate::timeline::Event,
+    plan: &Plan<'a>,
+    running: bool,
+) -> Option<&'a crate::encounter_run::SavedRunInfo> {
+    plan.saved_runs.iter().find(|saved| {
+        saved.standing == crate::encounter_run::Standing::Unfinished
+            && saved.id.is_some()
+            && saved.id == event.run
+            && !running
+    })
+}
+
+/// A closed row laid out by its recipe, with what the gate's record of it needs.
+struct KeptRow {
+    words: RowWords,
+    laid: design::Laid,
+    /// Its facts' width and whether its actions stand in the shared column.
+    facts: f32,
+    in_column: bool,
+}
+
+/// A planned group's row: laid by its recipe, or (with warnings) drawn by `plan_row_with`; and
+/// its action place.
+struct GroupRow {
+    row: Option<KeptRow>,
+    actions: f32,
+    edit_word: &'static str,
+    joins_fight: bool,
+}
+
+/// The plan's closed rows, laid out before any row draws, with the plan's shared column.
+pub(super) struct KeptRows {
+    events: Vec<(KeptRow, RewardsAt)>,
+    fights: Vec<KeptRow>,
+    groups: Vec<GroupRow>,
+    columns: design::PlanColumns,
+}
+
+/// What the plan's laid rows are made from (layout 11c A2c, review of PR 841): revisions, ids and
+/// the measuring environment. A quiet frame compares these and lays out nothing.
+#[derive(Clone, PartialEq)]
+struct RowsKey {
+    session: Option<Uuid>,
+    draft: u64,
+    book: design::memo::Revision,
+    fights: design::memo::Revision,
+    saved: design::memo::Revision,
+    days: design::memo::Revision,
+    open_event: Option<String>,
+    open_planned: Option<String>,
+    /// The open run and its state's words (the run link's).
+    open_run: Option<(Uuid, String)>,
+    arrivals_open: bool,
+    refused: Option<(Option<Uuid>, Uuid)>,
+    /// The rows' width, the font generation and the scale.
+    env: (f32, u64, f32),
+}
+
+/// The plan's laid rows, kept by their inputs (`RowsKey`).
+#[derive(Default)]
+pub(super) struct PlanRowsCache {
+    kept: Option<(RowsKey, Arc<KeptRows>)>,
+    /// How often a frame asked for the rows, and how often they were laid out (the quiet-frame
+    /// proof counts both).
+    pub(super) reached: usize,
+    pub(super) builds: usize,
+}
+
 /// Draw a closed plan row by its recipe at the rows' cursor (layout 11c A2c): its lead, its title
 /// link (`open`: whether its details show, for a screen reader), its summary part with its hover,
 /// and `actions` in its action place. Its block holds the rule after it when `rule` (a closed
@@ -841,14 +911,11 @@ struct DrawnRow {
 /// In test builds it records the row for the gate's plan check, as `plan_row_with` does.
 fn draw_plan_row(
     ui: &mut egui::Ui,
-    words: &RowWords,
-    (key, width, columns): (egui::Id, f32, design::PlanColumns),
-    (open, rule): (Option<bool>, bool),
+    row: &KeptRow,
+    open: Option<bool>,
     actions: impl FnOnce(&mut egui::Ui),
 ) -> DrawnRow {
-    let part = words.part();
-    let laid_row = words.row(key, part.as_slice(), rule);
-    let laid = laid_row.lay(ui, width, columns);
+    let (words, laid) = (&row.words, &row.laid);
     let mut title = None;
     let mut summary = None;
     let mut drawn = (
@@ -856,7 +923,9 @@ fn draw_plan_row(
         egui::Rect::NOTHING,
         egui::Rect::NOTHING,
     );
-    let rect = design::draw_laid(ui, &laid, |l| {
+    let mut rule = false;
+    let rect = design::draw_laid(ui, laid, |l| {
+        rule = l.slot(design::plan_slot::RULE).height() > 0.0;
         let link = l.link(0, &words.title);
         if let Some(open) = open {
             link.ctx
@@ -885,9 +954,9 @@ fn draw_plan_row(
         .map(|(response, part)| plan_hover(ui, response, &part.hover));
     let (slot, shown, rule_slot) = drawn;
     // The block ends at its rule; the column leaves its own gap after it (`theme::LINE_GAP`).
-    let (row, rule) = if rule {
-        let row = rule_slot.top() - design::S - rect.top();
-        (row, rect.height() - row + design::theme::LINE_GAP)
+    let (height, rule) = if rule {
+        let height = rule_slot.top() - design::S - rect.top();
+        (height, rect.height() - height + design::theme::LINE_GAP)
     } else {
         (rect.height(), 0.0)
     };
@@ -902,15 +971,15 @@ fn draw_plan_row(
                 facts: egui::Rect::from_min_max(
                     egui::pos2(left, rect.top()),
                     egui::pos2(
-                        left + laid_row.facts(ui, width).0,
-                        rect.top() + row - design::theme::LINE_GAP,
+                        left + row.facts,
+                        rect.top() + height - design::theme::LINE_GAP,
                     ),
                 ),
                 line: title.rect,
                 action: shown,
                 column: slot.left(),
                 edge: rect.right(),
-                wrapped: !laid_row.in_column(ui, width, columns),
+                wrapped: !row.in_column,
             },
         );
     }
@@ -919,7 +988,7 @@ fn draw_plan_row(
     DrawnRow {
         title,
         summary,
-        row,
+        row: height,
         rule,
     }
 }
@@ -5072,121 +5141,42 @@ impl Sessions {
                 let widths = [width - action_width - design::S, action_width];
                 let rewards_width = Action::quiet(ADD_REWARDS).density(Density::Read).natural_width(ui)
                     + Density::Read.control() + design::S;
-                // Layout 11c A2c: every closed row's words are laid out before any row draws, so
-                // the plan's shared column is known first, with no measure kept from the last
-                // pass (the scenes and a group with warnings keep theirs until scope B).
+                // Layout 11c A2c: every closed row is laid out before any row draws, so the
+                // plan's shared column is known first, with no measure kept from the last pass
+                // (the scenes and a group with warnings keep theirs until scope B). The laid rows
+                // are kept by their inputs: a quiet frame lays out nothing.
                 let row_width = ui.available_width();
-                let room = design::PlanRow::summary_room(row_width);
-                let mut event_rows = Vec::new();
-                for (at, event) in book.events.iter().enumerate() {
-                    if !event.is_in(session) { continue; }
-                    let label = event.label(days.get(at).copied().unwrap_or(0));
-                    let is_open = open_event.as_ref() == Some(&event.id);
-                    let running = event.run.is_some() && event.run == plan.open_run;
-                    let saved = plan.saved_runs.iter().find(|saved| {
-                        saved.standing == crate::encounter_run::Standing::Unfinished
-                            && saved.id.is_some()
-                            && saved.id == event.run
-                            && !running
-                    });
-                    // A fight that ended: its rewards (F7), on the row when the title keeps its lines.
-                    let ended = event.run.filter(|_| !running && saved.is_none());
-                    let lead = if is_open { icons::DOWN } else { icons::NEXT };
-                    let place = self.rewards.fits(ui, &label, lead, row_width, rewards_width);
-                    let actions = if ended.is_some() && place == RewardsAt::Row {
-                        rewards_width
-                    } else if event.run.is_some() && (running || saved.is_none()) {
-                        Density::Read.control()
-                    } else { widths[1] };
-                    let summary = if running {
-                        Some(RowPart::run_link(ui, &plan.open_state))
-                    } else if let Some(saved) = saved {
-                        Some(RowPart::saved(ui, saved))
-                    } else if !(is_open && event.kind == Kind::LongRest) {
-                        let summary = if event.run.is_some() {
-                            timeline::played_fight_summary(event, running)
-                        } else {
-                            event.summary(None)
-                        };
-                        let warning = event.time_warning().filter(|_| event.run.is_none());
-                        plan_event_summary_job(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores), warning.as_deref())
-                            .map(|job| RowPart::words(job, match warning {
-                                Some(_) => PlanHover::Text(timeline::TIME_REPAIR.to_owned()),
-                                None => PlanHover::None,
-                            }))
-                    } else { None };
-                    event_rows.push((RowWords { lead, title: label, summary, actions }, saved, ended, place));
-                }
-                let fight_days = self.planned_days(book, session, plan, &projection.planned);
-                let plan_days = self.plan_lines_seen.revision();
-                let mut fight_rows = Vec::new();
-                for (position, fight) in planned_fights().enumerate() {
-                    let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
-                    let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
-                    let open = self.open_planned.as_ref() == Some(&fight.path);
-                    let summary = if running {
-                        RowPart::run_link(ui, &plan.open_state)
-                    } else if let Some(saved) = saved {
-                        RowPart::saved(ui, saved)
-                    } else {
-                        let day = fight_days.at.get(position).cloned().flatten();
-                        kept_plan_line(ui, (&mut self.plan_lines, room), (session, position, fight.id), fight, day.as_deref(), plan_days)
-                            .part(ui, room)
-                    };
-                    let actions = if running { Density::Read.control() } else { widths[1] };
-                    fight_rows.push((RowWords {
-                        lead: if open { icons::DOWN } else { icons::NEXT },
-                        title: fight.name.clone(),
-                        summary: Some(summary),
-                        actions,
-                    }, saved));
-                }
-                let mut group_rows = Vec::new();
-                for group in planned_groups() {
-                    let edit_word = if group.warnings.is_empty() { "Edit" } else { "Edit group" };
-                    // With a fight open, the run's words and plus icon: the group joins it through Arrivals.
-                    // A group none of whose members can join has only its repair to offer.
-                    let joins_fight = plan.arrivals_open && !group.members.is_empty();
-                    let group_action = if joins_fight { Action::quiet(ADD_TO_FIGHT).icon(icons::ADD) } else { Action::quiet(edit_word) };
-                    let actions = group_action.density(Density::Read).natural_width(ui) + Density::Read.control() + design::S;
-                    // A group with a fault names it in messages measured by their own part, so
-                    // it keeps today's row until scope B.
-                    let words = group.warnings.is_empty().then(|| RowWords {
-                        lead: icons::GROUP,
-                        title: group.name.clone(),
-                        summary: Some(plan_group_part(ui, &plan_summary_text(ui, group, room), 3, room)),
-                        actions,
-                    });
-                    group_rows.push((words, actions, edit_word, joins_fight));
-                }
-                let columns = design::PlanColumns::of(
-                    event_rows.iter().map(|row| &row.0)
-                        .chain(fight_rows.iter().map(|row| &row.0))
-                        .chain(group_rows.iter().filter_map(|row| row.0.as_ref()))
-                        .map(|words| words.facts(ui, row_width))
-                        .chain([design::action_rows::MeasuredColumn::kept(ui, PLAN_COLUMNS)]),
+                let rows = self.plan_rows(
+                    ui,
+                    book,
+                    (session, plan, &projection),
+                    (row_width, widths[1], rewards_width),
+                    days,
                 );
+                let columns = rows.columns;
                 let mut any = false;
                 let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
                 // The opened played row, on the frame the DM opened it, and the next fight's action.
                 let mut opened_played = None;
                 let mut next_action = None;
-                let mut event_rows = event_rows.into_iter();
+                let mut event_rows = rows.events.iter();
                 for (at, event) in book.events.iter_mut().enumerate() {
                     if !event.is_in(session) { continue; }
-                    let Some((words, saved, ended, place)) = event_rows.next() else { break };
+                    let Some((row, place)) = event_rows.next() else { break };
+                    let place = *place;
                     any = true;
                     let day = days.get(at).copied().unwrap_or(0);
-                    let label = words.title.as_str();
+                    let label = row.words.title.as_str();
                     let is_open = open_event.as_ref() == Some(&event.id);
                     let running = event.run.is_some() && event.run == plan.open_run;
+                    let saved = planned_event_run(event, plan, running);
+                    let ended = event.run.filter(|_| !running && saved.is_none());
                     let saved_fight = plan.fights.iter().find(|fight| fight.saved.as_ref()
                         .is_some_and(|saved| saved.id == event.run && event.run.is_some()));
                     let row = ui.push_id(event.id.clone(), |ui| {
                         let listed = self.rewards.listed(&event.id);
                         let on_row = ended.is_some() && place == RewardsAt::Row;
-                        let key = egui::Id::new(("plan_event", &event.id));
-                        let drawn = draw_plan_row(ui, &words, (key, row_width, columns), (Some(is_open), !is_open), |ui| {
+                        let drawn = draw_plan_row(ui, row, Some(is_open), |ui| {
                             if let Some(saved) = saved {
                                 design::row_menu(ui, label, |ui| {
                                     if let Some(fight) = saved_fight
@@ -5290,9 +5280,10 @@ impl Sessions {
                     }
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
-                let mut fight_rows = fight_rows.into_iter();
+                let mut fight_rows = rows.fights.iter();
                 for (position, fight) in planned_fights().enumerate() {
-                    let Some((words, saved)) = fight_rows.next() else { break };
+                    let Some(row) = fight_rows.next() else { break };
+                    let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
                     self.removed_fight_message(ui, session, position);
                     if !folded {
                         closed_scenes += self.scene_rows(ui, (width, columns), (&scenes[position], &projection.model), position, shown, plan, &mut scene_act);
@@ -5301,8 +5292,7 @@ impl Sessions {
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
                     let open = self.open_planned.as_ref() == Some(&fight.path);
                     let fight_row = ui.push_id((&fight.path, position), |ui| {
-                        let key = egui::Id::new(("plan_fight", &fight.path, position));
-                        let drawn = draw_plan_row(ui, &words, (key, row_width, columns), (Some(open), !open), |ui| {
+                        let drawn = draw_plan_row(ui, row, Some(open), |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
                                     remove_fight = Some((position, fight.name.clone())); ui.close();
@@ -5369,9 +5359,10 @@ impl Sessions {
                     closed_scenes += self.scene_rows(ui, (width, columns), (&scenes[projection.planned.len()], &projection.model), projection.planned.len(), shown, plan, &mut scene_act);
                 }
                 any |= scenes.iter().any(|scenes| !scenes.is_empty());
-                let mut group_rows = group_rows.into_iter();
+                let mut group_rows = rows.groups.iter();
                 for (position, group) in planned_groups().enumerate() {
-                    let Some((words, action_width, edit_word, joins_fight)) = group_rows.next() else { break };
+                    let Some(group_row) = group_rows.next() else { break };
+                    let (action_width, edit_word, joins_fight) = (group_row.actions, group_row.edit_word, group_row.joins_fight);
                     any = true;
                     let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
@@ -5398,17 +5389,26 @@ impl Sessions {
                                 self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
                             }
                         };
-                        // B4 review F1: the refusal shows under the row, before its rule.
-                        let refused = plan.group_blocked.is_some() && self.plan_group_refused == Some((self.selected, group.id));
                         let top = ui.cursor().top();
                         // The row and the rule its block holds, as the fold counts them; `None` when
                         // the rule follows the row.
                         let mut in_block = None;
-                        if let Some(words) = &words {
-                            let key = egui::Id::new(("plan_group", group.id));
-                            let drawn = draw_plan_row(ui, words, (key, row_width, columns), (None, !refused), actions);
+                        if let Some(row) = &group_row.row {
+                            let drawn = draw_plan_row(ui, row, None, actions);
                             read_group = drawn.title.clicked();
                             in_block = (drawn.rule > 0.0).then_some(drawn.row + drawn.rule);
+                            // Its own reasons (`No members can join.`), as warnings under its
+                            // row, before its rule (review of PR 841).
+                            let problems = group.own_problems();
+                            if !problems.is_empty() {
+                                plan_details(ui, |ui| {
+                                    for reason in problems {
+                                        design::gap(ui, design::Gap::XS);
+                                        let fault = PlanFault::Check(as_sentence(reason));
+                                        let _ = design::outcome::BodyMessage::<()>::from(FaultMessage::new(&fault)).compact().show(ui);
+                                    }
+                                });
+                            }
                         } else {
                             let group_widths = [width - action_width - design::S, action_width];
                             plan_row(ui, (&group_widths, columns), icons::GROUP, |ui| {
@@ -5780,6 +5780,242 @@ impl Sessions {
 
     /// The plan model for the selected note, built again only when what it reads changed.
     /// The plan's projection (`PlanProjection`), kept while its inputs' revisions stay.
+    /// The plan's closed rows, laid out by their recipe before any row draws, with the plan's
+    /// shared column (layout 11c A2c): built again only when their inputs change (`RowsKey`),
+    /// so a quiet frame measures and lays out nothing (review of PR 841).
+    #[allow(clippy::too_many_arguments)]
+    fn plan_rows(
+        &mut self,
+        ui: &egui::Ui,
+        book: &Book,
+        (session, plan, projection): (Option<Uuid>, &Plan<'_>, &PlanProjection),
+        (row_width, plain_actions, rewards_width): (f32, f32, f32),
+        days: &[u32],
+    ) -> Arc<KeptRows> {
+        let fight_days = self.planned_days(book, session, plan, &projection.planned);
+        let plan_days = self.plan_lines_seen.revision();
+        let key = RowsKey {
+            session,
+            draft: self
+                .draft
+                .as_ref()
+                .map_or(0, crate::sessions::Draft::revision),
+            book: book.revision(),
+            fights: plan.fights_revision,
+            saved: plan.saved_runs_revision,
+            days: plan_days,
+            open_event: self.open_event.clone(),
+            open_planned: self.open_planned.clone(),
+            open_run: plan.open_run.map(|run| (run, plan.open_state.clone())),
+            arrivals_open: plan.arrivals_open,
+            refused: self
+                .plan_group_refused
+                .filter(|(at, _)| plan.group_blocked.is_some() && *at == session),
+            env: (
+                row_width,
+                design::theme::font_generation(ui.ctx()),
+                ui.ctx().pixels_per_point(),
+            ),
+        };
+        self.plan_rows.reached += 1;
+        if let Some((kept, rows)) = &self.plan_rows.kept
+            && *kept == key
+        {
+            return Arc::clone(rows);
+        }
+        self.plan_rows.builds += 1;
+        let room = design::PlanRow::summary_room(row_width);
+        let mut events = Vec::new();
+        for (at, event) in book.events.iter().enumerate() {
+            if !event.is_in(session) {
+                continue;
+            }
+            let label = event.label(days.get(at).copied().unwrap_or(0));
+            let is_open = self.open_event.as_ref() == Some(&event.id);
+            let running = event.run.is_some() && event.run == plan.open_run;
+            let saved = planned_event_run(event, plan, running);
+            // A fight that ended: its rewards (F7), on the row when the title keeps its lines.
+            let ended = event.run.filter(|_| !running && saved.is_none());
+            let lead = if is_open { icons::DOWN } else { icons::NEXT };
+            let place = self
+                .rewards
+                .fits(ui, &label, lead, row_width, rewards_width);
+            let actions = if ended.is_some() && place == RewardsAt::Row {
+                rewards_width
+            } else if event.run.is_some() && (running || saved.is_none()) {
+                Density::Read.control()
+            } else {
+                plain_actions
+            };
+            let summary = if running {
+                Some(RowPart::run_link(ui, &plan.open_state))
+            } else if let Some(saved) = saved {
+                Some(RowPart::saved(ui, saved))
+            } else if !(is_open && event.kind == Kind::LongRest) {
+                let summary = if event.run.is_some() {
+                    timeline::played_fight_summary(event, running)
+                } else {
+                    event.summary(None)
+                };
+                let warning = event.time_warning().filter(|_| event.run.is_none());
+                plan_event_summary_job(
+                    ui,
+                    &summary,
+                    (event.kind == Kind::LongRest).then_some(event.restores),
+                    warning.as_deref(),
+                )
+                .map(|job| {
+                    RowPart::words(
+                        job,
+                        match warning {
+                            Some(_) => PlanHover::Text(timeline::TIME_REPAIR.to_owned()),
+                            None => PlanHover::None,
+                        },
+                    )
+                })
+            } else {
+                None
+            };
+            let words = RowWords {
+                lead,
+                title: label,
+                summary,
+                actions,
+            };
+            events.push((
+                egui::Id::new(("plan_event", &event.id)),
+                !is_open,
+                words,
+                place,
+            ));
+        }
+        let mut fights = Vec::new();
+        for (position, fight) in projection
+            .planned
+            .iter()
+            .map(|&at| &plan.fights[at])
+            .enumerate()
+        {
+            let running =
+                plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
+            let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
+            let open = self.open_planned.as_ref() == Some(&fight.path);
+            let summary = if running {
+                RowPart::run_link(ui, &plan.open_state)
+            } else if let Some(saved) = saved {
+                RowPart::saved(ui, saved)
+            } else {
+                let day = fight_days.at.get(position).cloned().flatten();
+                kept_plan_line(
+                    ui,
+                    (&mut self.plan_lines, room),
+                    (session, position, fight.id),
+                    fight,
+                    day.as_deref(),
+                    plan_days,
+                )
+                .part(ui, room)
+            };
+            let words = RowWords {
+                lead: if open { icons::DOWN } else { icons::NEXT },
+                title: fight.name.clone(),
+                summary: Some(summary),
+                actions: if running {
+                    Density::Read.control()
+                } else {
+                    plain_actions
+                },
+            };
+            fights.push((
+                egui::Id::new(("plan_fight", &fight.path, position)),
+                !open,
+                words,
+            ));
+        }
+        let mut groups = Vec::new();
+        for group in projection.planned_groups.iter().map(|&at| &plan.groups[at]) {
+            let edit_word = if group.warnings.is_empty() {
+                "Edit"
+            } else {
+                "Edit group"
+            };
+            // With a fight open, the run's words and plus icon: the group joins it through
+            // Arrivals. A group none of whose members can join has only its repair to offer.
+            let joins_fight = plan.arrivals_open && !group.members.is_empty();
+            let group_action = if joins_fight {
+                Action::quiet(ADD_TO_FIGHT).icon(icons::ADD)
+            } else {
+                Action::quiet(edit_word)
+            };
+            let actions = group_action.density(Density::Read).natural_width(ui)
+                + Density::Read.control()
+                + design::S;
+            // A group with member faults names them in messages measured by their own part, so
+            // it keeps today's row until scope B. Its own reasons follow its row (review of PR
+            // 841), so the rule follows them.
+            let words = group.warnings.is_empty().then(|| RowWords {
+                lead: icons::GROUP,
+                title: group.name.clone(),
+                summary: Some(plan_group_part(
+                    ui,
+                    &plan_summary_text(ui, group, room),
+                    3,
+                    room,
+                )),
+                actions,
+            });
+            let refused = key.refused.is_some_and(|(_, id)| id == group.id);
+            let rule = !refused && group.own_problems().is_empty();
+            groups.push((group.id, rule, words, actions, edit_word, joins_fight));
+        }
+        let columns = design::PlanColumns::of(
+            events
+                .iter()
+                .map(|row| &row.2)
+                .chain(fights.iter().map(|row| &row.2))
+                .chain(groups.iter().filter_map(|row| row.2.as_ref()))
+                .map(|words| words.facts(ui, row_width))
+                .chain([design::action_rows::MeasuredColumn::kept(ui, PLAN_COLUMNS)]),
+        );
+        let lay = |key: egui::Id, rule: bool, words: RowWords| {
+            let part = words.part();
+            let row = words.row(key, part.as_slice(), rule);
+            let laid = row.lay(ui, row_width, columns);
+            let facts = row.facts(ui, row_width).0;
+            let in_column = row.in_column(ui, row_width, columns);
+            KeptRow {
+                laid,
+                facts,
+                in_column,
+                words,
+            }
+        };
+        let rows = Arc::new(KeptRows {
+            events: events
+                .into_iter()
+                .map(|(key, rule, words, place)| (lay(key, rule, words), place))
+                .collect(),
+            fights: fights
+                .into_iter()
+                .map(|(key, rule, words)| lay(key, rule, words))
+                .collect(),
+            groups: groups
+                .into_iter()
+                .map(
+                    |(id, rule, words, actions, edit_word, joins_fight)| GroupRow {
+                        row: words.map(|words| lay(egui::Id::new(("plan_group", id)), rule, words)),
+                        actions,
+                        edit_word,
+                        joins_fight,
+                    },
+                )
+                .collect(),
+            columns,
+        });
+        self.plan_rows.kept = Some((key, Arc::clone(&rows)));
+        rows
+    }
+
     pub(super) fn plan_projection(
         &mut self,
         book: &Book,
@@ -9375,6 +9611,28 @@ mod tests {
                 shown(harness, "Open: Captain Varra")
             })
             .expect("plan-projection-steady");
+        // Layout 11c A2c (review of PR 841): the plan's closed rows are measured and laid out by
+        // their recipe when one of their inputs changes, never on a quiet frame, counted from
+        // the plan's entry through paint.
+        let rows = crate::test_support::CachedWork::start(
+            "Plan rows",
+            &mut harness,
+            |harness: &mut egui_kittest::Harness<'_, (Sessions, Book)>| {
+                let cache = &harness.state().0.plan_rows;
+                crate::test_support::Counts {
+                    reached: cache.reached,
+                    work: cache.builds,
+                }
+            },
+        );
+        harness.run_steps(2);
+        let warm = shown(&harness, "Bridge");
+        rows.warm(&mut harness, warm, 0).expect("plan-rows-warm");
+        rows.steady(&mut harness, |harness| {
+            harness.run_steps(3);
+            shown(harness, "Bridge")
+        })
+        .expect("plan-rows-steady");
         // Review of PR 703: the planned fights' days are worked out once for each change of
         // the note, the Timeline or the fights, never on a quiet frame or a resize.
         let days = || DAYS_BY_PLACE.with(std::cell::Cell::get);
@@ -9950,7 +10208,8 @@ mod tests {
 
     /// The plan's inputs, which the projection cases below change one at a time.
     struct PlanInputs {
-        fights: Vec<PlanFight>,
+        fights: Arc<[PlanFight]>,
+        groups: Vec<Arc<crate::encounter_run::RunGroup>>,
         fights_revision: crate::design::memo::Revision,
         saved: Vec<crate::encounter_run::SavedRunInfo>,
         saved_revision: crate::design::memo::Revision,
@@ -9993,7 +10252,9 @@ mod tests {
             fights: vec![
                 planned_fight("Bridge", "Encounters/Bridge.md"),
                 planned_fight("Ford", "Encounters/Ford.md"),
-            ],
+            ]
+            .into(),
+            groups: Vec::new(),
             fights_revision: still,
             saved: Vec::new(),
             saved_revision: still,
@@ -10027,7 +10288,7 @@ mod tests {
                         saved_runs: &inputs.saved,
                         saved_runs_revision: inputs.saved_revision,
                         fights_revision: inputs.fights_revision,
-                        groups: &[],
+                        groups: &inputs.groups,
                         group_blocked: None,
                         group_open: false,
                         group_discard: &|_| None,
@@ -10066,7 +10327,11 @@ mod tests {
         // same count and the note unchanged: the note's Mill line is a planned fight now.
         {
             let mut inputs = inputs.borrow_mut();
-            inputs.fights[1] = planned_fight("Mill", "Encounters/Mill.md");
+            inputs.fights = vec![
+                planned_fight("Bridge", "Encounters/Bridge.md"),
+                planned_fight("Mill", "Encounters/Mill.md"),
+            ]
+            .into();
             inputs.fights_revision = crate::design::memo::Revised::new(()).revision();
         }
         harness.step();
@@ -10116,25 +10381,106 @@ mod tests {
             has(&harness, "other “Bridge”"),
             "the removal names the other Bridge"
         );
-        // The saved runs, by the real path (review of PR 820): `Encounters::plan_kept` lists a
-        // fight with its UNFINISHED run (`PlanFight::saved`); when that run ends, it lists the
-        // fight again with none, by the saved runs' revision, the fights' own revision kept. The
-        // plan reads it on the next frame: Resume, then Start fight again.
-        {
-            let mut inputs = inputs.borrow_mut();
-            inputs.fights[0].saved = Some(legacy_plan_run("Bridge"));
-            inputs.saved_revision = crate::design::memo::Revised::new(()).revision();
+        // The saved runs, by the real path (reviews of PR 820 and PR 840): Bridge and Mill are
+        // encounters of the campaign, and Bridge's run is saved unfinished in its run folder.
+        // `Encounters` reads the folder and `plan_kept` lists Bridge with its run; the plan
+        // offers Resume. Then the run ends (the same run, saved as ended): read again, Bridge
+        // has no unfinished run, and the plan offers Start fight again on the next frame.
+        let campaign = crate::persistence::Campaign {
+            id: Uuid::new_v4(),
+            name: "Marches".into(),
+            path: root.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        crate::content_workspace::CampaignDocument::new(&campaign)
+            .unwrap()
+            .save()
+            .unwrap();
+        let bridge = Uuid::new_v4();
+        for (id, name) in [(bridge, "Bridge"), (Uuid::new_v4(), "Mill")] {
+            fs::write(
+                root.path().join(format!("{name}.md")),
+                splat::content::formats::fixture(
+                    "Fixture.md",
+                    &format!("splat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter: {{roster: []}}\n"),
+                    "",
+                )
+                .unwrap(),
+            )
+            .unwrap();
         }
+        let wolf = || {
+            let fields = format!(
+                "splat_id: {}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{type: beast, cr_text: \"1/4\"}}\nsplat_stats:\n  max_hp: {{value: 11}}\n  armor_class: {{value: 13}}\n",
+                Uuid::new_v4()
+            );
+            let text =
+                splat::content::formats::fixture("Fixture.md", &fields, "\n## Actions\nBite.\n");
+            let entry = splat::content::Entry::parse("creature.md", &text.unwrap()).unwrap();
+            splat_campaign::encounter_run::Participant::new(
+                "wolf".into(),
+                "enemies".into(),
+                entry,
+                &serde_yaml_ng::Mapping::new(),
+                true,
+            )
+            .unwrap()
+        };
+        let runs = root.path().join("Encounter Runs");
+        fs::create_dir_all(&runs).unwrap();
+        splat_encounters_ui::encounter_run::write_in_progress_run(
+            campaign.id,
+            &runs,
+            "Bridge",
+            vec![(wolf(), 12), (wolf(), 8)],
+        )
+        .unwrap();
+        // The run came from Bridge: its file names the encounter, as a run started from it does.
+        let file = fs::read_dir(&runs).unwrap().next().unwrap().unwrap().path();
+        let mut saved: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        saved["source"] = bridge.to_string().into();
+        fs::write(&file, saved.to_string()).unwrap();
+        let mut encounters = splat_encounters_ui::encounters::Encounters::default();
+        // The test reads the run folder itself; `poll` notes the run facts, as each frame.
+        encounters.hold_reads = true;
+        encounters.refresh_now(&campaign, &[]);
+        let campaigns = splat_content_ui::campaigns::Campaigns::default();
+        let ctx = harness.ctx.clone();
+        let read = |encounters: &mut splat_encounters_ui::encounters::Encounters| {
+            encounters.poll(&ctx, &campaigns);
+            let kept = encounters.plan_kept();
+            let mut inputs = inputs.borrow_mut();
+            inputs.fights = kept.fights;
+            inputs.fights_revision = encounters.plan_fights_revision();
+            inputs.saved_revision = encounters.saved_runs_revision();
+        };
+        read(&mut encounters);
         harness.step();
         assert!(
             harness.query_all_by_label("Resume: Bridge").count() > 0,
             "a fight with its unfinished run offers Resume"
         );
-        {
-            let mut inputs = inputs.borrow_mut();
-            inputs.fights[0].saved = None;
-            inputs.saved_revision = crate::design::memo::Revised::new(()).revision();
-        }
+        let fights_revision = inputs.borrow().fights_revision;
+        fs::remove_file(&file).unwrap();
+        splat_encounters_ui::encounter_run::write_ended_run_with(
+            campaign.id,
+            &runs,
+            "Bridge",
+            Some(bridge),
+            "Won",
+            vec![wolf()],
+            "# Bridge",
+        )
+        .unwrap();
+        encounters.read_runs_again(&campaign);
+        read(&mut encounters);
+        assert_eq!(
+            inputs.borrow().fights_revision,
+            fights_revision,
+            "only the saved runs changed"
+        );
         harness.step();
         assert!(
             harness.query_all_by_label("Resume: Bridge").count() == 0
@@ -10144,13 +10490,6 @@ mod tests {
         // The content index, one built index for another (review of PR 820): with a Captain
         // Varra note the scene finds her; the note deleted and the index built again (another
         // generation, an index all the same), the scene says `Not found`.
-        let campaign = crate::persistence::Campaign {
-            id: Uuid::new_v4(),
-            name: "Marches".into(),
-            path: root.path().into(),
-            dndbeyond_campaign_id: None,
-            dndbeyond_campaign_name: None,
-        };
         let varra = root.path().join("Captain Varra.md");
         fs::write(
             &varra,
@@ -10236,6 +10575,42 @@ mod tests {
             holds && after > before + design::L,
             "in one pass every row's action moves to the new column, L after the widest facts \
              ({before} to {after}): {records:?}"
+        );
+        // The groups (review of PR 841): a group with no members and so no member fault, linked
+        // in the note, is a row laid by its recipe on the next frame, and keeps its own reason,
+        // `No members can join.`, as a warning under its row. Red: the recipe row with no reason.
+        {
+            let mut inputs = inputs.borrow_mut();
+            inputs.groups = vec![Arc::new(crate::encounter_run::RunGroup {
+                id: Uuid::new_v4(),
+                path: "Encounter Groups/Empty Watch.md".into(),
+                name: "Empty Watch".into(),
+                side: "enemies".into(),
+                encounter: None,
+                encounter_name: None,
+                members: vec![],
+                notes: String::new(),
+                xp: 0,
+                xp_unknown: vec![],
+                unavailable: 0,
+                unavailable_members: vec![],
+                problem: Some("No members can join.".into()),
+                warnings: vec![],
+            })];
+            inputs.fights_revision = crate::design::memo::Revised::new(()).revision();
+        }
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            let body = draft
+                .body
+                .as_str()
+                .replace("- [[Mill]]\n", "- [[Mill]]\n- [[Empty Watch]]\n");
+            let _ = draft.body.replace(body);
+        }
+        harness.step();
+        assert!(
+            harness.query_by_label("Empty Watch").is_some() && has(&harness, "No members can join"),
+            "an empty group's row says why it cannot join"
         );
     }
 
