@@ -18,7 +18,6 @@ src/lib.rs allow-deprecated 1
 src/library/view.rs allow-deprecated 1
 src/lookup.rs allow-deprecated 1
 src/loot_editor.rs allow-deprecated 1
-src/sessions/carry.rs allow-deprecated 1
 src/sessions/plan.rs allow-deprecated 1
 src/sessions/slash.rs allow-deprecated 1
 src/timeline/page.rs allow-deprecated 1

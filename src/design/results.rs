@@ -1021,8 +1021,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "show", &[Ban::Body]),
         // M-N0.10: the record line's warning (M0453).
         ("src/sessions/page.rs", "record_line_body", &[Ban::Body]),
-        ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
-        ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "banner_notices",
@@ -1054,6 +1052,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
+        // M-N1.3 (ruling M20): Read's embed whose source is gone, typed (`BodyMessage`), in
+        // place of a `small_message`.
+        ("src/sessions/carry.rs", "show_prepared", &[Ban::Body]),
         // M-N1.1 (ruling M20): a result with the note's Undo at its own place
         // (`PlacedResult`), replacing three `undo_message` calls.
         (
@@ -1623,7 +1624,6 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/outcome.rs", 1),
             ("src/design/pane.rs", 5),
-            ("src/sessions/carry.rs", 1),
             ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 1),
             ("src/trackers/history.rs", 1),
@@ -1636,7 +1636,6 @@ pub(crate) const STAGED: &[Staged] = &[
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[
             ("src/design/components.rs", 15),
-            ("src/sessions/carry.rs", 1),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],
@@ -1690,7 +1689,6 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/design/outcome.rs", 7),
             ("src/encounters.rs", 4),
-            ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 6),
             ("src/sessions/plan.rs", 2),
             ("src/timeline/page.rs", 3),
