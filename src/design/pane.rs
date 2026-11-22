@@ -321,16 +321,18 @@ enum Host {
     Alone { fills: bool },
 }
 
-/// How a document editor lays its text out ([`EditorRegion::document`]).
+/// How a document editor lays its text out ([`EditorRegion::editor`], [`editor_view`]).
 #[derive(Clone, Debug)]
 pub enum Face {
     /// Plain text in one font (a note's source in monospace, prose).
-    Font(egui::TextStyle),
+    Font(egui::FontId),
     /// Text laid out by a styling layouter (Markdown's source). `folds`: the layout depends on
     /// where the caret and the selection are (a fold opens on their lines), so the kept layout
     /// is keyed by them too.
     Laid {
         layout: fn(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley>,
+        /// The font the layout measures its text in (its prose type): a change lays out again.
+        font: egui::FontId,
         folds: bool,
     },
 }
@@ -351,7 +353,8 @@ struct LaidKey {
     measure: super::memo::Measure,
     atlas: u64,
     dark: bool,
-    face: (Option<egui::TextStyle>, usize),
+    /// The face's layout (the font is in `measure`): 0 for plain text, else the function.
+    face: usize,
     caret: Option<(bool, Option<(usize, usize)>)>,
 }
 
@@ -390,15 +393,15 @@ impl egui::cache::CacheTrait for KeptLayouts {
 /// it with the text it was given and again after each edit in its own pass (several in one
 /// frame too); each call reads the draft's live key (`text_draft::Lent`), so an edited text is
 /// never answered with the galley of another revision.
-pub(in crate::design) fn kept_layouter(
+pub(in crate::design) fn kept_layouter<'a>(
     field: Id,
     face: Face,
-    live: std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
-) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> {
+    live: &'a std::cell::Cell<super::text_draft::DraftKey>,
+) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> + 'a {
     move |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| {
         let font = match &face {
-            Face::Font(style) => style.resolve(ui.style()),
-            Face::Laid { .. } => super::tokens::Type::Body.font(ui),
+            Face::Font(font) => font.clone(),
+            Face::Laid { font, .. } => font.clone(),
         };
         let caret = match &face {
             Face::Laid { folds: true, .. } => {
@@ -416,8 +419,8 @@ pub(in crate::design) fn kept_layouter(
             atlas: super::theme::atlas_epoch(ui.ctx()),
             dark: ui.visuals().dark_mode,
             face: match &face {
-                Face::Font(style) => (Some(style.clone()), 0),
-                Face::Laid { layout, .. } => (None, *layout as usize),
+                Face::Font(_) => 0,
+                Face::Laid { layout, .. } => *layout as usize,
             },
             caret,
         };
@@ -472,29 +475,7 @@ pub enum ViewHeight {
 /// [`EditorRegion::editor`], with the same fixed frame, inner text scroll and lane, caret
 /// follow and reveal. For an editor that a page's own scroll holds (Campaign's repair) or that
 /// fills its pane's body (a Session template). Keyed by `field`'s id.
-pub fn editor_view<T: super::layout::GuardedText>(
-    ui: &mut Ui,
-    height: ViewHeight,
-    field: super::layout::FieldId,
-    text: &mut T,
-    style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
-) -> super::layout::Editor {
-    let (max, fills) = match height {
-        ViewHeight::AtMost(most) => (most, false),
-        ViewHeight::Fills => (ui.available_height(), true),
-    };
-    EditorRegion {
-        pane: field.id().with("editor_view"),
-        max: max.floor().max(0.0),
-        host: Host::Alone { fills },
-        _scope: std::marker::PhantomData,
-    }
-    .editor(ui, field, text, style)
-}
-
-/// [`editor_view`] for a document (`text_draft::TextDraft`): the same viewport, with its laid-out
-/// text kept by its key as [`EditorRegion::document`] keeps it.
-pub fn document_view(
+pub fn editor_view(
     ui: &mut Ui,
     height: ViewHeight,
     field: super::layout::FieldId,
@@ -512,7 +493,7 @@ pub fn document_view(
         host: Host::Alone { fills },
         _scope: std::marker::PhantomData,
     }
-    .document(ui, field, text, face, style)
+    .editor(ui, field, text, face, style)
 }
 
 /// The fixed frame of every editor viewport: the field's well, its hairline and an `S` inner
@@ -617,28 +598,6 @@ fn region_drawn(ui: &Ui, pane: Id) -> Option<f32> {
 }
 
 impl EditorRegion<'_> {
-    /// [`editor`](Self::editor) for a document (`text_draft::TextDraft`, layout PR 9b, rulings
-    /// L8 and M25). The part lays the text out in `face` and keeps the laid-out text by its full
-    /// key (the draft's identity and revision, the measure, the font atlas's epoch, the visuals,
-    /// the face, and the caret for a face that folds): a quiet frame lays out, hashes and copies
-    /// none of it in the app. egui's own per-frame text copies stay, counted (M25). `style` sets
-    /// the rest of the text edit, not its font.
-    pub fn document(
-        self,
-        ui: &mut Ui,
-        field: super::layout::FieldId,
-        text: &mut super::text_draft::TextDraft,
-        face: Face,
-        style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
-    ) -> super::layout::Editor {
-        let mut lent = super::text_draft::Lent {
-            live: std::rc::Rc::new(std::cell::Cell::new(text.key())),
-            draft: text,
-            face,
-        };
-        self.editor(ui, field, &mut lent, style)
-    }
-
     /// The pane's one editor, drawn through `field` (its id and text guard, `FieldId::editor`)
     /// inside the region, as tall as its text up to the region's height, then scrolling.
     ///
@@ -652,11 +611,12 @@ impl EditorRegion<'_> {
     /// line), or the first caret after the editor was not drawn, and lies outside the view is
     /// revealed, centred and with no animation, in the next pass; a caret that did not move is
     /// never scrolled to, so the DM's own wheel stays.
-    pub fn editor<T: super::layout::GuardedText>(
+    pub fn editor(
         self,
         ui: &mut Ui,
         field: super::layout::FieldId,
-        text: &mut T,
+        text: &mut super::text_draft::TextDraft,
+        face: Face,
         style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
     ) -> super::layout::Editor {
         let pane = innermost(ui);
@@ -757,7 +717,7 @@ impl EditorRegion<'_> {
                 // Where the content starts in this layout (the view's top less the offset used).
                 let origin = ui.max_rect().top();
                 let least_text = if fills { max } else { 0.0 };
-                let editor = field.editor(ui, text, |edit| {
+                let editor = field.editor(ui, text, face, |edit| {
                     style(edit)
                         .frame(false)
                         .margin(egui::Vec2::ZERO)
@@ -4942,14 +4902,12 @@ mod editor_region_tests {
         /// Draw the region (`pane_editor`); `false` with `plain` draws `Body::Content`.
         region: bool,
         plain: bool,
-        text: String,
+        text: crate::design::text_draft::TextDraft,
         save: Option<Rect>,
         caret: Option<Rect>,
         focus: bool,
         /// A caret placed from code (a char index), with focus, after the editor draws.
         set_caret: Option<usize>,
-        /// Draw this document (`EditorRegion::document`, layout PR 9b) in place of `text`.
-        doc: Option<crate::design::text_draft::TextDraft>,
         /// Lay the document out with a face that folds (`Face::Laid { folds: true }`).
         folds: bool,
         /// Each frame's `changed()` of the editor, and the text its galley holds.
@@ -4986,10 +4944,12 @@ mod editor_region_tests {
                     let want = state.lines;
                     // `lines` 0: the test owns the text (a document, the differential script).
                     if want > 0 && state.text.lines().count() != want {
-                        state.text = (0..want)
-                            .map(|line| format!("Line {line}"))
-                            .collect::<Vec<_>>()
-                            .join("\n");
+                        let _ = state.text.replace(
+                            (0..want)
+                                .map(|line| format!("Line {line}"))
+                                .collect::<Vec<_>>()
+                                .join("\n"),
+                        );
                     }
                     let frame = PaneFrame::new(ui);
                     let mut messages =
@@ -5034,26 +4994,19 @@ mod editor_region_tests {
                                     let face = if state.folds {
                                         Face::Laid {
                                             layout: laid_plainly,
+                                            font: egui::TextStyle::Body.resolve(ui.style()),
                                             folds: true,
                                         }
                                     } else {
-                                        Face::Font(egui::TextStyle::Body)
+                                        Face::Font(egui::TextStyle::Body.resolve(ui.style()))
                                     };
-                                    let output = match state.doc.as_mut() {
-                                        Some(doc) => editor.document(
-                                            ui,
-                                            FIELD.once(Once::Example),
-                                            doc,
-                                            face,
-                                            |edit| edit,
-                                        ),
-                                        None => editor.editor(
-                                            ui,
-                                            FIELD.once(Once::Example),
-                                            text,
-                                            |edit| edit.desired_width(f32::INFINITY),
-                                        ),
-                                    };
+                                    let output = editor.editor(
+                                        ui,
+                                        FIELD.once(Once::Example),
+                                        text,
+                                        face,
+                                        |edit| edit,
+                                    );
                                     state.changed.push(output.response.changed());
                                     state.galley_text.clone_from(&output.galley.job.text);
                                     if focus {
@@ -5590,7 +5543,7 @@ mod editor_region_tests {
                 messages: 1,
                 region: true,
                 focus: true,
-                doc: Some(crate::design::text_draft::TextDraft::new(words)),
+                text: crate::design::text_draft::TextDraft::new(words),
                 folds,
                 ..State::default()
             },
@@ -5638,10 +5591,9 @@ mod editor_region_tests {
                 change(h);
                 for frame in 1..=3 {
                     h.step();
-                    let draft = h.state().doc.as_ref().map(|doc| doc.as_str().to_owned());
                     assert_eq!(
-                        Some(h.state().galley_text.clone()),
-                        draft,
+                        h.state().galley_text,
+                        h.state().text.as_str(),
                         "{case}, folds {folds}, frame {frame}: the galley holds the draft's words"
                     );
                 }
@@ -5667,13 +5619,13 @@ mod editor_region_tests {
         if folds {
             relaid(&mut h, "caret", &mut |h| up(h));
         } else {
-            let (before, words) = (made(), h.state().doc.as_ref().map(|doc| doc.key()));
+            let (before, words) = (made(), h.state().text.key());
             let caret = h.state().caret;
             up(&mut h);
             h.run_steps(3);
             assert_ne!(h.state().caret, caret, "caret: the caret moved");
             assert_eq!(
-                (made(), h.state().doc.as_ref().map(|doc| doc.key())),
+                (made(), h.state().text.key()),
                 (before, words),
                 "caret: a plain face keeps its layout when only the caret moves"
             );
@@ -5686,12 +5638,12 @@ mod editor_region_tests {
             h.input_mut().events.push(egui::Event::Text("b".into()));
         });
         relaid(&mut h, "replace-equal", &mut |h| {
-            let doc = h.state_mut().doc.as_mut().expect("a document");
+            let doc = &mut h.state_mut().text;
             let words = doc.as_str().to_owned();
-            doc.replace(words);
+            let _ = doc.replace(words);
         });
         relaid(&mut h, "swap", &mut |h| {
-            let doc = h.state_mut().doc.as_mut().expect("a document");
+            let doc = &mut h.state_mut().text;
             let other = doc.copy_as_new();
             *doc = other;
         });
@@ -5740,19 +5692,37 @@ mod editor_region_tests {
     #[test]
     fn a_document_answers_as_a_plain_text_does() {
         let words = "Ash road\nCinder pass";
+        // The reference is the field part's plain text (`FieldId::multi_line`, a `String`):
+        // egui's own edit with the same guard; the document is `FieldId::editor`.
+        struct Field {
+            plain: Option<String>,
+            doc: crate::design::text_draft::TextDraft,
+            changed: Vec<bool>,
+        }
+        let field = crate::field_id!("editor_region_test_text").once(Once::Example);
         let make = |doc: bool| {
-            let mut h = harness(
-                400.0,
-                State {
-                    messages: 1,
-                    region: true,
-                    focus: true,
-                    text: words.to_owned(),
-                    doc: doc.then(|| crate::design::text_draft::TextDraft::new(words)),
-                    ..State::default()
-                },
-            );
-            h.run_steps(2);
+            let mut h = egui_kittest::Harness::builder()
+                .with_size(vec2(400.0, 300.0))
+                .build_ui_state(
+                    move |ui, state: &mut Field| {
+                        let response = match state.plain.as_mut() {
+                            Some(plain) => field.multi_line(ui, plain, |edit| edit),
+                            None => {
+                                let face = Face::Font(egui::TextStyle::Body.resolve(ui.style()));
+                                field.editor(ui, &mut state.doc, face, |edit| edit).response
+                            }
+                        };
+                        state.changed.push(response.changed());
+                    },
+                    Field {
+                        plain: (!doc).then(|| words.to_owned()),
+                        doc: crate::design::text_draft::TextDraft::new(words),
+                        changed: Vec::new(),
+                    },
+                );
+            h.run();
+            h.ctx.memory_mut(|memory| memory.request_focus(field.id()));
+            h.run();
             h
         };
         let (mut plain, mut doc) = (make(false), make(true));
@@ -5795,9 +5765,14 @@ mod editor_region_tests {
             ("cancel", ime(egui::ImeEvent::Preedit(String::new()))),
             ("ime-off", ime(egui::ImeEvent::Disabled)),
         ];
-        let text = |h: &egui_kittest::Harness<'static, State>| match &h.state().doc {
-            Some(doc) => doc.as_str().to_owned(),
-            None => h.state().text.clone(),
+        let text = |h: &egui_kittest::Harness<'static, Field>| match &h.state().plain {
+            Some(plain) => plain.clone(),
+            None => h.state().doc.as_str().to_owned(),
+        };
+        let caret = |h: &egui_kittest::Harness<'static, Field>| {
+            egui::TextEdit::load_state(&h.ctx, field.id())
+                .and_then(|state| state.cursor.char_range())
+                .map(|range| (range.primary.index, range.secondary.index))
         };
         for (step, events) in script {
             let modifiers = events
@@ -5807,13 +5782,7 @@ mod editor_region_tests {
                     _ => None,
                 })
                 .unwrap_or_default();
-            let before = (
-                text(&doc),
-                doc.state()
-                    .doc
-                    .as_ref()
-                    .map(crate::design::text_draft::TextDraft::key),
-            );
+            let before = (text(&doc), doc.state().doc.key());
             for h in [&mut plain, &mut doc] {
                 h.state_mut().changed.clear();
                 h.input_mut().modifiers = modifiers;
@@ -5827,18 +5796,10 @@ mod editor_region_tests {
                 plain.state().changed,
                 "{step}: the same changed() in each frame"
             );
-            assert_eq!(
-                doc.state().caret,
-                plain.state().caret,
-                "{step}: the same caret"
-            );
+            assert_eq!(caret(&doc), caret(&plain), "{step}: the same caret");
             // Revision stability: the key changes exactly when the words change (a no-op, such
             // as an empty paste or Delete at the end, keeps it and lays out nothing).
-            let key = doc
-                .state()
-                .doc
-                .as_ref()
-                .map(crate::design::text_draft::TextDraft::key);
+            let key = doc.state().doc.key();
             assert_eq!(
                 key != before.1,
                 text(&doc) != before.0,

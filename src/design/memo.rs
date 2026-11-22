@@ -192,6 +192,10 @@ impl Revision {
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self(NonZeroU64::new(n).expect("a revision count never wraps"))
     }
+
+    pub(in crate::design) fn value(self) -> u64 {
+        self.0.get()
+    }
 }
 
 /// A value and its revision. A clone is the same version, with the same revision.

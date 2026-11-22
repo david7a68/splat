@@ -1413,7 +1413,9 @@ pub struct Draft {
     pub path: PathBuf,
     search_folder: PathBuf,
     prefix: String,
-    pub body: String,
+    /// The note's words, a document of their own (layout PR 9b): its editor keeps its layout
+    /// and its parse by the draft's key.
+    pub body: crate::design::text_draft::TextDraft,
     baseline: Option<String>,
     pub state: DraftState,
     /// What the file holds now, once the DM asks to see it during a conflict.
@@ -1467,7 +1469,7 @@ impl Draft {
                 .unwrap_or(path)
                 .to_owned(),
             prefix: prefix.to_owned(),
-            body: body.to_owned(),
+            body: crate::design::text_draft::TextDraft::new(body),
             baseline: Some(text.clone()),
             state: DraftState::Clean,
             on_disk: None,
@@ -1506,7 +1508,7 @@ impl Draft {
 
     /// The note's whole text in this draft: its properties, then its words.
     pub fn text(&self) -> String {
-        format!("{}{}", self.prefix, self.body)
+        format!("{}{}", self.prefix, self.body.as_str())
     }
 
     /// The text this draft was read from or last wrote.

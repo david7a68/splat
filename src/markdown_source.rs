@@ -1,6 +1,7 @@
 //! Markdown source, styled where it is typed, in the Reader's faces. Only the look changes:
 //! every character stays, markup included, so the file holds exactly what was typed.
 use crate::design::{self, Type, colors};
+use crate::design::text_draft::DraftKey;
 use crate::markdown_view::LinkTarget;
 use eframe::egui::{
     self, Stroke, TextBuffer, TextFormat,
@@ -310,6 +311,8 @@ impl ComputerMut<&str, Arc<Styled>> for Styler {
 }
 
 fn styled_text(ui: &egui::Ui, text: &str) -> Arc<Styled> {
+    #[cfg(any(test, feature = "test-support"))]
+    STYLED_LOOKUPS.with(|lookups| lookups.set(lookups.get() + 1));
     ui.ctx().memory_mut(|memory| {
         memory
             .caches
@@ -371,6 +374,50 @@ fn format(ui: &egui::Ui, prose: Type, look: Look) -> TextFormat {
 thread_local! {
     /// The layouter's and the paint's steps over runs, sections and folds (a test reads it).
     static FOLD_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times a text's looks were looked up by its words, each a hash of the whole text
+    /// (layout PR 9b: a quiet frame of a document looks up none).
+    static STYLED_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The looks of each drawn document, kept by its draft's key (layout PR 9b: the heading rules
+/// and fold marks come from the kept parse, so a quiet frame hashes none of the words). egui
+/// runs `update` at the end of each pass: a document not drawn in a pass loses its entry.
+#[derive(Default)]
+struct KeptStyles {
+    kept: std::collections::HashMap<DraftKey, (Arc<Styled>, bool)>,
+}
+
+impl egui::cache::CacheTrait for KeptStyles {
+    fn update(&mut self) {
+        self.kept.retain(|_, (_, used)| std::mem::take(used));
+    }
+
+    fn len(&self) -> usize {
+        self.kept.len()
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// The looks of `text`, the words of the draft revision `key`: looked up by its words once per
+/// revision.
+fn kept_styles(ui: &egui::Ui, key: DraftKey, text: &str) -> Arc<Styled> {
+    let hit = ui.ctx().memory_mut(|memory| {
+        let (styled, used) = memory.caches.cache::<KeptStyles>().kept.get_mut(&key)?;
+        *used = true;
+        Some(styled.clone())
+    });
+    if let Some(styled) = hit {
+        return styled;
+    }
+    let styled = styled_text(ui, text);
+    ui.ctx().memory_mut(|memory| {
+        let kept = &mut memory.caches.cache::<KeptStyles>().kept;
+        kept.insert(key, (styled.clone(), true));
+    });
+    styled
 }
 
 fn count_fold_step() {
@@ -527,12 +574,15 @@ impl Laid for design::Editor {
 
 /// The rule under a section heading, as in the Reader, and the mark of each folded `splat:`
 /// comment. A layouter cannot draw either.
-pub fn paint_section_rules(ui: &egui::Ui, output: &impl Laid) {
+pub fn paint_section_rules(ui: &egui::Ui, output: &impl Laid, words: Option<DraftKey>) {
     let galley = output.galley();
     let galley_pos = output.galley_pos();
     let painter = ui.painter().with_clip_rect(output.text_clip_rect());
     let left = galley_pos.x;
-    let styled = styled_text(ui, &galley.job.text);
+    let styled = match words {
+        Some(key) => kept_styles(ui, key, &galley.job.text),
+        None => styled_text(ui, &galley.job.text),
+    };
     for end in &styled.section_ends {
         let row = galley.pos_from_cursor(egui::text::CCursor::new(*end));
         painter.hline(
@@ -840,14 +890,19 @@ mod tests {
     const TEST_NOTE: design::FieldName = crate::field_id!("markdown_source_test");
 
     /// A styled Markdown editor of `body`, through the field part, as the app's editors draw it.
-    fn styled_editor(ui: &mut egui::Ui, body: &mut String, width: f32) -> design::Editor {
+    fn styled_editor(
+        ui: &mut egui::Ui,
+        body: &mut crate::design::text_draft::TextDraft,
+        width: f32,
+    ) -> design::Editor {
+        let face = design::pane::Face::Laid {
+            layout: layouter,
+            font: design::reader::prose_type(ui).font(ui),
+            folds: true,
+        };
         TEST_NOTE
             .once(design::Once::Example)
-            .editor(ui, body, |edit| {
-                // The layouter is a function item: leaking its box allocates nothing.
-                edit.layouter(Box::leak(Box::new(layouter)))
-                    .desired_width(width)
-            })
+            .editor(ui, body, face, |edit| edit.desired_width(width))
     }
 
     /// Press on these words in an editor of `text`, with or without Ctrl.
@@ -855,7 +910,7 @@ mod tests {
         let context = egui::Context::default();
         design::theme::install(&context);
         let at = text[..text.find(words).unwrap()].chars().count();
-        let mut body = text.to_owned();
+        let mut body = crate::design::text_draft::TextDraft::new(text.to_owned());
         // The text does not move, so each frame finds the same place.
         let pointer = std::cell::Cell::new(egui::Pos2::ZERO);
         let mut noted = None;
@@ -929,7 +984,7 @@ mod tests {
         design::theme::install(&context);
         let _ = context.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                let mut body = text.clone();
+                let mut body = crate::design::text_draft::TextDraft::new(text.clone());
                 let output = styled_editor(ui, &mut body, 200.0);
                 let row = &output.galley.rows[1];
                 let glyph = &row.glyphs[0];
@@ -962,7 +1017,7 @@ mod tests {
         let context = egui::Context::default();
         design::theme::install(&context);
         let id = TEST_NOTE.once(design::Once::Example).id();
-        let mut body = text.to_owned();
+        let mut body = crate::design::text_draft::TextDraft::new(text.to_owned());
         // Whether the mark is folded, how many `⋯` were painted, and whether a repaint follows.
         let mut frame = |events: Vec<egui::Event>| {
             let mut folded = None;
@@ -974,7 +1029,7 @@ mod tests {
                 |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let output = styled_editor(ui, &mut body, 1000.0);
-                        paint_section_rules(ui, &output);
+                        paint_section_rules(ui, &output, Some(body.key()));
                         let section = |at: usize| {
                             output
                                 .galley
@@ -1134,10 +1189,12 @@ mod tests {
             let context = egui::Context::default();
             design::theme::install(&context);
             let id = TEST_NOTE.once(design::Once::Example).id();
-            let mut body = text.to_owned();
+            let mut body = crate::design::text_draft::TextDraft::new(text.to_owned());
             let mut after = Vec::new();
             let mut time = 0.0;
-            let frame = |body: &mut String, events: Vec<egui::Event>, time: f64| {
+            let frame = |body: &mut crate::design::text_draft::TextDraft,
+                         events: Vec<egui::Event>,
+                         time: f64| {
                 let output = context.run(
                     egui::RawInput {
                         events,
@@ -1150,9 +1207,13 @@ mod tests {
                             if styled {
                                 let _ = styled_editor(ui, body, 1000.0);
                             } else {
+                                let face = design::pane::Face::Font(
+                                    egui::FontSelection::default().resolve(ui.style()),
+                                );
                                 let _ = TEST_NOTE.once(design::Once::Example).editor(
                                     ui,
                                     body,
+                                    face,
                                     |edit| edit.desired_width(1000.0),
                                 );
                             }
@@ -1225,13 +1286,13 @@ mod tests {
         assert_eq!(splat_marks(&text).len(), 500);
         let context = egui::Context::default();
         design::theme::install(&context);
-        let mut body = text.clone();
+        let mut body = crate::design::text_draft::TextDraft::new(text.clone());
         FOLD_STEPS.with(|steps| steps.set(0));
         let mut runs = 0;
         let _ = context.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let output = styled_editor(ui, &mut body, 1000.0);
-                paint_section_rules(ui, &output);
+                paint_section_rules(ui, &output, Some(body.key()));
                 runs = styled_text(ui, &text).runs.len();
             });
         });

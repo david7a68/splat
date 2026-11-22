@@ -4,6 +4,7 @@
 use super::{
     Change, ChangeKind, Go, Picker, Reader, link_name, reference, status, stored_link, world_field,
 };
+use crate::design::text_draft::TextDraft;
 use crate::{
     design::{
         self, Action, Density, Type, colors,
@@ -83,14 +84,28 @@ pub(super) fn stored_value(index: &ContentIndex, mut value: Value) -> Value {
         .unwrap_or(value)
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 struct Fields {
     status: String,
     creature: Option<Value>,
     place: Option<Value>,
     groups: Vec<Value>,
     groups_unread: Option<super::fields::Unread>,
-    text: String,
+    /// The note's own text, a document of its own (layout PR 9b): its editor keeps its layout
+    /// by the draft's key.
+    text: TextDraft,
+}
+
+/// Two forms are equal when their values and their words are.
+impl PartialEq for Fields {
+    fn eq(&self, other: &Self) -> bool {
+        self.status == other.status
+            && self.creature == other.creature
+            && self.place == other.place
+            && self.groups == other.groups
+            && self.groups_unread == other.groups_unread
+            && self.text.as_str() == other.text.as_str()
+    }
 }
 
 /// Which values differ from where the form began. The status ignores outer spaces.
@@ -115,9 +130,7 @@ impl Fields {
             place: set("in"),
             groups: super::part_of(entry).into_iter().cloned().collect(),
             groups_unread: super::fields::unread_groups(entry, file),
-            text: split_text(file, &entry.name)
-                .map_or(file, |(_, text)| text)
-                .to_owned(),
+            text: TextDraft::new(split_text(file, &entry.name).map_or(file, |(_, text)| text)),
         }
     }
 
@@ -143,7 +156,7 @@ impl Fields {
             creature: self.creature != start.creature,
             place: self.place != start.place,
             groups: self.groups != start.groups,
-            text: self.text != start.text,
+            text: self.text.as_str() != start.text.as_str(),
         }
     }
 }
@@ -306,7 +319,7 @@ impl EditDraft {
             } else {
                 "\n"
             };
-            after = format!("{head}{newline}{}", self.now.text);
+            after = format!("{head}{newline}{}", self.now.text.as_str());
         }
         // A status or a place that play changed goes in the Log, as it does outside the form.
         if let Some(stamp) = log_as {
@@ -477,7 +490,7 @@ impl EditDraft {
                 ),
             ));
         }
-        if self.now.text != theirs.text {
+        if self.now.text.as_str() != theirs.text.as_str() {
             effects.push((
                 "Text",
                 if changed.text {
@@ -522,7 +535,7 @@ impl EditDraft {
             }
         }
         let their_text = theirs.as_ref().map_or("", |theirs| theirs.text.as_str());
-        if their_text != self.now.text {
+        if their_text != self.now.text.as_str() {
             design::grouped_draft_comparison(ui, &self.now.text, their_text, &self.path, false);
         }
         let Some(choice) = choice else {
@@ -564,7 +577,7 @@ impl EditDraft {
                     now.groups = self.start.overwritten_groups(now, &theirs, index);
                     now.groups_unread.clone_from(&theirs.groups_unread);
                     if !changed.text {
-                        now.text.clone_from(&theirs.text);
+                        let _ = now.text.replace(theirs.text.as_str());
                     }
                 }
             }
@@ -1172,9 +1185,13 @@ impl Reader {
                 let editor = match region {
                     // The pane's editor region (round 28, P2): it grows with the text and gives
                     // way, so Save stays in view under a long note.
-                    Some(region) => {
-                        region.editor(ui, field, text, |edit| edit_text_style(edit, font))
-                    }
+                    Some(region) => region.editor(
+                        ui,
+                        field,
+                        text,
+                        design::pane::Face::Font(font.clone()),
+                        |edit| edit_text_style(edit, font),
+                    ),
                     // No pane gave a region (a check that draws the reader alone).
                     None => {
                         let most = ui.available_height();
@@ -1183,6 +1200,7 @@ impl Reader {
                             design::pane::ViewHeight::AtMost(most),
                             field,
                             text,
+                            design::pane::Face::Font(font.clone()),
                             |edit| edit_text_style(edit, font),
                         )
                     }

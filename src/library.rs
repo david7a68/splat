@@ -176,7 +176,7 @@ type BrokenLines = (
 pub struct Library {
     /// The draft as last parsed, with its path. The editor needs the parse on every frame,
     /// and parsing a long note each time took most of the frame.
-    draft_parse: Option<(String, String, ParsedDraft)>,
+    draft_parse: Option<(String, crate::design::text_draft::DraftKey, ParsedDraft)>,
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
     /// The entry list's region (layout step 3b) and its rows: whole rows only, one offset writer.
@@ -233,7 +233,7 @@ pub struct Library {
     loaded: Option<Loaded>,
     pending: Option<mpsc::Receiver<Result<Loaded, String>>>,
     selected: Option<usize>,
-    draft: String,
+    draft: crate::design::text_draft::TextDraft,
     search: String,
     matches: Option<(Section, String, Vec<usize>)>,
     /// Chosen creature facts. They apply in Creatures and to search results.
@@ -686,11 +686,11 @@ impl Library {
             Ok(after) => {
                 kept.set_vital((
                     file,
-                    draft.clone(),
+                    draft.as_str().to_owned(),
                     after.clone(),
                     crate::sentence!("The stat block now says {} {}.", label, value),
                 ));
-                *draft = after;
+                let _ = draft.replace(after);
                 // The draft changed: a failed Save of the old words no longer owns it.
                 *revision += 1;
             }
@@ -703,7 +703,7 @@ impl Library {
     fn stat_result_for(&self, file: &FileId) -> Option<Sentence> {
         self.kept
             .vital()
-            .filter(|(at, _, after, _)| at.0 == file.0 && at.1 == file.1 && *after == self.draft)
+            .filter(|(at, _, after, _)| at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str())
             .map(|(_, _, _, result)| result.clone())
     }
 
@@ -712,7 +712,7 @@ impl Library {
     /// replaced).
     fn stat_undo_applies(&self, file: &FileId) -> bool {
         self.kept.vital().is_some_and(|(at, _, after, _)| {
-            at.0 == file.0 && at.1 == file.1 && *after == self.draft
+            at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str()
         })
     }
 
@@ -721,7 +721,7 @@ impl Library {
     fn heading_undo_applies(&self, file: &FileId) -> bool {
         self.kept
             .heading()
-            .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && *after == self.draft)
+            .is_some_and(|(at, _, after)| at.0 == file.0 && at.1 == file.1 && *after == self.draft.as_str())
     }
 
     /// The footer order of the open entry's link result: the order its own update issued
@@ -1069,8 +1069,8 @@ impl Library {
     /// words it dropped are the newest kept result, with Undo. It takes the parts it changes, so
     /// the editor can call it while it reads the open note.
     fn discard_draft((kept, draft, revision, error): DraftParts<'_>, note: &Note) {
-        kept.set_discarded((note.owner.key(), note.path.clone(), draft.clone()));
-        draft.clone_from(&note.text);
+        kept.set_discarded((note.owner.key(), note.path.clone(), draft.as_str().to_owned()));
+        let _ = draft.replace(note.text.as_str());
         // The draft changed: a failed Save of the old words no longer owns it.
         *revision += 1;
         *error = None;
@@ -1153,7 +1153,7 @@ impl Library {
         loaded.notes[index].text = after.clone();
         loaded.invalidate();
         loaded.refresh_diagnostics();
-        self.draft = after;
+        let _ = self.draft.replace(after);
         // The draft changed: a failed Save of the old words no longer owns it.
         self.draft_revision += 1;
         self.stale = true;
@@ -1171,7 +1171,7 @@ impl Library {
             if note.path == undo.path && note.owner.root() == Some(undo.root.as_path()) {
                 note.text = undo.before.clone();
                 note.entry = Entry::parse(&note.path, &note.text).ok();
-                self.draft = note.text.clone();
+                let _ = self.draft.replace(note.text.clone());
                 // The draft changed: a failed Save of the old words no longer owns it.
                 self.draft_revision += 1;
             }
@@ -1235,7 +1235,7 @@ impl Library {
         if let Some(path) = change.moved_to {
             note.path = path;
         }
-        let draft = std::mem::take(&mut self.draft);
+        let draft = self.draft.replace(String::new());
         self.draft_revision += 1;
         self.kept
             .set_discarded((note.owner.key(), note.path.clone(), draft));
@@ -1267,7 +1267,7 @@ impl Library {
                     }
                 }
                 note.text = text.clone();
-                self.draft = text;
+                let _ = self.draft.replace(text);
             }
             None => {
                 self.kept.set_removed(LetGo {
@@ -1284,7 +1284,7 @@ impl Library {
                     chosen,
                     campaign: None,
                 });
-                self.draft = note.text.clone();
+                let _ = self.draft.replace(note.text.clone());
                 self.stale = true;
                 self.selected = None;
             }
@@ -1313,7 +1313,7 @@ impl Library {
                 .set_scope_notice((note.name().to_owned(), Scope::All));
         }
         self.selected = Some(index);
-        self.draft = note.text.clone();
+        let _ = self.draft.replace(note.text.clone());
         self.disk_change = None;
         self.section = if note.is_manifest() {
             Section::All
@@ -1332,7 +1332,7 @@ impl Library {
             .loaded
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .filter(|n| n.text != self.draft)?;
+            .filter(|n| n.text != self.draft.as_str())?;
         Some((
             note.name().to_owned(),
             match &note.owner {
@@ -1346,7 +1346,7 @@ impl Library {
         self.loaded
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .is_some_and(|n| n.text != self.draft)
+            .is_some_and(|n| n.text != self.draft.as_str())
     }
     pub fn form_open(&self) -> bool {
         self.form || self.new_form || self.confirm_unregister.is_some()
@@ -1406,7 +1406,7 @@ impl Library {
         self.source = false;
         self.matches = None;
         self.selected = Some(index);
-        self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
+        let _ = self.draft.replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
         true
     }
     pub fn edit_copy(&mut self, entry: Entry) {
@@ -1597,18 +1597,19 @@ impl Library {
             ctx.request_repaint();
         });
     }
-    /// The draft of note `i`, parsed. The same text keeps the same parse.
+    /// The draft of note `i`, parsed. The same revision of the draft keeps the same parse (layout
+    /// PR 9b: a quiet frame compares no words).
     fn parsed_draft(&mut self, i: usize) -> ParsedDraft {
         let path = &self.loaded.as_ref().unwrap().notes[i].path;
         if let Some((parsed_path, draft, parsed)) = &self.draft_parse
             && parsed_path == path
-            && *draft == self.draft
+            && *draft == self.draft.key()
         {
             return parsed.clone();
         }
         let parsed =
             design::memo::Revised::new(std::sync::Arc::new(Entry::parse(path, &self.draft)));
-        self.draft_parse = Some((path.clone(), self.draft.clone(), parsed.clone()));
+        self.draft_parse = Some((path.clone(), self.draft.key(), parsed.clone()));
         parsed
     }
 
@@ -1785,7 +1786,7 @@ impl Library {
                                 .as_ref()
                                 .and_then(|(owner, path)| file_at(&l.notes, (*owner, path)));
                             if let Some(i) = self.selected {
-                                self.draft = l.notes[i].text.clone();
+                                let _ = self.draft.replace(l.notes[i].text.clone());
                                 // The draft changed: a failed Save of the old words no longer owns it.
                                 self.draft_revision += 1;
                             }
@@ -2200,7 +2201,7 @@ impl Library {
                         ));
                     }
                     self.selected = Some(index);
-                    self.draft = note.text.clone();
+                    let _ = self.draft.replace(note.text.clone());
                     self.section = Section::All;
                     self.unreadable_kind = None;
                     self.source = false;
@@ -2474,7 +2475,7 @@ impl Library {
                         ));
                     }
                     self.selected = Some(index);
-                    self.draft = note.text.clone();
+                    let _ = self.draft.replace(note.text.clone());
                     self.section = Section::All;
                     self.unreadable_kind = None;
                     self.source = false;
@@ -2666,7 +2667,7 @@ impl Library {
                 self.trail.leave(self.here());
             }
             self.selected = Some(i);
-            self.draft = self.loaded.as_ref().unwrap().notes[i].text.clone();
+            let _ = self.draft.replace(self.loaded.as_ref().unwrap().notes[i].text.clone());
             self.error = None;
             self.source = false;
         }
@@ -3775,7 +3776,7 @@ impl Library {
                                 self.search.clear();
                                 self.section = Section::All;
                                 self.source = true;
-                                self.draft = text;
+                                let _ = self.draft.replace(text);
                                 self.focus_hp = self.new_kind == "creature";
                                 self.new_name.clear();
                                 self.new_error = None;
@@ -3823,7 +3824,7 @@ impl Library {
         };
         self.selected = Some(index);
         self.reveal_row = true;
-        self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
+        let _ = self.draft.replace(self.loaded.as_ref().unwrap().notes[index].text.clone());
         self.disk_change = None;
         let _ = self.kept.take_scope_notice();
         self.scope = target.scope;
@@ -4015,7 +4016,7 @@ impl Library {
                         source: OfferSource {
                             root: root.clone(),
                             path: l.notes[i].path.clone(),
-                            text: self.draft.clone(),
+                            text: self.draft.as_str().to_owned(),
                         },
                         old: old.name.clone(),
                         new: entry.name.clone(),
@@ -4039,7 +4040,7 @@ impl Library {
                     .as_ref()
                     .is_none_or(|old| old.id != entry.id);
                 l.notes[i].entry = Some(entry);
-                l.notes[i].text = self.draft.clone();
+                l.notes[i].text = self.draft.as_str().to_owned();
                 l.notes[i].error = None;
                 // A manifest written from its draft is on disk again.
                 l.notes[i].manifest_gone = false;
@@ -4254,7 +4255,7 @@ impl Library {
             loaded.notes.push(note);
             loaded.invalidate();
             loaded.refresh_diagnostics();
-            self.draft = draft;
+            let _ = self.draft.replace(draft);
             // The draft changed: a failed Save of the old words no longer owns it.
             self.draft_revision += 1;
             self.source = true;
@@ -4319,7 +4320,7 @@ impl Library {
                 .and_then(|entry| entry.fields.get("splat_spell"))
                 .and_then(spell_kind),
         );
-        let dirty = self.draft != note.text;
+        let dirty = self.draft.as_str() != note.text;
         let editable = note.owner.editable();
         // A file the system will not read has no text to edit: the reader names its fault.
         let fault = note.fault.clone();
@@ -4957,7 +4958,7 @@ impl Library {
             }
         }
         // Live, because Discard in this same frame changed the draft.
-        if self.draft != note.text {
+        if self.draft.as_str() != note.text {
             let _ = self.kept.take_discarded();
         }
         // The pane's footer, typed (M-L0.4b): Edit Markdown's (with a save row), Read's, or a
@@ -5204,9 +5205,15 @@ impl Library {
                     ui.scope(|ui| {
                         ui.set_max_width(editor_width);
                         let output =
-                            region.editor(ui, note.markdown_field(), &mut self.draft, |edit| {
-                                edit.font(egui::TextStyle::Monospace).interactive(editable)
-                            });
+                            region.editor(
+                                ui,
+                                note.markdown_field(),
+                                &mut self.draft,
+                                design::pane::Face::Font(
+                                    egui::TextStyle::Monospace.resolve(ui.style()),
+                                ),
+                                |edit| edit.font(egui::TextStyle::Monospace).interactive(editable),
+                            );
                         // Each edit is a new draft: a failed Save of the old words ends.
                         if output.response.changed() {
                             self.draft_revision += 1;
@@ -5434,10 +5441,10 @@ impl Library {
         // still the text its action left, else it does nothing and its entry stays (its line
         // comes back with its own draft). Typed text is never replaced.
         if discard_undo
-            && self.draft == note.text
+            && self.draft.as_str() == note.text
             && let Some((_, _, text)) = self.kept.take_discarded()
         {
-            self.draft = text;
+            let _ = self.draft.replace(text);
             // The draft changed: a failed Save of the old words no longer owns it.
             self.draft_revision += 1;
         }
@@ -5484,12 +5491,12 @@ impl Library {
             && self.stat_undo_applies(&file)
             && let Some((_, before, _, _)) = self.kept.take_vital()
         {
-            self.draft = before;
+            let _ = self.draft.replace(before);
             // The draft changed: a failed Save of the old words no longer owns it.
             self.draft_revision += 1;
         }
         // Live, as above: a press that changed the draft ends Discard's Undo.
-        if self.draft != note.text {
+        if self.draft.as_str() != note.text {
             let _ = self.kept.take_discarded();
         }
         if self.draft_revision != draft_before {
@@ -6576,7 +6583,7 @@ mod tests {
             ..Default::default()
         };
         library.open_entry(at);
-        library.draft = valid.clone();
+        let _ = library.draft.replace(valid.clone());
         // F2: an empty file is there at Save.
         fs::write(&manifest, "").unwrap();
         library.save_selected(false);
@@ -6586,7 +6593,7 @@ mod tests {
             "never written over"
         );
         assert!(library.disk_change.is_some(), "the comparison opens");
-        assert_eq!(library.draft, valid, "the draft stays");
+        assert_eq!(library.draft.as_str(), valid, "the draft stays");
         // F1: the manifest came back as Module.md, with this package's identity.
         fs::remove_file(&manifest).unwrap();
         library.disk_change = None;
@@ -6701,10 +6708,10 @@ mod tests {
             .position(|n| n.path == "Wolf copy.md")
             .unwrap();
         library.selected = Some(copy_index);
-        library.draft = format!("{copy}\nEdited copy.\n");
+        let _ = library.draft.replace(format!("{copy}\nEdited copy.\n"));
         library.save_selected(false);
         let original = fs::read_to_string(module.path.join("Wolf.md")).unwrap();
-        let saved_copy = library.draft.clone();
+        let saved_copy = library.draft.as_str().to_owned();
         library.give_new_identity().unwrap();
         assert_ne!(crate::content_workspace::note_id(&library.draft), Some(id));
         let repaired = Entry::parse("Wolf copy.md", &library.draft).unwrap();
@@ -7173,10 +7180,10 @@ mod tests {
         library.open_entry(0);
         library.open_entry(1);
         library.draft.push_str("Unsaved ruling.");
-        let draft = library.draft.clone();
+        let draft = library.draft.as_str().to_owned();
         library.go(Step::Back);
         assert_eq!(library.selected, Some(1));
-        assert_eq!(library.draft, draft);
+        assert_eq!(library.draft.as_str(), draft);
         assert!(library.trail.peek(Step::Back).is_some());
     }
 
@@ -7868,7 +7875,7 @@ mod tests {
                 if dirty {
                     assert_eq!(library.selected, Some(0));
                     assert!(library.draft.ends_with("Unsaved note.\n"));
-                    library.draft = library.loaded.as_ref().unwrap().notes[0].text.clone();
+                    let _ = library.draft.replace(library.loaded.as_ref().unwrap().notes[0].text.clone());
                 } else {
                     let (place, title) = if read_by_menu {
                         (2, "# Guiding Bolt")
@@ -8190,7 +8197,7 @@ mod tests {
             };
             library.open_entry(0);
             library.source = true;
-            library.draft = text.replacen("# Cinder Wolf", "# Ash Wolf", 1);
+            let _ = library.draft.replace(text.replacen("# Cinder Wolf", "# Ash Wolf", 1));
             let ctx = egui::Context::default();
             crate::design::theme::install(&ctx);
             let mut painted = Vec::new();
@@ -8579,7 +8586,7 @@ mod tests {
             ] {
                 assert!(!rendered.contains(duplicate), "{rendered}");
             }
-            assert_eq!(library.draft, source);
+            assert_eq!(library.draft.as_str(), source);
         }
     }
 
@@ -9187,7 +9194,7 @@ mod tests {
             &entry,
             (key, label, value),
         );
-        let stat_after = library.draft.clone();
+        let stat_after = library.draft.as_str().to_owned();
         let stat_entry = Entry::parse("Rules/X.md", &stat_after).unwrap();
         let mut heading_after = stat_after.clone();
         HeadingChoice::new(Some(&stat_entry), &stat_after, None, &a).apply(
@@ -9200,12 +9207,12 @@ mod tests {
             stat_after, heading_after,
             "fixture: the heading fix changed it"
         );
-        library.draft = stat_after;
+        let _ = library.draft.replace(stat_after);
         assert!(
             library.stat_undo_applies(&a),
             "a heading fix keeps the stat Undo"
         );
-        library.draft = heading_after;
+        let _ = library.draft.replace(heading_after);
         assert!(
             library.heading_undo_applies(&a),
             "the heading Undo stands beside the stat Undo"
@@ -9375,7 +9382,7 @@ mod tests {
         let reload = |library: &mut Library, name: &str, text: Option<&str>| {
             let index = at(library, name);
             library.selected = Some(index);
-            library.draft = "An unsaved draft.".into();
+            let _ = library.draft.replace("An unsaved draft.".into());
             library.disk_change = Some(DiskChange {
                 text: text.map(str::to_owned),
                 moved_to: None,
@@ -9392,7 +9399,7 @@ mod tests {
             let before = library.kept.order_of(KeptKind::Discarded);
             let index = at(&library, name);
             library.selected = Some(index);
-            library.draft = format!("A draft of {name}.");
+            let _ = library.draft.replace(format!("A draft of {name}."));
             let note = &library.loaded.as_ref().unwrap().notes[index];
             Library::discard_draft(
                 (
@@ -9404,7 +9411,7 @@ mod tests {
                 note,
             );
             replaced(&library, KeptKind::Discarded, before);
-            assert_eq!(library.draft, note.text, "Discard: the file's words");
+            assert_eq!(library.draft.as_str(), note.text, "Discard: the file's words");
         }
         for name in ["Ash", "Brand"] {
             let before = library.kept.order_of(KeptKind::Removed);
@@ -9436,7 +9443,7 @@ mod tests {
         let (key, label, value, _) = creature::vital_checks(&entry)[0].clone();
         for _ in 0..2 {
             let before = library.kept.order_of(KeptKind::Vital);
-            library.draft = text.clone();
+            let _ = library.draft.replace(text.clone());
             Library::fix_stat(
                 (
                     &mut library.kept,
@@ -9728,7 +9735,7 @@ mod tests {
             .position(|note| note.path == format!("{entry}.md"))
             .unwrap();
         library.selected = Some(index);
-        library.draft = "An unsaved draft.".into();
+        let _ = library.draft.replace("An unsaved draft.".into());
         library.disk_change = Some(DiskChange {
             text: None,
             moved_to: None,
@@ -9935,16 +9942,16 @@ mod tests {
             selected: Some(0),
             ..Default::default()
         };
-        library.draft = library.loaded.as_ref().unwrap().notes[0].text.clone();
+        let _ = library.draft.replace(library.loaded.as_ref().unwrap().notes[0].text.clone());
         library.draft.push_str("Unsaved description");
-        let expected = library.draft.clone();
+        let expected = library.draft.as_str().to_owned();
         library.search = "no matching entry".into();
         let ctx = egui::Context::default();
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
         });
         assert!(campaigns.active_campaign().is_none());
-        assert_eq!(library.draft, expected);
+        assert_eq!(library.draft.as_str(), expected);
         campaigns.unregister_module(m.id).unwrap();
         assert!(m.path.join("Package.md").exists());
     }
@@ -10482,7 +10489,7 @@ mod tests {
         let stored = stored.split(" at line").next().unwrap().to_owned();
         assert!(!stored.contains("opens a list"), "{stored}");
         let valid = yaml.replace("splat_kind: [", "splat_kind: rule");
-        library.draft = valid.clone();
+        let _ = library.draft.replace(valid.clone());
         let painted = sd1_painted(&mut library);
         for words in ["opens a list", stored.as_str()] {
             assert!(
@@ -10511,7 +10518,7 @@ mod tests {
         );
         // Edited back to a new fault: the notice names the draft's line, not the saved one.
         library.source = true;
-        library.draft = valid.replace("splat_name: Yaml", "splat_name: [");
+        let _ = library.draft.replace(valid.replace("splat_name: Yaml", "splat_name: ["));
         let painted = sd1_painted(&mut library);
         assert!(
             painted.contains("Line 5 opens a list"),
@@ -10520,7 +10527,7 @@ mod tests {
         assert!(!painted.contains("Line 4"), "SD1-old-fault-gone\n{painted}");
         assert!(painted.contains("Invalid"), "SD1-invalid-again\n{painted}");
         // Discard goes back to the saved text and its fault.
-        library.draft = yaml.clone();
+        let _ = library.draft.replace(yaml.clone());
         let painted = sd1_painted(&mut library);
         assert!(
             painted.contains("Line 4 opens a list"),
@@ -10538,7 +10545,7 @@ mod tests {
         let taken = valid.replace(&id_line(&valid), &id_line(&other));
         assert_ne!(taken, valid);
         assert!(Entry::parse("Notes/Yaml.md", &taken).is_ok());
-        library.draft = taken.clone();
+        let _ = library.draft.replace(taken.clone());
         let painted = sd1_painted(&mut library);
         let cause = "Another entry already uses this UUID or key.";
         assert!(painted.contains(cause), "SD1-taken-notice\n{painted}");
@@ -10553,11 +10560,11 @@ mod tests {
             yaml.as_bytes(),
             "SD1-taken-not-written"
         );
-        assert_eq!(library.draft, taken, "SD1-taken-draft-kept");
+        assert_eq!(library.draft.as_str(), taken, "SD1-taken-draft-kept");
         let painted = sd1_painted(&mut library);
         assert!(painted.contains(cause), "SD1-taken-after-save\n{painted}");
         // Must stay true: a draft Save accepts has no notice, and Save writes it.
-        library.draft = valid.clone();
+        let _ = library.draft.replace(valid.clone());
         let painted = sd1_painted(&mut library);
         assert!(!painted.contains(cause), "SD1-valid-again\n{painted}");
         library.save_selected(false);
@@ -10581,7 +10588,7 @@ mod tests {
         let moved_id =
             format!("{valid}\nA new line.\n").replace(&id_line(&valid), &id_line(&other));
         assert!(Entry::parse("Notes/Yaml.md", &moved_id).is_ok());
-        library.draft = moved_id.clone();
+        let _ = library.draft.replace(moved_id.clone());
         let painted = sd1_painted(&mut library);
         let reason = "Keep this entry’s UUID and kind unchanged.";
         assert!(painted.contains(reason), "ready-refused-reason\n{painted}");
@@ -10596,9 +10603,9 @@ mod tests {
         assert!(!library.can_save_and_close(), "ready-refused-no-close-save");
         library.save_selected(false);
         assert_eq!(fs::read(&path).unwrap(), saved, "ready-refused-not-written");
-        assert_eq!(library.draft, moved_id, "ready-refused-draft-kept");
+        assert_eq!(library.draft.as_str(), moved_id, "ready-refused-draft-kept");
         // Must stay true: the same note's draft that Save accepts is Unsaved, with no reason.
-        library.draft = format!("{valid}\nA new line.\n");
+        let _ = library.draft.replace(format!("{valid}\nA new line.\n"));
         let painted = sd1_painted(&mut library);
         assert!(
             painted.contains("Unsaved"),
@@ -10616,7 +10623,7 @@ mod tests {
         let notes = campaign.path.join("Notes");
         let writable = fs::metadata(&notes).unwrap().permissions();
         fs::set_permissions(&notes, fs::Permissions::from_mode(0o555)).unwrap();
-        let accepted = library.draft.clone();
+        let accepted = library.draft.as_str().to_owned();
         // The failed-Save check counts each run, and `DraftView` counts each read of the words.
         let failure_work =
             crate::test_support::CachedWork::start("Failed-Save check", &mut library, |library| {
@@ -10647,7 +10654,7 @@ mod tests {
             "disk-failure-not-unsaved\n{painted}"
         );
         assert_eq!(fs::read(&path).unwrap(), saved, "disk-failure-not-written");
-        assert_eq!(library.draft, accepted, "disk-failure-draft-kept");
+        assert_eq!(library.draft.as_str(), accepted, "disk-failure-draft-kept");
         // iter-24-B FL1, lookalike outside the rule: a folder inside the campaign refused the
         // write, not the file or the campaign folder, so the owner line stays Editable.
         assert_eq!(
@@ -10702,7 +10709,7 @@ mod tests {
                 "fixture: the Save failed again"
             );
         };
-        library.draft = accepted.clone();
+        let _ = library.draft.replace(accepted.clone());
         library.draft_revision += 1;
         failed_again(&mut library);
         sd1_input(
@@ -10739,7 +10746,7 @@ mod tests {
             .position(|note| note.path == "Notes/Other.md")
             .unwrap();
         library.selected = Some(other_at);
-        library.draft = accepted.clone();
+        let _ = library.draft.replace(accepted.clone());
         let painted = sd1_painted(&mut library);
         assert!(
             !painted.contains("Not saved"),
@@ -10774,7 +10781,7 @@ mod tests {
         // ends both.
         let file_permissions = fs::metadata(&path).unwrap().permissions();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
-        library.draft = format!("{accepted}\nA locked file.\n");
+        let _ = library.draft.replace(format!("{accepted}\nA locked file.\n"));
         library.draft_revision += 1;
         library.save_selected(false);
         let painted = sd1_painted(&mut library);
@@ -10866,7 +10873,7 @@ mod tests {
         fs::write(&manifest, &other).unwrap();
         let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Package.md");
         library.source = true;
-        library.draft = format!("{other}\nA description.\n");
+        let _ = library.draft.replace(format!("{other}\nA description.\n"));
         assert!(
             crate::content_workspace::repair_problem("Package.md", &library.draft)
                 .0
@@ -10957,7 +10964,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Wolf.md");
         let draft = format!("{text}\nMy draft.\n");
-        library.draft = draft.clone();
+        let _ = library.draft.replace(draft.clone());
         let painted = sd1_painted(&mut library);
         assert!(
             painted.contains("Edit in Obsidian"),
@@ -10980,7 +10987,7 @@ mod tests {
             "SD1-save"
         );
         assert!(library.error.is_none(), "{:?}", library.error);
-        assert_eq!(library.draft, draft, "SD1-save-keeps-draft");
+        assert_eq!(library.draft.as_str(), draft, "SD1-save-keeps-draft");
         assert_eq!(fs::read(&file).unwrap(), NOT_TEXT, "SD1-save-keeps-bytes");
         let painted = sd1_painted(&mut library);
         for words in [
@@ -11020,7 +11027,7 @@ mod tests {
         fs::write(&file, &text).unwrap();
         library.refresh_destination(&module.path, &ctx, &Campaigns::default());
         assert!(library.disk_change.is_none(), "SD1-fault-ends");
-        assert_eq!(library.draft, draft);
+        assert_eq!(library.draft.as_str(), draft);
 
         // Reload and lose my draft: the note becomes the unreadable file; Undo keeps the draft.
         fs::write(&file, NOT_TEXT).unwrap();
@@ -11100,7 +11107,7 @@ mod tests {
         let text = note_text("Wolf", "creature", None);
         fs::write(module.path.join("Wolf.md"), &text).unwrap();
         let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Wolf.md");
-        library.draft = format!("{text}\nMy draft.\n");
+        let _ = library.draft.replace(format!("{text}\nMy draft.\n"));
         fs::remove_file(module.path.join("Wolf.md")).unwrap();
         fs::write(module.path.join("Other.md"), NOT_TEXT).unwrap();
         library.save_selected(false);
@@ -11155,7 +11162,7 @@ mod tests {
 /// draft, its revision and the page's error.
 type DraftParts<'a> = (
     &'a mut LibraryKept,
-    &'a mut String,
+    &'a mut crate::design::text_draft::TextDraft,
     &'a mut u64,
     &'a mut Option<PageError>,
 );
@@ -11209,17 +11216,17 @@ impl HeadingChoice {
         &self,
         (fix, undo): (bool, bool),
         file: &FileId,
-        draft: &mut String,
+        draft: &mut crate::design::text_draft::TextDraft,
         kept: &mut LibraryKept,
     ) -> bool {
         let mut changed = false;
         if fix && let Some((_, _, after)) = &self.fix {
-            kept.set_heading((file.clone(), draft.clone(), after.clone()));
-            draft.clone_from(after);
+            kept.set_heading((file.clone(), draft.as_str().to_owned(), after.clone()));
+            let _ = draft.replace(after.as_str());
             changed = true;
         }
         if undo && let Some((_, before, _)) = kept.take_heading() {
-            *draft = before;
+            let _ = draft.replace(before);
             changed = true;
         }
         changed

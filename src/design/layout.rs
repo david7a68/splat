@@ -515,15 +515,24 @@ impl FieldId {
         response
     }
 
-    /// A multi-line editor with this id, for a caller that reads where the text was laid out
-    /// (the galley, its place, the cursor, the clip rect): a Markdown source, a repair editor.
-    /// It guards the text history as [`single_line`](Self::single_line) does.
+    /// A multi-line editor of a document with this id, for a caller that reads where the text
+    /// was laid out (the galley, its place, the cursor, the clip rect): a Markdown source, a
+    /// repair editor, a note. It guards the text history as [`single_line`](Self::single_line)
+    /// does, by the draft's key: a quiet frame hashes no text (layout PR 9b).
+    ///
+    /// The part lays the text out in `face` and keeps the laid-out text by its whole key (the
+    /// draft's identity and revision, the measure, the font atlas's epoch, the visuals, the
+    /// face, and the caret for a face that folds): a quiet frame lays out, hashes and copies
+    /// none of it in the app. egui's own per-frame text copies stay, counted (ruling M25).
+    /// `style` sets the rest of the text edit; a layouter it sets is replaced by the part's.
     ///
     /// ```
-    /// fn f(ui: &mut egui::Ui, note: &mut String) {
+    /// use splat_design::{pane::Face, text_draft::TextDraft};
+    /// fn f(ui: &mut egui::Ui, note: &mut TextDraft) {
     ///     const NOTE: splat_design::layout::FieldName = splat_design::field_id!("doc_note");
     ///     let id = NOTE.once(splat_design::layout::Once::Example);
-    ///     let editor = id.editor(ui, note, |edit| edit.desired_rows(4));
+    ///     let face = Face::Font(egui::TextStyle::Body.resolve(ui.style()));
+    ///     let editor = id.editor(ui, note, face, |edit| edit.desired_rows(4));
     ///     let _ = (editor.response, editor.galley, editor.galley_pos, editor.text_clip_rect);
     ///     let _ = editor.cursor_range;
     /// }
@@ -532,25 +541,27 @@ impl FieldId {
         clippy::disallowed_methods,
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
     )]
-    pub fn editor<T: GuardedText>(
+    pub fn editor(
         self,
         ui: &mut Ui,
-        text: &mut T,
+        text: &mut super::text_draft::TextDraft,
+        face: super::pane::Face,
         style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Editor {
         let id = self.id();
-        // A document lent by `pane::EditorRegion::document` brings its kept layout (layout PR 9b).
-        let mut kept = text
-            .kept()
-            .map(|(face, live)| super::pane::kept_layouter(id, face, live));
-        let guard = TextGuard::before(ui, id, &|| text.bound().0);
-        let edit = style(TextEdit::multiline(text).id(id));
-        let edit = match kept.as_mut() {
-            Some(layouter) => edit.layouter(layouter),
-            None => edit,
+        let guard = TextGuard::before(ui, id, &|| BoundText::Draft(text.key()));
+        // The draft is lent to egui for this draw: each change reaches `live`, which the kept
+        // layouter reads on every call.
+        let live = std::cell::Cell::new(text.key());
+        let mut layouter = super::pane::kept_layouter(id, face, &live);
+        let mut lent = super::text_draft::Lent {
+            draft: text,
+            live: &live,
         };
-        let output = edit.show(ui);
-        guard.after(ui, &|| text.bound().0, &output.response);
+        let output = style(TextEdit::multiline(&mut lent).id(id))
+            .layouter(&mut layouter)
+            .show(ui);
+        guard.after(ui, &|| BoundText::Draft(lent.draft.key()), &output.response);
         record_field(ui, &output.response);
         Editor {
             frame: output.response.rect,
@@ -708,62 +719,6 @@ impl BoundText {
     }
 }
 
-/// A field's text, as the guard knows it: a plain text by its hash, a revised document by its
-/// revision (layout PR 9b: a quiet frame of a document field hashes nothing). Sealed.
-pub trait GuardedText: TextBuffer + guarded::Sealed {
-    #[doc(hidden)]
-    fn bound(&self) -> Bound;
-
-    /// The face and the live key of a document lent for one draw, whose layout the part keeps.
-    #[doc(hidden)]
-    fn kept(
-        &self,
-    ) -> Option<(
-        super::pane::Face,
-        std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
-    )> {
-        None
-    }
-}
-
-/// What a [`GuardedText`] is to the guard. Opaque.
-#[doc(hidden)]
-pub struct Bound(BoundText);
-
-mod guarded {
-    pub trait Sealed {}
-    impl Sealed for String {}
-    impl Sealed for super::super::text_draft::TextDraft {}
-    impl Sealed for super::super::text_draft::Lent<'_> {}
-}
-
-impl GuardedText for String {
-    fn bound(&self) -> Bound {
-        Bound(BoundText::of(self))
-    }
-}
-
-impl GuardedText for super::text_draft::TextDraft {
-    fn bound(&self) -> Bound {
-        Bound(BoundText::Draft(self.key()))
-    }
-}
-
-impl GuardedText for super::text_draft::Lent<'_> {
-    fn bound(&self) -> Bound {
-        Bound(BoundText::Draft(self.draft.key()))
-    }
-
-    fn kept(
-        &self,
-    ) -> Option<(
-        super::pane::Face,
-        std::rc::Rc<std::cell::Cell<super::text_draft::DraftKey>>,
-    )> {
-        Some((self.face.clone(), self.live.clone()))
-    }
-}
-
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
     /// How many times a field part hashed its text, for the cost proof.
@@ -917,12 +872,12 @@ pub(super) fn guarded_field(
 pub fn edit_in_place(
     ctx: &egui::Context,
     id: Id,
-    text: &mut String,
+    text: &mut super::text_draft::TextDraft,
     edit: impl FnOnce(&mut String),
 ) {
-    let before = BoundText::of(text);
-    edit(text);
-    let after = BoundText::of(text);
+    let before = BoundText::Draft(text.key());
+    text.edit(edit);
+    let after = BoundText::Draft(text.key());
     ctx.data_mut(|data| {
         if let Some(record) = data
             .get_temp_mut_or_default::<BoundTexts>(bound_texts_id())

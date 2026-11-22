@@ -15,6 +15,7 @@ use crate::{
     library::write_note,
     persistence::Campaign,
 };
+use crate::design::text_draft::{DraftKey, TextDraft};
 use eframe::egui;
 use uuid::Uuid;
 
@@ -29,6 +30,12 @@ pub fn editor_name(path: &str) -> String {
 const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_text");
 
 /// The source editor's face: the note's text in monospace, as wide as its room.
+/// The source editor's face: the note's text in monospace, laid out once per change (layout
+/// PR 9b).
+fn source_face(ui: &egui::Ui) -> design::pane::Face {
+    design::pane::Face::Font(egui::TextStyle::Monospace.resolve(ui.style()))
+}
+
 fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
     edit.font(egui::TextStyle::Monospace)
         .desired_width(f32::INFINITY)
@@ -55,17 +62,19 @@ fn source_editor(
     ui: &mut egui::Ui,
     place: Place<'_>,
     path: &str,
-    draft: &mut String,
+    draft: &mut TextDraft,
     error_line: Option<usize>,
 ) -> ((bool, bool), egui::Rect, egui::Id) {
     let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
+    let face = source_face(ui);
     let output = match place {
-        Place::Region(region) => region.editor(ui, field, draft, source_style),
+        Place::Region(region) => region.editor(ui, field, draft, face, source_style),
         Place::AtMost(most) => design::pane::editor_view(
             ui,
             design::pane::ViewHeight::AtMost(most),
             field,
             draft,
+            face,
             source_style,
         ),
     };
@@ -101,7 +110,7 @@ fn editor_in_pane(
     ui: &mut egui::Ui,
     region: EditorRegion<'_>,
     path: &str,
-    draft: &mut String,
+    draft: &mut TextDraft,
     error_line: Option<usize>,
 ) -> (bool, bool) {
     source_editor(ui, Place::Region(region), path, draft, error_line).0
@@ -113,7 +122,7 @@ fn editor_in_pane(
 pub fn editor_events(
     ui: &mut egui::Ui,
     path: &str,
-    draft: &mut String,
+    draft: &mut TextDraft,
     error_line: Option<usize>,
 ) -> (bool, bool) {
     const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
@@ -141,13 +150,19 @@ pub fn editor_events(
 /// line to fix, or an identity that the campaign does not allow. It writes nothing and reads no
 /// file: a refusal from the disk (read only, missing, a write error) is Save's own failure. Save, the save row's state, its cause
 /// and Save's availability all use it, so `Unsaved` always means that Save would write.
-pub fn refusal(campaign: &Campaign, path: &str, draft: &str) -> (Option<String>, Option<usize>) {
-    // The save row asks on every frame; a parse of a long note takes about 1 ms.
+pub fn refusal(
+    campaign: &Campaign,
+    path: &str,
+    draft: &TextDraft,
+) -> (Option<String>, Option<usize>) {
+    // The save row asks on every frame; a parse of a long note takes about 1 ms. The result is
+    // kept by the draft's key (layout PR 9b): a quiet frame hashes none of its words.
     static REFUSALS: splat::memo::Memo<(Option<String>, Option<usize>)> =
         splat::memo::Memo::new(64);
     REFUSALS.get_or(
-        &[campaign.id.as_bytes(), path.as_bytes(), draft.as_bytes()],
+        &[campaign.id.as_bytes(), path.as_bytes(), &draft.key().to_bytes()],
         || {
+            let draft = draft.as_str();
             if let Some(rule) = crate::library::note_path_rule(path) {
                 return (Some(rule.into()), None);
             }
@@ -266,14 +281,14 @@ pub struct Repair {
     pub path: String,
     campaign: Uuid,
     baseline: String,
-    draft: String,
+    draft: TextDraft,
     /// The Undo of the last Discard or Reload of this draft.
     undos: design::Results<RepairOwner, RepairUndo>,
     disk: Option<String>,
     /// Save's failure on the disk (read only, missing, a write error): the draft it tried to
     /// write and Save's reason. This draft owns it. Each end event clears it: an edit, Discard
     /// or its Undo, Reload or its Undo, the file followed from disk, and a successful Save.
-    failed: Option<(String, String)>,
+    failed: Option<(DraftKey, String)>,
 }
 
 impl Repair {
@@ -287,7 +302,7 @@ impl Repair {
             path: path.into(),
             campaign: campaign.id,
             baseline: text.clone(),
-            draft: text,
+            draft: TextDraft::new(text),
             undos: design::Results::new(),
             disk: None,
             failed: None,
@@ -308,14 +323,14 @@ impl Repair {
     }
 
     pub fn dirty(&self) -> bool {
-        self.draft != self.baseline
+        self.draft.as_str() != self.baseline
     }
 
     /// Save's last failure on the disk, while the draft is still the one it tried to write.
     fn failure(&self) -> Option<&str> {
         self.failed
             .as_ref()
-            .filter(|(tried, _)| *tried == self.draft)
+            .filter(|(tried, _)| *tried == self.draft.key())
             .map(|(_, reason)| reason.as_str())
     }
 
@@ -330,7 +345,7 @@ impl Repair {
                 self.disk = Some(text);
             } else {
                 self.baseline = text.clone();
-                self.draft = text;
+                let _ = self.draft.replace(text);
                 // A newer file ends the Undo of Discard and of Reload, so Undo never hides that
                 // change.
                 self.undos.disk_changed(|_| false);
@@ -342,7 +357,7 @@ impl Repair {
         if self
             .failed
             .as_ref()
-            .is_some_and(|(tried, _)| *tried != self.draft)
+            .is_some_and(|(tried, _)| *tried != self.draft.key())
         {
             self.failed = None;
         }
@@ -401,7 +416,7 @@ impl Repair {
                     };
                     // A replaced or ended result (`Gone`) does nothing.
                     if let Ok((undo, ())) = self.undos.undo_by(ticket, |_| Ok::<_, ()>(())) {
-                        self.draft = undo.draft().to_owned();
+                        let _ = self.draft.replace(undo.draft());
                         self.failed = None;
                         // The draft changed, so Save's check runs again on the words now in the
                         // editor.
@@ -463,7 +478,7 @@ impl Repair {
         self.disk = None;
         match choice {
             design::DiskConflictChoice::Reload => {
-                let draft = std::mem::replace(&mut self.draft, self.baseline.clone());
+                let draft = self.draft.replace(self.baseline.clone());
                 // Reload replaces Discard's Undo: one Undo per draft.
                 self.undos.record(RepairUndo::Reload {
                     owner: self.owner(),
@@ -531,7 +546,7 @@ impl Repair {
             saved = self.save(campaign);
         }
         if pressed.discard {
-            let draft = std::mem::replace(&mut self.draft, self.baseline.clone());
+            let draft = self.draft.replace(self.baseline.clone());
             // Discard replaces Reload's Undo: one Undo per draft.
             self.undos.record(RepairUndo::Discard {
                 owner: self.owner(),
@@ -556,14 +571,14 @@ impl Repair {
         };
         match result {
             Ok(_) => {
-                self.baseline = self.draft.clone();
+                self.baseline = self.draft.as_str().to_owned();
                 // A saved draft ends its Undo results.
                 self.undos.owner_changed(&self.owner());
                 self.failed = None;
                 true
             }
             Err(error) => {
-                self.failed = Some((self.draft.clone(), error));
+                self.failed = Some((self.draft.key(), error));
                 false
             }
         }

@@ -11,6 +11,7 @@ use crate::{
     party::Party,
     persistence::{Campaign, Module},
 };
+use crate::design::text_draft::TextDraft;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -760,8 +761,9 @@ struct Draft {
     source: String,
     name: String,
     setup: Setup,
-    /// What the DM reads to the table, and their notes: the note's own text.
-    body: String,
+    /// What the DM reads to the table, and their notes: the note's own text, a document of its
+    /// own (layout PR 9b).
+    body: TextDraft,
     saved_name: String,
     saved_setup: Setup,
     saved_body: String,
@@ -819,7 +821,7 @@ impl Draft {
             name: name.clone(),
             saved_name: name,
             setup: Setup::default(),
-            body: String::new(),
+            body: TextDraft::default(),
             saved_setup: Setup::default(),
             saved_body: String::new(),
             loot: Vec::new(),
@@ -876,7 +878,7 @@ impl Draft {
             saved_setup: setup.clone(),
             setup,
             saved_body: body.clone(),
-            body,
+            body: TextDraft::new(body),
             saved_loot: loot.clone(),
             loot,
             loot_owned,
@@ -898,7 +900,7 @@ impl Draft {
         self.baseline.is_none()
             || self.name != self.saved_name
             || self.setup != self.saved_setup
-            || self.body != self.saved_body
+            || self.body.as_str() != self.saved_body
             || self.loot != self.saved_loot
             || self.groups.iter().any(GroupDraft::dirty)
             || !self.deleted_groups.is_empty()
@@ -1000,7 +1002,7 @@ impl Draft {
             .as_ref()
             .and_then(|change| change.text.as_deref())
             .unwrap_or(&self.source);
-        let source = if self.body == self.saved_body && self.loot == self.saved_loot {
+        let source = if self.body.as_str() == self.saved_body && self.loot == self.saved_loot {
             disk_source.to_owned()
         } else {
             splat::content::list_formats::with_prose(disk_source, &self.prose())?
@@ -1022,7 +1024,7 @@ impl Draft {
         if self.loot_owned {
             splat::content::loot::with(&self.body, &self.loot, self.loot_before.as_deref())
         } else {
-            self.body.clone()
+            self.body.as_str().to_owned()
         }
     }
     fn comparison_text(&self, snapshot: &Snapshot) -> Result<String, String> {
@@ -1156,7 +1158,7 @@ impl Draft {
         self.origin = design::save_row::DraftOrigin::Saved;
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
-        self.saved_body = self.body.clone();
+        self.saved_body = self.body.as_str().to_owned();
         self.saved_loot = self.loot.clone();
         self.recovery = Default::default();
         for (index, text) in group_texts {
@@ -1378,12 +1380,23 @@ enum CreatureStep {
 }
 
 /// What the DM can change on a creature, as they typed it.
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 struct CreatureFields {
     name: String,
     hp: String,
     armor_class: String,
-    body: String,
+    /// The creature's text, a document of its own (layout PR 9b).
+    body: TextDraft,
+}
+
+/// Two forms are equal when their values and their words are.
+impl PartialEq for CreatureFields {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.hp == other.hp
+            && self.armor_class == other.armor_class
+            && self.body.as_str() == other.body.as_str()
+    }
 }
 
 /// A creature the DM made their own, open beside the roster.
@@ -1412,7 +1425,7 @@ impl CreatureEditor {
         let fields = CreatureFields {
             hp: stat("max_hp"),
             armor_class: stat("armor_class"),
-            body: entry.body.trim().to_owned(),
+            body: TextDraft::new(entry.body.trim()),
             name: entry.name,
         };
         Ok(Self {
@@ -1447,7 +1460,7 @@ impl CreatureEditor {
         let new_armor_class = number(armor_class, "Armor class")?;
         Entry::parse(&self.path, &self.baseline)?;
         {
-            let text = if *body == self.saved.body {
+            let text = if body.as_str() == self.saved.body.as_str() {
                 self.baseline.clone()
             } else {
                 with_body(&self.baseline, body)
@@ -1485,7 +1498,8 @@ impl CreatureEditor {
         let text = self.text()?;
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
-        self.fields.body = Entry::parse(&self.path, &text)?.body.trim().to_owned();
+        let body = Entry::parse(&self.path, &text)?.body.trim().to_owned();
+        let _ = self.fields.body.replace(body);
         self.baseline = text;
         self.saved = self.fields.clone();
         self.recovery = Default::default();
@@ -2251,6 +2265,17 @@ fn missing_creature_mark(
 /// draft (two encounters never share its text or its Undo).
 const NOTES_FIELD: design::layout::FieldName = crate::field_id!("encounter_notes");
 const NOTES_LABEL: &str = "Read-aloud and notes";
+
+/// The face of a notes field: the font egui gives a text edit with no font set, laid out once
+/// per change (layout PR 9b).
+fn plain_face(ui: &egui::Ui) -> design::pane::Face {
+    design::pane::Face::Font(egui::FontSelection::default().resolve(ui.style()))
+}
+
+/// The face of a creature's text: monospace, laid out once per change (layout PR 9b).
+fn mono_face(ui: &egui::Ui) -> design::pane::Face {
+    design::pane::Face::Font(egui::TextStyle::Monospace.resolve(ui.style()))
+}
 
 /// A DM's notes in an editor. Every notes field has the same inner margin, and its frame ends at
 /// the right edge of the column it is in.
@@ -5545,7 +5570,7 @@ impl Encounters {
                             let output =
                                 CREATURE_TEXT
                                     .of(key)
-                                    .editor(ui, &mut editor.fields.body, |edit| {
+                                    .editor(ui, &mut editor.fields.body, mono_face(ui), |edit| {
                                         edit.font(egui::TextStyle::Monospace)
                                             .desired_width(width)
                                             .margin(egui::vec2(design::S, design::S))
@@ -8266,7 +8291,7 @@ impl Encounters {
             );
             let output = NOTES_FIELD
                 .of(draft.id)
-                .editor(ui, &mut draft.body, |edit| {
+                .editor(ui, &mut draft.body, plain_face(ui), |edit| {
                     notes_style(edit, 5).hint_text(hint)
                 });
             if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {

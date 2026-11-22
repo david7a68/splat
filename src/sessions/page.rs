@@ -732,6 +732,8 @@ pub struct Sessions {
     templates: Vec<Template>,
     template: Option<String>,
     template_draft: Option<Draft>,
+    /// The shown built-in template's name and its words as a document (layout PR 9b).
+    builtin_text: Option<(String, design::text_draft::TextDraft)>,
     new_template: Option<String>,
     template_error: Option<String>,
     /// A deleted template's words, for its `Undo delete`.
@@ -1151,6 +1153,16 @@ fn note_frame_width(ctx: &egui::Context) -> f32 {
 }
 
 /// A note's words as a reader sees them: links as words, and no empty headings.
+/// A Markdown note's face: styled by `markdown_source::layouter` in the prose `font`, with its
+/// folds opened at the caret, laid out once per change (layout PR 9b).
+fn markdown_face(font: egui::FontId) -> design::pane::Face {
+    design::pane::Face::Laid {
+        layout: crate::markdown_source::layouter,
+        font,
+        folds: true,
+    }
+}
+
 fn words_to_read(body: &str, book: &Book) -> String {
     let _ = book;
     without_empty_sections(&crate::world::with_links(body, &Default::default()))
@@ -4969,21 +4981,21 @@ impl Sessions {
                                 ui.available_width()
                             };
                             let font = design::reader::prose_type(ui).font(ui);
+                            let face = markdown_face(font.clone());
                             let output =
-                                field.of(self.selected).editor(ui, &mut draft.body, |edit| {
-                                    // The layouter is a function item: leaking its box
-                                    // allocates nothing.
+                                field.of(self.selected).editor(ui, &mut draft.body, face, |edit| {
                                     edit.lock_focus(in_panel)
                                         .frame(false)
                                         .font(font)
-                                        .layouter(Box::leak(Box::new(
-                                            crate::markdown_source::layouter,
-                                        )))
                                         .margin(egui::Vec2::ZERO)
                                         .desired_width(width)
                                         .min_size(egui::vec2(0.0, visible_height + heading_offset))
                                 });
-                            crate::markdown_source::paint_section_rules(ui, &output);
+                            crate::markdown_source::paint_section_rules(
+                                ui,
+                                &output,
+                                Some(draft.body.key()),
+                            );
                             pressed_link =
                                 crate::markdown_source::pressed_note_link(ui, &output, None);
                             let place = super::slash::Place {
@@ -7894,13 +7906,10 @@ impl Sessions {
                 design::pane::ViewHeight::Fills,
                 field,
                 &mut draft.body,
-                |edit| {
-                    // The layouter is a function item: leaking its box allocates nothing.
-                    edit.font(font)
-                        .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
-                },
+                markdown_face(font.clone()),
+                |edit| edit.font(font),
             );
-            crate::markdown_source::paint_section_rules(ui, &output);
+            crate::markdown_source::paint_section_rules(ui, &output, Some(draft.body.key()));
             pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
             let response = output.response;
             design::named(ui, &response, "Template text");
@@ -7912,21 +7921,31 @@ impl Sessions {
             }
         } else {
             // A built-in template reads in the pane's scroll column: it is not an editor.
+            // Its words are a document kept while it shows (layout PR 9b): a built-in template
+            // never changes, so it is made again only for another template.
+            if self
+                .builtin_text
+                .as_ref()
+                .is_none_or(|(name, _)| *name != template.name)
+            {
+                self.builtin_text = Some((
+                    template.name.clone(),
+                    design::text_draft::TextDraft::new(template.body.as_str()),
+                ));
+            }
+            let body = &mut self.builtin_text.as_mut().expect("kept above").1;
             design::ScrollColumn::new(("template_editor", &template.name)).show(ui, |ui| {
-                let mut body = template.body.clone();
                 let (width, height) = (ui.available_width(), ui.available_height());
                 let font = design::reader::prose_type(ui).font(ui);
-                let output = field.editor(ui, &mut body, |edit| {
-                    // The layouter is a function item: leaking its box allocates nothing.
+                let output = field.editor(ui, body, markdown_face(font.clone()), |edit| {
                     edit.font(font)
-                        .layouter(Box::leak(Box::new(crate::markdown_source::layouter)))
                         .desired_width(width)
                         .min_size(egui::vec2(0.0, height))
                         .frame(false)
                         .interactive(false)
                 });
                 design::named(ui, &output.response, "Built-in template text");
-                crate::markdown_source::paint_section_rules(ui, &output);
+                crate::markdown_source::paint_section_rules(ui, &output, Some(body.key()));
             });
         }
         if save && let Some(draft) = &mut self.template_draft {
